@@ -1,0 +1,10 @@
+// ====================================
+// ElectroHub — Main SCSS Entry Point
+// ====================================
+// 7-1 SCSS Architecture
+
+// Abstracts (variables, mixins, functions)
+@use 'abstracts' as *;
+
+// Base (reset, typography, global)
+@use 'base';

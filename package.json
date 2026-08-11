@@ -1,0 +1,32 @@
+{
+  "name": "electrohub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ElectroHub — AI-Powered Electronics Commerce Platform",
+  "workspaces": [
+    "apps/frontend",
+    "apps/backend"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev --workspace=apps/frontend",
+    "dev:backend": "npm run dev --workspace=apps/backend",
+    "build:frontend": "npm run build --workspace=apps/frontend",
+    "build:backend": "npm run build --workspace=apps/backend",
+    "lint:frontend": "npm run lint --workspace=apps/frontend",
+    "lint:backend": "npm run lint --workspace=apps/backend",
+    "typecheck:frontend": "npm run typecheck --workspace=apps/frontend",
+    "typecheck:backend": "npm run typecheck --workspace=apps/backend",
+    "test:frontend": "npm run test --workspace=apps/frontend",
+    "test:backend": "npm run test --workspace=apps/backend",
+    "build": "npm run build:frontend && npm run build:backend"
+  },
+  "engines": {
+    "node": "20.11.0",
+    "npm": "10.2.4"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerce-Platform"
+  }
+}

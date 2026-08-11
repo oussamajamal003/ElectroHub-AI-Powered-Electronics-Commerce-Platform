@@ -1,0 +1,82 @@
+# ==========================================
+# ElectroHub Monorepo .gitignore
+# ==========================================
+
+# --- Dependencies ---
+node_modules/
+.pnp
+.pnp.js
+
+# --- Build Outputs ---
+dist/
+build/
+.next/
+out/
+
+# --- Environment Variables ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# --- Logs ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Testing ---
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+
+# --- TypeScript ---
+*.tsbuildinfo
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+.eggs/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Docker ---
+.docker/
+
+# --- Prisma ---
+apps/backend/prisma/migrations/*.sql
+
+# --- Misc ---
+*.tgz
+.cache/
+.temp/
+.tmp/

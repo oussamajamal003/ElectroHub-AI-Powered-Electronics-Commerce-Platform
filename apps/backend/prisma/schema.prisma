@@ -1,0 +1,11 @@
+// Prisma Schema — ElectroHub Backend
+// Foundation only. Models will be added in subsequent phases.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}

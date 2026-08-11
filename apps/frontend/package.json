@@ -1,0 +1,37 @@
+{
+  "name": "@electrohub/frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ElectroHub Frontend — React + TypeScript + Vite",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.1.0",
+    "@tanstack/react-query": "^5.62.0",
+    "zod": "^3.24.2",
+    "framer-motion": "^11.15.0",
+    "lucide-react": "^0.468.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.16.0",
+    "@eslint/js": "^9.16.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-refresh": "^0.4.16",
+    "globals": "^15.13.0",
+    "typescript": "~5.7.0",
+    "typescript-eslint": "^8.18.0",
+    "sass": "^1.82.0",
+    "vite": "^6.0.0"
+  }
+}
