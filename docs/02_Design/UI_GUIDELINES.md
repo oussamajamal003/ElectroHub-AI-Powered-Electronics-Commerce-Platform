@@ -1,26 +1,28 @@
-# UI Guidelines
+# ElectroHub UI Guidelines
 
 ## 1. Purpose
 
-This document defines the practical UI rules for ElectroHub.
+This document defines the practical UI rules for implementing ElectroHub consistently across customer and administrator experiences.
 
-It connects the design system with implementation and provides a consistent standard for:
+It consolidates the decisions established throughout the complete Figma workflow:
 
-- Visual hierarchy
-- Layout
-- Components
-- Spacing
-- Colors
-- Typography
-- Icons
-- Forms
-- Feedback
-- Accessibility
+- Foundation tokens
+- Variables and final token inventory
+- Component system
+- Navigation and shells
+- Customer information architecture
+- Authentication
+- Commerce and cart
+- Checkout and payment
+- Orders and delivery
+- Admin system
 - Responsive behavior
-- Customer interfaces
-- Administrator interfaces
+- Accessibility and interaction refinement
+- Prototype flows
+- Final design QA and polish
+- Final Figma handoff
 
-Figma is the source of truth for approved visual design, while these guidelines define how that design should be consistently implemented.
+**Figma is the visual source of truth.** These guidelines document how approved visual and interaction decisions should be implemented consistently. They do not replace the Figma file.
 
 ---
 
@@ -30,174 +32,419 @@ ElectroHub follows these principles:
 
 ### Clarity
 
-Users should immediately understand what they can do and what is happening.
+Users should understand what the page is, what changed, and what action is available.
 
 ### Consistency
 
-Equivalent actions and states should look and behave consistently.
+Equivalent interactions should use the same component, visual treatment, terminology, and behavior.
 
-### Simplicity
+### Reuse
 
-Avoid unnecessary visual complexity.
+Approved components should be reused instead of recreating visually similar controls.
 
 ### Accessibility
 
-Accessibility is part of the UI rather than a separate final step.
+Accessibility is part of component and feature design, not a final polish step.
 
-### Responsiveness
+### Responsive Structure
 
-Interfaces must work across supported viewport sizes.
+Interfaces adapt their structure and interaction patterns rather than merely shrinking.
 
 ### Feedback
 
-Every important user action should provide appropriate feedback.
+Important actions and system states must provide clear feedback.
 
 ### Performance
 
-Visual polish must not come at the cost of application performance.
+Visual quality must not introduce unnecessary rendering, assets, animation, or dependencies.
 
 ---
 
-# 3. Source of Truth
+# 3. Design Source of Truth
 
-The UI hierarchy is:
+The approved hierarchy is:
 
 ```text
 Figma
-  ↓
-Design System
-  ↓
+   ↓
+Design Tokens / Design System
+   ↓
 UI Guidelines
-  ↓
+   ↓
 Reusable Components
-  ↓
-Feature Implementation
+   ↓
+Feature Screens
+   ↓
+Implementation
 ```
 
-If implementation differs from approved design, the difference should be intentional and documented.
+If implementation differs from the approved Figma design, the difference must be intentional and justified.
+
+Markdown files describe the system; Figma provides the visual reference.
 
 ---
 
-# 4. Visual Hierarchy
+# 4. Repository and Figma Asset Structure
 
-Every screen should establish a clear hierarchy.
-
-A typical hierarchy is:
+The approved Figma repository structure is:
 
 ```text
-Page Title
-    ↓
-Section Title
-    ↓
-Primary Content
-    ↓
-Supporting Information
-    ↓
-Secondary Actions
+assets/
+└── figma/
+    ├── FIGMA.md
+    ├── FIGMA_IMPLEMENTATION_RULES.md
+    ├── FIGMA_REFERENCES.md
+    │
+    └── exports/
+        │
+        ├── Components/
+        │   ├── README.md
+        │   └── screenshots/
+        │
+        ├── admin/
+        │   ├── README.md
+        │   └── screenshots/
+        │
+        └── customer/
+            ├── README.md
+            └── screenshots/
 ```
 
-Primary actions should be visually stronger than secondary actions.
+### Responsibilities
+
+- `assets/figma/FIGMA.md` — central Figma documentation and consolidated design handoff/reference package.
+- `assets/figma/FIGMA_IMPLEMENTATION_RULES.md` — implementation rules governing Figma-to-code usage.
+- `assets/figma/FIGMA_REFERENCES.md` — references and links to the authoritative Figma sources.
+- `assets/figma/exports/Components/` — Figma Make component screenshots and their README.
+- `assets/figma/exports/admin/` — Figma Make admin-experience screenshots and their README.
+- `assets/figma/exports/customer/` — Figma Make customer-experience screenshots and their README.
+- Each `screenshots/` directory contains visual references captured from Figma Make.
+
+### Important Figma Export Policy
+
+The `exports/` directory is intentionally limited to three approved visual-reference categories:
+
+```text
+Components
+admin
+customer
+```
+
+Do not recreate the previous export categories such as:
+
+```text
+Layouts/
+Foundation/
+screens/
+responsive/
+```
+
+as separate Figma export folders.
+
+Those concepts are documented and represented through the central Figma documentation and the relevant component, admin, and customer screenshot packages.
+
+### Screenshot Naming
+
+Screenshots captured from Figma Make should retain the **default filename generated by Figma Make**.
+
+Do not introduce a mandatory naming convention such as:
+
+```text
+<Component> — Default.png
+<Screen> — Desktop.png
+<Screen> — Tablet.png
+<Screen> — Mobile.png
+```
+
+Context is provided by the folder, README documentation, screenshot content, and corresponding Figma Design frame.
+
+### Source-of-Truth Rule
+
+The repository assets are visual evidence and handoff material. **They are not a replacement for the live Figma Design source of truth.**
+
+Figma Design remains authoritative for visual decisions. Figma Make screenshots are supporting visual references for implementation and QA.
 
 ---
 
-# 5. Spacing
+# 5. Foundation Tokens
 
-Spacing should use the approved design token scale.
+Implementation should use the approved token system.
 
-Avoid arbitrary spacing values when an existing token provides the required result.
+## Colors
 
-Spacing should be consistent between:
+Primary:
 
-- Sections
+```text
+Primary        #2563EB
+Primary Hover  #1D4ED8
+Primary FG     #FFFFFF
+Accent         #06B6D4
+```
+
+The design system also contains the approved Slate scale and semantic aliases for:
+
+- Text
+- Background
+- Surface
+- Border
+- Success
+- Warning
+- Error
+- Info
+- Neutral
+
+Use semantic tokens instead of arbitrary raw colors.
+
+Verified refinements from the Figma work include:
+
+- Placeholder/muted text treatment using `#64748B`.
+- Rating star fill `#FDE68A`.
+- Rating star stroke `#B45309`.
+
+Do not introduce new semantic colors without design-system review.
+
+---
+
+# 6. Typography
+
+The approved typography system is:
+
+### UI
+
+```text
+Poppins
+400 / 500 / 600 / 700
+```
+
+### Data
+
+```text
+JetBrains Mono
+400 / 500 / 600 / 700
+```
+
+Inter is not part of the active ElectroHub design system.
+
+Imported/read-only Figma artifacts may contain historical Inter references; those artifacts must not be treated as active design-system implementation guidance.
+
+Use:
+
+```text
+--font-family-ui
+--font-family-data
+```
+
+and the canonical mono token:
+
+```text
+--font-mono
+```
+
+---
+
+# 7. Type Scale
+
+The approved scale runs from `xs` through `4xl`.
+
+Important verified values include:
+
+```text
+2xl → 30px / 40px / -0.01px
+4xl → 48px / 56px / -0.02px
+xl  → 24px for price/data emphasis
+```
+
+Use semantic typography roles rather than arbitrary per-component font sizes.
+
+---
+
+# 8. Spacing
+
+The implementation follows the 4px spacing scale.
+
+Verified examples include:
+
+```text
+16px
+24px
+32px
+48px
+```
+
+Do not create duplicate spacing tokens when the implementation system already provides the approved scale.
+
+Spacing should be consistent across:
+
+- Page sections
 - Cards
-- Form fields
-- Buttons
-- Navigation items
-- Page elements
+- Forms
+- Navigation
+- Dialogs
+- Commerce flows
+- Admin screens
 
 ---
 
-# 6. Containers
+# 9. Sizing
 
-Pages should use consistent content containers.
-
-Containers should control:
-
-- Maximum width
-- Horizontal padding
-- Alignment
-- Responsive behavior
-
-Do not allow individual pages to invent unrelated container widths.
-
----
-
-# 7. Alignment
-
-Related elements should share common alignment lines.
-
-Common alignment patterns include:
+Approved sizing includes:
 
 ```text
-Page Header
-     │
-     ├── Title
-     ├── Description
-     └── Actions
+Control base       40px
+Control small      32px
+Control large      48px
 
-Content
-     │
-     └── Aligned to same container
+Icon base          24px
+Icon small         20px
+
+Avatar medium      40px
+Thumbnail          64px
+Product image      240px
 ```
 
-Misaligned content should require a deliberate design reason.
+The visible icon does not necessarily define the complete interactive target.
 
 ---
 
-# 8. Typography
+# 10. Radius and Elevation
 
-Use semantic typography roles:
+Verified radius decisions include:
 
 ```text
-Display
-Heading
-Body
-Label
-Caption
+XL         16px
+Avatar     15px
+Thumbnail  5px
+Modal      12px
 ```
 
-Typography should follow `TYPOGRAPHY.md`.
+An unverified `8px` radius should not be treated as an approved canonical token.
 
-Do not introduce arbitrary font sizes or weights in individual components.
+The Figma visual treatment is predominantly flat. Functional shadows may exist where required for floating surfaces such as dialogs/drawers, but those should be treated as implementation-derived behavior rather than falsely described as Figma-verified elevation tokens.
 
 ---
 
-# 9. Colors
+# 11. Focus
 
-Use semantic color tokens defined by `COLORS.md`.
-
-Examples:
+The approved focus treatment uses:
 
 ```text
-Primary
-Surface
-Text Primary
-Text Secondary
-Border
+2px solid primary blue
+2px offset
+```
+
+Focus must be visible for keyboard users and must not be removed simply because the UI is visually minimal.
+
+---
+
+# 12. Component System
+
+The approved component hierarchy contains 42 components.
+
+## Tier 1 — Foundation
+
+```text
+Button
+Icon Button
+Input
+Textarea
+Select
+Checkbox
+Radio
+Switch
+Badge
+Avatar
+Tooltip
+```
+
+## Tier 2 — Navigation
+
+```text
+Header
+Sidebar
+Breadcrumb
+Tabs
+Pagination
+Dropdown
+Mobile Navigation
+```
+
+## Tier 3 — Feedback
+
+```text
+Alert
+Toast
+Modal
+Drawer
+Dialog
+Spinner
+Skeleton
+Error State
+Empty State
+```
+
+## Tier 4 — Commerce
+
+```text
+Product Card
+Product Image
+Product Gallery
+Price
+Rating
+Quantity Selector
+Cart Item
+Order Status
+Payment Status
+```
+
+## Tier 5 — Admin
+
+```text
+Data Table
+Filter Bar
+Stats Card
+Chart Container
+Admin Form
+Status Badge
+```
+
+Feature implementation should reuse these components rather than create near-duplicates.
+
+---
+
+# 13. Component Variants and States
+
+Components must expose purposeful variants.
+
+Typical dimensions include:
+
+```text
+Type
+Size
+State
+```
+
+Do not create redundant variants whose only purpose is to bypass the established component system.
+
+Relevant states include:
+
+```text
+Default
+Hover
+Focus
+Active / Pressed
+Disabled
+Loading
 Success
-Warning
 Error
 ```
 
-Avoid arbitrary raw colors inside components.
+State differences should remain understandable without relying only on color.
 
 ---
 
-# 10. Buttons
+# 14. Buttons
 
-Buttons should have clear hierarchy.
-
-Recommended types:
+Button hierarchy:
 
 ```text
 Primary
@@ -206,94 +453,148 @@ Ghost
 Danger
 ```
 
-Use:
+Rules:
 
-- Primary for the main action.
-- Secondary for supporting actions.
-- Ghost for low-emphasis actions.
-- Danger for destructive actions.
+- Primary = main action.
+- Secondary = supporting action.
+- Ghost = low-emphasis action.
+- Danger = destructive action.
 
-Avoid multiple competing primary actions in the same visual region.
+Do not place several visually competing primary actions in one region.
+
+Button typography must use the approved Poppins weights. The final Figma refinement corrected the earlier tendency to make every button bold.
 
 ---
 
-# 11. Button States
+# 15. Icon Buttons and Tooltips
 
-Buttons should support relevant states:
+Icon-only actions must have an accessible name.
+
+Use tooltips when they help users understand unfamiliar icon actions, but never make tooltip hover the only way to discover essential functionality.
+
+The approved base icon treatment is 24px, with 20px available for smaller contexts.
+
+---
+
+# 16. Icons
+
+Use **Lucide React** consistently.
+
+Icons should:
+
+- Reinforce meaning.
+- Use approved sizes.
+- Align with surrounding text.
+- Have accessible labels when interactive.
+- Be decorative when purely visual.
+- Avoid replacing necessary text.
+
+The ElectroHub logo/brand mark is a brand asset, not a generic interface icon.
+
+The admin sidebar collapse control belongs at the top of the sidebar.
+
+---
+
+# 17. Navigation and Shells
+
+## Customer
+
+The customer information architecture established in Figma includes:
 
 ```text
-Default
-Hover
-Focus
-Active
-Disabled
-Loading
-Success
+Home
+Products
+Cart
+Orders
+Account
 ```
 
-The state must be understandable without relying only on color.
-
----
-
-# 12. Forms
-
-Forms should provide:
+Supporting discovery includes:
 
 ```text
-Label
-Input
-Helper Text
-Error Text
+Categories
+Listing
+Detail
+Search
+Filters
+Wishlist
 ```
 
-Required fields should be clearly indicated.
+## Admin
 
-Validation should occur at appropriate interaction points and should provide actionable error messages.
-
----
-
-# 13. Form Errors
-
-Error messages should:
-
-- Identify the affected field.
-- Explain what is wrong.
-- Explain how to correct it where possible.
-- Be associated with the input.
-- Remain visible long enough to be understood.
-
-Avoid generic messages such as:
+The admin information architecture includes:
 
 ```text
-Invalid input
-Something went wrong
+Login
+Dashboard
+Products
+Create Product
+Edit Product
+Categories
+Inventory
+Orders
+Order Details
+Delivery Management
+Customers
+Analytics
+Settings
 ```
 
-when more useful information is available.
+The customer and admin shells share the same visual language but serve different workflows.
 
 ---
 
-# 14. Search
+# 18. Page Structure
 
-Search is a primary commerce interaction.
+A typical page should establish:
 
-Search should support:
+```text
+Header / Shell
+    ↓
+Page Title / Context
+    ↓
+Primary Content
+    ↓
+Supporting Sections
+    ↓
+Secondary Actions
+```
 
-- Clear input
-- Suggestions
-- Loading
-- Empty results
-- Error handling
-- Keyboard interaction
-- Mobile usability
+Keep related content within common alignment lines.
 
-Search suggestions should be visually and semantically associated with the search input.
+Do not introduce unrelated page-specific container widths.
 
 ---
 
-# 15. Product Cards
+# 19. Customer Home
 
-Product cards should consistently communicate:
+The approved customer home experience prioritizes:
+
+- Brand identity.
+- Hero/promotion.
+- Primary browsing action.
+- Product discovery.
+- Recommendations and commerce content.
+
+The “New Season 2026” treatment is a compact promotional eyebrow/label.
+
+The hero “Browse Deals” CTA must keep its text visible in the default state.
+
+---
+
+# 20. Product Discovery
+
+Product listing and search interfaces should prioritize:
+
+```text
+Search / Filters
+    ↓
+Product Results
+    ↓
+Product Actions
+```
+
+Product cards should communicate:
 
 ```text
 Image
@@ -313,16 +614,16 @@ Discount
 Badge
 ```
 
-Do not overload cards with low-priority information.
+Avoid overloading cards with low-priority information.
 
 ---
 
-# 16. Product Details
+# 21. Product Detail
 
-Product detail pages should prioritize:
+Priority order:
 
 1. Product identity.
-2. Product image.
+2. Product gallery.
 3. Price.
 4. Availability.
 5. Purchase action.
@@ -330,54 +631,64 @@ Product detail pages should prioritize:
 7. Supporting information.
 8. Recommendations.
 
-The primary purchase action should remain easy to locate.
+The primary purchase action should remain easy to locate across responsive layouts.
 
 ---
 
-# 17. Cart
+# 22. Cart
 
-The cart should clearly show:
+The cart must clearly expose:
 
-- Product
-- Quantity
-- Price
-- Item total
-- Availability
-- Remove action
-- Cart subtotal
-- Checkout action
+- Product.
+- Quantity.
+- Price.
+- Item total.
+- Availability.
+- Remove action.
+- Subtotal.
+- Checkout action.
 
-Users should always understand what they are about to purchase.
-
----
-
-# 18. Checkout
-
-Checkout should minimize distractions.
-
-Recommended structure:
+Desktop may use:
 
 ```text
-Shipping
-   ↓
-Payment
-   ↓
-Order Summary
-   ↓
-Confirmation
+Items | Summary
 ```
 
-The payment state must always be explicit.
+Mobile should stack the content.
 
-Do not show payment success until the backend confirms the transaction.
+The final Figma QA corrected mobile cart scrolling and overlap behavior. Implementation must preserve natural scrolling and prevent the summary or fixed controls from covering cart content.
 
 ---
 
-# 19. Payments
+# 23. Checkout
 
-Stripe is used in Test Mode.
+The checkout flow established in Figma is:
 
-The UI should clearly communicate:
+```text
+Cart
+ ↓
+Checkout
+ ↓
+Shipping Information
+ ↓
+Payment
+ ↓
+Processing
+ ↓
+Success / Failure
+ ↓
+Order
+```
+
+The UI must make the current stage explicit.
+
+Do not show order/payment success before the backend confirms the operation.
+
+---
+
+# 24. Payment
+
+Payment UI must clearly communicate:
 
 ```text
 Processing
@@ -386,13 +697,13 @@ Failed
 Cancelled
 ```
 
-Payment errors should provide recovery guidance where possible.
+Stripe Test Mode is used by the project.
 
-The UI must never expose sensitive payment information.
+Never expose sensitive payment information in UI state, logs, URLs, screenshots, or error messages.
 
 ---
 
-# 20. Orders
+# 25. Orders and Delivery
 
 Order interfaces should prioritize:
 
@@ -404,43 +715,15 @@ Payment Status
 Delivery Status
 ```
 
-Customers should be able to access:
+Order detail can expose:
 
-- Order details
-- Purchased products
-- Payment information
-- Delivery progress
-- Invoice
-- Payment receipt where available
+- Purchased products.
+- Payment information appropriate for the customer.
+- Delivery progress.
+- Invoice availability.
+- Payment receipt availability.
 
----
-
-# 21. Email and PDF Documents
-
-The commerce UI should clearly communicate document availability.
-
-Supported documents include:
-
-```text
-Order Invoice PDF
-Payment Receipt PDF
-```
-
-Transactional emails may include:
-
-```text
-OTP
-Order Confirmation
-Payment Confirmation
-```
-
-Email and PDF generation are backend responsibilities and should not be simulated as successful before the underlying operation completes.
-
----
-
-# 22. Delivery Tracking
-
-Delivery tracking should combine:
+Delivery tracking combines:
 
 ```text
 Status
@@ -449,39 +732,49 @@ Map
 Estimated Arrival
 ```
 
-The current status should be visually prominent.
-
-Real-time changes received through Socket.IO should update the interface without requiring unnecessary manual refreshes.
+Socket.IO updates should refresh status without unnecessary manual page reloads.
 
 ---
 
-# 23. Search by Image
+# 26. Search by Image
 
-The image-search experience should make the workflow clear:
+The approved flow is:
 
 ```text
 Choose Image
-     ↓
+    ↓
 Upload / Camera
-     ↓
+    ↓
 Preview
-     ↓
+    ↓
 Analyze
-     ↓
+    ↓
 Results
 ```
 
-Each state should provide clear feedback.
+The UI must provide clear states for:
 
-Permission failures and invalid images should have actionable recovery paths.
+```text
+Idle
+Selecting
+Preview
+Processing
+Success
+Invalid Image
+Permission Failure
+Error
+Results
+```
+
+The normal search experience should remain understandable when image search is unavailable.
 
 ---
 
-# 24. Recommendations
+# 27. Recommendations
 
-Recommendation sections should clearly indicate why products are being shown when useful.
+Recommendation sections should be visually subordinate to the primary task.
 
-Examples:
+Approved patterns include:
 
 ```text
 Recommended for You
@@ -490,13 +783,13 @@ Similar Products
 Frequently Bought Together
 ```
 
-Recommendations should not visually overpower the primary product or task.
+Where useful, explain recommendation context without adding unnecessary UI noise.
 
 ---
 
-# 25. Inventory
+# 28. Inventory and Availability
 
-Inventory states include:
+Use consistent states:
 
 ```text
 In Stock
@@ -504,28 +797,33 @@ Low Stock
 Out of Stock
 ```
 
-Availability should be communicated using:
+Communicate availability through:
 
 ```text
 Text
 +
-Visual indicator
+Visual treatment
 ```
 
-Do not rely only on red, yellow, or green.
+Do not rely solely on red/yellow/green.
 
-Out-of-stock products should prevent invalid purchase actions.
+Out-of-stock states must prevent invalid purchase actions at the UI level while the backend remains the true enforcement boundary.
 
 ---
 
-# 26. Statuses
+# 29. Status System
 
-Statuses should have:
+Use consistent semantic status variants:
 
-- Consistent wording
-- Consistent color semantics
-- Consistent icons where appropriate
-- Accessible text
+```text
+Success
+Warning
+Error
+Info
+Neutral
+```
+
+Status wording must remain consistent across customer and admin screens.
 
 Examples:
 
@@ -536,42 +834,33 @@ Out for Delivery
 Delivered
 ```
 
-Do not create different labels for the same state in different screens.
+Do not invent different labels for the same business state.
 
 ---
 
-# 27. Feedback
+# 30. Feedback Patterns
 
-Use the appropriate feedback mechanism.
+Use the correct feedback component:
 
-```text
-Toast
-Short temporary feedback
+| Situation | Pattern |
+|---|---|
+| Short temporary feedback | Toast |
+| Field-specific problem | Inline error |
+| Important persistent information | Alert |
+| Focused decision | Dialog / Modal |
+| Secondary focused workflow | Drawer |
+| No content | Empty State |
+| Loadable known layout | Skeleton |
+| Short operation | Spinner / progress |
+| Failed content load | Error State |
 
-Inline Error
-Field-specific problem
-
-Alert
-Important persistent information
-
-Dialog
-Confirmation / focused decision
-
-Empty State
-No content exists
-
-Error State
-Content could not be loaded
-
-Skeleton
-Content is loading
-```
+Do not replace the entire page with a spinner when only one region is loading.
 
 ---
 
-# 28. Empty States
+# 31. Empty States
 
-Empty states should explain:
+Every meaningful empty state should communicate:
 
 1. What is empty.
 2. Why it may be empty when useful.
@@ -589,52 +878,117 @@ Save products here to find them later.
 
 ---
 
-# 29. Loading States
+# 32. Error States
 
-Use skeletons when the final layout is known.
-
-Use spinners or progress indicators for:
-
-- Short actions
-- Buttons
-- Processing operations
-
-Avoid replacing the entire application with a spinner when only one section is loading.
-
----
-
-# 30. Error States
-
-Error states should provide:
+User-facing errors should communicate:
 
 ```text
 What happened
      ↓
 What the user can do
      ↓
-Retry / Recovery
+Recovery / Retry
 ```
 
-Do not expose raw stack traces or internal implementation details to users.
+Do not expose stack traces, internal service names, database errors, tokens, or implementation details.
 
 ---
 
-# 31. Dialogs
+# 33. Forms
 
-Dialogs should be reserved for:
+Forms should use:
 
-- Confirmation
-- Important decisions
-- Focused workflows
-- Destructive actions
+```text
+Label
+Field
+Helper Text
+Validation / Error
+```
 
-Dialogs should not be used for every piece of information.
+Rules:
+
+- Labels must remain visible and associated with fields.
+- Required fields must be clear.
+- Error messages must be actionable.
+- Multi-column layouts should stack appropriately on mobile.
+- Do not hard-code widths based on English-only content.
+- Preserve keyboard navigation and focus order.
 
 ---
 
-# 32. Destructive Actions
+# 34. Admin Forms
 
-Destructive actions include:
+Admin forms cover:
+
+```text
+Products
+Categories
+Inventory
+Delivery
+Settings
+```
+
+Use the shared Admin Form patterns.
+
+The Create/Edit Product image interaction is:
+
+```text
+Empty
+ → Upload Image
+ → Preview
+ → Replace / Remove
+```
+
+Do not make raw image URLs the primary user-facing upload workflow.
+
+---
+
+# 35. Admin Dashboard
+
+The admin dashboard prioritizes operational clarity and information density.
+
+Use:
+
+```text
+Stats Cards
+Charts
+Orders
+Inventory
+Operational Information
+```
+
+The final Figma QA corrected:
+
+- Sales Overview responsive behavior.
+- Orders by Status responsive stacking.
+
+Charts must remain readable and must not cause horizontal page overflow.
+
+---
+
+# 36. Data Tables
+
+Complex admin tables should use **TanStack Table**.
+
+Expected capabilities where required:
+
+```text
+Sorting
+Filtering
+Pagination
+Selection
+Loading
+Empty
+Error
+```
+
+Responsive table behavior must be intentional. Do not let a wide table accidentally force the whole application into horizontal scrolling.
+
+---
+
+# 37. Destructive Actions
+
+Destructive operations include:
 
 ```text
 Delete Product
@@ -643,290 +997,455 @@ Cancel Order
 Delete Account
 ```
 
-Use appropriate confirmation when the action is irreversible or high impact.
+Use confirmation when the action is irreversible or high impact.
 
-The destructive action should be visually distinguishable.
-
----
-
-# 33. Icons
-
-Use Lucide React consistently.
-
-Icons should:
-
-- Reinforce meaning.
-- Follow the approved size system.
-- Have accessible names when interactive.
-- Be decorative when appropriate.
-- Avoid replacing necessary text.
-
-Follow `ICONS.md`.
+The destructive action must be visually distinguishable and must not be disguised as a normal primary action.
 
 ---
 
-# 34. Motion
+# 38. Dialogs and Drawers
 
-Use motion to:
+Use dialogs/drawers for:
 
-- Explain state changes.
-- Provide feedback.
-- Improve continuity.
+- Confirmation.
+- Focused decisions.
+- Important short workflows.
+- Contextual secondary workflows.
 
-Do not use motion merely for decoration.
+Do not use a modal for information that belongs naturally in the page.
 
-Respect `prefers-reduced-motion`.
+Required behavior includes:
 
-Follow `MOTION.md`.
+- Focus management.
+- Escape where appropriate.
+- Body scroll control.
+- Clear close/cancel action.
+- Viewport-safe responsive sizing.
 
 ---
 
-# 35. Responsive Behavior
+# 39. Responsive UI
 
-Every major interface must work across:
+Every major feature must support:
 
 ```text
 Mobile
 Tablet
 Desktop
-Large Desktop
+Large Desktop consideration
 ```
 
-Responsive behavior should adapt structure, not simply scale the desktop layout.
+Responsive behavior should change structure where needed.
 
-Follow `RESPONSIVE.md`.
-
----
-
-# 36. Accessibility
-
-UI implementation must consider:
-
-- Semantic HTML
-- Keyboard navigation
-- Focus visibility
-- Labels
-- Accessible names
-- Contrast
-- Touch targets
-- Screen readers
-- Reduced motion
-- Zoom and text resizing
-
-Accessibility must be considered during component implementation.
-
----
-
-# 37. Touch Interaction
-
-Interactive controls should have adequate touch targets.
-
-Pay particular attention to:
-
-- Icon buttons
-- Menu controls
-- Quantity controls
-- Product actions
-- Map controls
-- Form controls
-
-Avoid tightly packed controls on mobile.
-
----
-
-# 38. Admin UI
-
-The administrator interface should prioritize:
-
-- Information density
-- Clarity
-- Fast workflows
-- Consistent tables
-- Clear status indicators
-- Safe destructive actions
-
-Admin UI should use the same design system as the customer interface while allowing different layout patterns where operational needs require them.
-
----
-
-# 39. Data Tables
-
-Tables should support:
-
-- Sorting
-- Filtering
-- Pagination
-- Selection where needed
-- Loading
-- Empty state
-- Error state
-
-Use TanStack Table for complex administrative data tables.
-
----
-
-# 40. UI Consistency Rules
-
-Equivalent functionality should look equivalent.
-
-For example:
+Examples established in the Figma work include:
 
 ```text
-Edit
-→ Same icon and interaction pattern
-
-Delete
-→ Same destructive treatment
-
-Loading
-→ Same loading language
-
-Success
-→ Same success treatment
+Product grid → 4 / 2 / 1 derived density
+Cart → desktop columns / mobile stack
+Admin sidebar → persistent / collapsible / compact navigation
+Orders by Status → responsive stacking
+Sales Overview → responsive chart/layout correction
 ```
 
-Do not create multiple visual patterns for the same interaction without a clear reason.
+Follow `RESPONSIVE.md` for the detailed rules.
 
 ---
 
-# 41. Content Guidelines
+# 40. Responsive Breakpoint Discipline
 
-UI text should be:
+Verified Figma design intent includes:
 
-- Clear
-- Concise
-- Action-oriented
-- Consistent
-- Human-readable
+```text
+md → 768px
+xl → 1440px
+```
 
-Prefer:
+These are design-intent values, not automatically proof of explicit CSS breakpoints.
+
+Do not treat unverified `640px` or `1024px` values as ElectroHub-specific design truth merely because they are common framework defaults.
+
+---
+
+# 41. Accessibility
+
+Every UI feature must consider:
+
+- Semantic HTML.
+- Keyboard navigation.
+- Visible focus.
+- Accessible names.
+- Labels and descriptions.
+- Contrast.
+- Screen-reader relationships.
+- Touch targets.
+- Zoom/text resizing.
+- Reduced motion.
+
+The approved focus treatment is:
+
+```text
+2px primary-blue ring
+2px offset
+```
+
+Accessibility must survive responsive transformations.
+
+---
+
+# 42. Content Guidelines
+
+UI content should be:
+
+- Clear.
+- Concise.
+- Action-oriented.
+- Consistent.
+- Human-readable.
+
+Prefer specific actions:
 
 ```text
 Remove from wishlist
 ```
 
-over:
+over vague actions:
 
 ```text
 Delete
 ```
 
-when the action specifically removes a wishlist item.
+when the context permits.
+
+Avoid unnecessary technical terminology in customer-facing interfaces.
 
 ---
 
-# 42. Localization
+# 43. Localization
 
-UI should support localized content where required.
+Layouts should tolerate:
 
-Layouts must tolerate:
+- Longer translations.
+- Different word order.
+- Different scripts.
+- RTL where supported.
 
-- Longer translations
-- Different word order
-- Different scripts
-- RTL languages where supported
+Never hard-code a control width solely because English text fits.
 
-Do not hard-code widths based on English text.
+Responsive testing must include representative long labels when localization is supported.
 
 ---
 
-# 43. Security in UI
+# 44. Security Boundary
 
-The UI must never be treated as the security boundary.
+The UI is **not** a security boundary.
 
-Sensitive operations must be validated by the backend.
-
-Do not rely on:
+Never rely on:
 
 ```text
 Hidden buttons
-Frontend role checks
+Frontend-only role checks
 Disabled controls
 ```
 
-as the only authorization mechanism.
+as the sole authorization mechanism.
+
+Sensitive operations must be enforced by the backend.
+
+The frontend should avoid exposing:
+
+- Secrets.
+- Tokens.
+- Sensitive payment details.
+- Internal stack traces.
+- Private backend implementation details.
 
 ---
 
-# 44. Performance
+# 45. Motion and Interaction
 
-UI implementation should avoid:
+Motion should explain:
 
-- Unnecessary re-renders
-- Excessive animation
-- Oversized images
-- Blocking assets
-- Large unnecessary dependencies
+- State changes.
+- Navigation.
+- Opening/closing.
+- Loading/progress.
+- Success/error feedback.
 
-Use:
+Use CSS/SCSS for simple transitions and Framer Motion where application-level orchestration benefits from it.
 
-- Lazy loading
-- Code splitting
-- Responsive images
-- Efficient queries
-- Appropriate caching
-
----
-
-# 45. Figma Handoff
-
-Figma should communicate:
-
-- Layout
-- Colors
-- Typography
-- Components
-- States
-- Responsive behavior
-- Motion
-- Interaction behavior
-
-Implementation should not require guessing basic design decisions.
-
----
-
-# 46. Review Checklist
-
-Before considering a UI feature complete, verify:
+Respect:
 
 ```text
-[ ] Figma design approved
-[ ] Layout matches design
-[ ] Typography matches tokens
-[ ] Colors use semantic tokens
-[ ] Components are reusable
-[ ] States are implemented
-[ ] Loading state exists where needed
-[ ] Empty state exists where needed
-[ ] Error state exists where needed
-[ ] Responsive behavior verified
-[ ] Keyboard accessibility verified
-[ ] Focus states verified
-[ ] Touch targets verified
-[ ] Motion respects reduced motion
-[ ] No unintended overflow
-[ ] No unnecessary visual complexity
+prefers-reduced-motion
+```
+
+Do not add motion that makes essential workflows slower or unclear.
+
+---
+
+# 46. Image and Asset Guidelines
+
+Use image assets according to their purpose:
+
+```text
+Figma exports
+→ Design evidence / handoff
+
+README screenshots
+→ Project presentation
+
+Architecture diagrams
+→ Technical communication
+
+Product images
+→ Application content
+```
+
+Optimize product/media assets appropriately and use Cloudinary for production image management.
+
+Do not duplicate visual source-of-truth information across many unrelated asset folders.
+
+---
+
+# 47. Implementation Boundaries
+
+Design and implementation responsibilities should remain clear.
+
+### Figma
+
+Owns:
+
+- Visual layout.
+- Component appearance.
+- Visual states.
+- Responsive compositions.
+- Interaction intent.
+- Prototype flows.
+
+### Design Markdown
+
+Owns:
+
+- Design decisions.
+- Tokens.
+- Rules.
+- Rationale.
+- Handoff guidance.
+
+### React/SCSS Implementation
+
+Owns:
+
+- Runtime behavior.
+- Data rendering.
+- Application state.
+- Responsive CSS implementation.
+- Accessibility implementation.
+- Integration with APIs.
+
+### Backend
+
+Owns:
+
+- Authorization.
+- Business rules.
+- Payment truth.
+- Inventory truth.
+- Order state.
+- Security enforcement.
+
+Do not move backend security responsibilities into UI-only logic.
+
+---
+
+# 48. Prototype and Flow Alignment
+
+The approved prototype flows include:
+
+## Customer
+
+```text
+Home
+ → Search
+ → Product
+ → Add to Cart
+ → Cart
+ → Checkout
+ → Payment
+ → Success
+ → Order
+ → Delivery Tracking
+```
+
+## Authentication
+
+```text
+Login
+ → OTP
+ → Verification
+ → Authenticated
+```
+
+## Admin
+
+```text
+Login
+ → Dashboard
+ → Orders
+ → Order Details
+ → Update Delivery
+ → Customer sees status
+```
+
+Implementation navigation should preserve these intended journeys.
+
+---
+
+# 49. Navigation Routes
+
+The approved customer route model includes:
+
+```text
+/
+ /products
+ /products/:id
+ /search
+ /wishlist
+ /account
+ /orders
+ /checkout
+```
+
+The lightweight router/navigation system should preserve browser/back navigation behavior and should not create inconsistent navigation patterns between screens.
+
+---
+
+# 50. Final Figma Handoff Structure
+
+The final handoff was organized around:
+
+```text
+Layouts
+├── Customer
+└── Admin
+
+Screens
+├── Customer
+└── Admin
+
+Responsive
+├── Desktop
+├── Tablet
+└── Mobile
+
+Prototype
+└── Main User Flows
+```
+
+Developer notes established:
+
+```text
+Spacing     → use existing spacing tokens
+Colors      → use existing color tokens
+Typography  → use existing typography styles
+Components  → reuse Figma components
+Responsive  → follow established grid
 ```
 
 ---
 
-# 47. UI Completion Criteria
+# 51. Design QA Rules
 
-A UI feature is considered complete when:
+Before implementation is considered visually complete, verify:
 
-- It follows the design system.
-- It follows the approved Figma design.
-- Components are reusable.
-- Responsive behavior is defined.
-- Accessibility is addressed.
-- Loading, empty, and error states are handled.
-- Interactive states are implemented.
-- Content is clear and consistent.
-- Performance is acceptable.
-- No unnecessary visual inconsistencies remain.
+```text
+[ ] Correct Figma screen used
+[ ] Correct component reused
+[ ] Correct token used
+[ ] Typography matches
+[ ] Colors match
+[ ] Spacing matches
+[ ] Radius matches
+[ ] Icon matches
+[ ] States implemented
+[ ] Responsive behavior implemented
+[ ] Focus behavior implemented
+[ ] Accessibility checked
+[ ] No unintended overflow
+[ ] Loading/empty/error states checked
+[ ] Customer/admin shell remains consistent
+```
 
 ---
 
-# 48. UI Principle
+# 52. Verified vs Derived Decisions
+
+To prevent accidental design drift:
+
+### Verified / explicitly established through the Figma work
+
+- Figma is the visual source of truth.
+- Poppins is the UI font.
+- JetBrains Mono is the data font.
+- Primary `#2563EB`.
+- Primary hover `#1D4ED8`.
+- Accent `#06B6D4`.
+- Placeholder/muted `#64748B`.
+- Rating fill/stroke treatment.
+- 4px spacing scale evidence.
+- `24px` horizontal container padding.
+- Control/icon sizing system.
+- Radius values explicitly verified.
+- 2px focus ring + 2px offset.
+- 42-component hierarchy.
+- Customer/admin navigation and shells.
+- Admin logo/header treatment.
+- Admin sidebar collapse control at the top.
+- Sticky sidebar/main-content scrolling behavior.
+- Mobile cart scrolling/overlap correction.
+- Sales Overview responsive correction.
+- Orders by Status stacking.
+- Admin image-upload interaction.
+- Responsive desktop/tablet/mobile coverage.
+- Prototype flow structure.
+- Final handoff organization.
+
+### Derived / implementation-level decisions
+
+Some values and rules were inferred from visual auditing rather than directly specified as code:
+
+- 4/2/1 product-grid density.
+- Exact CSS breakpoints beyond verified design intent.
+- `1440px` as an actual CSS max-width.
+- Some floating/elevation shadows.
+- Additional spacing changes required by implementation.
+
+Derived decisions must remain clearly distinguished from Figma-verified facts.
+
+---
+
+# 53. UI Completion Criteria
+
+A UI feature is complete only when:
+
+- It follows the approved Figma design.
+- It uses the approved design tokens.
+- It reuses existing components where applicable.
+- Interactive states are implemented.
+- Loading/empty/error states are handled where relevant.
+- Responsive behavior is intentional.
+- Accessibility is addressed.
+- Focus states are visible.
+- Touch interaction is usable.
+- Motion respects reduced-motion preferences.
+- Content is clear and consistent.
+- No unintended horizontal overflow exists.
+- No sensitive implementation details are exposed.
+- The implementation does not duplicate existing UI patterns without justification.
+- Final visual QA has been performed against Figma.
+
+---
+
+# 54. UI Principle
 
 > **Build interfaces that are clear, consistent, accessible, responsive, and easy to understand before making them visually impressive.**

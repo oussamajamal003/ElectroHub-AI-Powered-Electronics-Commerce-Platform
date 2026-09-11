@@ -2,652 +2,636 @@
 
 ## 1. Purpose
 
-This document defines the motion and animation system used throughout ElectroHub.
+This document defines the approved ElectroHub motion system.
 
-Motion is used to improve:
+Motion exists to communicate:
 
-- User feedback
-- Interaction clarity
-- Navigation continuity
-- State transitions
-- Perceived performance
-- Product polish
+-   Interaction feedback
+-   State changes
+-   Navigation continuity
+-   Loading
+-   Success and error feedback
+-   Commerce transitions
+-   Delivery updates
 
-Motion should support the interface rather than distract from the user's task.
+Motion is supportive, not decorative.
 
-ElectroHub uses **Framer Motion** for application-level motion where appropriate.
+**Figma is the visual source of truth for intended motion.** This
+document records the approved motion principles and implementation
+contract.
 
----
+------------------------------------------------------------------------
 
-# 2. Motion Principles
+# 2. Motion Philosophy
+
+ElectroHub follows five principles:
 
 ### Purposeful
 
-Every animation should have a clear reason to exist.
+Every animation must communicate or improve something.
 
 ### Fast
 
-Most interface interactions should feel immediate.
-
-### Consistent
-
-Similar interactions should use similar motion behavior.
+Interaction feedback should feel immediate.
 
 ### Subtle
 
-Motion should support hierarchy without becoming visually distracting.
+Motion should not compete with product content.
+
+### Consistent
+
+Similar interactions should behave similarly.
 
 ### Accessible
 
-Users who prefer reduced motion must receive an appropriate reduced-motion experience.
+Users who prefer reduced motion must receive an equivalent non-motion
+experience.
 
-### Responsive
-
-Motion should remain appropriate across device classes and interaction methods.
-
----
+------------------------------------------------------------------------
 
 # 3. Motion Source of Truth
 
-Figma defines the intended motion behavior.
-
-The implementation relationship is:
-
-```text
-Figma Motion Specification
-        ↓
-Motion Tokens
-        ↓
-Framer Motion
-        ↓
-React Components
+``` text
+Figma Interaction / Prototype
+          ↓
+Motion Pattern
+          ↓
+Motion Token
+          ↓
+React / CSS Implementation
 ```
 
-Significant motion behavior should be represented in the design before implementation.
+Figma defines intended behavior.
 
----
+Implementation must not invent contradictory motion.
 
-# 4. Motion Library
+------------------------------------------------------------------------
 
-The approved animation library is:
+# 4. Motion Technology
 
-```text
+The approved application-level motion library is:
+
+``` text
 Framer Motion
 ```
 
-CSS transitions and animations may be used for simple styling transitions where they are more appropriate.
+Simple transitions may use CSS/SCSS when that is technically simpler and
+sufficient.
 
-Motion libraries should not be added without an approved architectural reason.
+Do not add another animation library for isolated effects.
 
----
+------------------------------------------------------------------------
 
 # 5. Motion Categories
 
-ElectroHub motion is organized into:
+The system covers:
 
-```text
+``` text
 Micro-interactions
-State transitions
 Navigation
-Dialogs
-Loading
+Overlays
 Feedback
-Lists
+Loading
 Commerce
+Checkout
+Orders
 Delivery
+Admin
 Responsive
 ```
 
----
+------------------------------------------------------------------------
 
-# 6. Motion Timing
+# 6. Timing Philosophy
 
-Motion should use a small, consistent timing scale.
+Motion uses a small timing hierarchy rather than arbitrary values.
 
-Conceptual durations:
+Conceptual levels:
 
-```text
+``` text
 Instant
 Fast
 Normal
 Slow
 ```
 
-Typical use:
+### Instant
 
-```text
-Instant
-Very small visual state changes
+Tiny state changes.
 
-Fast
-Buttons, hover states, small UI feedback
+### Fast
 
-Normal
-Dialogs, dropdowns, content transitions
+Buttons, hover states, small controls.
 
-Slow
-Page-level or prominent transitions
-```
+### Normal
 
-The exact durations should be defined by the approved Figma motion system.
+Dropdowns, dialogs, drawers, content transitions.
 
----
+### Slow
+
+Large or prominent transitions only when justified.
+
+The exact numerical timing should be centralized rather than scattered
+through components.
+
+------------------------------------------------------------------------
 
 # 7. Easing
 
-Motion should use a controlled set of easing curves.
+Approved semantic easing roles:
 
-Conceptual roles:
-
-```text
+``` text
 Standard
-Ease-in
-Ease-out
-Ease-in-out
+Ease In
+Ease Out
+Ease In Out
 Spring
 ```
 
-Use the simplest appropriate easing.
+Use the simplest curve that communicates the interaction.
 
-Avoid custom easing values for individual components unless the design requires them.
+Do not introduce custom cubic-bezier values for individual components
+without design review.
 
----
+------------------------------------------------------------------------
 
-# 8. Hover Motion
+# 8. Hover
 
-Hover effects should provide subtle feedback.
+Hover feedback may use:
 
-Examples:
+-   Color transition
+-   Border transition
+-   Small elevation change
+-   Opacity
+-   Very small transform
 
-```text
-Product Card
-Button
-Navigation Item
-Icon Button
+Hover must not cause layout shift.
+
+The final Figma UI should remain understandable even without animation.
+
+------------------------------------------------------------------------
+
+# 9. Pressed State
+
+Pressed interactions may use subtle visual compression or state
+transition.
+
+Avoid exaggerated movement.
+
+The pressed state should be distinguishable from hover.
+
+------------------------------------------------------------------------
+
+# 10. Focus
+
+Focus visibility is not dependent on animation.
+
+The established focus treatment remains:
+
+``` text
+2px primary outline
+2px offset
 ```
 
-Possible changes:
+If motion is disabled, the focus indicator remains fully visible.
 
-- Elevation
-- Background
-- Border
-- Opacity
-- Small translation
-- Icon movement
+------------------------------------------------------------------------
 
-Hover motion must not cause layout instability.
+# 11. Button Motion
 
----
+Buttons may animate:
 
-# 9. Focus Motion
-
-Focus transitions should remain subtle.
-
-Focus visibility must never depend on animation.
-
-The focus indicator must remain visible even when motion is disabled.
-
----
-
-# 10. Button Motion
-
-Buttons may use subtle transitions for:
-
-```text
+``` text
 Hover
-Active
+Pressed
 Loading
 Success
 ```
 
-Examples:
+The animation should be short and restrained.
 
-```text
-Hover
-Slight visual emphasis
+Do not make every button bounce or scale dramatically.
 
-Active
-Small press feedback
+------------------------------------------------------------------------
 
-Loading
-Progress indicator
+# 12. Product Card Motion
 
-Success
-Clear completion feedback
-```
+Product cards may receive subtle hover feedback.
 
-Buttons should not use excessive bounce or large movement.
+Example:
 
----
-
-# 11. Card Motion
-
-Product cards may use subtle hover motion.
-
-Possible behavior:
-
-```text
+``` text
 Default
    ↓
 Hover
-Slight elevation / visual emphasis
+Visual emphasis
 ```
 
-Card motion should not cause neighboring cards to move unexpectedly.
+Avoid transforms that cause cards to overlap or change the surrounding
+grid.
 
----
+------------------------------------------------------------------------
 
-# 12. Modal and Dialog Motion
+# 13. Dropdown Motion
 
-Dialogs should use clear entry and exit transitions.
+Dropdowns may use:
 
-Conceptually:
-
-```text
-Opening
-Fade overlay
-+
-Scale / translate dialog
-
-Closing
-Reverse transition
-```
-
-Focus management must remain correct regardless of animation.
-
----
-
-# 13. Drawer and Mobile Navigation Motion
-
-Mobile navigation drawers may use:
-
-```text
-Slide In
-Slide Out
-```
-
-The background overlay may fade simultaneously.
-
-The animation should be fast enough that navigation does not feel delayed.
-
----
-
-# 14. Dropdown Motion
-
-Dropdowns may use a short:
-
-```text
+``` text
 Fade
 +
 Small translate / scale
 ```
 
-The motion should not interfere with keyboard navigation.
+The animation must not delay keyboard access.
 
----
+------------------------------------------------------------------------
 
-# 15. Page Transitions
+# 14. Modal / Dialog Motion
+
+Modal and dialog transitions may use:
+
+``` text
+Overlay fade
++
+Dialog fade/scale/translate
+```
+
+Requirements:
+
+-   Focus remains correctly managed.
+-   Escape behavior remains correct.
+-   Background interaction remains blocked where required.
+-   Closing must not trap focus.
+
+------------------------------------------------------------------------
+
+# 15. Drawer Motion
+
+Drawers, especially mobile navigation, may use:
+
+``` text
+Slide In
+Slide Out
+```
+
+with a synchronized overlay fade.
+
+The animation should not make navigation feel slow.
+
+------------------------------------------------------------------------
+
+# 16. Sidebar Motion
+
+Admin sidebar collapse/expand may animate width or content visibility.
+
+Requirements:
+
+-   Header is never covered.
+-   Main content resizes.
+-   Sticky behavior remains correct.
+-   Collapsed navigation remains usable.
+-   Motion does not cause horizontal overflow.
+
+------------------------------------------------------------------------
+
+# 17. Mobile Navigation
+
+Mobile navigation may animate its entrance and exit.
+
+The final interaction must remain usable with:
+
+-   Touch
+-   Keyboard where applicable
+-   Reduced motion
+-   Screen readers
+
+------------------------------------------------------------------------
+
+# 18. Page Transitions
 
 Page transitions should be used sparingly.
 
-If used, they should:
+They must not:
 
-- Preserve orientation.
-- Avoid delaying navigation.
-- Avoid excessive movement.
-- Respect reduced-motion preferences.
+-   Delay route changes unnecessarily.
+-   Create disorientation.
+-   Cause layout jumps.
+-   Hide the destination content for too long.
 
-The application should never make basic navigation feel slower because of animation.
+Basic application navigation should feel immediate.
 
----
+------------------------------------------------------------------------
 
-# 16. Loading Motion
+# 19. Loading
 
-Loading feedback may use:
+Approved loading patterns include:
 
-```text
-Skeleton Shimmer
+``` text
+Skeleton
 Spinner
-Progress Indicator
+Progress / Processing state
 ```
 
-Skeletons should generally be preferred when the structure of the final content is known.
+Prefer skeletons when the final content structure is known.
 
-Loading animations should avoid excessive flashing.
+Use a spinner when the operation itself is the main thing being waited
+on.
 
----
+------------------------------------------------------------------------
 
-# 17. Skeleton Motion
+# 20. Skeleton
 
-Skeleton animation should communicate activity without becoming distracting.
+Skeleton animation may use a subtle shimmer.
 
-If shimmer is used:
+Requirements:
 
-- Keep contrast subtle.
-- Keep timing consistent.
-- Avoid excessive speed.
-- Respect reduced motion.
+-   Low visual distraction
+-   Stable dimensions
+-   No excessive flashing
+-   Reduced-motion alternative
 
-When reduced motion is enabled, shimmer may be replaced with a static skeleton.
+With reduced motion enabled, shimmer should be replaced with a static
+representation where appropriate.
 
----
+------------------------------------------------------------------------
 
-# 18. Success Motion
+# 21. Success
 
-Success states may use subtle animation.
+Success may use subtle motion for:
 
-Examples:
-
-```text
+``` text
+Added to Cart
+Wishlist Updated
 Payment Successful
 Order Created
-Item Added to Cart
-Wishlist Updated
 ```
 
 Possible patterns:
 
-```text
+``` text
 Fade
 Scale
-Checkmark transition
+Checkmark reveal
 ```
 
-Success motion should reinforce the result without delaying the next action.
+Motion must not delay the user's next action.
 
----
+------------------------------------------------------------------------
 
-# 19. Error Motion
+# 22. Error
 
-Error motion should attract attention without being aggressive.
+Errors may use:
 
-Possible behavior:
-
-```text
-Inline Error
-Fade in
-
-Invalid Form
-Subtle highlight
-
-Error Alert
-Fade / slide in
+``` text
+Fade
+Slide
+Subtle emphasis
 ```
 
-Avoid excessive shaking.
+Avoid aggressive shaking.
 
-If a shake animation is used, it must remain accessible and respect reduced-motion preferences.
+Errors must remain understandable without animation.
 
----
+------------------------------------------------------------------------
 
-# 20. Toast Motion
+# 23. Toast
 
-Toasts may:
+Toast lifecycle:
 
-```text
+``` text
 Enter
-  ↓
-Remain visible
-  ↓
+ ↓
+Visible
+ ↓
 Exit
 ```
 
-The animation should clearly communicate appearance and disappearance.
+The animation should reinforce appearance and disappearance.
 
-Important information should not disappear solely because the animation completed.
+The message itself remains accessible independently of motion.
 
----
+------------------------------------------------------------------------
 
-# 21. Search Motion
+# 24. Search
 
-Search interactions may include:
+Search interactions may transition:
 
-```text
-Search Suggestions
-Fade / slide in
-
+``` text
+Input
+ ↓
+Suggestions
+ ↓
 Loading
-Progress indicator
-
+ ↓
 Results
-Content transition
 ```
 
-Search animations should not delay typing or result access.
+Animation must not interfere with typing, keyboard navigation, or result
+access.
 
----
+------------------------------------------------------------------------
 
-# 22. Image Search Motion
+# 25. Image Search
 
-The image-search flow may use motion for:
+Image-search interaction may show:
 
-```text
-Image Selection
- ↓
+``` text
+Select Image
+      ↓
 Preview
- ↓
+      ↓
 Processing
- ↓
+      ↓
 Results
 ```
 
-Processing feedback should make it clear that the system is working.
+The interface must represent real processing state.
 
-The animation must not imply AI certainty or progress that the system cannot actually measure.
+Do not simulate fake AI progress.
 
----
+------------------------------------------------------------------------
 
-# 23. Cart Motion
+# 26. Cart
 
-Cart interactions may use subtle feedback for:
+Cart interactions may use subtle transitions for:
 
-```text
-Add to Cart
-Remove Item
-Quantity Change
-Cart Update
+-   Add item
+-   Remove item
+-   Quantity change
+-   Cart count update
+
+The updated state must remain immediately understandable.
+
+------------------------------------------------------------------------
+
+# 27. Wishlist
+
+Wishlist interactions may animate:
+
+``` text
+Not Saved
+   ↕
+Saved
 ```
 
-Examples:
+The heart state should communicate the actual current state.
 
-```text
-Button feedback
-Cart count update
-Small item transition
-```
+------------------------------------------------------------------------
 
-Motion should not obscure the updated cart state.
+# 28. Checkout and Payment
 
----
+Checkout may use transitions for:
 
-# 24. Wishlist Motion
-
-Wishlist interactions may use:
-
-```text
-Heart state transition
-Add
-Remove
-Loading
-```
-
-The animation should clearly communicate whether the product is currently saved.
-
----
-
-# 25. Checkout and Payment Motion
-
-Checkout may use motion for:
-
-```text
+``` text
 Validation
-Payment Processing
+Processing
 Success
-Error
-Order Confirmation
+Failure
+Order confirmation
 ```
 
-Payment processing should provide clear visual feedback.
+Payment UI must never animate into a success state before the backend
+confirms payment.
 
-The UI must not imply successful payment before the backend confirms the transaction.
+------------------------------------------------------------------------
 
----
+# 29. Orders
 
-# 26. Order Motion
-
-Order status changes may use subtle transitions.
+Order status changes may transition through the established order
+lifecycle.
 
 Example:
 
-```text
-Confirmed
+``` text
+Pending
    ↓
-Preparing
+Processing
    ↓
-Out for Delivery
+Shipped
    ↓
 Delivered
 ```
 
-Timeline progression may animate when a new status is received.
+Motion should represent actual state changes.
 
----
+------------------------------------------------------------------------
 
-# 27. Delivery Tracking Motion
+# 30. Delivery Tracking
 
-Delivery tracking is a real-time feature and may use motion for:
+Delivery tracking can use motion for:
 
-- Map marker movement
-- Timeline updates
-- Status changes
-- Estimated arrival changes
-- Connection state
+-   Timeline progression
+-   Map updates
+-   Status changes
+-   Location updates
+-   Estimated arrival changes
 
-Socket.IO provides the real-time data.
+Real-time movement must be based on actual received data.
 
-Motion should represent actual received updates rather than simulate movement that has not occurred.
+Do not simulate movement that has not occurred.
 
----
+------------------------------------------------------------------------
 
-# 28. Recommendation Motion
+# 31. Admin Motion
 
-Recommendation sections may use:
+Admin interfaces prioritize efficiency.
 
-- Carousel transitions
-- Card entrance
-- Loading skeletons
+Use motion mainly for:
 
-Motion should remain secondary to product discovery.
+-   Dialogs
+-   Drawers
+-   Loading
+-   Feedback
+-   Navigation state
+-   Status changes
 
----
+Avoid unnecessary animations in dense tables and operational workflows.
 
-# 29. Admin Motion
+------------------------------------------------------------------------
 
-Administrative interfaces should prioritize efficiency.
+# 32. List Motion
 
-Motion should be more restrained than marketing-oriented interfaces.
+Lists may animate:
 
-Use motion for:
+-   Item insertion
+-   Removal
+-   Filtering
+-   Reordering
+-   Loading
 
-- Dialogs
-- Feedback
-- Loading
-- Status updates
-- Navigation
+When many records change at once, motion should be restrained to avoid
+visual confusion.
 
-Avoid unnecessary animation in dense tables and operational workflows.
+------------------------------------------------------------------------
 
----
+# 33. Layout Stability
 
-# 30. List Motion
+Animations must not introduce unexpected layout shifts.
 
-Lists may use subtle item transitions for:
+Prefer properties such as:
 
-- Adding items
-- Removing items
-- Reordering
-- Filtering
-- Loading results
-
-Animations must avoid creating confusing movement when many items change simultaneously.
-
----
-
-# 31. Layout Stability
-
-Motion must not create unexpected layout shifts.
-
-Avoid animations that:
-
-- Change document flow unnecessarily.
-- Push surrounding content unexpectedly.
-- Cause horizontal overflow.
-- Move controls away from the user's pointer or keyboard focus.
-
-Prefer transform and opacity for many visual transitions when appropriate.
-
----
-
-# 32. Performance
-
-Motion should remain performant.
-
-Prefer GPU-friendly properties where appropriate:
-
-```text
+``` text
 transform
 opacity
 ```
 
-Avoid expensive continuous animations when they provide little value.
+for visual transitions where appropriate.
 
-Motion should not noticeably reduce performance on lower-powered mobile devices.
+Avoid animations that:
 
----
+-   Push surrounding content unexpectedly
+-   Create horizontal overflow
+-   Move focused controls
+-   Cause unstable grid layouts
 
-# 33. Reduced Motion
+------------------------------------------------------------------------
+
+# 34. Performance
+
+Motion must remain performant across:
+
+``` text
+Desktop
+Tablet
+Mobile
+```
+
+Avoid:
+
+-   Continuous expensive animations
+-   Large repaint-heavy effects
+-   Excessive simultaneous transitions
+
+Lower-powered devices must remain usable.
+
+------------------------------------------------------------------------
+
+# 35. Reduced Motion
 
 The application must respect:
 
-```text
+``` text
 prefers-reduced-motion
 ```
 
-When reduced motion is requested:
+When enabled:
 
-- Remove unnecessary transitions.
-- Disable decorative movement.
-- Replace shimmer with static loading where appropriate.
-- Reduce page transitions.
-- Preserve essential state feedback.
+-   Remove decorative movement.
+-   Reduce or eliminate transitions.
+-   Disable shimmer where appropriate.
+-   Preserve focus.
+-   Preserve status feedback.
+-   Preserve functional state changes.
 
-Functional feedback must remain available without animation.
+Reduced motion changes presentation, not functionality.
 
----
+------------------------------------------------------------------------
 
-# 34. Motion and Accessibility
+# 36. Motion Tokens
 
-Motion must never be required to understand:
+Motion should be centralized conceptually:
 
-- Navigation
-- Status
-- Errors
-- Success
-- Availability
-- Payment results
-- Order state
-
-Users must receive equivalent information without animation.
-
----
-
-# 35. Motion Tokens
-
-Motion should use centralized tokens.
-
-Conceptually:
-
-```scss
+``` text
 --motion-duration-fast
 --motion-duration-normal
 --motion-duration-slow
@@ -658,41 +642,38 @@ Conceptually:
 --motion-ease-in-out
 ```
 
-The exact values should follow the approved Figma motion system.
+Do not scatter raw animation durations throughout the application.
 
----
+------------------------------------------------------------------------
 
-# 36. Framer Motion Usage
+# 37. Implementation Boundary
 
-Framer Motion should be used when it provides meaningful value for:
+Use:
 
-- Component transitions
-- Layout animations
-- Presence animations
-- Page transitions
-- Complex interaction sequences
+``` text
+CSS / SCSS
+```
 
-Simple hover and color transitions may remain in SCSS/CSS.
+for simple style transitions.
 
----
+Use:
 
-# 37. Animation Boundaries
+``` text
+Framer Motion
+```
 
-Motion logic should remain close to the component or feature it belongs to.
+for meaningful component/application transitions.
 
-Avoid creating a global animation abstraction for every possible animation.
+The technology should follow complexity rather than forcing every
+transition through one system.
 
-Shared motion utilities should be introduced only when the same behavior is genuinely reused.
-
----
+------------------------------------------------------------------------
 
 # 38. Motion Naming
 
-Motion definitions should use semantic names.
+Use semantic names:
 
-Prefer:
-
-```text
+``` text
 fadeIn
 fadeOut
 slideIn
@@ -701,72 +682,135 @@ scaleIn
 scaleOut
 ```
 
-rather than:
+Avoid:
 
-```text
+``` text
 animation1
-transition2
-effectNew
+effect2
+newTransition
 ```
 
----
+------------------------------------------------------------------------
 
-# 39. Motion Usage Rules
+# 39. Motion and Accessibility
 
-### Do
+Motion must never be required to understand:
 
-- Use motion with purpose.
-- Keep transitions consistent.
-- Respect reduced motion.
-- Prefer subtle feedback.
-- Validate performance.
-- Align motion with Figma.
-- Keep important information available without animation.
+-   Errors
+-   Success
+-   Order state
+-   Payment result
+-   Availability
+-   Navigation
+-   Loading state
 
-### Do Not
+Equivalent information must remain available without animation.
 
-- Animate everything.
-- Delay critical workflows.
-- Use excessive bouncing or shaking.
-- Simulate real-time activity inaccurately.
-- Depend on animation for meaning.
-- Introduce arbitrary durations everywhere.
+------------------------------------------------------------------------
 
----
+# 40. Review Rules
 
-# 40. Design Review
+Before introducing motion:
 
-Before adding a new animation, verify:
+1.  Identify the user benefit.
+2.  Check the Figma reference.
+3.  Reuse an existing motion pattern.
+4.  Confirm it does not destabilize layout.
+5.  Confirm reduced-motion behavior.
+6.  Confirm mobile performance.
+7.  Confirm it does not delay critical actions.
+8.  Confirm real-time motion represents real data.
 
-1. What user problem does the animation solve?
-2. Is the animation defined in Figma?
-3. Can an existing motion pattern be reused?
-4. Does it preserve layout stability?
-5. Does it respect reduced motion?
-6. Does it perform well on mobile?
-7. Does it delay or obscure a critical action?
+------------------------------------------------------------------------
 
----
+# 41. Verified vs Derived
 
-# 41. Motion Completion Criteria
+### Established
 
-The motion system is considered complete when:
+-   Motion is purposeful, subtle, consistent, and accessible.
+-   Framer Motion is the approved application-level motion library.
+-   CSS/SCSS is appropriate for simple transitions.
+-   Reduced-motion behavior is required.
+-   Motion must not compromise layout stability.
+-   Real-time delivery motion must represent actual data.
 
-- Motion principles are defined.
-- Timing rules are defined.
-- Easing rules are defined.
-- Common interaction patterns are defined.
-- Loading motion is defined.
-- Feedback motion is defined.
-- Commerce motion is defined.
-- Delivery motion is defined.
-- Admin motion is defined.
-- Reduced-motion behavior is defined.
-- Performance requirements are defined.
-- Figma and implementation are aligned.
+### Derived
 
----
+-   Exact duration values.
+-   Exact easing curves.
+-   Specific transition distances/scales.
+-   Component-specific animation parameters.
 
-# 42. Motion Principle
+These values should be finalized from Figma when explicitly specified
+rather than invented as design truth.
 
-> **Motion should explain change, provide feedback, and improve continuity without slowing the user down.**
+------------------------------------------------------------------------
+
+# 42. Completion Criteria
+
+The motion system is complete when:
+
+-   Motion principles are defined.
+-   Timing hierarchy is defined.
+-   Easing roles are defined.
+-   Component patterns are defined.
+-   Overlay behavior is defined.
+-   Loading behavior is defined.
+-   Commerce behavior is defined.
+-   Delivery behavior is defined.
+-   Admin behavior is defined.
+-   Reduced-motion behavior is defined.
+-   Performance requirements are defined.
+-   Figma and implementation remain aligned.
+
+------------------------------------------------------------------------
+
+# 43. Motion Principle
+
+> **Motion explains change, confirms interaction, and preserves
+> continuity without slowing the user down.**
+# 44. Repository Figma Asset Structure
+
+Motion documentation remains part of `docs/02_Design/`. Figma visual-reference and handoff assets use the single approved repository structure below:
+
+```text
+assets/
+└── figma/
+    ├── FIGMA.md
+    ├── FIGMA_IMPLEMENTATION_RULES.md
+    ├── FIGMA_REFERENCES.md
+    │
+    └── exports/
+        │
+        ├── Components/
+        │   ├── README.md
+        │   └── screenshots/
+        │
+        ├── admin/
+        │   ├── README.md
+        │   └── screenshots/
+        │
+        └── customer/
+            ├── README.md
+            └── screenshots/
+```
+
+## 44.1 Responsibilities
+
+- `assets/figma/FIGMA.md` — primary repository-side Figma governance and handoff documentation.
+- `assets/figma/FIGMA_IMPLEMENTATION_RULES.md` — implementation rules for translating Figma interactions into the application.
+- `assets/figma/FIGMA_REFERENCES.md` — Figma file, page, frame, prototype, and handoff references.
+- `assets/figma/exports/Components/` — component interaction and motion reference exports/screenshots.
+- `assets/figma/exports/admin/` — administrator flow and interaction reference exports/screenshots.
+- `assets/figma/exports/customer/` — customer flow and interaction reference exports/screenshots.
+
+Do not recreate legacy Figma export categories such as `Layouts/`, `Foundation/`, `screens/`, or `responsive/`.
+
+## 44.2 Screenshot Policy
+
+Figma Design is authoritative for intended motion and interaction behavior. Figma Make screenshots are supporting visual references; screenshots alone do not establish exact animation timing or easing unless explicitly evidenced by the design.
+
+Preserve default Figma Make-generated filenames. Do not manually rename screenshots into custom component/screen naming patterns.
+
+Responsive motion evidence belongs inside the approved `Components`, `admin`, and `customer` packages rather than a separate responsive export directory.
+

@@ -2,149 +2,234 @@
 
 ## 1. Purpose
 
-This document defines the color system used throughout ElectroHub.
+This document defines the approved ElectroHub color system.
 
-The color system provides consistent visual roles for:
+It records the color decisions established during the complete
+Figma/Figma Make workflow and defines how those decisions should be
+consumed by the application.
 
-- Brand identity
-- Backgrounds
-- Surfaces
-- Text
-- Borders
-- Interactive elements
-- Status feedback
-- Commerce states
-- Administrative interfaces
-- Dark and light themes where applicable
+The color system covers:
 
-Colors should be applied through semantic design tokens rather than arbitrary values.
+-   Brand identity
+-   Neutral scale
+-   Backgrounds
+-   Surfaces
+-   Text
+-   Borders
+-   Interactive states
+-   Status states
+-   Commerce states
+-   Rating
+-   Focus
+-   Overlays
+-   Accessibility
 
----
+**Figma is the visual source of truth.** This document records the
+approved color decisions so they can be implemented consistently.
 
-# 2. Color Principles
+------------------------------------------------------------------------
 
-The ElectroHub color system follows these principles:
+# 2. Source of Truth
 
-### Consistency
+The authority chain is:
 
-The same semantic role should use the same color throughout the application.
-
-### Accessibility
-
-Color choices must provide sufficient contrast and must not be the only mechanism used to communicate important information.
-
-### Semantic Usage
-
-Colors should describe meaning rather than simply decorate individual components.
-
-### Theme Support
-
-If multiple themes are implemented, semantic tokens should remain stable while their underlying values may change.
-
-### Design-Code Alignment
-
-Figma color tokens and implementation tokens should represent the same design decisions.
-
----
-
-# 3. Color Source of Truth
-
-Figma is the source of truth for the approved visual color system.
-
-The implementation should map the approved Figma colors into semantic SCSS/CSS tokens.
-
-Conceptually:
-
-```text
-Figma Color Tokens
+``` text
+Figma Variables / Styles
         ↓
 Semantic Design Tokens
         ↓
-SCSS Variables / CSS Custom Properties
+SCSS / CSS Custom Properties
         ↓
 React Components
+        ↓
+Feature Screens
 ```
 
----
+Figma defines the intended visual appearance.
 
-# 4. Color Categories
+Implementation defines how those values are technically consumed at
+runtime.
 
-The ElectroHub color system is organized into:
+If a visual discrepancy appears, do not introduce a local color to hide
+it. Determine whether the Figma definition or implementation is
+outdated.
 
-```text
-Brand
-Background
+------------------------------------------------------------------------
+
+# 3. Color Architecture
+
+The approved system separates:
+
+``` text
+Primitive Colors
+      ↓
+Semantic Tokens
+      ↓
+Component Usage
+```
+
+### Primitive
+
+Primitive values describe the actual color scale.
+
+Example:
+
+``` text
+Slate 900
+Slate 800
+...
+Slate 50
+```
+
+### Semantic
+
+Semantic tokens describe purpose:
+
+``` text
+Text Primary
 Surface
-Text
-Border
-Interactive
-Status
-Commerce
-Overlay
-```
-
----
-
-# 5. Brand Colors
-
-Brand colors establish ElectroHub's visual identity.
-
-Recommended semantic roles:
-
-```text
+Border Default
+Success
+Error
 Primary
-Primary Hover
-Primary Active
-Primary Contrast
-Secondary
-Secondary Hover
-Secondary Active
-Secondary Contrast
 ```
 
-The exact hexadecimal values are defined by the approved Figma design.
+### Component
 
-Brand colors should be used consistently across:
+Components consume semantic tokens rather than inventing local colors.
 
-- Primary buttons
-- Links
-- Important actions
-- Selected states
-- Brand elements
-- Key interface highlights
+------------------------------------------------------------------------
 
----
+# 4. Primary Brand
 
-# 6. Background Colors
+The approved primary brand color is:
 
-Background tokens define large page-level surfaces.
+  Token                Value       Purpose
+  -------------------- ----------- -----------------------------
+  Primary              `#2563EB`   Main brand/action color
+  Primary Hover        `#1D4ED8`   Hovered primary action
+  Primary Foreground   `#FFFFFF`   Content on primary surfaces
 
-Recommended roles:
+Primary is used for:
 
-```text
+-   Primary buttons
+-   Important links
+-   Selected controls
+-   Main actions
+-   Brand highlights
+-   Key interactive elements
+
+Do not introduce another blue for a component when the existing semantic
+primary role applies.
+
+------------------------------------------------------------------------
+
+# 5. Accent
+
+The approved accent color is:
+
+``` text
+Accent → #06B6D4
+```
+
+The accent is used selectively for secondary visual emphasis and
+interaction highlights established by the Figma work.
+
+Examples observed in the design system include:
+
+-   Sidebar hover treatment
+-   Dropdown hover treatment
+-   Reset/filter CTA emphasis
+
+Accent must not replace Primary for primary actions.
+
+------------------------------------------------------------------------
+
+# 6. Neutral Scale
+
+The approved neutral foundation uses a Slate scale:
+
+``` text
+Slate 900
+Slate 800
+Slate 700
+Slate 600
+Slate 500
+Slate 400
+Slate 300
+Slate 200
+Slate 100
+Slate 50
+```
+
+The neutral scale provides the foundation for:
+
+-   Text
+-   Backgrounds
+-   Surfaces
+-   Borders
+-   Disabled UI
+-   Supporting content
+
+Primitive values should normally be consumed through semantic aliases.
+
+------------------------------------------------------------------------
+
+# 7. Semantic Text Colors
+
+The approved text hierarchy includes:
+
+``` text
+Text Primary
+Text Secondary
+Text Muted
+Text Disabled
+Text Inverse
+Text Link
+```
+
+### Muted / Placeholder
+
+The verified muted/placeholder value is:
+
+``` text
+#64748B
+```
+
+This value is important for:
+
+-   Placeholder text
+-   Secondary metadata
+-   Supporting labels
+-   Low-emphasis content
+
+Do not use an arbitrary gray for placeholder text when the muted
+semantic token is appropriate.
+
+------------------------------------------------------------------------
+
+# 8. Background Colors
+
+Background roles include:
+
+``` text
 Background
 Background Secondary
 Background Tertiary
 ```
 
-These may be used for:
+Use backgrounds for page-level and large structural regions.
 
-- Application background
-- Section backgrounds
-- Page regions
-- Alternate content areas
+The background system should create hierarchy without introducing
+unnecessary decorative colors.
 
-Background colors should provide sufficient separation between major interface regions.
+------------------------------------------------------------------------
 
----
+# 9. Surface Colors
 
-# 7. Surface Colors
+Surface roles include:
 
-Surface colors represent contained interface elements.
-
-Recommended roles:
-
-```text
+``` text
 Surface
 Surface Elevated
 Surface Secondary
@@ -154,186 +239,194 @@ Surface Selected
 
 Typical usage:
 
-- Cards
-- Panels
-- Dropdowns
-- Dialogs
-- Navigation surfaces
-- Product containers
-- Dashboard widgets
+-   Cards
+-   Product containers
+-   Panels
+-   Dropdowns
+-   Dialogs
+-   Dashboard widgets
+-   Navigation regions
 
----
+The overall ElectroHub visual direction is predominantly flat.
 
-# 8. Text Colors
+Functional elevation may be used where separation is necessary,
+particularly for overlays and floating UI.
 
-Text should use semantic roles.
+------------------------------------------------------------------------
 
-Recommended tokens:
+# 10. Border Colors
 
-```text
-Text Primary
-Text Secondary
-Text Muted
-Text Disabled
-Text Inverse
-Text Link
-```
+Approved semantic border roles include:
 
-### Text Primary
-
-Used for:
-
-- Main headings
-- Product names
-- Important information
-- Primary content
-
-### Text Secondary
-
-Used for:
-
-- Supporting information
-- Descriptions
-- Secondary labels
-
-### Text Muted
-
-Used for:
-
-- Captions
-- Metadata
-- Less prominent supporting content
-
-### Text Disabled
-
-Used for unavailable controls and disabled content.
-
-### Text Inverse
-
-Used when text appears on a sufficiently contrasting dark or brand surface.
-
----
-
-# 9. Border Colors
-
-Borders should communicate separation without creating unnecessary visual noise.
-
-Recommended tokens:
-
-```text
-Border
+``` text
+Border Default
 Border Subtle
 Border Strong
 Border Focus
 ```
 
-Typical usage:
+Borders are used for:
 
-- Inputs
-- Cards
-- Tables
-- Dividers
-- Navigation
-- Form sections
+-   Inputs
+-   Cards
+-   Tables
+-   Navigation
+-   Dividers
+-   Form sections
 
----
+Prefer the existing border token instead of creating slightly different
+local grays.
 
-# 10. Interactive Colors
+------------------------------------------------------------------------
 
-Interactive states should be visually distinguishable.
+# 11. Interactive States
 
-Recommended roles:
+Interactive colors communicate:
 
-```text
-Interactive
-Interactive Hover
-Interactive Active
-Interactive Focus
-Interactive Disabled
+``` text
+Default
+Hover
+Active / Pressed
+Focus
+Disabled
 ```
 
-Interactive states should not rely exclusively on color.
+Primary interactive behavior is based on the approved brand tokens.
 
-Focus states must remain clearly visible for keyboard users.
+Important requirements:
 
----
+-   Hover must not make text unreadable.
+-   Focus must remain clearly visible.
+-   Disabled state must be distinguishable.
+-   Interaction must not rely only on color.
 
-# 11. Status Colors
+------------------------------------------------------------------------
 
-Status colors communicate system feedback.
+# 12. Focus
 
-Recommended semantic roles:
+The approved focus treatment is:
 
-```text
+``` text
+2px solid Primary
+2px offset
+```
+
+The project uses a shared focus-ring concept rather than
+component-specific focus colors.
+
+Conceptually:
+
+``` css
+.focus-ring {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+```
+
+The exact implementation syntax may differ, but the visual intent should
+remain consistent.
+
+------------------------------------------------------------------------
+
+# 13. Status Colors
+
+The semantic status system contains:
+
+``` text
 Success
-Success Background
-Success Border
-Success Text
-
 Warning
-Warning Background
-Warning Border
-Warning Text
-
 Error
-Error Background
-Error Border
-Error Text
-
 Info
-Info Background
-Info Border
-Info Text
+Neutral
 ```
 
-Status colors should be paired with text, icons, or other visual indicators where appropriate.
+These are used consistently across:
 
----
+-   Alerts
+-   Badges
+-   Toasts
+-   Forms
+-   Inventory
+-   Orders
+-   Payments
+-   Delivery
+-   Admin interfaces
 
-# 12. Commerce Colors
+Status presentation should normally combine color with text, icons,
+labels, or position.
 
-Commerce-specific states may use semantic status tokens.
+------------------------------------------------------------------------
 
-Examples:
+# 14. Commerce Status
 
-```text
+Commerce states include:
+
+``` text
 In Stock
 Low Stock
 Out of Stock
 Sale
-Price
 Discount
-Payment Success
-Payment Pending
-Payment Failed
 ```
 
-These states must remain understandable without relying solely on color.
+The status presentation should be semantic rather than feature-specific.
 
----
+Example:
 
-# 13. Order Status Colors
+``` text
+"In Stock"
+    ↓
+Success semantic treatment
+```
 
-Order states include:
+The label determines meaning; the visual variant determines
+presentation.
 
-```text
-Confirmed
-Preparing
-Out for Delivery
+------------------------------------------------------------------------
+
+# 15. Order Status
+
+Order lifecycle states may include:
+
+``` text
+Pending
+Processing
+Shipped
 Delivered
+Cancelled
 ```
 
-Each state may have a dedicated semantic presentation.
+The actual business-state vocabulary belongs to the application domain.
 
-The implementation should not hard-code unrelated colors directly into order components.
+The color system provides the semantic presentation.
 
----
+Do not create a unique color for every new order state without design
+review.
 
-# 14. Delivery Status Colors
+------------------------------------------------------------------------
 
-Delivery tracking may use semantic status treatments for:
+# 16. Payment Status
 
-```text
+Payment states include:
+
+``` text
+Pending
+Processing
+Paid / Successful
+Failed
+Refunded / Cancelled
+```
+
+Payment state must remain understandable through text and status
+indicators, not color alone.
+
+------------------------------------------------------------------------
+
+# 17. Delivery Status
+
+Delivery tracking may use semantic status treatment for:
+
+``` text
 Confirmed
 Preparing
 Out for Delivery
@@ -342,181 +435,170 @@ Delayed
 Unavailable
 ```
 
-Status colors should be reinforced through:
+Use supporting:
 
-- Text
-- Icons
-- Timeline position
-- Labels
+-   Status labels
+-   Icons
+-   Timeline position
+-   Explanatory text
 
----
+when necessary.
 
-# 15. Inventory Colors
+------------------------------------------------------------------------
+
+# 18. Inventory
 
 Inventory states include:
 
-```text
+``` text
 In Stock
 Low Stock
 Out of Stock
 ```
 
-The visual system should communicate these states through more than color alone.
+Example:
 
-For example:
-
-```text
+``` text
 Low Stock
-+
-"Only 3 left"
+Only 3 left
 ```
 
-is preferable to communicating low stock only through a color change.
+is preferable to communicating the state only through color.
 
----
+------------------------------------------------------------------------
 
-# 16. Payment Colors
+# 19. Rating Colors
 
-Payment states may include:
+The approved rating/star treatment is:
 
-```text
-Payment Successful
-Payment Pending
-Payment Failed
-Payment Cancelled
+``` text
+Star Fill   → #FDE68A
+Star Stroke → #B45309
 ```
 
-These states should use the same semantic status system used elsewhere in the application.
+These values are specifically associated with the rating visual
+language.
 
----
+They should not be generalized into unrelated warning or brand colors.
 
-# 17. Form Validation Colors
+------------------------------------------------------------------------
 
-Form validation should use semantic status colors.
+# 20. Overlay Colors
 
-Recommended roles:
+Overlays are used for:
 
-```text
+-   Modals
+-   Drawers
+-   Mobile navigation
+-   Image viewers
+-   Confirmation interfaces
+
+Semantic roles may include:
+
+``` text
+Overlay
+Overlay Strong
+```
+
+Overlay opacity must preserve sufficient context while visually
+separating the active layer.
+
+------------------------------------------------------------------------
+
+# 21. Validation Colors
+
+Forms use semantic status colors for:
+
+``` text
 Valid
 Invalid
 Warning
 Required
 ```
 
-Error messages should include meaningful text rather than relying solely on a red border.
+An invalid field should provide:
 
----
-
-# 18. Focus Color
-
-Keyboard focus must remain clearly visible.
-
-The focus treatment may use:
-
-```text
-Focus Ring
-Focus Border
-Focus Shadow
+``` text
+Visual state
++
+Error message
++
+Accessible association
 ```
 
-The focus style should provide sufficient contrast against the surrounding surface.
+Do not rely only on a red border.
 
----
+------------------------------------------------------------------------
 
-# 19. Overlay Colors
+# 22. Disabled Colors
 
-Overlays are used for:
+Disabled controls should communicate unavailability through a
+combination of:
 
-- Dialogs
-- Drawers
-- Mobile navigation
-- Image viewers
-- Confirmation interfaces
+-   Reduced emphasis
+-   Disabled text treatment
+-   Disabled background/border treatment
+-   Disabled interaction
+-   Appropriate cursor/behavior
 
-Recommended roles:
+Disabled content must not be confused with normal muted content.
 
-```text
-Overlay
-Overlay Strong
-```
+------------------------------------------------------------------------
 
-Overlay opacity should preserve context while clearly separating the active interface from the background.
+# 23. Theme Strategy
 
----
+The semantic layer is intentionally separated from primitive values.
 
-# 20. Theme Architecture
+Conceptually:
 
-If ElectroHub supports multiple themes, components should consume semantic tokens.
-
-Example:
-
-```text
+``` text
 Component
    ↓
 --color-surface
    ↓
-Theme-specific value
+Current theme value
 ```
 
-Components should not contain separate hard-coded colors for each theme.
+If themes are introduced, component code should remain semantic.
 
----
+Do not duplicate hard-coded light/dark colors inside individual
+components.
 
-# 21. Semantic Token Strategy
+------------------------------------------------------------------------
 
-Prefer:
+# 24. Token Naming
 
-```scss
-background: var(--color-surface);
-color: var(--color-text-primary);
-border-color: var(--color-border);
-```
+Prefer purpose-based names:
 
-Avoid:
-
-```scss
-background: #ffffff;
-color: #111111;
-border-color: #dddddd;
-```
-
-when a semantic token already exists.
-
----
-
-# 22. Color Naming
-
-Color tokens should describe purpose rather than appearance.
-
-Prefer:
-
-```text
+``` text
 --color-primary
---color-surface
+--color-primary-hover
 --color-text-primary
+--color-text-muted
+--color-surface
+--color-border-default
 --color-success
 --color-error
 ```
 
-Avoid:
+Avoid appearance-only names:
 
-```text
+``` text
 --color-blue
 --color-gray
 --color-dark-blue
 ```
 
-Semantic naming makes theme changes and design evolution easier.
+Semantic naming makes the system scalable.
 
----
+------------------------------------------------------------------------
 
-# 23. Figma Color Organization
+# 25. Figma Organization
 
-Figma should organize colors by semantic purpose.
+The Figma color architecture should remain organized around semantic
+categories:
 
-Recommended structure:
-
-```text
+``` text
 Colors
 ├── Brand
 ├── Background
@@ -528,138 +610,248 @@ Colors
 └── Commerce
 ```
 
-Color styles or variables should use consistent names.
+Primitive variables may exist underneath these semantic categories.
 
----
+The design documentation should not claim a primitive value is a
+semantic role unless the mapping has been intentionally established.
 
-# 24. Accessibility
+------------------------------------------------------------------------
 
-Color decisions must consider:
+# 26. Accessibility
 
-- Text contrast
-- Interactive contrast
-- Focus visibility
-- Disabled states
-- Status communication
-- Dark/light surfaces
-- Large and small text
+Color usage must consider:
 
-Important information must never depend only on color.
+-   Text contrast
+-   Interactive contrast
+-   Focus visibility
+-   Disabled controls
+-   Status communication
+-   Surface separation
+-   Small text
+-   Large text
+
+Important information must not depend exclusively on color.
 
 Examples:
 
-```text
+``` text
+Error
++
+Error icon
++
+Error message
+```
+
+``` text
 Out of Stock
 +
 Text label
 +
-Icon / visual indicator
+Visual indicator
 ```
 
-rather than only a color change.
+------------------------------------------------------------------------
 
----
+# 27. Color Usage Rules
 
-# 25. Color Usage Rules
+## Do
 
-### Do
+-   Use approved Figma colors.
+-   Prefer semantic tokens.
+-   Reuse the same semantic role consistently.
+-   Validate contrast.
+-   Pair status color with non-color information.
+-   Keep brand colors consistent.
+-   Preserve the approved rating colors.
 
-- Use semantic tokens.
-- Reuse approved colors.
-- Follow Figma definitions.
-- Validate contrast.
-- Use status colors consistently.
-- Provide non-color indicators for important states.
+## Do Not
 
-### Do Not
+-   Add arbitrary hex values.
+-   Create one-off grays/blues.
+-   Change the primary brand color locally.
+-   Communicate critical state through color alone.
+-   Use rating colors as generic status colors.
+-   Duplicate semantic tokens with slightly different values.
 
-- Introduce arbitrary colors.
-- Use raw hex values throughout components.
-- Create slightly different colors for the same semantic role.
-- Use color as the only status indicator.
-- Change brand colors per feature without design approval.
+------------------------------------------------------------------------
 
----
+# 28. Component Mapping
 
-# 26. Component Usage
+Typical mapping:
 
-Components should consume the color system through semantic tokens.
-
-Examples:
-
-```text
+``` text
 Button
     ↓
-Primary Token
+Primary / Interactive Tokens
+
+Input
+    ↓
+Surface + Border + Focus + Error
+
+Badge
+    ↓
+Status Tokens
 
 Product Card
     ↓
-Surface Token
+Surface + Border + Text Tokens
 
-Error Message
+Rating
     ↓
-Error Token
+Rating Fill / Stroke
 
-Inventory Badge
+Order Status
     ↓
-Inventory Status Token
+Status Tokens
+
+Payment Status
+    ↓
+Status Tokens
+
+Admin Sidebar
+    ↓
+Surface + Text + Accent / Interactive
 ```
 
----
+------------------------------------------------------------------------
 
-# 27. Design Review
+# 29. Design Review for New Colors
 
-Before introducing a new color, verify:
+Before adding a color:
 
-1. Does an existing semantic token already represent the required meaning?
-2. Is the new color required by the design?
-3. Does it meet accessibility requirements?
-4. Is it documented in Figma?
-5. Does it need a new semantic token?
-6. Will it be reused elsewhere?
+1.  Check whether an existing semantic token already represents the
+    requirement.
+2.  Confirm the visual requirement in Figma.
+3.  Determine whether the color is primitive or semantic.
+4.  Check accessibility.
+5.  Confirm whether the color will be reused.
+6.  Update this document if a new approved semantic role is created.
+7.  Update implementation tokens.
+8.  Validate affected components.
 
-Avoid creating one-off colors for isolated components.
+A new color should solve a real design-system need, not a local styling
+problem.
 
----
+------------------------------------------------------------------------
 
-# 28. Implementation
+# 30. Verified vs Derived Values
 
-The implementation should centralize reusable color tokens.
+The documentation distinguishes between values established directly
+through Figma work and values that are implementation baselines.
 
-A conceptual structure may be:
+### Verified / explicitly established
+
+-   `#2563EB` Primary
+-   `#1D4ED8` Primary Hover
+-   `#FFFFFF` Primary Foreground
+-   `#06B6D4` Accent
+-   Slate 900 → 50 neutral foundation
+-   `#64748B` muted/placeholder
+-   `#FDE68A` rating fill
+-   `#B45309` rating stroke
+-   2px focus ring
+-   2px focus offset
+
+### Semantic / derived
+
+-   Component-specific status mapping
+-   Theme aliases
+-   Overlay roles
+-   Disabled-state presentation
+-   Additional semantic aliases
+
+Derived values must remain consistent with the approved visual system
+and should not be represented as independently verified Figma primitives
+unless they are later confirmed.
+
+------------------------------------------------------------------------
+
+# 31. Implementation Boundary
+
+The frontend should consume colors through centralized tokens.
+
+Conceptually:
+
+``` text
+Figma
+  ↓
+Design Token
+  ↓
+CSS Custom Property / SCSS Token
+  ↓
+Component
+```
+
+Avoid scattering raw hexadecimal values throughout component styles.
+
+------------------------------------------------------------------------
+
+# 32. Completion Criteria
+
+The color system is complete when:
+
+-   Brand colors are defined.
+-   Neutral scale is defined.
+-   Semantic text colors are defined.
+-   Backgrounds and surfaces are defined.
+-   Borders are defined.
+-   Interactive states are defined.
+-   Focus is defined.
+-   Status semantics are defined.
+-   Commerce semantics are defined.
+-   Rating treatment is defined.
+-   Accessibility rules are defined.
+-   Figma and implementation terminology are aligned.
+-   New colors are governed through review.
+
+------------------------------------------------------------------------
+
+# 33. Color Principle
+
+> **Use color as a consistent language of identity, hierarchy,
+> interaction, and state---not as arbitrary decoration.**
+# 34. Repository Figma Asset Structure
+
+Color documentation remains part of `docs/02_Design/`. Figma visual-reference and handoff assets use the single approved repository structure below:
 
 ```text
-styles/
-├── abstracts/
-│   ├── _variables.scss
-│   └── _tokens.scss
-│
-└── themes/
-    └── _themes.scss
+assets/
+└── figma/
+    ├── FIGMA.md
+    ├── FIGMA_IMPLEMENTATION_RULES.md
+    ├── FIGMA_REFERENCES.md
+    │
+    └── exports/
+        │
+        ├── Components/
+        │   ├── README.md
+        │   └── screenshots/
+        │
+        ├── admin/
+        │   ├── README.md
+        │   └── screenshots/
+        │
+        └── customer/
+            ├── README.md
+            └── screenshots/
 ```
 
-The exact structure should follow the project's SCSS 7-1 architecture.
+## 34.1 Responsibilities
 
----
+- `assets/figma/FIGMA.md` — primary repository-side Figma governance and handoff documentation.
+- `assets/figma/FIGMA_IMPLEMENTATION_RULES.md` — implementation rules for translating Figma into the application.
+- `assets/figma/FIGMA_REFERENCES.md` — Figma file, page, frame, prototype, and handoff references.
+- `assets/figma/exports/Components/` — component reference exports and supporting screenshots.
+- `assets/figma/exports/admin/` — administrator experience reference exports and screenshots.
+- `assets/figma/exports/customer/` — customer experience reference exports and screenshots.
 
-# 29. Color Completion Criteria
+Do not recreate legacy Figma export categories such as `Layouts/`, `Foundation/`, `screens/`, or `responsive/`.
 
-The color system is considered complete when:
+## 34.2 Screenshot Policy
 
-- Brand colors are defined.
-- Background colors are defined.
-- Surface colors are defined.
-- Text colors are defined.
-- Border colors are defined.
-- Interactive states are defined.
-- Status colors are defined.
-- Commerce states are defined.
-- Accessibility requirements are verified.
-- Figma and implementation tokens are aligned.
-- Components use semantic colors.
+Figma Design remains authoritative for visual decisions. Figma Make screenshots are supporting visual references for implementation and Antigravity.
 
----
+Preserve the default filenames generated by Figma Make. Do not manually rename screenshots into custom patterns such as `<Component> — Default.png` or `<Screen> — Desktop/Tablet/Mobile.png`.
 
-# 30. Color Principle
+Responsive evidence belongs inside the `Components`, `admin`, and `customer` export packages rather than in a separate responsive export directory.
 
-> **Use color to communicate meaning consistently, not to create arbitrary visual variation.**

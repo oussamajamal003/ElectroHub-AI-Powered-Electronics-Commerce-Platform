@@ -6,23 +6,27 @@ This document defines the layout architecture for ElectroHub.
 
 The layout system establishes consistent rules for:
 
-- Page structure
-- Containers
-- Navigation
-- Headers
-- Sidebars
-- Grids
-- Sections
-- Forms
-- Tables
-- Customer screens
-- Administrator screens
-- Responsive behavior
-- Mobile navigation
+-   Application shells
+-   Headers
+-   Sidebars
+-   Navigation
+-   Containers
+-   Grids
+-   Sections
+-   Forms
+-   Tables
+-   Customer screens
+-   Administrator screens
+-   Commerce flows
+-   Delivery tracking
+-   Responsive behavior
+-   Loading, empty, and error states
 
-The goal is to provide predictable layouts across the entire application while allowing feature-specific content to remain flexible.
+**Figma is the visual source of truth for the intended composition of
+these layouts.** This document records the structural rules that
+implementation must follow.
 
----
+------------------------------------------------------------------------
 
 # 2. Layout Principles
 
@@ -30,38 +34,52 @@ ElectroHub layouts follow these principles:
 
 ### Consistency
 
-Common page structures should use shared layout components.
+Repeated structures use shared layout components.
 
 ### Hierarchy
 
-Layouts should clearly communicate the relationship between navigation, content, actions, and supporting information.
+Navigation, content, actions, and supporting information must have a
+clear visual relationship.
+
+### Reusability
+
+Page structures should be composed from shared shells, containers,
+sections, and components.
 
 ### Responsiveness
 
-Layouts must adapt across:
+Layouts adapt across:
 
-```text
+``` text
 Mobile
 Tablet
 Desktop
 Large Desktop
 ```
 
-### Reusability
-
-Repeated structural patterns should become reusable layout components.
-
 ### Accessibility
 
-Layout structure must preserve semantic order, keyboard navigation, and readable content flow.
+Responsive changes must preserve logical reading order, focus order,
+semantic landmarks, and usable controls.
 
----
+### No Overlap
 
-# 3. Application Layout Architecture
+Approved layouts must not produce unintended overlap between:
 
-The application is organized into major layout levels:
+-   Header and sidebar
+-   Cart and order summary
+-   Checkout pipeline and order summary
+-   Dashboard widgets
+-   Orders-by-status content
+-   Form actions and image-upload areas
 
-```text
+------------------------------------------------------------------------
+
+# 3. Layout Architecture
+
+The application is organized as:
+
+``` text
 Application Shell
       ↓
 Page Layout
@@ -70,279 +88,344 @@ Section Layout
       ↓
 Feature Layout
       ↓
-Components
+Reusable Components
 ```
 
----
+A page should compose these levels rather than recreate their structure
+independently.
 
-# 4. Application Shell
+------------------------------------------------------------------------
 
-The application shell provides the global structure.
+# 4. Customer Application Shell
 
-Customer shell:
+The customer shell follows:
 
-```text
-┌───────────────────────────────┐
-│ Header / Navigation           │
-├───────────────────────────────┤
-│                               │
-│ Main Content                  │
-│                               │
-├───────────────────────────────┤
-│ Footer                        │
-└───────────────────────────────┘
+``` text
+┌─────────────────────────────────┐
+│ Branded Header / Navigation     │
+├─────────────────────────────────┤
+│                                 │
+│ Main Content                    │
+│                                 │
+├─────────────────────────────────┤
+│ Footer                          │
+└─────────────────────────────────┘
 ```
 
-Administrator shell:
+The Header remains the global customer navigation boundary.
 
-```text
-┌──────────────┬────────────────┐
-│              │ Header         │
-│ Admin        ├────────────────┤
-│ Sidebar      │                │
-│              │ Main Content   │
-│              │                │
-└──────────────┴────────────────┘
+The Main region contains page-specific content.
+
+The Footer is used on public/customer pages where appropriate.
+
+------------------------------------------------------------------------
+
+# 5. Administrator Application Shell
+
+The admin shell follows:
+
+``` text
+┌────────────────────────────────────────┐
+│ Admin Header                           │
+├──────────────┬─────────────────────────┤
+│              │                         │
+│ Sidebar      │ Main Content            │
+│              │                         │
+│ Navigation   │                         │
+│              │                         │
+└──────────────┴─────────────────────────┘
 ```
 
----
+The approved admin shell is:
 
-# 5. Customer Layout
-
-The customer-facing application should use a consistent global structure.
-
-Typical layout:
-
-```text
-Header
-  ↓
-Main Navigation / Search
-  ↓
-Page Content
-  ↓
-Footer
+``` text
+Admin Header
+      ↓
+Sidebar + Main Content
 ```
 
-The exact header and navigation behavior may change responsively.
+The sidebar begins below the header and must never overlay it.
 
----
+------------------------------------------------------------------------
 
-# 6. Header
+# 6. Customer Header Layout
 
-The header is a primary global navigation component.
+The customer Header may contain:
 
-It may contain:
-
-```text
-Logo
+``` text
+ElectroHub Brand
 Navigation
 Search
 Wishlist
 Cart
-Authentication
-User Menu
+Authentication / Account
 ```
 
-The desktop header may use a multi-area layout where appropriate.
+Requirements:
 
-The header must remain contained within the viewport and must not create horizontal overflow.
+-   Branding is part of the approved header.
+-   Search remains usable.
+-   Header content stays within the viewport.
+-   No unintended horizontal overflow.
+-   Navigation adapts for smaller screens.
+-   Mobile navigation is used when desktop navigation no longer fits.
 
----
+------------------------------------------------------------------------
 
-# 7. Search Header Layout
+# 7. Admin Header Layout
 
-The search experience is a core part of product discovery.
+The Admin Header establishes the administrator context.
 
-The search input should:
+It follows the same ElectroHub branding principle while remaining
+optimized for operational workflows.
 
-- Remain visually contained within the header.
-- Adapt to available width.
-- Support suggestions.
-- Remain usable on smaller screens.
-- Preserve appropriate vertical spacing.
-- Avoid shrinking to an unusable width.
-- Avoid causing header overflow.
+The header is structurally independent from sidebar scrolling.
 
-Search suggestions should align with the search input and remain visually connected to it.
+------------------------------------------------------------------------
 
----
+# 8. Admin Sidebar Layout
 
-# 8. Main Content Container
+The sidebar is a persistent navigation region on desktop.
 
-Pages should use a shared content-container strategy.
+Approved behavior:
+
+``` text
+Header
+  ↓
+Sticky Sidebar
+  +
+Scrollable Main
+```
+
+Requirements:
+
+-   Collapse button at the top of the sidebar.
+-   Sticky below the header.
+-   Never cover the header.
+-   Main content scrolls independently.
+-   Main content width changes when sidebar expands/collapses.
+-   Collapsed navigation remains usable.
+-   Mobile may transition to drawer/overlay navigation.
+
+------------------------------------------------------------------------
+
+# 9. Main Content Container
+
+Pages use a shared content-container strategy.
 
 Conceptually:
 
-```text
+``` text
 Viewport
 │
-├── Outer spacing
-│
-└── Content Container
-      │
+└── Page Container
       ├── Page Header
-      ├── Main Content
+      ├── Sections
       └── Supporting Content
 ```
 
-The container should provide:
+Approved horizontal page/container padding reference:
 
-- Maximum content width
-- Horizontal padding
-- Responsive spacing
-- Consistent alignment
+``` text
+24px
+```
 
-The exact values are defined by the design system.
+A large-desktop 1440px reference is a design-intent value. It should not
+automatically be treated as a CSS max-width unless implementation
+establishes that behavior.
 
----
+------------------------------------------------------------------------
 
-# 9. Page Header
+# 10. Page Header
 
-Page headers should establish:
+A page header establishes:
 
-- Page title
-- Description where needed
-- Primary action
-- Supporting actions
-- Breadcrumbs where appropriate
+-   Page title
+-   Description where useful
+-   Primary action
+-   Supporting actions
+-   Breadcrumbs where appropriate
 
-Example:
+Typical structure:
 
-```text
-Page Title                         [Primary Action]
+``` text
+Page Title                    [Primary Action]
 
 Supporting description
 ```
 
-Page headers should maintain consistent vertical spacing from the main content.
+On mobile, actions may stack beneath the title.
 
----
+------------------------------------------------------------------------
 
-# 10. Section Layout
+# 11. Section Layout
 
-Sections provide vertical organization within pages.
+A section follows:
 
-A typical section contains:
-
-```text
+``` text
 Section Header
       ↓
 Section Content
 ```
 
-Section headers may include:
+The header may contain:
 
-- Title
-- Description
-- Action
-- Filter
-- View control
+-   Title
+-   Description
+-   Action
+-   Filter
+-   View control
 
-Sections should use consistent spacing tokens.
+Spacing must use the approved design-system rhythm.
 
----
+------------------------------------------------------------------------
 
-# 11. Product Grid Layout
+# 12. Product Discovery Layout
 
-Product listings should use a responsive grid.
+The discovery hierarchy is:
 
-Conceptually:
-
-```text
-Desktop
-
-┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐
-│ Card │ │ Card │ │ Card │ │ Card │
-└──────┘ └──────┘ └──────┘ └──────┘
-
-
-Tablet
-
-┌──────┐ ┌──────┐ ┌──────┐
-│ Card │ │ Card │ │ Card │
-└──────┘ └──────┘ └──────┘
-
-
-Mobile
-
-┌────────┐
-│  Card  │
-└────────┘
-
-┌────────┐
-│  Card  │
-└────────┘
+``` text
+Home / Search / Products
+        ↓
+Search / Filters / Sort
+        ↓
+Results
+        ↓
+Product Grid
+        ↓
+Pagination
 ```
 
-The exact number of columns is determined by available width and the approved Figma design.
+Customer discovery surfaces include:
 
----
+-   Home
+-   Products
+-   Search
+-   Categories
+-   Wishlist
+-   Recommendations
 
-# 12. Product Listing Layout
+------------------------------------------------------------------------
 
-A product listing page may use:
+# 13. Product Grid
 
-```text
+The product grid is responsive.
+
+Design intent:
+
+``` text
+Desktop → Multi-column
+Tablet  → Reduced columns
+Mobile  → Single-column / compact arrangement
+```
+
+The exact number of columns follows the approved Figma screen at each
+target viewport.
+
+Cards must not overlap or become unreadable because of fixed-width
+assumptions.
+
+------------------------------------------------------------------------
+
+# 14. Product Listing Layout
+
+Typical structure:
+
+``` text
 Page Header
      ↓
 Search / Filters / Sort
+     ↓
+Results Count
      ↓
 Product Grid
      ↓
 Pagination
 ```
 
-On larger screens, filters may appear as a sidebar.
+On larger screens, filters may occupy a sidebar region.
 
-On smaller screens, filters may become a drawer or dialog.
+On smaller screens, complex filters may move into a Drawer.
 
----
+------------------------------------------------------------------------
 
-# 13. Search Results Layout
+# 15. Search Layout
 
-The search page should provide:
+Search is a core product-discovery layout.
 
-```text
+``` text
 Search Query
      ↓
-Suggestions / Search Controls
+Search Controls
      ↓
-Filters + Sorting
+Filters / Sort
      ↓
-Results Count
-     ↓
-Product Grid
+Results
 ```
 
-The layout should clearly distinguish:
+Search must distinguish:
 
-- Search controls
-- Results
-- Empty state
-- Loading state
-- Error state
+-   Loading
+-   Results
+-   No Results
+-   Error
 
----
+Search-by-image is part of the Search experience rather than a
+disconnected page.
 
-# 14. Product Details Layout
+------------------------------------------------------------------------
 
-The product details page should prioritize product information and the primary purchase action.
+# 16. Search-by-Image Layout
 
-Typical desktop structure:
+The image-search layout follows:
 
-```text
-┌─────────────────┬────────────────────────┐
-│                 │ Product Information    │
-│ Product Gallery │ Price                  │
-│                 │ Availability           │
-│                 │ Specifications         │
-│                 │ Purchase Actions       │
-└─────────────────┴────────────────────────┘
+``` text
+Search by Image
+      ↓
+Source Selection
+      ↓
+Upload / Camera
+      ↓
+Preview
+      ↓
+Processing
+      ↓
+Matching Results
 ```
 
-Supporting content may follow:
+States:
 
-```text
+-   Upload
+-   Camera
+-   Preview
+-   Processing
+-   Results
+-   No Results
+-   Error
+
+The primary UI is an upload/camera interaction with constrained image
+preview.
+
+------------------------------------------------------------------------
+
+# 17. Product Details Layout
+
+Desktop intent:
+
+``` text
+┌──────────────────────┬─────────────────────────┐
+│ Product Gallery      │ Product Information     │
+│                      │ Price                   │
+│ Main Product Image   │ Availability            │
+│                      │ Specifications          │
+│                      │ Quantity                │
+│                      │ Purchase Actions        │
+└──────────────────────┴─────────────────────────┘
+```
+
+Supporting content:
+
+``` text
 Product Details
       ↓
 Specifications
@@ -352,52 +435,37 @@ Recommendations
 Related Products
 ```
 
-On mobile, the layout should stack vertically.
+Mobile:
 
----
+``` text
+Gallery
+  ↓
+Information
+  ↓
+Price / Availability
+  ↓
+Quantity / Actions
+  ↓
+Details
+  ↓
+Recommendations
+```
 
-# 15. Cart Layout
+------------------------------------------------------------------------
 
-The cart page may use:
+# 18. Wishlist Layout
 
-```text
+Typical:
+
+``` text
 Page Header
      ↓
-Cart Items              Order Summary
-     ↓                        ↓
-Quantity / Actions       Subtotal
-                         Shipping
-                         Total
-                         Checkout
+Wishlist Product Grid
 ```
 
-On smaller screens:
+Empty:
 
-```text
-Cart Items
-    ↓
-Order Summary
-    ↓
-Checkout
-```
-
----
-
-# 16. Wishlist Layout
-
-The wishlist should reuse the product-grid layout where appropriate.
-
-Typical structure:
-
-```text
-Page Header
-     ↓
-Wishlist Grid
-```
-
-When empty:
-
-```text
+``` text
 Page Header
      ↓
 Empty State
@@ -405,83 +473,151 @@ Empty State
 Explore Products
 ```
 
----
+Reuse Product Card rather than creating a separate wishlist card.
 
-# 17. Checkout Layout
+------------------------------------------------------------------------
 
-Checkout should use a focused layout that minimizes unnecessary navigation.
+# 19. Cart Layout
 
-Typical structure:
+Desktop:
 
-```text
-Checkout
-│
-├── Shipping Information
-├── Payment
-└── Order Summary
+``` text
+┌──────────────────────────┬────────────────────┐
+│ Cart Items               │ Order Summary      │
+│                          │                    │
+│ Product / Quantity       │ Subtotal           │
+│ Actions                  │ Shipping           │
+│                          │ Total              │
+│                          │ Checkout           │
+└──────────────────────────┴────────────────────┘
 ```
 
-A desktop layout may use:
+The cart content and order summary must remain visually separated.
 
-```text
-┌────────────────────────┬────────────────┐
-│ Checkout Form          │ Order Summary  │
-│                        │                │
-│ Shipping               │ Products       │
-│ Payment                │ Subtotal       │
-│                        │ Total          │
-└────────────────────────┴────────────────┘
-```
+Mobile:
 
-On mobile, content should stack.
-
----
-
-# 18. Order Confirmation Layout
-
-After successful order creation:
-
-```text
-Success
-   ↓
-Order Number
-   ↓
+``` text
+Cart Items
+     ↓
 Order Summary
-   ↓
+     ↓
+Checkout
+```
+
+The mobile cart must scroll naturally and must not trap or hide content.
+
+------------------------------------------------------------------------
+
+# 20. Checkout Layout
+
+Checkout is a focused purchase flow.
+
+``` text
+Cart
+  ↓
+Shipping Information
+  ↓
+Payment
+  ↓
+Processing
+  ↓
+Success / Failure
+  ↓
+Order Confirmation
+```
+
+Desktop:
+
+``` text
+┌──────────────────────────────┬──────────────────┐
+│ Checkout Pipeline / Form     │ Order Summary     │
+│                              │                  │
+│ Shipping                     │ Products         │
+│ Payment                      │ Subtotal         │
+│                              │ Total             │
+└──────────────────────────────┴──────────────────┘
+```
+
+The pipeline and summary must never overlap.
+
+Mobile:
+
+``` text
+Checkout Steps
+     ↓
+Form
+     ↓
+Order Summary
+     ↓
+Primary Action
+```
+
+------------------------------------------------------------------------
+
+# 21. Payment States
+
+Payment layout must account for:
+
+``` text
+Payment Form
+     ↓
+Processing
+     ↓
+Success
+     OR
+Failure
+```
+
+Processing must communicate that the operation is in progress.
+
+Failure must provide a clear recovery path where possible.
+
+------------------------------------------------------------------------
+
+# 22. Order Confirmation Layout
+
+Successful completion follows:
+
+``` text
+Success
+  ↓
+Order Number
+  ↓
+Order Summary
+  ↓
 Payment Status
-   ↓
+  ↓
 Invoice / Receipt
-   ↓
+  ↓
 Track Order
 ```
 
-The primary next action should be visually clear.
+The next action should be clearly prioritized.
 
----
+------------------------------------------------------------------------
 
-# 19. Orders Layout
+# 23. Orders Layout
 
-The orders page should present customer order history in a scannable structure.
+Customer order history may use:
 
-Desktop may use:
-
-```text
+``` text
 Orders
-────────────────────────────────
+────────────────────────────────────
 Order # | Date | Total | Status
-────────────────────────────────
+────────────────────────────────────
 ...
 ```
 
-Mobile may use order cards instead of a wide table.
+On mobile, use a card or stacked representation when a table would
+become unreadable.
 
----
+------------------------------------------------------------------------
 
-# 20. Order Details Layout
+# 24. Order Details Layout
 
-Order details should organize information into clear sections:
+Order details hierarchy:
 
-```text
+``` text
 Order Header
      ↓
 Order Status
@@ -497,29 +633,27 @@ Delivery Tracking
 Invoice / Receipt
 ```
 
-The order number and current status should be easy to identify.
+The order number and current status should be immediately scannable.
 
----
+------------------------------------------------------------------------
 
-# 21. Delivery Tracking Layout
-
-The delivery tracking screen should combine operational information with the map.
+# 25. Delivery Tracking Layout
 
 Desktop:
 
-```text
-┌──────────────────────┬───────────────────────┐
-│ Delivery Information  │                       │
-│ Status                │                       │
-│ Timeline              │        MAP            │
-│ Estimated Arrival    │                       │
-│ Location              │                       │
-└──────────────────────┴───────────────────────┘
+``` text
+┌────────────────────────┬────────────────────────┐
+│ Delivery Information   │                        │
+│ Current Status         │          MAP           │
+│ Timeline               │                        │
+│ Estimated Arrival      │                        │
+│ Location               │                        │
+└────────────────────────┴────────────────────────┘
 ```
 
 Mobile:
 
-```text
+``` text
 Delivery Status
       ↓
 Timeline
@@ -529,45 +663,17 @@ Estimated Arrival
 Map
 ```
 
-The map must remain usable without overwhelming smaller screens.
+The map must remain usable without dominating the mobile viewport.
 
----
+------------------------------------------------------------------------
 
-# 22. Search by Image Layout
+# 26. Recommendations Layout
 
-The image-search flow should use a focused layout:
-
-```text
-Search by Image
-      ↓
-Source Selection
-      ↓
-Upload / Camera
-      ↓
-Preview
-      ↓
-Processing
-      ↓
-Results
-```
-
-Camera capture should account for:
-
-- Permission state
-- Camera availability
-- Mobile viewport
-- Capture controls
-- Cancel action
-
----
-
-# 23. Recommendation Layout
-
-Recommendation sections should be reusable across multiple pages.
+Recommendations reuse the standard product-grid system.
 
 Examples:
 
-```text
+``` text
 Product Details
       ↓
 You May Also Like
@@ -577,88 +683,75 @@ Product Grid
 
 or:
 
-```text
+``` text
 Home
  ├── Recommended for You
  ├── Popular Products
  └── Frequently Bought Together
 ```
 
-The same product-card layout should be reused.
+Do not create separate layout systems for each recommendation type.
 
----
+------------------------------------------------------------------------
 
-# 24. Admin Layout
+# 27. Admin Dashboard Layout
 
-The admin application uses a dedicated dashboard shell.
+The dashboard hierarchy is:
 
-Desktop:
-
-```text
-┌──────────────┬────────────────────────────┐
-│              │ Header                     │
-│ Sidebar      ├────────────────────────────┤
-│              │ Page Header                │
-│ Navigation   │                            │
-│              │ Main Content               │
-│              │                            │
-└──────────────┴────────────────────────────┘
-```
-
-The sidebar contains administrative navigation.
-
----
-
-# 25. Admin Dashboard Layout
-
-The dashboard may use:
-
-```text
+``` text
 Page Header
      ↓
-Key Metrics
+Stats Cards
      ↓
-Charts / Analytics
+Sales Overview
      ↓
-Recent Orders
+Orders by Status
      ↓
-Inventory / Alerts
+Additional Analytics / Operational Data
 ```
 
-Dashboard widgets should use consistent card and grid patterns.
+The dashboard must reflow on smaller screens.
 
----
+### Sales Overview
 
-# 26. Admin Data Layout
+The chart container must resize with available width.
 
-Administrative data pages may use:
+### Orders by Status
 
-```text
+Mixed content must not overlap.
+
+On narrow screens, items stack safely.
+
+------------------------------------------------------------------------
+
+# 28. Admin Data Layout
+
+Typical:
+
+``` text
 Page Header
      ↓
-Filters / Search / Actions
+Filter Bar
      ↓
 Data Table
      ↓
 Pagination
 ```
 
-For smaller screens, complex tables should adapt through:
+Responsive table behavior may include:
 
-- Horizontal scrolling where appropriate
-- Responsive columns
-- Card representation
-- Alternative mobile presentation
+-   Horizontal scrolling when appropriate
+-   Reduced columns
+-   Stacked cards
+-   Alternative mobile representation
 
-The chosen approach should follow the Figma design.
+The chosen representation follows the approved Figma screen.
 
----
+------------------------------------------------------------------------
 
-# 27. Admin Product Layout
+# 29. Admin Product Layout
 
-Typical product-management structure:
-
-```text
+``` text
 Products
      ↓
 Search / Filters
@@ -668,35 +761,63 @@ Product Table
 Create / Edit Product
 ```
 
-Product forms should use shared form components.
+Create/Edit forms use the shared Admin Form and foundation components.
 
----
+------------------------------------------------------------------------
 
-# 28. Admin Inventory Layout
+# 30. Create/Edit Product Layout
 
-Inventory management may use:
+The product form should clearly separate:
 
-```text
+``` text
+Product Information
+      +
+Image Upload
+      +
+Form Actions
+```
+
+Image upload:
+
+``` text
+Empty State
+     ↓
+Upload Image
+     ↓
+Constrained Preview
+     ↓
+Replace / Remove
+```
+
+The upload control must remain visible and usable.
+
+Do not expose a raw URL field as the primary image-selection experience.
+
+------------------------------------------------------------------------
+
+# 31. Admin Inventory Layout
+
+Typical:
+
+``` text
 Inventory
      ↓
 Filters
      ↓
 Stock Table
      ↓
-Low Stock Alerts
+Low Stock / Inventory Alerts
      ↓
-Stock Editing
+Stock Actions
 ```
 
-Important inventory states should remain visually distinct.
+Inventory statuses use the shared semantic status language.
 
----
+------------------------------------------------------------------------
 
-# 29. Admin Order Layout
+# 32. Admin Order Layout
 
-Order administration may use:
-
-```text
+``` text
 Orders
      ↓
 Filters
@@ -708,15 +829,13 @@ Order Details
 Status / Payment / Delivery Actions
 ```
 
-Destructive or irreversible actions should require appropriate confirmation.
+Destructive actions require appropriate confirmation.
 
----
+------------------------------------------------------------------------
 
-# 30. Admin Delivery Layout
+# 33. Admin Delivery Layout
 
-Delivery management should provide:
-
-```text
+``` text
 Active Deliveries
      ↓
 Delivery List
@@ -728,19 +847,14 @@ Map
 Status / Location Controls
 ```
 
-Administrators may update:
+The layout must distinguish operational controls from read-only delivery
+information.
 
-- Delivery status
-- Delivery location
-- Shipment progress
+------------------------------------------------------------------------
 
----
+# 34. Analytics Layout
 
-# 31. Analytics Layout
-
-Analytics pages should use a consistent hierarchy:
-
-```text
+``` text
 Page Header
      ↓
 Filters / Date Range
@@ -752,110 +866,15 @@ Charts
 Detailed Tables
 ```
 
-Charts should remain readable on smaller screens.
+Charts must remain readable on tablet and mobile.
 
----
+------------------------------------------------------------------------
 
-# 32. Navigation Responsiveness
+# 35. Forms Layout
 
-Desktop navigation may use:
+Forms use consistent grouping:
 
-```text
-Full Header
-Full Navigation
-```
-
-Mobile navigation may use:
-
-```text
-Compact Header
-Menu Trigger
-Drawer / Sheet
-```
-
-The navigation should not require desktop-width assumptions on mobile.
-
----
-
-# 33. Sidebar Responsiveness
-
-The administrator sidebar may behave as:
-
-```text
-Desktop
-Persistent Sidebar
-
-Tablet
-Collapsible Sidebar
-
-Mobile
-Drawer / Overlay Navigation
-```
-
-The exact behavior should follow the approved Figma design.
-
----
-
-# 34. Layout Containers
-
-Layouts should use consistent container primitives.
-
-Conceptually:
-
-```text
-Page
- └── Container
-      ├── Header
-      ├── Content
-      └── Footer / Supporting Content
-```
-
-Containers should control:
-
-- Maximum width
-- Horizontal padding
-- Alignment
-- Responsive spacing
-
----
-
-# 35. Grid System
-
-The layout system may use CSS Grid for:
-
-- Product grids
-- Dashboard cards
-- Admin layouts
-- Multi-column forms
-- Content sections
-
-Grid behavior should be responsive rather than fixed to one viewport size.
-
----
-
-# 36. Flex Layouts
-
-Flexbox should be used for:
-
-- Navigation
-- Toolbars
-- Button groups
-- Inline controls
-- Alignment
-- Card internals
-- Header regions
-
-Use Grid when the layout represents two-dimensional content relationships.
-
----
-
-# 37. Forms Layout
-
-Forms should use consistent field spacing and grouping.
-
-Example:
-
-```text
+``` text
 Form
  ├── Section
  │    ├── Field
@@ -869,55 +888,163 @@ Form
  └── Actions
 ```
 
-Complex forms may use multiple columns on desktop and stack on mobile.
+Desktop may use multiple columns when the Figma layout supports it.
 
----
+Mobile should stack fields into a readable single flow.
 
-# 38. Loading Layouts
+------------------------------------------------------------------------
 
-Loading layouts should preserve the expected page structure.
+# 36. Navigation Responsiveness
 
-For example:
+Desktop:
 
-```text
-Page
- ↓
-Page Header Skeleton
- ↓
-Filter Skeleton
- ↓
-Product Grid Skeleton
+``` text
+Full Header
+Full Navigation
 ```
 
-Avoid replacing the entire page with an unrelated spinner when the final layout is known.
+Mobile:
 
----
+``` text
+Compact Header
+Menu Trigger
+Mobile Navigation / Drawer
+```
 
-# 39. Empty Layouts
+The mobile layout must preserve access to:
 
-Empty states should occupy the same logical content area that populated content would use.
+-   Home
+-   Products
+-   Search
+-   Cart
+-   Orders
+-   Account
+
+according to the approved information architecture.
+
+------------------------------------------------------------------------
+
+# 37. Sidebar Responsiveness
+
+Desktop:
+
+``` text
+Persistent Sidebar
+```
+
+Tablet:
+
+``` text
+Collapsible Sidebar
+```
+
+Mobile:
+
+``` text
+Drawer / Overlay Navigation
+```
+
+The exact breakpoint behavior follows the approved Figma responsive
+composition.
+
+------------------------------------------------------------------------
+
+# 38. Responsive Reference Values
+
+Figma design-intent references include:
+
+``` text
+768px  → tablet / medium reference
+1440px → large desktop reference
+```
+
+These values describe design references and are not automatically CSS
+media-query requirements.
+
+The project should avoid creating duplicate breakpoint tokens when the
+implementation framework already provides equivalent defaults.
+
+------------------------------------------------------------------------
+
+# 39. Spacing and Layout Rhythm
+
+The design uses a 4px spacing foundation.
+
+Common verified values include:
+
+``` text
+16px
+24px
+32px
+48px
+```
+
+Horizontal page/container padding reference:
+
+``` text
+24px
+```
+
+Layout implementations should consume the existing spacing system
+instead of inventing local spacing scales.
+
+------------------------------------------------------------------------
+
+# 40. Loading Layouts
+
+Loading states should preserve the final page structure.
 
 Example:
 
-```text
+``` text
 Page Header
      ↓
-Content Area
+Filter Skeleton
      ↓
+Content Skeleton
+```
+
+Use Skeleton when the eventual layout is known.
+
+Use Spinner for short indeterminate operations where replacing the
+content structure is unnecessary.
+
+------------------------------------------------------------------------
+
+# 41. Empty Layouts
+
+Empty states occupy the same logical content region as populated
+content.
+
+Examples:
+
+``` text
+Wishlist
+   ↓
 Empty State
 ```
 
-The empty state should not cause unexpected layout shifts.
+``` text
+Orders
+   ↓
+No Orders
+```
 
----
+``` text
+Search
+   ↓
+No Search Results
+```
 
-# 40. Error Layouts
+An empty state should not cause unexpected layout shifts.
 
-Error states should preserve the surrounding page structure when possible.
+------------------------------------------------------------------------
 
-Example:
+# 42. Error Layouts
 
-```text
+Error states preserve surrounding structure when possible:
+
+``` text
 Page Header
      ↓
 Content Area
@@ -927,41 +1054,76 @@ Error State
 Retry
 ```
 
-Global application failures may use a dedicated error boundary layout.
+Global failures may use a dedicated error boundary layout.
 
----
+------------------------------------------------------------------------
 
-# 41. Footer
+# 43. Modal, Drawer, and Overlay Layouts
 
-The customer footer may contain:
+Overlays must:
 
-- Product navigation
-- Support links
-- Company information
-- Policies
-- Contact information
-- Copyright
+-   Remain within viewport bounds.
+-   Avoid clipping.
+-   Preserve focus behavior.
+-   Prevent inappropriate background interaction.
+-   Respect mobile viewport constraints.
+-   Avoid covering critical navigation unnecessarily.
 
-The footer should remain consistent across public customer pages.
+Functional elevation is acceptable for floating UI even though the
+overall visual system is predominantly flat.
 
-Administrative pages may use a simplified or omitted footer depending on the final design.
+------------------------------------------------------------------------
 
----
+# 44. Grid and Flex Rules
 
-# 42. Accessibility and Semantic Layout
+Use CSS Grid for two-dimensional structures such as:
 
-Layouts must preserve:
+-   Product grids
+-   Dashboard grids
+-   Multi-column content
+-   Complex admin arrangements
 
-- Logical heading hierarchy
-- Semantic landmarks
-- Keyboard navigation
-- Focus order
-- Readable content flow
-- Responsive accessibility
+Use Flexbox for:
 
-Recommended landmarks include:
+-   Navigation
+-   Toolbars
+-   Inline controls
+-   Button groups
+-   Header regions
+-   Alignment
+-   Card internals
 
-```text
+The choice should follow the relationship represented by the layout
+rather than habit.
+
+------------------------------------------------------------------------
+
+# 45. Overflow Rules
+
+Avoid unintended horizontal overflow.
+
+Review carefully:
+
+-   Header search
+-   Navigation
+-   Product grids
+-   Tables
+-   Dialogs
+-   Maps
+-   Long product names
+-   Long order numbers
+-   Admin dashboard charts
+
+Horizontal scrolling is acceptable only when intentional and usable,
+especially for genuinely tabular data.
+
+------------------------------------------------------------------------
+
+# 46. Semantic Layout
+
+Use appropriate landmarks:
+
+``` html
 <header>
 <nav>
 <main>
@@ -969,69 +1131,131 @@ Recommended landmarks include:
 <footer>
 ```
 
-The exact semantic structure should reflect the actual content hierarchy.
+Maintain:
 
----
+-   Logical heading hierarchy
+-   Correct reading order
+-   Keyboard focus order
+-   Meaningful landmarks
+-   Accessible responsive behavior
 
-# 43. Overflow Rules
+------------------------------------------------------------------------
 
-The application should avoid unintended horizontal overflow.
+# 47. Figma-to-Layout Workflow
 
-Particular attention should be given to:
+The layout implementation process is:
 
-- Header search
-- Navigation
-- Product grids
-- Tables
-- Dialogs
-- Maps
-- Long product names
-- Long order numbers
-
-Horizontal scrolling should only be introduced where it is intentional and usable.
-
----
-
-# 44. Layout and Figma
-
-Every major page layout should correspond to an approved Figma design.
-
-The implementation relationship is:
-
-```text
-Figma Layout
-     ↓
-Layout Specification
-     ↓
-React Layout Component
-     ↓
+``` text
+Approved Figma Layout
+        ↓
+Layout Rules
+        ↓
+React Layout / Shell
+        ↓
 SCSS / CSS Modules
+        ↓
+Responsive Implementation
+        ↓
+Visual Validation
 ```
 
-Major deviations should be reviewed.
+Major layout deviations require review.
 
----
+------------------------------------------------------------------------
 
-# 45. Layout Completion Criteria
+# 48. Final Figma Layout Corrections Incorporated
 
-A layout is considered complete when:
+The final QA pass established:
 
-- Desktop behavior is defined.
-- Tablet behavior is defined.
-- Mobile behavior is defined.
-- Containers are consistent.
-- Navigation is responsive.
-- Overflow is controlled.
-- Loading states are considered.
-- Empty states are considered.
-- Error states are considered.
-- Accessibility is considered.
-- Figma and implementation are aligned.
+-   Customer and admin branding is present in the headers.
+-   Admin sidebar collapse control is at the top.
+-   Sidebar is sticky below the header.
+-   Main content scrolls independently.
+-   Sidebar collapse resizes main content.
+-   Header is never covered by sidebar behavior.
+-   Browse Deals CTA remains readable in its default state.
+-   "New Season 2026" is a compact promotional eyebrow rather than an
+    oversized heading.
+-   Cart content and order summary do not overlap.
+-   Checkout pipeline and order summary do not overlap.
+-   Mobile cart scrolls correctly.
+-   Admin Sales Overview responds to available width.
+-   Orders by Status avoids mixed-item overlap and stacks safely on
+    mobile.
+-   Product image upload has a visible control and constrained preview.
 
----
+------------------------------------------------------------------------
 
-# 46. Layout Principle
+# 49. Layout Completion Criteria
 
-> **Layouts should provide a stable structure while allowing content and features to evolve independently.**
+A layout is complete when:
 
-ElectroHub layouts should remain predictable, responsive, accessible, and consistent across customer and administrator experiences.
+-   Approved Figma composition exists.
+-   Desktop behavior is defined.
+-   Tablet behavior is defined.
+-   Mobile behavior is defined.
+-   Containers are consistent.
+-   Navigation is responsive.
+-   Sidebar behavior is defined where applicable.
+-   Overflow is controlled.
+-   Loading states are considered.
+-   Empty states are considered.
+-   Error states are considered.
+-   Accessibility is considered.
+-   Primary actions remain accessible.
+-   No unintended overlap exists.
+-   Implementation has been visually validated against Figma.
+
+------------------------------------------------------------------------
+
+# 51. Figma Repository Export Structure
+
+This layout documentation follows the approved repository-side Figma asset structure:
+
+```text
+assets/
+└── figma/
+    ├── FIGMA.md
+    ├── FIGMA_IMPLEMENTATION_RULES.md
+    ├── FIGMA_REFERENCES.md
+    │
+    └── exports/
+        │
+        ├── Components/
+        │   ├── README.md
+        │   └── screenshots/
+        │
+        ├── admin/
+        │   ├── README.md
+        │   └── screenshots/
+        │
+        └── customer/
+            ├── README.md
+            └── screenshots/
+```
+
+### Responsibilities
+
+- `assets/figma/FIGMA.md` — consolidated Figma governance, source-of-truth, handoff, and design context.
+- `assets/figma/FIGMA_IMPLEMENTATION_RULES.md` — implementation rules for translating approved Figma layouts into the application.
+- `assets/figma/FIGMA_REFERENCES.md` — Figma file, page, frame, prototype, and reference navigation.
+- `assets/figma/exports/Components/README.md` — component screenshot/reference package.
+- `assets/figma/exports/admin/README.md` — administrator layout/screen reference package.
+- `assets/figma/exports/customer/README.md` — customer layout/screen reference package.
+- Each corresponding `screenshots/` directory contains supporting Figma Make visual evidence.
+
+**Figma Design remains authoritative for layout composition and responsive intent. Figma Make screenshots are supporting visual references only.**
+
+The previous export categories `Layouts/`, `Foundation/`, `screens/`, and `responsive/` are not part of the approved repository export structure and must not be recreated.
+
+For Figma Make screenshots, preserve the filename generated by Figma Make. Do not introduce manual naming patterns such as `<Screen> — Desktop/Tablet/Mobile.png`. Context is provided by the destination folder and README.
+
+The responsive layout rules themselves remain documented in `docs/02_Design/RESPONSIVE.md`; the repository export structure is only the evidence/reference organization.
+
+------------------------------------------------------------------------
+
+# 50. Layout Principle
+
+> **Layouts provide the stable structural framework that allows
+> ElectroHub features and content to evolve without breaking
+> consistency, responsiveness, or usability.**

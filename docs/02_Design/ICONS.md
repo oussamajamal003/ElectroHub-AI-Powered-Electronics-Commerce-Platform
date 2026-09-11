@@ -2,620 +2,754 @@
 
 ## 1. Purpose
 
-This document defines the icon system used throughout ElectroHub.
+This document defines the approved ElectroHub icon system.
 
-The icon system provides consistent rules for:
+It covers:
 
-- Icon library
-- Icon sizing
-- Icon usage
-- Icon alignment
-- Interactive icons
-- Status icons
-- Navigation icons
-- Accessibility
-- Responsive behavior
-- Figma-to-code consistency
+-   Icon library
+-   Icon sizing
+-   Icon buttons
+-   Navigation icons
+-   Commerce icons
+-   Admin icons
+-   Status icons
+-   Accessibility
+-   Alignment
+-   Responsive behavior
+-   Figma-to-code usage
 
-ElectroHub uses **Lucide React** as its approved icon library.
+**Figma is the visual source of truth.** This document records the
+approved icon decisions and implementation rules established during the
+design workflow.
 
----
+------------------------------------------------------------------------
 
-# 2. Icon Principles
+# 2. Icon Source of Truth
 
-The icon system follows these principles:
+The authority chain is:
 
-### Consistency
+``` text
+Figma Icon Usage
+      ↓
+Icon Library / Semantic Icon Role
+      ↓
+React Icon Component
+      ↓
+Application Components
+```
 
-Icons should use a consistent visual language, stroke style, and sizing system.
+The implementation must preserve the visual role established in Figma.
 
-### Clarity
-
-Icons should communicate familiar concepts without unnecessary complexity.
-
-### Accessibility
-
-Icons must not be the only way to communicate critical information.
-
-### Restraint
-
-Icons should support content and interaction rather than create visual noise.
-
-### Reusability
-
-The same icon should be reused for the same semantic purpose throughout the application.
-
----
+------------------------------------------------------------------------
 
 # 3. Approved Icon Library
 
-ElectroHub uses:
+The application component system uses:
 
-```text
+``` text
 Lucide React
 ```
 
-Lucide provides:
+The Figma work established a consistent outline-icon language, and the
+implementation uses Lucide React to provide that language in the
+application.
 
-- Consistent stroke-based icons
-- React components
-- Configurable sizing
-- Accessibility support
-- A broad set of interface and commerce icons
+Do not introduce another icon library for individual features without
+architectural review.
 
-New icon libraries should not be introduced without an architectural or design decision.
+------------------------------------------------------------------------
 
----
+# 4. Icon Style
 
-# 4. Figma and Implementation
+The default icon language is:
 
-The icon relationship is:
+-   Clean
+-   Minimal
+-   Outline-based
+-   Consistent stroke treatment
+-   Simple geometric forms
+-   Appropriate for both customer and admin interfaces
 
-```text
-Figma Icon
-    ↓
-Lucide Icon Selection
-    ↓
-React Component
-    ↓
-SCSS / CSS Modules
+Icons should support the interface rather than become decorative noise.
+
+------------------------------------------------------------------------
+
+# 5. Core Icon Size
+
+The approved base icon size is:
+
+``` text
+24px
 ```
 
-Figma should use icons that have an equivalent Lucide React implementation whenever possible.
+Implementation token:
 
-If a custom icon is required, the reason should be documented.
-
----
-
-# 5. Icon Sizes
-
-The icon system should use a consistent size scale.
-
-Conceptual sizes:
-
-```text
-XS
-SM
-MD
-LG
-XL
+``` text
+--size-icon: 24px
 ```
 
-Typical usage:
+This is the primary size for standard UI icons.
 
-```text
-XS
-Small metadata or compact controls
+------------------------------------------------------------------------
 
-SM
-Inputs, badges, compact buttons
+# 6. Small Icons
 
-MD
-Default UI icons
+Small icons use:
 
-LG
-Prominent actions
-
-XL
-Large empty states or feature visuals
+``` text
+20px
 ```
 
-The exact pixel values should follow the approved Figma design tokens.
+Implementation token:
 
----
-
-# 6. Icon Weight
-
-Icons should maintain a consistent stroke treatment.
-
-Lucide icons should normally use their default stroke style unless the design system explicitly defines an alternative.
-
-Avoid mixing unrelated icon styles such as:
-
-```text
-Filled
-Outlined
-3D
-Multicolor
-Hand-drawn
+``` text
+--size-icon-sm: 20px
 ```
 
-without design approval.
+Typical uses:
 
----
+-   Compact metadata
+-   Small status indicators
+-   Dense admin UI
+-   Supporting labels
 
-# 7. Navigation Icons
+Do not reduce icons below the intended touch/control size when the icon
+itself is interactive.
 
-Navigation icons may represent:
+------------------------------------------------------------------------
 
-```text
-Home
-Products
-Categories
-Orders
-Wishlist
-Cart
-Account
-Settings
-Dashboard
-Analytics
-Inventory
-Delivery
-```
+# 7. Icon and Control Sizing
 
-Navigation icons should be paired with text where space permits.
+Icon size and control size are separate concepts.
 
-Icons alone should not be relied upon for navigation meaning unless the control has an accessible name.
+Approved semantic sizing includes:
 
----
-
-# 8. Action Icons
-
-Common action icons include:
-
-```text
-Search
-Add
-Edit
-Delete
-Close
-Back
-Forward
-Refresh
-Filter
-Sort
-More
-Download
-Upload
-Share
-Copy
-```
-
-The same semantic action should use the same icon throughout the application.
-
----
-
-# 9. Commerce Icons
-
-Commerce interfaces may use icons for:
-
-```text
-Cart
-Wishlist
-Heart
-Shopping Bag
-Package
-Credit Card
-Receipt
-Invoice
-Tag
-Discount
-Truck
-Map Pin
-```
-
-Icons should reinforce the associated label or action.
-
----
-
-# 10. Product Icons
-
-Product-related interfaces may use icons for:
-
-```text
-Image
-Camera
-Zoom
-Star
-Heart
-Compare
-Specifications
-Availability
-```
-
-Product icons should remain visually secondary to product information unless the action itself is primary.
-
----
-
-# 11. Search by Image Icons
-
-The image-search workflow may use:
-
-```text
-Camera
-Upload
-Image
-Scan
-Search
-Refresh
-Close
-```
-
-The camera icon should be used consistently for camera capture actions.
-
-Upload and camera actions should remain distinguishable.
-
----
-
-# 12. Delivery Icons
-
-Delivery tracking may use:
-
-```text
-Map Pin
-Navigation
-Truck
-Package
-Clock
-Check
-Route
-Location
-```
-
-Icons should support the delivery timeline and map interface.
-
----
-
-# 13. Order and Payment Icons
-
-Order interfaces may use:
-
-```text
-Package
-Receipt
-File
-Download
-Credit Card
-Check Circle
-Clock
-Alert Circle
-X Circle
-```
-
-Icons should correspond to the semantic state or action.
-
----
-
-# 14. Status Icons
-
-Status icons may represent:
-
-```text
-Success
-Warning
-Error
-Information
-Pending
-Loading
-```
-
-Status communication should normally combine:
-
-```text
+``` text
 Icon
-+
-Text
+24px
+
+Small Icon
+20px
+
+Control
+40px
+
+Small Control
+32px
+
+Large Control
+48px
 ```
 
-rather than relying on an icon alone.
-
----
-
-# 15. Icon Buttons
-
-Icon-only buttons should be used when the action is universally recognizable or when space is constrained.
-
-Examples:
-
-```text
-Search
-Close
-Menu
-More
-Wishlist
-Delete
-Edit
-```
-
-Every icon-only button must provide an accessible name.
+An icon button therefore has a control box and an icon inside it.
 
 Example:
 
-```tsx
-<button aria-label="Remove from wishlist">
-  <Heart />
-</button>
+``` text
+40px control
+┌──────────┐
+│   24px   │
+└──────────┘
 ```
 
----
+Do not treat the icon itself as the complete interactive target.
 
-# 16. Icons With Text
+------------------------------------------------------------------------
 
-When an icon accompanies text:
+# 8. Icon Buttons
 
-```text
-[Icon] Add to Cart
-[Icon] Download Invoice
-[Icon] Track Order
-```
+Icon buttons must provide:
 
-The icon should reinforce the action rather than duplicate the complete meaning unnecessarily.
+-   Sufficient target size
+-   Accessible name
+-   Visible focus state
+-   Clear hover/pressed state
+-   Disabled state where appropriate
 
----
+Typical uses:
 
-# 17. Decorative Icons
-
-Decorative icons should not create unnecessary accessibility announcements.
-
-When an icon is purely decorative, it should be hidden from assistive technology where appropriate.
-
-Conceptually:
-
-```tsx
-<Icon aria-hidden="true" />
-```
-
----
-
-# 18. Icon Alignment
-
-Icons should align consistently with adjacent content.
-
-For inline icon/text combinations:
-
-```text
-[Icon] Text
-```
-
-The icon should use the same visual alignment and appropriate spacing.
-
-Avoid manually positioning icons with arbitrary offsets.
-
----
-
-# 19. Icon Spacing
-
-Icon-to-text spacing should use the project's spacing tokens.
-
-Avoid:
-
-```css
-margin-left: 7px;
-```
-
-when an appropriate spacing token already exists.
-
-Prefer the design system spacing scale.
-
----
-
-# 20. Interactive States
-
-Interactive icons should define:
-
-```text
-Default
-Hover
-Focus
-Active
-Disabled
-Loading
-```
-
-The state should be visible without relying solely on color.
-
-Focus states are required for keyboard-accessible controls.
-
----
-
-# 21. Selected Icons
-
-Selected states may be represented through:
-
-- Color
-- Background
-- Stroke treatment
-- Filled state where supported
-- Supporting text
-
-The exact treatment must follow the Figma design.
-
----
-
-# 22. Loading Icons
-
-Loading indicators may use:
-
-- Spinner icons
-- Dedicated loading components
-- Skeletons
-
-Animated icons should not replace meaningful loading content when the structure of the final content can be represented by a skeleton.
-
----
-
-# 23. Responsive Icons
-
-Icons should remain appropriately sized across:
-
-```text
-Mobile
-Tablet
-Desktop
-Large Desktop
-```
-
-Do not automatically scale icons simply because the viewport changes.
-
-Size changes should be intentional and defined by the design system.
-
----
-
-# 24. Icon Accessibility
-
-Accessibility requirements include:
-
-- Accessible names for interactive icon buttons.
-- Decorative icons hidden from assistive technology where appropriate.
-- Icons not being the sole source of critical information.
-- Adequate contrast.
-- Visible focus states.
-- Appropriate touch target sizes.
-
----
-
-# 25. Touch Targets
-
-Interactive icons must provide an adequately sized interaction area.
-
-The visible icon and its clickable area are separate concepts.
-
-For example:
-
-```text
-┌──────────────┐
-│      ♥       │
-└──────────────┘
-```
-
-The icon may be small while the interactive target remains sufficiently large.
-
----
-
-# 26. Icon Color
-
-Icons should use semantic color tokens.
-
-Prefer:
-
-```text
-color: var(--color-text-secondary);
-```
-
-rather than arbitrary component-specific colors.
-
-Status icons should use the corresponding semantic status color where appropriate.
-
----
-
-# 27. Icon Naming
-
-Icon usage should describe the semantic purpose.
-
-Prefer:
-
-```text
+``` text
 Search
-Trash2
-Heart
-ShoppingCart
-MapPin
-Download
+Wishlist
+Cart
+Menu
+Close
+Edit
+Delete
+More
+Filter
 ```
 
-Avoid creating custom wrapper names that obscure the underlying meaning unless the abstraction provides meaningful application behavior.
+An icon-only control must have an accessible label.
 
----
+------------------------------------------------------------------------
 
-# 28. Figma Icon Organization
+# 9. Navigation Icons
 
-Figma should organize icons consistently.
+Navigation icons may be used in:
 
-Recommended structure:
+-   Customer Header
+-   Mobile Navigation
+-   Admin Sidebar
+-   Admin Header
+-   Breadcrumbs
+-   Tabs
 
-```text
+Icons must remain secondary to the navigation label where a label is
+present.
+
+------------------------------------------------------------------------
+
+# 10. Customer Navigation
+
+Typical semantic roles include:
+
+``` text
+Home
+Products
+Search
+Cart
+Orders
+Account
+Wishlist
+```
+
+Use the icon that most clearly communicates the destination.
+
+Avoid using multiple visually similar icons for the same semantic
+action.
+
+------------------------------------------------------------------------
+
+# 11. Admin Navigation
+
+Admin navigation may include:
+
+``` text
+Dashboard
+Products
+Categories
+Inventory
+Orders
+Customers
+Analytics
+Settings
+```
+
+The icon language should remain consistent with the customer experience.
+
+Admin does not receive a separate icon library.
+
+------------------------------------------------------------------------
+
+# 12. Commerce Icons
+
+Commerce-related icons include semantic roles such as:
+
+``` text
+Shopping Cart
+Heart / Wishlist
+Search
+Filter
+Plus
+Minus
+Trash
+Package
+Credit Card
+Receipt
+Truck
+Map Pin
+```
+
+Use semantic icons consistently throughout the purchase and order
+lifecycle.
+
+------------------------------------------------------------------------
+
+# 13. Authentication Icons
+
+Authentication screens may use icons for:
+
+``` text
+Email
+Password
+Visibility
+OTP / Verification
+Lock
+Security
+```
+
+Icons should supplement labels and instructions.
+
+They must not replace required form labels.
+
+------------------------------------------------------------------------
+
+# 14. Status Icons
+
+Status icons support:
+
+``` text
+Success
+Warning
+Error
+Info
+Neutral
+```
+
+Examples:
+
+``` text
+Check
+Alert
+X
+Info
+```
+
+Status meaning should be communicated by:
+
+``` text
+Icon + Color + Text
+```
+
+rather than color alone.
+
+------------------------------------------------------------------------
+
+# 15. Delivery Icons
+
+Delivery workflows may use:
+
+``` text
+Package
+Truck
+Map Pin
+Location
+Clock
+Check
+```
+
+Icons should support the delivery timeline and tracking information.
+
+------------------------------------------------------------------------
+
+# 16. Product Icons
+
+Product interfaces may use:
+
+``` text
+Image
+Zoom
+Heart
+Star
+Shopping Cart
+Compare
+Share
+```
+
+Only icons relevant to the actual supported feature should be displayed.
+
+Do not show an icon merely because the design system has one.
+
+------------------------------------------------------------------------
+
+# 17. Rating Icons
+
+Rating uses star icons.
+
+The approved rating treatment is:
+
+``` text
+Fill   → #FDE68A
+Stroke → #B45309
+```
+
+The star treatment is specific to rating and should not be reused as
+generic warning styling.
+
+------------------------------------------------------------------------
+
+# 18. Admin Data Icons
+
+Admin interfaces may use icons for:
+
+``` text
+Edit
+Delete
+View
+Filter
+Sort
+Export
+Search
+More
+```
+
+Actions must remain understandable through accessible names and/or
+visible labels.
+
+------------------------------------------------------------------------
+
+# 19. Icon Stroke
+
+Icons should use a consistent stroke language.
+
+Avoid changing stroke width arbitrarily from one component to another.
+
+When the selected Lucide icon provides a standard stroke, retain the
+system-consistent stroke unless Figma explicitly requires another
+treatment.
+
+------------------------------------------------------------------------
+
+# 20. Icon Color
+
+Icons should normally inherit the semantic color of their context.
+
+Examples:
+
+``` text
+Navigation icon
+→ Navigation text color
+
+Primary button icon
+→ Primary foreground
+
+Error icon
+→ Error semantic color
+
+Muted metadata icon
+→ Muted text color
+```
+
+Do not introduce arbitrary icon colors.
+
+------------------------------------------------------------------------
+
+# 21. Icon Alignment
+
+Icons must align optically with their accompanying content.
+
+For icon + text:
+
+``` text
+[Icon] Label
+```
+
+Maintain consistent:
+
+-   Gap
+-   Vertical alignment
+-   Baseline relationship
+-   Control padding
+
+The icon should not visually overpower the text.
+
+------------------------------------------------------------------------
+
+# 22. Icons in Buttons
+
+Buttons with icons should maintain:
+
+``` text
+Icon
++
+Consistent gap
++
+Label
+```
+
+The icon position should remain predictable:
+
+``` text
+[Icon] Label
+```
+
+or:
+
+``` text
+Label [Icon]
+```
+
+depending on the semantic action.
+
+Do not mix patterns randomly.
+
+------------------------------------------------------------------------
+
+# 23. Icon-Only Actions
+
+When the action is obvious from context, an icon-only control may be
+used.
+
+Requirements:
+
+-   Accessible name
+-   Tooltip where useful
+-   Visible focus
+-   Adequate target size
+-   Clear state
+
+Critical destructive actions should not rely on an unlabeled icon alone.
+
+------------------------------------------------------------------------
+
+# 24. Tooltips
+
+Tooltips can supplement icon-only controls.
+
+They are especially useful for:
+
+-   Admin actions
+-   Collapsed sidebar
+-   Dense data tables
+-   Unfamiliar controls
+
+Tooltips do not replace accessible labels.
+
+------------------------------------------------------------------------
+
+# 25. Sidebar Collapse Icon
+
+The admin sidebar has a collapse/expand control.
+
+The approved shell behavior places this control at the top of the
+sidebar.
+
+When collapsed:
+
+-   The sidebar remains usable.
+-   Icon-only navigation remains understandable.
+-   Tooltips may provide additional context.
+-   The main content resizes rather than being covered.
+
+The collapse control must not be positioned in a way that overlaps or
+competes with the header.
+
+------------------------------------------------------------------------
+
+# 26. Mobile Navigation Icons
+
+Mobile navigation uses icons where appropriate.
+
+Touch targets must remain large enough for comfortable interaction.
+
+The icon itself may remain 20--24px while the surrounding control is
+larger.
+
+------------------------------------------------------------------------
+
+# 27. Responsive Icons
+
+Icon size should not change simply because the viewport becomes smaller.
+
+Responsive changes should be made when they improve:
+
+-   Density
+-   Touch usability
+-   Visual hierarchy
+
+The control target must remain accessible even when the icon is visually
+compact.
+
+------------------------------------------------------------------------
+
+# 28. Loading Icons
+
+Loading indicators use the shared Spinner component rather than
+arbitrary spinning icons.
+
+Where a status is genuinely loading:
+
+``` text
+Spinner
++
+Accessible loading state
+```
+
+should be preferred.
+
+------------------------------------------------------------------------
+
+# 29. Decorative Icons
+
+Purely decorative icons should not create unnecessary screen-reader
+announcements.
+
+Implementation should mark decorative icons appropriately.
+
+Functional icons require accessible semantics.
+
+------------------------------------------------------------------------
+
+# 30. Accessibility
+
+Icon accessibility requirements include:
+
+-   Accessible names for icon-only controls
+-   Keyboard accessibility
+-   Visible focus
+-   Adequate target size
+-   Non-color-only meaning
+-   Decorative icon suppression
+-   Tooltip support where useful
+
+An icon is not a substitute for semantic HTML.
+
+------------------------------------------------------------------------
+
+# 31. Icon Asset Strategy
+
+Prefer library-based icons for interface controls.
+
+Use raster/vector assets for:
+
+-   Product photography
+-   Logos
+-   Brand illustrations
+-   Complex illustrations
+-   Marketing artwork
+
+Do not convert ordinary interface icons into image assets without a
+reason.
+
+------------------------------------------------------------------------
+
+# 32. Brand Logo
+
+The ElectroHub logo/brand mark is a brand asset, not a generic UI icon.
+
+It belongs to the application branding layer and is used in:
+
+-   Customer Header
+-   Admin Header
+-   Cover/handoff documentation where appropriate
+
+The logo must remain visually aligned with the existing header system.
+
+------------------------------------------------------------------------
+
+# 33. Figma Organization
+
+The icon system should be documented around:
+
+``` text
 Icons
 ├── Navigation
-├── Actions
 ├── Commerce
-├── Products
-├── Delivery
-├── Orders
+├── Authentication
 ├── Status
+├── Delivery
+├── Admin
 └── Utility
 ```
 
-The selected Lucide equivalent should be identifiable during design handoff.
+The actual Figma component/library organization may evolve, but semantic
+roles should remain stable.
 
----
+------------------------------------------------------------------------
 
-# 29. Custom Icons
+# 34. Token Integration
 
-Custom icons should only be introduced when:
+Icons consume existing semantic tokens.
 
-1. No suitable Lucide icon exists.
-2. The icon represents important ElectroHub-specific identity.
-3. The custom icon is required by the approved Figma design.
+Relevant sizing tokens include:
 
-Custom icons should document:
+``` text
+--size-icon: 24px
+--size-icon-sm: 20px
+```
 
-- Purpose
-- Source
-- Usage
-- Dimensions
-- Accessibility requirements
-- Licensing where applicable
+Controls consume:
 
----
+``` text
+--size-control: 40px
+--size-control-sm: 32px
+--size-control-lg: 48px
+```
 
-# 30. Icon Usage Rules
+This keeps icon dimensions separate from interactive target dimensions.
 
-### Do
+------------------------------------------------------------------------
 
-- Use Lucide React.
-- Reuse semantic icons.
-- Keep sizing consistent.
-- Provide accessible names.
-- Use semantic colors.
-- Maintain consistent stroke style.
-- Follow Figma.
+# 35. Icon Review Rules
 
-### Do Not
+Before adding an icon:
 
-- Mix unrelated icon libraries.
-- Use icons as decoration everywhere.
-- Rely only on icons for critical information.
-- Use arbitrary sizes throughout the application.
-- Manually position icons unnecessarily.
-- Introduce custom icons without justification.
+1.  Check whether Lucide already provides an appropriate icon.
+2.  Check the Figma reference.
+3.  Reuse the existing semantic role.
+4.  Confirm accessibility.
+5.  Confirm the icon is actually needed.
+6.  Confirm size and alignment.
+7.  Avoid introducing a second icon library.
 
----
+------------------------------------------------------------------------
 
-# 31. Icon Completion Criteria
+# 36. Completion Criteria
 
-The icon system is considered complete when:
+The icon system is complete when:
 
-- Lucide React is established as the primary icon library.
-- Icon categories are defined.
-- Size rules are defined.
-- Interactive states are defined.
-- Accessibility rules are defined.
-- Figma and implementation icons are aligned.
-- Customer and admin workflows use consistent icon semantics.
-- Custom icons are documented when required.
+-   Library is defined.
+-   Base sizes are defined.
+-   Icon/control sizing is separated.
+-   Navigation usage is defined.
+-   Commerce usage is defined.
+-   Admin usage is defined.
+-   Status usage is defined.
+-   Rating treatment is defined.
+-   Accessibility is defined.
+-   Responsive behavior is defined.
+-   Brand logo treatment is defined.
+-   Figma and implementation remain aligned.
 
----
+------------------------------------------------------------------------
 
-# 32. Icon Principle
+# 37. Icon Principle
 
-> **Use icons to reinforce meaning and interaction, not to replace clear communication.**
+> **Icons should clarify actions and information, remain visually
+> consistent, and never replace accessible meaning.**
+# 38. Repository Figma Asset Structure
+
+Icon documentation remains part of `docs/02_Design/`. Figma visual-reference and handoff assets use the single approved repository structure below:
+
+```text
+assets/
+└── figma/
+    ├── FIGMA.md
+    ├── FIGMA_IMPLEMENTATION_RULES.md
+    ├── FIGMA_REFERENCES.md
+    │
+    └── exports/
+        │
+        ├── Components/
+        │   ├── README.md
+        │   └── screenshots/
+        │
+        ├── admin/
+        │   ├── README.md
+        │   └── screenshots/
+        │
+        └── customer/
+            ├── README.md
+            └── screenshots/
+```
+
+## 38.1 Responsibilities
+
+- `assets/figma/FIGMA.md` — primary repository-side Figma governance and handoff documentation.
+- `assets/figma/FIGMA_IMPLEMENTATION_RULES.md` — implementation rules for translating Figma into the application.
+- `assets/figma/FIGMA_REFERENCES.md` — Figma file, page, frame, prototype, and handoff references.
+- `assets/figma/exports/Components/` — component reference exports and supporting screenshots, including icon usage evidence.
+- `assets/figma/exports/admin/` — administrator experience reference exports and screenshots.
+- `assets/figma/exports/customer/` — customer experience reference exports and screenshots.
+
+Do not recreate legacy Figma export categories such as `Layouts/`, `Foundation/`, `screens/`, or `responsive/`.
+
+## 38.2 Screenshot Policy
+
+Figma Design remains authoritative for icon appearance and usage. Figma Make screenshots are supporting visual references for implementation and Antigravity.
+
+Preserve the default filenames generated by Figma Make. Do not manually rename screenshots into custom naming patterns.
+
+Responsive evidence belongs inside the three approved export packages rather than in a separate responsive export directory.
+

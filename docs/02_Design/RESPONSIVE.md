@@ -1,205 +1,169 @@
-# Responsive Design
+# ElectroHub Responsive Design
 
 ## 1. Purpose
 
-This document defines the responsive design strategy for ElectroHub.
+This document defines the approved responsive design and implementation strategy for ElectroHub.
 
-The responsive system ensures that the application remains usable, readable, accessible, and visually consistent across:
+It consolidates the responsive decisions established throughout the Figma design work, including:
 
-```text
-Mobile
-Tablet
-Desktop
-Large Desktop
-```
+- Customer and admin experiences
+- Desktop, tablet, and mobile representations
+- Navigation and shell adaptation
+- Commerce flows
+- Checkout and payment
+- Orders and delivery tracking
+- Search and image search
+- Admin dashboards, tables, and forms
+- Component states
+- Accessibility and touch behavior
+- Motion and performance considerations
 
-Responsive behavior must be designed intentionally rather than treated as a final styling adjustment.
+**Figma remains the visual source of truth.** This document records the responsive rules and implementation expectations derived from the approved Figma work; it does not replace the Figma designs.
 
 ---
 
-# 2. Responsive Principles
+# 2. Responsive Design Principles
 
 ElectroHub follows these principles:
 
 ### Mobile First
 
-Layouts should begin with the smallest practical viewport and progressively enhance for larger screens.
+Implementation should establish a robust small-screen baseline and progressively enhance the layout.
 
 ### Content First
 
-Breakpoints should respond to content requirements rather than arbitrary device names.
+Breakpoints are introduced when content no longer fits comfortably, not because a specific device model is being targeted.
+
+### Structural Adaptation
+
+Responsive design changes layout, navigation, density, and interaction patterns where necessary. It is not simply desktop UI scaled down.
 
 ### Consistency
 
-The same feature should remain recognizable across all viewport sizes.
+A feature must remain recognizable and functionally equivalent across viewport sizes.
 
 ### Accessibility
 
-Responsive changes must not reduce keyboard accessibility, readability, or touch usability.
+Responsive changes must preserve keyboard access, visible focus, readable content, semantic structure, contrast, and touch usability.
 
 ### Performance
 
-Mobile layouts should avoid unnecessary assets, rendering, and animation.
-
-### Figma Alignment
-
-Responsive behavior must follow the approved Figma designs and specifications.
+Small screens should not unnecessarily load oversized assets, expensive effects, or desktop-only UI.
 
 ---
 
-# 3. Supported Viewports
+# 3. Approved Responsive Coverage
 
-The application should support at minimum:
+The Figma work establishes responsive coverage for:
 
 ```text
-Mobile
+Desktop
 Tablet
-Desktop
-Large Desktop
-```
-
-The exact breakpoint values are defined by the implementation design tokens and should be selected according to content behavior.
-
-Avoid designing only for specific device models.
-
----
-
-# 4. Breakpoint Strategy
-
-Breakpoints should be content-driven.
-
-Conceptually:
-
-```text
 Mobile
-    ↓
-Small / Medium Tablet
-    ↓
-Desktop
-    ↓
-Large Desktop
 ```
 
-A breakpoint should be introduced when the current layout no longer provides an acceptable experience.
+Large desktop is also considered in implementation so content does not stretch indefinitely.
 
-Avoid unnecessary breakpoints.
-
----
-
-# 5. Mobile Layout
-
-Mobile layouts prioritize:
-
-- Single-column content
-- Touch interaction
-- Clear hierarchy
-- Compact navigation
-- Readable text
-- Accessible controls
-
-Typical structure:
-
-```text
-Header
-   ↓
-Page Content
-   ↓
-Sections
-   ↓
-Footer
-```
-
-Multi-column desktop layouts should generally stack vertically on mobile.
+Important responsive states and patterns were refined during the final Figma QA and polish work.
 
 ---
 
-# 6. Tablet Layout
+# 4. Breakpoint and Viewport Decisions
 
-Tablet layouts may use:
+The design work verified the following **design-intent values**:
 
-- Two-column content
-- Reduced navigation
-- Collapsible sidebars
-- Adaptive product grids
-- Compact toolbars
+| Token / value | Status | Meaning |
+|---|---|---|
+| `md: 768px` | Verified | Figma tablet/design breakpoint intent |
+| `xl: 1440px` | Verified | Large desktop/artboard intent |
+| `sm: 640px` | Not approved as a Figma-specific value | Do not treat as design truth |
+| `lg: 1024px` | Not approved as a Figma-specific value | Do not treat as design truth |
 
-Tablet behavior should not simply be a scaled-down desktop layout.
+These values must not be described as explicit CSS breakpoints unless the implementation independently establishes them.
 
----
-
-# 7. Desktop Layout
-
-Desktop layouts may use:
-
-- Multi-column grids
-- Persistent navigation
-- Sidebars
-- Expanded search
-- Multi-column forms
-- Dashboard layouts
-
-Content should remain within readable maximum widths.
+Implementation may introduce additional content-driven thresholds when required by layout behavior, but those thresholds must be documented and should not be presented as Figma-verified values.
 
 ---
 
-# 8. Large Desktop
+# 5. Container Strategy
 
-Large desktop screens should use additional space carefully.
+The page container must provide stable horizontal alignment across the application.
 
-Do not simply stretch all content indefinitely.
+Verified design evidence includes:
 
-Large screens may provide:
+- `24px` horizontal container padding.
+- `1440px` as a large-desktop artboard/design intent.
 
-- Larger content areas
-- Additional grid columns
-- Increased spacing where appropriate
-- Wider dashboard layouts
-
-Primary content should remain visually focused.
-
----
-
-# 9. Container System
-
-Pages should use responsive containers.
+The `1440px` value should not automatically be interpreted as a verified CSS `max-width`.
 
 Conceptually:
 
 ```text
 Viewport
 │
-├── Responsive Padding
+├── 24px+ responsive horizontal padding
 │
-└── Max Width Container
-      │
-      └── Page Content
+└── Content Container
+       │
+       ├── Page Header
+       ├── Main Content
+       └── Supporting Sections
 ```
 
-The container should:
-
-- Prevent excessive line length.
-- Maintain consistent horizontal alignment.
-- Adapt padding by viewport size.
-- Prevent unintended overflow.
+Do not create unrelated page-specific container widths.
 
 ---
 
-# 10. Header Responsiveness
+# 6. Product Grid
 
-The header is one of the most important responsive components.
+The visual audit established the following intended density:
 
-Desktop may contain:
+```text
+Desktop → 4 columns
+Tablet  → 2 columns
+Mobile  → 1 column
+```
+
+These are **derived responsive rules from the visual design audit**, not claims of explicit Figma CSS/grid implementation.
+
+The product card must retain enough width for:
+
+- Product image
+- Name
+- Price
+- Availability
+- Primary action
+- Wishlist action
+- Optional rating/badge information
+
+Do not force additional columns merely because screen width permits them if the cards become too narrow.
+
+---
+
+# 7. Customer Header and Navigation
+
+### Desktop
+
+The customer header can expose the full navigation and actions:
 
 ```text
 Logo
-Navigation
-Search
-Wishlist
+Home
+Products
 Cart
+Orders
 Account
+Search
+Wishlist / Account Actions
 ```
 
-Mobile may contain:
+### Tablet
+
+Navigation may become more compact while preserving the primary destinations.
+
+### Mobile
+
+The design supports a compact shell with:
 
 ```text
 Menu
@@ -208,111 +172,177 @@ Search
 Cart
 ```
 
-Secondary navigation should move into a menu or drawer when necessary.
+Secondary navigation should move into the established mobile navigation/drawer pattern.
 
-The header must never create horizontal overflow.
+The header must not create horizontal overflow or overlap page content.
 
----
-
-# 11. Search Responsiveness
-
-Search must remain usable at every supported width.
-
-Desktop:
-
-```text
-[ Navigation ] [ Search Input ] [ Actions ]
-```
-
-Mobile may use:
-
-```text
-[ Menu ] [ Logo ] [ Cart ]
-
-[ Search Input ]
-```
-
-Search suggestions should remain aligned with the search control.
-
-Search controls must remain large enough for touch interaction.
+The ElectroHub brand mark/logo is part of the approved customer and admin shell treatment.
 
 ---
 
-# 12. Product Grid Responsiveness
+# 8. Admin Shell Responsiveness
 
-Product grids should adapt to available width.
+The admin shell consists of:
 
-Conceptually:
+```text
+Admin Header
+Sidebar
+Main Content
+```
+
+The final Figma work established important shell behavior:
+
+- The sidebar collapse control is positioned at the **top of the sidebar**.
+- The sidebar remains sticky below the header.
+- The main content scrolls independently.
+- Main content resizes correctly when the sidebar is collapsed.
+- The collapsed state remains usable.
+
+Expected adaptation:
 
 ```text
 Desktop
-4+ columns
+Persistent / collapsible sidebar
 
 Tablet
-2–3 columns
+Collapsible sidebar
 
 Mobile
-1–2 columns
+Compact navigation / drawer pattern
 ```
 
-The final number of columns depends on product-card dimensions and the approved Figma design.
-
-Cards should not become too narrow.
+Do not allow the sidebar to cover or incorrectly overlap the admin header.
 
 ---
 
-# 13. Product Card Responsiveness
+# 9. Home and Landing Screens
 
-Product cards should preserve:
+Customer home content should preserve the established visual hierarchy at smaller widths.
 
-- Image ratio
-- Product name readability
-- Price visibility
-- Availability
-- Primary action
-- Wishlist action
+Responsive behavior includes:
 
-Long product names should wrap or truncate according to the design system.
+- Hero content stacking where necessary.
+- Primary CTA remaining visible.
+- Promotional content retaining readable hierarchy.
+- Product/recommendation sections adapting to available width.
+- The compact “New Season 2026” promotion treatment remaining an eyebrow/promo label rather than consuming excessive vertical space.
 
-Critical information must remain visible.
+The final Figma QA also corrected the default visibility of the hero “Browse Deals” CTA text.
 
 ---
 
-# 14. Product Details Responsiveness
+# 10. Product Listing and Search
 
-Desktop:
+Listing and search pages should adapt:
 
 ```text
-Gallery | Product Information
+Desktop
+Filters + multi-column results
+
+Tablet
+Reduced density + adaptive filters
+
+Mobile
+Single-column results + compact filter/search controls
 ```
 
-Mobile:
+Search must remain accessible and usable at every supported width.
+
+Search suggestions must stay visually associated with the search control.
+
+The image-search entry point must remain discoverable without overwhelming the normal text-search experience.
+
+---
+
+# 11. Search by Image
+
+The responsive image-search flow supports:
+
+```text
+Choose Image
+    ↓
+Upload / Camera
+    ↓
+Preview
+    ↓
+Analyze
+    ↓
+Results
+```
+
+Mobile behavior must support:
+
+- Camera capture where the browser/device permits it.
+- File selection.
+- Preview before analysis.
+- Processing feedback.
+- Results that use the normal responsive product layout.
+- Clear invalid-image and permission failure recovery.
+
+The interface should avoid unnecessary nested scrolling during image selection or preview.
+
+---
+
+# 12. Product Detail
+
+Desktop structure:
+
+```text
+Product Gallery | Product Information
+```
+
+Mobile structure:
 
 ```text
 Gallery
-    ↓
+   ↓
 Product Information
-    ↓
+   ↓
 Purchase Actions
-    ↓
+   ↓
 Specifications
-    ↓
+   ↓
 Recommendations
 ```
 
-The primary purchase action should remain easy to locate on mobile.
+The primary purchase action must remain easy to locate.
+
+Product imagery must preserve the approved aspect-ratio treatment and avoid layout shift while loading.
 
 ---
 
-# 15. Cart Responsiveness
+# 13. Product Images and Uploads
 
-Desktop may use:
+The final admin Create/Edit Product design established an image-upload interaction:
+
+```text
+Empty
+  → Upload Image
+  → Preview
+  → Replace / Remove
+```
+
+Responsive implementation must:
+
+- Constrain preview dimensions.
+- Preserve image aspect ratio.
+- Keep upload/remove actions reachable on touch screens.
+- Provide a meaningful empty state.
+- Avoid exposing the raw image URL as the primary user interaction.
+
+The raw URL can remain an internal implementation/model value; it is not the preferred user-facing upload interaction.
+
+---
+
+# 14. Cart
+
+Desktop:
 
 ```text
 Cart Items | Order Summary
 ```
 
-Mobile should generally stack:
+Mobile:
 
 ```text
 Cart Items
@@ -322,456 +352,623 @@ Order Summary
 Checkout
 ```
 
-The checkout action should remain clearly visible.
+The Figma refinement specifically addressed mobile cart scrolling and overlap.
+
+Implementation must ensure:
+
+- Cart content can scroll naturally.
+- The summary does not overlap items.
+- Quantity controls remain usable.
+- Remove/wishlist actions remain reachable.
+- Checkout remains obvious.
+- No fixed element traps or blocks the cart content.
 
 ---
 
-# 16. Checkout Responsiveness
+# 15. Checkout and Payment
 
 Desktop:
 
 ```text
-Checkout Form | Order Summary
+Checkout / Shipping | Order Summary
 ```
 
 Mobile:
 
 ```text
 Shipping
-    ↓
+   ↓
 Payment
-    ↓
+   ↓
 Order Summary
-    ↓
-Confirm Payment
+   ↓
+Confirm
 ```
 
-Form fields should use full available width where appropriate.
+Forms should move from multi-column desktop arrangements to single-column mobile arrangements when required.
 
-Payment controls must remain comfortable to use with touch input.
+Payment states established by the product flow include:
+
+```text
+Processing
+Success
+Failure
+```
+
+The UI must not show successful payment/order completion until the backend confirms the operation.
 
 ---
 
-# 17. Forms
+# 16. Orders and Delivery
 
-Forms should adapt from multi-column to single-column layouts.
+Customer order views must preserve visibility of:
 
+- Order number
+- Order status
+- Payment status
+- Delivery status
+- Total
+- Purchased products
+- Delivery progress
+
+Delivery tracking can adapt from:
+
+```text
 Desktop:
-
-```text
-First Name       Last Name
-Email            Phone
-Address          City
-```
-
-Mobile:
-
-```text
-First Name
-Last Name
-Email
-Phone
-Address
-City
-```
-
-Fields should maintain adequate spacing and readable labels.
-
----
-
-# 18. Tables
-
-Administrative tables require special responsive treatment.
-
-Possible strategies include:
-
-```text
-Horizontal Scrolling
-Responsive Columns
-Card Transformation
-Priority-Based Column Hiding
-```
-
-The chosen strategy should depend on the data and approved design.
-
-Important information must remain accessible.
-
----
-
-# 19. Admin Sidebar
-
-The administrator sidebar should adapt:
-
-```text
-Desktop
-Persistent Sidebar
-
-Tablet
-Collapsible Sidebar
-
-Mobile
-Drawer / Overlay
-```
-
-Navigation should remain accessible when collapsed.
-
----
-
-# 20. Admin Dashboard
-
-Dashboard cards should adapt their grid.
-
-Desktop:
-
-```text
-┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐
-│ KPI │ │ KPI │ │ KPI │ │ KPI │
-└─────┘ └─────┘ └─────┘ └─────┘
-```
-
-Tablet:
-
-```text
-┌─────┐ ┌─────┐
-│ KPI │ │ KPI │
-└─────┘ └─────┘
-```
-
-Mobile:
-
-```text
-┌─────────┐
-│   KPI   │
-└─────────┘
-```
-
-Charts must remain readable at smaller widths.
-
----
-
-# 21. Delivery Tracking Responsiveness
-
-Desktop:
-
-```text
 Delivery Information | Map
 ```
 
-Mobile:
+to:
 
 ```text
+Mobile:
 Delivery Status
-      ↓
+↓
 Timeline
-      ↓
+↓
 Estimated Arrival
-      ↓
+↓
 Map
 ```
 
-The map must provide usable controls on touch devices.
+The map must remain usable with touch interaction.
+
+Real-time delivery updates received through Socket.IO should update the responsive UI without requiring unnecessary page refreshes.
 
 ---
 
-# 22. Search by Image Responsiveness
+# 17. Admin Dashboard
 
-The image-search flow must support:
-
-- Mobile camera capture
-- File upload
-- Image preview
-- Processing
-- Results
-
-Mobile camera UI should use the available viewport efficiently without creating unnecessary page scrolling.
-
----
-
-# 23. Dialogs and Drawers
-
-Dialogs should adapt to the viewport.
-
-Desktop:
-
-```text
-Centered Dialog
-```
-
-Mobile may use:
-
-```text
-Full-width Dialog
-Bottom Sheet
-Full-screen Dialog
-```
-
-The chosen pattern depends on the interaction.
-
-Dialogs must remain within the viewport and support keyboard/focus management.
-
----
-
-# 24. Navigation
-
-Navigation should progressively simplify as available width decreases.
-
-Desktop:
-
-```text
-Full Navigation
-```
-
-Tablet:
-
-```text
-Reduced / Collapsible Navigation
-```
-
-Mobile:
-
-```text
-Menu / Drawer
-```
-
-Navigation labels must remain understandable.
-
----
-
-# 25. Typography Responsiveness
-
-Typography should scale according to the approved typography system.
-
-Responsive typography should prevent:
-
-- Oversized headings on mobile
-- Tiny body text
-- Horizontal overflow
-- Unnecessary wrapping
-
-Text should remain readable when users zoom or increase system font size.
-
----
-
-# 26. Spacing Responsiveness
-
-Spacing may reduce at smaller widths.
+The admin dashboard uses adaptive card and content density.
 
 Conceptually:
 
 ```text
 Desktop
-Generous spacing
+[KPI] [KPI] [KPI] [KPI]
 
 Tablet
-Moderate spacing
+[KPI] [KPI]
+[KPI] [KPI]
 
 Mobile
-Compact but comfortable spacing
+[KPI]
+[KPI]
+[KPI]
+[KPI]
 ```
 
-Spacing should remain consistent with the design token system.
+The exact arrangement remains governed by the approved Figma design and available content width.
+
+### Sales Overview
+
+The final responsive QA corrected the Sales Overview layout so it behaves correctly at smaller widths.
+
+Charts must:
+
+- Fit their container.
+- Preserve readable labels.
+- Avoid horizontal clipping.
+- Resize without overlapping adjacent content.
+
+### Orders by Status
+
+The final responsive QA established stacking behavior for the Orders by Status section on smaller screens.
 
 ---
 
-# 27. Images
+# 18. Admin Tables
 
-Images should be responsive and preserve appropriate aspect ratios.
+Administrative data tables require an intentional small-screen strategy.
 
-Use:
+Possible strategies include:
 
 ```text
-Responsive dimensions
-Object-fit
-Appropriate image sizes
-Lazy loading where appropriate
+Horizontal scrolling
+Priority-based column reduction
+Responsive transformation
+Card presentation
 ```
 
-Avoid loading unnecessarily large images on small screens.
+The chosen approach must preserve important information and remain usable with keyboard and touch input.
+
+Do not allow a table to accidentally force the entire application into horizontal scrolling.
 
 ---
 
-# 28. Maps
+# 19. Admin Forms
 
-Maps should have responsive dimensions.
+Admin forms should use:
 
-The map must:
+```text
+Desktop → Multi-column where appropriate
+Mobile  → Single-column / stacked
+```
 
-- Remain usable on touch screens.
-- Provide adequate height.
-- Avoid trapping page scrolling unnecessarily.
-- Preserve important controls.
-- Adapt to orientation changes.
+This applies to:
+
+- Create Product
+- Edit Product
+- Category management
+- Inventory
+- Delivery management
+- Settings
+- Customer/order operations
+
+Labels, validation messages, and action controls must remain associated with their fields after reflow.
 
 ---
 
-# 29. Touch Targets
+# 20. Dialogs, Drawers, and Overlays
 
-Interactive controls should provide sufficiently large touch areas.
+Dialogs and drawers must adapt to viewport dimensions.
 
-Pay particular attention to:
+Desktop may use:
 
+```text
+Centered dialog
+```
+
+Mobile may use:
+
+```text
+Full-width dialog
+Bottom sheet
+Full-screen dialog
+Drawer
+```
+
+The chosen pattern must follow the approved Figma interaction.
+
+Requirements:
+
+- No viewport clipping.
+- Keyboard/focus management.
+- Escape behavior where applicable.
+- Touch-friendly controls.
+- Body scroll handling.
+- Clear close/cancel actions.
+
+---
+
+# 21. Navigation and Mobile Navigation
+
+Navigation progressively simplifies as width decreases.
+
+```text
+Desktop → Full navigation
+Tablet  → Reduced / collapsible navigation
+Mobile  → Menu / drawer / mobile navigation
+```
+
+The existing Mobile Navigation component should be reused rather than implementing unrelated mobile menus per page.
+
+---
+
+# 22. Typography
+
+Responsive typography follows the approved typography system:
+
+- Poppins for UI.
+- JetBrains Mono for data.
+- Semantic typography roles.
+- Approved type scale.
+
+Responsive implementation must avoid:
+
+- Oversized headings on small screens.
+- Tiny body text.
+- Unnecessary wrapping.
+- Text clipping.
+- Fixed widths based on English-only strings.
+
+Data-heavy values such as prices should retain their data typography treatment.
+
+---
+
+# 23. Spacing
+
+The design evidence follows the 4px spacing scale.
+
+Verified examples include:
+
+```text
+16px
+24px
+32px
+48px
+```
+
+Spacing may become more compact on smaller screens, but it should continue using the existing spacing system rather than arbitrary values.
+
+---
+
+# 24. Controls and Touch Targets
+
+Responsive interfaces must preserve usable touch areas for:
+
+- Buttons
 - Icon buttons
-- Navigation items
+- Header actions
+- Sidebar/menu controls
+- Quantity selectors
 - Product actions
-- Quantity controls
-- Map controls
 - Form controls
+- Map controls
 
-The visible icon size does not need to equal the complete interactive target size.
+The visible icon size is not necessarily the same as the complete interactive target.
 
----
-
-# 30. Hover Behavior
-
-Hover-dependent interactions must have an alternative on touch devices.
-
-Do not make important functionality accessible only through:
+The approved control sizing system includes:
 
 ```text
-:hover
+Small control → 32px
+Base control  → 40px
+Large control → 48px
+Base icon     → 24px
+Small icon    → 20px
 ```
 
-Touch devices should receive equivalent interaction paths.
-
 ---
 
-# 31. Orientation
+# 25. Hover and Pointer Adaptation
 
-The application should remain usable in:
+Important functionality must never depend only on hover.
+
+For touch devices:
 
 ```text
-Portrait
-Landscape
+:hover-only action
+        ↓
+Equivalent tap/focus action
 ```
 
-where the device supports both orientations.
-
-Important controls must not disappear when the viewport height becomes limited.
+Tooltips and hover affordances must have usable alternatives where their information is important.
 
 ---
 
-# 32. Horizontal Overflow
+# 26. Responsive Component States
 
-Unintended horizontal scrolling is prohibited.
-
-Particular attention should be given to:
-
-- Header
-- Search
-- Navigation
-- Product cards
-- Tables
-- Long text
-- Order numbers
-- Dialogs
-- Maps
-- Images
-
-Horizontal scrolling may be used intentionally for tables or specific content patterns when documented and usable.
-
----
-
-# 33. Responsive States
-
-Every major component should consider:
+Responsive behavior must be tested for the relevant states established in the Figma work:
 
 ```text
+Default
 Loading
 Empty
 Error
 Success
-Default
-Interactive
+Validation Error
 Disabled
+Processing
+Out of Stock
+Payment Failed
+No Orders
+No Search Results
 ```
 
-Responsive behavior must remain correct in each relevant state.
+A state that works on desktop but clips or overlaps on mobile is incomplete.
 
 ---
 
-# 34. Accessibility
+# 27. Accessibility
 
-Responsive layouts must preserve:
+Responsive implementation must preserve:
 
-- Keyboard navigation
-- Focus visibility
-- Semantic structure
-- Screen-reader usability
-- Text readability
-- Touch usability
-- Contrast
-- Zoom support
+- Semantic HTML.
+- Keyboard navigation.
+- Visible focus.
+- Accessible names.
+- Screen-reader relationships.
+- Color contrast.
+- Touch usability.
+- Zoom/text resizing.
+- Reduced-motion behavior.
 
-Mobile simplification must not remove essential accessibility information.
+The approved focus treatment is based on a 2px primary-blue ring with a 2px offset.
 
----
-
-# 35. Performance
-
-Responsive implementation should consider mobile performance.
-
-Use:
-
-- Responsive images
-- Lazy loading
-- Code splitting
-- Efficient rendering
-- Limited animation
-- Appropriate asset sizes
-
-Avoid loading desktop-only resources when they are unnecessary.
+Mobile simplification must not remove essential labels or status information.
 
 ---
 
-# 36. Figma Responsive Design
+# 28. Motion on Small Screens
 
-Figma should contain responsive representations for important screens.
+Motion should remain purposeful and lightweight.
 
-Recommended design coverage:
+Follow the approved motion system and respect:
+
+```css
+@media (prefers-reduced-motion: reduce)
+```
+
+Avoid heavy animation on low-power/mobile devices.
+
+Layout changes should not cause unnecessary jank or cumulative layout shift.
+
+---
+
+# 29. Images and Performance
+
+Responsive images should use appropriate dimensions and loading behavior.
+
+Prefer:
+
+- Responsive image sizing.
+- Appropriate object-fit behavior.
+- Lazy loading for below-the-fold content.
+- Constrained previews.
+- Optimized Cloudinary assets.
+- Avoidance of unnecessarily large mobile downloads.
+
+Do not load desktop-sized assets when a smaller asset is sufficient.
+
+---
+
+# 30. Horizontal Overflow
+
+Unintended horizontal overflow is prohibited.
+
+Review especially:
 
 ```text
-Desktop
-Tablet
-Mobile
+Header
+Navigation
+Search
+Product grids
+Product cards
+Cart
+Checkout
+Admin tables
+Charts
+Dialogs
+Maps
+Long order numbers
+Long product names
+Image previews
 ```
 
-Each major feature should document meaningful layout changes.
+Intentional horizontal scrolling is acceptable for patterns such as data tables when it is explicitly designed and remains usable.
 
 ---
 
-# 37. Testing
+# 31. Orientation and Limited Height
 
-Responsive behavior should be verified using:
+The application should remain usable in portrait and landscape where supported.
 
-- Browser responsive tools
-- Real mobile devices where possible
-- Tablet-sized viewports
-- Desktop viewports
-- Automated E2E viewport tests where appropriate
+For short-height viewports:
 
-Test important workflows at multiple viewport sizes.
+- Do not hide critical actions.
+- Avoid oversized fixed headers.
+- Keep dialogs within the usable viewport.
+- Preserve access to checkout/payment actions.
+- Allow content to scroll naturally.
 
 ---
 
-# 38. Responsive Completion Criteria
+# 32. Responsive QA Matrix
 
-A feature is considered responsive when:
+Every major feature should be reviewed at minimum against:
 
-- Mobile behavior is defined.
-- Tablet behavior is defined.
-- Desktop behavior is defined.
+| Area | Mobile | Tablet | Desktop | Large Desktop |
+|---|---:|---:|---:|---:|
+| Customer Header | ✓ | ✓ | ✓ | ✓ |
+| Home / Hero | ✓ | ✓ | ✓ | ✓ |
+| Product Listing | ✓ | ✓ | ✓ | ✓ |
+| Search | ✓ | ✓ | ✓ | ✓ |
+| Product Detail | ✓ | ✓ | ✓ | ✓ |
+| Cart | ✓ | ✓ | ✓ | ✓ |
+| Checkout | ✓ | ✓ | ✓ | ✓ |
+| Orders | ✓ | ✓ | ✓ | ✓ |
+| Delivery Tracking | ✓ | ✓ | ✓ | ✓ |
+| Admin Shell | ✓ | ✓ | ✓ | ✓ |
+| Dashboard | ✓ | ✓ | ✓ | ✓ |
+| Tables | ✓ | ✓ | ✓ | ✓ |
+| Admin Forms | ✓ | ✓ | ✓ | ✓ |
+| Dialogs/Drawers | ✓ | ✓ | ✓ | ✓ |
+| Image Search | ✓ | ✓ | ✓ | ✓ |
+
+---
+
+# 33. Figma Responsive Handoff
+
+Responsive design evidence belongs under the approved Figma repository
+structure:
+
+```text
+assets/
+└── figma/
+    ├── FIGMA.md
+    ├── FIGMA_IMPLEMENTATION_RULES.md
+    ├── FIGMA_REFERENCES.md
+    │
+    └── exports/
+        │
+        ├── Components/
+        │   ├── README.md
+        │   └── screenshots/
+        │
+        ├── admin/
+        │   ├── README.md
+        │   └── screenshots/
+        │
+        └── customer/
+            ├── README.md
+            └── screenshots/
+```
+
+## Repository responsibilities
+
+| Location | Responsibility |
+|---|---|
+| `assets/figma/FIGMA.md` | Primary repository-side Figma governance, source-of-truth, workflow, handoff, and organization reference |
+| `assets/figma/FIGMA_IMPLEMENTATION_RULES.md` | Rules for translating approved Figma designs into implementation |
+| `assets/figma/FIGMA_REFERENCES.md` | Figma file, page, frame, prototype, and handoff navigation references |
+| `assets/figma/exports/Components/` | Component reference material and screenshots |
+| `assets/figma/exports/admin/` | Admin experience reference material and screenshots |
+| `assets/figma/exports/customer/` | Customer experience reference material and screenshots |
+
+Responsive evidence is therefore organized by the **component, admin, and
+customer experience packages** rather than by a separate
+`exports/responsive/` directory.
+
+Responsive screenshots should be placed in the relevant package:
+
+```text
+assets/figma/exports/
+├── Components/
+│   └── screenshots/
+├── admin/
+│   └── screenshots/
+└── customer/
+    └── screenshots/
+```
+
+Use the package README files to explain the responsive context of each
+screenshot where necessary.
+
+### Figma Design and Figma Make policy
+
+**Figma Design is the visual source of truth.**
+
+Figma Design should be accessed through the approved Figma Design reference
+and used for authoritative inspection of:
+
+- Components
+- Layouts
+- Responsive composition
+- States
+- Typography
+- Colors
+- Spacing
+- Interaction intent
+
+**Figma Make is a screenshot reference source only for Antigravity.**
+
+The repository should not require:
+
+- A `.make` file
+- A Figma Make code export
+- `exportfigmaframespng`
+- `makelink`
+- `exportpng` as a Figma Make implementation dependency
+
+Figma Make screenshots belong in the relevant `Components`, `admin`, or
+`customer` screenshot package when retained as visual implementation
+evidence.
+
+### Screenshot naming policy
+
+Do not invent a new manual naming convention for Figma Make screenshots.
+
+Preserve the **default filename generated by Figma Make**.
+
+Do not rename screenshots into patterns such as:
+
+```text
+Button — Default.png
+Product Card — Desktop.png
+Product Card — Tablet.png
+Product Card — Mobile.png
+Customer Home — Desktop.png
+```
+
+The surrounding directory and README provide the context for the screenshot.
+
+### Responsive source hierarchy
+
+When implementing responsive behavior, use this order:
+
+```text
+Figma Design
+    ↓
+FIGMA_IMPLEMENTATION_RULES.md
+    ↓
+Relevant export README / screenshot evidence
+    ↓
+RESPONSIVE.md
+    ↓
+Frontend implementation
+    ↓
+Visual validation
+```
+
+`RESPONSIVE.md` defines the responsive engineering rules and verified vs
+derived decisions. It does not override approved Figma visual decisions.
+
+The `assets/figma/` package supports visual handoff and implementation
+navigation; it does not replace the live Figma source or the design
+documentation under `docs/02_Design/`.
+
+# 34. Verified vs Derived Rules
+
+To prevent design drift, every responsive value must be classified correctly.
+
+### Verified from Figma work
+
+- Desktop/tablet/mobile coverage.
+- `768px` medium design intent.
+- `1440px` large desktop/artboard intent.
+- `24px` horizontal container padding.
+- Customer/admin shell behavior.
+- Admin sidebar collapse placement and sticky behavior.
+- Mobile cart scrolling/overlap correction.
+- Sales Overview responsive correction.
+- Orders by Status stacking.
+- Image-upload responsive interaction refinements.
+
+### Derived from visual/system analysis
+
+- 4/2/1 product-grid density.
+- Additional content-driven implementation thresholds.
+- Container max-width behavior inferred from artboards.
+- Some responsive spacing reductions.
+- Exact CSS rules needed to reproduce visual behavior.
+
+Derived rules must not be presented as direct Figma measurements.
+
+---
+
+# 35. Responsive Completion Criteria
+
+A feature is responsive only when:
+
+- Mobile behavior is intentionally defined.
+- Tablet behavior is intentionally defined.
+- Desktop behavior is intentionally defined.
 - Large-screen behavior is considered.
+- Approved Figma responsive evidence is respected.
 - No unintended horizontal overflow exists.
-- Touch targets are usable.
 - Navigation adapts correctly.
 - Forms remain usable.
-- Tables have an intentional mobile strategy.
+- Tables have an intentional strategy.
+- Charts remain readable.
 - Images and maps adapt correctly.
+- Touch targets remain usable.
 - Accessibility is preserved.
-- Figma and implementation are aligned.
+- Relevant states work at each supported size.
+- Motion respects reduced-motion preferences.
+- Performance remains acceptable.
 
 ---
 
-# 39. Responsive Principle
+# 36. Responsive Principle
 
-> **Responsive design is adaptation of structure and interaction, not simply shrinking the desktop interface.**
+> **Responsive design is the intentional adaptation of structure, density, and interaction to available space—not the shrinking of a desktop interface.**
