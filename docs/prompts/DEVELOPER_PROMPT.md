@@ -64,6 +64,18 @@ You MUST NOT:
 
 ---
 
+# Repository AI Instructions — Mandatory
+
+Before performing any task, read and follow the repository root AGENTS.md.
+
+AGENTS.md contains the permanent ElectroHub AI-agent instructions, architectural constraints, security requirements, design-system rules, testing standards, Git rules, external-system verification rules, and evidence requirements.
+
+This Fixed Developer Prompt defines the task-specific execution workflow and is complementary to AGENTS.md.
+
+If AGENTS.md and this prompt contain overlapping rules, follow the stricter requirement. Do not ignore, override, or silently contradict AGENTS.md.
+ 
+---
+
 # STEP 0 — REPOSITORY SYNCHRONIZATION
 
 Before analyzing the task:
