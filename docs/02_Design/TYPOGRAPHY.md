@@ -2,140 +2,330 @@
 
 ## 1. Purpose
 
-This document defines the typography system used throughout ElectroHub.
+This document defines the approved ElectroHub typography system.
 
-The typography system establishes consistent rules for:
+It records the typography decisions established through the complete
+Figma/Figma Make workflow and defines how those decisions should be used
+across:
 
-- Font family
-- Font weights
-- Font sizes
-- Heading hierarchy
-- Body text
-- Labels
-- Captions
-- Line height
-- Letter spacing
-- Responsive typography
-- Accessibility
+-   Customer interfaces
+-   Administrator interfaces
+-   Commerce content
+-   Forms
+-   Navigation
+-   Data
+-   Pricing
+-   Status information
+-   Responsive layouts
 
-Typography should provide a clear visual hierarchy while remaining readable across all supported devices.
+**Figma is the visual source of truth for typography.** This document
+records the approved typography contract for implementation.
 
----
+------------------------------------------------------------------------
 
-# 2. Typography Principles
+# 2. Typography Source of Truth
 
-The ElectroHub typography system follows these principles:
+The authority chain is:
 
-### Readability
-
-Text must remain easy to read across supported screen sizes.
-
-### Hierarchy
-
-Typography should clearly communicate the importance and relationship of content.
-
-### Consistency
-
-The same semantic text role should use the same typography rules throughout the application.
-
-### Responsiveness
-
-Typography should adapt appropriately across mobile, tablet, and desktop layouts.
-
-### Accessibility
-
-Font size, contrast, spacing, and scaling should support accessible reading.
-
-### Design-Code Alignment
-
-Figma typography definitions and frontend typography tokens should represent the same design decisions.
-
----
-
-# 3. Typography Source of Truth
-
-Figma is the source of truth for the approved typography system.
-
-The implementation relationship is:
-
-```text
-Figma Typography
-       ↓
-Typography Tokens
-       ↓
-SCSS
-       ↓
-CSS Modules
-       ↓
-React Components
+``` text
+Figma Typography Styles / Variables
+          ↓
+Semantic Typography Roles
+          ↓
+CSS / SCSS Tokens
+          ↓
+Components
+          ↓
+Screens
 ```
 
----
+Typography must be implemented through established roles rather than
+arbitrary local font values.
 
-# 4. Font Family
+------------------------------------------------------------------------
 
-The project should use the approved font family defined by the Figma design.
+# 3. Font Families
 
-The selected font should provide:
+The final approved typography system uses two font families.
 
-- Good readability
-- Multiple required weights
-- Consistent rendering
-- Appropriate character coverage
-- Reliable web delivery
+## 3.1 UI Font --- Poppins
 
-The exact font family should be documented in the approved Figma typography styles and reflected in the implementation.
+**Poppins** is the primary UI typeface.
 
----
+It is used for:
 
-# 5. Font Stack
+-   Navigation
+-   Buttons
+-   Forms
+-   Headings
+-   Body copy
+-   Labels
+-   Product names
+-   General interface content
 
-The implementation should provide appropriate fallbacks.
+Approved weights:
 
-Conceptually:
-
-```scss
-font-family:
-  "Primary Font",
-  system-ui,
-  -apple-system,
-  BlinkMacSystemFont,
-  "Segoe UI",
-  sans-serif;
+``` text
+400 — Regular
+500 — Medium
+600 — Semibold
+700 — Bold
 ```
 
-The final font stack should follow the approved project design.
+------------------------------------------------------------------------
 
-Fallback fonts should preserve reasonable proportions and readability.
+## 3.2 Data / Monospace Font --- JetBrains Mono
 
----
+**JetBrains Mono** is the approved secondary/data typeface.
 
-# 6. Font Weights
+It is used where a monospace/data treatment improves scanning or
+establishes the intended visual hierarchy.
 
-The typography system should use a controlled set of font weights.
+Primary examples include:
 
-Recommended semantic roles:
+-   Prices
+-   Numeric data
+-   Operational/admin data where appropriate
+-   Technical/data-oriented values
 
-```text
-Regular
-Medium
-Semibold
-Bold
+Approved weights:
+
+``` text
+400 — Regular
+500 — Medium
+600 — Semibold
+700 — Bold
 ```
 
-Not every component should use every weight.
+Canonical implementation family:
 
-Weights should be selected according to hierarchy and emphasis.
+``` css
+--font-mono: 'JetBrains Mono', monospace;
+```
 
----
+------------------------------------------------------------------------
 
-# 7. Typography Scale
+# 4. Inter Is Not an Active Design-System Font
 
-The system should define a consistent type scale.
+**Inter is not part of the active ElectroHub typography system.**
 
-Conceptually:
+Earlier Figma import/reference artifacts may contain Inter declarations.
+Those artifacts are treated as read-only reference material and do not
+redefine the active design system.
 
-```text
+New design-system work must use:
+
+``` text
+Poppins
+JetBrains Mono
+```
+
+Do not introduce Inter into new components unless the design system is
+formally changed.
+
+------------------------------------------------------------------------
+
+# 5. Font Family Tokens
+
+Recommended semantic aliases:
+
+``` css
+--font-family-ui: 'Poppins', sans-serif;
+--font-family-data: 'JetBrains Mono', monospace;
+```
+
+The data family should not be split into duplicate tokens such as:
+
+``` text
+--font-mono-regular
+--font-mono-medium
+--font-mono-semibold
+--font-mono-bold
+```
+
+Weight is a separate property.
+
+------------------------------------------------------------------------
+
+# 6. Font Weight System
+
+The approved weight range is:
+
+    Weight Name       Typical use
+  -------- ---------- -----------------------------------------
+       400 Regular    Body, descriptions, normal UI
+       500 Medium     Labels, navigation, supporting emphasis
+       600 Semibold   Important UI, prices, section emphasis
+       700 Bold       Strong headings and high emphasis
+
+Weight must be selected according to hierarchy.
+
+**Do not make every button, label, or variant bold.**
+
+------------------------------------------------------------------------
+
+# 7. Type Scale
+
+The approved base type scale is:
+
+  Token     Size
+  ------- ------
+  XS        12px
+  SM        14px
+  MD        16px
+  LG        18px
+  XL        24px
+  2XL       30px
+  3XL       36px
+  4XL       48px
+
+This scale provides the foundation for semantic roles.
+
+The exact role applied to a screen should follow the approved Figma
+composition.
+
+------------------------------------------------------------------------
+
+# 8. XS --- 12px
+
+Primary uses:
+
+-   Fine metadata
+-   Compact captions
+-   Supporting information
+-   Dense admin/table content where appropriate
+
+Because 12px is small, contrast and line-height must be handled
+carefully.
+
+------------------------------------------------------------------------
+
+# 9. SM --- 14px
+
+Primary uses:
+
+-   Labels
+-   Secondary metadata
+-   Supporting text
+-   Compact navigation
+-   Form helper text
+
+This is commonly used for secondary interface information.
+
+------------------------------------------------------------------------
+
+# 10. MD --- 16px
+
+16px is the primary body/UI baseline.
+
+Typical uses:
+
+-   Body text
+-   Standard labels
+-   Form values
+-   Navigation items
+-   Product descriptions
+
+It should remain the default starting point for ordinary interface copy
+unless the hierarchy calls for another size.
+
+------------------------------------------------------------------------
+
+# 11. LG --- 18px
+
+18px is used for elevated body/UI content.
+
+Typical uses:
+
+-   Important labels
+-   Supporting headings
+-   Prominent card information
+-   Larger body copy where appropriate
+
+------------------------------------------------------------------------
+
+# 12. XL --- 24px
+
+24px is used for stronger section-level information.
+
+Typical uses:
+
+-   Section headings
+-   Prominent prices/data
+-   Important interface hierarchy
+
+The Figma work established 24px as the XL size.
+
+------------------------------------------------------------------------
+
+# 13. 2XL --- 30px
+
+30px is an approved major heading size.
+
+Verified line height:
+
+``` text
+40px
+```
+
+Verified tracking:
+
+``` text
+-0.01px
+```
+
+Typical uses:
+
+-   Major page/section headings
+-   Important product or workflow headings
+-   High-level application content
+
+------------------------------------------------------------------------
+
+# 14. 3XL --- 36px
+
+36px provides a larger heading step between 30px and 48px.
+
+Use for:
+
+-   Strong section hierarchy
+-   Major marketing/application headings
+-   Large content emphasis
+
+It should not be used merely to make ordinary UI text look more
+prominent.
+
+------------------------------------------------------------------------
+
+# 15. 4XL --- 48px
+
+48px is the largest approved type-scale value.
+
+Verified line height:
+
+``` text
+56px
+```
+
+Verified tracking:
+
+``` text
+-0.02px
+```
+
+The 48px role is appropriate for major visual headings, especially
+hero-level or page-level visual hierarchy where the Figma composition
+supports it.
+
+------------------------------------------------------------------------
+
+# 16. Semantic Typography Roles
+
+The scale should be consumed through semantic roles.
+
+Recommended roles:
+
+``` text
 Display
 Heading 1
 Heading 2
@@ -146,660 +336,548 @@ Body
 Body Small
 Caption
 Label
+Data
+Price
 ```
 
-The exact values are defined by the approved Figma design tokens.
+The role describes purpose.
 
----
+The underlying size/weight is selected from the approved type scale.
 
-# 8. Display Text
+------------------------------------------------------------------------
 
-Display typography is reserved for high-level visual headings.
+# 17. Display
+
+Display typography is reserved for high-level visual statements.
 
 Typical use:
 
-- Landing page hero
-- Major marketing section
-- Primary visual statement
+``` text
+Hero
+Major marketing statement
+Primary landing-page message
+```
 
-Display text should not be used for ordinary application headings.
+Display text must not become the default style for application pages.
 
----
+------------------------------------------------------------------------
 
-# 9. Heading 1
+# 18. Heading 1
 
-Heading 1 is the primary page-level heading.
+Heading 1 establishes the primary page hierarchy.
 
 Examples:
 
-```text
+``` text
 Products
-My Orders
 Checkout
+My Orders
 Admin Dashboard
 ```
 
-Each page should normally have a clear primary heading.
+A page should normally have one clear primary heading.
 
----
+------------------------------------------------------------------------
 
-# 10. Heading 2
+# 19. Heading 2
 
-Heading 2 is used for major sections within a page.
+Heading 2 is used for major page sections.
 
 Examples:
 
-```text
+``` text
 Recommended for You
 Order Details
 Shipping Information
 Payment
+Sales Overview
 ```
 
----
+------------------------------------------------------------------------
 
-# 11. Heading 3
+# 20. Heading 3
 
-Heading 3 is used for subsections and grouped content.
+Heading 3 is used for subsections.
 
 Examples:
 
-```text
+``` text
 Product Specifications
 Payment Information
 Delivery Details
 ```
 
----
+------------------------------------------------------------------------
 
-# 12. Heading 4
+# 21. Heading 4
 
-Heading 4 is used for smaller content groups where additional hierarchy is required.
+Heading 4 is used for smaller grouped sections where an additional
+hierarchy level is genuinely needed.
 
-It should not be introduced unnecessarily.
+Avoid unnecessary heading levels.
 
----
+------------------------------------------------------------------------
 
-# 13. Body Text
+# 22. Body Typography
 
-Body text is the default content typography.
+### Body Large
 
-It is used for:
+Use for prominent supporting copy or important explanatory content.
 
-- Descriptions
-- Instructions
-- Supporting information
-- General application content
+### Body
 
-Body text should prioritize readability over visual density.
+Use for standard application content.
 
----
+### Body Small
 
-# 14. Body Large
+Use for compact supporting content.
 
-Body Large may be used for:
+### Caption
 
-- Important introductory text
-- Prominent descriptions
-- Hero supporting text
-- Large form instructions
+Use for metadata and low-emphasis information.
 
-It should not replace heading styles.
+### Label
 
----
+Use for form and control labels.
 
-# 15. Body Small
+The hierarchy should remain visually consistent across customer and
+admin interfaces.
 
-Body Small is useful for:
+------------------------------------------------------------------------
 
-- Secondary descriptions
-- Supporting information
-- Dense administrative interfaces
-- Metadata
+# 23. Data Typography
 
-Body Small should remain readable and should not be used below accessible minimum sizes.
-
----
-
-# 16. Caption
-
-Captions are used for secondary supporting information.
+JetBrains Mono should be used selectively for data-oriented
+presentation.
 
 Examples:
 
-```text
-Updated 5 minutes ago
-Last modified
-Optional information
-Additional metadata
+``` text
+$1,299.00
+ORD-2026-000184
+42
+12.5%
 ```
 
-Captions should have sufficient contrast and should not be excessively small.
+The purpose is improved numerical/data scanning and the specific visual
+language established by the Figma design.
 
----
+Do not convert ordinary UI copy into monospace without a design reason.
 
-# 17. Labels
+------------------------------------------------------------------------
 
-Labels identify controls and fields.
+# 24. Price Typography
 
-Examples:
-
-```text
-Email
-Password
-Shipping Address
-Payment Method
-Quantity
-```
-
-Labels must remain associated with their controls.
-
----
-
-# 18. Button Typography
-
-Buttons should use typography that clearly communicates their action.
-
-Button typography should define:
-
-- Font size
-- Font weight
-- Line height
-- Letter spacing
-
-Primary and secondary buttons should maintain consistent typography.
-
----
-
-# 19. Navigation Typography
-
-Navigation typography should provide clear hierarchy between:
-
-- Primary navigation
-- Secondary navigation
-- Active items
-- Supporting navigation
-- User menu
-
-Active navigation should not rely solely on color.
-
----
-
-# 20. Product Typography
-
-Product interfaces should use a clear hierarchy.
-
-Recommended order:
-
-```text
-Brand
- ↓
-Product Name
- ↓
-Rating / Metadata
- ↓
-Price
- ↓
-Availability
- ↓
-Supporting Information
-```
-
-Product name and price should receive stronger visual emphasis than secondary metadata.
-
----
-
-# 21. Price Typography
-
-Prices are important commerce information.
-
-The typography system should support:
-
-```text
-Current Price
-Original Price
-Discount
-Currency
-```
-
-Example conceptual hierarchy:
-
-```text
-$899
-$999
-20% OFF
-```
-
-The original price should remain visually secondary to the current price.
-
----
-
-# 22. Order Typography
-
-Order interfaces should prioritize:
-
-```text
-Order Number
- ↓
-Order Status
- ↓
-Total
- ↓
-Products
- ↓
-Supporting Information
-```
-
-Important order information should remain scannable on both desktop and mobile.
-
----
-
-# 23. Status Typography
-
-Status labels should be concise and easy to scan.
-
-Examples:
-
-```text
-Confirmed
-Preparing
-Out for Delivery
-Delivered
-
-In Stock
-Low Stock
-Out of Stock
-
-Paid
-Pending
-Failed
-```
-
-Status text should be paired with appropriate visual indicators.
-
----
-
-# 24. Form Typography
-
-Forms should maintain consistent typography for:
-
-```text
-Label
-Input
-Helper Text
-Error Text
-Success Text
-```
+Prices are a confirmed use case for the JetBrains Mono treatment.
 
 Example:
 
-```text
-Email
-[ user@example.com ]
-
-We'll use this email for order notifications.
-
-Please enter a valid email address.
+``` text
+$1,299.00
 ```
 
-Error and helper text must remain readable and associated with the correct field.
+Price weight may use the approved 600 level where the component
+hierarchy calls for emphasis.
 
----
+Do not use arbitrary `font-bold` styling when a semantic price role
+already exists.
 
-# 25. Table Typography
+------------------------------------------------------------------------
 
-Administrative tables should use typography optimized for scanning.
+# 25. Button Typography
 
-Table typography should define:
+Buttons use Poppins.
 
-- Header
-- Cell
-- Numeric values
-- Status
-- Supporting metadata
+Button typography must respect:
 
-Avoid excessively small table text simply to fit more columns.
+-   Button variant
+-   Button size
+-   Hierarchy
+-   State
 
----
+Important:
 
-# 26. Dashboard Typography
-
-Dashboard interfaces should establish a hierarchy between:
-
-```text
-Metric
-Metric Label
-Trend
-Supporting Information
+``` text
+Primary ≠ automatically Bold
+Secondary ≠ automatically Bold
+Ghost ≠ automatically Bold
+Danger ≠ automatically Bold
 ```
 
-For example:
+The font weight should come from the approved typography hierarchy.
 
-```text
-$24,850
-Revenue
+------------------------------------------------------------------------
 
-+12.4%
-vs previous period
+# 26. Form Typography
+
+Forms use Poppins for:
+
+-   Labels
+-   Inputs
+-   Selects
+-   Textareas
+-   Helper text
+-   Validation messages
+
+A consistent relationship should be maintained:
+
+``` text
+Label
+  ↓
+Field
+  ↓
+Helper / Error
 ```
 
----
+Error text must remain readable and sufficiently prominent.
 
-# 27. AI and Search Typography
+------------------------------------------------------------------------
 
-AI and image-search interfaces should use typography that clearly communicates:
+# 27. Navigation Typography
 
-- Search state
-- Processing state
-- Results
-- Match information
-- Recommendation context
+Navigation uses Poppins.
 
-Processing messages should remain concise.
+Navigation hierarchy should distinguish:
 
----
+``` text
+Primary navigation
+Secondary navigation
+Active navigation
+Supporting navigation
+```
 
-# 28. Responsive Typography
+Active state may use weight and/or approved color treatment, but must
+remain accessible.
 
-Typography must adapt to viewport size when necessary.
+------------------------------------------------------------------------
 
-Typical behavior:
+# 28. Admin Typography
 
-```text
-Desktop
-Larger headings
-More spacious hierarchy
+Admin interfaces use the same global typography system.
 
-Tablet
-Moderate scaling
+Admin-specific differences should come from:
 
+-   Density
+-   Layout
+-   Data hierarchy
+-   Component composition
+
+not from introducing a separate font system.
+
+------------------------------------------------------------------------
+
+# 29. Status and Badge Typography
+
+Status labels use Poppins and should remain compact.
+
+The semantic status variant determines the visual state:
+
+``` text
+Success
+Warning
+Error
+Info
+Neutral
+```
+
+Do not create a separate font treatment for every status.
+
+------------------------------------------------------------------------
+
+# 30. Line Height
+
+Line height must support readability and hierarchy.
+
+Verified Figma values:
+
+``` text
+30px type → 40px line height
+48px type → 56px line height
+```
+
+Other roles should use line heights appropriate to their size and
+density rather than a single global line-height.
+
+Avoid overly tight body copy.
+
+------------------------------------------------------------------------
+
+# 31. Letter Spacing
+
+Verified Figma tracking values include:
+
+``` text
+30px → -0.01px
+48px → -0.02px
+```
+
+Tracking is part of the typography role and should not be changed
+locally without reason.
+
+Body text should generally retain normal readable spacing.
+
+------------------------------------------------------------------------
+
+# 32. Responsive Typography
+
+Typography must remain readable across:
+
+``` text
 Mobile
-Compact headings
-Readable body text
+Tablet
+Desktop
+Large Desktop
 ```
 
-Responsive typography should avoid:
+Responsive changes should be intentional.
 
-- Oversized mobile headings
-- Text overflow
-- Unnecessary wrapping
-- Extremely small supporting text
+Avoid simply shrinking every heading proportionally.
 
----
+The Figma responsive composition is the visual reference for deciding
+when hierarchy changes.
 
-# 29. Line Height
+------------------------------------------------------------------------
 
-Line height should be appropriate for the text role.
+# 33. Text Wrapping
 
-Generally:
+Typography must support natural wrapping.
 
-```text
-Headings
-Tighter line height
+Avoid fixed-height text containers that can clip:
 
-Body
-More generous line height
+-   Product names
+-   Headings
+-   Form labels
+-   Error messages
+-   Order information
+-   Navigation labels
 
-Captions
-Compact but readable
+Long content should wrap or truncate intentionally according to the
+approved design.
+
+------------------------------------------------------------------------
+
+# 34. Text Alignment
+
+Default alignment follows the content language and layout hierarchy.
+
+Typical application alignment:
+
+``` text
+Left-aligned UI text
 ```
 
-The exact values should be defined by the Figma typography tokens.
+Data may use alignment appropriate to scanning, especially numeric
+information.
 
----
+Do not center long-form application text without a clear design reason.
 
-# 30. Letter Spacing
+------------------------------------------------------------------------
 
-Letter spacing should be used intentionally.
-
-It may be useful for:
-
-- Uppercase labels
-- Small metadata
-- Certain display styles
-
-Avoid excessive letter spacing in normal body text.
-
----
-
-# 31. Text Wrapping
-
-Layouts must support natural text wrapping.
-
-Components should account for:
-
-- Long product names
-- Long category names
-- Long order numbers
-- Translated text
-- Error messages
-- User-generated content
-
-Text should not be clipped without a deliberate UX reason.
-
----
-
-# 32. Truncation
-
-Truncation may be used when content must fit a constrained UI.
-
-Examples:
-
-```text
-Product cards
-Tables
-Navigation
-Compact lists
-```
-
-Truncation should not hide critical information when the full content is necessary for decision-making.
-
-Where appropriate, provide a way to access the complete text.
-
----
-
-# 33. Localization
-
-Typography should support localized content.
-
-The system should account for:
-
-- Different text lengths
-- Different scripts
-- RTL languages if supported
-- Character rendering
-- Line wrapping
-
-Layouts must not assume that English text length is representative of every language.
-
----
-
-# 34. Accessibility
+# 35. Accessibility
 
 Typography must consider:
 
-- Readable font size
-- Adequate line height
-- Sufficient contrast
-- Clear hierarchy
-- Zoom behavior
-- Text resizing
-- Focus visibility
-- Reduced motion where typography interacts with animation
+-   Readable font sizes
+-   Sufficient line height
+-   Contrast
+-   Zoom/reflow
+-   Text wrapping
+-   Focus visibility
+-   Error readability
+-   Touch interaction
+-   Screen-reader heading structure
 
-The interface should remain usable when users increase browser or system text size.
+Do not encode hierarchy through font size alone.
 
----
+Use semantic headings in implementation.
 
-# 35. Color and Typography
-
-Typography and color must work together.
-
-Important text should not depend only on:
-
-- Font weight
-- Color
-- Size
-
-Critical information should use multiple appropriate visual cues.
-
----
+------------------------------------------------------------------------
 
 # 36. Typography Tokens
 
-The implementation should centralize typography tokens.
+A conceptual implementation layer:
 
-Conceptually:
+``` css
+--font-family-ui: 'Poppins', sans-serif;
+--font-family-data: 'JetBrains Mono', monospace;
 
-```scss
---font-family-primary
---font-size-display
---font-size-heading-1
---font-size-heading-2
---font-size-body
---font-size-body-small
---font-size-caption
-
---font-weight-regular
---font-weight-medium
---font-weight-semibold
---font-weight-bold
-
---line-height-tight
---line-height-normal
---line-height-relaxed
+--text-xs: 12px;
+--text-sm: 14px;
+--text-md: 16px;
+--text-lg: 18px;
+--text-xl: 24px;
+--text-2xl: 30px;
+--text-3xl: 36px;
+--text-4xl: 48px;
 ```
 
-The exact values should follow the approved Figma system.
+Where line height and tracking are explicitly defined:
 
----
+``` text
+2XL
+30px / 40px
+tracking -0.01px
 
-# 37. Semantic Typography
-
-Components should use semantic typography roles rather than arbitrary font sizes.
-
-Prefer:
-
-```text
-Page Heading
-Body
-Caption
-Label
+4XL
+48px / 56px
+tracking -0.02px
 ```
 
-rather than:
+The implementation may use different token naming conventions, but the
+semantic mapping must remain clear.
 
-```text
-font-size: 19px
-font-size: 14px
-font-size: 11px
-```
+------------------------------------------------------------------------
 
-when an appropriate design token already exists.
+# 37. Figma Typography Organization
 
----
+Figma typography should remain organized around:
 
-# 38. Figma Typography Organization
-
-Figma should organize typography styles by semantic role.
-
-Recommended structure:
-
-```text
+``` text
 Typography
-├── Display
-├── Headings
-├── Body
-├── Labels
-├── Captions
-└── Special / Commerce
+├── Font Families
+│   ├── Poppins
+│   └── JetBrains Mono
+│
+├── Weights
+│   ├── 400
+│   ├── 500
+│   ├── 600
+│   └── 700
+│
+└── Type Scale
+    ├── XS
+    ├── SM
+    ├── MD
+    ├── LG
+    ├── XL
+    ├── 2XL
+    ├── 3XL
+    └── 4XL
 ```
 
-Styles should use clear and consistent names.
+Semantic text styles may reference these foundations.
 
----
+------------------------------------------------------------------------
 
-# 39. Typography Usage Rules
+# 38. Verified vs Derived Typography Decisions
 
-### Do
+### Verified / explicitly established
 
-- Use approved typography tokens.
-- Maintain clear hierarchy.
-- Respect responsive behavior.
-- Support localization.
-- Validate readability.
-- Keep font weights intentional.
-- Use semantic text roles.
+-   Poppins is the UI font.
+-   JetBrains Mono is the approved data/monospace font.
+-   400 / 500 / 600 / 700 weights are available/approved.
+-   Inter is not part of the active design-system declaration.
+-   Type scale is 12px → 48px.
+-   30px uses 40px line height and -0.01px tracking.
+-   48px uses 56px line height and -0.02px tracking.
+-   Price/data presentation uses JetBrains Mono.
 
-### Do Not
+### Semantic / derived
 
-- Introduce arbitrary font sizes throughout components.
-- Use too many font weights.
-- Use extremely small text for dense layouts.
-- Rely solely on font weight to communicate meaning.
-- Prevent text from wrapping without a deliberate reason.
-- Override the design system for isolated screens without approval.
+-   Exact mapping of every screen heading to H1/H2/H3/H4.
+-   Responsive changes to individual type roles.
+-   Component-specific weight selection where Figma does not explicitly
+    annotate it.
+-   Fallback stack.
 
----
+Derived decisions must remain consistent with the visual hierarchy and
+can be refined through implementation QA.
 
-# 40. Design Review
+------------------------------------------------------------------------
 
-Before introducing a new typography style, verify:
+# 39. Typography Review Rules
 
-1. Does an existing semantic role already meet the requirement?
-2. Is the new style required by the design?
-3. Does it remain readable across supported viewports?
-4. Does it support localization?
-5. Is it documented in Figma?
-6. Will it be reused?
+Before introducing a new typography value:
 
-Avoid creating one-off typography styles.
+1.  Check whether an existing scale value solves the requirement.
+2.  Check the Figma reference.
+3.  Prefer a semantic role over a local value.
+4.  Confirm the weight is within the approved set.
+5.  Check line height and wrapping.
+6.  Validate responsive behavior.
+7.  Update this document if the system itself changes.
 
----
+Do not introduce arbitrary font sizes such as:
 
-# 41. Typography and Components
+``` text
+17px
+19px
+27px
+43px
+```
 
-Reusable components should consume typography tokens.
+unless a new value is intentionally approved as part of the design
+system.
 
-Example:
+------------------------------------------------------------------------
+
+# 40. Typography Completion Criteria
+
+Typography is considered complete when:
+
+-   UI font is defined.
+-   Data font is defined.
+-   Weights are defined.
+-   Type scale is defined.
+-   Heading hierarchy is defined.
+-   Body roles are defined.
+-   Data/price usage is defined.
+-   Line-height rules are defined.
+-   Tracking rules are defined.
+-   Responsive behavior is defined.
+-   Accessibility requirements are addressed.
+-   Figma and implementation terminology are aligned.
+-   Components do not introduce arbitrary typography values.
+
+------------------------------------------------------------------------
+
+# 41. Typography Principle
+
+> **Use typography as a hierarchy system: Poppins communicates the
+> interface, JetBrains Mono emphasizes data, and the approved scale
+> keeps the entire product visually coherent.**
+# 42. Repository Figma Asset Structure
+
+Typography documentation remains part of `docs/02_Design/`. Figma visual-reference and handoff assets use the single approved repository structure below:
 
 ```text
-Button
-   ↓
-Button Typography
-
-Product Card
-   ↓
-Product Name + Price Typography
-
-Order Card
-   ↓
-Order Heading + Metadata Typography
+assets/
+└── figma/
+    ├── FIGMA.md
+    ├── FIGMA_IMPLEMENTATION_RULES.md
+    ├── FIGMA_REFERENCES.md
+    │
+    └── exports/
+        │
+        ├── Components/
+        │   ├── README.md
+        │   └── screenshots/
+        │
+        ├── admin/
+        │   ├── README.md
+        │   └── screenshots/
+        │
+        └── customer/
+            ├── README.md
+            └── screenshots/
 ```
 
-This keeps typography consistent throughout the application.
+## 42.1 Responsibilities
 
----
+- `assets/figma/FIGMA.md` — primary repository-side Figma governance and handoff documentation.
+- `assets/figma/FIGMA_IMPLEMENTATION_RULES.md` — implementation rules for translating Figma typography into the application.
+- `assets/figma/FIGMA_REFERENCES.md` — Figma file, page, frame, prototype, and handoff references.
+- `assets/figma/exports/Components/` — component typography reference exports and screenshots.
+- `assets/figma/exports/admin/` — administrator typography reference exports and screenshots.
+- `assets/figma/exports/customer/` — customer typography reference exports and screenshots.
 
-# 42. Typography Completion Criteria
+Do not recreate legacy Figma export categories such as `Layouts/`, `Foundation/`, `screens/`, or `responsive/`.
 
-The typography system is considered complete when:
+## 42.2 Screenshot Policy
 
-- Font family is defined.
-- Font weights are defined.
-- Typography scale is defined.
-- Heading hierarchy is defined.
-- Body styles are defined.
-- Labels and captions are defined.
-- Commerce typography is defined.
-- Responsive behavior is defined.
-- Localization considerations are addressed.
-- Accessibility requirements are verified.
-- Figma and implementation tokens are aligned.
-- Components use semantic typography roles.
+Figma Design remains authoritative for typography. Figma Make screenshots are supporting visual references for implementation and Antigravity.
 
----
+Preserve default Figma Make-generated filenames. Do not manually rename screenshots into custom naming patterns.
 
-# 43. Typography Principle
+Responsive typography evidence belongs inside the approved `Components`, `admin`, and `customer` packages rather than a separate responsive export directory.
 
-> **Typography should create hierarchy, improve readability, and communicate information clearly without unnecessary visual complexity.**
