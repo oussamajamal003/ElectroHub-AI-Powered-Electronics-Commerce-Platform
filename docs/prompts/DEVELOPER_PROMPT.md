@@ -73,7 +73,7 @@ AGENTS.md contains the permanent ElectroHub AI-agent instructions, architectural
 This Fixed Developer Prompt defines the task-specific execution workflow and is complementary to AGENTS.md.
 
 If AGENTS.md and this prompt contain overlapping rules, follow the stricter requirement. Do not ignore, override, or silently contradict AGENTS.md.
-
+ 
 ---
 
 # STEP 0 — REPOSITORY SYNCHRONIZATION
