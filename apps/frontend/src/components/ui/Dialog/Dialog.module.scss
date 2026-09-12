@@ -1,0 +1,77 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: $z-modal;
+  background-color: rgba($color-secondary, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.content {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: $z-modal + 1;
+  width: 100%;
+  max-width: 32rem; // 512px
+  // Note: Transform is handled by Framer Motion, but we set a fallback here.
+  transform: translate(-50%, -50%);
+  background-color: $color-surface;
+  padding: $spacing-6;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-xl;
+  border: 1px solid $color-border;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 $focus-ring-width $focus-ring-color;
+  }
+}
+
+.closeButton {
+  position: absolute;
+  top: $spacing-4;
+  right: $spacing-4;
+  background: transparent;
+  border: none;
+  padding: $spacing-1;
+  border-radius: $radius-sm;
+  color: $color-text-muted;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color $transition-fast, color $transition-fast;
+
+  &:hover {
+    background-color: $color-border;
+    color: $color-text-primary;
+  }
+
+  &:focus-visible {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: 2px;
+  }
+}
+
+.closeIcon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.title {
+  font-family: $font-family-heading;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin: 0;
+}
+
+.description {
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  margin: 0;
+}

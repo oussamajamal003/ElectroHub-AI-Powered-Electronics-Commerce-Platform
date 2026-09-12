@@ -28,7 +28,7 @@ $color-text-muted: #94a3b8;
 $color-text-inverse: #ffffff;
 
 // --- Typography ---
-$font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+$font-family-base: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI',
   Roboto, sans-serif;
 $font-family-heading: $font-family-base;
 $font-family-mono: 'JetBrains Mono', 'Fira Code', monospace;
@@ -77,6 +77,12 @@ $radius-lg: 0.5rem;
 $radius-xl: 0.75rem;
 $radius-2xl: 1rem;
 $radius-full: 9999px;
+
+// --- Focus ---
+$focus-ring-width: 2px;
+$focus-ring-style: solid;
+$focus-ring-color: $color-primary;
+$focus-ring-offset: 2px;
 
 // --- Shadows ---
 $shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
