@@ -10,7 +10,7 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  // @ts-ignore
+  // @ts-expect-error test property is from vitest
   test: {
     environment: 'jsdom',
   },
