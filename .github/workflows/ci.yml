@@ -22,79 +22,142 @@ permissions:
   contents: read
 
 jobs:
-  frontend:
-    name: Frontend
+  frontend-typecheck:
+    name: Frontend / Typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20.11.0'
           cache: 'npm'
-          
       - name: Install dependencies
         run: npm ci
-        
       - name: Typecheck
         run: npm run typecheck --workspace=@electrohub/frontend
-        
+
+  frontend-lint:
+    name: Frontend / Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.11.0'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
       - name: Lint
         run: npm run lint --workspace=@electrohub/frontend
-        
+
+  frontend-test:
+    name: Frontend / Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.11.0'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
       # Frontend tests are not yet implemented in develop; this check is optional until the testing framework is merged.
       - name: Test
         run: npm run test --workspace=@electrohub/frontend --if-present
-        
-      - name: Build
-        run: npm run build --workspace=@electrohub/frontend
 
-  backend:
-    name: Backend
+  frontend-build:
+    name: Frontend / Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20.11.0'
           cache: 'npm'
-          
       - name: Install dependencies
         run: npm ci
-        
+      - name: Build
+        run: npm run build --workspace=@electrohub/frontend
+
+  backend-typecheck:
+    name: Backend / Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.11.0'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
       - name: Typecheck
         run: npm run typecheck --workspace=@electrohub/backend
-        
+
+  backend-lint:
+    name: Backend / Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.11.0'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
       - name: Lint
         run: npm run lint --workspace=@electrohub/backend
-        
+
+  backend-test:
+    name: Backend / Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.11.0'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
       - name: Test
         run: npm run test --workspace=@electrohub/backend
-        
+
+  backend-build:
+    name: Backend / Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.11.0'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
       - name: Build
         run: npm run build --workspace=@electrohub/backend
 
   ai:
-    name: AI Service
+    name: AI Service / Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
-          
       - name: Install dependencies
         working-directory: apps/ai-service
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          
       - name: Test
         working-directory: apps/ai-service
         run: python -m pytest
@@ -104,15 +167,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20.11.0'
           cache: 'npm'
-          
       - name: Install dependencies
         run: npm ci
-        
       - name: NPM Audit
         run: npm audit --audit-level=high
