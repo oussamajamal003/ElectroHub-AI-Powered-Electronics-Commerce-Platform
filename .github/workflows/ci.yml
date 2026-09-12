@@ -8,6 +8,7 @@ on:
       - 'feature/**'
       - 'fix/**'
       - 'chore/**'
+      - 'task/**'
   pull_request:
     branches:
       - develop
@@ -37,16 +38,17 @@ jobs:
         run: npm ci
         
       - name: Typecheck
-        run: npm run typecheck --workspace=@electrohub/frontend --if-present
+        run: npm run typecheck --workspace=@electrohub/frontend
         
       - name: Lint
-        run: npm run lint --workspace=@electrohub/frontend --if-present
+        run: npm run lint --workspace=@electrohub/frontend
         
+      # Frontend tests are not yet implemented in develop; this check is optional until the testing framework is merged.
       - name: Test
         run: npm run test --workspace=@electrohub/frontend --if-present
         
       - name: Build
-        run: npm run build --workspace=@electrohub/frontend --if-present
+        run: npm run build --workspace=@electrohub/frontend
 
   backend:
     name: Backend
@@ -64,16 +66,16 @@ jobs:
         run: npm ci
         
       - name: Typecheck
-        run: npm run typecheck --workspace=@electrohub/backend --if-present
+        run: npm run typecheck --workspace=@electrohub/backend
         
       - name: Lint
-        run: npm run lint --workspace=@electrohub/backend --if-present
+        run: npm run lint --workspace=@electrohub/backend
         
       - name: Test
-        run: npm run test --workspace=@electrohub/backend --if-present
+        run: npm run test --workspace=@electrohub/backend
         
       - name: Build
-        run: npm run build --workspace=@electrohub/backend --if-present
+        run: npm run build --workspace=@electrohub/backend
 
   ai:
     name: AI Service
