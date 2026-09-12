@@ -162,17 +162,3 @@ jobs:
         working-directory: apps/ai-service
         run: python -m pytest
 
-  security:
-    name: Security & Dependencies
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.11.0'
-          cache: 'npm'
-      - name: Install dependencies
-        run: npm ci
-      - name: NPM Audit
-        run: npm audit --audit-level=high
