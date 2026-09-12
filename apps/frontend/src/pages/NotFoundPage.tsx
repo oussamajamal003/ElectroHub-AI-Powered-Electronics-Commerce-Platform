@@ -12,7 +12,7 @@ export function NotFoundPage() {
           The page you are looking for doesn't exist or has been moved.
         </p>
         <Link to="/" className={styles.homeLink}>
-          <Home className={styles.homeIcon} />
+          <Home className={styles.homeIcon} aria-hidden="true" />
           Back to Home
         </Link>
       </div>

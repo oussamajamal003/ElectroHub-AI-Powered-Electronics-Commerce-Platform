@@ -1,3 +1,5 @@
+@use "@/styles/abstracts" as *;
+
 .overlay {
   position: fixed;
   inset: 0;
@@ -17,7 +19,7 @@
   transform: translate(-50%, -50%);
   background-color: $color-surface;
   padding: $spacing-6;
-  border-radius: $radius-lg;
+  border-radius: $radius-xl;
   box-shadow: $shadow-xl;
   border: 1px solid $color-border;
   display: flex;
@@ -25,8 +27,8 @@
   gap: $spacing-4;
 
   &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 $focus-ring-width $focus-ring-color;
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
   }
 }
 
@@ -52,7 +54,7 @@
 
   &:focus-visible {
     outline: $focus-ring-width $focus-ring-style $focus-ring-color;
-    outline-offset: 2px;
+    outline-offset: $focus-ring-offset;
   }
 }
 

@@ -5,6 +5,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '../components/ui/Dialog';
+import styles from './HomePage.module.scss';
 
 /**
  * Home Page — Foundation placeholder.
@@ -12,23 +13,14 @@ import {
  */
 export function HomePage() {
   return (
-    <main style={{ padding: '2rem' }}>
-      <h1>ElectroHub</h1>
-      <p>AI-Powered Electronics Commerce Platform</p>
+    <main className={styles.container}>
+      <h1 className={styles.title}>ElectroHub</h1>
+      <p className={styles.subtitle}>AI-Powered Electronics Commerce Platform</p>
       
-      <div style={{ marginTop: '2rem' }}>
+      <div className={styles.content}>
         <Dialog>
           <DialogTrigger asChild>
-            <button
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: '#2563eb',
-                color: 'white',
-                border: 'none',
-                borderRadius: '0.375rem',
-                cursor: 'pointer'
-              }}
-            >
+            <button className={styles.triggerButton}>
               Open Foundation Dialog
             </button>
           </DialogTrigger>

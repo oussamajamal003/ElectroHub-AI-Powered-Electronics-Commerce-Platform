@@ -38,7 +38,7 @@ export const DialogContent = React.forwardRef<
       >
         {children}
         <DialogPrimitive.Close className={styles.closeButton} aria-label="Close">
-          <X className={styles.closeIcon} />
+          <X className={styles.closeIcon} aria-hidden="true" />
         </DialogPrimitive.Close>
       </motion.div>
     </DialogPrimitive.Content>

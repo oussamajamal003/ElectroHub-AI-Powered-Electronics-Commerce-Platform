@@ -1,3 +1,5 @@
+@use "@/styles/abstracts" as *;
+
 .container {
   display: flex;
   align-items: center;
@@ -17,7 +19,7 @@
 
 .title {
   font-family: $font-family-heading;
-  font-size: 6rem;
+  font-size: $font-size-4xl;
   font-weight: $font-weight-bold;
   color: $color-primary;
   line-height: 1;
