@@ -1,0 +1,88 @@
+@use '../../../styles/abstracts/variables' as *;
+@use '../../../styles/abstracts/mixins' as *;
+
+.container {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  background-color: $color-background;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: $color-primary-text;
+  transition: background-color 0.2s ease, color 0.2s ease;
+
+  &:hover:not(:disabled) {
+    background-color: $color-surface-hover;
+  }
+
+  &:disabled {
+    color: $color-disabled-text;
+    cursor: not-allowed;
+  }
+}
+
+.quantity {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: $font-family-primary; // JetBrains Mono? Figma uses Poppins or standard for numeric maybe. Standard body font. Let's use Poppins/Inter.
+  font-weight: $font-weight-medium;
+  color: $color-primary-text;
+}
+
+// Sizes
+.small {
+  height: 32px;
+  .button {
+    width: 32px;
+    height: 100%;
+  }
+  .quantity {
+    min-width: 32px;
+    font-size: $font-size-sm;
+  }
+  .icon {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.medium {
+  height: 40px;
+  .button {
+    width: 40px;
+    height: 100%;
+  }
+  .quantity {
+    min-width: 40px;
+    font-size: $font-size-base;
+  }
+  .icon {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.large {
+  height: 48px;
+  .button {
+    width: 48px;
+    height: 100%;
+  }
+  .quantity {
+    min-width: 48px;
+    font-size: $font-size-lg;
+  }
+  .icon {
+    width: 20px;
+    height: 20px;
+  }
+}
