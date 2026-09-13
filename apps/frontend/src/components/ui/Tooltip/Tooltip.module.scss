@@ -1,0 +1,23 @@
+@use '../../../styles/abstracts/variables' as *;
+
+.content {
+  z-index: $z-tooltip;
+  border-radius: $radius-sm;
+  padding: $spacing-2 $spacing-3;
+  font-family: $font-family-base;
+  font-size: $font-size-xs;
+  line-height: 1;
+  color: $color-text-inverse;
+  background-color: $color-text-primary;
+  box-shadow: $shadow-md;
+  user-select: none;
+  animation-duration: 400ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+  max-width: 300px;
+  word-wrap: break-word;
+}
+
+.arrow {
+  fill: $color-text-primary;
+}

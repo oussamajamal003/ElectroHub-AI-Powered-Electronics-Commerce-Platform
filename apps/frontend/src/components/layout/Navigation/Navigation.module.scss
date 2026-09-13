@@ -1,0 +1,27 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.nav {
+  display: flex;
+  align-items: center;
+}
+
+.list {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: $spacing-6;
+}
+
+.item {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $color-text-secondary;
+  transition: color $transition-colors-duration $transition-colors-timing;
+  cursor: pointer;
+
+  &:hover {
+    color: $color-text-primary;
+  }
+}

@@ -1,0 +1,21 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.header {
+  width: 100%;
+  border-bottom: 1px solid $color-border;
+  background-color: $color-background;
+  position: sticky;
+  top: 0;
+  z-index: $z-index-sticky;
+}
+
+.container {
+  display: flex;
+  height: 4rem; // 64px
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 $spacing-6;
+  max-width: 1280px;
+  margin: 0 auto;
+}

@@ -1,0 +1,27 @@
+@use '@/styles/abstracts/variables' as *;
+
+.spinner {
+  animation: spin 1s linear infinite;
+  color: currentColor;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.size-small {
+  width: 1rem;
+  height: 1rem;
+}
+
+.size-medium {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.size-large {
+  width: 2rem;
+  height: 2rem;
+}

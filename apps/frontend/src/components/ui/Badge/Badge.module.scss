@@ -1,0 +1,65 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: $radius-full;
+  border: 1px solid transparent;
+  padding: $spacing-0-5 $spacing-2-5;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  transition: background-color $transition-colors-duration $transition-colors-timing;
+  line-height: 1.25rem;
+
+  &:focus {
+    outline: none;
+    box-shadow: $shadow-focus;
+  }
+}
+
+.variant-default {
+  border-color: transparent;
+  background-color: $color-primary;
+  color: $color-primary-foreground;
+  
+  &:hover {
+    background-color: $color-primary-hover;
+  }
+}
+
+.variant-secondary {
+  border-color: transparent;
+  background-color: $color-secondary;
+  color: $color-secondary-foreground;
+
+  &:hover {
+    background-color: $color-secondary-hover;
+  }
+}
+
+.variant-destructive {
+  border-color: transparent;
+  background-color: $color-error;
+  color: $color-text-inverse;
+  
+  &:hover {
+    background-color: darken(#ef4444, 10%);
+  }
+}
+
+.variant-success {
+  border-color: transparent;
+  background-color: $color-success;
+  color: $color-text-inverse;
+
+  &:hover {
+    background-color: darken(#10b981, 10%);
+  }
+}
+
+.variant-outline {
+  color: $color-text-primary;
+  border-color: $color-border;
+  background-color: transparent;
+}

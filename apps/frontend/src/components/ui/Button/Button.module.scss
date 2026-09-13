@@ -1,0 +1,168 @@
+@use '../../../styles/abstracts/variables' as *;
+@use '../../../styles/abstracts/mixins' as *;
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  font-family: $font-family-base;
+  font-weight: $font-weight-bold;
+  font-size: $font-size-xs;
+  line-height: $line-height-normal;
+  text-align: center;
+  white-space: nowrap;
+  border-radius: $radius-sm;
+  transition: all $transition-fast;
+  cursor: pointer;
+  border: 1px solid transparent; // for outline variant consistency
+
+  /* Default Spacing */
+  padding: 0 $spacing-6;
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 $focus-ring-width $focus-ring-color;
+    border-color: $color-border;
+  }
+
+  &.loading {
+    cursor: wait;
+    opacity: 0.8;
+  }
+
+  &:disabled,
+  &.disabled {
+    cursor: not-allowed;
+  }
+
+  .content {
+    display: inline-flex;
+    align-items: center;
+    gap: $spacing-2;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+    margin-right: $spacing-2;
+  }
+}
+
+/* SIZES */
+.size-small {
+  height: 32px;
+}
+.size-medium {
+  height: 40px;
+}
+.size-large {
+  height: 48px;
+}
+
+/* VARIANTS */
+.variant-primary {
+  background-color: $color-primary;
+  color: $color-text-inverse;
+
+  &:hover:not(:disabled) {
+    background-color: $color-primary-dark;
+  }
+
+  &:active:not(:disabled) {
+    background-color: darken($color-primary-dark, 10%);
+  }
+
+  &:disabled {
+    background-color: $color-background;
+    border-color: $color-border;
+    color: $color-text-muted;
+  }
+}
+
+.variant-secondary {
+  background-color: $color-accent;
+  color: $color-text-inverse;
+
+  &:hover:not(:disabled) {
+    background-color: darken($color-accent, 10%);
+  }
+
+  &:disabled {
+    background-color: $color-background;
+    border-color: $color-border;
+    color: $color-text-muted;
+  }
+}
+
+.variant-outline {
+  background-color: transparent;
+  border-color: $color-border;
+  color: $color-primary;
+
+  &:hover:not(:disabled) {
+    background-color: $color-surface;
+  }
+
+  &:disabled {
+    color: $color-text-muted;
+  }
+}
+
+.variant-ghost {
+  background-color: transparent;
+  color: $color-text-primary;
+
+  &:hover:not(:disabled) {
+    background-color: $color-surface;
+  }
+
+  &:disabled {
+    color: $color-text-muted;
+  }
+}
+
+.variant-destructive {
+  background-color: $color-error;
+  color: $color-text-inverse;
+
+  &:hover:not(:disabled) {
+    background-color: darken($color-error, 10%);
+  }
+
+  &:disabled {
+    background-color: $color-background;
+    border-color: $color-border;
+    color: $color-text-muted;
+  }
+}
+
+.variant-link {
+  background-color: transparent;
+  color: $color-primary;
+  padding: 0;
+  height: auto;
+  border: none;
+  font-weight: $font-weight-regular;
+
+  &:hover:not(:disabled) {
+    text-decoration: underline;
+  }
+
+  &:disabled {
+    color: $color-text-muted;
+    text-decoration: none;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

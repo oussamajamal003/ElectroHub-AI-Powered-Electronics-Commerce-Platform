@@ -1,0 +1,46 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.alert {
+  position: relative;
+  width: 100%;
+  border-radius: $radius-lg;
+  border: 1px solid transparent;
+  padding: $spacing-4;
+  
+  // Icon spacing if an icon is placed inside (SVG)
+  > svg {
+    position: absolute;
+    left: $spacing-4;
+    top: $spacing-4;
+    color: inherit;
+    ~ * {
+      padding-left: $spacing-7;
+    }
+  }
+}
+
+.variant-default {
+  background-color: $color-background;
+  color: $color-text-primary;
+  border-color: $color-border;
+}
+
+.variant-destructive {
+  border-color: $color-error;
+  color: $color-error;
+}
+
+.title {
+  margin-bottom: $spacing-1;
+  font-weight: $font-weight-medium;
+  line-height: 1;
+  letter-spacing: -0.025em;
+}
+
+.description {
+  font-size: $font-size-sm;
+  &_p {
+    line-height: 1.625;
+  }
+}
