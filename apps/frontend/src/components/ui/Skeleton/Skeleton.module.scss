@@ -1,0 +1,62 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.skeleton {
+  display: block;
+  background-color: #d9d9d9; // Hardcoded to match Figma specification
+  position: relative;
+  overflow: hidden;
+
+  // Shimmer effect
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      rgba($color-surface, 0) 0,
+      rgba($color-surface, 0.4) 20%,
+      rgba($color-surface, 0.6) 60%,
+      rgba($color-surface, 0)
+    );
+    animation: shimmer 1.5s infinite;
+  }
+
+  // Respect reduced motion
+  @media (prefers-reduced-motion: reduce) {
+    &::after {
+      animation: none;
+      display: none;
+    }
+  }
+}
+
+.variant-text {
+  height: auto;
+  border-radius: $radius-sm;
+  transform: scale(1, 0.8);
+  transform-origin: 0 50%;
+  
+  // Default to a typical line height if no explicit height is given
+  &:empty:before {
+    content: '\00a0';
+  }
+}
+
+.variant-rectangular {
+  border-radius: $radius-md;
+}
+
+.variant-circular {
+  border-radius: $radius-full;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
