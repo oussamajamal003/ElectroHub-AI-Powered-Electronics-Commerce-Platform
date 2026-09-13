@@ -22,13 +22,17 @@ export const DropdownMenuContent = forwardRef<
 ));
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
 
+export interface DropdownMenuItemProps extends React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> {
+  variant?: 'default' | 'destructive';
+}
+
 export const DropdownMenuItem = forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item>
->(({ className, ...props }, ref) => (
+  DropdownMenuItemProps
+>(({ className, variant = 'default', ...props }, ref) => (
   <DropdownMenuPrimitive.Item
     ref={ref}
-    className={clsx(styles.item, className)}
+    className={clsx(styles.item, styles[`variant-${variant}`], className)}
     {...props}
   />
 ));

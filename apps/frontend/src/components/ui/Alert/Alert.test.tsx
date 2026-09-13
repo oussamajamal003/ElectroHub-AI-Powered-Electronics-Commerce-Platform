@@ -1,26 +1,47 @@
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { Alert, AlertTitle, AlertDescription } from './Alert';
 
 describe('Alert Component', () => {
-  it('renders correctly', () => {
+  it('renders default alert correctly', () => {
     render(
       <Alert>
         <AlertTitle>Alert Title</AlertTitle>
         <AlertDescription>Alert Description</AlertDescription>
       </Alert>
     );
-
-    const alert = screen.getByRole('alert');
-    expect(alert).toBeInTheDocument();
+    
+    const alertElement = screen.getByRole('alert');
+    expect(alertElement).toBeInTheDocument();
     expect(screen.getByText('Alert Title')).toBeInTheDocument();
     expect(screen.getByText('Alert Description')).toBeInTheDocument();
-    expect(alert.className).toMatch(/variant-default/);
   });
 
-  it('renders destructive variant', () => {
-    render(<Alert variant="destructive">Error!</Alert>);
+  it('renders success variant correctly', () => {
+    render(<Alert variant="success">Success!</Alert>);
     const alert = screen.getByRole('alert');
-    expect(alert.className).toMatch(/variant-destructive/);
+    expect(alert.className).toContain('variant-success');
+    expect(screen.getByText('Success!')).toBeInTheDocument();
+  });
+
+  it('renders error variant correctly', () => {
+    render(<Alert variant="error">Error!</Alert>);
+    const alert = screen.getByRole('alert');
+    expect(alert.className).toContain('variant-error');
+    expect(screen.getByText('Error!')).toBeInTheDocument();
+  });
+
+  it('renders close button when onDismiss is provided and triggers callback', async () => {
+    const onDismissMock = vi.fn();
+    const user = userEvent.setup();
+    
+    render(<Alert onDismiss={onDismissMock}>Dismissible Alert</Alert>);
+    
+    const closeBtn = screen.getByRole('button', { name: /close alert/i });
+    expect(closeBtn).toBeInTheDocument();
+    
+    await user.click(closeBtn);
+    expect(onDismissMock).toHaveBeenCalledTimes(1);
   });
 });

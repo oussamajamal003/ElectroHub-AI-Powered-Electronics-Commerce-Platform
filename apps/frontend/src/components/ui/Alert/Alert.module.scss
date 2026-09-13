@@ -7,17 +7,9 @@
   border-radius: $radius-lg;
   border: 1px solid transparent;
   padding: $spacing-4;
-  
-  // Icon spacing if an icon is placed inside (SVG)
-  > svg {
-    position: absolute;
-    left: $spacing-4;
-    top: $spacing-4;
-    color: inherit;
-    ~ * {
-      padding-left: $spacing-7;
-    }
-  }
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-6;
 }
 
 .variant-default {
@@ -26,21 +18,93 @@
   border-color: $color-border;
 }
 
-.variant-destructive {
-  border-color: $color-error;
-  color: $color-error;
+.variant-success {
+  background-color: $color-success-background;
+  border-color: $color-success-border;
+  color: $color-success-foreground;
+}
+
+.variant-error {
+  background-color: $color-error-background;
+  border-color: $color-error-border;
+  color: $color-error-foreground;
+}
+
+.variant-warning {
+  background-color: $color-warning-background;
+  border-color: $color-warning-border;
+  color: $color-warning-foreground;
+}
+
+.variant-info {
+  background-color: $color-info-background;
+  border-color: $color-info-border;
+  color: $color-info-foreground;
+}
+
+.iconWrapper {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 1px; // visually center align with the first line of text
+}
+
+.iconSvg {
+  width: 20px;
+  height: 20px;
+  color: inherit;
+}
+
+.content {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.closeButton {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: inherit;
+  opacity: 0.7;
+  transition: opacity $transition-fast;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: $radius-sm;
+
+  &:hover, &:focus-visible {
+    opacity: 1;
+    outline: none;
+  }
+  
+  &:focus-visible {
+    box-shadow: 0 0 0 $focus-ring-width $focus-ring-color;
+  }
+}
+
+.closeIcon {
+  width: 20px;
+  height: 20px;
 }
 
 .title {
-  margin-bottom: $spacing-1;
+  margin: 0;
   font-weight: $font-weight-medium;
-  line-height: 1;
-  letter-spacing: -0.025em;
+  font-size: $font-size-sm;
+  line-height: $line-height-normal;
 }
 
 .description {
+  margin: 0;
   font-size: $font-size-sm;
-  &_p {
-    line-height: 1.625;
+  font-weight: $font-weight-regular;
+  line-height: $line-height-normal;
+  
+  .variant-default & {
+    color: $color-text-secondary;
   }
 }

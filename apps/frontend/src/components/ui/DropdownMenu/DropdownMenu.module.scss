@@ -34,7 +34,19 @@
 
   &[data-highlighted] {
     background-color: $color-surface;
-    color: $color-primary;
+  }
+}
+
+.variant-default {
+  color: $color-text-primary;
+}
+
+.variant-destructive {
+  color: $color-error;
+  
+  &[data-highlighted] {
+    background-color: $color-error-background;
+    color: $color-error-foreground;
   }
 }
 
