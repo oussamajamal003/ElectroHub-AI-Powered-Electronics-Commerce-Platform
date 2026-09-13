@@ -8,7 +8,6 @@ import {
   CardContent,
   CardFooter,
 } from './Card';
-import React from 'react';
 
 describe('Card Component', () => {
   it('renders all card sections correctly', () => {

@@ -29,14 +29,14 @@
   color: $color-error;
 }
 
-.inputWrapper {
+.textareaWrapper {
   position: relative;
   display: flex;
-  align-items: center;
 }
 
-.input {
+.textarea {
   width: 100%;
+  min-height: 120px;
   font-family: $font-family-base;
   font-size: $font-size-base;
   color: $color-text-primary;
@@ -44,7 +44,8 @@
   border: 1px solid $color-border;
   border-radius: $radius-md;
   transition: all $transition-fast;
-  padding: 10px; // Figma shows p-[10px]
+  padding: 10px;
+  resize: vertical;
 
   &::placeholder {
     color: $color-text-muted;
@@ -57,7 +58,7 @@
   }
 
   &:disabled {
-    background-color: $color-surface; // or the disabled background from tokens
+    background-color: $color-surface;
     border-color: $color-border;
     color: $color-text-muted;
     cursor: not-allowed;
@@ -76,20 +77,10 @@
   }
 }
 
-/* SIZES */
-.size-small {
-  height: 32px;
-}
-.size-medium {
-  height: 40px;
-}
-.size-large {
-  height: 48px;
-}
-
 .errorIcon {
   position: absolute;
   right: $spacing-3;
+  top: 10px;
   color: $color-error;
   display: flex;
   align-items: center;

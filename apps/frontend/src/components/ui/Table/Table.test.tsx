@@ -10,7 +10,6 @@ import {
   TableCell,
   TableCaption,
 } from './Table';
-import React from 'react';
 
 describe('Table Component', () => {
   it('renders all table elements correctly', () => {

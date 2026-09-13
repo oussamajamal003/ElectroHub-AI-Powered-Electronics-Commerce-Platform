@@ -36,9 +36,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           styles.button,
           styles[`variant-${variant}`],
           styles[`size-${size}`],
-          {
-            [styles.loading]: isLoading,
-          },
+          isLoading && styles.loading,
           className
         )}
         ref={ref}

@@ -1,7 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { Navigation, NavigationList, NavigationItem } from './Navigation';
-import React from 'react';
 
 describe('Navigation Component', () => {
   it('renders navigation elements correctly', () => {

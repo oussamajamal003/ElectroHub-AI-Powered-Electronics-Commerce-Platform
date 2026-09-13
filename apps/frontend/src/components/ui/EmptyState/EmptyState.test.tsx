@@ -1,7 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { EmptyState } from './EmptyState';
-import React from 'react';
 import { Box } from 'lucide-react';
 
 describe('EmptyState Component', () => {

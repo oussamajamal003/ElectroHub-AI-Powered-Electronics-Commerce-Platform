@@ -9,23 +9,24 @@ export interface SelectProps extends React.ComponentPropsWithoutRef<typeof Selec
   error?: string;
   placeholder?: string;
   options: { value: string; label: string; disabled?: boolean }[];
+  selectSize?: 'small' | 'medium' | 'large';
   fullWidth?: boolean;
 }
 
 export const Select = forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger>, SelectProps>(
   (
-    { label, error, placeholder = 'Select an option...', options, fullWidth, disabled, ...props },
+    { label, error, placeholder = 'Select an option...', options, selectSize = 'medium', fullWidth, disabled, ...props },
     ref
   ) => {
     const isError = Boolean(error);
     const generatedId = React.useId();
 
     return (
-      <div className={clsx(styles.container, { [styles.fullWidth]: fullWidth })}>
+      <div className={clsx(styles.container, fullWidth && styles.fullWidth)}>
         {label && (
           <label
             htmlFor={generatedId}
-            className={clsx(styles.label, { [styles.labelDisabled]: disabled })}
+            className={clsx(styles.label, disabled && styles.labelDisabled)}
           >
             {label}
             {props.required && <span className={styles.required}>*</span>}
@@ -35,7 +36,7 @@ export const Select = forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger
           <SelectPrimitive.Trigger
             ref={ref}
             id={generatedId}
-            className={clsx(styles.trigger, { [styles.error]: isError })}
+            className={clsx(styles.trigger, styles[`size-${selectSize}`], isError && styles.error)}
           >
             <SelectPrimitive.Value placeholder={placeholder} />
             <SelectPrimitive.Icon className={styles.icon}>

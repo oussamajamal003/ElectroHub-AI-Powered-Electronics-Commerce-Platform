@@ -1,25 +1,23 @@
 import React, { forwardRef } from 'react';
 import clsx from 'clsx';
-import styles from './Input.module.scss';
 import { AlertCircle } from 'lucide-react';
+import styles from './Textarea.module.scss';
 
-export interface InputProps
-  extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface TextareaProps
+  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
   helperText?: string;
   error?: string;
-  inputSize?: 'small' | 'medium' | 'large';
   fullWidth?: boolean;
 }
 
-export const Input = forwardRef<HTMLInputElement, InputProps>(
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
   (
     {
       className,
       label,
       helperText,
       error,
-      inputSize = 'medium',
       fullWidth = false,
       disabled,
       id,
@@ -27,11 +25,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     },
     ref
   ) => {
-    // Generate a unique ID if none provided and we have a label/helper text
     const generatedId = React.useId();
-    const inputId = id || generatedId;
-    const errorId = `${inputId}-error`;
-    const helperId = `${inputId}-helper`;
+    const textareaId = id || generatedId;
+    const errorId = `${textareaId}-error`;
+    const helperId = `${textareaId}-helper`;
 
     const isError = Boolean(error);
 
@@ -45,16 +42,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       >
         {label && (
           <label
-            htmlFor={inputId}
+            htmlFor={textareaId}
             className={clsx(styles.label, disabled && styles.labelDisabled)}
           >
             {label}
             {props.required && <span className={styles.required}>*</span>}
           </label>
         )}
-        <div className={styles.inputWrapper}>
-          <input
-            id={inputId}
+        <div className={styles.textareaWrapper}>
+          <textarea
+            id={textareaId}
             ref={ref}
             disabled={disabled}
             aria-invalid={isError ? 'true' : undefined}
@@ -64,7 +61,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
                 [helperId]: helperText && !isError,
               }) || undefined
             }
-            className={clsx(styles.input, styles[`size-${inputSize}`], isError && styles.error)}
+            className={clsx(styles.textarea, isError && styles.error)}
             {...props}
           />
           {isError && (
@@ -87,4 +84,4 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
   }
 );
 
-Input.displayName = 'Input';
+Textarea.displayName = 'Textarea';

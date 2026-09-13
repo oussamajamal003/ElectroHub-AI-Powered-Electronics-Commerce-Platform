@@ -9,7 +9,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from './DropdownMenu';
-import React from 'react';
 
 // Required for Radix UI portal to work in jsdom
 window.HTMLElement.prototype.scrollIntoView = function() {};

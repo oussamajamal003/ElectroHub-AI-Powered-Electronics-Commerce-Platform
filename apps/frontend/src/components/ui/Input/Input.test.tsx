@@ -1,7 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { Input } from './Input';
-import React from 'react';
 
 describe('Input', () => {
   it('renders correctly with basic props', () => {
