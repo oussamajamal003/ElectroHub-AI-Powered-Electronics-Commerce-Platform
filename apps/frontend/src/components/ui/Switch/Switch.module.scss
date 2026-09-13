@@ -1,0 +1,43 @@
+@use '../../../styles/abstracts/variables' as *;
+
+.switch {
+  all: unset;
+  width: 40px;
+  height: 24px;
+  background-color: $color-border;
+  border-radius: 9999px;
+  position: relative;
+  box-shadow: none;
+  cursor: pointer;
+  box-sizing: border-box;
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 $focus-ring-width $focus-ring-color;
+  }
+
+  &[data-state='checked'] {
+    background-color: $color-primary;
+  }
+
+  &[data-disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.thumb {
+  display: block;
+  width: 20px;
+  height: 20px;
+  background-color: white;
+  border-radius: 9999px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: transform 100ms;
+  transform: translateX(2px);
+  will-change: transform;
+
+  &[data-state='checked'] {
+    transform: translateX(18px);
+  }
+}

@@ -1,0 +1,46 @@
+@use '../../../styles/abstracts/variables' as *;
+
+.root {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  overflow: hidden;
+  user-select: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 15px; // Avatar specific from Figma
+  background-color: $color-background;
+  border: 1px solid $color-border;
+  flex-shrink: 0;
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+.fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: $color-background;
+  color: $color-text-primary;
+}
+
+.initials {
+  font-family: $font-family-primary;
+  font-weight: $font-weight-medium;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.icon {
+  width: 30px;
+  height: 30px;
+  color: $color-text-secondary;
+}

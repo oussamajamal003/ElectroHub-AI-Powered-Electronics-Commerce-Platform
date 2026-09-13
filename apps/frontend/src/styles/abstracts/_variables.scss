@@ -1,5 +1,5 @@
 // ====================================
-// ElectroHub — SCSS Variables
+// ElectroHub — SCSS Variables 
 // ====================================
 // Design system tokens for the ElectroHub frontend.
 
@@ -14,11 +14,21 @@ $color-secondary-light: #1e293b;
 $color-accent: #06b6d4;
 
 $color-success: #22c55e;
+$color-success-background: #f0fdf4;
+$color-success-border: #bbf7d0;
+$color-success-foreground: #15803d;
 $color-warning: #f59e0b;
+$color-warning-background: #fffbeb;
+$color-warning-border: #fde68a;
+$color-warning-foreground: #b45309;
 $color-error: #ef4444;
 $color-error-background: #fef2f2;
 $color-error-border: #fecaca;
+$color-error-foreground: #b91c1c;
 $color-info: #3b82f6;
+$color-info-background: #f0f9ff;
+$color-info-border: #bae6fd;
+$color-info-foreground: #0369a1;
 
 $color-background: #ffffff;
 $color-surface: #f8fafc;

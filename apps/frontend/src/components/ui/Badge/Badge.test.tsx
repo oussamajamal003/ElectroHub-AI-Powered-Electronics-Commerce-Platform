@@ -3,16 +3,16 @@ import { describe, it, expect } from 'vitest';
 import { Badge } from './Badge';
 
 describe('Badge Component', () => {
-  it('renders correctly with default variant', () => {
-    render(<Badge>Default Badge</Badge>);
-    const badge = screen.getByText('Default Badge');
+  it('renders correctly with neutral variant', () => {
+    render(<Badge>Neutral Badge</Badge>);
+    const badge = screen.getByText('Neutral Badge');
     expect(badge).toBeInTheDocument();
-    expect(badge.className).toMatch(/variant-default/);
+    expect(badge.className).toMatch(/variant-neutral/);
   });
 
   it('renders different variants', () => {
-    render(<Badge variant="destructive">Destructive Badge</Badge>);
-    const badge = screen.getByText('Destructive Badge');
-    expect(badge.className).toMatch(/variant-destructive/);
+    render(<Badge variant="error">Error Badge</Badge>);
+    const badge = screen.getByText('Error Badge');
+    expect(badge.className).toMatch(/variant-error/);
   });
 });

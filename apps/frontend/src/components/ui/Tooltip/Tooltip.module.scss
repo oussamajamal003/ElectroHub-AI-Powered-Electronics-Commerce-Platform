@@ -8,7 +8,7 @@
   font-size: $font-size-xs;
   line-height: 1;
   color: $color-text-inverse;
-  background-color: $color-text-primary;
+  background-color: $color-secondary;
   box-shadow: $shadow-md;
   user-select: none;
   animation-duration: 400ms;
@@ -19,5 +19,5 @@
 }
 
 .arrow {
-  fill: $color-text-primary;
+  fill: $color-secondary;
 }

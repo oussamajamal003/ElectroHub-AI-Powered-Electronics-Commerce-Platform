@@ -1,6 +1,6 @@
 import React, { forwardRef } from 'react';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
-import clsx from 'clsx';
+import { clsx } from 'clsx';
 import styles from './Tooltip.module.scss';
 
 export const TooltipProvider = TooltipPrimitive.Provider;
