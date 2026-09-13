@@ -1,0 +1,109 @@
+.tableContainer {
+  width: 100%;
+  overflow-x: auto;
+  background-color: var(--color-background, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-lg, 12px);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.th {
+  padding: 16px;
+  font-family: var(--font-family-primary, 'Poppins', sans-serif);
+  font-size: var(--font-size-sm, 14px);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-secondary, #475569);
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  background-color: var(--color-surface, #f8fafc);
+  white-space: nowrap;
+}
+
+.tr {
+  transition: background-color 0.2s ease;
+  border-bottom: 1px solid var(--color-border-subtle, #f1f5f9);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &.clickable {
+    cursor: pointer;
+  }
+
+  &:hover {
+    background-color: var(--color-surface, #f8fafc);
+  }
+}
+
+.td {
+  padding: 16px;
+  font-family: 'JetBrains Mono', monospace; /* Data-oriented typography */
+  font-size: var(--font-size-sm, 14px);
+  color: var(--color-text-primary, #0f172a);
+  vertical-align: middle;
+}
+
+/* For textual columns, we might override JetBrains Mono to Poppins, but JetBrains Mono is the default for Data Tables. We can allow users to render custom spans if needed. */
+
+.align-left {
+  text-align: left;
+}
+
+.align-center {
+  text-align: center;
+}
+
+.align-right {
+  text-align: right;
+}
+
+.actionsHeader {
+  width: 60px;
+  text-align: center;
+}
+
+.actionsCell {
+  text-align: center;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm, 4px);
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary, #475569);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+
+  &:hover {
+    background-color: var(--color-border-subtle, #f1f5f9);
+    color: var(--color-text-primary, #0f172a);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary, #2563eb);
+    outline-offset: 2px;
+  }
+}
+
+.actionIcon {
+  width: 20px;
+  height: 20px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--color-text-muted, #64748b);
+  font-family: var(--font-family-primary, 'Poppins', sans-serif);
+  font-size: var(--font-size-sm, 14px);
+}

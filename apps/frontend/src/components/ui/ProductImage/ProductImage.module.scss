@@ -1,0 +1,73 @@
+.container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1 / 1;
+  background-color: var(--color-surface, #f8fafc);
+  border-radius: var(--radius-xl, 16px);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  
+  &.loaded {
+    opacity: 1;
+  }
+}
+
+.fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--color-text-muted, #64748b);
+  width: 100%;
+  height: 100%;
+  background-color: var(--color-border-subtle, #f1f5f9);
+}
+
+.fallbackIcon {
+  width: 36px;
+  height: 36px;
+  color: var(--color-text-disabled, #94a3b8);
+}
+
+.fallbackText {
+  font-family: var(--font-family-primary, 'Poppins', sans-serif);
+  font-size: var(--font-size-sm, 14px);
+  text-align: center;
+}
+
+.loadingSkeleton {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--color-border-subtle, #f1f5f9) 25%,
+    var(--color-border-default, #e2e8f0) 50%,
+    var(--color-border-subtle, #f1f5f9) 75%
+  );
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

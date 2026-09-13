@@ -11,11 +11,12 @@ export interface SelectProps extends React.ComponentPropsWithoutRef<typeof Selec
   options: { value: string; label: string; disabled?: boolean }[];
   selectSize?: 'small' | 'medium' | 'large';
   fullWidth?: boolean;
+  'aria-label'?: string;
 }
 
 export const Select = forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger>, SelectProps>(
   (
-    { label, error, placeholder = 'Select an option...', options, selectSize = 'medium', fullWidth, disabled, ...props },
+    { label, error, placeholder = 'Select an option...', options, selectSize = 'medium', fullWidth, disabled, 'aria-label': ariaLabel, ...props },
     ref
   ) => {
     const isError = Boolean(error);
@@ -37,6 +38,7 @@ export const Select = forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger
             ref={ref}
             id={generatedId}
             className={clsx(styles.trigger, styles[`size-${selectSize}`], isError && styles.error)}
+            aria-label={ariaLabel}
           >
             <SelectPrimitive.Value placeholder={placeholder} />
             <SelectPrimitive.Icon className={styles.icon}>

@@ -1,0 +1,68 @@
+.gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.mainImage {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-xl, 16px);
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle, #f1f5f9);
+}
+
+.thumbnails {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  
+  /* Hide scrollbar for cleaner look */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.thumbnailBtn {
+  position: relative;
+  flex: 0 0 74px; /* Fixed width based on Figma */
+  height: 74px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md, 8px);
+  background-color: var(--color-background, #ffffff);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.2s ease, opacity 0.2s ease;
+
+  &:hover {
+    opacity: 0.8;
+  }
+
+  &.active {
+    border-color: var(--color-primary, #2563eb);
+    opacity: 1;
+  }
+
+  &:focus {
+    outline: none;
+  }
+  
+  &:focus-visible {
+    border-color: var(--color-primary, #2563eb);
+    outline: 2px solid var(--color-primary, #2563eb);
+    outline-offset: 2px;
+  }
+}
+
+.thumbnailImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none; /* Prevent image dragging issues */
+}
