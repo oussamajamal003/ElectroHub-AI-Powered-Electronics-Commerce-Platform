@@ -1,0 +1,66 @@
+@use '../../../styles/abstracts/variables' as *;
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-2; // 8px between dot and text
+  font-family: $font-family-primary;
+  color: $color-text-primary;
+}
+
+.text {
+  font-weight: $font-weight-regular;
+  white-space: nowrap;
+}
+
+.dot {
+  display: block;
+  border-radius: $radius-full;
+  flex-shrink: 0;
+}
+
+/* Sizes */
+.size-sm {
+  height: 24px;
+  
+  .text {
+    font-size: $font-size-xs;
+    line-height: 16px;
+  }
+  
+  .dot {
+    width: 6px;
+    height: 6px;
+  }
+}
+
+.size-md {
+  height: 30px; // matches Figma frame height 30px
+  
+  .text {
+    font-size: $font-size-sm;
+    line-height: 20px;
+  }
+  
+  .dot {
+    width: 8px; // matches Figma ellipse 8x8
+    height: 8px;
+  }
+}
+
+/* Variants - applying color to the dot */
+.variant-success {
+  background-color: $color-success-foreground;
+}
+
+.variant-warning {
+  background-color: $color-warning-foreground;
+}
+
+.variant-error {
+  background-color: $color-error-foreground;
+}
+
+.variant-neutral {
+  background-color: $color-text-muted;
+}

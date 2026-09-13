@@ -1,0 +1,83 @@
+@use '../../../styles/abstracts/variables' as *;
+
+.container {
+  background-color: $color-background;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-6;
+  padding: $spacing-6;
+  overflow: clip;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-1;
+  flex-shrink: 0;
+}
+
+.title {
+  font-family: $font-family-primary;
+  font-weight: $font-weight-semibold;
+  font-size: $font-size-xl;
+  color: $color-text-primary;
+  line-height: 28px;
+  margin: 0;
+}
+
+.description {
+  font-family: $font-family-primary;
+  font-weight: $font-weight-regular;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  line-height: 20px;
+  margin: 0;
+}
+
+.content {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 200px;
+  
+  p {
+    font-family: $font-family-primary;
+    font-weight: $font-weight-regular;
+    font-size: $font-size-base;
+    color: $color-text-secondary;
+    line-height: 24px;
+    margin: 0;
+  }
+}
+
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-16;
+}
+
+.loadingHeader {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-3;
+  flex-shrink: 0;
+}
+
+.loadingContent {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-3;
+  flex-shrink: 0;
+}
+
+.skeletonBlock {
+  max-width: 100%;
+}
