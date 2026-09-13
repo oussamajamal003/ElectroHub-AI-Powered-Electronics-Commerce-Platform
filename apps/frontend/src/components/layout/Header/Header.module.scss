@@ -7,15 +7,15 @@
   background-color: $color-background;
   position: sticky;
   top: 0;
-  z-index: $z-index-sticky;
+  z-index: $z-header;
 }
 
 .container {
   display: flex;
-  height: 4rem; // 64px
+  height: 90px;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 $spacing-6;
+  gap: $spacing-12;
+  padding: $spacing-6 $spacing-6 10px;
   max-width: 1280px;
   margin: 0 auto;
 }
