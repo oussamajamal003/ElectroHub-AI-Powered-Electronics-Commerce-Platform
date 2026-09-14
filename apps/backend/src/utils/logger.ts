@@ -54,7 +54,11 @@ const redactSensitiveData = winston.format((info) => {
     if (typeof key === 'symbol' || ['level', 'message', 'timestamp'].includes(key)) {
       continue;
     }
-    result[key] = redact(result[key]);
+    if (sensitiveKeys.some((sk) => key.toLowerCase().includes(sk))) {
+      result[key] = '[REDACTED]';
+    } else {
+      result[key] = redact(result[key]);
+    }
   }
 
   return result;
