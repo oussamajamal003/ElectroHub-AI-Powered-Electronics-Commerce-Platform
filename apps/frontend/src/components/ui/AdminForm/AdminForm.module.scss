@@ -1,0 +1,40 @@
+@use '../../../styles/abstracts/variables' as *;
+
+.form {
+  background-color: transparent;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-8; // Maps closely to the 35px from Figma
+  padding: $spacing-6; // 24px
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+}
+
+.title {
+  font-family: $font-family-base;
+  font-weight: $font-weight-semibold;
+  font-size: $font-size-xl;
+  color: $color-text-primary;
+  line-height: 28px;
+  margin: 0;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-6;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: $spacing-4;
+  margin-top: $spacing-2;
+}

@@ -1,0 +1,75 @@
+@use '../../../styles/abstracts/variables' as *;
+
+.container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1 / 1;
+  background-color: #f1f5f9; // Figma: --color/border/subtle
+  border-radius: $radius-2xl; // Figma requires 16px
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity $transition-normal;
+  
+  &.loaded {
+    opacity: 1;
+  }
+}
+
+.fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-3;
+  color: $color-text-muted;
+  width: 100%;
+  height: 100%;
+  background-color: #f1f5f9; // Figma: --color/border/subtle
+}
+
+.fallbackIcon {
+  width: 36px;
+  height: 36px;
+  color: $color-text-muted;
+}
+
+.fallbackText {
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  text-align: center;
+}
+
+.loadingSkeleton {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    #f1f5f9 25%, /* Component-specific subtle border */
+    $color-border 50%,
+    #f1f5f9 75% /* Component-specific subtle border */
+  );
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

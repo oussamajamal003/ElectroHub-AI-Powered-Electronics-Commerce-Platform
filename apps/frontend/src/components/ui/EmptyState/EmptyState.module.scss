@@ -1,0 +1,50 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-6;
+  text-align: center;
+  border-radius: $radius-lg;
+  border: 1px solid $color-border;
+  background-color: $color-surface;
+}
+
+.iconWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: $radius-full;
+  background-color: $color-background;
+  color: $color-text-secondary;
+  margin-bottom: $spacing-4;
+
+  > svg {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+}
+
+.title {
+  font-family: $font-family-sans;
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-2;
+}
+
+.description {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  max-width: 24rem;
+  margin: 0 auto;
+}
+
+.actionWrapper {
+  margin-top: $spacing-6;
+}

@@ -1,0 +1,42 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.card {
+  border-radius: $radius-xl;
+  border: 1px solid $color-border;
+  background-color: $color-surface;
+  color: $color-text-primary;
+  box-shadow: $shadow-sm;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-1-5;
+  padding: $spacing-6;
+}
+
+.title {
+  font-family: $font-family-sans;
+  font-size: $font-size-2xl;
+  font-weight: $font-weight-semibold;
+  line-height: 1;
+  letter-spacing: -0.025em;
+}
+
+.description {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.content {
+  padding: $spacing-6;
+  padding-top: 0;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  padding: $spacing-6;
+  padding-top: 0;
+}

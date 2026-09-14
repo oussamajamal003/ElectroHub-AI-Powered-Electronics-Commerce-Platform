@@ -1,6 +1,7 @@
 // ====================================
 // ElectroHub — SCSS Mixins
 // ====================================
+@use 'variables' as *;
 
 // --- Responsive Breakpoint Mixins ---
 @mixin respond-to($breakpoint) {

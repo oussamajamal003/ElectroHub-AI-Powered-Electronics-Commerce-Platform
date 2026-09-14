@@ -1,0 +1,74 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: $spacing-2; // 8px
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: inline-flex;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: $radius-sm; // 4px
+  background-color: transparent;
+  color: $color-text-secondary;
+  font-family: $font-family-base;
+  font-size: $font-size-base; // 16px
+  line-height: $line-height-normal;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid transparent; // To avoid jump on active border if any, or just transparent
+  transition: all $transition-fast;
+
+  @include focus-ring;
+
+  &:hover:not(:disabled):not(.active) {
+    background-color: $color-surface; // or another subtle background
+    color: $color-text-primary;
+  }
+
+  &.active {
+    background-color: $color-primary;
+    color: $color-text-inverse;
+    font-weight: $font-weight-medium;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    color: $color-text-muted;
+  }
+}
+
+.ellipsis {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  color: $color-text-muted;
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+}

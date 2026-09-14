@@ -1,0 +1,111 @@
+@use '../../../styles/abstracts/variables' as *;
+
+.tableContainer {
+  width: 100%;
+  overflow-x: auto;
+  background-color: $color-background;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.th {
+  padding: $spacing-4;
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $color-text-secondary;
+  border-bottom: 1px solid $color-border;
+  background-color: $color-surface;
+  white-space: nowrap;
+}
+
+.tr {
+  transition: background-color $transition-normal;
+  border-bottom: 1px solid $color-surface;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &.clickable {
+    cursor: pointer;
+  }
+
+  &:hover {
+    background-color: $color-surface;
+  }
+}
+
+.td {
+  padding: $spacing-4;
+  font-family: $font-family-mono; /* Data-oriented typography */
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  vertical-align: middle;
+}
+
+/* For textual columns, we might override JetBrains Mono to Poppins, but JetBrains Mono is the default for Data Tables. We can allow users to render custom spans if needed. */
+
+.align-left {
+  text-align: left;
+}
+
+.align-center {
+  text-align: center;
+}
+
+.align-right {
+  text-align: right;
+}
+
+.actionsHeader {
+  width: 60px;
+  text-align: center;
+}
+
+.actionsCell {
+  text-align: center;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: $radius-sm;
+  background: transparent;
+  border: none;
+  color: $color-text-secondary;
+  cursor: pointer;
+  transition: background-color $transition-normal, color $transition-normal;
+
+  &:hover {
+    background-color: $color-surface;
+    color: $color-text-primary;
+  }
+
+  &:focus-visible {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
+}
+
+.actionIcon {
+  width: 20px;
+  height: 20px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: $spacing-12 $spacing-4;
+  color: $color-text-muted;
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+}

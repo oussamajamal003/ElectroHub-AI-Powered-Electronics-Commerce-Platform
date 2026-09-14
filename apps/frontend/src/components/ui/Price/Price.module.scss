@@ -1,0 +1,42 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.priceContainer {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+}
+
+.currentPrice {
+  font-family: $font-family-heading;
+  font-size: $font-size-2xl;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  letter-spacing: -0.01px;
+}
+
+.discountContainer {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+}
+
+.originalPrice {
+  font-family: $font-family-base;
+  font-size: $font-size-md; // approx 16px/18px equivalent to figma
+  color: $color-text-muted;
+  text-decoration: line-through;
+}
+
+.discountBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-1 $spacing-2;
+  border-radius: $radius-sm;
+  background-color: $color-error-background;
+  color: $color-error-foreground;
+  font-family: $font-family-base;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-bold;
+}

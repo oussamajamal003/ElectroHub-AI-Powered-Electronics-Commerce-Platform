@@ -13,6 +13,8 @@ export default defineConfig({
   // @ts-expect-error test property is from vitest
   test: {
     environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    globals: true,
   },
   server: {
     port: 3000,

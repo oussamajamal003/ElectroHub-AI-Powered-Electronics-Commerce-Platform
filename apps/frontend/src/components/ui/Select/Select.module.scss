@@ -1,0 +1,163 @@
+@use '../../../styles/abstracts/variables' as *;
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+
+  &.fullWidth {
+    width: 100%;
+    
+    .trigger {
+      width: 100%;
+    }
+  }
+}
+
+.label {
+  font-family: $font-family-base;
+  font-weight: $font-weight-medium;
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: $spacing-1;
+
+  &.labelDisabled {
+    color: $color-text-muted;
+  }
+}
+
+.required {
+  color: $color-error;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: $radius-md;
+  padding: 0 $spacing-3;
+  font-size: $font-size-base;
+  line-height: 1;
+  background-color: $color-background;
+  color: $color-text-primary;
+  border: 1px solid $color-border;
+  transition: all $transition-fast;
+  font-family: $font-family-base;
+
+  &:hover {
+    background-color: $color-surface;
+  }
+
+  &:focus {
+    box-shadow: 0 0 0 $focus-ring-width $focus-ring-color;
+    border-color: $color-primary;
+    outline: none;
+  }
+
+  &[data-placeholder] {
+    color: $color-text-muted;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    background-color: $color-surface;
+    color: $color-text-muted;
+  }
+
+  &.error {
+    border-color: $color-error-border;
+    background-color: $color-error-background;
+    color: $color-error;
+
+    &:focus {
+      box-shadow: 0 0 0 $focus-ring-width rgba($color-error, 0.3);
+      border-color: $color-error;
+    }
+  }
+}
+
+/* SIZES */
+.size-small {
+  height: 32px;
+}
+.size-medium {
+  height: 40px;
+}
+.size-large {
+  height: 48px;
+}
+
+.icon {
+  color: $color-text-muted;
+}
+
+.content {
+  overflow: hidden;
+  background-color: $color-background;
+  border-radius: $radius-md;
+  box-shadow: $shadow-lg;
+  border: 1px solid $color-border;
+  z-index: $z-dropdown;
+  width: var(--radix-select-trigger-width);
+}
+
+.viewport {
+  padding: $spacing-1;
+}
+
+.item {
+  font-family: $font-family-base;
+  font-size: $font-size-base;
+  line-height: 1;
+  color: $color-text-primary;
+  border-radius: $radius-sm;
+  display: flex;
+  align-items: center;
+  padding: $spacing-2 $spacing-6 $spacing-2 $spacing-8; // Padding for checkmark
+  position: relative;
+  user-select: none;
+
+  &[data-disabled] {
+    color: $color-text-muted;
+    pointer-events: none;
+  }
+
+  &[data-highlighted] {
+    outline: none;
+    background-color: $color-primary;
+    color: $color-text-inverse;
+  }
+}
+
+.itemIndicator {
+  position: absolute;
+  left: $spacing-2;
+  width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scrollButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 25px;
+  background-color: $color-background;
+  color: $color-text-primary;
+  cursor: default;
+}
+
+.scrollUpIcon {
+  transform: rotate(180deg);
+}
+
+.errorMessage {
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  color: $color-error;
+  margin: 0;
+}

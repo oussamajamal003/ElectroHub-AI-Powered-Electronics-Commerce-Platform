@@ -1,0 +1,57 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  caption-side: bottom;
+  font-size: $font-size-sm;
+  border-collapse: collapse;
+}
+
+.header {
+  border-bottom: 1px solid $color-border;
+}
+
+.body {
+  // Body styles if needed
+}
+
+.footer {
+  border-top: 1px solid $color-border;
+  background-color: $color-background; // A subtle different background for footer if desired
+  font-weight: $font-weight-medium;
+}
+
+.row {
+  border-bottom: 1px solid $color-border;
+  transition: background-color $transition-colors-duration $transition-colors-timing;
+
+  &:hover {
+    background-color: $color-background;
+  }
+}
+
+.head {
+  height: 3rem;
+  padding: 0 $spacing-4;
+  text-align: left;
+  vertical-align: middle;
+  font-weight: $font-weight-medium;
+  color: $color-text-secondary;
+}
+
+.cell {
+  padding: $spacing-4;
+  vertical-align: middle;
+}
+
+.caption {
+  margin-top: $spacing-4;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}

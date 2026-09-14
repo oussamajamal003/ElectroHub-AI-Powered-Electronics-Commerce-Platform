@@ -1,0 +1,62 @@
+@use '../../../styles/abstracts/variables' as *;
+@use '../../../styles/abstracts/mixins' as *;
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: $radius-full;
+  font-family: $font-family-base;
+  font-weight: $font-weight-medium;
+  white-space: nowrap;
+}
+
+// Sizes
+.small {
+  height: 24px;
+  padding: 0 $spacing-2;
+  gap: $spacing-1;
+  font-size: $font-size-xs;
+
+  .icon {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.medium {
+  height: 32px;
+  padding: 0 $spacing-3;
+  gap: $spacing-2;
+  font-size: $font-size-sm;
+
+  .icon {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+// Themes
+.warning {
+  background-color: $color-warning-background;
+  color: $color-warning-foreground;
+  border: 1px solid $color-warning-border;
+}
+
+.info {
+  background-color: $color-info-background;
+  color: $color-info-foreground;
+  border: 1px solid $color-info-border;
+}
+
+.success {
+  background-color: $color-success-background;
+  color: $color-success-foreground;
+  border: 1px solid $color-success-border;
+}
+
+.error {
+  background-color: $color-error-background;
+  color: $color-error-foreground;
+  border: 1px solid $color-error-border;
+}

@@ -1,0 +1,106 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: $color-background;
+  width: 240px;
+  transition: width $transition-normal;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: $spacing-2; // 10px padding from Figma
+  gap: $spacing-2; // 10px gap between items
+
+  &.collapsed {
+    width: 109px;
+  }
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: $spacing-2; // 10px gap between items in group
+}
+
+.groupLabel {
+  display: flex;
+  align-items: center;
+  height: 39px; // Approx 39px from Figma
+  padding-left: $spacing-2;
+  color: $color-text-secondary; // closest to #64748b muted from Figma
+  font-family: $font-family-base;
+  font-size: $font-size-2xl; // 24px
+  line-height: $line-height-tight; // 16px line height in Figma vs 24px font size? 24px text with 16px line-height? Weird, let's use tight.
+  text-transform: uppercase;
+  overflow: hidden;
+  white-space: nowrap;
+  
+  &.collapsed {
+    justify-content: center;
+    padding-left: 0;
+    font-size: $font-size-base; // smaller when collapsed
+  }
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  padding: $spacing-4 $spacing-5;
+  gap: $spacing-5;
+  background-color: $color-background;
+  color: $color-text-primary;
+  border-radius: $radius-sm; // Adding a small radius for a better look, though Figma might not specify one in the box, usually items have radius on hover
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: all $transition-fast;
+  width: 100%;
+  cursor: pointer;
+  outline: none;
+  border: 1px solid transparent; // Added to prevent layout shift on hover
+
+  @include focus-ring;
+
+  &:hover:not(:disabled) {
+    background-color: $color-accent;
+    border-color: $color-border;
+    color: $color-text-inverse;
+  }
+
+  &.active {
+    background-color: $color-primary;
+    border-color: $color-border;
+    color: $color-text-inverse;
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &.collapsed {
+    justify-content: center;
+    padding: $spacing-4; // adjust padding when collapsed
+  }
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.label {
+  font-family: $font-family-base;
+  font-size: $font-size-xl; // 20px
+  line-height: $line-height-normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

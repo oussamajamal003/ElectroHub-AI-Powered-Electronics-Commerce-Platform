@@ -1,0 +1,102 @@
+@use '../../../styles/abstracts/variables' as *;
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+
+  &.fullWidth {
+    width: 100%;
+  }
+}
+
+.label {
+  font-family: $font-family-base;
+  font-weight: $font-weight-medium;
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: $spacing-1;
+
+  &.labelDisabled {
+    color: $color-text-muted;
+  }
+}
+
+.required {
+  color: $color-error;
+}
+
+.textareaWrapper {
+  position: relative;
+  display: flex;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 120px;
+  font-family: $font-family-base;
+  font-size: $font-size-base;
+  color: $color-text-primary;
+  background-color: $color-background;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  transition: all $transition-fast;
+  padding: 10px;
+  resize: vertical;
+
+  &::placeholder {
+    color: $color-text-muted;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: $color-primary;
+    box-shadow: 0 0 0 $focus-ring-width $focus-ring-color;
+  }
+
+  &:disabled {
+    background-color: $color-surface;
+    border-color: $color-border;
+    color: $color-text-muted;
+    cursor: not-allowed;
+  }
+
+  &.error {
+    background-color: $color-error-background;
+    border-color: $color-error-border;
+    color: $color-error;
+    padding-right: $spacing-10; // Space for the error icon
+
+    &:focus {
+      box-shadow: 0 0 0 $focus-ring-width rgba($color-error, 0.3);
+      border-color: $color-error;
+    }
+  }
+}
+
+.errorIcon {
+  position: absolute;
+  right: $spacing-3;
+  top: 10px;
+  color: $color-error;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.errorMessage {
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  color: $color-error;
+  margin: 0;
+}
+
+.helperText {
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  color: $color-text-muted;
+  margin: 0;
+}

@@ -1,0 +1,58 @@
+@use '../../../styles/abstracts/variables' as *;
+@use '../../../styles/abstracts/mixins' as *;
+
+.ratingContainer {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2; // Using typical 8px gap assuming $spacing-2 is 8px. Figma used 6px between stars. Wait, gap between stars and text or within stars?
+}
+
+.stars {
+  display: flex;
+  align-items: center;
+  gap: 6px; // Specified in Figma: 6px gap between stars
+}
+
+// Icon sizes
+.starFilled, .starHalf, .starEmpty {
+  width: 16px; // Derived from Figma: size-[16px]
+  height: 16px;
+}
+
+.starFilled, .starHalf {
+  color: $color-warning; // Star color, e.g. #f59e0b
+}
+
+.starEmpty {
+  color: $color-border; // Empty star color, e.g. #e2e8f0
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: $spacing-1; // 4px gap
+}
+
+.value {
+  font-family: $font-family-base; // Poppins
+  font-size: $font-size-sm; // 14px
+  font-weight: $font-weight-regular; // 400
+  color: $color-text-primary; // #0f172a
+  line-height: 20px;
+}
+
+.noRating {
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-regular;
+  color: $color-text-primary; // #0f172a
+  line-height: 20px;
+}
+
+.reviewCount {
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-regular;
+  color: $color-text-secondary; // #475569
+  line-height: 20px;
+}

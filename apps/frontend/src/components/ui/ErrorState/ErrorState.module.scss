@@ -1,0 +1,54 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-6;
+  text-align: center;
+  background-color: $color-error-background;
+  border: 1px solid $color-error-border;
+  border-radius: $radius-lg;
+}
+
+.iconWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  color: $color-error;
+  margin-bottom: $spacing-4;
+
+  > svg {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.defaultIcon {
+  width: 2rem;
+  height: 2rem;
+}
+
+.title {
+  font-family: $font-family-heading;
+  font-size: $font-size-2xl;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-2;
+  letter-spacing: -0.01px;
+}
+
+.description {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+  max-width: 28rem;
+  margin: 0 auto;
+}
+
+.actionWrapper {
+  margin-top: $spacing-6;
+}

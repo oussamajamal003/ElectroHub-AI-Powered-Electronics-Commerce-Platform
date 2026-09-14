@@ -1,0 +1,101 @@
+@use '../../../styles/abstracts/variables' as *;
+@use '../../../styles/abstracts/mixins' as *;
+
+.filterBarContainer {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+  width: 100%;
+}
+
+.controlsRow {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-3;
+  width: 100%;
+
+  @include respond-to(md) {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.searchWrapper {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 200px;
+}
+
+.searchIcon {
+  position: absolute;
+  left: $spacing-3;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  color: $color-text-muted;
+  z-index: 1;
+}
+
+.searchInput {
+  padding-left: $spacing-10 !important;
+}
+
+.selectWrapper {
+  flex: 1 1 auto;
+  min-width: 150px;
+}
+
+.applyBtn {
+  flex: 0 0 auto;
+}
+
+.activeFiltersRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-2;
+}
+
+.activeFilterChip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px $spacing-3;
+  background-color: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius-full;
+}
+
+.filterLabel {
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+}
+
+.clearFilterBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background: transparent;
+  border: none;
+  border-radius: $radius-full;
+  color: $color-text-muted;
+  cursor: pointer;
+  transition: color $transition-normal, background-color $transition-normal;
+
+  &:hover {
+    background-color: $color-surface;
+    color: $color-text-primary;
+  }
+  
+  &:focus-visible {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
+}
+
+.clearIcon {
+  width: 14px;
+  height: 14px;
+}

@@ -1,0 +1,53 @@
+@use '@/styles/abstracts/variables' as *;
+
+.mobileNavigation {
+  display: block;
+
+  @media (min-width: $breakpoint-md) {
+    display: none; // hide on desktop
+  }
+}
+
+.content {
+  padding-top: $spacing-16; // Add space for the close button
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-6;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: $spacing-4;
+}
+
+.item {
+  font-size: $font-size-base;
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+  padding: $spacing-2 0;
+  cursor: pointer;
+  transition: color $transition-fast;
+
+  &:hover {
+    color: $color-primary;
+  }
+}

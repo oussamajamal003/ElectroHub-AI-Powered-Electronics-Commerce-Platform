@@ -1,0 +1,70 @@
+@use '../../../styles/abstracts/variables' as *;
+
+.gallery {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+  width: 100%;
+}
+
+.mainImage {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: $radius-2xl; // Figma requires 16px
+  overflow: hidden;
+  border: 1px solid $color-surface;
+}
+
+.thumbnails {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: $spacing-3;
+  overflow-x: auto;
+  padding-bottom: $spacing-1;
+  
+  /* Hide scrollbar for cleaner look */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.thumbnailBtn {
+  position: relative;
+  flex: 0 0 74px; /* Fixed width based on Figma */
+  height: 74px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: $radius-md;
+  background-color: $color-background;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color $transition-normal, opacity $transition-normal;
+
+  &:hover {
+    opacity: 0.8;
+  }
+
+  &.active {
+    border-color: $color-primary;
+    opacity: 1;
+  }
+
+  &:focus {
+    outline: none;
+  }
+  
+  &:focus-visible {
+    border-color: $color-primary;
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
+}
+
+.thumbnailImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none; /* Prevent image dragging issues */
+}
