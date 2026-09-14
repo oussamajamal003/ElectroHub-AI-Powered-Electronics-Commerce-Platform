@@ -40,6 +40,7 @@ export function errorHandler(
 ): void {
   if (err instanceof AppError) {
     logger.warn('Application error', {
+      requestId: _req.id,
       code: err.code,
       statusCode: err.statusCode,
       message: err.message,
@@ -56,6 +57,7 @@ export function errorHandler(
 
   // Unexpected errors
   logger.error('Unexpected error', {
+    requestId: _req.id,
     message: err.message,
     stack: env.NODE_ENV !== 'production' ? err.stack : undefined,
   });

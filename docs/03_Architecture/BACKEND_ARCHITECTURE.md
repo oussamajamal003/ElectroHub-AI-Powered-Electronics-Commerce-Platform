@@ -451,6 +451,28 @@ Consider:
 
 The backend architecture is complete when request flow, layers, authentication, database access, payments, email, PDF generation, orders, inventory, delivery, AI, Cloudinary, errors, security, transactions, and testing are documented.
 
-## 27. Backend Principle
+## 27. Backend Foundation (TASK 02.1)
+
+The Phase 02.1 Backend Foundation establishes the foundational infrastructure required for feature development:
+
+- **App/Server Separation**: `app.ts` configures the Express application (middleware, routing), and `server.ts` imports the configured app to bind the HTTP server. This allows HTTP testing without binding to a port.
+- **Middleware Order**:
+  1. `requestId` (assigns UUID to `req.id`)
+  2. `helmet` (security headers)
+  3. `cors` (frontend origin access)
+  4. `express.json` & `express.urlencoded` (strict 10kb body limits)
+  5. `requestLogger` (logs request method, path, and UUID)
+  6. API Routes (`/api`)
+  7. Swagger UI (`/api/docs`)
+  8. `notFoundHandler` (404 catch-all)
+  9. `errorHandler` (global error catch)
+- **Logging Integration**: Centralized Winston logger integrates request/error logging. Sensitive metadata (e.g., passwords, tokens) is actively redacted via `winston.format`.
+- **Health / Readiness**:
+  - `GET /api/health`: Deterministic endpoint verifying the server is actively running.
+  - `GET /api/ready`: **N/A** (Currently not required by the deployment architecture as no external stateful boundaries are mandatory for startup).
+- **Startup / Shutdown**: Graceful shutdown handles `SIGINT`/`SIGTERM`, safely closing active HTTP connections within a 10s timeout window before process exit.
+- **Environment**: Configuration is validated strictly at startup using `zod` in `config/env.ts`.
+
+## 28. Backend Principle
 
 > **Keep business logic centralized, security server-side, persistence consistent, and external integrations isolated behind clear service boundaries.**
