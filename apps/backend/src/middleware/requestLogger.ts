@@ -23,6 +23,7 @@ export function requestLogger(
     const duration = Date.now() - start;
 
     logger.info('HTTP request', {
+      requestId: req.id,
       method: req.method,
       path: req.originalUrl,
       statusCode: res.statusCode,
