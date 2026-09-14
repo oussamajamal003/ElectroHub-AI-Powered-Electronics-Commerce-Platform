@@ -1,0 +1,13 @@
+@use '../abstracts/variables' as *;
+@use '../abstracts/mixins' as *;
+
+.container {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0 $spacing-4;
+
+  @include respond-to(md) {
+    padding: 0 $spacing-6; // 24px padding on tablet and up
+  }
+}

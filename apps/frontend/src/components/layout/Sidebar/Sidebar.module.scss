@@ -2,16 +2,24 @@
 @use '@/styles/abstracts/mixins' as *;
 
 .sidebar {
-  display: flex;
+  display: none; // Hidden by default on mobile
   flex-direction: column;
   height: 100%;
   background-color: $color-background;
-  width: 240px;
+  width: 188px; // Tablet width verified from Figma
   transition: width $transition-normal;
   overflow-y: auto;
   overflow-x: hidden;
   padding: $spacing-2; // 10px padding from Figma
   gap: $spacing-2; // 10px gap between items
+
+  @include respond-to(md) {
+    display: flex; // Visible on tablet (188px)
+  }
+
+  @include respond-to(lg) {
+    width: 240px; // Retaining 240px established repository convention (Figma: 236px)
+  }
 
   &.collapsed {
     width: 109px;
@@ -49,11 +57,16 @@
   display: flex;
   align-items: center;
   height: 56px;
-  padding: $spacing-4 $spacing-5;
-  gap: $spacing-5;
+  padding: $spacing-4 $spacing-3; // 12px padding on tablet
+  gap: $spacing-3; // 12px gap on tablet
   background-color: $color-background;
   color: $color-text-primary;
-  border-radius: $radius-sm; // Adding a small radius for a better look, though Figma might not specify one in the box, usually items have radius on hover
+  border-radius: $radius-sm; 
+
+  @include respond-to(lg) {
+    padding: $spacing-4 $spacing-5; // 20px padding on desktop
+    gap: $spacing-5; // 20px gap on desktop
+  }
   text-decoration: none;
   border: 1px solid transparent;
   transition: all $transition-fast;

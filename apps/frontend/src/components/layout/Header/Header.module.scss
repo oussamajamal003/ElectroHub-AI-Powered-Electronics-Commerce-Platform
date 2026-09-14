@@ -14,8 +14,17 @@
   display: flex;
   height: 90px;
   align-items: center;
-  gap: $spacing-12;
-  padding: $spacing-6 $spacing-6 10px;
-  max-width: 1280px;
+  gap: $spacing-4; // Compact gap on mobile
+  padding: $spacing-4 $spacing-4 10px; // Mobile padding
+  max-width: 1440px; // Match Figma foundation
   margin: 0 auto;
+
+  @include respond-to(md) {
+    gap: $spacing-8;
+    padding: $spacing-6 $spacing-6 10px; // Tablet padding
+  }
+
+  @include respond-to(lg) {
+    gap: $spacing-12; // Desktop gap
+  }
 }
