@@ -1,7 +1,11 @@
 @use "@/styles/abstracts" as *;
 
 .container {
-  padding: $spacing-8;
+  padding: $spacing-4;
+
+  @include respond-to(md) {
+    padding: $spacing-8;
+  }
 }
 
 .title {

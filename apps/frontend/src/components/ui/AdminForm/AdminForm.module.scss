@@ -1,4 +1,5 @@
 @use '../../../styles/abstracts/variables' as *;
+@use '../../../styles/abstracts/mixins' as *;
 
 .form {
   background-color: transparent;
@@ -6,8 +7,13 @@
   border-radius: $radius-lg;
   display: flex;
   flex-direction: column;
-  gap: $spacing-8; // Maps closely to the 35px from Figma
-  padding: $spacing-6; // 24px
+  gap: $spacing-6; // Maps closely to the 35px from Figma
+  padding: $spacing-4; // 16px on mobile
+
+  @include respond-to(md) {
+    gap: $spacing-8;
+    padding: $spacing-6; // 24px on tablet/desktop
+  }
 }
 
 .header {
