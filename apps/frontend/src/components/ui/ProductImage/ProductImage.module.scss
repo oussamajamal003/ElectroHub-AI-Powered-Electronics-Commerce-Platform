@@ -1,10 +1,12 @@
+@use '../../../styles/abstracts/variables' as *;
+
 .container {
   position: relative;
   width: 100%;
   height: 100%;
   aspect-ratio: 1 / 1;
-  background-color: var(--color-surface, #f8fafc);
-  border-radius: var(--radius-xl, 16px);
+  background-color: #f1f5f9; // Figma: --color/border/subtle
+  border-radius: $radius-2xl; // Figma requires 16px
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -16,7 +18,7 @@
   height: 100%;
   object-fit: contain;
   opacity: 0;
-  transition: opacity 0.2s ease-in-out;
+  transition: opacity $transition-normal;
   
   &.loaded {
     opacity: 1;
@@ -28,22 +30,22 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  color: var(--color-text-muted, #64748b);
+  gap: $spacing-3;
+  color: $color-text-muted;
   width: 100%;
   height: 100%;
-  background-color: var(--color-border-subtle, #f1f5f9);
+  background-color: #f1f5f9; // Figma: --color/border/subtle
 }
 
 .fallbackIcon {
   width: 36px;
   height: 36px;
-  color: var(--color-text-disabled, #94a3b8);
+  color: $color-text-muted;
 }
 
 .fallbackText {
-  font-family: var(--font-family-primary, 'Poppins', sans-serif);
-  font-size: var(--font-size-sm, 14px);
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
   text-align: center;
 }
 
@@ -55,9 +57,9 @@
   height: 100%;
   background: linear-gradient(
     90deg,
-    var(--color-border-subtle, #f1f5f9) 25%,
-    var(--color-border-default, #e2e8f0) 50%,
-    var(--color-border-subtle, #f1f5f9) 75%
+    #f1f5f9 25%, /* Component-specific subtle border */
+    $color-border 50%,
+    #f1f5f9 75% /* Component-specific subtle border */
   );
   background-size: 200% 100%;
   animation: loading 1.5s infinite;

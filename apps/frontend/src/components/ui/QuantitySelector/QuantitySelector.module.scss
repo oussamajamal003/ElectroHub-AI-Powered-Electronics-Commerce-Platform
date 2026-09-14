@@ -16,15 +16,15 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  color: $color-primary-text;
+  color: $color-text-primary;
   transition: background-color 0.2s ease, color 0.2s ease;
 
   &:hover:not(:disabled) {
-    background-color: $color-surface-hover;
+    background-color: $color-surface;
   }
 
   &:disabled {
-    color: $color-disabled-text;
+    color: $color-text-muted;
     cursor: not-allowed;
   }
 }
@@ -33,9 +33,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: $font-family-primary; // JetBrains Mono? Figma uses Poppins or standard for numeric maybe. Standard body font. Let's use Poppins/Inter.
+  font-family: $font-family-base; // JetBrains Mono? Figma uses Poppins or standard for numeric maybe. Standard body font. Let's use Poppins/Inter.
   font-weight: $font-weight-medium;
-  color: $color-primary-text;
+  color: $color-text-primary;
 }
 
 // Sizes

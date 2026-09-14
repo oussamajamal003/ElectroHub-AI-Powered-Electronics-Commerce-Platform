@@ -17,7 +17,7 @@
 }
 
 .title {
-  font-family: $font-family-primary;
+  font-family: $font-family-base;
   font-weight: $font-weight-semibold;
   font-size: $font-size-xl;
   color: $color-text-primary;
@@ -26,7 +26,7 @@
 }
 
 .description {
-  font-family: $font-family-primary;
+  font-family: $font-family-base;
   font-weight: $font-weight-regular;
   font-size: $font-size-sm;
   color: $color-text-secondary;
@@ -49,7 +49,7 @@
   min-height: 200px;
   
   p {
-    font-family: $font-family-primary;
+    font-family: $font-family-base;
     font-weight: $font-weight-regular;
     font-size: $font-size-base;
     color: $color-text-secondary;

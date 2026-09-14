@@ -20,7 +20,7 @@
   height: 80px;
   border-radius: $radius-md;
   overflow: hidden;
-  background-color: $color-surface-hover;
+  background-color: $color-surface;
 
   @include respond-to('sm') {
     width: 120px;
@@ -56,10 +56,10 @@
 }
 
 .title {
-  font-family: $font-family-primary;
+  font-family: $font-family-base;
   font-weight: $font-weight-medium;
   font-size: $font-size-base;
-  color: $color-primary-text;
+  color: $color-text-primary;
   margin: 0;
   
   // Truncate text
@@ -69,9 +69,9 @@
 }
 
 .subtitle {
-  font-family: $font-family-primary;
+  font-family: $font-family-base;
   font-size: $font-size-sm;
-  color: $color-secondary-text;
+  color: $color-text-secondary;
   margin: 0;
 }
 
@@ -80,7 +80,7 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  color: $color-secondary-text;
+  color: $color-text-secondary;
   padding: $spacing-1;
   transition: color 0.2s ease;
 
@@ -98,7 +98,7 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  color: $color-secondary-text;
+  color: $color-text-secondary;
   padding: $spacing-1;
   transition: color 0.2s ease;
 
@@ -137,23 +137,23 @@
 }
 
 .price {
-  font-family: $font-family-primary;
+  font-family: $font-family-base;
   font-weight: $font-weight-semibold;
   font-size: $font-size-base;
-  color: $color-primary-text;
+  color: $color-text-primary;
 }
 
 .discountPrice {
-  font-family: $font-family-primary;
+  font-family: $font-family-base;
   font-weight: $font-weight-semibold;
   font-size: $font-size-base;
   color: $color-primary; // Use primary color for discount maybe, or primary-text
 }
 
 .originalPrice {
-  font-family: $font-family-primary;
+  font-family: $font-family-base;
   font-size: $font-size-sm;
-  color: $color-secondary-text;
+  color: $color-text-secondary;
   text-decoration: line-through;
 }
 

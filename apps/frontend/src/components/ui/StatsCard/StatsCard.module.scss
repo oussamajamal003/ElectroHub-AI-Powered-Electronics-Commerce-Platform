@@ -1,10 +1,12 @@
+@use '../../../styles/abstracts/variables' as *;
+
 .statsCard {
   display: flex;
   flex-direction: column;
-  padding: 24px;
-  background-color: var(--color-background, #ffffff);
-  border: 1px solid var(--color-border, #e2e8f0);
-  border-radius: var(--radius-xl, 16px);
+  padding: $spacing-6;
+  background-color: $color-background;
+  border: 1px solid $color-border;
+  border-radius: $radius-2xl; // Figma requires 16px
   width: 100%;
 }
 
@@ -12,19 +14,19 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 16px;
+  margin-bottom: $spacing-4;
 }
 
 .title {
-  font-family: var(--font-family-primary, 'Poppins', sans-serif);
-  font-size: var(--font-size-sm, 14px);
-  font-weight: var(--font-weight-medium, 500);
-  color: var(--color-text-secondary, #475569);
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $color-text-secondary;
   margin: 0;
 }
 
 .iconWrapper {
-  color: var(--color-text-muted, #64748b);
+  color: $color-text-muted;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -40,26 +42,26 @@
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: $spacing-3;
 }
 
 .value {
-  font-family: var(--font-family-primary, 'Poppins', sans-serif);
-  font-size: var(--font-size-2xl, 24px);
-  font-weight: var(--font-weight-bold, 700);
-  color: var(--color-text-primary, #0f172a);
+  font-family: $font-family-base;
+  font-size: $font-size-2xl;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
   line-height: 1.2;
 }
 
 .trendContainer {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-family: var(--font-family-primary, 'Poppins', sans-serif);
-  font-size: var(--font-size-xs, 12px);
-  font-weight: var(--font-weight-medium, 500);
-  padding: 2px 8px;
-  border-radius: var(--radius-full, 9999px);
+  gap: $spacing-1;
+  font-family: $font-family-base;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  padding: 2px $spacing-2;
+  border-radius: $radius-full;
 }
 
 .trendIcon {
@@ -68,16 +70,16 @@
 }
 
 .trend-up {
-  color: var(--color-success-dark, #15803d);
-  background-color: var(--color-success-light, #dcfce7);
+  color: $color-success-foreground;
+  background-color: #dcfce7; /* Component-specific Figma value */
 }
 
 .trend-down {
-  color: var(--color-error-dark, #b91c1c);
-  background-color: var(--color-error-light, #fee2e2);
+  color: $color-error-foreground;
+  background-color: #fee2e2; /* Component-specific Figma value */
 }
 
 .trend-neutral {
-  color: var(--color-text-secondary, #475569);
-  background-color: var(--color-surface, #f8fafc);
+  color: $color-text-secondary;
+  background-color: $color-surface;
 }

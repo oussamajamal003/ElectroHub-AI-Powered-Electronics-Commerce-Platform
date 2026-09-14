@@ -34,25 +34,25 @@
 }
 
 .value {
-  font-family: $font-family-primary; // Poppins
+  font-family: $font-family-base; // Poppins
   font-size: $font-size-sm; // 14px
   font-weight: $font-weight-regular; // 400
-  color: $color-primary-text; // #0f172a
+  color: $color-text-primary; // #0f172a
   line-height: 20px;
 }
 
 .noRating {
-  font-family: $font-family-primary;
+  font-family: $font-family-base;
   font-size: $font-size-sm;
   font-weight: $font-weight-regular;
-  color: $color-primary-text; // #0f172a
+  color: $color-text-primary; // #0f172a
   line-height: 20px;
 }
 
 .reviewCount {
-  font-family: $font-family-primary;
+  font-family: $font-family-base;
   font-size: $font-size-sm;
   font-weight: $font-weight-regular;
-  color: $color-secondary-text; // #475569
+  color: $color-text-secondary; // #475569
   line-height: 20px;
 }
