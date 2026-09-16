@@ -1,0 +1,27 @@
+name: Verify Prisma Migration on Linux
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify-migration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Prisma Migrate Deploy
+        env:
+          DATABASE_URL: "postgresql://postgres.pzxekjybdiulzmssalfo:WzszpOBaTK7wIlBy@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true"
+          DIRECT_URL: "postgresql://postgres.pzxekjybdiulzmssalfo:WzszpOBaTK7wIlBy@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+        run: |
+          cd apps/backend
+          npx prisma migrate deploy
