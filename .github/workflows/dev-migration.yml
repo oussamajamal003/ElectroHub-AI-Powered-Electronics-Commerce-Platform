@@ -40,30 +40,31 @@ jobs:
           DATABASE_URL: ${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}
           DIRECT_URL: ${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}
         run: |
-          node -e '
-            const checkUrl = (name, val) => {
-              console.log(`--- Checking ${name} ---`);
-              if (!val) { console.log(`Result: EMPTY or NOT SET`); return; }
-              console.log(`Length: ${val.length}`);
-              console.log(`Starts with quote? ${val.startsWith("\"") || val.startsWith("\'")}`);
-              console.log(`Ends with quote? ${val.endsWith("\"") || val.endsWith("\'")}`);
-              console.log(`Contains whitespace? ${/\s/.test(val)}`);
-              console.log(`Starts with postgresql:// or postgres:// ? ${val.startsWith("postgresql://") || val.startsWith("postgres://")}`);
-              console.log(`Contains DATABASE_URL= prefix? ${val.includes("DATABASE_URL=")}`);
-              try {
-                const u = new URL(val);
-                console.log(`URL parse: SUCCESS`);
-                console.log(`Protocol: ${u.protocol}`);
-                console.log(`Hostname: ${u.hostname}`);
-                console.log(`Has Username? ${!!u.username}`);
-                console.log(`Has Password? ${!!u.password}`);
-              } catch (e) {
-                console.log(`URL parse: FAILED (${e.message})`);
-              }
-            };
-            checkUrl("DATABASE_URL", process.env.DATABASE_URL);
-            checkUrl("DIRECT_URL", process.env.DIRECT_URL);
-          '
+          cat << 'EOF' > check.js
+          const checkUrl = (name, val) => {
+            console.log(`--- Checking ${name} ---`);
+            if (!val) { console.log(`Result: EMPTY or NOT SET`); return; }
+            console.log(`Length: ${val.length}`);
+            console.log(`Starts with quote? ${val.startsWith("\"") || val.startsWith("'")}`);
+            console.log(`Ends with quote? ${val.endsWith("\"") || val.endsWith("'")}`);
+            console.log(`Contains whitespace? ${/\s/.test(val)}`);
+            console.log(`Starts with postgresql:// or postgres:// ? ${val.startsWith("postgresql://") || val.startsWith("postgres://")}`);
+            console.log(`Contains DATABASE_URL= prefix? ${val.includes("DATABASE_URL=")}`);
+            try {
+              const u = new URL(val);
+              console.log(`URL parse: SUCCESS`);
+              console.log(`Protocol: ${u.protocol}`);
+              console.log(`Hostname: ${u.hostname}`);
+              console.log(`Has Username? ${!!u.username}`);
+              console.log(`Has Password? ${!!u.password}`);
+            } catch (e) {
+              console.log(`URL parse: FAILED (${e.message})`);
+            }
+          };
+          checkUrl("DATABASE_URL", process.env.DATABASE_URL);
+          checkUrl("DIRECT_URL", process.env.DIRECT_URL);
+          EOF
+          node check.js
 
       - name: Deploy Prisma Migration
         env:
