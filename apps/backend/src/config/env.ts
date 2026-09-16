@@ -14,6 +14,7 @@ const envSchema = z.object({
     .default('development'),
   PORT: z.coerce.number().default(5000),
   DATABASE_URL: z.string().optional(),
+  DIRECT_URL: z.string().optional(),
   JWT_SECRET: z.string().optional(),
   JWT_REFRESH_SECRET: z.string().optional(),
   AI_SERVICE_URL: z.string().url().optional(),

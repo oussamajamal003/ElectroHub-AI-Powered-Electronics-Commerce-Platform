@@ -73,7 +73,7 @@ venv/
 .docker/
 
 # --- Prisma ---
-apps/backend/prisma/migrations/*.sql
+# Generated Prisma Client is in node_modules and should not be committed
 
 # --- Misc ---
 *.tgz
