@@ -17,7 +17,7 @@ All actions were performed following strict security boundaries without altering
 - **CI Workflow Credentials Removed**: Hardcoded `DATABASE_URL` and `DIRECT_URL` credentials were removed from `.github/workflows/ci.yml` and `.github/workflows/verify-migration.yml`.
 - **Database Password Rotation**: We evaluated password rotation directly via Supabase SQL. Supabase correctly restricted this action with `42501: permission denied to alter role`. 
   - **MANUAL ACTION REQUIRED**: The project owner MUST manually rotate the `postgres` password in the Supabase Dashboard for both DEV (`electrohub-dev`) and PROD (`electrohub`). Because the credentials were leaked in earlier commits and history rewriting was not authorized, the credentials remain in git history until manually invalidated at the Supabase level.
-- **Git History Audit**: Searched the entire repository history for the leaked DEV password (`WzszpOBaTK7wIlBy`). 
+- **Git History Audit**: Searched the entire repository history for the leaked DEV password (`[REDACTED]`). 
   - **Result**: The credential *did* exist in history (e.g. in commits `71a0a6d` and `2f983ad`). It has now been scrubbed from all current active tracked files, but the historical commits remain, reinforcing the absolute necessity for a manual rotation via the Supabase Dashboard.
 
 ### 2.2 CI/CD Architecture Separation
