@@ -27,8 +27,8 @@ if (typeof window !== 'undefined' && !window.PointerEvent) {
       this.isPrimary = params.isPrimary !== false;
     }
   }
-  (window as any).PointerEvent = PointerEvent;
-  (global as any).PointerEvent = PointerEvent;
+  (window as unknown as { PointerEvent: typeof PointerEvent }).PointerEvent = PointerEvent;
+  (global as unknown as { PointerEvent: typeof PointerEvent }).PointerEvent = PointerEvent;
 }
 
 
