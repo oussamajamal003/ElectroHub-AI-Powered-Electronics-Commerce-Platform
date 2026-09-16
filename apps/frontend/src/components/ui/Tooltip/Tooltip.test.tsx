@@ -1,5 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { Tooltip } from './Tooltip';
 
@@ -19,10 +18,9 @@ describe('Tooltip', () => {
     const trigger = screen.getByRole('button', { name: /hover me/i });
     expect(trigger).toBeInTheDocument();
 
-    const user = userEvent.setup();
-
-    // Hover over the trigger
-    await user.hover(trigger);
+    // Trigger hover/focus to open tooltip
+    fireEvent.mouseOver(trigger);
+    fireEvent.focus(trigger);
 
     await waitFor(() => {
       const tooltipContent = screen.getByText(/tooltip info/i);

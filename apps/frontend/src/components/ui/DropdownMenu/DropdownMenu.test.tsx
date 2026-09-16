@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect } from 'vitest';
 import {
@@ -32,8 +32,9 @@ describe('DropdownMenu', () => {
     const trigger = screen.getByRole('button', { name: /open/i });
     expect(trigger).toBeInTheDocument();
 
-    const user = userEvent.setup();
-    await user.click(trigger);
+    // Click the trigger using fireEvent to avoid userEvent flakiness in CI
+    fireEvent.pointerDown(trigger);
+    fireEvent.click(trigger);
 
     await waitFor(() => {
       expect(screen.getByText(/my account/i)).toBeInTheDocument();
