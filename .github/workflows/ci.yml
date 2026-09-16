@@ -130,11 +130,8 @@ jobs:
           DATABASE_URL: "postgresql://postgres.pzxekjybdiulzmssalfo:WzszpOBaTK7wIlBy@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true"
           DIRECT_URL: "postgresql://postgres.pzxekjybdiulzmssalfo:WzszpOBaTK7wIlBy@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
         run: |
-          if [ -f "./node_modules/.bin/prisma" ]; then
-            ./node_modules/.bin/prisma migrate deploy --schema apps/backend/prisma/schema.prisma
-          else
-            ./apps/backend/node_modules/.bin/prisma migrate deploy --schema apps/backend/prisma/schema.prisma
-          fi
+          npm install -g prisma@6.4.1
+          prisma migrate deploy --schema apps/backend/prisma/schema.prisma
       - name: Test
         run: npm run test --workspace=@electrohub/backend
 
