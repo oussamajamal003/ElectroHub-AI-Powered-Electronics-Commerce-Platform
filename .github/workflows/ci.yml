@@ -125,6 +125,12 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      - name: Verify Prisma Migration on Linux CI
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: "postgresql://postgres.pzxekjybdiulzmssalfo:WzszpOBaTK7wIlBy@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true"
+          DIRECT_URL: "postgresql://postgres.pzxekjybdiulzmssalfo:WzszpOBaTK7wIlBy@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+        run: npx prisma migrate deploy
       - name: Test
         run: npm run test --workspace=@electrohub/backend
 
