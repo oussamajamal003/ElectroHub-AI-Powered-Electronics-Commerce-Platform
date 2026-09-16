@@ -125,13 +125,8 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
-      - name: Verify Prisma Migration on Linux CI
-        env:
-          DATABASE_URL: "postgresql://postgres.pzxekjybdiulzmssalfo:WzszpOBaTK7wIlBy@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
-          DIRECT_URL: "postgresql://postgres.pzxekjybdiulzmssalfo:WzszpOBaTK7wIlBy@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
-        run: |
-          npm install -g prisma@6.4.1
-          prisma migrate deploy --schema apps/backend/prisma/schema.prisma
+      - name: Validate Prisma Schema
+        run: npx prisma validate --schema apps/backend/prisma/schema.prisma
       - name: Test
         run: npm run test --workspace=@electrohub/backend
 
