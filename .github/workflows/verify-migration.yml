@@ -20,8 +20,8 @@ jobs:
 
       - name: Run Prisma Migrate Deploy
         env:
-          DATABASE_URL: "postgresql://postgres.pzxekjybdiulzmssalfo:WzszpOBaTK7wIlBy@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true"
-          DIRECT_URL: "postgresql://postgres.pzxekjybdiulzmssalfo:WzszpOBaTK7wIlBy@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+          DATABASE_URL: ${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}
         run: |
           cd apps/backend
           npx prisma migrate deploy
