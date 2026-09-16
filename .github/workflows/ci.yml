@@ -127,8 +127,8 @@ jobs:
         run: npm ci
       - name: Verify Prisma Migration on Linux CI
         env:
-          DATABASE_URL: "postgresql://postgres.pzxekjybdiulzmssalfo:WzszpOBaTK7wIlBy@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true"
-          DIRECT_URL: "postgresql://postgres.pzxekjybdiulzmssalfo:WzszpOBaTK7wIlBy@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+          DATABASE_URL: "postgresql://postgres.pzxekjybdiulzmssalfo:%5BWzszpOBaTK7wIlBy%5D@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true"
+          DIRECT_URL: "postgresql://postgres.pzxekjybdiulzmssalfo:%5BWzszpOBaTK7wIlBy%5D@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
         run: |
           npm install -g prisma@6.4.1
           prisma migrate deploy --schema apps/backend/prisma/schema.prisma
