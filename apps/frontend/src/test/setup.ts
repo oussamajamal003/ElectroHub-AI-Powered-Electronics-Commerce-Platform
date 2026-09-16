@@ -14,6 +14,24 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
+// Mock PointerEvent
+if (typeof window !== 'undefined' && !window.PointerEvent) {
+  class PointerEvent extends MouseEvent {
+    public pointerId: number;
+    public pointerType: string;
+    public isPrimary: boolean;
+    constructor(type: string, params: PointerEventInit = {}) {
+      super(type, params);
+      this.pointerId = params.pointerId || 1;
+      this.pointerType = params.pointerType || 'mouse';
+      this.isPrimary = params.isPrimary !== false;
+    }
+  }
+  (window as any).PointerEvent = PointerEvent;
+  (global as any).PointerEvent = PointerEvent;
+}
+
+
 // Mock matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
