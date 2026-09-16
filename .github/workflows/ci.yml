@@ -130,7 +130,7 @@ jobs:
         env:
           DATABASE_URL: "postgresql://postgres.pzxekjybdiulzmssalfo:WzszpOBaTK7wIlBy@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true"
           DIRECT_URL: "postgresql://postgres.pzxekjybdiulzmssalfo:WzszpOBaTK7wIlBy@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
-        run: npx prisma migrate deploy
+        run: ./node_modules/.bin/prisma migrate deploy
       - name: Test
         run: npm run test --workspace=@electrohub/backend
 
