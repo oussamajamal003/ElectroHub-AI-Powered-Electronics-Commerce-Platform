@@ -135,7 +135,12 @@ jobs:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
           DIRECT_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
         run: npx prisma validate --schema apps/backend/prisma/schema.prisma
+      - name: Generate Prisma Client
+        run: npx prisma generate --schema apps/backend/prisma/schema.prisma
       - name: Test
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          DIRECT_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
         run: npm run test --workspace=@electrohub/backend
 
   backend-build:
