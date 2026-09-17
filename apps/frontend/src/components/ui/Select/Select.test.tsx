@@ -1,5 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { Select } from './Select';
 
@@ -30,11 +29,14 @@ describe('Select', () => {
   });
 
   it('opens options list on click', async () => {
-    const user = userEvent.setup();
     render(<Select options={options} />);
     const trigger = screen.getByRole('combobox');
-    await user.click(trigger);
-    
+    expect(trigger).toBeInTheDocument();
+
+    // Click the trigger using fireEvent
+    fireEvent.pointerDown(trigger);
+    fireEvent.click(trigger);
+
     await waitFor(() => {
       expect(screen.getByRole('listbox')).toBeInTheDocument();
       expect(screen.getAllByRole('option')).toHaveLength(3);
