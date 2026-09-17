@@ -1,11 +1,6 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { Select } from './Select';
-
-// Required for Radix UI portal to work in jsdom
-window.HTMLElement.prototype.scrollIntoView = function() {};
-window.HTMLElement.prototype.hasPointerCapture = function() { return false; };
-window.HTMLElement.prototype.releasePointerCapture = function() {};
 
 describe('Select', () => {
   const options = [
@@ -33,14 +28,11 @@ describe('Select', () => {
     const trigger = screen.getByRole('combobox');
     expect(trigger).toBeInTheDocument();
 
-    // Click the trigger using fireEvent
-    fireEvent.pointerDown(trigger);
-    fireEvent.click(trigger);
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
 
-    await waitFor(() => {
-      expect(screen.getByRole('listbox')).toBeInTheDocument();
-      expect(screen.getAllByRole('option')).toHaveLength(3);
-    });
+    const listbox = await screen.findByRole('listbox');
+    expect(listbox).toBeInTheDocument();
+    expect(screen.getAllByRole('option')).toHaveLength(3);
   });
 
   it('shows error message', () => {

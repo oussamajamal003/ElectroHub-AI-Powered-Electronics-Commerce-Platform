@@ -4,17 +4,32 @@ import path from 'path';
 
 // Determine the environment based on NODE_ENV (default: development)
 const nodeEnv = process.env.NODE_ENV || 'development';
+const backendRoot = path.resolve(__dirname, '../..');
 
-// 1. Base default development configuration (non-secret defaults)
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+const envFilesByEnvironment = {
+  development: ['.env', '.env.local'],
+  test: ['.env', '.env.test.local'],
+  production: ['.env', '.env.production.local'],
+} as const;
 
-// 2. Override with local environment secrets based on NODE_ENV
-if (nodeEnv === 'production') {
-  dotenv.config({ path: path.resolve(process.cwd(), '.env.production.local'), override: true });
-} else {
-  // Explicitly load .env.local for development (and fallback for test)
-  dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
-}
+const selectedEnvFiles =
+  envFilesByEnvironment[nodeEnv as keyof typeof envFilesByEnvironment] ??
+  envFilesByEnvironment.development;
+
+const loadedEnvFiles = selectedEnvFiles.filter((fileName, index) => {
+  const result = dotenv.config({
+    path: path.resolve(backendRoot, fileName),
+    override: index > 0,
+  });
+
+  return !result.error;
+});
+
+export const envDiagnostics = {
+  nodeEnv,
+  selectedEnvFiles,
+  loadedEnvFiles,
+} as const;
 
 /**
  * Environment variable schema.
