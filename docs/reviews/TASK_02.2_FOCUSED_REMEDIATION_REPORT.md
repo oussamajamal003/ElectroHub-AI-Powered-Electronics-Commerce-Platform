@@ -34,16 +34,20 @@ All actions were performed following strict security boundaries without altering
 
 ## 3. Verification & Evidence
 
-- **Tests Passed**: Run via `npm run test --workspace=@electrohub/backend`.
+- **Tests Passed**: Run via `npm run test --workspace=@electrohub/backend` and `npm run test --workspace=@electrohub/frontend`.
 - **Typecheck Passed**: Run via `npm run typecheck --workspace=@electrohub/backend`.
 - **Lint Passed**: Run via `npm run lint --workspace=@electrohub/backend`.
 - **Build Passed**: Run via `npm run build --workspace=@electrohub/backend`.
 - **Prisma Validate Passed**: Run via `npx prisma validate` successfully against `6.19.3` definitions.
-- **CI Verification**: GitHub Actions `Development CI` workflow failed on the `feature/database-foundation` branch due to a pre-existing unrelated `Frontend / Test` ESM require error, although `Backend / Test` correctly initialized Prisma after adding `npx prisma generate`.
-- **Git Commit**: All fixes successfully committed to `feature/database-foundation` and merged to `develop` without exposing further secrets.
-- **Migration Deployment**: The `Dev Database Migration` workflow ran on `develop` but **FAILED** with `Error: P1013` because the `ELECTROHUB_DEV_DATABASE_URL` GitHub Secret is not populated with a valid connection string.
+- **CI Verification**: GitHub Actions `Development CI` workflow passed entirely on `feature/database-foundation` (Run: 35204436570) after explicitly passing dummy `DATABASE_URL` and `DIRECT_URL` environment variables to the backend test step, and resolving the frontend `ERR_REQUIRE_ESM` test failures by downgrading/pinning `jsdom` to `25.0.1`.
+- **Environment Architecture**: `apps/backend/src/config/env.ts` was standardized to explicitly load `.env`, `.env.local`, or `.env.production.local` with strict schema validation enforcing database credentials.
+- **Git Commit**: All environment, test, and CI fixes successfully committed to `feature/database-foundation`.
+- **Migration Deployment**: The `Dev Database Migration` workflow passed successfully on `develop` (Run: 35138758674) after password rotation and proper GitHub Secrets configuration.
 
-4. Final Remaining Requirements (BLOCKED/PENDING)
-1. **Rotate Credentials (BLOCKED/PENDING)**: Log in to Supabase Dashboard and rotate DEV/PROD passwords. Password rotation remains manual.
-2. **Update GitHub Secrets**: Populate `ELECTROHUB_DEV_DATABASE_URL` and `ELECTROHUB_DEV_DIRECT_URL` in the GitHub repository secrets.
-3. **Update Local Environments**: Update local `.env` and `.env.local` files once passwords are rotated.
+## 4. Final Status (RESOLVED)
+
+1. **Rotate Credentials (RESOLVED)**: The project owner successfully rotated passwords in the Supabase Dashboard for both DEV (`electrohub-dev`) and PROD (`electrohub`).
+2. **Update GitHub Secrets (RESOLVED)**: Valid connection strings were successfully populated in GitHub Actions Secrets, resulting in successful CI dev migrations.
+3. **Update Local Environments (RESOLVED)**: Local `.env` and `.env.local` architectures were finalized without committing sensitive credentials.
+
+The task is now completely verified. `feature/database-foundation` is ready to merge into `develop`.
