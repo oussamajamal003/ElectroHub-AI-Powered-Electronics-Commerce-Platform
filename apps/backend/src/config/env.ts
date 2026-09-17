@@ -1,19 +1,21 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
-import fs from 'fs';
 import path from 'path';
 
-// Determine the environment file to load based on NODE_ENV (default: development)
+// Determine the environment based on NODE_ENV (default: development)
 const nodeEnv = process.env.NODE_ENV || 'development';
-const envFile = nodeEnv === 'production' ? '.env.production.local' : '.env.local';
 
-const envPath = path.resolve(process.cwd(), envFile);
-if (fs.existsSync(envPath)) {
-  dotenv.config({ path: envPath });
+// 1. Base default development configuration (non-secret defaults)
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+
+// 2. Override with local environment secrets based on NODE_ENV
+if (nodeEnv === 'production') {
+  dotenv.config({ path: path.resolve(process.cwd(), '.env.production.local'), override: true });
+} else {
+  // Explicitly load .env.local for development (and fallback for test)
+  dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
 }
 
-// Fallback to the default .env (dotenv won't override variables already loaded)
-dotenv.config();
 /**
  * Environment variable schema.
  * Validates required configuration at startup.
@@ -24,8 +26,8 @@ const envSchema = z.object({
     .enum(['development', 'production', 'test'])
     .default('development'),
   PORT: z.coerce.number().default(5000),
-  DATABASE_URL: z.string().optional(),
-  DIRECT_URL: z.string().optional(),
+  DATABASE_URL: z.string().url(),
+  DIRECT_URL: z.string().url(),
   JWT_SECRET: z.string().optional(),
   JWT_REFRESH_SECRET: z.string().optional(),
   AI_SERVICE_URL: z.string().url().optional(),
