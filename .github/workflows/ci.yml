@@ -125,6 +125,21 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      - name: Setup test environment file
+        run: |
+          cat << 'EOF' > apps/backend/.env.test.local
+          NODE_ENV=test
+          PORT=5001
+          DATABASE_URL="postgresql://postgres:postgres@localhost:5432/electrohub_test?schema=public"
+          DIRECT_URL="postgresql://postgres:postgres@localhost:5432/electrohub_test?schema=public"
+          JWT_SECRET=test-jwt-secret
+          JWT_REFRESH_SECRET=test-jwt-refresh-secret
+          AI_SERVICE_URL=http://localhost:8000
+          STRIPE_SECRET_KEY=sk_test_placeholder
+          STRIPE_WEBHOOK_SECRET=whsec_test_placeholder
+          BREVO_API_KEY=test-brevo-api-key
+          CLOUDINARY_URL=cloudinary://test-key:test-secret@test-cloud
+          EOF
       - name: Generate Prisma Client
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
@@ -135,8 +150,6 @@ jobs:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
           DIRECT_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
         run: npx prisma validate --schema apps/backend/prisma/schema.prisma
-      - name: Generate Prisma Client
-        run: npx prisma generate --schema apps/backend/prisma/schema.prisma
       - name: Test
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
