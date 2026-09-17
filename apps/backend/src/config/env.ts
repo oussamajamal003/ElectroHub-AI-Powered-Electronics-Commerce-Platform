@@ -1,8 +1,19 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 
+// Determine the environment file to load based on NODE_ENV (default: development)
+const nodeEnv = process.env.NODE_ENV || 'development';
+const envFile = nodeEnv === 'production' ? '.env.production.local' : '.env.local';
+
+const envPath = path.resolve(process.cwd(), envFile);
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+}
+
+// Fallback to the default .env (dotenv won't override variables already loaded)
 dotenv.config();
-
 /**
  * Environment variable schema.
  * Validates required configuration at startup.
