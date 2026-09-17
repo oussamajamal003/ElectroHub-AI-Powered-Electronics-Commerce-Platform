@@ -14,11 +14,16 @@
     "build:backend": "npm run build --workspace=apps/backend",
     "lint:frontend": "npm run lint --workspace=apps/frontend",
     "lint:backend": "npm run lint --workspace=apps/backend",
+    "lint": "npm run lint:frontend && npm run lint:backend",
     "typecheck:frontend": "npm run typecheck --workspace=apps/frontend",
     "typecheck:backend": "npm run typecheck --workspace=apps/backend",
+    "typecheck": "npm run typecheck:frontend && npm run typecheck:backend",
     "test:frontend": "npm run test --workspace=apps/frontend",
     "test:backend": "npm run test --workspace=apps/backend",
-    "build": "npm run build:frontend && npm run build:backend"
+    "test": "npm run test:frontend && npm run test:backend",
+    "build": "npm run build:frontend && npm run build:backend",
+    "audit:ci": "node scripts/security-audit.mjs",
+    "audit": "npm audit --audit-level=high"
   },
   "engines": {
     "node": "20.11.0",
@@ -34,5 +39,11 @@
   },
   "devDependencies": {
     "jsdom": "^25.0.1"
+  },
+  "overrides": {
+    "fast-uri": "^3.1.6",
+    "qs": "^6.16.0",
+    "js-yaml": "^5.0.0",
+    "vitest": "^4.1.11"
   }
 }

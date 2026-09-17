@@ -35,4 +35,4 @@ jobs:
         run: npm ci
 
       - name: NPM Audit
-        run: npm audit --audit-level=high
+        run: npm run audit:ci

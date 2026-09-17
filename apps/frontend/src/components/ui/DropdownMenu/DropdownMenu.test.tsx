@@ -9,10 +9,7 @@ import {
   DropdownMenuSeparator,
 } from './DropdownMenu';
 
-// Required for Radix UI portal to work in jsdom
-window.HTMLElement.prototype.scrollIntoView = function() {};
-window.HTMLElement.prototype.hasPointerCapture = function() { return false; };
-window.HTMLElement.prototype.releasePointerCapture = function() {};
+
 
 describe('DropdownMenu', () => {
   it('renders and opens the dropdown', async () => {
@@ -31,7 +28,6 @@ describe('DropdownMenu', () => {
     const trigger = screen.getByRole('button', { name: /open/i });
     expect(trigger).toBeInTheDocument();
 
-    // Click the trigger using fireEvent to avoid userEvent flakiness in CI
     fireEvent.pointerDown(trigger);
     fireEvent.click(trigger);
 

@@ -14,21 +14,28 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
-// Mock PointerEvent
-if (typeof window !== 'undefined' && !window.PointerEvent) {
-  class PointerEvent extends MouseEvent {
-    public pointerId: number;
-    public pointerType: string;
-    public isPrimary: boolean;
-    constructor(type: string, params: PointerEventInit = {}) {
-      super(type, params);
-      this.pointerId = params.pointerId || 1;
-      this.pointerType = params.pointerType || 'mouse';
-      this.isPrimary = params.isPrimary !== false;
+// Mock PointerEvent for Radix UI
+if (typeof window !== 'undefined') {
+  class MockPointerEvent extends Event {
+    button: number;
+    ctrlKey: boolean;
+    pointerType: string;
+    pointerId: number;
+    isPrimary: boolean;
+
+    constructor(type: string, props: PointerEventInit = {}) {
+      super(type, props);
+      this.button = props.button || 0;
+      this.ctrlKey = props.ctrlKey || false;
+      this.pointerType = props.pointerType || 'mouse';
+      this.pointerId = props.pointerId || 1;
+      this.isPrimary = props.isPrimary !== false;
     }
   }
-  (window as unknown as { PointerEvent: typeof PointerEvent }).PointerEvent = PointerEvent;
-  (global as unknown as { PointerEvent: typeof PointerEvent }).PointerEvent = PointerEvent;
+  (window as unknown as { PointerEvent: typeof MockPointerEvent }).PointerEvent = MockPointerEvent;
+  window.HTMLElement.prototype.scrollIntoView = function() {};
+  window.HTMLElement.prototype.hasPointerCapture = function() { return false; };
+  window.HTMLElement.prototype.releasePointerCapture = function() {};
 }
 
 
