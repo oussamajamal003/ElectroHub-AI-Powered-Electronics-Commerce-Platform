@@ -1,3 +1,38 @@
+# ElectroHub Task 02.2 — Latest Implemented Database Foundation
+
+> This document is synchronized to the current Task 02.2 baseline. Prisma is the schema/migration source of truth. The implemented application model set is 15 models; `_prisma_migrations` is Prisma metadata.
+
+## Environments
+
+- Development: `electrohub-dev` — Supabase project ref `pzxekjybdiulzmssalfo`
+- Production: Supabase project ref `yepfgjehdstlxbpespun`
+- Development seed: allowed only on `electrohub-dev`
+- Production development seed: forbidden
+
+## Implemented Application Models
+
+`Role`, `User`, `Address`, `Category`, `Product`, `ProductImage`, `Inventory`, `Cart`, `CartItem`, `Wishlist`, `WishlistItem`, `Order`, `OrderItem`, `Payment`, `Delivery`.
+
+## Explicitly Out of Task 02.2 Core Schema
+
+`RefreshToken`, `OTP`, `RecommendationEvent`, `RecommendationResult`, `UserBehavior`, `AuditLog`, `ShipmentHistory`, `StripeWebhookEvent`, `EmailDelivery`, `PDFDocument`, and other future feature-specific models unless separately approved.
+
+## Authoritative Flow
+
+```text
+Task 02.2
+   ↓
+apps/backend/prisma/schema.prisma
+   ↓
+Prisma migration
+   ↓
+Supabase PostgreSQL
+```
+
+Do not use `supabase db push` as a competing migration source of truth.
+
+# Indexing — Current Baseline
+
 # Database Indexing
 
 ## 1. Purpose
