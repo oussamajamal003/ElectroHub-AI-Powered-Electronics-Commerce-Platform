@@ -10,6 +10,7 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:ci": "vitest run --exclude 'tests/adminSeedLogin.test.ts' --exclude 'tests/auth.integration.test.ts'",
     "lint": "eslint src/ --ext .ts",
     "typecheck": "tsc --noEmit",
     "db:seed": "npx prisma db seed"
