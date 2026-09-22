@@ -1,0 +1,180 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.modalContent {
+  position: relative;
+  width: min(480px, calc(100vw - 2rem));
+  max-width: 480px;
+  background-color: #ffffff !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid $color-border !important;
+  border-radius: 0 !important;
+  display: flex;
+  flex-direction: column;
+  margin: auto;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: $color-border transparent;
+  padding: $spacing-8;
+}
+
+.overlay {
+  background-color: rgba(15, 23, 42, 0.55) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+.closeButton {
+  position: absolute;
+  top: $spacing-4;
+  left: $spacing-4;
+  background: none;
+  border: none;
+  padding: $spacing-2;
+  color: $color-text-secondary;
+  cursor: pointer;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color $transition-fast, color $transition-fast;
+
+  &:hover:not(:disabled) {
+    color: $color-text-primary;
+    background-color: $color-surface;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.header {
+  text-align: center;
+  margin-bottom: $spacing-6;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  .brand {
+    font-family: $font-family-heading;
+    font-size: $font-size-2xl;
+    font-weight: $font-weight-bold;
+    color: $color-primary;
+    margin-bottom: $spacing-4;
+  }
+
+  .title {
+    font-family: $font-family-heading;
+    font-size: 28px;
+    font-weight: $font-weight-bold;
+    color: $color-text-primary;
+    margin: 0 0 $spacing-2 0;
+  }
+
+  .description {
+    color: $color-text-secondary;
+    font-size: $font-size-base;
+    margin: 0;
+  }
+}
+
+.alert {
+  margin-bottom: $spacing-6;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+  width: 100%;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+
+  .labelRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  label {
+    font-family: $font-family-heading;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $color-text-primary;
+
+    &.labelError {
+      color: $color-error-foreground;
+      font-weight: $font-weight-semibold;
+    }
+  }
+
+  .forgotPassword {
+    background: none;
+    border: none;
+    padding: 0;
+    color: $color-primary;
+    font-size: $font-size-sm;
+    cursor: pointer;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.eyeButton {
+  background: none;
+  border: none;
+  padding: $spacing-1;
+  color: $color-text-muted;
+  cursor: pointer;
+  @include flex-center;
+
+  &:hover {
+    color: $color-text-primary;
+  }
+}
+
+.submitButton {
+  margin-top: $spacing-2;
+  width: 100%;
+  height: 48px;
+  font-size: $font-size-base;
+  font-weight: $font-weight-semibold;
+  border-radius: 0 !important;
+}
+
+.footer {
+  margin-top: $spacing-4;
+  text-align: center;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.switchButton {
+  background: none;
+  border: none;
+  color: $color-primary;
+  font-weight: $font-weight-semibold;
+  cursor: pointer;
+  padding: 0;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+@media (max-width: $breakpoint-sm) {
+  .modalContent {
+    max-width: 100%;
+    padding: $spacing-6 $spacing-4;
+  }
+}

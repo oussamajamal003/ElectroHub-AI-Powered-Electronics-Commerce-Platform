@@ -1,8 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec } from './config/swagger.js';
+import { swaggerSpec } from './docs/swagger/index.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestId } from './middleware/requestId.js';
@@ -17,13 +18,17 @@ import routes from './routes/index.js';
  * 2. Helmet (security headers)
  * 3. CORS
  * 4. JSON body parsing
- * 5. Request logging
- * 6. Routes
- * 7. Swagger UI
- * 8. Not Found handler
- * 9. Error handler (must be last)
+ * 5. Cookie parsing
+ * 6. Request logging
+ * 7. Routes
+ * 8. Swagger UI
+ * 9. Not Found handler
+ * 10. Error handler (must be last)
  */
 const app = express();
+
+// Trust reverse proxy (e.g. Nginx) to ensure correct client IP for rate limiting
+app.set('trust proxy', 1);
 
 // Request ID (should be very first to track everything)
 app.use(requestId);
@@ -44,6 +49,9 @@ app.use(express.json({ limit: '10kb' }));
 
 // URL-encoded body parsing with strict size limit
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+
+// Cookie parsing
+app.use(cookieParser());
 
 // Request logging
 app.use(requestLogger);

@@ -6,10 +6,12 @@ import { AlertCircle } from 'lucide-react';
 export interface InputProps
   extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
+  labelRight?: React.ReactNode;
   helperText?: string;
   error?: string;
   inputSize?: 'small' | 'medium' | 'large';
   fullWidth?: boolean;
+  endAdornment?: React.ReactNode;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
@@ -17,10 +19,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     {
       className,
       label,
+      labelRight,
       helperText,
       error,
       inputSize = 'medium',
       fullWidth = false,
+      endAdornment,
       disabled,
       id,
       ...props
@@ -43,14 +47,23 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           className
         )}
       >
-        {label && (
-          <label
-            htmlFor={inputId}
-            className={clsx(styles.label, disabled && styles.labelDisabled)}
-          >
-            {label}
-            {props.required && <span className={styles.required}>*</span>}
-          </label>
+        {(label || labelRight) && (
+          <div className={styles.labelRow}>
+            {label && (
+              <label
+                htmlFor={inputId}
+                className={clsx(
+                  styles.label, 
+                  disabled && styles.labelDisabled,
+                  isError && styles.labelError
+                )}
+              >
+                {label}
+                {props.required && <span className={styles.required}>*</span>}
+              </label>
+            )}
+            {labelRight && <div className={styles.labelRight}>{labelRight}</div>}
+          </div>
         )}
         <div className={styles.inputWrapper}>
           <input
@@ -64,17 +77,18 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
                 [helperId]: helperText && !isError,
               }) || undefined
             }
-            className={clsx(styles.input, styles[`size-${inputSize}`], isError && styles.error)}
+            className={clsx(styles.input, styles[`size-${inputSize}`], isError && styles.error, endAdornment && styles.hasEndAdornment)}
             {...props}
           />
-          {isError && (
-            <div className={styles.errorIcon}>
-              <AlertCircle size={16} aria-hidden="true" />
+          {endAdornment && (
+            <div className={styles.endAdornment}>
+              {endAdornment}
             </div>
           )}
         </div>
         {isError ? (
           <span id={errorId} className={styles.errorMessage}>
+            <AlertCircle size={14} className={styles.errorMessageIcon} />
             {error}
           </span>
         ) : helperText ? (

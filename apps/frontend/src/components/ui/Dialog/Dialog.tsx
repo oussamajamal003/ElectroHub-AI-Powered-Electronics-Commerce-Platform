@@ -25,23 +25,31 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 export const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ children, className, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { 
+    overlayClassName?: string;
+    containerClassName?: string;
+    hideCloseButton?: boolean;
+  }
+>(({ children, className, overlayClassName, containerClassName, hideCloseButton, ...props }, ref) => (
   <DialogPortal>
-    <DialogOverlay />
-    <DialogPrimitive.Content asChild ref={ref} {...props}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: '-45%', x: '-50%' }}
-        animate={{ opacity: 1, scale: 1, y: '-50%', x: '-50%' }}
-        transition={{ duration: 0.2, ease: 'easeOut' }}
-        className={`${styles.content} ${className || ''}`.trim()}
-      >
-        {children}
-        <DialogPrimitive.Close className={styles.closeButton} aria-label="Close">
-          <X className={styles.closeIcon} aria-hidden="true" />
-        </DialogPrimitive.Close>
-      </motion.div>
-    </DialogPrimitive.Content>
+    <DialogOverlay className={overlayClassName} />
+    <div className={`${styles.container} ${containerClassName || ''}`.trim()}>
+      <DialogPrimitive.Content asChild ref={ref} {...props}>
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+          className={`${styles.content} ${className || ''}`.trim()}
+        >
+          {children}
+          {!hideCloseButton && (
+            <DialogPrimitive.Close className={styles.closeButton} aria-label="Close">
+              <X className={styles.closeIcon} aria-hidden="true" />
+            </DialogPrimitive.Close>
+          )}
+        </motion.div>
+      </DialogPrimitive.Content>
+    </div>
   </DialogPortal>
 ));
 DialogContent.displayName = DialogPrimitive.Content.displayName;

@@ -8,15 +8,23 @@
   backdrop-filter: blur(4px);
 }
 
-.content {
+.container {
   position: fixed;
-  left: 50%;
-  top: 50%;
+  inset: 0;
   z-index: $z-modal + 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-4;
+  overflow-y: auto;
+  pointer-events: none;
+}
+
+.content {
+  pointer-events: auto;
+  position: relative;
   width: 100%;
   max-width: 32rem; // 512px
-  // Note: Transform is handled by Framer Motion, but we set a fallback here.
-  transform: translate(-50%, -50%);
   background-color: $color-surface;
   padding: $spacing-6;
   border-radius: $radius-xl;
@@ -25,6 +33,7 @@
   display: flex;
   flex-direction: column;
   gap: $spacing-4;
+  margin: auto;
 
   &:focus-visible {
     outline: $focus-ring-width $focus-ring-style $focus-ring-color;

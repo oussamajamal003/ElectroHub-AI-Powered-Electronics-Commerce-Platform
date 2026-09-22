@@ -1,6 +1,7 @@
 import React from 'react';
 import { clsx } from 'clsx';
 import { ChevronRight, MoreHorizontal } from 'lucide-react';
+import { Slot } from '@radix-ui/react-slot';
 import styles from './Breadcrumb.module.scss';
 
 export interface BreadcrumbProps extends React.HTMLAttributes<HTMLElement> {
@@ -45,16 +46,15 @@ export const BreadcrumbItem = React.forwardRef<HTMLLIElement, BreadcrumbItemProp
 );
 BreadcrumbItem.displayName = 'BreadcrumbItem';
 
-export type BreadcrumbLinkProps = React.AnchorHTMLAttributes<HTMLAnchorElement>;
+export interface BreadcrumbLinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
+  asChild?: boolean;
+}
 
 export const BreadcrumbLink = React.forwardRef<HTMLAnchorElement, BreadcrumbLinkProps>(
-  ({ className, ...props }, ref) => {
-    // If asChild is true, we assume the user will pass a custom link component (like from next/link or react-router)
-    // We would need to use Radix Slot for true asChild support, but keeping it simple here
-    // or just pass className to child. Since we don't have Radix Slot imported here,
-    // we just render a standard anchor. In a real app we'd use @radix-ui/react-slot.
+  ({ className, asChild, ...props }, ref) => {
+    const Comp = asChild ? Slot : 'a';
     return (
-      <a
+      <Comp
         ref={ref}
         className={clsx(styles.link, className)}
         {...props}

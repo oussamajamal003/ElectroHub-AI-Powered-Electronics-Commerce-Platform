@@ -10,6 +10,18 @@
   }
 }
 
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.labelRight {
+  display: flex;
+  align-items: center;
+}
+
 .label {
   font-family: $font-family-base;
   font-weight: $font-weight-medium;
@@ -23,6 +35,11 @@
   &.labelDisabled {
     color: $color-text-muted;
   }
+
+  &.labelError {
+    color: $color-error-foreground;
+    font-weight: $font-weight-semibold;
+  }
 }
 
 .required {
@@ -33,6 +50,7 @@
   position: relative;
   display: flex;
   align-items: center;
+  width: 100%;
 }
 
 .input {
@@ -42,37 +60,49 @@
   color: $color-text-primary;
   background-color: $color-background;
   border: 1px solid $color-border;
-  border-radius: $radius-md;
+  border-radius: 0 !important;
   transition: all $transition-fast;
-  padding: 10px; // Figma shows p-[10px]
+  padding: 10px 12px;
 
   &::placeholder {
     color: $color-text-muted;
   }
 
+  &:hover:not(:disabled):not(:focus) {
+    border-color: $color-text-muted;
+  }
+
   &:focus {
-    outline: none;
-    border-color: $color-primary;
-    box-shadow: 0 0 0 $focus-ring-width $focus-ring-color;
+    outline: 2px solid $color-primary !important;
+    outline-offset: -2px !important;
+    border-color: $color-primary !important;
   }
 
   &:disabled {
-    background-color: $color-surface; // or the disabled background from tokens
+    background-color: $color-surface;
     border-color: $color-border;
     color: $color-text-muted;
     cursor: not-allowed;
   }
 
   &.error {
-    background-color: $color-error-background;
-    border-color: $color-error-border;
-    color: $color-error;
-    padding-right: $spacing-10; // Space for the error icon
+    background-color: #fff1f2;
+    border-color: #fca5a5;
+    color: $color-text-primary;
+
+    &:hover:not(:disabled):not(:focus) {
+      border-color: #f87171;
+    }
 
     &:focus {
-      box-shadow: 0 0 0 $focus-ring-width rgba($color-error, 0.3);
-      border-color: $color-error;
+      outline: 2px solid $color-primary !important;
+      outline-offset: -2px !important;
+      border-color: $color-primary !important;
     }
+  }
+
+  &.hasEndAdornment {
+    padding-right: 40px;
   }
 }
 
@@ -87,20 +117,28 @@
   height: 48px;
 }
 
-.errorIcon {
+.endAdornment {
   position: absolute;
   right: $spacing-3;
-  color: $color-error;
   display: flex;
   align-items: center;
-  pointer-events: none;
+  color: $color-text-muted;
 }
 
 .errorMessage {
+  display: flex;
+  align-items: center;
+  gap: $spacing-1;
   font-family: $font-family-base;
   font-size: $font-size-sm;
-  color: $color-error;
+  font-weight: $font-weight-semibold;
+  color: $color-error-foreground;
   margin: 0;
+  line-height: $line-height-normal;
+}
+
+.errorMessageIcon {
+  flex-shrink: 0;
 }
 
 .helperText {

@@ -15,7 +15,7 @@
  */
 
 import { UserRole, ProductStatus, InventoryStatus } from '@prisma/client';
-import { createHash } from 'crypto';
+import bcrypt from 'bcrypt';
 import { prisma, pool } from '../src/lib/prisma';
 
 // ─── Production Safety Gate ──────────────────────────────
@@ -27,13 +27,14 @@ if (process.env.NODE_ENV === 'production') {
   process.exit(1);
 }
 
-// ─── Development Password Hashing ────────────────────────
-// Uses SHA-256 for development seed only. The application will use bcrypt
-// for real authentication. These are NOT production credentials.
+// ─── Development Credentials Configuration ───────────────
+// Uses secure bcrypt hashing (SALT_ROUNDS = 12) for local dev/testing.
+// Never log passwords or password hashes.
 
-function devHash(password: string): string {
-  return createHash('sha256').update(password).digest('hex');
-}
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@electrohub.com').toLowerCase().trim();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123!';
+const CUSTOMER_EMAIL = (process.env.CUSTOMER_EMAIL || 'customer@electrohub.com').toLowerCase().trim();
+const CUSTOMER_PASSWORD = process.env.CUSTOMER_PASSWORD || 'customer123!';
 
 // ─── Seed Data ───────────────────────────────────────────
 
@@ -62,37 +63,70 @@ async function main() {
   console.log(`    ✓ ADMIN (${adminRole.id})`);
   console.log(`    ✓ CUSTOMER (${customerRole.id})`);
 
-  // 2. Users
-  console.log('  → Users');
-  const adminUser = await prisma.user.upsert({
-    where: { email: 'admin@electrohub.dev' },
-    update: {},
-    create: {
-      email: 'admin@electrohub.dev',
-      passwordHash: devHash('admin-dev-password'),
-      firstName: 'Admin',
-      lastName: 'Dev',
-      phone: '+1000000001',
-      isActive: true,
-      roleId: adminRole.id,
-    },
-  });
+  // Clean up any legacy dev emails to guarantee exactly ONE controlled administrator
+  if (ADMIN_EMAIL !== 'admin@electrohub.dev') {
+    await prisma.user.deleteMany({
+      where: { email: 'admin@electrohub.dev' },
+    });
+  }
+  if (CUSTOMER_EMAIL !== 'customer@electrohub.dev') {
+    await prisma.user.deleteMany({
+      where: { email: 'customer@electrohub.dev' },
+    });
+  }
 
+  // 2. Users (Bcrypt hashed)
+  console.log('  → Users');
+  const adminEmails = [
+    'admin@electrohub.com',
+    'admin1@electrohub.com',
+    'admin2@electrohub.com',
+    'admin3@electrohub.com',
+    'admin4@electrohub.com',
+  ];
+
+  for (let i = 0; i < adminEmails.length; i++) {
+    const email = adminEmails[i];
+    const password = process.env[`ADMIN${i === 0 ? '' : i}_PASSWORD`] || process.env.ADMIN_PASSWORD || 'admin123!';
+    const passwordHash = await bcrypt.hash(password, 12);
+    const firstName = i === 0 ? 'Admin' : `Admin${i}`;
+    const adminUser = await prisma.user.upsert({
+      where: { email },
+      update: {
+        passwordHash,
+        roleId: adminRole.id,
+        isActive: true,
+      },
+      create: {
+        email,
+        passwordHash,
+        firstName,
+        lastName: 'ElectroHub',
+        isActive: true,
+        roleId: adminRole.id,
+      },
+    });
+    console.log(`    ✓ Admin: ${email} (${adminUser.id})`);
+  }
+
+  const customerPasswordHash = await bcrypt.hash(CUSTOMER_PASSWORD, 12);
   const customerUser = await prisma.user.upsert({
-    where: { email: 'customer@electrohub.dev' },
-    update: {},
+    where: { email: CUSTOMER_EMAIL },
+    update: {
+      passwordHash: customerPasswordHash,
+      roleId: customerRole.id,
+      isActive: true,
+    },
     create: {
-      email: 'customer@electrohub.dev',
-      passwordHash: devHash('customer-dev-password'),
+      email: CUSTOMER_EMAIL,
+      passwordHash: customerPasswordHash,
       firstName: 'Customer',
       lastName: 'Dev',
-      phone: '+1000000002',
       isActive: true,
       roleId: customerRole.id,
     },
   });
-  console.log(`    ✓ admin@electrohub.dev (${adminUser.id})`);
-  console.log(`    ✓ customer@electrohub.dev (${customerUser.id})`);
+  console.log(`    ✓ Customer: ${CUSTOMER_EMAIL} (${customerUser.id})`);
 
   // 3. Categories
   console.log('  → Categories');

@@ -1,0 +1,48 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.modalContent {
+  width: 100%;
+  max-width: 400px;
+  background-color: $color-background;
+  padding: $spacing-6;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-lg;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+}
+
+.overlay {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(2px);
+}
+
+.header {
+  text-align: center;
+  margin-bottom: $spacing-2;
+
+  .title {
+    font-family: $font-family-heading;
+    font-size: 20px;
+    font-weight: $font-weight-bold;
+    color: $color-text-primary;
+    margin: 0 0 $spacing-2 0;
+  }
+
+  .description {
+    color: $color-text-secondary;
+    font-size: $font-size-sm;
+    margin: 0;
+  }
+}
+
+.actions {
+  display: flex;
+  gap: $spacing-4;
+  margin-top: $spacing-2;
+
+  > button {
+    flex: 1;
+  }
+}
