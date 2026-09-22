@@ -1,5 +1,6 @@
 @use '../../../styles/abstracts/variables' as *;
 @use '../../../styles/abstracts/mixins' as *;
+@use 'sass:color';
 
 .button {
   display: inline-flex;
@@ -13,7 +14,7 @@
   line-height: $line-height-normal;
   text-align: center;
   white-space: nowrap;
-  border-radius: $radius-sm;
+  border-radius: 0;
   transition: all $transition-fast;
   cursor: pointer;
   border: 1px solid transparent; // for outline variant consistency
@@ -76,7 +77,7 @@
   }
 
   &:active:not(:disabled) {
-    background-color: darken($color-primary-dark, 10%);
+    background-color: color.adjust($color-primary-dark, $lightness: -10%);
   }
 
   &:disabled {
@@ -91,7 +92,7 @@
   color: $color-text-inverse;
 
   &:hover:not(:disabled) {
-    background-color: darken($color-accent, 10%);
+    background-color: color.adjust($color-accent, $lightness: -10%);
   }
 
   &:disabled {
@@ -133,7 +134,7 @@
   color: $color-text-inverse;
 
   &:hover:not(:disabled) {
-    background-color: darken($color-error, 10%);
+    background-color: color.adjust($color-error, $lightness: -10%);
   }
 
   &:disabled {

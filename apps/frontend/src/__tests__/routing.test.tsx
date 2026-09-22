@@ -21,7 +21,7 @@ describe('Routing Foundation', () => {
   afterEach(cleanup);
   it('renders HomePage on the root route "/"', () => {
     renderWithProviders('/');
-    expect(screen.getByText('ElectroHub')).toBeInTheDocument();
+    expect(screen.getAllByText('ElectroHub').length).toBeGreaterThan(0);
     expect(screen.getByText('AI-Powered Electronics Commerce Platform')).toBeInTheDocument();
   });
 

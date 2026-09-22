@@ -16,6 +16,7 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     globals: true,
     testTimeout: 60000,
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
   },
   server: {
     port: 3000,

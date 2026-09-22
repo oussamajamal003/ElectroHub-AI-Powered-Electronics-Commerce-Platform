@@ -1,0 +1,211 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.page {
+  min-height: calc(100vh - 80px);
+  background-color: $color-background;
+  padding: $spacing-8 0 0 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.container {
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 $spacing-6;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-10;
+  margin-bottom: $spacing-16;
+}
+
+.breadcrumbWrapper {
+  margin-top: $spacing-4;
+}
+
+// ─── Profile Card ──────────────────────────────────────────
+.profileCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  padding: $spacing-6;
+  background-color: $color-surface;
+  
+  @media (max-width: $breakpoint-sm) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: $spacing-4;
+  }
+}
+
+.profileInfo {
+  display: flex;
+  align-items: center;
+  gap: $spacing-5;
+}
+
+.avatar {
+  width: 64px;
+  height: 64px;
+  font-size: $font-size-2xl;
+}
+
+.profileDetails {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-1;
+}
+
+.profileName {
+  font-family: $font-family-heading;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  margin: 0;
+  line-height: $line-height-tight;
+}
+
+.profileEmail {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  font-size: $font-size-sm;
+  color: $color-text-muted;
+}
+
+.editProfileBtn {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+}
+
+.editIcon {
+  color: inherit;
+}
+
+// ─── Sections ───────────────────────────────────────────────
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+}
+
+.sectionTitle {
+  font-family: $font-family-heading;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  margin: 0;
+}
+
+// ─── Grid (2x2 row-item layout) ─────────────────────────────
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: $spacing-4;
+
+  @media (max-width: $breakpoint-md) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.gridItem {
+  display: flex;
+  align-items: center;
+  gap: $spacing-4;
+  border: 1px solid $color-border;
+  border-radius: 0;
+  padding: $spacing-5 $spacing-4;
+  background-color: $color-surface;
+  text-decoration: none;
+  transition: border-color $transition-fast;
+  
+  &:hover:not(.gridItemDisabled) {
+    border-color: $color-primary;
+    
+    .itemTitle {
+      color: $color-primary;
+    }
+  }
+
+  @include focus-ring;
+}
+
+.gridItemDisabled {
+  opacity: 0.6;
+  pointer-events: none;
+  cursor: default;
+}
+
+.itemIcon {
+  color: $color-primary;
+  flex-shrink: 0;
+}
+
+.gridItemDisabled .itemIcon {
+  color: $color-text-muted;
+}
+
+.itemBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.itemTitleRow {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+}
+
+.itemTitle {
+  font-family: $font-family-heading;
+  font-size: $font-size-base;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  transition: color $transition-fast;
+}
+
+.itemDesc {
+  font-size: $font-size-sm;
+  color: $color-text-muted;
+}
+
+.comingSoonBadge {
+  background-color: $color-border;
+  color: $color-text-secondary;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  padding: 2px $spacing-2;
+  border-radius: $radius-sm;
+}
+
+.chevron {
+  color: $color-text-muted;
+  flex-shrink: 0;
+}
+
+// ─── Sign Out Link ──────────────────────────────────────────
+.signOutWrapper {
+  padding-top: $spacing-8;
+  border-top: 1px solid $color-border;
+  display: flex;
+}
+
+.signOutBtn {
+  color: $color-error;
+  border-color: $color-error;
+  width: 100%;
+  max-width: 300px;
+  margin: 0 auto;
+  
+  &:hover {
+    background-color: #FFF1F2;
+    border-color: $color-error;
+  }
+}

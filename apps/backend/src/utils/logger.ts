@@ -1,4 +1,6 @@
 import winston from 'winston';
+import path from 'path';
+import fs from 'fs';
 import { env } from '../config/env.js';
 
 /**
@@ -6,10 +8,12 @@ import { env } from '../config/env.js';
  *
  * Features:
  * - Supports debug, info, warn, error levels
- * - JSON format in production for structured log analysis
- * - Human-readable format in development
+ * - Writes all application events to apps/backend/logs/app.log
+ * - Writes error events to apps/backend/logs/error.log
+ * - Console transport for local development and container runtime
+ * - Auto-creates logs/ directory if not present
  * - Includes timestamp in all log entries
- * - Redacts sensitive data from log metadata (e.g. passwords, tokens)
+ * - Redacts sensitive data from log metadata (e.g. passwords, tokens, cookies, secrets)
  *
  * Usage:
  *   import { logger } from '@/utils/logger';
@@ -19,8 +23,17 @@ import { env } from '../config/env.js';
 
 const isProduction = env.NODE_ENV === 'production';
 
+// Resolve logs directory path: apps/backend/logs
+const logsDir = path.resolve(__dirname, '../../logs');
+
+// Ensure the logs directory exists
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
+
 const sensitiveKeys = [
   'password',
+  'passwordhash',
   'token',
   'jwt',
   'authorization',
@@ -30,6 +43,12 @@ const sensitiveKeys = [
   'apikey',
   'stripe_secret',
   'secret',
+  'refreshtoken',
+  'accesstoken',
+  'resettoken',
+  'otp',
+  'bearer',
+  'credential',
 ];
 
 const redactSensitiveData = winston.format((info) => {
@@ -80,10 +99,32 @@ const prodFormat = winston.format.combine(
   winston.format.json()
 );
 
+const fileFormat = winston.format.combine(
+  redactSensitiveData(),
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.printf(({ timestamp, level, message, ...meta }) => {
+    const metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
+    return `${timestamp} [${level.toUpperCase()}]: ${message}${metaStr}`;
+  })
+);
+
 export const logger = winston.createLogger({
   level: isProduction ? 'info' : 'debug',
   format: isProduction ? prodFormat : devFormat,
-  transports: [new winston.transports.Console()],
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({
+      filename: path.join(logsDir, 'app.log'),
+      level: isProduction ? 'info' : 'debug',
+      format: fileFormat,
+    }),
+    new winston.transports.File({
+      filename: path.join(logsDir, 'error.log'),
+      level: 'error',
+      format: fileFormat,
+    }),
+  ],
   // Prevent winston from exiting on uncaught exceptions during normal operation
   exitOnError: false,
 });
+

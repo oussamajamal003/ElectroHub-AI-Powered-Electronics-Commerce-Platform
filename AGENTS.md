@@ -277,6 +277,59 @@ Use environment variables for secrets.
 
 ---
 
+## 9A. Customer vs Admin Authentication Rules
+
+ElectroHub has different registration/provisioning models for customers and administrators.
+
+### Customer
+
+Customer registration is a normal public customer flow:
+
+```text
+Customer Header
+    ↓
+Account
+    ↓
+Login / Create Account popup
+    ↓
+CUSTOMER account
+```
+
+Customer registration may create a `CUSTOMER` account through the approved backend registration API.
+
+### Admin
+
+**Do not implement public admin registration like customer registration.**
+
+Admin authentication is:
+
+```text
+/admin/login
+    ↓
+email + password
+    ↓
+backend verifies credentials
+    ↓
+backend verifies role = ADMIN
+    ↓
+Admin Console
+```
+
+Rules:
+
+- Admin login is supported.
+- Public `/admin/register` must not be exposed.
+- Never allow a client to submit `role=ADMIN`.
+- Never allow customer registration to create an administrator.
+- Admin accounts must be created through controlled development provisioning/seed/admin tooling or an explicitly approved future invitation/provisioning workflow.
+- Do not add an invitation-code system unless the task explicitly requires it.
+- Frontend must not contain an admin role selector.
+- Backend must enforce administrator authorization regardless of frontend behavior.
+
+For development/testing, use an existing seeded/provisioned administrator for `/admin/login`.
+
+Any future administrator-provisioning feature must explicitly address authorization, provisioning security, audit logging, abuse prevention, production restrictions, and API/database changes.
+
 ## 10. Stripe Rules
 
 Stripe is used for payment functionality.
@@ -328,6 +381,143 @@ When investigating runtime issues:
 A Sentry issue is evidence of runtime behavior, not automatically proof of root cause.
 
 ---
+
+## 13A. UI / Visual Source-of-Truth Rules
+
+These rules are mandatory for every UI implementation and remediation task.
+
+### Visual Source Priority
+
+For any requested UI change, inspect and follow all applicable visual sources, in this order:
+
+1. Explicit UI requirements in the task prompt
+2. Attached images/media in the current prompt
+3. Relevant screenshots inside `assets/figma/`
+4. Figma Design / Figma Make references
+5. Existing repository design-system tokens/components
+6. Existing responsive foundation and documented breakpoints
+
+**Every attached image is a source of truth for the requested visual behavior.**
+
+When the task says **"match the UI exactly"**, reproduce the relevant reference's layout, proportions, spacing, alignment, typography, colors, borders, radius, focus/error/disabled/loading states, icon placement, responsive behavior, modal/backdrop behavior, and header/sidebar behavior.
+
+Do not reinterpret a screenshot into a generic approximation.
+
+### Attached Images Are Requirements
+
+When images/media are attached:
+
+- inspect them before implementation
+- identify the UI state represented by each image
+- treat them as visual acceptance criteria
+- compare the implementation against them during verification
+- do not replace their requirements with generic UI assumptions
+- do not claim visual compliance without checking the result
+
+If an attached image conflicts with an older implementation, the current task's requested image is the visual target unless the task explicitly says otherwise.
+
+### Figma Repository Screenshots
+
+Always inspect the relevant:
+
+```text
+assets/figma/
+├── Components/
+├── admin/
+└── customer/
+```
+
+including relevant `README.md` files and screenshots.
+
+For UI work, do not rely only on the written task description when screenshots exist.
+
+### Fix Shared Components at the Foundation
+
+If a shared component controls the requested visual behavior, fix it at the shared-component level rather than patching every consumer.
+
+Examples:
+
+- Input focus/error/disabled styling → shared `Input`
+- Button disabled/loading/radius → shared `Button`
+- Modal backdrop/scroll/close behavior → shared Dialog/Modal foundation
+- Header/sidebar responsive behavior → shared responsive header/layout foundation
+
+Do not create duplicate components to work around a broken shared primitive.
+
+### Responsive Design Rule
+
+If desktop Figma/screenshots exist but mobile screenshots do not:
+
+- desktop must match the supplied visual reference strictly
+- mobile/tablet must use the existing ElectroHub responsive architecture and SCSS breakpoints
+- reuse the Task 01.5 responsive foundation where applicable
+- do not invent an unrelated responsive system
+
+If mobile/tablet screenshots are supplied, those screenshots become the strict visual source of truth for those breakpoints.
+
+Never assume a desktop layout can simply be scaled down.
+
+### Reusable Playwright Visual QA
+
+For meaningful UI changes, use this pipeline:
+
+```text
+inspect source
+    ↓
+implement
+    ↓
+run application
+    ↓
+capture visual evidence
+    ↓
+compare against screenshots/Figma
+    ↓
+identify differences
+    ↓
+fix
+    ↓
+capture again
+    ↓
+approve
+```
+
+Keep Playwright visual tests/scripts in the repository whenever practical so visual verification is reusable for future tasks.
+
+Recommended command:
+
+```bash
+cd apps/frontend
+npm run test:visual
+```
+
+The goal is a reusable pipeline, not a one-time manual Playwright run.
+
+For meaningful UI tasks, record:
+
+- viewport size
+- visual source used
+- screenshots captured
+- important differences found
+- fixes applied
+- final visual verification status
+
+If Playwright/browser installation or another environment limitation prevents visual verification, report:
+
+`Visual QA: NOT VERIFIED`
+
+and explain why. Never claim visual approval without evidence.
+
+### No False Visual Claims
+
+Never claim:
+
+- "matches Figma"
+- "pixel-perfect"
+- "matches screenshot"
+- "responsive verified"
+- "visual QA passed"
+
+unless the relevant visual evidence was actually inspected.
 
 ## 13. Figma Rules
 

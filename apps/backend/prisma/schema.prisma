@@ -84,14 +84,15 @@ model User {
   passwordHash String  @db.VarChar(255)
   firstName    String  @db.VarChar(100)
   lastName     String  @db.VarChar(100)
-  phone        String? @db.VarChar(30)
   isActive     Boolean @default(true)
 
-  role      Role      @relation(fields: [roleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  addresses Address[]
-  cart      Cart?
-  wishlist  Wishlist?
-  orders    Order[]
+  role               Role                 @relation(fields: [roleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  addresses          Address[]
+  cart               Cart?
+  wishlist           Wishlist?
+  orders             Order[]
+  refreshTokens      RefreshToken[]
+  passwordResetToken PasswordResetToken?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -357,4 +358,36 @@ model Delivery {
 
   @@index([status])
   @@map("deliveries")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique @db.VarChar(255)
+  expiresAt DateTime
+  isRevoked Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @db.Uuid
+  tokenHash String   @unique @db.VarChar(255)
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tokenHash])
+  @@map("password_reset_tokens")
 }

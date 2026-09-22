@@ -28,7 +28,7 @@ describe('Select', () => {
     const trigger = screen.getByRole('combobox');
     expect(trigger).toBeInTheDocument();
 
-    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+    fireEvent.keyDown(trigger, { key: 'ArrowDown', code: 'ArrowDown' });
 
     const listbox = await screen.findByRole('listbox');
     expect(listbox).toBeInTheDocument();
