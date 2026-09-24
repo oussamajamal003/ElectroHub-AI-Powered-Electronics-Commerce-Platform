@@ -137,6 +137,7 @@ describe('OtpService', () => {
           lockedAt: null,
           attempts: { lt: 5 },
           expiresAt: { gt: expect.any(Date) },
+          codeHash,
         },
         data: { consumedAt: expect.any(Date) },
       });
@@ -323,8 +324,10 @@ describe('OtpService', () => {
           id: 'challenge-1',
           consumedAt: null,
           lockedAt: null,
-          expiresAt: { gt: expect.any(Date) },
-          lastSentAt: { lte: expect.any(Date) }
+          OR: [
+            { lastSentAt: null },
+            { lastSentAt: { lte: expect.any(Date) } }
+          ]
         },
         data: expect.objectContaining({
           codeHash: expect.any(String),
