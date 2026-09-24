@@ -23,7 +23,7 @@ describe('OtpService Concurrency Integration', () => {
         firstName: 'Concurrency',
         lastName: 'Test',
         passwordHash: 'dummy',
-        role: 'CUSTOMER',
+        role: { connect: { name: 'CUSTOMER' } },
       },
     });
   });
