@@ -40,7 +40,7 @@ describe('OtpService', () => {
 
   beforeEach(() => {
     otpService = new OtpService();
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   describe('generateCode & hashCode', () => {
@@ -193,29 +193,30 @@ describe('OtpService', () => {
           expiresAt: new Date(Date.now() + 10000),
           attempts: 1,
           maxAttempts: 5,
-        } as unknown as OtpChallenge)
-        .mockResolvedValueOnce({
-          id: 'challenge-1',
-          userId: 'user-1',
-          attempts: 2,
-          maxAttempts: 5,
-          lockedAt: null,
-        } as unknown as OtpChallenge); // Mock the read-back
+        } as unknown as OtpChallenge);
 
       vi.mocked(prisma.otpChallenge.updateMany).mockResolvedValue({ count: 1 });
 
       const result = await otpService.verifyChallenge('challenge-1', '654321');
 
       expect(result).toBe(false);
-      expect(prisma.otpChallenge.updateMany).toHaveBeenCalledWith({
+      expect(prisma.otpChallenge.updateMany).toHaveBeenNthCalledWith(1, {
         where: {
           id: 'challenge-1',
           consumedAt: null,
           lockedAt: null,
           attempts: { lt: 5 },
-          expiresAt: { gt: expect.any(Date) },
         },
         data: { attempts: { increment: 1 } },
+      });
+      expect(prisma.otpChallenge.updateMany).toHaveBeenNthCalledWith(2, {
+        where: {
+          id: 'challenge-1',
+          consumedAt: null,
+          lockedAt: null,
+          attempts: { gte: 5 },
+        },
+        data: { lockedAt: expect.any(Date) },
       });
     });
 
@@ -233,22 +234,20 @@ describe('OtpService', () => {
           expiresAt: new Date(Date.now() + 10000),
           attempts: 4,
           maxAttempts: 5,
-        } as unknown as OtpChallenge)
-        .mockResolvedValueOnce({
-          id: 'challenge-1',
-          userId: 'user-1',
-          attempts: 5,
-          maxAttempts: 5,
-          lockedAt: null,
-        } as unknown as OtpChallenge); // Mock read-back after increment
+        } as unknown as OtpChallenge);
 
       vi.mocked(prisma.otpChallenge.updateMany).mockResolvedValue({ count: 1 });
 
       const result = await otpService.verifyChallenge('challenge-1', '999999');
 
       expect(result).toBe(false);
-      expect(prisma.otpChallenge.updateMany).toHaveBeenCalledWith({
-        where: { id: 'challenge-1', lockedAt: null },
+      expect(prisma.otpChallenge.updateMany).toHaveBeenNthCalledWith(2, {
+        where: {
+          id: 'challenge-1',
+          consumedAt: null,
+          lockedAt: null,
+          attempts: { gte: 5 },
+        },
         data: { lockedAt: expect.any(Date) },
       });
     });
@@ -275,7 +274,8 @@ describe('OtpService', () => {
 
   describe('resendChallenge', () => {
     it('should throttle resend if cooldown has not elapsed', async () => {
-      vi.mocked(prisma.otpChallenge.findUnique).mockResolvedValue({
+      vi.mocked(prisma.otpChallenge.updateMany).mockResolvedValueOnce({ count: 0 });
+      vi.mocked(prisma.otpChallenge.findUnique).mockResolvedValueOnce({
         id: 'challenge-1',
         consumedAt: null,
         lockedAt: null,
@@ -287,7 +287,8 @@ describe('OtpService', () => {
     });
 
     it('should issue new code, send email internally, and return metadata if cooldown has elapsed', async () => {
-      vi.mocked(prisma.otpChallenge.findUnique).mockResolvedValue({
+      vi.mocked(prisma.otpChallenge.updateMany).mockResolvedValueOnce({ count: 1 });
+      vi.mocked(prisma.otpChallenge.findUniqueOrThrow).mockResolvedValueOnce({
         id: 'challenge-1',
         userId: 'user-1',
         channel: OtpChannel.EMAIL,
@@ -313,14 +314,20 @@ describe('OtpService', () => {
         'user-1'
       );
 
-      expect(prisma.otpChallenge.update).toHaveBeenCalledWith({
-        where: { id: 'challenge-1' },
+      expect(prisma.otpChallenge.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'challenge-1',
+          consumedAt: null,
+          lockedAt: null,
+          expiresAt: { gt: expect.any(Date) },
+          lastSentAt: { lte: expect.any(Date) }
+        },
         data: expect.objectContaining({
           codeHash: expect.any(String),
           attempts: 0,
-          lockedAt: null,
+          expiresAt: expect.any(Date),
           resendCount: { increment: 1 },
-          lastSentAt: expect.any(Date),
+          lastSentAt: expect.any(Date)
         }),
       });
     });

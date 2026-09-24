@@ -19,6 +19,12 @@ describe('OtpService Concurrency Integration', () => {
     originalEmailMethod = emailService.sendAccountVerificationOtp;
     emailService.sendAccountVerificationOtp = vi.fn().mockResolvedValue(true);
 
+    await prisma.role.upsert({
+      where: { name: 'CUSTOMER' },
+      update: {},
+      create: { name: 'CUSTOMER', description: 'Customer' },
+    });
+
     await prisma.user.upsert({
       where: { email: destination },
       update: {},
@@ -236,7 +242,7 @@ describe('OtpService Concurrency Integration', () => {
     let errorThrown = false;
     try {
       await otpService.resendChallenge(challenge.id);
-    } catch (_e) {
+    } catch {
       errorThrown = true;
     }
     expect(errorThrown).toBe(true);
