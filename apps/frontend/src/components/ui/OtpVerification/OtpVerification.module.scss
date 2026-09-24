@@ -1,0 +1,230 @@
+@use '../../../styles/abstracts/variables' as *;
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: $spacing-8 $spacing-6;
+  background-color: $color-background;
+  border-radius: $radius-xl;
+  border: 1px solid $color-border;
+  box-shadow: $shadow-md;
+  box-sizing: border-box;
+
+  @media (max-width: $breakpoint-sm) {
+    padding: $spacing-6 $spacing-4;
+    border: none;
+    box-shadow: none;
+  }
+}
+
+.brand {
+  font-family: $font-family-heading;
+  font-size: $font-size-2xl;
+  font-weight: $font-weight-bold;
+  color: $color-primary;
+  margin-bottom: $spacing-3;
+  text-align: center;
+}
+
+.title {
+  font-family: $font-family-heading;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin: 0 0 $spacing-2;
+  text-align: center;
+}
+
+.subtitle {
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  margin: 0 0 $spacing-6;
+  text-align: center;
+  line-height: $line-height-normal;
+}
+
+.emailHighlight {
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+}
+
+.form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.digitsGroup {
+  display: flex;
+  gap: $spacing-3;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: $spacing-5;
+  width: 100%;
+
+  @media (max-width: $breakpoint-sm) {
+    gap: $spacing-2;
+  }
+}
+
+.digitInput {
+  width: 48px;
+  height: 54px;
+  font-family: $font-family-mono;
+  font-size: $font-size-2xl;
+  font-weight: $font-weight-bold;
+  text-align: center;
+  color: $color-text-primary;
+  background-color: $color-background;
+  border: 1.5px solid $color-border;
+  border-radius: $radius-lg;
+  transition: all $transition-fast;
+  box-sizing: border-box;
+  caret-color: $color-primary;
+
+  @media (max-width: $breakpoint-sm) {
+    width: 42px;
+    height: 48px;
+    font-size: $font-size-xl;
+  }
+
+  &:hover:not(:disabled):not(:focus) {
+    border-color: $color-primary-light;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: $color-primary;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  }
+
+  &.error {
+    border-color: $color-error;
+    background-color: $color-error-background;
+
+    &:focus {
+      border-color: $color-error;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+    }
+  }
+
+  &.filled {
+    border-color: $color-primary-light;
+  }
+
+  &:disabled {
+    background-color: $color-surface;
+    border-color: $color-border;
+    color: $color-text-muted;
+    cursor: not-allowed;
+  }
+}
+
+.stateMessage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-1;
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  margin-bottom: $spacing-4;
+  text-align: center;
+  width: 100%;
+
+  &.error {
+    color: $color-error-foreground;
+    font-weight: $font-weight-medium;
+  }
+
+  &.expired {
+    color: $color-warning-foreground;
+    font-weight: $font-weight-medium;
+  }
+
+  &.locked {
+    color: $color-error-foreground;
+    font-weight: $font-weight-semibold;
+  }
+}
+
+.stateIcon {
+  flex-shrink: 0;
+}
+
+.submitButton {
+  width: 100%;
+  margin-bottom: $spacing-5;
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $spacing-3;
+  width: 100%;
+}
+
+.resendContainer {
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-1;
+  flex-wrap: wrap;
+}
+
+.resendButton {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: $font-weight-semibold;
+  color: $color-primary;
+  cursor: pointer;
+  transition: color $transition-fast;
+
+  &:hover:not(:disabled) {
+    color: $color-primary-dark;
+    text-decoration: underline;
+  }
+
+  &:disabled {
+    color: $color-text-muted;
+    cursor: not-allowed;
+    text-decoration: none;
+  }
+}
+
+.countdownText {
+  color: $color-text-muted;
+  font-weight: $font-weight-medium;
+}
+
+.backButton {
+  background: none;
+  border: none;
+  padding: $spacing-1 $spacing-2;
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $color-text-secondary;
+  cursor: pointer;
+  transition: color $transition-fast;
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-1;
+
+  &:hover {
+    color: $color-text-primary;
+  }
+}

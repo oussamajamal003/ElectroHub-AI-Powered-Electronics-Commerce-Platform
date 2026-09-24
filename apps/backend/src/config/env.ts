@@ -49,6 +49,8 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().url().optional(),
   STRIPE_SECRET_KEY: z.string().optional(),
   BREVO_API_KEY: z.string().optional(),
+  BREVO_SENDER_EMAIL: z.string().email().optional(),
+  BREVO_SENDER_NAME: z.string().optional().default('ElectroHub'),
   CLOUDINARY_URL: z.string().optional(),
 });
 
