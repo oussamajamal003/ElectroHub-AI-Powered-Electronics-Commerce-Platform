@@ -20,7 +20,7 @@ export class BrevoProvider {
         apiKey: env.BREVO_API_KEY,
       });
 
-    this.defaultSenderEmail = defaultSender?.email || env.BREVO_SENDER_EMAIL || 'no-reply@electrohub.com';
+    this.defaultSenderEmail = defaultSender?.email || env.BREVO_SENDER_EMAIL || '';
     this.defaultSenderName = defaultSender?.name || env.BREVO_SENDER_NAME || 'ElectroHub';
   }
 

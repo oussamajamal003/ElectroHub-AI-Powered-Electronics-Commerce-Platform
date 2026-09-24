@@ -136,6 +136,8 @@ export class OtpService {
       return false;
     }
 
+    const now = new Date();
+
     if (challenge.consumedAt) {
       logger.warn('OTP_VERIFICATION_FAILURE', { challengeId, reason: 'already_consumed' });
       return false;
@@ -146,7 +148,7 @@ export class OtpService {
       return false;
     }
 
-    if (challenge.expiresAt < new Date()) {
+    if (challenge.expiresAt < now) {
       logger.warn('OTP_EXPIRED', { challengeId });
       return false;
     }
@@ -156,12 +158,18 @@ export class OtpService {
     if (isMatch) {
       // Atomic consumption
       const result = await prisma.otpChallenge.updateMany({
-        where: { id: challengeId, consumedAt: null },
-        data: { consumedAt: new Date() },
+        where: { 
+          id: challengeId, 
+          consumedAt: null, 
+          lockedAt: null,
+          expiresAt: { gt: now },
+          attempts: { lt: challenge.maxAttempts }
+        },
+        data: { consumedAt: now },
       });
 
       if (result.count === 0) {
-        logger.warn('OTP_VERIFICATION_FAILURE', { challengeId, reason: 'already_consumed_concurrent' });
+        logger.warn('OTP_VERIFICATION_FAILURE', { challengeId, reason: 'already_consumed_or_locked_concurrent' });
         return false;
       }
 
@@ -175,28 +183,30 @@ export class OtpService {
 
     // Atomic increment for wrong code
     await prisma.otpChallenge.updateMany({
-      where: { id: challengeId, consumedAt: null, lockedAt: null },
+      where: { 
+        id: challengeId, 
+        consumedAt: null, 
+        lockedAt: null,
+        attempts: { lt: challenge.maxAttempts } 
+      },
       data: { attempts: { increment: 1 } },
     });
 
-    // Check if it should be locked
-    const updated = await prisma.otpChallenge.findUnique({ where: { id: challengeId } });
-    if (updated && updated.attempts >= updated.maxAttempts && !updated.lockedAt) {
-      await prisma.otpChallenge.updateMany({
-        where: { id: challengeId, lockedAt: null },
-        data: { lockedAt: new Date() },
-      });
-      logger.warn('OTP_LOCKED', {
-        challengeId,
-        userId: updated.userId,
-        attempts: updated.attempts,
-      });
-    } else if (updated) {
-      logger.warn('OTP_VERIFICATION_FAILURE', {
-        challengeId,
-        attempts: updated.attempts,
-        remainingAttempts: Math.max(0, updated.maxAttempts - updated.attempts),
-      });
+    // Check if it reached maxAttempts and lock it atomically
+    const lockResult = await prisma.otpChallenge.updateMany({
+      where: {
+        id: challengeId,
+        consumedAt: null,
+        lockedAt: null,
+        attempts: { gte: challenge.maxAttempts },
+      },
+      data: { lockedAt: now },
+    });
+
+    if (lockResult.count > 0) {
+      logger.warn('OTP_LOCKED', { challengeId, userId: challenge.userId });
+    } else {
+      logger.warn('OTP_VERIFICATION_FAILURE', { challengeId, reason: 'wrong_code' });
     }
 
     return false;
@@ -205,73 +215,86 @@ export class OtpService {
   /**
    * Resend an OTP for an active challenge with server-side throttling.
    * Delivers via EmailService and returns metadata without exposing the plaintext OTP.
+   * 
+   * RESEND STATE ARCHITECTURE:
+   * - Concurrency behavior: Atomic `updateMany` claims the resend window based on `lastSentAt` <= (now - cooldownMs).
+   * - Which OTP is authoritative: The codeHash is committed BEFORE delivery. The database is ALWAYS authoritative.
+   * - Crash behavior / Brevo fails: If delivery fails or the process crashes post-DB commit, the new code is authoritative but undelivered. The user must wait for the cooldown to retry.
+   * - Post-Brevo failure: Since DB update happens BEFORE Brevo, there's no risk of sending an unpersisted code.
    */
   async resendChallenge(
     challengeId: string,
     cooldownMs: number = this.resendCooldownMs
   ): Promise<{ success: boolean; expiresAt: Date; resendAvailableAt: Date }> {
-    const challenge = await prisma.otpChallenge.findUnique({
-      where: { id: challengeId },
-    });
-
-    if (!challenge) {
-      throw new Error('Challenge not found');
-    }
-
-    if (challenge.consumedAt) {
-      throw new Error('Challenge has already been consumed');
-    }
-
-    if (challenge.lockedAt) {
-      throw new Error('Challenge is locked due to too many failed attempts');
-    }
-
-    // Check throttle cooldown
-    if (challenge.lastSentAt) {
-      const elapsed = Date.now() - challenge.lastSentAt.getTime();
-      if (elapsed < cooldownMs) {
-        const waitSeconds = Math.ceil((cooldownMs - elapsed) / 1000);
-        logger.warn('OTP_RESEND_THROTTLED', { challengeId, waitSeconds });
-        throw new Error(`Please wait ${waitSeconds}s before requesting a new code.`);
-      }
-    }
-
-    // Issue new code and reset attempts for this challenge
+    const now = new Date();
+    const thresholdDate = new Date(Date.now() - cooldownMs);
     const newCode = this.generateCode();
     const newCodeHash = this.hashCode(newCode);
     const newExpiresAt = new Date(Date.now() + this.defaultTtlMs);
 
-    // Send email using internal delivery path
+    // 1. Atomically claim the resend opportunity and persist the new code.
+    const claimResult = await prisma.otpChallenge.updateMany({
+      where: {
+        id: challengeId,
+        consumedAt: null,
+        lockedAt: null,
+        OR: [
+          { lastSentAt: null },
+          { lastSentAt: { lte: thresholdDate } }
+        ]
+      },
+      data: {
+        codeHash: newCodeHash,
+        attempts: 0,
+        expiresAt: newExpiresAt,
+        resendCount: { increment: 1 },
+        lastSentAt: now,
+      }
+    });
+
+    if (claimResult.count === 0) {
+      // Claim failed. Identify reason.
+      const current = await prisma.otpChallenge.findUnique({ where: { id: challengeId }});
+      if (!current) throw new Error('Challenge not found');
+      if (current.consumedAt) throw new Error('Challenge has already been consumed');
+      if (current.lockedAt) throw new Error('Challenge is locked due to too many failed attempts');
+      
+      const elapsed = Date.now() - current.lastSentAt!.getTime();
+      const waitSeconds = Math.ceil((cooldownMs - elapsed) / 1000);
+      logger.warn('OTP_RESEND_THROTTLED', { challengeId, waitSeconds });
+      throw new Error(`Please wait ${waitSeconds}s before requesting a new code.`);
+    }
+
+    // 2. We claimed the challenge. We must fetch it to get channel and destination.
+    const challenge = await prisma.otpChallenge.findUniqueOrThrow({
+      where: { id: challengeId }
+    });
+
+    // 3. Attempt delivery
     let deliverySuccess = false;
-    if (challenge.channel === OtpChannel.EMAIL) {
-      deliverySuccess = await emailService.sendAccountVerificationOtp(
-        challenge.destination,
-        newCode,
-        challenge.userId
-      );
+    try {
+      if (challenge.channel === OtpChannel.EMAIL) {
+        deliverySuccess = await emailService.sendAccountVerificationOtp(
+          challenge.destination,
+          newCode,
+          challenge.userId
+        );
+      }
+    } catch (err) {
+      logger.error('OTP_RESEND_DELIVERY_ERROR', { challengeId, error: err instanceof Error ? err.message : String(err) });
     }
 
     if (!deliverySuccess) {
       logger.error('OTP_RESEND_DELIVERY_FAILED', { challengeId });
+      // The DB reflects a sent code, but it failed to reach the provider.
+      // This is the expected crash boundary behavior.
       throw new Error('Failed to deliver the new verification code.');
     }
-
-    await prisma.otpChallenge.update({
-      where: { id: challengeId },
-      data: {
-        codeHash: newCodeHash,
-        attempts: 0,
-        lockedAt: null,
-        expiresAt: newExpiresAt,
-        resendCount: { increment: 1 },
-        lastSentAt: new Date(),
-      },
-    });
 
     logger.info('OTP_RESENT', {
       challengeId,
       userId: challenge.userId,
-      resendCount: challenge.resendCount + 1,
+      resendCount: challenge.resendCount,
     });
 
     return { 
