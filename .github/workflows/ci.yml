@@ -135,8 +135,8 @@ jobs:
           cat << 'EOF' > apps/backend/.env.test.local
           NODE_ENV=test
           PORT=5001
-          DATABASE_URL="postgresql://postgres:postgres@localhost:5432/electrohub_test?schema=public"
-          DIRECT_URL="postgresql://postgres:postgres@localhost:5432/electrohub_test?schema=public"
+          DATABASE_URL="${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}"
+          DIRECT_URL="${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}"
           JWT_SECRET=test-jwt-secret
           JWT_REFRESH_SECRET=test-jwt-refresh-secret
           AI_SERVICE_URL=http://localhost:8000
@@ -147,18 +147,28 @@ jobs:
           EOF
       - name: Generate Prisma Client
         env:
-          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
-          DIRECT_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          DATABASE_URL: "${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}"
+          DIRECT_URL: "${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}"
         run: npx prisma generate --schema apps/backend/prisma/schema.prisma
       - name: Validate Prisma Schema
         env:
-          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
-          DIRECT_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          DATABASE_URL: "${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}"
+          DIRECT_URL: "${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}"
         run: npx prisma validate --schema apps/backend/prisma/schema.prisma
-      - name: Test (unit tests only — integration tests require live DB)
+      - name: Prisma Migrate Deploy
         env:
-          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
-          DIRECT_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          DATABASE_URL: "${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}"
+          DIRECT_URL: "${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}"
+        run: npx prisma migrate deploy --schema apps/backend/prisma/schema.prisma
+      - name: Prisma Migrate Status
+        env:
+          DATABASE_URL: "${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}"
+          DIRECT_URL: "${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}"
+        run: npx prisma migrate status --schema apps/backend/prisma/schema.prisma
+      - name: Test (unit tests and integration tests)
+        env:
+          DATABASE_URL: "${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}"
+          DIRECT_URL: "${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}"
         run: npm run test:ci --workspace=@electrohub/backend
 
   backend-build:

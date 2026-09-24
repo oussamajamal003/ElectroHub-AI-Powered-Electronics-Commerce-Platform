@@ -49,7 +49,34 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().url().optional(),
   STRIPE_SECRET_KEY: z.string().optional(),
   BREVO_API_KEY: z.string().optional(),
+  BREVO_SENDER_EMAIL: z.string().email().optional(),
+  BREVO_SENDER_NAME: z.string().optional().default('ElectroHub'),
   CLOUDINARY_URL: z.string().optional(),
+  OTP_HASH_SECRET: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.NODE_ENV === 'production') {
+    if (!data.BREVO_API_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'BREVO_API_KEY is required in production',
+        path: ['BREVO_API_KEY'],
+      });
+    }
+    if (!data.BREVO_SENDER_EMAIL) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'BREVO_SENDER_EMAIL is required in production',
+        path: ['BREVO_SENDER_EMAIL'],
+      });
+    }
+    if (!data.OTP_HASH_SECRET || data.OTP_HASH_SECRET.length < 16) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'A secure OTP_HASH_SECRET of at least 16 characters is required in production',
+        path: ['OTP_HASH_SECRET'],
+      });
+    }
+  }
 });
 
 export type Env = z.infer<typeof envSchema>;
