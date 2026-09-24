@@ -1,8 +1,23 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { OtpService } from '../otp.service.js';
 import { prisma } from '../../lib/prisma.js';
-import { OtpPurpose, OtpChallenge, User } from '@prisma/client';
+import { OtpPurpose, OtpChallenge, User, OtpChannel } from '@prisma/client';
 import crypto from 'crypto';
+import { emailService } from '../email.service.js';
+
+// Mock env
+vi.mock('../../config/env.js', () => ({
+  env: {
+    OTP_HASH_SECRET: 'test-otp-secret-key-32chars-min-length',
+  },
+}));
+
+// Mock email service
+vi.mock('../email.service.js', () => ({
+  emailService: {
+    sendAccountVerificationOtp: vi.fn(),
+  },
+}));
 
 // Mock prisma
 vi.mock('../../lib/prisma.js', () => ({
@@ -35,10 +50,13 @@ describe('OtpService', () => {
       expect(code).toMatch(/^[0-9]{6}$/);
     });
 
-    it('should hash code predictably with sha256 without storing plaintext', () => {
+    it('should hash code predictably with HMAC sha256 without storing plaintext', () => {
       const code = '483921';
       const hash = otpService.hashCode(code);
-      const expected = crypto.createHash('sha256').update(code).digest('hex');
+      const expected = crypto
+        .createHmac('sha256', 'test-otp-secret-key-32chars-min-length')
+        .update(code)
+        .digest('hex');
       expect(hash).toBe(expected);
       expect(hash).not.toContain(code);
     });
@@ -72,7 +90,10 @@ describe('OtpService', () => {
           userId: 'user-1',
           purpose: OtpPurpose.EMAIL_VERIFICATION,
           destination: 'test@example.com',
-          codeHash: crypto.createHash('sha256').update(code).digest('hex'),
+          codeHash: crypto
+            .createHmac('sha256', 'test-otp-secret-key-32chars-min-length')
+            .update(code)
+            .digest('hex'),
           expiresAt: expect.any(Date),
           attempts: 0,
           maxAttempts: 5,
@@ -84,9 +105,12 @@ describe('OtpService', () => {
   });
 
   describe('verifyChallenge', () => {
-    it('should return true and consume challenge for correct code', async () => {
+    it('should return true and consume challenge for correct code atomically', async () => {
       const code = '123456';
-      const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+      const codeHash = crypto
+        .createHmac('sha256', 'test-otp-secret-key-32chars-min-length')
+        .update(code)
+        .digest('hex');
 
       vi.mocked(prisma.otpChallenge.findUnique).mockResolvedValue({
         id: 'challenge-1',
@@ -100,13 +124,13 @@ describe('OtpService', () => {
         maxAttempts: 5,
       } as unknown as OtpChallenge);
 
-      vi.mocked(prisma.otpChallenge.update).mockResolvedValue({} as unknown as OtpChallenge);
+      vi.mocked(prisma.otpChallenge.updateMany).mockResolvedValue({ count: 1 });
 
       const result = await otpService.verifyChallenge('challenge-1', code);
 
       expect(result).toBe(true);
-      expect(prisma.otpChallenge.update).toHaveBeenCalledWith({
-        where: { id: 'challenge-1' },
+      expect(prisma.otpChallenge.updateMany).toHaveBeenCalledWith({
+        where: { id: 'challenge-1', consumedAt: null },
         data: { consumedAt: expect.any(Date) },
       });
     });
@@ -116,7 +140,7 @@ describe('OtpService', () => {
         id: 'challenge-1',
         userId: 'user-1',
         purpose: OtpPurpose.EMAIL_VERIFICATION,
-        codeHash: crypto.createHash('sha256').update('123456').digest('hex'),
+        codeHash: crypto.createHmac('sha256', 'test-otp-secret-key-32chars-min-length').update('123456').digest('hex'),
         consumedAt: new Date(),
         lockedAt: null,
         expiresAt: new Date(Date.now() + 10000),
@@ -127,7 +151,7 @@ describe('OtpService', () => {
       const result = await otpService.verifyChallenge('challenge-1', '123456');
 
       expect(result).toBe(false);
-      expect(prisma.otpChallenge.update).not.toHaveBeenCalled();
+      expect(prisma.otpChallenge.updateMany).not.toHaveBeenCalled();
     });
 
     it('should reject expired challenge even if code is correct', async () => {
@@ -135,7 +159,7 @@ describe('OtpService', () => {
         id: 'challenge-1',
         userId: 'user-1',
         purpose: OtpPurpose.EMAIL_VERIFICATION,
-        codeHash: crypto.createHash('sha256').update('123456').digest('hex'),
+        codeHash: crypto.createHmac('sha256', 'test-otp-secret-key-32chars-min-length').update('123456').digest('hex'),
         consumedAt: null,
         lockedAt: null,
         expiresAt: new Date(Date.now() - 5000), // past
@@ -146,58 +170,74 @@ describe('OtpService', () => {
       const result = await otpService.verifyChallenge('challenge-1', '123456');
 
       expect(result).toBe(false);
-      expect(prisma.otpChallenge.update).not.toHaveBeenCalled();
+      expect(prisma.otpChallenge.updateMany).not.toHaveBeenCalled();
     });
 
-    it('should increment attempts on incorrect code and return false', async () => {
-      const codeHash = crypto.createHash('sha256').update('123456').digest('hex');
+    it('should increment attempts atomically on incorrect code and return false', async () => {
+      const codeHash = crypto.createHmac('sha256', 'test-otp-secret-key-32chars-min-length').update('123456').digest('hex');
 
-      vi.mocked(prisma.otpChallenge.findUnique).mockResolvedValue({
-        id: 'challenge-1',
-        userId: 'user-1',
-        purpose: OtpPurpose.EMAIL_VERIFICATION,
-        codeHash,
-        consumedAt: null,
-        lockedAt: null,
-        expiresAt: new Date(Date.now() + 10000),
-        attempts: 1,
-        maxAttempts: 5,
-      } as unknown as OtpChallenge);
+      vi.mocked(prisma.otpChallenge.findUnique)
+        .mockResolvedValueOnce({
+          id: 'challenge-1',
+          userId: 'user-1',
+          purpose: OtpPurpose.EMAIL_VERIFICATION,
+          codeHash,
+          consumedAt: null,
+          lockedAt: null,
+          expiresAt: new Date(Date.now() + 10000),
+          attempts: 1,
+          maxAttempts: 5,
+        } as unknown as OtpChallenge)
+        .mockResolvedValueOnce({
+          id: 'challenge-1',
+          userId: 'user-1',
+          attempts: 2,
+          maxAttempts: 5,
+          lockedAt: null,
+        } as unknown as OtpChallenge); // Mock the read-back
 
-      vi.mocked(prisma.otpChallenge.update).mockResolvedValue({} as unknown as OtpChallenge);
+      vi.mocked(prisma.otpChallenge.updateMany).mockResolvedValue({ count: 1 });
 
       const result = await otpService.verifyChallenge('challenge-1', '654321');
 
       expect(result).toBe(false);
-      expect(prisma.otpChallenge.update).toHaveBeenCalledWith({
-        where: { id: 'challenge-1' },
-        data: { attempts: 2, lockedAt: null },
+      expect(prisma.otpChallenge.updateMany).toHaveBeenCalledWith({
+        where: { id: 'challenge-1', consumedAt: null, lockedAt: null },
+        data: { attempts: { increment: 1 } },
       });
     });
 
     it('should lock challenge when max attempts is reached', async () => {
-      const codeHash = crypto.createHash('sha256').update('123456').digest('hex');
+      const codeHash = crypto.createHmac('sha256', 'test-otp-secret-key-32chars-min-length').update('123456').digest('hex');
 
-      vi.mocked(prisma.otpChallenge.findUnique).mockResolvedValue({
-        id: 'challenge-1',
-        userId: 'user-1',
-        purpose: OtpPurpose.EMAIL_VERIFICATION,
-        codeHash,
-        consumedAt: null,
-        lockedAt: null,
-        expiresAt: new Date(Date.now() + 10000),
-        attempts: 4,
-        maxAttempts: 5,
-      } as unknown as OtpChallenge);
+      vi.mocked(prisma.otpChallenge.findUnique)
+        .mockResolvedValueOnce({
+          id: 'challenge-1',
+          userId: 'user-1',
+          purpose: OtpPurpose.EMAIL_VERIFICATION,
+          codeHash,
+          consumedAt: null,
+          lockedAt: null,
+          expiresAt: new Date(Date.now() + 10000),
+          attempts: 4,
+          maxAttempts: 5,
+        } as unknown as OtpChallenge)
+        .mockResolvedValueOnce({
+          id: 'challenge-1',
+          userId: 'user-1',
+          attempts: 5,
+          maxAttempts: 5,
+          lockedAt: null,
+        } as unknown as OtpChallenge); // Mock read-back after increment
 
-      vi.mocked(prisma.otpChallenge.update).mockResolvedValue({} as unknown as OtpChallenge);
+      vi.mocked(prisma.otpChallenge.updateMany).mockResolvedValue({ count: 1 });
 
       const result = await otpService.verifyChallenge('challenge-1', '999999');
 
       expect(result).toBe(false);
-      expect(prisma.otpChallenge.update).toHaveBeenCalledWith({
-        where: { id: 'challenge-1' },
-        data: { attempts: 5, lockedAt: expect.any(Date) },
+      expect(prisma.otpChallenge.updateMany).toHaveBeenCalledWith({
+        where: { id: 'challenge-1', lockedAt: null },
+        data: { lockedAt: expect.any(Date) },
       });
     });
 
@@ -206,7 +246,7 @@ describe('OtpService', () => {
         id: 'challenge-1',
         userId: 'user-1',
         purpose: OtpPurpose.EMAIL_VERIFICATION,
-        codeHash: crypto.createHash('sha256').update('123456').digest('hex'),
+        codeHash: crypto.createHmac('sha256', 'test-otp-secret-key-32chars-min-length').update('123456').digest('hex'),
         consumedAt: null,
         lockedAt: new Date(),
         expiresAt: new Date(Date.now() + 10000),
@@ -217,7 +257,7 @@ describe('OtpService', () => {
       const result = await otpService.verifyChallenge('challenge-1', '123456');
 
       expect(result).toBe(false);
-      expect(prisma.otpChallenge.update).not.toHaveBeenCalled();
+      expect(prisma.otpChallenge.updateMany).not.toHaveBeenCalled();
     });
   });
 
@@ -234,9 +274,12 @@ describe('OtpService', () => {
       await expect(otpService.resendChallenge('challenge-1')).rejects.toThrow(/wait/i);
     });
 
-    it('should issue new code and reset attempts if cooldown has elapsed', async () => {
+    it('should issue new code, send email internally, and return metadata if cooldown has elapsed', async () => {
       vi.mocked(prisma.otpChallenge.findUnique).mockResolvedValue({
         id: 'challenge-1',
+        userId: 'user-1',
+        channel: OtpChannel.EMAIL,
+        destination: 'test@example.com',
         consumedAt: null,
         lockedAt: null,
         expiresAt: new Date(Date.now() + 10000),
@@ -244,15 +287,24 @@ describe('OtpService', () => {
         resendCount: 1,
       } as unknown as OtpChallenge);
 
+      vi.mocked(emailService.sendAccountVerificationOtp).mockResolvedValue(true);
       vi.mocked(prisma.otpChallenge.update).mockResolvedValue({} as unknown as OtpChallenge);
 
-      const code = await otpService.resendChallenge('challenge-1');
+      const result = await otpService.resendChallenge('challenge-1');
 
-      expect(code).toMatch(/^[0-9]{6}$/);
+      expect(result.success).toBe(true);
+      expect(result.expiresAt).toBeInstanceOf(Date);
+      
+      expect(emailService.sendAccountVerificationOtp).toHaveBeenCalledWith(
+        'test@example.com',
+        expect.stringMatching(/^[0-9]{6}$/),
+        'user-1'
+      );
+
       expect(prisma.otpChallenge.update).toHaveBeenCalledWith({
         where: { id: 'challenge-1' },
         data: expect.objectContaining({
-          codeHash: crypto.createHash('sha256').update(code).digest('hex'),
+          codeHash: expect.any(String),
           attempts: 0,
           lockedAt: null,
           resendCount: { increment: 1 },
@@ -265,7 +317,10 @@ describe('OtpService', () => {
   describe('verifyEmailOtp', () => {
     it('should verify challenge and update User.emailVerifiedAt on success', async () => {
       const code = '123456';
-      const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+      const codeHash = crypto
+        .createHmac('sha256', 'test-otp-secret-key-32chars-min-length')
+        .update(code)
+        .digest('hex');
 
       vi.mocked(prisma.otpChallenge.findUnique).mockResolvedValue({
         id: 'challenge-1',
@@ -279,7 +334,7 @@ describe('OtpService', () => {
         maxAttempts: 5,
       } as unknown as OtpChallenge);
 
-      vi.mocked(prisma.otpChallenge.update).mockResolvedValue({} as unknown as OtpChallenge);
+      vi.mocked(prisma.otpChallenge.updateMany).mockResolvedValue({ count: 1 });
       vi.mocked(prisma.user.update).mockResolvedValue({} as unknown as User);
 
       const result = await otpService.verifyEmailOtp('challenge-1', code);

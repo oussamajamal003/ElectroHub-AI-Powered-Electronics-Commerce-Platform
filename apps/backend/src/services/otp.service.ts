@@ -2,6 +2,8 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { OtpChannel, OtpPurpose } from '@prisma/client';
 import { logger } from '../utils/logger.js';
+import { env } from '../config/env.js';
+import { emailService } from './email.service.js';
 
 export interface VerifyChallengeResult {
   success: boolean;
@@ -22,10 +24,14 @@ export class OtpService {
   }
 
   /**
-   * Hashes a plaintext code using SHA-256.
+   * Hashes a plaintext code using HMAC SHA-256 and a server-side secret.
    */
   hashCode(code: string): string {
-    return crypto.createHash('sha256').update(code).digest('hex');
+    const secret = env.OTP_HASH_SECRET;
+    if (!secret) {
+      throw new Error('OTP_HASH_SECRET environment variable is missing');
+    }
+    return crypto.createHmac('sha256', secret).update(code).digest('hex');
   }
 
   /**
@@ -118,6 +124,7 @@ export class OtpService {
    * Verify an OTP challenge.
    * Returns boolean (or boolean compatible).
    * Enforces expiration, attempt limits, single-use consumption, and locking.
+   * Atomic operations prevent concurrent verification races.
    */
   async verifyChallenge(challengeId: string, code: string): Promise<boolean> {
     const challenge = await prisma.otpChallenge.findUnique({
@@ -129,68 +136,66 @@ export class OtpService {
       return false;
     }
 
-    // 1. Check if already consumed
     if (challenge.consumedAt) {
       logger.warn('OTP_VERIFICATION_FAILURE', { challengeId, reason: 'already_consumed' });
       return false;
     }
 
-    // 2. Check if already locked
     if (challenge.lockedAt) {
       logger.warn('OTP_LOCKED', { challengeId, reason: 'already_locked' });
       return false;
     }
 
-    // 3. Check expiration
     if (challenge.expiresAt < new Date()) {
       logger.warn('OTP_EXPIRED', { challengeId });
       return false;
     }
 
-    // 4. Compare code with hash
     const isMatch = this.compareCodeHash(code, challenge.codeHash);
 
     if (isMatch) {
-      // Consume challenge immediately (replay prevention)
-      await prisma.otpChallenge.update({
-        where: { id: challengeId },
-        data: {
-          consumedAt: new Date(),
-        },
+      // Atomic consumption
+      const result = await prisma.otpChallenge.updateMany({
+        where: { id: challengeId, consumedAt: null },
+        data: { consumedAt: new Date() },
       });
+
+      if (result.count === 0) {
+        logger.warn('OTP_VERIFICATION_FAILURE', { challengeId, reason: 'already_consumed_concurrent' });
+        return false;
+      }
 
       logger.info('OTP_VERIFICATION_SUCCESS', {
         challengeId,
         userId: challenge.userId,
         purpose: challenge.purpose,
       });
-
       return true;
     }
 
-    // Wrong code: increment attempt counter
-    const newAttempts = challenge.attempts + 1;
-    const shouldLock = newAttempts >= challenge.maxAttempts;
-
-    await prisma.otpChallenge.update({
-      where: { id: challengeId },
-      data: {
-        attempts: newAttempts,
-        lockedAt: shouldLock ? new Date() : null,
-      },
+    // Atomic increment for wrong code
+    await prisma.otpChallenge.updateMany({
+      where: { id: challengeId, consumedAt: null, lockedAt: null },
+      data: { attempts: { increment: 1 } },
     });
 
-    if (shouldLock) {
+    // Check if it should be locked
+    const updated = await prisma.otpChallenge.findUnique({ where: { id: challengeId } });
+    if (updated && updated.attempts >= updated.maxAttempts && !updated.lockedAt) {
+      await prisma.otpChallenge.updateMany({
+        where: { id: challengeId, lockedAt: null },
+        data: { lockedAt: new Date() },
+      });
       logger.warn('OTP_LOCKED', {
         challengeId,
-        userId: challenge.userId,
-        attempts: newAttempts,
+        userId: updated.userId,
+        attempts: updated.attempts,
       });
-    } else {
+    } else if (updated) {
       logger.warn('OTP_VERIFICATION_FAILURE', {
         challengeId,
-        attempts: newAttempts,
-        remainingAttempts: challenge.maxAttempts - newAttempts,
+        attempts: updated.attempts,
+        remainingAttempts: Math.max(0, updated.maxAttempts - updated.attempts),
       });
     }
 
@@ -199,12 +204,12 @@ export class OtpService {
 
   /**
    * Resend an OTP for an active challenge with server-side throttling.
-   * Returns new plaintext 6-digit code.
+   * Delivers via EmailService and returns metadata without exposing the plaintext OTP.
    */
   async resendChallenge(
     challengeId: string,
     cooldownMs: number = this.resendCooldownMs
-  ): Promise<string> {
+  ): Promise<{ success: boolean; expiresAt: Date; resendAvailableAt: Date }> {
     const challenge = await prisma.otpChallenge.findUnique({
       where: { id: challengeId },
     });
@@ -236,6 +241,21 @@ export class OtpService {
     const newCodeHash = this.hashCode(newCode);
     const newExpiresAt = new Date(Date.now() + this.defaultTtlMs);
 
+    // Send email using internal delivery path
+    let deliverySuccess = false;
+    if (challenge.channel === OtpChannel.EMAIL) {
+      deliverySuccess = await emailService.sendAccountVerificationOtp(
+        challenge.destination,
+        newCode,
+        challenge.userId
+      );
+    }
+
+    if (!deliverySuccess) {
+      logger.error('OTP_RESEND_DELIVERY_FAILED', { challengeId });
+      throw new Error('Failed to deliver the new verification code.');
+    }
+
     await prisma.otpChallenge.update({
       where: { id: challengeId },
       data: {
@@ -254,7 +274,11 @@ export class OtpService {
       resendCount: challenge.resendCount + 1,
     });
 
-    return newCode;
+    return { 
+      success: true, 
+      expiresAt: newExpiresAt, 
+      resendAvailableAt: new Date(Date.now() + cooldownMs) 
+    };
   }
 
   /**
