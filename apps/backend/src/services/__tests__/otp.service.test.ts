@@ -130,7 +130,13 @@ describe('OtpService', () => {
 
       expect(result).toBe(true);
       expect(prisma.otpChallenge.updateMany).toHaveBeenCalledWith({
-        where: { id: 'challenge-1', consumedAt: null },
+        where: {
+          id: 'challenge-1',
+          consumedAt: null,
+          lockedAt: null,
+          attempts: { lt: 5 },
+          expiresAt: { gt: expect.any(Date) },
+        },
         data: { consumedAt: expect.any(Date) },
       });
     });
@@ -202,7 +208,13 @@ describe('OtpService', () => {
 
       expect(result).toBe(false);
       expect(prisma.otpChallenge.updateMany).toHaveBeenCalledWith({
-        where: { id: 'challenge-1', consumedAt: null, lockedAt: null },
+        where: {
+          id: 'challenge-1',
+          consumedAt: null,
+          lockedAt: null,
+          attempts: { lt: 5 },
+          expiresAt: { gt: expect.any(Date) },
+        },
         data: { attempts: { increment: 1 } },
       });
     });

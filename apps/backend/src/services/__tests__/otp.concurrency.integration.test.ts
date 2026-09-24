@@ -2,14 +2,14 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { otpService } from '../otp.service.js';
 import { emailService } from '../email.service.js';
 import { prisma } from '../../lib/prisma.js';
-import { OtpPurpose, OtpChannel } from '@prisma/client';
+import { OtpPurpose } from '@prisma/client';
 import { env } from '../../config/env.js';
 import { vi } from 'vitest';
 
 describe('OtpService Concurrency Integration', () => {
-  const testUserId = 'test-concurrency-user';
+  const testUserId = '123e4567-e89b-12d3-a456-426614174000';
   const destination = 'concurrency@example.com';
-  let originalEmailMethod: any;
+  let originalEmailMethod: typeof emailService.sendAccountVerificationOtp;
 
   beforeAll(async () => {
     // This test requires a real database connection.
@@ -236,7 +236,7 @@ describe('OtpService Concurrency Integration', () => {
     let errorThrown = false;
     try {
       await otpService.resendChallenge(challenge.id);
-    } catch (e) {
+    } catch (_e) {
       errorThrown = true;
     }
     expect(errorThrown).toBe(true);
