@@ -31,6 +31,10 @@ export class BrevoProvider {
     options: SendTransactionalEmailOptions
   ): Promise<SendTransactionalEmailResult> {
     try {
+      if ((process.env.VITEST === 'true' || env.NODE_ENV === 'test') && process.env.VITEST_NO_MOCK_BREVO !== 'true') {
+        return { success: true, messageId: `mocked-message-id-${Date.now()}` };
+      }
+
       const sender: BrevoEmailAddress = {
         email: options.sender?.email || this.defaultSenderEmail,
         name: options.sender?.name || this.defaultSenderName,

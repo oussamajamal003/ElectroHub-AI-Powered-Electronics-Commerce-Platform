@@ -1,9 +1,17 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { BrevoClient } from '../brevo.client.js';
 import { BrevoProvider } from '../brevo.provider.js';
 
 describe('Brevo Integration', () => {
   const originalFetch = global.fetch;
+
+  beforeAll(() => {
+    process.env.VITEST_NO_MOCK_BREVO = 'true';
+  });
+
+  afterAll(() => {
+    delete process.env.VITEST_NO_MOCK_BREVO;
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();

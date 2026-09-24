@@ -17,8 +17,18 @@ export const forgotPasswordSchema = z.object({
 });
 
 export const resetPasswordSchema = z.object({
-  token: z.string().min(1, 'Reset token is required'),
+  email: z.string().email(),
+  code: z.string().length(6, 'Verification code must be exactly 6 digits').regex(/^\d+$/, 'Code must contain only digits'),
   newPassword: z.string().min(8, 'Password must be at least 8 characters long'),
+});
+
+export const verifyEmailSchema = z.object({
+  email: z.string().email(),
+  code: z.string().length(6, 'Verification code must be exactly 6 digits').regex(/^\d+$/, 'Code must contain only digits'),
+});
+
+export const resendVerificationSchema = z.object({
+  email: z.string().email(),
 });
 
 export const updateProfileSchema = z.object({

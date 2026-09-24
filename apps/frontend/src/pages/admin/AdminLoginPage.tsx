@@ -95,7 +95,11 @@ export function AdminLoginPage() {
 
     try {
       const loggedInUser = await login({ email: email.trim(), password });
-      if (loggedInUser?.role !== 'ADMIN') {
+      if ('requiresVerification' in loggedInUser) {
+        setError('Admin accounts must be pre-verified.');
+        return;
+      }
+      if ('role' in loggedInUser && loggedInUser.role !== 'ADMIN') {
         await logout();
         setError('Access denied. Administrator privileges required.');
         return;

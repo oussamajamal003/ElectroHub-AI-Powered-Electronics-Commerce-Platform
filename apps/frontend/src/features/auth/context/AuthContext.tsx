@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, LoginCredentials, RegisterData } from '../types';
-import { authApi } from '../api/auth';
+import { authApi, VerificationResponse } from '../api/auth';
 
 interface AuthState {
   user: User | null;
@@ -10,8 +10,9 @@ interface AuthState {
 }
 
 interface AuthContextValue extends AuthState {
-  login: (credentials: LoginCredentials) => Promise<User>;
-  register: (data: RegisterData) => Promise<void>;
+  login: (credentials: LoginCredentials) => Promise<VerificationResponse>;
+  register: (data: RegisterData) => Promise<VerificationResponse>;
+  verifyEmail: (data: { email: string; code: string }) => Promise<VerificationResponse>;
   logout: () => Promise<void>;
   updateProfile: (data: { firstName?: string; lastName?: string }) => Promise<void>;
 }
@@ -59,16 +60,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = async (credentials: LoginCredentials): Promise<User> => {
+  const login = async (credentials: LoginCredentials): Promise<VerificationResponse> => {
     setState((prev) => ({ ...prev, isLoading: true }));
     try {
       const response = await authApi.login(credentials);
-      setState((prev) => ({
-        ...prev,
-        user: response.user,
-        isAuthenticated: true,
-      }));
-      return response.user;
+      if (response.user) {
+        setState((prev) => ({
+          ...prev,
+          user: response.user,
+          isAuthenticated: true,
+        }));
+      }
+      return response;
     } finally {
       setState((prev) => ({ ...prev, isLoading: false }));
     }
@@ -78,6 +81,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, isLoading: true }));
     try {
       const response = await authApi.register(data);
+      return response;
+    } finally {
+      setState((prev) => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  const verifyEmail = async (data: { email: string; code: string }) => {
+    setState((prev) => ({ ...prev, isLoading: true }));
+    try {
+      const response = await authApi.verifyEmail(data);
       if (response.user && response.accessToken) {
         setState((prev) => ({
           ...prev,
@@ -85,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isAuthenticated: true,
         }));
       }
+      return response;
     } finally {
       setState((prev) => ({ ...prev, isLoading: false }));
     }
@@ -119,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, login, register, logout, updateProfile }}>
+    <AuthContext.Provider value={{ ...state, login, register, verifyEmail, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

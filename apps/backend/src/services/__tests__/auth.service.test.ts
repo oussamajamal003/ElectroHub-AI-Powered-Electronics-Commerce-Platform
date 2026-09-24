@@ -1,3 +1,4 @@
+process.env.OTP_HASH_SECRET = 'unit-test-secret';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuthService } from '../auth.service.js';
 import { prisma } from '../../lib/prisma.js';
@@ -25,6 +26,16 @@ vi.mock('../../lib/prisma.js', () => ({
       upsert: vi.fn(),
       findFirst: vi.fn(),
       deleteMany: vi.fn(),
+    },
+    otpChallenge: {
+      updateMany: vi.fn(),
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
+    },
+    emailDelivery: {
+      create: vi.fn().mockResolvedValue({ id: 'delivery-1', status: 'PENDING' }),
+      update: vi.fn().mockResolvedValue({ id: 'delivery-1', status: 'FAILED' }),
     },
     $transaction: vi.fn((callback) => callback(prisma)),
   },
@@ -68,15 +79,9 @@ describe('AuthService', () => {
 
       const result = await authService.registerCustomer('test@example.com', 'password123', 'John', 'Doe');
 
-      expect(result.user).toEqual({
-        id: 'user-1',
-        email: 'test@example.com',
-        firstName: 'John',
-        lastName: 'Doe',
-        role: 'CUSTOMER',
-      });
-      expect(typeof result.accessToken).toBe('string');
-      expect(typeof result.refreshToken).toBe('string');
+      expect(result.requiresVerification).toBe(true);
+      expect(result.email).toBe('test@example.com');
+      expect(result.message).toMatch(/verify/i);
       expect(prisma.user.create).toHaveBeenCalledTimes(1);
     });
 
@@ -111,6 +116,7 @@ describe('AuthService', () => {
         passwordHash: passwordHashed,
         roleId: 'role-1',
         isActive: true,
+        emailVerifiedAt: new Date(),
         createdAt: new Date(),
         updatedAt: new Date(),
         role: { id: 'role-1', name: 'CUSTOMER', description: '', createdAt: new Date(), updatedAt: new Date() }
@@ -119,10 +125,11 @@ describe('AuthService', () => {
       vi.mocked(prisma.refreshToken.create).mockResolvedValueOnce({} as unknown as RefreshToken);
 
       const result = await authService.login('test@example.com', passwordPlain);
+      if ('requiresVerification' in result) throw new Error('Expected success');
 
       expect(result.accessToken).toBeDefined();
       expect(result.refreshToken).toBeDefined();
-      expect(result.user.email).toBe('test@example.com');
+      expect(result.user?.email).toBe('test@example.com');
       expect(prisma.refreshToken.create).toHaveBeenCalledTimes(1);
     });
 
@@ -163,6 +170,7 @@ describe('AuthService', () => {
         passwordHash: passwordHashed,
         roleId: 'role-admin',
         isActive: true,
+        emailVerifiedAt: new Date(),
         createdAt: new Date(),
         updatedAt: new Date(),
         role: { id: 'role-admin', name: 'ADMIN', description: '', createdAt: new Date(), updatedAt: new Date() }
@@ -171,10 +179,11 @@ describe('AuthService', () => {
       vi.mocked(prisma.refreshToken.create).mockResolvedValueOnce({} as unknown as RefreshToken);
 
       const result = await authService.login('admin@electrohub.com', passwordPlain);
+      if ('requiresVerification' in result) throw new Error('Expected success');
 
       expect(result.accessToken).toBeDefined();
-      expect(result.user.role).toBe('ADMIN');
-      expect(result.user.email).toBe('admin@electrohub.com');
+      expect(result.user?.role).toBe('ADMIN');
+      expect(result.user?.email).toBe('admin@electrohub.com');
     });
 
     it('registration unconditionally assigns CUSTOMER role server-side', async () => {
@@ -202,9 +211,8 @@ describe('AuthService', () => {
       vi.mocked(prisma.user.create).mockResolvedValueOnce(mockUser as unknown as User);
       vi.mocked(prisma.refreshToken.create).mockResolvedValueOnce({} as unknown as RefreshToken);
 
-      const result = await authService.registerCustomer('hacker@example.com', 'password123', 'Hacker', 'User');
+      await authService.registerCustomer('hacker@example.com', 'password123', 'Hacker', 'User');
 
-      expect(result.user.role).toBe('CUSTOMER');
       expect(prisma.user.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           roleId: 'role-cust',

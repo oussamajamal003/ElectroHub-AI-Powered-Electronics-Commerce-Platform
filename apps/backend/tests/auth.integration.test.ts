@@ -16,10 +16,14 @@
  * cross-contamination between test runs.
  */
 
+process.env.OTP_HASH_SECRET = 'integration-test-secret';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+
 import request from 'supertest';
 import app from '../src/app.js';
 import { prisma } from '../src/lib/prisma.js';
+
+
 
 // ─── Test fixtures ───────────────────────────────────────────────────────────
 
@@ -59,25 +63,21 @@ afterAll(async () => {
 // ─── 1. CUSTOMER REGISTRATION ────────────────────────────────────────────────
 
 describe('1. Customer Registration — POST /api/auth/register', () => {
-  it('1a. Registers a new customer and returns 201 + accessToken + CUSTOMER role', async () => {
+  it('1a. Registers a new customer and returns 201 + requiresVerification (no token)', async () => {
     const res = await request(app)
       .post('/api/auth/register')
       .send(testCustomer);
 
     expect(res.status).toBe(201);
-    expect(res.body.accessToken).toBeDefined();
-    expect(res.body.user).toMatchObject({
-      email: testCustomer.email,
-      firstName: testCustomer.firstName,
-      lastName: testCustomer.lastName,
-      role: 'CUSTOMER',
-    });
-    // Refresh token must be in HttpOnly cookie — NOT in response body
+    expect(res.body.requiresVerification).toBe(true);
+    expect(res.body.accessToken).toBeUndefined();
     expect(res.body.refreshToken).toBeUndefined();
-    const setCookie = res.headers['set-cookie'];
-    expect(setCookie).toBeDefined();
-    expect(setCookie.some((c: string) => c.includes('electrohub_refresh'))).toBe(true);
-    expect(setCookie.some((c: string) => c.includes('HttpOnly'))).toBe(true);
+
+    // Manually verify the user in the database so subsequent login tests pass
+    await prisma.user.update({
+      where: { email: testCustomer.email },
+      data: { emailVerifiedAt: new Date() }
+    });
   }, 20000);
 
   it('1b. Returns 409 when email already exists', async () => {
@@ -310,7 +310,7 @@ describe('8. POST /api/auth/forgot-password — generic response (no email enume
       .send({ email: testCustomer.email });
 
     expect(res.status).toBe(200);
-    expect(res.body.message).toMatch(/password reset/i);
+    expect(res.body.message).toBe("If the account exists, a password reset message has been sent.");
   }, 15000);
 
   it('8b. Returns 200 for a non-existent email (no user enumeration)', async () => {
@@ -319,7 +319,7 @@ describe('8. POST /api/auth/forgot-password — generic response (no email enume
       .send({ email: `ghost.${timestamp}@dev.invalid` });
 
     expect(res.status).toBe(200);
-    expect(res.body.message).toBeDefined();
+    expect(res.body.message).toBe("If the account exists, a password reset message has been sent.");
   }, 10000);
 
   it('8c. Returns 400 for invalid email format', async () => {

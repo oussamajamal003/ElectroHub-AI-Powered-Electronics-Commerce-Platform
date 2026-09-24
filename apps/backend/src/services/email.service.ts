@@ -149,6 +149,164 @@ export class EmailService {
       return false;
     }
   }
+
+  /**
+   * Send a password reset OTP.
+   */
+  async sendPasswordResetOtp(email: string, otp: string, userId?: string): Promise<boolean> {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const delivery = await prisma.emailDelivery.create({
+      data: {
+        type: EmailType.PASSWORD_RESET,
+        recipient: normalizedEmail,
+        userId: userId || null,
+        status: EmailDeliveryStatus.QUEUED,
+        provider: 'BREVO',
+      },
+    });
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Reset your ElectroHub password</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #0f172a; }
+    .card { max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+    .brand { font-size: 22px; font-weight: 700; color: #2563eb; text-align: center; margin-bottom: 24px; }
+    h1 { font-size: 20px; font-weight: 600; margin: 0 0 12px; text-align: center; color: #0f172a; }
+    p { font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 16px; }
+    .code-container { background: #f1f5f9; border-radius: 8px; padding: 18px; text-align: center; margin: 24px 0; border: 1px dashed #cbd5e1; }
+    .code { font-family: monospace; font-size: 32px; font-weight: 700; letter-spacing: 8px; color: #1e293b; }
+    .notice { font-size: 13px; color: #64748b; margin-top: 16px; }
+    .footer { font-size: 12px; color: #94a3b8; text-align: center; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">ElectroHub</div>
+    <h1>Reset your password</h1>
+    <p>Please enter the following 6-digit code to reset your ElectroHub password. This code is valid for 15 minutes.</p>
+    <div class="code-container">
+      <span class="code">${otp}</span>
+    </div>
+    <p class="notice">If you did not request a password reset, you can safely ignore this email.</p>
+    <div class="footer">&copy; ElectroHub. All rights reserved.</div>
+  </div>
+</body>
+</html>
+    `.trim();
+
+    const textContent = `ElectroHub — Reset your password\n\nYour 6-digit reset code is: ${otp}\n\nThis code will expire in 15 minutes. If you did not request this code, you can safely ignore this email.`;
+
+    try {
+      const result = await this.provider.sendTransactionalEmail({
+        to: normalizedEmail,
+        subject: 'Reset your ElectroHub password',
+        htmlContent,
+        textContent,
+        tags: [EmailType.PASSWORD_RESET],
+      });
+
+      if (result.success && result.messageId) {
+        await prisma.emailDelivery.update({
+          where: { id: delivery.id },
+          data: { status: EmailDeliveryStatus.SENT, providerMessageId: result.messageId, sentAt: new Date() },
+        });
+        logger.info('EMAIL_SEND_SUCCESS', { type: EmailType.PASSWORD_RESET, recipient: this.maskEmail(normalizedEmail) });
+        return true;
+      }
+      await prisma.emailDelivery.update({
+        where: { id: delivery.id },
+        data: { status: EmailDeliveryStatus.FAILED, failureReason: result.error, failedAt: new Date() },
+      });
+      return false;
+    } catch (err: unknown) {
+      await prisma.emailDelivery.update({
+        where: { id: delivery.id },
+        data: { status: EmailDeliveryStatus.FAILED, failureReason: String(err), failedAt: new Date() },
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Send a password changed notification.
+   */
+  async sendPasswordChangedNotification(email: string, userId?: string): Promise<boolean> {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const delivery = await prisma.emailDelivery.create({
+      data: {
+        type: EmailType.PASSWORD_CHANGED,
+        recipient: normalizedEmail,
+        userId: userId || null,
+        status: EmailDeliveryStatus.QUEUED,
+        provider: 'BREVO',
+      },
+    });
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Your ElectroHub password was changed</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #0f172a; }
+    .card { max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+    .brand { font-size: 22px; font-weight: 700; color: #2563eb; text-align: center; margin-bottom: 24px; }
+    h1 { font-size: 20px; font-weight: 600; margin: 0 0 12px; text-align: center; color: #0f172a; }
+    p { font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 16px; }
+    .notice { font-size: 13px; color: #64748b; margin-top: 16px; }
+    .footer { font-size: 12px; color: #94a3b8; text-align: center; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">ElectroHub</div>
+    <h1>Password Changed</h1>
+    <p>This is a confirmation that the password for your ElectroHub account has been changed recently.</p>
+    <p class="notice">If you did not make this change, please contact our support team immediately.</p>
+    <div class="footer">&copy; ElectroHub. All rights reserved.</div>
+  </div>
+</body>
+</html>
+    `.trim();
+
+    const textContent = `ElectroHub — Password Changed\n\nYour ElectroHub password was recently changed. If you did not make this change, please contact support immediately.`;
+
+    try {
+      const result = await this.provider.sendTransactionalEmail({
+        to: normalizedEmail,
+        subject: 'Your ElectroHub password was changed',
+        htmlContent,
+        textContent,
+        tags: [EmailType.PASSWORD_CHANGED],
+      });
+
+      if (result.success && result.messageId) {
+        await prisma.emailDelivery.update({
+          where: { id: delivery.id },
+          data: { status: EmailDeliveryStatus.SENT, providerMessageId: result.messageId, sentAt: new Date() },
+        });
+        return true;
+      }
+      await prisma.emailDelivery.update({
+        where: { id: delivery.id },
+        data: { status: EmailDeliveryStatus.FAILED, failureReason: result.error, failedAt: new Date() },
+      });
+      return false;
+    } catch (err: unknown) {
+      await prisma.emailDelivery.update({
+        where: { id: delivery.id },
+        data: { status: EmailDeliveryStatus.FAILED, failureReason: String(err), failedAt: new Date() },
+      });
+      return false;
+    }
+  }
 }
 
 export const emailService = new EmailService();

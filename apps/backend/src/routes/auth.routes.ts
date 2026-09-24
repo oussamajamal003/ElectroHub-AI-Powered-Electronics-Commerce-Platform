@@ -9,6 +9,8 @@ import {
   forgotPassword,
   resetPassword,
   changePassword,
+  verifyEmail,
+  resendVerification,
 } from '../controllers/auth.controller.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
@@ -100,6 +102,62 @@ router.post('/login', loginRateLimiter, login);
 
 /**
  * @swagger
+ * /auth/verify-email:
+ *   post:
+ *     summary: Verify email using a verification code
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - code
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               code:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Email verified successfully
+ *       400:
+ *         description: Invalid or expired verification code
+ *       429:
+ *         description: Too many requests
+ * 
+ * /auth/resend-verification:
+ *   post:
+ *     summary: Resend email verification code
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Verification code resent successfully
+ *       400:
+ *         description: No active verification process found
+ *       429:
+ *         description: Please wait before requesting a new code
+ */
+router.post('/verify-email', verifyEmail);
+router.post('/resend-verification', resendVerification);
+
+/**
+ * @swagger
  * /auth/refresh:
  *   post:
  *     summary: Refresh access token
@@ -156,10 +214,14 @@ router.post('/forgot-password', passwordResetRateLimiter, forgotPassword);
  *           schema:
  *             type: object
  *             required:
- *               - token
+ *               - email
+ *               - code
  *               - newPassword
  *             properties:
- *               token:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               code:
  *                 type: string
  *               newPassword:
  *                 type: string

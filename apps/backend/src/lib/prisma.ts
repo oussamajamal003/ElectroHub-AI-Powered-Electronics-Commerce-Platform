@@ -19,12 +19,16 @@ const globalForPrisma = globalThis as unknown as {
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 
-const connectionString = process.env.DATABASE_URL;
+import { env } from '../config/env.js';
+const connectionString = env.DIRECT_URL || env.DATABASE_URL;
 export const pool = new Pool({
   connectionString,
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 15000,
+  ssl: {
+    rejectUnauthorized: false,
+  },
 });
 const adapter = new PrismaPg(pool);
 

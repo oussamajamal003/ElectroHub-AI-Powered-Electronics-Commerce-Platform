@@ -9,13 +9,14 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { useAuth } from '../context/AuthContext';
+import { authApi } from '../api/auth';
 import styles from './AuthModals.module.scss';
 import { ApiError } from '@/lib/api';
 import { Eye, EyeOff, X } from 'lucide-react';
 
 import { useNavigate, useLocation } from 'react-router-dom';
 
-export type AuthModalMode = 'login' | 'register';
+export type AuthModalMode = 'login' | 'register' | 'verify' | 'forgot' | 'reset';
 
 export interface AuthModalProps {
   open: boolean;
@@ -51,12 +52,33 @@ export function AuthModal({
   onSwitchToRegister,
   onSwitchToLogin,
 }: AuthModalProps) {
-  const { login, register } = useAuth();
+  const { login, register, verifyEmail } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string })?.from || '/account';
   const [mode, setMode] = useState<AuthModalMode>(initialMode);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Target email for OTP flows
+  const [targetEmail, setTargetEmail] = useState('');
+
+  // Verify form state
+  const [verifyCode, setVerifyCode] = useState('');
+  const [verifyCodeError, setVerifyCodeError] = useState('');
+  const [verifyError, setVerifyError] = useState('');
+  
+  // Forgot form state
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotEmailError, setForgotEmailError] = useState('');
+  const [forgotError, setForgotError] = useState('');
+
+  // Reset form state
+  const [resetCode, setResetCode] = useState('');
+  const [resetCodeError, setResetCodeError] = useState('');
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetPasswordError, setResetPasswordError] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [showResetPassword, setShowResetPassword] = useState(false);
 
   // Login form state
   const [loginEmail, setLoginEmail] = useState('');
@@ -115,6 +137,19 @@ export function AuthModal({
         password: '',
         confirmPassword: '',
       });
+      setVerifyCode('');
+      setVerifyCodeError('');
+      setVerifyError('');
+      setForgotEmail('');
+      setForgotEmailError('');
+      setForgotError('');
+      setResetCode('');
+      setResetCodeError('');
+      setResetPassword('');
+      setResetPasswordError('');
+      setResetError('');
+      setShowResetPassword(false);
+      setTargetEmail('');
     }
   }, [open, initialMode]);
 
@@ -140,6 +175,18 @@ export function AuthModal({
       password: '',
       confirmPassword: '',
     });
+    setVerifyCode('');
+    setVerifyCodeError('');
+    setVerifyError('');
+    setForgotEmail('');
+    setForgotEmailError('');
+    setForgotError('');
+    setResetCode('');
+    setResetCodeError('');
+    setResetPassword('');
+    setResetPasswordError('');
+    setResetError('');
+    setShowResetPassword(false);
     if (newMode === 'register' && onSwitchToRegister) {
       onSwitchToRegister();
     } else if (newMode === 'login' && onSwitchToLogin) {
@@ -225,7 +272,12 @@ export function AuthModal({
       setLoginPassword('');
       navigate(from, { replace: true });
     } catch (err: unknown) {
-      setLoginError(normalizeErrorMessage(err));
+      if (err instanceof ApiError && err.status === 403 && (err.data as Record<string, unknown>)?.requiresVerification) {
+        setTargetEmail((err.data as Record<string, unknown>).email as string || loginEmail.trim());
+        setMode('verify');
+      } else {
+        setLoginError(normalizeErrorMessage(err));
+      }
     } finally {
       setIsLoading(false);
     }
@@ -330,22 +382,26 @@ export function AuthModal({
     setIsLoading(true);
 
     try {
-      await register({
+      const res = await register({
         email: registerData.email.trim(),
         password: registerData.password,
         firstName,
         lastName,
       });
 
-      // Successful register + auto-login immediately transitions to authenticated state
-      setRegisterData({
-        fullName: '',
-        email: '',
-        password: '',
-        confirmPassword: '',
-      });
-      onOpenChange(false);
-      navigate(from, { replace: true });
+      if (res?.requiresVerification) {
+        setTargetEmail(res.email || registerData.email.trim());
+        setMode('verify');
+      } else {
+        setRegisterData({
+          fullName: '',
+          email: '',
+          password: '',
+          confirmPassword: '',
+        });
+        onOpenChange(false);
+        navigate(from, { replace: true });
+      }
     } catch (err: unknown) {
       setRegisterError(normalizeErrorMessage(err));
     } finally {
@@ -353,7 +409,91 @@ export function AuthModal({
     }
   };
 
-  const isLogin = mode === 'login';
+  const handleVerifySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLoading) return;
+    setVerifyCodeError('');
+    setVerifyError('');
+    if (!verifyCode || verifyCode.length !== 6 || !/^\d+$/.test(verifyCode)) {
+      setVerifyCodeError('Please enter a valid 6-digit code.');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await verifyEmail({ email: targetEmail, code: verifyCode });
+      onOpenChange(false);
+      navigate(from, { replace: true });
+    } catch (err) {
+      setVerifyError(normalizeErrorMessage(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendVerify = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+    setVerifyError('');
+    try {
+      await authApi.resendVerification({ email: targetEmail });
+      setVerifyError('Verification code resent successfully.');
+    } catch (err) {
+      setVerifyError(normalizeErrorMessage(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLoading) return;
+    setForgotEmailError('');
+    setForgotError('');
+    const err = validateLoginEmail(forgotEmail);
+    if (err) {
+      setForgotEmailError(err);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await authApi.forgotPassword({ email: forgotEmail.trim() });
+      setTargetEmail(forgotEmail.trim());
+      setMode('reset');
+    } catch (err) {
+      setForgotError(normalizeErrorMessage(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLoading) return;
+    setResetCodeError('');
+    setResetPasswordError('');
+    setResetError('');
+    let hasErr = false;
+    if (!resetCode || resetCode.length !== 6 || !/^\d+$/.test(resetCode)) {
+      setResetCodeError('Please enter a valid 6-digit code.');
+      hasErr = true;
+    }
+    if (!resetPassword || resetPassword.length < 8) {
+      setResetPasswordError('Password must be at least 8 characters.');
+      hasErr = true;
+    }
+    if (hasErr) return;
+
+    setIsLoading(true);
+    try {
+      await authApi.resetPassword({ email: targetEmail, code: resetCode, newPassword: resetPassword });
+      setMode('login');
+      setLoginError('Password reset successfully. Please log in.');
+    } catch (err) {
+      setResetError(normalizeErrorMessage(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <Dialog
@@ -388,16 +528,143 @@ export function AuthModal({
         <div className={styles.header}>
           <div className={styles.brand}>ElectroHub</div>
           <DialogTitle className={styles.title}>
-            {isLogin ? 'Welcome Back' : 'Create Account'}
+            {mode === 'login' && 'Welcome Back'}
+            {mode === 'register' && 'Create Account'}
+            {mode === 'verify' && 'Verify Email'}
+            {mode === 'forgot' && 'Reset Password'}
+            {mode === 'reset' && 'Create New Password'}
           </DialogTitle>
           <DialogDescription className={styles.description}>
-            {isLogin
-              ? 'Sign in to your account to continue'
-              : 'Join ElectroHub to start shopping'}
+            {mode === 'login' && 'Sign in to your account to continue'}
+            {mode === 'register' && 'Join ElectroHub to start shopping'}
+            {mode === 'verify' && `Enter the 6-digit code sent to ${targetEmail}`}
+            {mode === 'forgot' && 'Enter your email to receive a reset code'}
+            {mode === 'reset' && `Enter the reset code sent to ${targetEmail}`}
           </DialogDescription>
         </div>
 
-        {isLogin ? (
+        {mode === 'verify' && (
+          <>
+            {verifyError && (
+              <Alert variant="error" className={styles.alert}>
+                {verifyError}
+              </Alert>
+            )}
+            <form onSubmit={handleVerifySubmit} className={styles.form} noValidate>
+              <div className={styles.formGroup}>
+                <Input
+                  id="verifyCode"
+                  name="verifyCode"
+                  label="Verification Code"
+                  value={verifyCode}
+                  onChange={(e) => setVerifyCode(e.target.value)}
+                  error={verifyCodeError}
+                  fullWidth
+                  disabled={isLoading}
+                  placeholder="000000"
+                  autoComplete="one-time-code"
+                />
+              </div>
+              <Button type="submit" className={styles.submitButton} disabled={isLoading} isLoading={isLoading}>
+                Verify Email
+              </Button>
+            </form>
+            <div className={styles.footer}>
+              <p>Didn't receive a code? <button type="button" onClick={handleResendVerify} className={styles.switchButton} disabled={isLoading}>Resend</button></p>
+              <p style={{ marginTop: '8px' }}><button type="button" onClick={() => handleSwitchMode('login')} className={styles.switchButton} disabled={isLoading}>Back to Login</button></p>
+            </div>
+          </>
+        )}
+
+        {mode === 'forgot' && (
+          <>
+            {forgotError && (
+              <Alert variant="error" className={styles.alert}>
+                {forgotError}
+              </Alert>
+            )}
+            <form onSubmit={handleForgotSubmit} className={styles.form} noValidate>
+              <div className={styles.formGroup}>
+                <Input
+                  id="forgotEmail"
+                  name="forgotEmail"
+                  label="Email Address"
+                  type="email"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  error={forgotEmailError}
+                  fullWidth
+                  disabled={isLoading}
+                  placeholder="you@example.com"
+                />
+              </div>
+              <Button type="submit" className={styles.submitButton} disabled={isLoading} isLoading={isLoading}>
+                Send Reset Code
+              </Button>
+            </form>
+            <div className={styles.footer}>
+              <p><button type="button" onClick={() => handleSwitchMode('login')} className={styles.switchButton} disabled={isLoading}>Back to Login</button></p>
+            </div>
+          </>
+        )}
+
+        {mode === 'reset' && (
+          <>
+            {resetError && (
+              <Alert variant="error" className={styles.alert}>
+                {resetError}
+              </Alert>
+            )}
+            <form onSubmit={handleResetSubmit} className={styles.form} noValidate>
+              <div className={styles.formGroup}>
+                <Input
+                  id="resetCode"
+                  name="resetCode"
+                  label="Reset Code"
+                  value={resetCode}
+                  onChange={(e) => setResetCode(e.target.value)}
+                  error={resetCodeError}
+                  fullWidth
+                  disabled={isLoading}
+                  placeholder="000000"
+                  autoComplete="one-time-code"
+                />
+              </div>
+              <div className={styles.formGroup}>
+                <Input
+                  id="resetPassword"
+                  name="resetPassword"
+                  label="New Password"
+                  type={showResetPassword ? 'text' : 'password'}
+                  value={resetPassword}
+                  onChange={(e) => setResetPassword(e.target.value)}
+                  error={resetPasswordError}
+                  fullWidth
+                  disabled={isLoading}
+                  placeholder="Min. 8 characters"
+                  endAdornment={
+                    <button
+                      type="button"
+                      className={styles.eyeButton}
+                      onClick={() => setShowResetPassword(!showResetPassword)}
+                      disabled={isLoading}
+                    >
+                      {showResetPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  }
+                />
+              </div>
+              <Button type="submit" className={styles.submitButton} disabled={isLoading} isLoading={isLoading}>
+                Reset Password
+              </Button>
+            </form>
+            <div className={styles.footer}>
+              <p><button type="button" onClick={() => handleSwitchMode('login')} className={styles.switchButton} disabled={isLoading}>Back to Login</button></p>
+            </div>
+          </>
+        )}
+
+        {mode === 'login' && (
           <>
             {loginError && (
               <Alert variant="error" className={styles.alert}>
@@ -432,7 +699,7 @@ export function AuthModal({
                     <button
                       type="button"
                       className={styles.forgotPassword}
-                      onClick={() => {}}
+                      onClick={() => handleSwitchMode('forgot')}
                       disabled={isLoading}
                     >
                       Forgot Password?
@@ -485,7 +752,9 @@ export function AuthModal({
               </p>
             </div>
           </>
-        ) : (
+        )}
+        
+        {mode === 'register' && (
           <>
             {registerError && (
               <Alert variant="error" className={styles.alert}>

@@ -5,11 +5,6 @@ import { logger } from '../utils/logger.js';
 import { env } from '../config/env.js';
 import { emailService } from './email.service.js';
 
-export interface VerifyChallengeResult {
-  success: boolean;
-  reason?: 'not_found' | 'expired' | 'locked' | 'already_consumed' | 'invalid_code';
-  remainingAttempts?: number;
-}
 
 export class OtpService {
   private readonly defaultTtlMs = 10 * 60 * 1000; // 10 minutes
@@ -214,6 +209,29 @@ export class OtpService {
     }
 
     return false;
+  }
+
+  /**
+   * Find the most recent active challenge ID by email and purpose.
+   */
+  async getChallengeIdByEmail(email: string, purpose: OtpPurpose): Promise<string | null> {
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await prisma.user.findUnique({
+      where: { email: normalizedEmail }
+    });
+    if (!user) return null;
+
+    const challenge = await prisma.otpChallenge.findFirst({
+      where: {
+        userId: user.id,
+        purpose,
+        consumedAt: null,
+        lockedAt: null,
+        expiresAt: { gt: new Date() }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    return challenge?.id || null;
   }
 
   /**
