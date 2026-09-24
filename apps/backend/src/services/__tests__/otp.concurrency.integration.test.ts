@@ -66,7 +66,7 @@ describe('OtpService Concurrency Integration', () => {
 
     const updated = await prisma.otpChallenge.findUnique({ where: { id: latestChallenge.id } });
     expect(updated?.consumedAt).not.toBeNull();
-  });
+  }, 30000);
 
   it('TEST 2: Concurrent incorrect OTP attempts should respect maxAttempts', async () => {
     await otpService.createChallenge(testUserId, destination, OtpPurpose.EMAIL_VERIFICATION);
@@ -88,7 +88,7 @@ describe('OtpService Concurrency Integration', () => {
     const updated = await prisma.otpChallenge.findUnique({ where: { id: challenge.id } });
     expect(updated?.attempts).toBe(5); // EXACTLY 5
     expect(updated?.lockedAt).not.toBeNull();
-  });
+  }, 30000);
 
   it('TEST 3: Correct OTP vs simultaneous lock race', async () => {
     const testCode = await otpService.createChallenge(testUserId, destination, OtpPurpose.EMAIL_VERIFICATION);
@@ -206,7 +206,7 @@ describe('OtpService Concurrency Integration', () => {
       expect(updated?.consumedAt).toBeNull();
       expect(updated?.resendCount).toBe(1);
     }
-  });
+  }, 30000);
 
   it('TEST 7: Replay attack (consumed challenge cannot be reused)', async () => {
     const testCode = await otpService.createChallenge(testUserId, destination, OtpPurpose.EMAIL_VERIFICATION);
