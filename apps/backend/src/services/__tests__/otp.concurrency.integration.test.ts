@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { otpService } from '../otp.service.js';
 import { prisma } from '../../lib/prisma.js';
 import { OtpPurpose } from '@prisma/client';
-import crypto from 'crypto';
 import { env } from '../../config/env.js';
 
 describe('OtpService Concurrency Integration', () => {
@@ -24,6 +23,7 @@ describe('OtpService Concurrency Integration', () => {
         firstName: 'Concurrency',
         lastName: 'Test',
         passwordHash: 'dummy',
+        role: 'CUSTOMER',
       },
     });
   });
@@ -60,7 +60,7 @@ describe('OtpService Concurrency Integration', () => {
   });
 
   it('TEST 2: Concurrent incorrect OTP attempts should respect maxAttempts', async () => {
-    const code = await otpService.createChallenge(testUserId, destination, OtpPurpose.EMAIL_VERIFICATION);
+    await otpService.createChallenge(testUserId, destination, OtpPurpose.EMAIL_VERIFICATION);
     
     const challenge = await prisma.otpChallenge.findFirst({
       where: { userId: testUserId, purpose: OtpPurpose.EMAIL_VERIFICATION, consumedAt: null },
