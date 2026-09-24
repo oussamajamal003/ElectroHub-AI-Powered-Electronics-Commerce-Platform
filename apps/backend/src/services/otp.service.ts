@@ -163,7 +163,8 @@ export class OtpService {
           consumedAt: null, 
           lockedAt: null,
           expiresAt: { gt: now },
-          attempts: { lt: challenge.maxAttempts }
+          attempts: { lt: challenge.maxAttempts },
+          codeHash: challenge.codeHash
         },
         data: { consumedAt: now },
       });
@@ -178,6 +179,7 @@ export class OtpService {
         userId: challenge.userId,
         purpose: challenge.purpose,
       });
+
       return true;
     }
 
@@ -187,7 +189,8 @@ export class OtpService {
         id: challengeId, 
         consumedAt: null, 
         lockedAt: null,
-        attempts: { lt: challenge.maxAttempts } 
+        attempts: { lt: challenge.maxAttempts },
+        codeHash: challenge.codeHash
       },
       data: { attempts: { increment: 1 } },
     });
@@ -199,6 +202,7 @@ export class OtpService {
         consumedAt: null,
         lockedAt: null,
         attempts: { gte: challenge.maxAttempts },
+        codeHash: challenge.codeHash
       },
       data: { lockedAt: now },
     });

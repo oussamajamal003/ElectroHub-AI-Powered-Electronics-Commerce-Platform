@@ -26,6 +26,7 @@ vi.mock('../../lib/prisma.js', () => ({
       updateMany: vi.fn(),
       create: vi.fn(),
       findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
       findFirst: vi.fn(),
     },
@@ -206,6 +207,7 @@ describe('OtpService', () => {
           consumedAt: null,
           lockedAt: null,
           attempts: { lt: 5 },
+          codeHash,
         },
         data: { attempts: { increment: 1 } },
       });
@@ -215,6 +217,7 @@ describe('OtpService', () => {
           consumedAt: null,
           lockedAt: null,
           attempts: { gte: 5 },
+          codeHash,
         },
         data: { lockedAt: expect.any(Date) },
       });
@@ -247,6 +250,7 @@ describe('OtpService', () => {
           consumedAt: null,
           lockedAt: null,
           attempts: { gte: 5 },
+          codeHash,
         },
         data: { lockedAt: expect.any(Date) },
       });
