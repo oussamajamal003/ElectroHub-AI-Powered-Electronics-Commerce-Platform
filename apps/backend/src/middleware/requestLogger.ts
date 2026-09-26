@@ -25,7 +25,7 @@ export function requestLogger(
     logger.info('HTTP request', {
       requestId: req.id,
       method: req.method,
-      path: req.originalUrl,
+      path: req.originalUrl.startsWith('/api/auth/google') ? req.originalUrl.split('?')[0] : req.originalUrl,
       statusCode: res.statusCode,
       duration: `${duration}ms`,
     });

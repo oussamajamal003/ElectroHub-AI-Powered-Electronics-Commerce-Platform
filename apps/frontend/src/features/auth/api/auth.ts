@@ -18,6 +18,16 @@ export interface VerificationResponse extends AuthResponse {
 }
 
 export const authApi = {
+  finishGoogle: async (): Promise<{ user: User }> => {
+    const response = await apiClient<{ accessToken: string }>('/api/auth/refresh', { method: 'POST' });
+    setAccessToken(response.accessToken);
+    return apiClient('/api/auth/me');
+  },
+
+  linkGoogle: async (password: string): Promise<void> => {
+    const response = await apiClient<{ accessToken: string }>('/api/auth/google/link', { method: 'POST', data: { password } });
+    setAccessToken(response.accessToken);
+  },
   login: async (credentials: LoginCredentials): Promise<VerificationResponse> => {
     const response = await apiClient<VerificationResponse>('/api/auth/login', {
       method: 'POST',

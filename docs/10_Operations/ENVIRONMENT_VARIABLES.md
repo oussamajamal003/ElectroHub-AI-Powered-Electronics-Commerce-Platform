@@ -1,5 +1,9 @@
 # Environment Variables
 
+## Google OAuth (Task 02.4-C)
+
+Backend-only `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_REDIRECT_URI` enable customer Google sign-in. Register GOOGLE_REDIRECT_URI exactly in the Google Web application client's authorized redirects. Development uses `http://localhost:3000/api/auth/google/callback`; production must use HTTPS. The callback must share the configured FRONTEND_URL origin through the API proxy. Set a strong JWT_SECRET (at least 16 characters); it also authenticates the five-minute OAuth transaction cookie. No additional provider-token session or linking-token secret is needed. Leave Google variables empty to keep the provider unavailable safely. Never put the client secret in frontend/Vite configuration.
+
 ## 1. Purpose
 
 This document defines how ElectroHub environment variables are organized, protected, and managed.

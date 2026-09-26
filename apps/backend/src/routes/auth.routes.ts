@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { startGoogle, callbackGoogle, completeGoogle, linkGoogle } from '../controllers/google.controller.js';
 import {
   register,
   login,
@@ -26,6 +27,56 @@ import {
 } from '../middleware/rateLimiter.js';
 
 const router = Router();
+/**
+ * @swagger
+ * /auth/google/start:
+ *   get:
+ *     tags: [Authentication]
+ *     summary: Start customer Google authorization with state, nonce and PKCE
+ *     responses:
+ *       302: { description: Redirect to Google; sets a five-minute HttpOnly OAuth transaction cookie }
+ *       200: { description: Configuration unavailable; safe popup failure notification }
+ *       429: { description: Login rate limit reached }
+ * /auth/google/callback:
+ *   get:
+ *     tags: [Authentication]
+ *     summary: Complete customer Google authorization
+ *     parameters:
+ *       - in: query
+ *         name: state
+ *         schema: { type: string }
+ *       - in: query
+ *         name: code
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Safe popup status success, linking_required, cancelled or failure; success sets the existing refresh cookie }
+ *       429: { description: Login rate limit reached }
+ * /auth/google/link:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Connect a verified Google identity after existing password ownership proof
+ *     description: Requires the five-minute HttpOnly OAuth transaction cookie and the configured frontend Origin. Email equality never links automatically.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [password]
+ *             properties:
+ *               password: { type: string, maxLength: 128 }
+ *     responses:
+ *       200: { description: Connected; returns existing customer user and access token, sets existing refresh cookie }
+ *       400: { description: Invalid password, unverified account or expired transaction }
+ *       403: { description: Invalid Origin or non-customer account }
+ *       409: { description: Provider identity cannot be reassigned }
+ *       429: { description: Login rate limit reached }
+ *       503: { description: Google configuration unavailable }
+ */
+router.get('/google/start', loginRateLimiter, startGoogle);
+router.get('/google/callback', loginRateLimiter, callbackGoogle);
+router.get('/google/complete', completeGoogle);
+router.post('/google/link', loginRateLimiter, linkGoogle);
 
 /**
  * @swagger

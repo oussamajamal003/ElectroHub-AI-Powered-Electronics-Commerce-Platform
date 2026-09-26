@@ -44,7 +44,7 @@ function respondWithOtpDeliveryError(error: unknown, res: Response): boolean {
 /**
  * Helper to set HttpOnly cookie securely.
  */
-function setRefreshCookie(res: Response, token: string) {
+export function setRefreshCookie(res: Response, token: string) {
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

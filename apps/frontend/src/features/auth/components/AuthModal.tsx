@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { PasswordInput } from '@/components/ui/PasswordInput/PasswordInput';
 import { Alert } from '@/components/ui/Alert';
 import { useAuth } from '../context/AuthContext';
+import { GoogleAuthButton } from './GoogleAuthButton';
 import { authApi } from '../api/auth';
 import styles from './AuthModals.module.scss';
 import { ApiError } from '@/lib/api';
@@ -18,7 +19,7 @@ import { X } from 'lucide-react';
 
 import { useNavigate, useLocation } from 'react-router-dom';
 
-export type AuthModalMode = 'login' | 'register' | 'verify' | 'changeVerificationEmail' | 'forgot' | 'resetVerify' | 'resetNew' | 'resetSuccess';
+export type AuthModalMode = 'login' | 'register' | 'verify' | 'changeVerificationEmail' | 'forgot' | 'resetVerify' | 'resetNew' | 'resetSuccess' | 'googleLink';
 
 export interface AuthModalProps {
   open: boolean;
@@ -57,7 +58,7 @@ export function AuthModal({
   onSwitchToRegister,
   onSwitchToLogin,
 }: AuthModalProps) {
-  const { login, register, verifyEmail } = useAuth();
+  const { login, register, verifyEmail, finishGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string })?.from || '/account';
@@ -633,6 +634,7 @@ export function AuthModal({
           <DialogTitle className={styles.title}>
             {mode === 'login' && 'Welcome Back'}
             {mode === 'register' && 'Create Account'}
+            {mode === 'googleLink' && 'Connect Google'}
             {(mode === 'verify' || mode === 'resetVerify') && 'Verify your email'}
             {mode === 'changeVerificationEmail' && 'Change email'}
             {mode === 'forgot' && 'Reset Password'}
@@ -642,6 +644,7 @@ export function AuthModal({
           <DialogDescription className={styles.description}>
             {mode === 'login' && 'Sign in to your account to continue'}
             {mode === 'register' && 'Join ElectroHub to start shopping'}
+            {mode === 'googleLink' && 'Confirm ownership of your existing ElectroHub account.'}
             {mode === 'verify' && `Enter the 6-digit code sent to ${maskEmail(targetEmail)}`}
             {mode === 'changeVerificationEmail' && 'Enter the corrected email address for your pending account.'}
             {mode === 'forgot' && 'Enter your email to receive a reset code'}
@@ -650,6 +653,14 @@ export function AuthModal({
             {mode === 'resetSuccess' && 'Your password has been changed.'}
           </DialogDescription>
         </div>
+
+        {(mode === 'login' || mode === 'register' || mode === 'googleLink') && (
+          <GoogleAuthButton disabled={isLoading} onBusyChange={setIsLoading} onLinkingChange={linking => setMode(linking ? 'googleLink' : 'login')} onSuccess={async () => {
+            await finishGoogle();
+            onOpenChange(false);
+            navigate(from);
+          }} />
+        )}
 
         {mode === 'verify' && (
           <OtpVerification

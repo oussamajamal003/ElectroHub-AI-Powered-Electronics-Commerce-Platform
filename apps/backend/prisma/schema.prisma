@@ -83,7 +83,7 @@ model User {
   roleId       String  @db.Uuid
   email        String  @unique @db.VarChar(255)
   pendingEmail String? @unique @db.VarChar(255)
-  passwordHash String  @db.VarChar(255)
+  passwordHash String? @db.VarChar(255)
   firstName    String  @db.VarChar(100)
   lastName     String  @db.VarChar(100)
   isActive     Boolean   @default(true)
@@ -99,6 +99,7 @@ model User {
   otpChallenges      OtpChallenge[]
   emailDeliveries    EmailDelivery[]
   securityEvents      SecurityEvent[]
+  oauthAccounts       OAuthAccount[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -106,6 +107,26 @@ model User {
   @@index([roleId])
   @@index([isActive])
   @@map("users")
+}
+
+enum OAuthProvider {
+  GOOGLE
+}
+
+model OAuthAccount {
+  id                String        @id @default(uuid()) @db.Uuid
+  userId            String        @db.Uuid
+  provider          OAuthProvider
+  providerAccountId String        @db.VarChar(255)
+  providerEmail     String        @db.VarChar(255)
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@index([provider, providerEmail])
+  @@map("oauth_accounts")
 }
 
 model Address {
