@@ -6,6 +6,7 @@ on:
     branches:
       - develop
     paths:
+      - '.github/workflows/dev-migration.yml'
       - 'apps/backend/prisma/schema.prisma'
       - 'apps/backend/prisma/migrations/**'
 
@@ -33,7 +34,7 @@ jobs:
         run: npm ci
         
       - name: Verify Prisma Version
-        run: npx prisma --version
+        run: npm exec --workspace=@electrohub/backend -- prisma --version
         
       - name: Safe Diagnostics
         env:
@@ -70,4 +71,4 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}
           DIRECT_URL: ${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}
-        run: npx prisma migrate deploy --schema apps/backend/prisma/schema.prisma
+        run: npm exec --workspace=@electrohub/backend -- prisma migrate deploy
