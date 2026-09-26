@@ -1,5 +1,13 @@
 # ElectroHub Task 02.2 — Latest Implemented Database Foundation
 
+## Task 02.4-C migration evidence (2026-09-26)
+
+`20260926000000_google_oauth` was generated through Prisma migrate diff from the preceding committed schema. It adds the GOOGLE OAuthProvider enum, oauth_accounts, User.oauthAccounts, provider/subject uniqueness, user and provider/email indexes, cascading user FK, RLS with no public policies, and nullable users.passwordHash. Existing password hashes are retained; Google-only customers use null, never synthetic passwords.
+
+DEV: Prisma migrate deploy applied the migration and recorded its successful completion in `_prisma_migrations`. Read-back verified columns, indexes, foreign key and RLS. Prisma migrate status reports all seven migrations applied. Existing DEV seed completed: two roles, four categories, eight products and eight inventory rows. OAuth credentials/identities were not seeded.
+
+PROD: independent connection verification was blocked by `SELF_SIGNED_CERT_IN_CHAIN`. A trusted database CA is required before authorized migrate deploy can proceed. No production migration or seed was run. Production migration metadata remains NOT VERIFIED; never substitute DEV TLS settings for production verification.
+
 > This document is synchronized to the current Task 02.2 baseline. Prisma is the schema/migration source of truth. The implemented application model set is 15 models; `_prisma_migrations` is Prisma metadata.
 
 ## Environments

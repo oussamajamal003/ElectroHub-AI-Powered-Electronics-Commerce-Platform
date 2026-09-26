@@ -10,6 +10,7 @@ interface AuthState {
 }
 
 interface AuthContextValue extends AuthState {
+  finishGoogle: () => Promise<void>;
   login: (credentials: LoginCredentials) => Promise<VerificationResponse>;
   register: (data: RegisterData) => Promise<VerificationResponse>;
   verifyEmail: (data: { email: string; code: string }) => Promise<VerificationResponse>;
@@ -142,8 +143,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return response.user;
   };
 
+  const finishGoogle = async () => {
+    const { user } = await authApi.finishGoogle();
+    setState(previous => ({ ...previous, user, isAuthenticated: true }));
+  };
+
   return (
-    <AuthContext.Provider value={{ ...state, login, register, verifyEmail, logout, updateProfile, verifyEmailChange }}>
+    <AuthContext.Provider value={{ ...state, login, register, verifyEmail, logout, updateProfile, verifyEmailChange, finishGoogle }}>
       {children}
     </AuthContext.Provider>
   );

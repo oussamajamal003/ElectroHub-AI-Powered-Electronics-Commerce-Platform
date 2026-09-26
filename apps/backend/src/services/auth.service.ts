@@ -4,7 +4,7 @@ import { generateAccessToken, JwtPayload } from '../utils/jwt.js';
 import { hashPassword, verifyPassword } from '../utils/hash.js';
 import { otpService, OtpVerificationError, OTP_CONFIG } from './otp.service.js';
 import { emailService } from './email.service.js';
-import { OtpPurpose, SecurityEventType } from '@prisma/client';
+import { OtpPurpose, SecurityEventType, User, Role } from '@prisma/client';
 import { logger } from '../utils/logger.js';
 
 const normalizeEmail = (email: string) => email.toLowerCase().trim();
@@ -95,31 +95,7 @@ export class AuthService {
       };
     }
 
-    const payload: JwtPayload = {
-      userId: user.id,
-      role: user.role.name,
-    };
-
-    const accessToken = generateAccessToken(payload);
-    
-    // Generate Refresh Token
-    const rawRefreshToken = crypto.randomBytes(64).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-
-    await this.repository.createRefreshToken(user.id, tokenHash, expiresAt);
-
-    return {
-      accessToken,
-      refreshToken: rawRefreshToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role.name,
-      }
-    };
+    return this.createSession(user);
   }
 
   /**
@@ -145,29 +121,24 @@ export class AuthService {
       throw new OtpVerificationError('OTP_INVALID');
     }
 
-    // verification success, generate session
-    const payload: JwtPayload = {
-      userId: user.id,
-      role: verifiedUser.role.name,
-    };
-    const accessToken = generateAccessToken(payload);
+    return this.createSession(verifiedUser);
+  }
 
-    const rawRefreshToken = crypto.randomBytes(64).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  async establishCustomerSession(userId: string) {
+    const user = await this.repository.findUserById(userId);
+    if (!user || !user.isActive || user.role.name !== 'CUSTOMER' || !user.emailVerifiedAt) {
+      throw new Error('Invalid credentials');
+    }
+    return this.createSession(user);
+  }
 
-    await this.repository.createRefreshToken(user.id, tokenHash, expiresAt);
-
+  private async createSession(user: User & { role: Role }) {
+    const refreshToken = crypto.randomBytes(64).toString('hex');
+    await this.repository.createRefreshToken(user.id, crypto.createHash('sha256').update(refreshToken).digest('hex'), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
     return {
-      accessToken,
-      refreshToken: rawRefreshToken,
-      user: {
-        id: user.id,
-        email: verifiedUser.email,
-        firstName: verifiedUser.firstName,
-        lastName: verifiedUser.lastName,
-        role: verifiedUser.role.name,
-      },
+      accessToken: generateAccessToken({ userId: user.id, role: user.role.name }),
+      refreshToken,
+      user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role.name },
     };
   }
 
