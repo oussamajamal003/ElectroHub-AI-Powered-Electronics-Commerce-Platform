@@ -4,6 +4,18 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AuthModal } from './AuthModal';
 import { useAuth } from '../context/AuthContext';
+import { ApiError } from '@/lib/api';
+
+const authApiMocks = vi.hoisted(() => ({
+  forgotPassword: vi.fn(),
+  verifyResetOtp: vi.fn(),
+  resetPassword: vi.fn(),
+  resendPasswordReset: vi.fn(),
+  resendVerification: vi.fn(),
+  changeVerificationEmail: vi.fn(),
+}));
+
+vi.mock('../api/auth', () => ({ authApi: authApiMocks }));
 
 // Mock useAuth
 vi.mock('../context/AuthContext', () => ({
@@ -19,14 +31,97 @@ vi.mock('react-router-dom', () => ({
 describe('AuthModal Component', () => {
   const mockLogin = vi.fn();
   const mockRegister = vi.fn();
+  const mockVerifyEmail = vi.fn();
   const mockOnOpenChange = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    authApiMocks.forgotPassword.mockResolvedValue({ message: 'If an account exists, you may receive password reset instructions shortly.' });
     (useAuth as any).mockReturnValue({
       login: mockLogin,
       register: mockRegister,
+      verifyEmail: mockVerifyEmail,
     });
+  });
+
+  it('prefills Forgot Password from Login while keeping the email editable', async () => {
+    const user = userEvent.setup();
+    render(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="login" />);
+    await user.type(screen.getByLabelText(/Email Address/i), 'john@gmail.com');
+    await user.click(screen.getByRole('button', { name: 'Forgot Password?' }));
+
+    const email = screen.getByLabelText(/Email Address/i);
+    expect(email).toHaveValue('john@gmail.com');
+    expect(email).toBeEnabled();
+    await user.clear(email);
+    await user.type(email, 'anotheraccount@gmail.com');
+    expect(email).toHaveValue('anotheraccount@gmail.com');
+    fireEvent.submit(email.closest('form')!);
+
+    await waitFor(() => expect(authApiMocks.forgotPassword).toHaveBeenCalledWith({ email: 'anotheraccount@gmail.com' }));
+  });
+
+  it('shows one friendly inline error for an incorrect verification OTP', async () => {
+    const user = userEvent.setup();
+    mockLogin.mockRejectedValue(new ApiError(403, 'Verification required', { requiresVerification: true, email: 'customer@example.com' }));
+    mockVerifyEmail.mockRejectedValue(new ApiError(400, 'Incorrect verification code. Please try again.', {
+      error: { code: 'OTP_INCORRECT', message: 'Incorrect verification code. Please try again.' },
+    }));
+    render(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="login" />);
+    await user.type(screen.getByLabelText(/Email Address/i), 'customer@example.com');
+    await user.type(screen.getByLabelText(/^Password$/i), 'password123');
+    fireEvent.submit(screen.getByLabelText(/^Password$/i).closest('form')!);
+    const inputs = (await screen.findByRole('group', { name: 'Verification code' })).querySelectorAll('input');
+    for (const input of inputs) fireEvent.change(input, { target: { value: '5' } });
+    await user.click(screen.getByRole('button', { name: 'Verify' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Incorrect verification code. Please try again.');
+    expect(screen.getAllByText('Incorrect verification code. Please try again.')).toHaveLength(1);
+  });
+
+  it('shows controlled copy when password recovery is rate limited', async () => {
+    const user = userEvent.setup();
+    authApiMocks.forgotPassword.mockRejectedValue(new ApiError(429, 'Too many password reset attempts. Please try again in an hour.', {
+      error: { code: 'RATE_LIMITED', message: 'Too many password reset attempts. Please try again in an hour.' },
+    }));
+    render(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="login" />);
+    await user.type(screen.getByLabelText(/Email Address/i), 'john@gmail.com');
+    await user.click(screen.getByRole('button', { name: 'Forgot Password?' }));
+    fireEvent.submit(screen.getByLabelText(/Email Address/i).closest('form')!);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Too many password reset attempts. Please try again in an hour.');
+  });
+
+  it('completes reset as a separate step and returns to Login without auto-authenticating', async () => {
+    const user = userEvent.setup();
+    authApiMocks.verifyResetOtp.mockResolvedValue({ resetToken: 'one-time-reset-authorization' });
+    authApiMocks.resetPassword.mockResolvedValue({ message: 'Password has been reset successfully.' });
+    render(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="login" />);
+    await user.type(screen.getByLabelText(/Email Address/i), 'john@gmail.com');
+    await user.click(screen.getByRole('button', { name: 'Forgot Password?' }));
+    fireEvent.submit(screen.getByLabelText(/Email Address/i).closest('form')!);
+    const digits = (await screen.findByRole('group', { name: 'Verification code' })).querySelectorAll('input');
+    for (const input of digits) fireEvent.change(input, { target: { value: '1' } });
+    await user.click(screen.getByRole('button', { name: 'Verify' }));
+    expect(await screen.findByRole('heading', { name: 'Create new password' })).toBeInTheDocument();
+    expect(authApiMocks.verifyResetOtp).toHaveBeenCalledWith({ email: 'john@gmail.com', code: '111111' });
+    await user.type(screen.getByLabelText('New Password'), 'NewPassword#2026');
+    await user.type(screen.getByLabelText('Confirm Password'), 'NewPassword#2026');
+    const resetButton = screen.getByRole('button', { name: 'Reset Password' });
+    await waitFor(() => expect(resetButton).toBeEnabled());
+    const resetForm = screen.getByLabelText('New Password').closest('form')!;
+    fireEvent.submit(resetForm);
+    await waitFor(() => expect(authApiMocks.resetPassword).toHaveBeenCalledWith({
+      resetToken: 'one-time-reset-authorization',
+      newPassword: 'NewPassword#2026',
+    }));
+    expect(await screen.findByText(/Your password has been updated/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Continue to Login' }));
+
+    expect(screen.getByLabelText(/Email Address/i)).toHaveValue('john@gmail.com');
+    expect(screen.getByLabelText(/^Password$/i)).toHaveValue('');
+    expect(mockLogin).not.toHaveBeenCalled();
+    expect(mockOnOpenChange).not.toHaveBeenCalledWith(false);
   });
 
   describe('Login Popup & Mode Switching', () => {
@@ -280,6 +375,45 @@ describe('AuthModal Component', () => {
       await waitFor(() => {
         expect(mockOnOpenChange).toHaveBeenCalledWith(false);
       });
+    });
+    it('switches to verify mode and displays partial-success warning message when registration delivery fails', async () => {
+      mockRegister.mockResolvedValue({
+        requiresVerification: true,
+        deliveryFailed: true,
+        email: 'deliveryfailed@example.com',
+        message: 'Account created, but we could not send the verification code. Please request a new code shortly.',
+      });
+
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="register" />);
+
+      fireEvent.change(screen.getByLabelText(/Full Name/i), { target: { value: 'Jane Doe' } });
+      fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'deliveryfailed@example.com' } });
+      fireEvent.change(screen.getByLabelText(/^Password$/i), { target: { value: 'password123' } });
+      fireEvent.change(screen.getByLabelText(/^Confirm Password$/i), { target: { value: 'password123' } });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Create Account$/i }));
+
+      expect(await screen.findByRole('group', { name: 'Verification code' })).toBeInTheDocument();
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Account created, but we could not send the verification code. Please request a new code shortly.'
+      );
+    });
+
+    it('shows authoritative expired error message when OTP expires', async () => {
+      const user = userEvent.setup();
+      mockLogin.mockRejectedValue(new ApiError(403, 'Verification required', { requiresVerification: true, email: 'customer@example.com' }));
+      mockVerifyEmail.mockRejectedValue(new ApiError(400, 'This verification code has expired. Request a new code.', {
+        error: { code: 'OTP_EXPIRED', message: 'This verification code has expired. Request a new code.' },
+      }));
+      render(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="login" />);
+      await user.type(screen.getByLabelText(/Email Address/i), 'customer@example.com');
+      await user.type(screen.getByLabelText(/^Password$/i), 'password123');
+      fireEvent.submit(screen.getByLabelText(/^Password$/i).closest('form')!);
+      const inputs = (await screen.findByRole('group', { name: 'Verification code' })).querySelectorAll('input');
+      for (const input of inputs) fireEvent.change(input, { target: { value: '5' } });
+      await user.click(screen.getByRole('button', { name: 'Verify' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('This verification code has expired. Request a new code.');
     });
   });
 });

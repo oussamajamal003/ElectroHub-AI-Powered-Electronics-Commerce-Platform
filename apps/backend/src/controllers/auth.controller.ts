@@ -6,14 +6,40 @@ import {
   registerSchema,
   loginSchema,
   forgotPasswordSchema,
+  verifyResetOtpSchema,
   resetPasswordSchema,
   updateProfileSchema,
   changePasswordSchema,
+  verifyEmailSchema,
+  resendVerificationSchema,
+  changeVerificationEmailSchema,
 } from '../validators/auth.validator.js';
+import { otpService, OtpDeliveryError, OtpVerificationError, OTP_CONFIG } from '../services/otp.service.js';
+import { OtpPurpose } from '@prisma/client';
 
 const authService = new AuthService();
 
 const COOKIE_NAME = 'electrohub_refresh';
+
+function respondWithOtpError(error: unknown, res: Response): boolean {
+  if (error instanceof OtpVerificationError) {
+    res.status(error.statusCode).json({ error: { code: error.code, message: error.message } });
+    return true;
+  }
+  if (error instanceof Error && (error.message === 'Invalid or expired verification code' || error.message === 'No active verification process found')) {
+    res.status(400).json({
+      error: { code: 'OTP_INVALID', message: 'The verification code is no longer valid. Request a new code.' },
+    });
+    return true;
+  }
+  return false;
+}
+
+function respondWithOtpDeliveryError(error: unknown, res: Response): boolean {
+  if (!(error instanceof OtpDeliveryError)) return false;
+  res.status(error.statusCode).json({ error: { code: error.code, message: error.message } });
+  return true;
+}
 
 /**
  * Helper to set HttpOnly cookie securely.
@@ -47,15 +73,10 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
       data.lastName
     );
 
-    setRefreshCookie(res, result.refreshToken);
-
-    logger.info('AUTH_REGISTER_SUCCESS', { userId: result.user.id });
-    res.status(201).json({
-      message: 'Registration successful',
-      accessToken: result.accessToken,
-      user: result.user,
-    });
+    logger.info('AUTH_REGISTER_SUCCESS_REQUIRES_VERIFICATION', { email: result.email });
+    res.status(201).json(result);
   } catch (error: unknown) {
+    if (respondWithOtpDeliveryError(error, res)) return;
     if (error instanceof ZodError) {
       return res.status(400).json({ error: 'Validation failed', details: error.errors });
     }
@@ -71,6 +92,15 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     const data = loginSchema.parse(req.body);
     const result = await authService.login(data.email, data.password);
     
+    if ('requiresVerification' in result && result.requiresVerification) {
+      logger.info('AUTH_LOGIN_REQUIRES_VERIFICATION', { email: result.email });
+      return res.status(403).json(result);
+    }
+
+    if (!('accessToken' in result) || !result.refreshToken || !result.user) {
+      throw new Error('Invalid login result state');
+    }
+
     setRefreshCookie(res, result.refreshToken);
 
     logger.info('AUTH_LOGIN_SUCCESS', { userId: result.user.id });
@@ -85,6 +115,79 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     }
     if (error instanceof Error && error.message === 'Invalid credentials') {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    next(error);
+  }
+};
+
+export const verifyEmail = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = verifyEmailSchema.parse(req.body);
+    const result = await authService.verifyRegistrationOtp(data.email, data.code);
+    
+    setRefreshCookie(res, result.refreshToken);
+
+    logger.info('AUTH_VERIFY_EMAIL_SUCCESS', { userId: result.user.id });
+
+    res.status(200).json({
+      message: 'Email verified successfully',
+      accessToken: result.accessToken,
+      user: result.user,
+    });
+  } catch (error: unknown) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+    }
+    if (respondWithOtpError(error, res)) return;
+    next(error);
+  }
+};
+
+export const resendVerification = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = resendVerificationSchema.parse(req.body);
+    
+    const challengeId = await otpService.getChallengeIdByEmail(data.email, OtpPurpose.EMAIL_VERIFICATION);
+    if (!challengeId) {
+      return res.status(200).json({
+        message: 'If verification is pending, a code will be sent when available.',
+        success: true,
+        expiresAt: new Date(Date.now() + OTP_CONFIG.TTL_MS),
+        resendAvailableAt: new Date(Date.now() + OTP_CONFIG.RESEND_COOLDOWN_MS),
+      });
+    }
+
+    const metadata = await otpService.resendChallenge(challengeId);
+    
+    logger.info('AUTH_RESEND_VERIFICATION_SUCCESS');
+    res.status(200).json({ message: 'If verification is pending, a code will be sent when available.', ...metadata });
+  } catch (error: unknown) {
+    if (error instanceof ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+    }
+    if (error instanceof Error && error.message.includes('Please wait')) {
+      return res.status(200).json({
+        message: 'If verification is pending, a code will be sent when available.',
+        success: true,
+        expiresAt: new Date(Date.now() + OTP_CONFIG.TTL_MS),
+        resendAvailableAt: new Date(Date.now() + OTP_CONFIG.RESEND_COOLDOWN_MS),
+      });
+    }
+    next(error);
+  }
+};
+
+export const changeVerificationEmail = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = changeVerificationEmailSchema.parse(req.body);
+    const result = await authService.changeVerificationEmail(data.currentEmail, data.password, data.newEmail);
+    logger.info('AUTH_CHANGE_VERIFICATION_EMAIL_REQUEST');
+    res.status(200).json(result);
+  } catch (error: unknown) {
+    if (respondWithOtpDeliveryError(error, res)) return;
+    if (respondWithOtpError(error, res)) return;
+    if (error instanceof ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.errors });
     }
     next(error);
   }
@@ -175,6 +278,9 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
     if (error instanceof Error && error.message === 'User not found or inactive') {
       return res.status(401).json({ error: 'User not found or inactive' });
     }
+    if (error instanceof Error && error.message === 'Email already registered') {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
     next(error);
   }
 };
@@ -185,7 +291,7 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
     await authService.forgotPassword(data.email);
     
     logger.info('AUTH_PASSWORD_RESET_REQUEST');
-    res.status(200).json({ message: 'If the account exists, a password reset message has been sent.' });
+    res.status(200).json({ message: 'If an account exists, you may receive password reset instructions shortly.' });
   } catch (error: unknown) {
     if (error instanceof ZodError) {
       return res.status(400).json({ error: 'Validation failed', details: error.errors });
@@ -197,17 +303,83 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
 export const resetPassword = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = resetPasswordSchema.parse(req.body);
-    await authService.resetPassword(data.token, data.newPassword);
+    await authService.resetPassword(data.resetToken, data.newPassword);
     
     logger.info('AUTH_PASSWORD_RESET_SUCCESS');
     res.status(200).json({ message: 'Password has been reset successfully.' });
   } catch (error: unknown) {
+    if (respondWithOtpError(error, res)) return;
     if (error instanceof ZodError) {
       return res.status(400).json({ error: 'Validation failed', details: error.errors });
     }
     if (error instanceof Error && error.message === 'Invalid or expired reset token') {
-      return res.status(400).json({ error: 'Invalid or expired reset token' });
+      return res.status(400).json({ error: { code: 'RESET_AUTHORIZATION_INVALID', message: 'The password reset authorization is no longer valid. Request a new code.' } });
     }
+    next(error);
+  }
+};
+
+export const resendPasswordReset = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = forgotPasswordSchema.parse(req.body);
+    const result = await authService.resendPasswordReset(data.email);
+    res.status(200).json(result);
+  } catch (error: unknown) {
+    if (error instanceof ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+    next(error);
+  }
+};
+
+export const verifyResetOtp = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = verifyResetOtpSchema.parse(req.body);
+    const result = await authService.verifyPasswordResetOtp(data.email, data.code);
+
+    logger.info('AUTH_PASSWORD_RESET_OTP_VERIFIED');
+    res.status(200).json({
+      message: 'Reset code verified successfully.',
+      resetToken: result.resetToken,
+      expiresAt: result.expiresAt,
+    });
+  } catch (error: unknown) {
+    if (respondWithOtpError(error, res)) return;
+    if (error instanceof ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+    }
+    next(error);
+  }
+};
+
+export const verifyPendingEmailChange = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const data = verifyEmailSchema.pick({ code: true }).parse(req.body);
+    const user = await authService.verifyPendingEmailChange(userId, data.code);
+    logger.info('AUTH_VERIFY_EMAIL_CHANGE_SUCCESS', { userId });
+    res.status(200).json({ message: 'Email changed successfully', user });
+  } catch (error: unknown) {
+    if (respondWithOtpError(error, res)) return;
+    if (error instanceof ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+    }
+    next(error);
+  }
+};
+
+export const resendPendingEmailChange = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ error: 'Not authenticated' });
+    const result = await authService.resendPendingEmailChange(userId);
+    res.status(200).json({ message: 'Verification code sent.', ...result });
+  } catch (error) {
+    if (respondWithOtpDeliveryError(error, res)) return;
+    if (error instanceof Error && error.message.includes('Please wait')) return res.status(429).json({ error: error.message });
+    if (error instanceof Error && error.message === 'No active verification process found') return res.status(400).json({ error: error.message });
     next(error);
   }
 };
@@ -237,4 +409,3 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
     next(error);
   }
 };
-

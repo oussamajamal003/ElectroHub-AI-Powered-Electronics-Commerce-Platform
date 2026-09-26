@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { describe, beforeEach, it, expect, vi } from 'vitest';
 import { ProfilePage } from './ProfilePage';
@@ -10,6 +10,7 @@ vi.mock('@/features/auth/context/AuthContext', () => ({
 }));
 
 const mockNavigate = vi.fn();
+const mockUpdateProfile = vi.fn();
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
@@ -26,6 +27,8 @@ describe('ProfilePage', () => {
       isAuthenticated: true,
       login: vi.fn(),
       logout: vi.fn(),
+      updateProfile: mockUpdateProfile,
+      verifyEmailChange: vi.fn(),
     } as any);
   });
 
@@ -51,8 +54,7 @@ describe('ProfilePage', () => {
     const textboxes = screen.getAllByRole('textbox');
     expect(textboxes).toHaveLength(3); // First Name, Last Name, Email
     
-    // Email is disabled
-    expect(screen.getByDisplayValue('jane@example.com')).toBeDisabled();
+    expect(screen.getByDisplayValue('jane@example.com')).toBeEnabled();
     // Phone is removed
     expect(screen.queryByText(/Phone Number/i)).not.toBeInTheDocument();
 
@@ -72,6 +74,16 @@ describe('ProfilePage', () => {
     renderWithRouter(<ProfilePage />);
     const saveBtn = screen.getByRole('button', { name: 'Save Profile' });
     expect(saveBtn).not.toBeDisabled();
+  });
+
+  it('sends an email change for verification instead of reporting it as verified', async () => {
+    mockUpdateProfile.mockResolvedValueOnce({ user: { email: 'jane@example.com', pendingEmail: 'new@example.com', requiresEmailVerification: true } });
+    renderWithRouter(<ProfilePage />);
+    fireEvent.change(screen.getByLabelText('Email Address'), { target: { value: 'new@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Profile' }));
+    await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledWith({ firstName: 'Jane', lastName: 'Doe', email: 'new@example.com' }));
+    expect(await screen.findByText(/A verification code was requested for the new address/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Verify your new email' })).toBeInTheDocument();
   });
 });
 

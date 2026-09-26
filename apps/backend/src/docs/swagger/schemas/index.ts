@@ -8,5 +8,3 @@ export const schemas = {
   ...commonSchemas,
   ...authSchemas,
 };
-
-export { commonSchemas, authSchemas };

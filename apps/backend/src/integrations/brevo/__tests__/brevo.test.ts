@@ -1,9 +1,17 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { BrevoClient } from '../brevo.client.js';
 import { BrevoProvider } from '../brevo.provider.js';
 
 describe('Brevo Integration', () => {
   const originalFetch = global.fetch;
+
+  beforeAll(() => {
+    process.env.VITEST_NO_MOCK_BREVO = 'true';
+  });
+
+  afterAll(() => {
+    delete process.env.VITEST_NO_MOCK_BREVO;
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -58,7 +66,7 @@ describe('Brevo Integration', () => {
       );
     });
 
-    it('should redact api-key if an error message contains the secret key', async () => {
+    it('should not expose provider error messages that contain the api key', async () => {
       const mockFetch = vi.fn().mockRejectedValue(new Error('Connection failed with key secret-key-123'));
       global.fetch = mockFetch;
 
@@ -66,19 +74,22 @@ describe('Brevo Integration', () => {
         apiKey: 'secret-key-123',
       });
 
-      await expect(
-        client.sendSmtpEmail({
+      const result = await client.sendSmtpEmail({
           to: [{ email: 'user@example.com' }],
           subject: 'Test',
-        })
-      ).rejects.toThrow(/Connection failed with key \[REDACTED\]/);
+        }).then(() => null, (caught: unknown) => caught);
+
+      expect(result).toBeInstanceOf(Error);
+      if (!(result instanceof Error)) throw new Error('Expected Brevo request to reject');
+      expect(result.message).toBe('Brevo network request failed');
+      expect(result.message).not.toContain('secret-key-123');
     });
 
-    it('should parse error message from Brevo error response', async () => {
+    it('should retain the HTTP status and safe provider code without exposing provider messages', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 400,
-        text: async () => JSON.stringify({ message: 'Invalid email address' }),
+        text: async () => JSON.stringify({ code: 'invalid_parameter', message: 'Invalid email address' }),
       });
       global.fetch = mockFetch;
 
@@ -91,7 +102,7 @@ describe('Brevo Integration', () => {
           to: [{ email: 'bad' }],
           subject: 'Test',
         })
-      ).rejects.toThrow('Invalid email address');
+      ).rejects.toThrow('Brevo request rejected (HTTP 400, invalid_parameter)');
     });
   });
 
@@ -140,7 +151,7 @@ describe('Brevo Integration', () => {
 
       expect(result).toEqual({
         success: false,
-        error: 'Brevo service unavailable',
+        error: 'Brevo delivery failed',
       });
     });
   });

@@ -9,6 +9,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { requestId } from './middleware/requestId.js';
 import { notFoundHandler } from './middleware/notFoundHandler.js';
 import routes from './routes/index.js';
+import { env } from './config/env.js';
 
 /**
  * Express application.
@@ -57,6 +58,16 @@ app.use(cookieParser());
 app.use(requestLogger);
 
 // API routes
+if (env.NODE_ENV === 'test') {
+  app.use('/api', (req, _res, next) => {
+    if (req.method === 'POST' && req.path === '/auth/register' && req.get('x-e2e-inject-failure') === 'unexpected-auth-failure') {
+      next(new Error('Injected Prisma/TLS failure at C:\\private\\backend\\auth.repository.ts; DATABASE_URL must remain secret'));
+      return;
+    }
+    next();
+  });
+}
+
 app.use('/api', routes);
 
 // Swagger UI

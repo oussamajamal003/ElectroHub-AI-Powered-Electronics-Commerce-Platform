@@ -75,6 +75,8 @@
 
 .digitInput {
   width: 48px;
+  flex: 1 1 0;
+  min-width: 0;
   height: 54px;
   font-family: $font-family-mono;
   font-size: $font-size-2xl;
@@ -89,7 +91,7 @@
   caret-color: $color-primary;
 
   @media (max-width: $breakpoint-sm) {
-    width: 42px;
+    max-width: 42px;
     height: 48px;
     font-size: $font-size-xl;
   }

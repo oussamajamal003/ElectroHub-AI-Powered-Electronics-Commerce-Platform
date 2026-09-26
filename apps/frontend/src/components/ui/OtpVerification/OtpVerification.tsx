@@ -73,6 +73,7 @@ export interface OtpVerificationProps {
    * Optional callback for "Back to Login".
    */
   onBackToLogin?: () => void;
+  onChangeEmail?: () => void;
   /**
    * Custom brand header text (default: "ElectroHub").
    */
@@ -105,6 +106,7 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
   subtitle,
   email,
   onBackToLogin,
+  onChangeEmail,
   brandName = 'ElectroHub',
   id,
   className,
@@ -117,10 +119,11 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
   const activeValue = controlledValue !== undefined ? controlledValue : internalValue;
 
   // Convert string to array of digits of exact length
-  const digits = Array.from({ length }, (_, i) => activeValue[i] || '');
+  const digits = Array.from({ length }, (_, i) => activeValue[i] && activeValue[i] !== ' ' ? activeValue[i] : '');
 
   // References to the 6 input elements for auto-focusing
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const submitLock = useRef(false);
 
   // Countdown timer state
   const [countdown, setCountdown] = useState<number>(resendCountdownSeconds);
@@ -129,6 +132,10 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
   useEffect(() => {
     setCountdown(resendCountdownSeconds);
   }, [resendCountdownSeconds]);
+
+  useEffect(() => {
+    if (error) inputRefs.current[0]?.focus();
+  }, [error]);
 
   // Interval timer for countdown with safe unmount cleanup
   useEffect(() => {
@@ -154,6 +161,12 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
     onChange?.(newValue);
   };
 
+  const serializeDigits = (values: string[]) => {
+    let lastFilledIndex = values.length - 1;
+    while (lastFilledIndex >= 0 && !values[lastFilledIndex]) lastFilledIndex -= 1;
+    return values.slice(0, lastFilledIndex + 1).map((digit) => digit || ' ').join('');
+  };
+
   const handleInputChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     if (disabled || loading || locked) return;
 
@@ -161,10 +174,11 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
     const rawVal = e.target.value.replace(/\D/g, '');
 
     if (!rawVal) {
+      if (e.target.value) return;
       // Current digit cleared
       const nextDigits = [...digits];
       nextDigits[index] = '';
-      updateValue(nextDigits.join(''));
+      updateValue(serializeDigits(nextDigits));
       return;
     }
 
@@ -172,7 +186,7 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
     const char = rawVal.slice(-1);
     const nextDigits = [...digits];
     nextDigits[index] = char;
-    const combined = nextDigits.join('');
+    const combined = serializeDigits(nextDigits);
     updateValue(combined);
 
     // Auto-focus next input if available
@@ -190,20 +204,20 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
         e.preventDefault();
         const nextDigits = [...digits];
         nextDigits[index - 1] = '';
-        updateValue(nextDigits.join(''));
+        updateValue(serializeDigits(nextDigits));
         inputRefs.current[index - 1]?.focus();
       } else if (digits[index]) {
         // Clear current
         e.preventDefault();
         const nextDigits = [...digits];
         nextDigits[index] = '';
-        updateValue(nextDigits.join(''));
+        updateValue(serializeDigits(nextDigits));
       }
     } else if (e.key === 'Delete') {
       e.preventDefault();
       const nextDigits = [...digits];
       nextDigits[index] = '';
-      updateValue(nextDigits.join(''));
+      updateValue(serializeDigits(nextDigits));
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
       if (index > 0) {
@@ -214,33 +228,49 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
       if (index < length - 1) {
         inputRefs.current[index + 1]?.focus();
       }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (!isSubmitDisabled) {
+        void submitValue();
+      }
     }
   };
 
-  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+  const handlePaste = (index: number, e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
     if (disabled || loading || locked) return;
 
     const pastedText = e.clipboardData.getData('text');
-    const numericChars = pastedText.replace(/\D/g, '').slice(0, length);
+    const numericChars = pastedText.replace(/\D/g, '').slice(0, length - index);
 
     if (!numericChars) return;
 
-    updateValue(numericChars);
+    const nextDigits = [...digits];
+    for (const [offset, digit] of [...numericChars].entries()) nextDigits[index + offset] = digit;
+    updateValue(serializeDigits(nextDigits));
 
     // Focus the box following the last pasted digit
-    const focusIndex = Math.min(numericChars.length, length - 1);
+    const focusIndex = Math.min(index + numericChars.length, length - 1);
     inputRefs.current[focusIndex]?.focus();
   };
 
-  const isComplete = activeValue.length === length && !digits.includes('');
+  const isComplete = activeValue.length === length && !digits.includes('') && /^\d+$/.test(activeValue);
   const isInputsDisabled = disabled || loading || locked;
   const isSubmitDisabled = isInputsDisabled || !isComplete || expired;
 
+  const submitValue = async () => {
+    if (isSubmitDisabled || submitLock.current) return;
+    submitLock.current = true;
+    try {
+      await onSubmit?.(activeValue);
+    } finally {
+      submitLock.current = false;
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitDisabled) return;
-    onSubmit?.(activeValue);
+    void submitValue();
   };
 
   const handleResend = () => {
@@ -254,7 +284,7 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
   const renderStateMessage = () => {
     if (locked) {
       return (
-        <div className={clsx(styles.stateMessage, styles.locked)} role="alert">
+        <div id={`${componentId}-error`} className={clsx(styles.stateMessage, styles.locked)} role="alert">
           <AlertCircle size={16} className={styles.stateIcon} />
           <span>Too many attempts. Please request a new code.</span>
         </div>
@@ -263,7 +293,7 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
 
     if (expired) {
       return (
-        <div className={clsx(styles.stateMessage, styles.expired)} role="alert">
+        <div id={`${componentId}-error`} className={clsx(styles.stateMessage, styles.expired)} role="alert">
           <AlertTriangle size={16} className={styles.stateIcon} />
           <span>Code expired. Please request a new code.</span>
         </div>
@@ -272,7 +302,7 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
 
     if (error) {
       return (
-        <div className={clsx(styles.stateMessage, styles.error)} role="alert">
+        <div id={`${componentId}-error`} className={clsx(styles.stateMessage, styles.error)} role="alert">
           <AlertCircle size={16} className={styles.stateIcon} />
           <span>{error}</span>
         </div>
@@ -285,7 +315,7 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
   return (
     <div id={componentId} className={clsx(styles.container, className)}>
       {brandName && <div className={styles.brand}>{brandName}</div>}
-      <h1 className={styles.title}>{title}</h1>
+      {title && <h1 className={styles.title}>{title}</h1>}
 
       {subtitle ? (
         <p className={styles.subtitle}>{subtitle}</p>
@@ -295,8 +325,8 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
         </p>
       ) : null}
 
-      <form className={styles.form} onSubmit={handleSubmit} noValidate>
-        <div className={styles.digitsGroup} role="group" aria-label="Verification code digits">
+      <form className={styles.form} onSubmit={handleSubmit} noValidate aria-busy={loading}>
+        <div className={styles.digitsGroup} role="group" aria-label="Verification code" aria-disabled={isInputsDisabled}>
           {digits.map((digit, index) => {
             const inputId = `${componentId}-digit-${index}`;
             const isErrorState = Boolean(error) || locked;
@@ -315,8 +345,9 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
                 maxLength={1}
                 value={digit}
                 disabled={isInputsDisabled}
-                aria-label={`Digit ${index + 1} of ${length}`}
+                aria-label={`Verification code, digit ${index + 1} of ${length}`}
                 aria-invalid={isErrorState ? 'true' : undefined}
+                aria-describedby={isErrorState ? `${componentId}-error` : undefined}
                 className={clsx(
                   styles.digitInput,
                   isErrorState && styles.error,
@@ -324,7 +355,7 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
                 )}
                 onChange={(e) => handleInputChange(index, e)}
                 onKeyDown={(e) => handleKeyDown(index, e)}
-                onPaste={handlePaste}
+                onPaste={(event) => handlePaste(index, event)}
                 onFocus={(e) => e.target.select()}
               />
             );
@@ -334,12 +365,12 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
         {renderStateMessage()}
 
         <Button
-          type="submit"
+          type="button"
           variant="primary"
           size="large"
           isLoading={loading}
           disabled={isSubmitDisabled}
-          onClick={handleSubmit}
+          onClick={() => void submitValue()}
           className={styles.submitButton}
         >
           {loading ? 'Verifying...' : 'Verify'}
@@ -351,7 +382,7 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
               <span>Didn&apos;t receive the code?</span>
               {countdown > 0 ? (
                 <span className={styles.countdownText}>
-                  Resend code in {countdown}s
+                  Resend available in {countdown}s
                 </span>
               ) : (
                 <button
@@ -364,6 +395,17 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
                 </button>
               )}
             </div>
+          )}
+
+          {onChangeEmail && (
+            <button
+              type="button"
+              onClick={onChangeEmail}
+              className={styles.resendButton}
+              disabled={disabled || loading}
+            >
+              Change email
+            </button>
           )}
 
           {onBackToLogin && (

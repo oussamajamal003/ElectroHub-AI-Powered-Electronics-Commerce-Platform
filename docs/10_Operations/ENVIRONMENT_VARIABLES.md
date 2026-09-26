@@ -61,9 +61,15 @@ Example:
 
 ```text
 DATABASE_URL
+DIRECT_URL
+DB_SSL_CA_CERT_PATH
 ```
 
 The database connection must point to the correct environment.
+
+The application uses `DATABASE_URL` for runtime queries and `DIRECT_URL` for Prisma migrations. Runtime PostgreSQL TLS verification is mandatory in production. `DB_SSL_CA_CERT_PATH` supplies a custom trusted CA when the database certificate chain requires one. Development and test runtime connections use a database-scoped TLS compatibility setting for the current DEV pooler; this does not change global Node TLS verification. Prisma migration commands use `DIRECT_URL` and need their own valid certificate chain or approved DEV connection settings.
+
+`E2E_OTP_OUTBOX_DIR` is for isolated browser tests only. When `NODE_ENV=test`, the email adapter captures messages sent to `.invalid` addresses in this local directory. Keep it under an ignored test output folder and do not set it in production. The real Brevo API is used only outside `NODE_ENV=test`; test mocking is not activated by an inherited `VITEST` flag.
 
 Production database credentials must never be committed.
 

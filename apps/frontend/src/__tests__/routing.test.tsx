@@ -19,15 +19,16 @@ const renderWithProviders = (initialRoute = '/') => {
 
 describe('Routing Foundation', () => {
   afterEach(cleanup);
-  it('renders HomePage on the root route "/"', () => {
+  it('renders HomePage on the root route "/"', async () => {
     renderWithProviders('/');
-    expect(screen.getAllByText('ElectroHub').length).toBeGreaterThan(0);
-    expect(screen.getByText('AI-Powered Electronics Commerce Platform')).toBeInTheDocument();
+    const title = await screen.findAllByText('ElectroHub');
+    expect(title.length).toBeGreaterThan(0);
+    expect(await screen.findByText('AI-Powered Electronics Commerce Platform')).toBeInTheDocument();
   });
 
-  it('renders NotFoundPage on an unknown route', () => {
+  it('renders NotFoundPage on an unknown route', async () => {
     renderWithProviders('/unknown-route-that-does-not-exist');
-    expect(screen.getByText('404')).toBeInTheDocument();
-    expect(screen.getByText('Page Not Found')).toBeInTheDocument();
+    expect(await screen.findByText('404')).toBeInTheDocument();
+    expect(await screen.findByText('Page Not Found')).toBeInTheDocument();
   });
 });

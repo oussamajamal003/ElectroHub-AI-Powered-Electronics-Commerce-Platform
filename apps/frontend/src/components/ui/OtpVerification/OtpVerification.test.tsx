@@ -110,6 +110,17 @@ describe('OtpVerification Component', () => {
     expect(handleChange).toHaveBeenCalledWith('4');
   });
 
+  it('preserves later digits when pasting into the middle', () => {
+    const handleChange = vi.fn();
+    render(<OtpVerification value="123456" onChange={handleChange} />);
+
+    fireEvent.paste(screen.getAllByRole('textbox')[2]!, {
+      clipboardData: { getData: () => '89' },
+    });
+
+    expect(handleChange).toHaveBeenCalledWith('128956');
+  });
+
   it('7. Delete key clears current digit', () => {
     const handleChange = vi.fn();
     render(<OtpVerification value="48" onChange={handleChange} />);
@@ -119,7 +130,7 @@ describe('OtpVerification Component', () => {
     inputs[0]!.focus();
     fireEvent.keyDown(inputs[0]!, { key: 'Delete' });
 
-    expect(handleChange).toHaveBeenCalledWith('8');
+    expect(handleChange).toHaveBeenCalledWith(' 8');
   });
 
   it('8. ArrowLeft and ArrowRight navigate between inputs', () => {
@@ -134,6 +145,31 @@ describe('OtpVerification Component', () => {
 
     fireEvent.keyDown(inputs[1]!, { key: 'ArrowRight' });
     expect(inputs[2]!).toHaveFocus();
+  });
+
+  it('preserves digit positions when clearing a middle slot with Delete', () => {
+    const handleChange = vi.fn();
+    render(<OtpVerification value="123456" onChange={handleChange} />);
+    const inputs = screen.getAllByRole('textbox');
+    fireEvent.keyDown(inputs[2]!, { key: 'Delete' });
+    expect(handleChange).toHaveBeenCalledWith('12 456');
+  });
+
+  it('does not submit an incomplete code when Enter is pressed', () => {
+    const handleSubmit = vi.fn();
+    render(<OtpVerification value="12345" onSubmit={handleSubmit} />);
+    fireEvent.keyDown(screen.getAllByRole('textbox')[4]!, { key: 'Enter' });
+    expect(handleSubmit).not.toHaveBeenCalled();
+  });
+
+  it('submits a complete code with Enter and prevents duplicate in-flight submissions', () => {
+    const handleSubmit = vi.fn(() => new Promise<void>(() => undefined));
+    render(<OtpVerification value="483921" onSubmit={handleSubmit} />);
+    const lastInput = screen.getAllByRole('textbox')[5]!;
+    fireEvent.keyDown(lastInput, { key: 'Enter' });
+    fireEvent.keyDown(lastInput, { key: 'Enter' });
+    expect(handleSubmit).toHaveBeenCalledTimes(1);
+    expect(handleSubmit).toHaveBeenCalledWith('483921');
   });
 
   it('9. Enables Verify button when 6 digits are complete, and submits code', async () => {
@@ -202,13 +238,13 @@ describe('OtpVerification Component', () => {
     );
 
     // Initial state: countdown active
-    expect(screen.getByText('Resend code in 3s')).toBeInTheDocument();
+    expect(screen.getByText('Resend available in 3s')).toBeInTheDocument();
 
     // Advance 1s
     act(() => {
       vi.advanceTimersByTime(1000);
     });
-    expect(screen.getByText('Resend code in 2s')).toBeInTheDocument();
+    expect(screen.getByText('Resend available in 2s')).toBeInTheDocument();
 
     // Advance 2s to reach 0
     act(() => {

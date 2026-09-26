@@ -17,5 +17,3 @@ const swaggerOptions: swaggerJsdoc.Options = {
 };
 
 export const swaggerSpec = swaggerJsdoc(swaggerOptions);
-export { openapiDefinition };
-export * from './schemas/index.js';

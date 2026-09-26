@@ -19,10 +19,10 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
   },
   server: {
-    port: 3000,
+    port: Number(process.env.E2E_FRONTEND_PORT ?? 3000),
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: process.env.E2E_API_PROXY_TARGET ?? 'http://localhost:5000',
         changeOrigin: true,
       },
     },

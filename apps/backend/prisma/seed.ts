@@ -16,7 +16,7 @@
 
 import { UserRole, ProductStatus, InventoryStatus } from '@prisma/client';
 import bcrypt from 'bcrypt';
-import { prisma, pool } from '../src/lib/prisma';
+import { prisma } from '../src/lib/prisma';
 
 // ─── Production Safety Gate ──────────────────────────────
 
@@ -87,7 +87,7 @@ async function main() {
 
   for (let i = 0; i < adminEmails.length; i++) {
     const email = adminEmails[i];
-    const password = process.env[`ADMIN${i === 0 ? '' : i}_PASSWORD`] || process.env.ADMIN_PASSWORD || 'admin123!';
+    const password = process.env[`ADMIN${i === 0 ? '' : i}_PASSWORD`] || ADMIN_PASSWORD;
     const passwordHash = await bcrypt.hash(password, 12);
     const firstName = i === 0 ? 'Admin' : `Admin${i}`;
     const adminUser = await prisma.user.upsert({
@@ -96,6 +96,7 @@ async function main() {
         passwordHash,
         roleId: adminRole.id,
         isActive: true,
+        emailVerifiedAt: new Date(),
       },
       create: {
         email,
@@ -103,6 +104,7 @@ async function main() {
         firstName,
         lastName: 'ElectroHub',
         isActive: true,
+        emailVerifiedAt: new Date(),
         roleId: adminRole.id,
       },
     });
@@ -116,6 +118,7 @@ async function main() {
       passwordHash: customerPasswordHash,
       roleId: customerRole.id,
       isActive: true,
+      emailVerifiedAt: new Date(),
     },
     create: {
       email: CUSTOMER_EMAIL,
@@ -123,6 +126,7 @@ async function main() {
       firstName: 'Customer',
       lastName: 'Dev',
       isActive: true,
+      emailVerifiedAt: new Date(),
       roleId: customerRole.id,
     },
   });
@@ -312,5 +316,4 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
-    await pool.end();
   });

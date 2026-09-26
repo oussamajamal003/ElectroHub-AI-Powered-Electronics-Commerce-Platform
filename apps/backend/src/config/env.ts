@@ -4,6 +4,7 @@ import path from 'path';
 
 // Determine the environment based on NODE_ENV (default: development)
 const nodeEnv = process.env.NODE_ENV || 'development';
+const processPort = process.env.PORT;
 const backendRoot = path.resolve(__dirname, '../..');
 
 const envFilesByEnvironment = {
@@ -25,6 +26,9 @@ const loadedEnvFiles = selectedEnvFiles.filter((fileName, index) => {
   return !result.error;
 });
 
+process.env.NODE_ENV = nodeEnv;
+if (processPort) process.env.PORT = processPort;
+
 export const envDiagnostics = {
   nodeEnv,
   selectedEnvFiles,
@@ -43,6 +47,9 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(5000),
   DATABASE_URL: z.string().url(),
   DIRECT_URL: z.string().url(),
+  DB_SSL_CA_CERT_PATH: z.string().optional(),
+  E2E_OTP_OUTBOX_DIR: z.string().optional(),
+  E2E_TEST_SUPPORT_TOKEN: z.string().optional(),
   JWT_SECRET: z.string().optional(),
   JWT_REFRESH_SECRET: z.string().optional(),
   AI_SERVICE_URL: z.string().url().optional(),

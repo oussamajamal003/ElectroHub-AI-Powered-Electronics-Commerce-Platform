@@ -3,8 +3,8 @@ import { logger } from '../src/utils/logger.js';
 import Transport from 'winston-transport';
 
 class TestTransport extends Transport {
-  public logOutput: any[] = [];
-  log(info: any, callback: () => void) {
+  public logOutput: Record<string, unknown>[] = [];
+  log(info: Record<string, unknown>, callback: () => void) {
     this.logOutput.push(info);
     callback();
   }

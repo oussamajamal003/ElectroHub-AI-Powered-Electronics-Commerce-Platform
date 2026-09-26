@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { OtpService } from '../otp.service.js';
+import { OtpService, OTP_CONFIG } from '../otp.service.js';
 import { prisma } from '../../lib/prisma.js';
 import { OtpPurpose, OtpChallenge, User, OtpChannel } from '@prisma/client';
 import crypto from 'crypto';
@@ -31,8 +31,13 @@ vi.mock('../../lib/prisma.js', () => ({
       findFirst: vi.fn(),
     },
     user: {
+      findUnique: vi.fn(),
       update: vi.fn(),
     },
+    securityEvent: {
+      create: vi.fn(),
+    },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -103,6 +108,25 @@ describe('OtpService', () => {
         }),
       });
     });
+
+    it('should set OTP expiration to exactly 60 seconds (OTP_CONFIG.TTL_MS)', async () => {
+      expect(OTP_CONFIG.TTL_SECONDS).toBe(60);
+      expect(OTP_CONFIG.TTL_MS).toBe(60000);
+      expect(OTP_CONFIG.RESEND_COOLDOWN_SECONDS).toBe(60);
+      expect(OTP_CONFIG.RESEND_COOLDOWN_MS).toBe(60000);
+
+      vi.mocked(prisma.otpChallenge.updateMany).mockResolvedValue({ count: 0 });
+      vi.mocked(prisma.otpChallenge.create).mockResolvedValue({} as unknown as OtpChallenge);
+
+      const before = Date.now();
+      await otpService.createChallenge('user-1', 'test@example.com', OtpPurpose.EMAIL_VERIFICATION);
+      const after = Date.now();
+
+      const callData = vi.mocked(prisma.otpChallenge.create).mock.calls[0][0].data;
+      const expiresAt = callData.expiresAt as Date;
+      expect(expiresAt.getTime()).toBeGreaterThanOrEqual(before + 59000);
+      expect(expiresAt.getTime()).toBeLessThanOrEqual(after + 61000);
+    });
   });
 
   describe('verifyChallenge', () => {
@@ -117,6 +141,7 @@ describe('OtpService', () => {
         id: 'challenge-1',
         userId: 'user-1',
         purpose: OtpPurpose.EMAIL_VERIFICATION,
+        destination: 'test@example.com',
         codeHash,
         consumedAt: null,
         lockedAt: null,
@@ -179,6 +204,23 @@ describe('OtpService', () => {
 
       expect(result).toBe(false);
       expect(prisma.otpChallenge.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('should return OTP_EXPIRED outcome with authoritative message when expired', async () => {
+      vi.mocked(prisma.otpChallenge.findUnique).mockResolvedValue({
+        id: 'challenge-1',
+        userId: 'user-1',
+        purpose: OtpPurpose.EMAIL_VERIFICATION,
+        codeHash: crypto.createHmac('sha256', 'test-otp-secret-key-32chars-min-length').update('123456').digest('hex'),
+        consumedAt: null,
+        lockedAt: null,
+        expiresAt: new Date(Date.now() - 5000),
+        attempts: 0,
+        maxAttempts: 5,
+      } as unknown as OtpChallenge);
+
+      const outcome = await otpService.verifyChallengeWithOutcome('challenge-1', '123456');
+      expect(outcome).toBe('OTP_EXPIRED');
     });
 
     it('should increment attempts atomically on incorrect code and return false', async () => {
@@ -338,6 +380,33 @@ describe('OtpService', () => {
         }),
       });
     });
+
+    it('should set fresh 60-second expiry on resendChallenge', async () => {
+      vi.mocked(prisma.otpChallenge.updateMany).mockResolvedValueOnce({ count: 1 });
+      vi.mocked(prisma.otpChallenge.findUniqueOrThrow).mockResolvedValueOnce({
+        id: 'challenge-1',
+        userId: 'user-1',
+        channel: OtpChannel.EMAIL,
+        destination: 'test@example.com',
+        consumedAt: null,
+        lockedAt: null,
+        expiresAt: new Date(Date.now() + 10000),
+        lastSentAt: new Date(Date.now() - 65000),
+        resendCount: 1,
+      } as unknown as OtpChallenge);
+
+      vi.mocked(emailService.sendAccountVerificationOtp).mockResolvedValue(true);
+
+      const before = Date.now();
+      const result = await otpService.resendChallenge('challenge-1');
+      const after = Date.now();
+
+      expect(result.success).toBe(true);
+      expect(result.expiresAt.getTime()).toBeGreaterThanOrEqual(before + 59000);
+      expect(result.expiresAt.getTime()).toBeLessThanOrEqual(after + 61000);
+      expect(result.resendAvailableAt.getTime()).toBeGreaterThanOrEqual(before + 59000);
+      expect(result.resendAvailableAt.getTime()).toBeLessThanOrEqual(after + 61000);
+    });
   });
 
   describe('verifyEmailOtp', () => {
@@ -352,6 +421,7 @@ describe('OtpService', () => {
         id: 'challenge-1',
         userId: 'user-1',
         purpose: OtpPurpose.EMAIL_VERIFICATION,
+        destination: 'test@example.com',
         codeHash,
         consumedAt: null,
         lockedAt: null,
@@ -360,8 +430,10 @@ describe('OtpService', () => {
         maxAttempts: 5,
       } as unknown as OtpChallenge);
 
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', email: 'test@example.com', emailVerifiedAt: null, pendingEmail: null } as unknown as User);
       vi.mocked(prisma.otpChallenge.updateMany).mockResolvedValue({ count: 1 });
       vi.mocked(prisma.user.update).mockResolvedValue({} as unknown as User);
+      vi.mocked(prisma.$transaction).mockImplementation(async (callback) => callback(prisma));
 
       const result = await otpService.verifyEmailOtp('challenge-1', code);
 

@@ -1,6 +1,9 @@
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
-import { BrevoClient } from './brevo.client.js';
+import { BrevoClient, BrevoRequestError } from './brevo.client.js';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   BrevoEmailAddress,
   BrevoSendEmailPayload,
@@ -31,6 +34,21 @@ export class BrevoProvider {
     options: SendTransactionalEmailOptions
   ): Promise<SendTransactionalEmailResult> {
     try {
+      const recipientEmail = typeof options.to === 'string' ? options.to : options.to.email;
+      if (env.NODE_ENV === 'test' && env.E2E_OTP_OUTBOX_DIR && recipientEmail.endsWith('.invalid')) {
+        const fileName = createHash('sha256').update(`${recipientEmail}:${options.subject}`).digest('hex');
+        await mkdir(env.E2E_OTP_OUTBOX_DIR, { recursive: true });
+        await writeFile(join(env.E2E_OTP_OUTBOX_DIR, `${fileName}.json`), JSON.stringify({
+          to: recipientEmail,
+          subject: options.subject,
+          textContent: options.textContent,
+        }), { mode: 0o600 });
+        return { success: true, messageId: `e2e-${randomUUID()}` };
+      }
+      if (env.NODE_ENV === 'test' && process.env.VITEST_NO_MOCK_BREVO !== 'true') {
+        return { success: true, messageId: `mocked-message-id-${randomUUID()}` };
+      }
+
       const sender: BrevoEmailAddress = {
         email: options.sender?.email || this.defaultSenderEmail,
         name: options.sender?.name || this.defaultSenderName,
@@ -59,13 +77,15 @@ export class BrevoProvider {
         messageId: result.messageId,
       };
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Brevo provider error';
+      const safeError = err instanceof BrevoRequestError ? err.message : 'Brevo delivery failed';
       logger.error('Brevo provider failed to send transactional email', {
-        errorMessage,
+        category: err instanceof BrevoRequestError ? err.category : 'provider_error',
+        statusCode: err instanceof BrevoRequestError ? err.statusCode : undefined,
+        providerCode: err instanceof BrevoRequestError ? err.providerCode : undefined,
       });
       return {
         success: false,
-        error: errorMessage,
+        error: safeError,
       };
     }
   }
