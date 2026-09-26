@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { RegisterModal } from './RegisterModal';
 import { useAuth } from '../context/AuthContext';
+import { ApiError } from '@/lib/api';
 
 import { BrowserRouter } from 'react-router-dom';
 
@@ -56,7 +57,7 @@ describe('RegisterModal', () => {
   });
 
   it('shows error if registration fails', async () => {
-    const mockRegister = vi.fn().mockRejectedValue(new Error('Email already registered'));
+    const mockRegister = vi.fn().mockRejectedValue(new ApiError(409, 'Email already registered'));
     const mockOnOpenChange = vi.fn();
     
     (useAuth as any).mockReturnValue({

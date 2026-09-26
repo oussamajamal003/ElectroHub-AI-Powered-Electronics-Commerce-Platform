@@ -8,15 +8,21 @@ import {
   updateProfile,
   forgotPassword,
   resetPassword,
+  verifyResetOtp,
   changePassword,
   verifyEmail,
   resendVerification,
+  changeVerificationEmail,
+  verifyPendingEmailChange,
+  resendPasswordReset,
+  resendPendingEmailChange,
 } from '../controllers/auth.controller.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
   loginRateLimiter,
   registerRateLimiter,
   passwordResetRateLimiter,
+  resendVerificationRateLimiter,
 } from '../middleware/rateLimiter.js';
 
 const router = Router();
@@ -147,14 +153,39 @@ router.post('/login', loginRateLimiter, login);
  *                 format: email
  *     responses:
  *       200:
- *         description: Verification code resent successfully
+ *         description: Generic acknowledgement regardless of account existence
  *       400:
- *         description: No active verification process found
+ *         description: Invalid request
  *       429:
- *         description: Please wait before requesting a new code
+ *         description: IP request limit reached; challenge cooldown returns a generic acknowledgement
  */
 router.post('/verify-email', verifyEmail);
-router.post('/resend-verification', resendVerification);
+router.post('/resend-verification', resendVerificationRateLimiter, resendVerification);
+
+/**
+ * @swagger
+ * /auth/change-verification-email:
+ *   post:
+ *     summary: Correct the address on an unverified customer account
+ *     description: Requires the current email and password. Responses are generic; the new address remains unverified until its OTP is consumed.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [currentEmail, password, newEmail]
+ *             properties:
+ *               currentEmail: { type: string, format: email }
+ *               password: { type: string }
+ *               newEmail: { type: string, format: email }
+ *     responses:
+ *       200: { description: Generic acknowledgement; verification remains required }
+ *       400: { description: Invalid request }
+ *       429: { description: Request limit reached }
+ */
+router.post('/change-verification-email', resendVerificationRateLimiter, changeVerificationEmail);
 
 /**
  * @swagger
@@ -193,13 +224,59 @@ router.post('/refresh', refresh);
  *                 format: email
  *     responses:
  *       200:
- *         description: If the account exists, a password reset message has been sent.
+ *         description: If an account exists, you may receive password reset instructions shortly.
  *       400:
  *         description: Validation failed
  *       429:
  *         description: Too many requests
  */
 router.post('/forgot-password', passwordResetRateLimiter, forgotPassword);
+
+/**
+ * @swagger
+ * /auth/resend-password-reset:
+ *   post:
+ *     summary: Resend a password reset OTP
+ *     description: Uses the PASSWORD_RESET purpose and an enumeration-safe response.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email: { type: string, format: email }
+ *     responses:
+ *       200: { description: Generic acknowledgement }
+ *       400: { description: Invalid request }
+ *       429: { description: Request limit reached }
+ */
+router.post('/resend-password-reset', passwordResetRateLimiter, resendPasswordReset);
+
+/**
+ * @swagger
+ * /auth/verify-reset-otp:
+ *   post:
+ *     summary: Verify a password reset OTP and issue a reset authorization
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, code]
+ *             properties:
+ *               email: { type: string, format: email }
+ *               code: { type: string, pattern: '^[0-9]{6}$' }
+ *     responses:
+ *       200: { description: OTP consumed; returns a ten-minute single-use reset authorization }
+ *       400: { description: Invalid or expired code }
+ *       429: { description: Request limit reached }
+ */
+router.post('/verify-reset-otp', passwordResetRateLimiter, verifyResetOtp);
 
 /**
  * @swagger
@@ -214,14 +291,10 @@ router.post('/forgot-password', passwordResetRateLimiter, forgotPassword);
  *           schema:
  *             type: object
  *             required:
- *               - email
- *               - code
+ *               - resetToken
  *               - newPassword
  *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *               code:
+ *               resetToken:
  *                 type: string
  *               newPassword:
  *                 type: string
@@ -279,6 +352,16 @@ router.get('/me', requireAuth, getCurrentUser);
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               firstName: { type: string, maxLength: 100 }
+ *               lastName: { type: string, maxLength: 100 }
+ *               email: { type: string, format: email, description: New address remains pending until verified }
  *     responses:
  *       200:
  *         description: Successfully updated profile
@@ -286,8 +369,52 @@ router.get('/me', requireAuth, getCurrentUser);
  *         description: Validation failed
  *       401:
  *         description: Unauthenticated
+ *       409:
+ *         description: Email already registered
+ *       429:
+ *         description: Profile update rate limit reached
  */
-router.patch('/me', requireAuth, updateProfile);
+router.patch('/me', requireAuth, resendVerificationRateLimiter, updateProfile);
+
+/**
+ * @swagger
+ * /auth/me/verify-email-change:
+ *   post:
+ *     summary: Verify a pending profile email change
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [code]
+ *             properties:
+ *               code: { type: string, pattern: '^[0-9]{6}$' }
+ *     responses:
+ *       200: { description: Email promoted and EMAIL_CHANGED event recorded }
+ *       400: { description: Invalid or expired code }
+ *       401: { description: Unauthenticated }
+ */
+router.post('/me/verify-email-change', requireAuth, verifyPendingEmailChange);
+
+/**
+ * @swagger
+ * /auth/me/resend-email-change:
+ *   post:
+ *     summary: Resend the pending profile email change OTP
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Verification code resent }
+ *       400: { description: No pending email change }
+ *       401: { description: Unauthenticated }
+ *       429: { description: Resend cooldown or request limit reached }
+ */
+router.post('/me/resend-email-change', requireAuth, resendVerificationRateLimiter, resendPendingEmailChange);
 
 /**
  * @swagger

@@ -14,7 +14,8 @@ interface AuthContextValue extends AuthState {
   register: (data: RegisterData) => Promise<VerificationResponse>;
   verifyEmail: (data: { email: string; code: string }) => Promise<VerificationResponse>;
   logout: () => Promise<void>;
-  updateProfile: (data: { firstName?: string; lastName?: string }) => Promise<void>;
+  updateProfile: (data: { firstName?: string; lastName?: string; email?: string }) => Promise<VerificationResponse>;
+  verifyEmailChange: (code: string) => Promise<User>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -64,10 +65,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, isLoading: true }));
     try {
       const response = await authApi.login(credentials);
-      if (response.user) {
+      const authenticatedUser = response.user;
+      if (authenticatedUser) {
         setState((prev) => ({
           ...prev,
-          user: response.user,
+          user: authenticatedUser,
           isAuthenticated: true,
         }));
       }
@@ -91,10 +93,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, isLoading: true }));
     try {
       const response = await authApi.verifyEmail(data);
-      if (response.user && response.accessToken) {
+      const verifiedUser = response.user;
+      if (verifiedUser && response.accessToken) {
         setState((prev) => ({
           ...prev,
-          user: response.user,
+          user: verifiedUser,
           isAuthenticated: true,
         }));
       }
@@ -119,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateProfile = async (data: { firstName?: string; lastName?: string }) => {
+  const updateProfile = async (data: { firstName?: string; lastName?: string; email?: string }) => {
     setState((prev) => ({ ...prev, isLoading: true }));
     try {
       const response = await authApi.updateProfile(data);
@@ -127,13 +130,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...prev,
         user: response.user,
       }));
+      return response as VerificationResponse;
     } finally {
       setState((prev) => ({ ...prev, isLoading: false }));
     }
   };
 
+  const verifyEmailChange = async (code: string): Promise<User> => {
+    const response = await authApi.verifyEmailChange({ code });
+    setState((previous) => ({ ...previous, user: response.user }));
+    return response.user;
+  };
+
   return (
-    <AuthContext.Provider value={{ ...state, login, register, verifyEmail, logout, updateProfile }}>
+    <AuthContext.Provider value={{ ...state, login, register, verifyEmail, logout, updateProfile, verifyEmailChange }}>
       {children}
     </AuthContext.Provider>
   );

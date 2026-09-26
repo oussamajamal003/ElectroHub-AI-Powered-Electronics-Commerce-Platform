@@ -9,6 +9,24 @@ export interface BrevoClientOptions {
   timeoutMs?: number;
 }
 
+export class BrevoRequestError extends Error {
+  constructor(
+    readonly statusCode?: number,
+    readonly providerCode?: string,
+    readonly category: 'rejected' | 'timeout' | 'network' | 'invalid_response' = 'network'
+  ) {
+    const safeCode = providerCode ? `, ${providerCode}` : '';
+    super(category === 'rejected'
+      ? `Brevo request rejected (HTTP ${statusCode}${safeCode})`
+      : category === 'timeout'
+        ? 'Brevo request timed out'
+        : category === 'invalid_response'
+          ? 'Brevo returned an invalid response'
+          : 'Brevo network request failed');
+    this.name = 'BrevoRequestError';
+  }
+}
+
 export class BrevoClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
@@ -54,30 +72,24 @@ export class BrevoClient {
       }
 
       if (!response.ok) {
-        const errorMsg =
-          typeof responseData.message === 'string'
-            ? responseData.message
-            : `Brevo request failed with status ${response.status}`;
-        throw new Error(errorMsg);
+        const rawProviderCode = responseData.code ?? responseData.errorCode;
+        const providerCode = typeof rawProviderCode === 'string' && /^[a-z0-9_-]{1,48}$/i.test(rawProviderCode)
+          ? rawProviderCode
+          : undefined;
+        throw new BrevoRequestError(response.status, providerCode, 'rejected');
       }
 
       if (!responseData.messageId || typeof responseData.messageId !== 'string') {
-        throw new Error('Brevo response missing valid messageId');
+        throw new BrevoRequestError(undefined, undefined, 'invalid_response');
       }
 
       return {
         messageId: responseData.messageId,
       };
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        if (err.name === 'AbortError') {
-          throw new Error(`Brevo request timed out after ${this.timeoutMs}ms`);
-        }
-        // Protect secret: ensure apiKey never leaks into any error message
-        const sanitized = err.message.replace(new RegExp(this.apiKey, 'g'), '[REDACTED]');
-        throw new Error(sanitized);
-      }
-      throw new Error('Unknown error communicating with Brevo');
+      if (err instanceof BrevoRequestError) throw err;
+      if (err instanceof Error && err.name === 'AbortError') throw new BrevoRequestError(undefined, undefined, 'timeout');
+      throw new BrevoRequestError();
     } finally {
       clearTimeout(timer);
     }

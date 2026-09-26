@@ -1,15 +1,55 @@
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
-import { OtpChannel, OtpPurpose } from '@prisma/client';
+import { OtpChannel, OtpPurpose, SecurityEventType } from '@prisma/client';
 import { logger } from '../utils/logger.js';
 import { env } from '../config/env.js';
 import { emailService } from './email.service.js';
 
+export type OtpFailureCode = 'OTP_INCORRECT' | 'OTP_EXPIRED' | 'OTP_CONSUMED' | 'OTP_ATTEMPTS_EXHAUSTED' | 'OTP_INVALID';
+export type OtpVerificationOutcome = 'VERIFIED' | OtpFailureCode;
+
+const otpFailureMessages: Record<OtpFailureCode, string> = {
+  OTP_INCORRECT: 'Incorrect verification code. Please try again.',
+  OTP_EXPIRED: 'This verification code has expired. Request a new code.',
+  OTP_CONSUMED: 'This verification code is no longer valid. Request a new code.',
+  OTP_ATTEMPTS_EXHAUSTED: 'Too many incorrect attempts. Request a new verification code.',
+  OTP_INVALID: 'The verification code is no longer valid. Request a new code.',
+};
+
+export class OtpVerificationError extends Error {
+  readonly statusCode: number;
+  readonly code: OtpFailureCode;
+
+  constructor(code: OtpFailureCode) {
+    super(otpFailureMessages[code]);
+    this.name = 'OtpVerificationError';
+    this.code = code;
+    this.statusCode = code === 'OTP_ATTEMPTS_EXHAUSTED' ? 429 : 400;
+  }
+}
+
+export class OtpDeliveryError extends Error {
+  readonly statusCode = 503;
+  readonly code = 'OTP_DELIVERY_FAILED';
+
+  constructor() {
+    super('We could not send a verification code. Please try again shortly.');
+    this.name = 'OtpDeliveryError';
+  }
+}
+
+export const OTP_CONFIG = {
+  TTL_SECONDS: 60,
+  TTL_MS: 60 * 1000,
+  MAX_ATTEMPTS: 5,
+  RESEND_COOLDOWN_SECONDS: 60,
+  RESEND_COOLDOWN_MS: 60 * 1000,
+} as const;
 
 export class OtpService {
-  private readonly defaultTtlMs = 10 * 60 * 1000; // 10 minutes
-  private readonly maxAttempts = 5;
-  private readonly resendCooldownMs = 60 * 1000; // 60 seconds
+  private readonly defaultTtlMs = OTP_CONFIG.TTL_MS; // 60 seconds (1 minute)
+  private readonly maxAttempts = OTP_CONFIG.MAX_ATTEMPTS;
+  private readonly resendCooldownMs = OTP_CONFIG.RESEND_COOLDOWN_MS; // 60 seconds
 
   /**
    * Generates a cryptographically secure 6-digit numeric OTP.
@@ -22,7 +62,7 @@ export class OtpService {
    * Hashes a plaintext code using HMAC SHA-256 and a server-side secret.
    */
   hashCode(code: string): string {
-    const secret = env.OTP_HASH_SECRET;
+    const secret = env.OTP_HASH_SECRET || (env.NODE_ENV !== 'production' ? 'development_otp_fallback_secret_12345678' : undefined);
     if (!secret) {
       throw new Error('OTP_HASH_SECRET environment variable is missing');
     }
@@ -122,30 +162,34 @@ export class OtpService {
    * Atomic operations prevent concurrent verification races.
    */
   async verifyChallenge(challengeId: string, code: string): Promise<boolean> {
+    return (await this.verifyChallengeWithOutcome(challengeId, code)) === 'VERIFIED';
+  }
+
+  async verifyChallengeWithOutcome(challengeId: string, code: string): Promise<OtpVerificationOutcome> {
     const challenge = await prisma.otpChallenge.findUnique({
       where: { id: challengeId },
     });
 
     if (!challenge) {
       logger.warn('OTP_VERIFICATION_FAILURE', { challengeId, reason: 'not_found' });
-      return false;
+      return 'OTP_INVALID';
     }
 
     const now = new Date();
 
     if (challenge.consumedAt) {
       logger.warn('OTP_VERIFICATION_FAILURE', { challengeId, reason: 'already_consumed' });
-      return false;
+      return 'OTP_CONSUMED';
     }
 
     if (challenge.lockedAt) {
       logger.warn('OTP_LOCKED', { challengeId, reason: 'already_locked' });
-      return false;
+      return 'OTP_ATTEMPTS_EXHAUSTED';
     }
 
     if (challenge.expiresAt < now) {
       logger.warn('OTP_EXPIRED', { challengeId });
-      return false;
+      return 'OTP_EXPIRED';
     }
 
     const isMatch = this.compareCodeHash(code, challenge.codeHash);
@@ -166,7 +210,7 @@ export class OtpService {
 
       if (result.count === 0) {
         logger.warn('OTP_VERIFICATION_FAILURE', { challengeId, reason: 'already_consumed_or_locked_concurrent' });
-        return false;
+        return this.getChallengeFailureOutcome(challengeId);
       }
 
       logger.info('OTP_VERIFICATION_SUCCESS', {
@@ -175,7 +219,7 @@ export class OtpService {
         purpose: challenge.purpose,
       });
 
-      return true;
+      return 'VERIFIED';
     }
 
     // Atomic increment for wrong code
@@ -204,11 +248,56 @@ export class OtpService {
 
     if (lockResult.count > 0) {
       logger.warn('OTP_LOCKED', { challengeId, userId: challenge.userId });
+      return 'OTP_ATTEMPTS_EXHAUSTED';
     } else {
       logger.warn('OTP_VERIFICATION_FAILURE', { challengeId, reason: 'wrong_code' });
     }
 
-    return false;
+    return this.getChallengeFailureOutcome(challengeId, 'OTP_INCORRECT');
+  }
+
+  private async getChallengeFailureOutcome(
+    challengeId: string,
+    fallback: OtpFailureCode = 'OTP_INVALID'
+  ): Promise<OtpFailureCode> {
+    const challenge = await prisma.otpChallenge.findUnique({ where: { id: challengeId } });
+    if (!challenge) return 'OTP_INVALID';
+    if (challenge.consumedAt) return 'OTP_CONSUMED';
+    if (challenge.lockedAt || challenge.attempts >= challenge.maxAttempts) return 'OTP_ATTEMPTS_EXHAUSTED';
+    if (challenge.expiresAt <= new Date()) return 'OTP_EXPIRED';
+    return fallback;
+  }
+
+  async getLatestChallengeIdByEmail(email: string, purpose: OtpPurpose): Promise<string | null> {
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
+      ?? await prisma.user.findUnique({ where: { pendingEmail: normalizedEmail } });
+    if (!user) return null;
+    const challenge = await prisma.otpChallenge.findFirst({
+      where: { userId: user.id, purpose, destination: normalizedEmail },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    return challenge?.id ?? null;
+  }
+
+  async getLatestChallengeIdByUserAndDestination(userId: string, destination: string, purpose: OtpPurpose): Promise<string | null> {
+    const challenge = await prisma.otpChallenge.findFirst({
+      where: { userId, destination: destination.toLowerCase().trim(), purpose },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    return challenge?.id ?? null;
+  }
+
+  async checkChallengeForAtomicConsumption(challengeId: string, code: string): Promise<OtpVerificationOutcome> {
+    const challenge = await prisma.otpChallenge.findUnique({ where: { id: challengeId } });
+    if (!challenge) return 'OTP_INVALID';
+    if (challenge.consumedAt) return 'OTP_CONSUMED';
+    if (challenge.lockedAt || challenge.attempts >= challenge.maxAttempts) return 'OTP_ATTEMPTS_EXHAUSTED';
+    if (challenge.expiresAt <= new Date()) return 'OTP_EXPIRED';
+    if (this.compareCodeHash(code, challenge.codeHash)) return 'VERIFIED';
+    return this.verifyChallengeWithOutcome(challengeId, code);
   }
 
   /**
@@ -216,22 +305,48 @@ export class OtpService {
    */
   async getChallengeIdByEmail(email: string, purpose: OtpPurpose): Promise<string | null> {
     const normalizedEmail = email.toLowerCase().trim();
-    const user = await prisma.user.findUnique({
-      where: { email: normalizedEmail }
-    });
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
+      ?? await prisma.user.findUnique({ where: { pendingEmail: normalizedEmail } });
     if (!user) return null;
 
     const challenge = await prisma.otpChallenge.findFirst({
       where: {
         userId: user.id,
         purpose,
+        destination: normalizedEmail,
         consumedAt: null,
         lockedAt: null,
-        expiresAt: { gt: new Date() }
       },
       orderBy: { createdAt: 'desc' }
     });
     return challenge?.id || null;
+  }
+
+  matchesCode(code: string, codeHash: string): boolean {
+    return this.compareCodeHash(code, codeHash);
+  }
+
+  async getChallengeIdByUserAndDestination(userId: string, destination: string, purpose: OtpPurpose): Promise<string | null> {
+    const normalizedDestination = destination.toLowerCase().trim();
+    const challenge = await prisma.otpChallenge.findFirst({
+      where: {
+        userId,
+        destination: normalizedDestination,
+        purpose,
+        consumedAt: null,
+        lockedAt: null,
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    return challenge?.id || null;
+  }
+
+  async getActiveChallengeForUser(userId: string, purpose: OtpPurpose): Promise<{ id: string; destination: string; codeHash: string } | null> {
+    return prisma.otpChallenge.findFirst({
+      where: { userId, purpose, consumedAt: null, lockedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, destination: true, codeHash: true },
+    });
   }
 
   /**
@@ -296,21 +411,19 @@ export class OtpService {
     let deliverySuccess = false;
     try {
       if (challenge.channel === OtpChannel.EMAIL) {
-        deliverySuccess = await emailService.sendAccountVerificationOtp(
-          challenge.destination,
-          newCode,
-          challenge.userId
-        );
+        deliverySuccess = challenge.purpose === OtpPurpose.PASSWORD_RESET
+          ? await emailService.sendPasswordResetOtp(challenge.destination, newCode, challenge.userId)
+          : await emailService.sendAccountVerificationOtp(challenge.destination, newCode, challenge.userId);
       }
-    } catch (err) {
-      logger.error('OTP_RESEND_DELIVERY_ERROR', { challengeId, error: err instanceof Error ? err.message : String(err) });
+    } catch {
+      logger.error('OTP_RESEND_DELIVERY_ERROR', { challengeId, reason: 'email_delivery_failed' });
     }
 
     if (!deliverySuccess) {
       logger.error('OTP_RESEND_DELIVERY_FAILED', { challengeId });
       // The DB reflects a sent code, but it failed to reach the provider.
       // This is the expected crash boundary behavior.
-      throw new Error('Failed to deliver the new verification code.');
+      throw new OtpDeliveryError();
     }
 
     logger.info('OTP_RESENT', {
@@ -330,27 +443,55 @@ export class OtpService {
    * Verify email OTP and update User.emailVerifiedAt on success.
    */
   async verifyEmailOtp(challengeId: string, code: string): Promise<boolean> {
+    return (await this.verifyEmailOtpWithOutcome(challengeId, code)) === 'VERIFIED';
+  }
+
+  async verifyEmailOtpWithOutcome(challengeId: string, code: string): Promise<OtpVerificationOutcome> {
     const challenge = await prisma.otpChallenge.findUnique({
       where: { id: challengeId },
     });
 
     if (!challenge || challenge.purpose !== OtpPurpose.EMAIL_VERIFICATION) {
-      return false;
+      return 'OTP_INVALID';
     }
 
-    const verified = await this.verifyChallenge(challengeId, code);
+    if (!this.compareCodeHash(code, challenge.codeHash)) {
+      return this.verifyChallengeWithOutcome(challengeId, code);
+    }
 
-    if (verified) {
-      await prisma.user.update({
-        where: { id: challenge.userId },
-        data: {
-          emailVerifiedAt: new Date(),
+    if (challenge.consumedAt) return 'OTP_CONSUMED';
+    if (challenge.lockedAt || challenge.attempts >= challenge.maxAttempts) return 'OTP_ATTEMPTS_EXHAUSTED';
+    if (challenge.expiresAt <= new Date()) return 'OTP_EXPIRED';
+
+    const now = new Date();
+    const verified = await prisma.$transaction(async (transaction) => {
+      const user = await transaction.user.findUnique({ where: { id: challenge.userId } });
+      if (!user || user.emailVerifiedAt || (user.email !== challenge.destination && user.pendingEmail !== challenge.destination)) return false;
+
+      const consumed = await transaction.otpChallenge.updateMany({
+        where: {
+          id: challengeId,
+          purpose: OtpPurpose.EMAIL_VERIFICATION,
+          codeHash: challenge.codeHash,
+          consumedAt: null,
+          lockedAt: null,
+          expiresAt: { gt: now },
+          attempts: { lt: challenge.maxAttempts },
         },
+        data: { consumedAt: now },
       });
-      return true;
-    }
+      if (consumed.count !== 1) return false;
 
-    return false;
+      await transaction.user.update({
+        where: { id: user.id },
+        data: user.pendingEmail === challenge.destination
+          ? { email: challenge.destination, pendingEmail: null, emailVerifiedAt: now }
+          : { emailVerifiedAt: now },
+      });
+      await transaction.securityEvent.create({ data: { userId: user.id, type: SecurityEventType.EMAIL_VERIFIED } });
+      return true;
+    }, { timeout: 15000 });
+    return verified ? 'VERIFIED' : this.getChallengeFailureOutcome(challengeId);
   }
 }
 

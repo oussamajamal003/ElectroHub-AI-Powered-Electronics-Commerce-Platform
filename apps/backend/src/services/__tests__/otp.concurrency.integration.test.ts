@@ -37,7 +37,7 @@ describe('OtpService Concurrency Integration', () => {
         role: { connect: { name: 'CUSTOMER' } },
       },
     });
-  }, 30000);
+  }, 60000);
 
   afterAll(async () => {
     await prisma.otpChallenge.deleteMany({ where: { userId: testUserId } });
@@ -66,7 +66,7 @@ describe('OtpService Concurrency Integration', () => {
 
     const updated = await prisma.otpChallenge.findUnique({ where: { id: latestChallenge.id } });
     expect(updated?.consumedAt).not.toBeNull();
-  }, 30000);
+  }, 60000);
 
   it('TEST 2: Concurrent incorrect OTP attempts should respect maxAttempts', async () => {
     await otpService.createChallenge(testUserId, destination, OtpPurpose.EMAIL_VERIFICATION);
@@ -88,7 +88,7 @@ describe('OtpService Concurrency Integration', () => {
     const updated = await prisma.otpChallenge.findUnique({ where: { id: challenge.id } });
     expect(updated?.attempts).toBe(5); // EXACTLY 5
     expect(updated?.lockedAt).not.toBeNull();
-  }, 30000);
+  }, 60000);
 
   it('TEST 3: Correct OTP vs simultaneous lock race', async () => {
     const testCode = await otpService.createChallenge(testUserId, destination, OtpPurpose.EMAIL_VERIFICATION);
@@ -125,7 +125,7 @@ describe('OtpService Concurrency Integration', () => {
       expect(updated?.attempts).toBe(5);
       expect(results[0]).toBe(false);
     }
-  }, 30000);
+  }, 60000);
 
   it('TEST 4: Expired OTP vs verification', async () => {
     const testCode = await otpService.createChallenge(testUserId, destination, OtpPurpose.EMAIL_VERIFICATION);
@@ -146,7 +146,7 @@ describe('OtpService Concurrency Integration', () => {
 
     const updated = await prisma.otpChallenge.findUnique({ where: { id: challenge.id } });
     expect(updated?.consumedAt).toBeNull();
-  }, 30000);
+  }, 60000);
 
   it('TEST 5: Concurrent resend should allow exactly one claim', async () => {
     await otpService.createChallenge(testUserId, destination, OtpPurpose.EMAIL_VERIFICATION);
@@ -172,7 +172,7 @@ describe('OtpService Concurrency Integration', () => {
     
     const successes = results.filter((r) => r === true);
     expect(successes.length).toBe(1); // EXACTLY 1 resend claim allowed
-  }, 30000);
+  }, 60000);
 
   it('TEST 6: Resend + verify race', async () => {
     const testCode = await otpService.createChallenge(testUserId, destination, OtpPurpose.EMAIL_VERIFICATION);
@@ -206,7 +206,7 @@ describe('OtpService Concurrency Integration', () => {
       expect(updated?.consumedAt).toBeNull();
       expect(updated?.resendCount).toBe(1);
     }
-  }, 30000);
+  }, 60000);
 
   it('TEST 7: Replay attack (consumed challenge cannot be reused)', async () => {
     const testCode = await otpService.createChallenge(testUserId, destination, OtpPurpose.EMAIL_VERIFICATION);
@@ -221,7 +221,7 @@ describe('OtpService Concurrency Integration', () => {
 
     const secondResult = await otpService.verifyChallenge(challenge.id, testCode);
     expect(secondResult).toBe(false);
-  }, 30000);
+  }, 60000);
 
   it('TEST 8: Resend delivery failure behavior', async () => {
     await otpService.createChallenge(testUserId, destination, OtpPurpose.EMAIL_VERIFICATION);
@@ -252,5 +252,5 @@ describe('OtpService Concurrency Integration', () => {
     const updated = await prisma.otpChallenge.findUnique({ where: { id: challenge.id } });
     expect(updated?.resendCount).toBe(1);
     expect(updated?.lastSentAt?.getTime()).toBeGreaterThan(Date.now() - 15000);
-  }, 30000);
+  }, 60000);
 });

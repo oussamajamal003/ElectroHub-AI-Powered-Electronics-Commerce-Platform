@@ -30,7 +30,7 @@ export class AppError extends Error {
  * Returns consistent error response structure:
  * { error: { code, message } }
  *
- * Never exposes stack traces or internal details in production.
+ * Never exposes stack traces or internal details to clients.
  */
 export function errorHandler(
   err: Error,
@@ -65,10 +65,7 @@ export function errorHandler(
   res.status(500).json({
     error: {
       code: 'INTERNAL_SERVER_ERROR',
-      message:
-        env.NODE_ENV === 'production'
-          ? 'An unexpected error occurred.'
-          : err.message,
+      message: 'Something went wrong. Please try again later.',
     },
   });
 }

@@ -3,7 +3,8 @@
 // Authoritative schema: 14 tables, 8 enums
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -81,6 +82,7 @@ model User {
   id           String  @id @default(uuid()) @db.Uuid
   roleId       String  @db.Uuid
   email        String  @unique @db.VarChar(255)
+  pendingEmail String? @unique @db.VarChar(255)
   passwordHash String  @db.VarChar(255)
   firstName    String  @db.VarChar(100)
   lastName     String  @db.VarChar(100)
@@ -96,6 +98,7 @@ model User {
   passwordResetToken PasswordResetToken?
   otpChallenges      OtpChallenge[]
   emailDeliveries    EmailDelivery[]
+  securityEvents      SecurityEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -373,7 +376,7 @@ model RefreshToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([userId])
   @@index([tokenHash])
@@ -385,14 +388,42 @@ model PasswordResetToken {
   userId    String   @unique @db.Uuid
   tokenHash String   @unique @db.VarChar(255)
   expiresAt DateTime
+  consumedAt DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([tokenHash])
+  @@index([expiresAt])
   @@map("password_reset_tokens")
+}
+
+enum SecurityEventType {
+  EMAIL_VERIFIED
+  PASSWORD_CHANGED
+  PASSWORD_RESET
+  EMAIL_CHANGED
+  GOOGLE_CONNECTED
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+}
+
+model SecurityEvent {
+  id        String            @id @default(uuid()) @db.Uuid
+  userId    String?           @db.Uuid
+  type      SecurityEventType
+  ipAddress String?           @db.VarChar(64)
+  userAgent String?           @db.VarChar(1000)
+  createdAt DateTime          @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@map("security_events")
 }
 
 // ─── OTP & Email Foundation (TASK 02.4-A) ─────────────────

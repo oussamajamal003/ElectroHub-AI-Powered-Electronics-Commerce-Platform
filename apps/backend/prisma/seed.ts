@@ -16,7 +16,7 @@
 
 import { UserRole, ProductStatus, InventoryStatus } from '@prisma/client';
 import bcrypt from 'bcrypt';
-import { prisma, pool } from '../src/lib/prisma';
+import { prisma } from '../src/lib/prisma';
 
 // ─── Production Safety Gate ──────────────────────────────
 
@@ -316,5 +316,4 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
-    await pool.end();
   });

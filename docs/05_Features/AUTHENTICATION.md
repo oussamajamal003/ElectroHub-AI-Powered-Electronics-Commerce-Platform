@@ -1,5 +1,28 @@
 # Authentication
 
+## Task 02.4-B recovery and security events
+
+Password recovery uses a `PASSWORD_RESET` OTP followed by a short-lived, single-use `PasswordResetToken` authorization. The token is stored only as a SHA-256 hash, cannot authenticate a session, and is consumed atomically with the password update and refresh-session revocation.
+
+Customer security OTPs expire after 1 minute (60 seconds); reset authorization expires after 10 minutes. Both are single-use. Access JWTs expire after 15 minutes and refresh tokens after 7 days. Password changes and resets revoke refresh sessions, but already-issued access JWTs remain valid for at most 15 minutes; immediate access-token revocation is not implemented.
+
+Password changes and resets update the hash, revoke all refresh sessions, and persist a `SecurityEvent` in one database transaction. Email notifications run after that transaction and failed delivery is recorded separately. Email verification also persists an `EMAIL_VERIFIED` event. The `20260925000000_security_events` migration creates the event table with RLS enabled and no public policies.
+
+## Task 02.4-B profile and recovery contracts
+
+- `PATCH /api/auth/me` updates first and last name. An email change stores `pendingEmail`, sends an `EMAIL_CHANGE` OTP, and leaves the current email and session valid until OTP verification.
+- The same pending-email rule applies when correcting an unverified registration: the verified/current `User.email` is not replaced before successful OTP verification. Brevo acceptance means only that the provider accepted a send request; it does not prove delivery, mailbox existence, or ownership. Ownership is proven only when the user submits the correct, unexpired OTP. A failed send leaves the original email authoritative and permits a rate-limited resend; abandoned pending addresses expire with their OTP and are not activated.
+- `POST /api/auth/me/verify-email-change` consumes the authenticated customer's email-change OTP, promotes the pending address, and writes `EMAIL_CHANGED`. `POST /api/auth/me/resend-email-change` uses the OTP resend cooldown and rate limit.
+- `POST /api/auth/change-verification-email` requires the current unverified email, its password, and the corrected address. It supersedes the previous `EMAIL_VERIFICATION` challenge. Duplicate-target and non-matching requests use a generic response to avoid exposing account ownership; the new address is never marked verified by the change request.
+- Resend endpoints retain IP rate limiting (10 requests per 15 minutes) and OTP challenge cooldowns. Verification resend returns the same generic `200` body for unknown addresses and challenge cooldowns; the IP-wide limiter may still return `429`. Known-account and unknown-account DB paths can differ slightly in timing; this remains a residual side-channel risk.
+- `POST /api/auth/forgot-password` and `POST /api/auth/resend-password-reset` return an enumeration-safe response. Both use only the `PASSWORD_RESET` OTP purpose.
+- `POST /api/auth/verify-reset-otp` consumes the reset OTP and issues a reset authorization valid for ten minutes. `POST /api/auth/reset-password` accepts only that authorization and a new password. Replaying either the OTP or authorization fails.
+- OTP validation errors use the structured `{ error: { code, message } }` response. `OTP_INCORRECT`, `OTP_EXPIRED`, `OTP_CONSUMED`, and `OTP_INVALID` return `400`; `OTP_ATTEMPTS_EXHAUSTED` returns `429`. Unexpected system failures use a generic `500` response.
+- The password-reset IP limiter returns `429` with neutral copy: “Too many password reset attempts. Please try again in an hour.” The response does not identify whether an account or challenge exists.
+- Email delivery records use `SENT` to mean Brevo accepted the API request and supplied a message ID. It does not assert inbox delivery, mailbox existence, or ownership. Brevo rejection logs/records retain only safe HTTP status/provider code or a generic network category; raw provider messages are not exposed.
+- Outside `NODE_ENV=test`, the Brevo adapter always uses the configured provider. Test-only message capture/mocking is not selected from the `VITEST` process flag.
+- Password changes and email changes preserve the current authenticated identity while revoking refresh sessions only for password changes/resets.
+
 ## 1. Purpose
 
 This document defines the authentication and account-security behavior for ElectroHub.
@@ -390,6 +413,14 @@ POST /api/auth/refresh
 POST /api/auth/logout
 POST /api/auth/otp/request
 POST /api/auth/otp/verify
+PATCH /api/auth/me
+POST /api/auth/me/verify-email-change
+POST /api/auth/me/resend-email-change
+POST /api/auth/change-verification-email
+POST /api/auth/forgot-password
+POST /api/auth/resend-password-reset
+POST /api/auth/verify-reset-otp
+POST /api/auth/reset-password
 ```
 
 The exact API contract is defined by the backend implementation and `API_GUIDELINES.md`.

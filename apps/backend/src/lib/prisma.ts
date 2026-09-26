@@ -16,21 +16,22 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { readFileSync } from 'node:fs';
 
 import { env } from '../config/env.js';
-const connectionString = env.DIRECT_URL || env.DATABASE_URL;
-export const pool = new Pool({
-  connectionString,
+const runtimeUrl = new URL(env.DATABASE_URL);
+const ca = env.DB_SSL_CA_CERT_PATH ? readFileSync(env.DB_SSL_CA_CERT_PATH, 'utf8') : undefined;
+for (const parameter of ['sslmode', 'sslrootcert', 'sslcert', 'sslkey']) {
+  runtimeUrl.searchParams.delete(parameter);
+}
+const adapter = new PrismaPg({
+  connectionString: runtimeUrl.toString(),
   max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 15000,
-  ssl: {
-    rejectUnauthorized: false,
-  },
+  connectionTimeoutMillis: 30000,
+  ssl: ca ? { ca, rejectUnauthorized: true } : { rejectUnauthorized: env.NODE_ENV === 'production' },
 });
-const adapter = new PrismaPg(pool);
 
 export const prisma =
   globalForPrisma.prisma ??

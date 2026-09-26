@@ -3,6 +3,13 @@ import { brevoProvider, BrevoProvider } from '../integrations/brevo/brevo.provid
 import { EmailDeliveryStatus, EmailType } from '@prisma/client';
 import { logger } from '../utils/logger.js';
 
+function safeProviderFailure(error?: string): string {
+  if (error && /^Brevo request rejected \(HTTP \d{3}(?:, [a-z0-9_-]{1,48})?\)$|^Brevo request timed out$|^Brevo returned an invalid response$|^Brevo network request failed$/i.test(error)) {
+    return error;
+  }
+  return 'Email provider delivery failed';
+}
+
 export class EmailService {
   private provider: BrevoProvider;
 
@@ -65,7 +72,7 @@ export class EmailService {
   <div class="card">
     <div class="brand">ElectroHub</div>
     <h1>Verify your email</h1>
-    <p>Please enter the following 6-digit verification code to verify your ElectroHub account. This code is valid for 10 minutes.</p>
+    <p>Please enter the following 6-digit verification code to verify your ElectroHub account. This code is valid for 1 minute.</p>
     <div class="code-container">
       <span class="code">${otp}</span>
     </div>
@@ -76,7 +83,7 @@ export class EmailService {
 </html>
     `.trim();
 
-    const textContent = `ElectroHub — Verify your email\n\nYour 6-digit verification code is: ${otp}\n\nThis code will expire in 10 minutes. If you did not request this code, you can safely ignore this email.`;
+    const textContent = `ElectroHub — Verify your email\n\nYour 6-digit verification code is: ${otp}\n\nThis code will expire in 1 minute. If you did not request this code, you can safely ignore this email.`;
 
     try {
       // 2. Call Brevo provider
@@ -110,7 +117,7 @@ export class EmailService {
       }
 
       // 4. Mark FAILED
-      const failureReason = result.error || 'Provider rejected request';
+      const failureReason = safeProviderFailure(result.error);
       await prisma.emailDelivery.update({
         where: { id: delivery.id },
         data: {
@@ -128,8 +135,8 @@ export class EmailService {
       });
 
       return false;
-    } catch (err: unknown) {
-      const failureReason = err instanceof Error ? err.message : 'Unexpected email delivery error';
+    } catch {
+      const failureReason = 'Email provider delivery failed';
       await prisma.emailDelivery.update({
         where: { id: delivery.id },
         data: {
@@ -188,7 +195,7 @@ export class EmailService {
   <div class="card">
     <div class="brand">ElectroHub</div>
     <h1>Reset your password</h1>
-    <p>Please enter the following 6-digit code to reset your ElectroHub password. This code is valid for 15 minutes.</p>
+    <p>Please enter the following 6-digit code to reset your ElectroHub password. This code is valid for 1 minute.</p>
     <div class="code-container">
       <span class="code">${otp}</span>
     </div>
@@ -199,7 +206,7 @@ export class EmailService {
 </html>
     `.trim();
 
-    const textContent = `ElectroHub — Reset your password\n\nYour 6-digit reset code is: ${otp}\n\nThis code will expire in 15 minutes. If you did not request this code, you can safely ignore this email.`;
+    const textContent = `ElectroHub — Reset your password\n\nYour 6-digit reset code is: ${otp}\n\nThis code will expire in 1 minute. If you did not request this code, you can safely ignore this email.`;
 
     try {
       const result = await this.provider.sendTransactionalEmail({
@@ -220,13 +227,13 @@ export class EmailService {
       }
       await prisma.emailDelivery.update({
         where: { id: delivery.id },
-        data: { status: EmailDeliveryStatus.FAILED, failureReason: result.error, failedAt: new Date() },
+        data: { status: EmailDeliveryStatus.FAILED, failureReason: safeProviderFailure(result.error), failedAt: new Date() },
       });
       return false;
-    } catch (err: unknown) {
+    } catch {
       await prisma.emailDelivery.update({
         where: { id: delivery.id },
-        data: { status: EmailDeliveryStatus.FAILED, failureReason: String(err), failedAt: new Date() },
+        data: { status: EmailDeliveryStatus.FAILED, failureReason: 'Email provider delivery failed', failedAt: new Date() },
       });
       return false;
     }
@@ -296,13 +303,13 @@ export class EmailService {
       }
       await prisma.emailDelivery.update({
         where: { id: delivery.id },
-        data: { status: EmailDeliveryStatus.FAILED, failureReason: result.error, failedAt: new Date() },
+        data: { status: EmailDeliveryStatus.FAILED, failureReason: safeProviderFailure(result.error), failedAt: new Date() },
       });
       return false;
-    } catch (err: unknown) {
+    } catch {
       await prisma.emailDelivery.update({
         where: { id: delivery.id },
-        data: { status: EmailDeliveryStatus.FAILED, failureReason: String(err), failedAt: new Date() },
+        data: { status: EmailDeliveryStatus.FAILED, failureReason: 'Email provider delivery failed', failedAt: new Date() },
       });
       return false;
     }

@@ -1,27 +1,38 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/Breadcrumb';
 import { Avatar } from '@/components/ui/Avatar';
 import { Input } from '@/components/ui/Input';
+import { PasswordInput } from '@/components/ui/PasswordInput/PasswordInput';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Footer } from '@/components/layout/Footer';
 import { ApiError } from '@/lib/api';
+import { OtpVerification } from '@/components/ui/OtpVerification';
+import { authApi } from '@/features/auth/api/auth';
 import styles from './ProfilePage.module.scss';
 
 export function ProfilePage() {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, verifyEmailChange } = useAuth();
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
+    email: user?.email || '',
   });
   
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [resendAvailableAt, setResendAvailableAt] = useState(0);
+
+  useEffect(() => {
+    setFormData({ firstName: user?.firstName || '', lastName: user?.lastName || '', email: user?.email || '' });
+  }, [user?.firstName, user?.lastName, user?.email]);
 
   const initial = user?.firstName?.[0]?.toUpperCase() || 'U';
 
@@ -30,22 +41,41 @@ export function ProfilePage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError('');
     setSuccess('');
 
-    if (!formData.firstName.trim() || !formData.lastName.trim()) {
-      setError('First and last name are required.');
+    if (!formData.firstName.trim() || !formData.lastName.trim() || formData.firstName.trim().length > 100 || formData.lastName.trim().length > 100) {
+      setError('Enter a valid first and last name (up to 100 characters each).');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    if (formData.firstName.trim() === user?.firstName && formData.lastName.trim() === user?.lastName && formData.email.trim().toLowerCase() === user?.email.toLowerCase()) {
+      setSuccess('No changes to save.');
       return;
     }
 
     setIsLoading(true);
     try {
-      await updateProfile({
+      const response = await updateProfile({
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
+        email: formData.email.trim(),
       });
-      setSuccess('Profile updated successfully.');
+      if (response.user?.requiresEmailVerification && response.user.pendingEmail) {
+        setPendingEmail(response.user.pendingEmail);
+        setOtp('');
+        setResendAvailableAt(Date.now() + 60_000);
+        setSuccess(response.user.verificationDeliveryStatus === 'FAILED'
+          ? 'The address is pending verification, but we could not send its code. Use Resend code when available.'
+          : 'A verification code was requested for the new address. Your current verified email remains active until you enter the code.');
+      } else {
+        setSuccess('Profile updated successfully.');
+      }
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -90,7 +120,7 @@ export function ProfilePage() {
             <p className={styles.subtext}>Your profile information</p>
           </div>
 
-          <div className={styles.form}>
+          <form className={styles.form} onSubmit={handleSave}>
             {error && <Alert variant="error">{error}</Alert>}
             {success && <Alert variant="success">{success}</Alert>}
 
@@ -112,13 +142,18 @@ export function ProfilePage() {
             />
             <Input
               label="Email Address"
-              value={user?.email || ''}
-              disabled
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleChange}
+              disabled={isLoading || Boolean(pendingEmail)}
+              autoComplete="email"
               fullWidth
             />
 
             <div className={styles.formActions}>
               <Button
+                type="button"
                 variant="outline"
                 className={styles.cancelBtn}
                 onClick={() => navigate('/account')}
@@ -127,16 +162,54 @@ export function ProfilePage() {
                 Cancel
               </Button>
               <Button
+                type="submit"
                 variant="primary"
                 className={styles.saveBtn}
                 disabled={isLoading}
                 isLoading={isLoading}
-                onClick={handleSave}
               >
                 Save Profile
               </Button>
             </div>
-          </div>
+          </form>
+
+            {pendingEmail && <OtpVerification
+              value={otp}
+              onChange={setOtp}
+              email={pendingEmail}
+              subtitle={`Enter the 6-digit code sent to ${pendingEmail}`}
+              loading={isLoading}
+              onSubmit={async (code) => {
+                setIsLoading(true);
+                setError('');
+                try {
+                  await verifyEmailChange(code);
+                  setPendingEmail('');
+                  setFormData((current) => ({ ...current, email: pendingEmail }));
+                  setSuccess('Email changed successfully.');
+                } catch (verifyError) {
+                  setError(verifyError instanceof ApiError ? verifyError.message : 'Unable to verify this email. Please try again.');
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+              resendCountdownSeconds={Math.max(0, Math.ceil((resendAvailableAt - Date.now()) / 1000))}
+              onResend={async () => {
+                setIsLoading(true);
+                try {
+                  const result = await authApi.resendEmailChange();
+                  setResendAvailableAt(new Date(result.resendAvailableAt).getTime());
+                } catch (resendError) {
+                  setError(resendError instanceof ApiError ? resendError.message : 'Unable to resend the code. Please try again.');
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+              error={error}
+              brandName=""
+              title="Verify your new email"
+            />}
+
         </div>
 
         <div className={styles.card}>
@@ -209,9 +282,8 @@ function PasswordChangeForm() {
       {error && <Alert variant="error">{error}</Alert>}
       {success && <Alert variant="success">{success}</Alert>}
 
-      <Input
+      <PasswordInput
         label="Current Password"
-        type="password"
         value={currentPassword}
         onChange={(e) => setCurrentPassword(e.target.value)}
         placeholder="Enter your current password"
@@ -219,9 +291,8 @@ function PasswordChangeForm() {
         fullWidth
       />
 
-      <Input
+      <PasswordInput
         label="New Password"
-        type="password"
         value={newPassword}
         onChange={(e) => setNewPassword(e.target.value)}
         placeholder="At least 8 characters"
@@ -229,9 +300,8 @@ function PasswordChangeForm() {
         fullWidth
       />
 
-      <Input
+      <PasswordInput
         label="Confirm New Password"
-        type="password"
         value={confirmPassword}
         onChange={(e) => setConfirmPassword(e.target.value)}
         placeholder="Repeat new password"

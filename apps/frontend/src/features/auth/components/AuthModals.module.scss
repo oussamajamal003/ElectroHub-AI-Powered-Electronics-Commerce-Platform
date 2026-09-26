@@ -130,19 +130,6 @@
   }
 }
 
-.eyeButton {
-  background: none;
-  border: none;
-  padding: $spacing-1;
-  color: $color-text-muted;
-  cursor: pointer;
-  @include flex-center;
-
-  &:hover {
-    color: $color-text-primary;
-  }
-}
-
 .submitButton {
   margin-top: $spacing-2;
   width: 100%;

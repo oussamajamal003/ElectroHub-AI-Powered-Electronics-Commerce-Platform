@@ -78,7 +78,7 @@ describe('EmailService', () => {
       vi.mocked(prisma.emailDelivery.create).mockResolvedValue({ id: 'delivery-1' } as unknown as EmailDelivery);
       vi.mocked(brevoProvider.sendTransactionalEmail).mockResolvedValue({
         success: false,
-        error: 'Invalid recipient email address',
+        error: 'Brevo request rejected (HTTP 400, invalid_parameter)',
       });
       vi.mocked(prisma.emailDelivery.update).mockResolvedValue({} as unknown as EmailDelivery);
 
@@ -90,7 +90,7 @@ describe('EmailService', () => {
         where: { id: 'delivery-1' },
         data: expect.objectContaining({
           status: EmailDeliveryStatus.FAILED,
-          failureReason: 'Invalid recipient email address',
+          failureReason: 'Brevo request rejected (HTTP 400, invalid_parameter)',
           failedAt: expect.any(Date),
         }),
       });
@@ -109,7 +109,7 @@ describe('EmailService', () => {
         where: { id: 'delivery-1' },
         data: expect.objectContaining({
           status: EmailDeliveryStatus.FAILED,
-          failureReason: 'Network offline',
+          failureReason: 'Email provider delivery failed',
           failedAt: expect.any(Date),
         }),
       });

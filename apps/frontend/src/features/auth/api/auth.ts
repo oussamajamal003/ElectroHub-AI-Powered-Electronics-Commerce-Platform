@@ -7,8 +7,13 @@ export interface VerifyEmailData {
 }
 
 export interface VerificationResponse extends AuthResponse {
+  user?: User & { pendingEmail?: string; requiresEmailVerification?: boolean; verificationDeliveryStatus?: 'ACCEPTED_BY_PROVIDER' | 'FAILED' | 'PENDING' };
   requiresVerification?: boolean;
+  deliveryFailed?: boolean;
   email?: string;
+  pendingEmail?: string;
+  requiresEmailVerification?: boolean;
+  verificationDeliveryStatus?: 'ACCEPTED_BY_PROVIDER' | 'FAILED' | 'PENDING';
   message?: string;
 }
 
@@ -43,8 +48,15 @@ export const authApi = {
     return response;
   },
 
-  resendVerification: async (data: { email: string }): Promise<{ message: string }> => {
-    return apiClient<{ message: string }>('/api/auth/resend-verification', {
+  resendVerification: async (data: { email: string }): Promise<{ message: string; resendAvailableAt: string }> => {
+    return apiClient<{ message: string; resendAvailableAt: string }>('/api/auth/resend-verification', {
+      method: 'POST',
+      data,
+    });
+  },
+
+  changeVerificationEmail: async (data: { currentEmail: string; password: string; newEmail: string }): Promise<{ message: string; email: string; deliveryStatus: 'ACCEPTED_BY_PROVIDER' | 'FAILED' | 'PENDING' }> => {
+    return apiClient('/api/auth/change-verification-email', {
       method: 'POST',
       data,
     });
@@ -59,7 +71,7 @@ export const authApi = {
     return apiClient('/api/auth/me', { method: 'GET' });
   },
 
-  updateProfile: async (data: { firstName?: string; lastName?: string }): Promise<{ message: string; user: User }> => {
+  updateProfile: async (data: { firstName?: string; lastName?: string; email?: string }): Promise<{ message: string; user: User & { pendingEmail?: string; requiresEmailVerification?: boolean; verificationDeliveryStatus?: 'ACCEPTED_BY_PROVIDER' | 'FAILED' | 'PENDING' } }> => {
     return apiClient('/api/auth/me', {
       method: 'PATCH',
       data,
@@ -80,10 +92,32 @@ export const authApi = {
     });
   },
 
-  resetPassword: async (data: { email: string; code: string; newPassword: string }): Promise<{ message: string }> => {
+  resendPasswordReset: async (data: { email: string }): Promise<{ message: string; resendAvailableAt: string }> => {
+    return apiClient('/api/auth/resend-password-reset', { method: 'POST', data });
+  },
+
+  verifyResetOtp: async (data: { email: string; code: string }): Promise<{ message: string; resetToken: string; expiresAt: string }> => {
+    return apiClient('/api/auth/verify-reset-otp', {
+      method: 'POST',
+      data,
+    });
+  },
+
+  resetPassword: async (data: { resetToken: string; newPassword: string }): Promise<{ message: string }> => {
     return apiClient('/api/auth/reset-password', {
       method: 'POST',
       data,
     });
+  },
+
+  verifyEmailChange: async (data: { code: string }): Promise<{ message: string; user: User }> => {
+    return apiClient('/api/auth/me/verify-email-change', {
+      method: 'POST',
+      data,
+    });
+  },
+
+  resendEmailChange: async (): Promise<{ message: string; expiresAt: string; resendAvailableAt: string }> => {
+    return apiClient('/api/auth/me/resend-email-change', { method: 'POST' });
   },
 };

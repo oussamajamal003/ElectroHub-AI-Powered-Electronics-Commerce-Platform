@@ -5,7 +5,7 @@ import rateLimit from 'express-rate-limit';
  */
 export const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // Limit each IP to 20 login requests per `window`
+  max: 30, // Limit each IP to 20 login requests per `window`
   message: { error: 'Too many login attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -28,8 +28,16 @@ export const registerRateLimiter = rateLimit({
  */
 export const passwordResetRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3, // Limit each IP to 3 password reset requests per `window`
-  message: { error: 'Too many password reset requests, please try again after an hour.' },
+  max: 5, // Limit each IP to 3 password reset requests per `window`
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many password reset attempts. Please try again in an hour.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const resendVerificationRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many verification requests. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
 });

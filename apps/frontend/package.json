@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:visual": "playwright test -c playwright.config.ts --update-snapshots"
+    "test:visual": "playwright test -c playwright.config.ts --update-snapshots",
+    "test:e2e": "playwright test -c playwright.auth.config.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.6",

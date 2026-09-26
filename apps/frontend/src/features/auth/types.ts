@@ -19,6 +19,6 @@ export interface RegisterData {
 }
 
 export interface AuthResponse {
-  accessToken: string;
-  user: User;
+  accessToken?: string;
+  user?: User;
 }
