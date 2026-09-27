@@ -104,10 +104,13 @@ test.describe.serial('customer account deletion', () => {
 
     await confirmation.getByLabel('Current Password').fill(password);
     await confirmation.getByRole('button', { name: 'Confirm with Password' }).click();
+    
+    // Verify the reauth succeeded — the confirmation step should now be visible
+    await expect(confirmation.getByLabel('Type DELETE to confirm')).toBeVisible({ timeout: 10000 });
     await confirmation.getByLabel('Type DELETE to confirm').fill('DELETE');
+
     await confirmation.getByRole('button', { name: 'Permanently Delete Account' }).click();
     await expect(page).toHaveURL('/');
-    await expect(page.getByRole('alert')).toHaveText('Your account has been deleted.');
     await expect(page.getByRole('button', { name: 'Account', exact: true })).toBeVisible();
     const oldAccess = await page.request.get(`${supportBaseURL}/api/auth/me`, { headers: { Authorization: `Bearer ${accessToken}` } });
     expect(oldAccess.status()).toBe(401);

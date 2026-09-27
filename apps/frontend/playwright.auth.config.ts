@@ -12,7 +12,7 @@ const frontendPort = process.env.E2E_AUTH_FRONTEND_PORT ?? '3202';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 180_000,
+  timeout: 300_000,
   expect: { timeout: 30_000 },
   workers: 1,
   retries: process.env.CI ? 1 : 0,

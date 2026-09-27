@@ -5,6 +5,7 @@ import path from 'path';
 // Determine the environment based on NODE_ENV (default: development)
 const nodeEnv = process.env.NODE_ENV || 'development';
 const processPort = process.env.PORT;
+const processFrontendUrl = process.env.FRONTEND_URL;
 const backendRoot = path.resolve(__dirname, '../..');
 
 const envFilesByEnvironment = {
@@ -28,6 +29,7 @@ const loadedEnvFiles = selectedEnvFiles.filter((fileName, index) => {
 
 process.env.NODE_ENV = nodeEnv;
 if (processPort) process.env.PORT = processPort;
+if (processFrontendUrl) process.env.FRONTEND_URL = processFrontendUrl;
 
 export const envDiagnostics = {
   nodeEnv,
