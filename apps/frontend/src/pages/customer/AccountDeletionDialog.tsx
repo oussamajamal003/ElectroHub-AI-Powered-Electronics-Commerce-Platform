@@ -129,11 +129,11 @@ export function AccountDeletionDialog({ open, onOpenChange, onDeleted }: Account
     setIsBusy(true);
     try {
       await authApi.deleteAccount();
+      onDeleted();
       clearSession();
       queryClient.clear();
       onOpenChange(false);
       reset();
-      onDeleted();
     } catch (cause) {
       if (cause instanceof ApiError) {
         setError(cause.message);
