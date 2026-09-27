@@ -30,8 +30,12 @@ vi.mock('../../utils/logger.js', () => ({
 describe('Auth Controller - /api/auth/me', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(prisma.user.findFirst).mockResolvedValue(validUser as any);
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(validUser as any);
+    vi.mocked(prisma.user.findFirst).mockResolvedValue(
+      validUser as unknown as NonNullable<Awaited<ReturnType<typeof prisma.user.findFirst>>>,
+    );
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(
+      validUser as unknown as NonNullable<Awaited<ReturnType<typeof prisma.user.findUnique>>>,
+    );
     vi.mocked(prisma.oAuthAccount.findFirst).mockResolvedValue(null);
   });
 
