@@ -13,6 +13,9 @@ vi.mock('../../lib/prisma.js', () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    oAuthAccount: {
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     role: {
       findUnique: vi.fn(),
       create: vi.fn(),

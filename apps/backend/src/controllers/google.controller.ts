@@ -7,6 +7,7 @@ import { GoogleService } from '../services/google.service.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { setRefreshCookie } from './auth.controller.js';
 import { logger } from '../utils/logger.js';
+import { createAccountDeletionProof } from '../services/account-deletion-proof.js';
 
 const service = new GoogleService();
 const cookieName = 'electrohub_google_transaction';
@@ -15,7 +16,13 @@ const cookieOptions = { ...clearOptions, maxAge: 5 * 60 * 1000 };
 const transactionSchema = z.object({
   state: z.string().min(32), verifier: z.string().min(32), nonce: z.string().min(32), expiresAt: z.number(),
   channel: z.string().uuid().optional(),
+  intent: z.literal('ACCOUNT_DELETION').optional(),
+  userId: z.string().uuid().optional(),
   identity: z.object({ sub: z.string().min(1), email: z.string().email(), firstName: z.string(), lastName: z.string() }).optional(),
+}).superRefine((data, context) => {
+  if ((data.intent === 'ACCOUNT_DELETION') !== Boolean(data.userId)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid OAuth intent' });
+  }
 });
 
 function configuration() {
@@ -86,18 +93,48 @@ export const completeGoogle = (req: Request, res: Response) => {
   } catch { popup(res, 'failure', false); }
 };
 
+function createAuthorization(data: z.infer<typeof transactionSchema>) {
+  const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  url.search = new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID!, redirect_uri: env.GOOGLE_REDIRECT_URI!, response_type: 'code', scope: 'openid email profile', state: data.state, nonce: data.nonce, code_challenge: crypto.createHash('sha256').update(data.verifier).digest('base64url'), code_challenge_method: 'S256', prompt: 'select_account' }).toString();
+  return url.toString();
+}
+
+function createTransaction(channel?: string, userId?: string) {
+  return {
+    state: crypto.randomBytes(32).toString('base64url'),
+    verifier: crypto.randomBytes(32).toString('base64url'),
+    nonce: crypto.randomBytes(32).toString('base64url'),
+    expiresAt: Date.now() + cookieOptions.maxAge,
+    channel,
+    ...(userId ? { intent: 'ACCOUNT_DELETION' as const, userId } : {}),
+  };
+}
+
 export const startGoogle = (req: Request, res: Response) => {
   try {
     configuration();
     const channel = z.string().uuid().optional().parse(req.query.channel);
-    const data = { state: crypto.randomBytes(32).toString('base64url'), verifier: crypto.randomBytes(32).toString('base64url'), nonce: crypto.randomBytes(32).toString('base64url'), expiresAt: Date.now() + cookieOptions.maxAge, channel };
+    const data = createTransaction(channel);
     res.cookie(cookieName, seal(data), cookieOptions);
-    const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    url.search = new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID!, redirect_uri: env.GOOGLE_REDIRECT_URI!, response_type: 'code', scope: 'openid email profile', state: data.state, nonce: data.nonce, code_challenge: crypto.createHash('sha256').update(data.verifier).digest('base64url'), code_challenge_method: 'S256', prompt: 'select_account' }).toString();
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-    res.redirect(url.toString());
+    res.redirect(createAuthorization(data));
   } catch { popup(res, 'failure'); }
+};
+
+export const prepareGoogleDeletionReauth = (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { frontendOrigin } = configuration();
+    if (req.get('origin') !== frontendOrigin) throw new AppError('Unable to verify this request. Please try again.', 403, 'ACCOUNT_DELETION_ORIGIN_INVALID');
+    const { channel } = z.object({ channel: z.string().uuid() }).parse(req.body);
+    const data = createTransaction(channel, req.user!.userId);
+    res.cookie(cookieName, seal(data), cookieOptions);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ authorizationUrl: createAuthorization(data) });
+  } catch (error) {
+    if (error instanceof z.ZodError) return next(new AppError('Unable to start Google verification. Please try again.', 400, 'GOOGLE_STATE_INVALID'));
+    next(error);
+  }
 };
 
 export const callbackGoogle = async (req: Request, res: Response) => {
@@ -110,6 +147,17 @@ export const callbackGoogle = async (req: Request, res: Response) => {
     if (req.query.error === 'access_denied') return popup(res, 'cancelled', true, channel);
     if (typeof req.query.code !== 'string' || req.query.code.length > 4096) throw new Error('Invalid code');
     const identity: GoogleIdentity = await googleProvider.verifyCode(req.query.code, data.verifier, data.nonce);
+    if (data.intent === 'ACCOUNT_DELETION' && data.userId) {
+      await service.verifyDeletionIdentity(data.userId, identity.sub);
+      res.cookie('electrohub_account_deletion_proof', createAccountDeletionProof(data.userId), {
+        httpOnly: true,
+        secure: env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        path: '/api/account',
+        maxAge: 5 * 60 * 1000,
+      });
+      return popup(res, 'success', true, channel);
+    }
     const result = await service.signIn(identity);
     if ('linkingRequired' in result) {
       res.cookie(cookieName, seal({ ...data, identity, expiresAt: Date.now() + cookieOptions.maxAge }), cookieOptions);

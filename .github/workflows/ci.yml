@@ -169,6 +169,7 @@ jobs:
         env:
           DATABASE_URL: "${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}"
           DIRECT_URL: "${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}"
+          DB_SSL_CA_CERT_PATH: ${{ github.workspace }}/apps/backend/prisma/supabase-ca.pem
         run: npm run test:ci --workspace=@electrohub/backend
 
   backend-build:

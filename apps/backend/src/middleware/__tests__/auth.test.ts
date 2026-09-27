@@ -8,6 +8,10 @@ vi.mock('../../utils/jwt.js', () => ({
   verifyAccessToken: vi.fn(),
 }));
 
+vi.mock('../../lib/prisma.js', () => ({ prisma: { user: { findFirst: vi.fn() } } }));
+
+import { prisma } from '../../lib/prisma.js';
+
 describe('Auth Middleware', () => {
   let mockReq: Partial<Request>;
   let mockRes: Partial<Response>;
@@ -26,36 +30,48 @@ describe('Auth Middleware', () => {
   });
 
   describe('requireAuth', () => {
-    it('should return 401 if no authorization header is present', () => {
-      requireAuth(mockReq as Request, mockRes as Response, nextFunction);
+    it('should return 401 if no authorization header is present', async () => {
+      await requireAuth(mockReq as Request, mockRes as Response, nextFunction);
 
       expect(mockRes.status).toHaveBeenCalledWith(401);
       expect(mockRes.json).toHaveBeenCalledWith({ error: 'Unauthenticated' });
       expect(nextFunction).not.toHaveBeenCalled();
     });
 
-    it('should return 401 if token is invalid', () => {
+    it('should return 401 if token is invalid', async () => {
       mockReq.headers = { authorization: 'Bearer invalid_token' };
       vi.mocked(jwtUtils.verifyAccessToken).mockImplementation(() => {
         throw new Error('Invalid token');
       });
 
-      requireAuth(mockReq as Request, mockRes as Response, nextFunction);
+      await requireAuth(mockReq as Request, mockRes as Response, nextFunction);
 
       expect(mockRes.status).toHaveBeenCalledWith(401);
       expect(mockRes.json).toHaveBeenCalledWith({ error: 'Invalid or expired token' });
       expect(nextFunction).not.toHaveBeenCalled();
     });
 
-    it('should set req.user and call next if token is valid', () => {
+    it('should set req.user and call next if token is valid and account is active', async () => {
       mockReq.headers = { authorization: 'Bearer valid_token' };
       const payload = { userId: '123', role: 'CUSTOMER' };
       vi.mocked(jwtUtils.verifyAccessToken).mockReturnValue(payload);
+      vi.mocked(prisma.user.findFirst).mockResolvedValue({ id: '123', role: { name: 'CUSTOMER' } } as never);
 
-      requireAuth(mockReq as Request, mockRes as Response, nextFunction);
+      await requireAuth(mockReq as Request, mockRes as Response, nextFunction);
 
       expect(mockReq.user).toEqual(payload);
       expect(nextFunction).toHaveBeenCalled();
+    });
+
+    it('rejects a previously issued token when its account is inactive', async () => {
+      mockReq.headers = { authorization: 'Bearer valid_token' };
+      vi.mocked(jwtUtils.verifyAccessToken).mockReturnValue({ userId: '123', role: 'CUSTOMER' });
+      vi.mocked(prisma.user.findFirst).mockResolvedValue(null);
+
+      await requireAuth(mockReq as Request, mockRes as Response, nextFunction);
+
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+      expect(nextFunction).not.toHaveBeenCalled();
     });
   });
 

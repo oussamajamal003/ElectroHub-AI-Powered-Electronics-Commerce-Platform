@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { startGoogle, callbackGoogle, completeGoogle, linkGoogle } from '../controllers/google.controller.js';
+import { startGoogle, callbackGoogle, completeGoogle, linkGoogle, prepareGoogleDeletionReauth } from '../controllers/google.controller.js';
 import {
   register,
   login,
@@ -18,12 +18,13 @@ import {
   resendPasswordReset,
   resendPendingEmailChange,
 } from '../controllers/auth.controller.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 import {
   loginRateLimiter,
   registerRateLimiter,
   passwordResetRateLimiter,
   resendVerificationRateLimiter,
+  accountDeletionRateLimiter,
 } from '../middleware/rateLimiter.js';
 
 const router = Router();
@@ -51,6 +52,26 @@ const router = Router();
  *     responses:
  *       200: { description: Safe popup status success, linking_required, cancelled or failure; success sets the existing refresh cookie }
  *       429: { description: Login rate limit reached }
+ * /auth/google/deletion-reauth/start:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Prepare Google re-authentication for account deletion
+ *     description: Requires the authenticated customer and exact configured frontend Origin. Google callback must match the linked provider subject; it does not create a login session.
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [channel]
+ *             properties:
+ *               channel: { type: string, format: uuid }
+ *     responses:
+ *       200: { description: Returns the Google authorization URL and sets a short-lived HttpOnly OAuth transaction cookie }
+ *       401: { description: Authentication required }
+ *       403: { description: Customer or request-origin check failed }
+ *       429: { description: Re-authentication rate limit reached }
  * /auth/google/link:
  *   post:
  *     tags: [Authentication]
@@ -74,6 +95,7 @@ const router = Router();
  *       503: { description: Google configuration unavailable }
  */
 router.get('/google/start', loginRateLimiter, startGoogle);
+router.post('/google/deletion-reauth/start', requireAuth, requireRole('CUSTOMER'), accountDeletionRateLimiter, prepareGoogleDeletionReauth);
 router.get('/google/callback', loginRateLimiter, callbackGoogle);
 router.get('/google/complete', completeGoogle);
 router.post('/google/link', loginRateLimiter, linkGoogle);
@@ -389,7 +411,21 @@ router.post('/logout', logout);
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Successfully retrieved user details
+ *         description: Successfully retrieved user details, including available re-authentication methods
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     authMethods:
+ *                       type: object
+ *                       required: [password, google]
+ *                       properties:
+ *                         password: { type: boolean }
+ *                         google: { type: boolean }
  *       401:
  *         description: Unauthenticated or user not found
  */

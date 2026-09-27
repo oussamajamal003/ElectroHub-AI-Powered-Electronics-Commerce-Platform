@@ -430,6 +430,7 @@ enum SecurityEventType {
   LOGIN_SUCCESS
   LOGIN_FAILED
   LOGOUT
+  ACCOUNT_DELETED
 }
 
 model SecurityEvent {

@@ -12,6 +12,7 @@ import { ApiError } from '@/lib/api';
 import { OtpVerification } from '@/components/ui/OtpVerification';
 import { authApi } from '@/features/auth/api/auth';
 import styles from './ProfilePage.module.scss';
+import { AccountDeletionDialog } from './AccountDeletionDialog';
 
 export function ProfilePage() {
   const { user, updateProfile, verifyEmailChange } = useAuth();
@@ -29,6 +30,7 @@ export function ProfilePage() {
   const [pendingEmail, setPendingEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [resendAvailableAt, setResendAvailableAt] = useState(0);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   useEffect(() => {
     setFormData({ firstName: user?.firstName || '', lastName: user?.lastName || '', email: user?.email || '' });
@@ -114,6 +116,7 @@ export function ProfilePage() {
 
         <h1 className={styles.pageTitle}>My Profile</h1>
 
+        <div className={styles.sections}>
         <div className={styles.card}>
           <div className={styles.cardHeader}>
             <Avatar initials={initial} className={styles.avatar} />
@@ -220,8 +223,25 @@ export function ProfilePage() {
 
           <PasswordChangeForm />
         </div>
+
+        <section className={`${styles.card} ${styles.dangerZone}`} aria-labelledby="danger-zone-title">
+          <div className={styles.cardHeader}>
+            <h2 id="danger-zone-title" className={styles.sectionTitle}>Danger Zone</h2>
+            <p className={styles.subtext}>Permanently remove your account access and personal profile.</p>
+          </div>
+          <div className={styles.dangerActions}>
+            <p>Orders and payment history are retained. Active orders keep the shipping details needed to complete fulfillment.</p>
+            <Button type="button" variant="destructive" onClick={() => setDeleteOpen(true)}>Delete Account</Button>
+          </div>
+        </section>
+        </div>
       </div>
       <Footer />
+      <AccountDeletionDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={() => navigate('/', { replace: true, state: { accountDeleted: true } })}
+      />
     </div>
   );
 }

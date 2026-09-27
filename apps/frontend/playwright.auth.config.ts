@@ -34,7 +34,7 @@ export default defineConfig({
       url: `http://localhost:${backendPort}/api/health`,
       reuseExistingServer: false,
       timeout: 60_000,
-      env: { NODE_ENV: 'test', PORT: backendPort, E2E_OTP_OUTBOX_DIR: outboxDirectory, E2E_TEST_SUPPORT_TOKEN: e2eSupportToken },
+      env: { NODE_ENV: 'test', PORT: backendPort, FRONTEND_URL: `http://localhost:${frontendPort}`, E2E_OTP_OUTBOX_DIR: outboxDirectory, E2E_TEST_SUPPORT_TOKEN: e2eSupportToken },
     },
     {
       command: 'npm run dev:frontend',

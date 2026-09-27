@@ -41,6 +41,20 @@ Password changes and resets update the hash, revoke all refresh sessions, and pe
 - Outside `NODE_ENV=test`, the Brevo adapter always uses the configured provider. Test-only message capture/mocking is not selected from the `VITEST` process flag.
 - Password changes and email changes preserve the current authenticated identity while revoking refresh sessions only for password changes/resets.
 
+## Task 02.4-D customer account deletion
+
+`POST /api/account/deletion/reauth/password` verifies the authenticated CUSTOMER's current password and sets a five-minute HttpOnly, SameSite=Strict, purpose- and user-bound deletion proof. Google-only customers use `POST /api/auth/google/deletion-reauth/start` followed by the existing state/nonce/PKCE callback. The callback compares the verified Google subject with the exact GOOGLE OAuthAccount linked to the current customer; it does not create a login session. Hybrid customers may use either available method. The endpoints require the configured frontend Origin and use the account security rate limiter.
+
+`GET /api/auth/me` and successful login responses include `authMethods.password` and `authMethods.google` booleans so the UI offers only methods actually linked to the customer; password hashes and provider subjects are never returned.
+
+`DELETE /api/account` accepts only `{ "confirmation": "DELETE" }`, the current authenticated CUSTOMER identity, and a valid deletion proof cookie. It clears the access-token client state and refresh cookie after the database transaction commits. Protected API authentication reloads the current User and rejects inactive accounts, so an access JWT issued before deletion stops authorizing requests immediately.
+
+Deletion runs as one Prisma transaction. Refresh tokens, OTP challenges, password-reset authorization, OAuthAccount, addresses, cart, wishlist, and prior security events are deleted; customer-linked email-delivery records retain their relation to the anonymized tombstone but have their recipient and failure details sanitized. The User row becomes an inactive, non-authenticating tombstone with a synthetic `.invalid` email and generic name because `Order.userId` is required and uses `onDelete: Restrict`. This preserves order/admin/fulfillment joins without preserving login credentials. A minimal `ACCOUNT_DELETED` event remains linked only to that pseudonymous tombstone and contains no customer snapshot.
+
+Order, OrderItem, Payment, and Delivery transaction records are retained. Shipping recipient/address and destination coordinates remain unchanged for orders in `CONFIRMED`, `PREPARING`, or `OUT_FOR_DELIVERY` so fulfillment can complete. For `DELIVERED` and `CANCELLED` orders, customer-identifying shipping fields and delivery coordinates are redacted; order totals, items, payment state/provider references, tracking identifiers, and fulfillment status remain. The repository defines no automated post-fulfillment purge or legal retention period; none is introduced here, and this behavior is not a claim of legal compliance.
+
+Expected errors use the existing structured API contract: 401 for unauthenticated/unavailable accounts, 400 for password/confirmation validation, 403 for missing/invalid deletion proof or identity mismatch, 429 for security throttling, and sanitized 500 only for unexpected failures. Production migration preflight must review the exact `ACCOUNT_DELETED` enum migration and history before an approved deployment. Account deletion and destructive browser tests are DEV/test-only; PROD is never seeded or used for deletion tests.
+
 ## 1. Purpose
 
 This document defines the authentication and account-security behavior for ElectroHub.

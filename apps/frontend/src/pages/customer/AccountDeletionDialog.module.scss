@@ -1,0 +1,23 @@
+@use '@/styles/abstracts/variables' as *;
+
+.dialog {
+  max-width: 32rem;
+  border-radius: 0 !important;
+}
+
+.methods,
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+}
+
+.methodLabel {
+  margin: 0;
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+}
+
+.fullWidthButton {
+  width: 100%;
+}

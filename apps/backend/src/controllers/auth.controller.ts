@@ -54,7 +54,7 @@ export function setRefreshCookie(res: Response, token: string) {
   });
 }
 
-function clearRefreshCookie(res: Response) {
+export function clearRefreshCookie(res: Response) {
   res.clearCookie(COOKIE_NAME, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

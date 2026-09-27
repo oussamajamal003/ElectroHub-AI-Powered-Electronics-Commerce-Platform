@@ -26,6 +26,10 @@ export const openapiDefinition = {
       description: 'User authentication, registration, and session management',
     },
     {
+      name: 'Account',
+      description: 'Authenticated customer account lifecycle actions',
+    },
+    {
       name: 'Health',
       description: 'Service health and status monitoring',
     },

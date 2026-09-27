@@ -21,6 +21,14 @@
   margin-bottom: $spacing-16;
 }
 
+.sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: $spacing-6;
+  min-width: 0;
+}
+
 // ─── Breadcrumb ─────────────────────────────────────────────
 .breadcrumbWrapper {
   margin-top: $spacing-4;
@@ -38,6 +46,7 @@
 // ─── Card ───────────────────────────────────────────────────
 .card {
   max-width: 540px;
+  min-width: 0;
   width: 100%;
   background-color: $color-surface;
   border: 1px solid $color-border;
@@ -99,6 +108,48 @@
   min-width: 160px;
 }
 
+.sectionTitle {
+  font-family: $font-family-heading;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin: 0;
+}
+
+.dangerZone {
+  border-color: $color-error-border;
+  max-width: 540px;
+  grid-column: 1 / -1;
+  justify-self: center;
+  padding: $spacing-6;
+  gap: $spacing-5;
+}
+
+.dangerZone .cardHeader {
+  border-bottom-color: $color-error-border;
+}
+
+.dangerActions {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+  align-items: center;
+  text-align: center;
+
+  p {
+    margin: 0;
+    color: $color-text-secondary;
+    font-size: $font-size-sm;
+    line-height: 1.5;
+  }
+}
+
+@media (min-width: $breakpoint-sm) and (max-width: $breakpoint-md) {
+  .card {
+    padding: $spacing-6;
+  }
+}
+
 @media (max-width: $breakpoint-md) {
   .formActions {
     flex-direction: column-reverse;
@@ -108,5 +159,20 @@
   .cancelBtn, .saveBtn {
     width: 100%;
     min-width: 100%;
+  }
+}
+
+@media (max-width: $breakpoint-sm) {
+  .sections {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .card,
+  .dangerZone {
+    max-width: none;
+  }
+
+  .dangerZone {
+    grid-column: auto;
   }
 }

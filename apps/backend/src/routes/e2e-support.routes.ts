@@ -51,15 +51,14 @@ router.post('/expire-reset-authorization', async (request, response, next) => {
 
 router.post('/cleanup', async (request, response, next) => {
   try {
-    const { runId } = z.object({ runId: runIdSchema }).parse(request.body);
+    const { runId, deletedUserIds } = z.object({ runId: runIdSchema, deletedUserIds: z.array(z.string().uuid()).max(20).optional().default([]) }).parse(request.body);
     const marker = `-${runId}-`;
     const users = await prisma.user.findMany({
-      where: {
-        OR: [
-          { email: { startsWith: 'e2e-', contains: marker, endsWith: '@electrohub.invalid' } },
-          { pendingEmail: { startsWith: 'e2e-', contains: marker, endsWith: '@electrohub.invalid' } },
-        ],
-      },
+      where: { OR: [
+        { email: { startsWith: 'e2e-', contains: marker, endsWith: '@electrohub.invalid' } },
+        { pendingEmail: { startsWith: 'e2e-', contains: marker, endsWith: '@electrohub.invalid' } },
+        { id: { in: deletedUserIds }, isActive: false, email: { startsWith: 'deleted-', endsWith: '@deleted.invalid' } },
+      ] },
       select: { id: true },
     });
     const userIds = users.map((user) => user.id);

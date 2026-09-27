@@ -614,3 +614,8 @@ Security operations are complete when:
 # 35. Security Principle
 
 > **Security is enforced at every trust boundary, with the backend and infrastructure treated as the primary enforcement layers rather than relying on client-side behavior.**
+# Customer account deletion
+
+Account deletion requires current customer authentication, short-lived purpose-bound re-authentication, the exact `DELETE` confirmation, and a same-origin request. Password re-auth validates the current hash; Google re-auth validates the exact linked provider subject through the existing OAuth state/PKCE/nonce callback and never establishes a new session. Rate limits apply to both re-authentication and deletion.
+
+Deletion removes authentication credentials and volatile customer state atomically. The account row is anonymized and deactivated because retained orders have a required restrictive customer foreign key. Old access tokens are rejected by a live active-account check in authentication middleware; refresh credentials and the browser refresh cookie are removed. Order/payment/fulfillment records are retained; active-order shipping data remains until fulfillment is no longer active, while completed/cancelled order address details are redacted. The minimal `ACCOUNT_DELETED` event references only the pseudonymous tombstone. There is no automated post-fulfillment purge policy documented by the project. See `docs/05_Features/AUTHENTICATION.md` for the lifecycle matrix and API contract.

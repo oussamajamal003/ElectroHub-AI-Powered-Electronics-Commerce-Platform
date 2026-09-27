@@ -58,7 +58,7 @@ export function AuthModal({
   onSwitchToRegister,
   onSwitchToLogin,
 }: AuthModalProps) {
-  const { login, register, verifyEmail, finishGoogle } = useAuth();
+  const { login, register, verifyEmail, finishGoogle, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string })?.from || '/account';
@@ -122,6 +122,15 @@ export function AuthModal({
     confirmPassword: '',
   });
   const [registerError, setRegisterError] = useState('');
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    setRegisterData({ fullName: '', email: '', password: '', confirmPassword: '' });
+    setLoginPassword('');
+    setResetPassword('');
+    setConfirmResetPassword('');
+    setResetToken('');
+  }, [isAuthenticated]);
 
   // Sync mode with initialMode when dialog opens or initialMode changes
   useEffect(() => {

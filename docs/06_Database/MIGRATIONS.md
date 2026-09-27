@@ -10,6 +10,10 @@ PROD: independent connection verification was blocked by `SELF_SIGNED_CERT_IN_CH
 
 > This document is synchronized to the current Task 02.2 baseline. Prisma is the schema/migration source of truth. The implemented application model set is 15 models; `_prisma_migrations` is Prisma metadata.
 
+## Task 02.4-D migration
+
+`20260927000000_account_deleted_security_event` adds only `ACCOUNT_DELETED` to the existing `SecurityEventType` enum. It does not alter customer/order foreign keys or create account-deletion persistence tables. Verify Prisma schema/client and DEV migration status after application. Before any production deployment, independently inspect the exact pending migration SQL and migration history; never run account-deletion tests or seed data against PROD.
+
 ## Environments
 
 - Development: `electrohub-dev` — Supabase project ref `pzxekjybdiulzmssalfo`

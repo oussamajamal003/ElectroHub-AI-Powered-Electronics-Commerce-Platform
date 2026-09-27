@@ -7,8 +7,12 @@ import { generateAccessToken } from '../../utils/jwt.js';
 vi.mock('../../lib/prisma.js', () => ({
   prisma: {
     user: {
+      findFirst: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
+    },
+    oAuthAccount: {
+      findFirst: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -26,6 +30,13 @@ vi.mock('../../utils/logger.js', () => ({
 describe('Auth Controller - /api/auth/me', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.user.findFirst).mockResolvedValue(
+      validUser as unknown as NonNullable<Awaited<ReturnType<typeof prisma.user.findFirst>>>,
+    );
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(
+      validUser as unknown as NonNullable<Awaited<ReturnType<typeof prisma.user.findUnique>>>,
+    );
+    vi.mocked(prisma.oAuthAccount.findFirst).mockResolvedValue(null);
   });
 
   const validUser = {
@@ -66,7 +77,7 @@ describe('Auth Controller - /api/auth/me', () => {
   });
 
   it('4. Valid token for missing user -> 401', async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.user.findFirst).mockResolvedValue(null);
     const token = generateAccessToken({ userId: 'missing-user', role: 'CUSTOMER' });
 
     const res = await request(app)
@@ -90,7 +101,8 @@ describe('Auth Controller - /api/auth/me', () => {
     expect(returnedUser.passwordHash).toBeUndefined();
     expect(returnedUser.roleId).toBeUndefined();
     expect(returnedUser.isActive).toBeUndefined();
-    expect(Object.keys(returnedUser)).toEqual(['id', 'email', 'firstName', 'lastName', 'role']);
+    expect(returnedUser.authMethods).toEqual({ password: true, google: false });
+    expect(Object.keys(returnedUser)).toEqual(['id', 'email', 'firstName', 'lastName', 'role', 'authMethods']);
   });
 
   it('6. Unexpected Prisma failure -> controlled 500', async () => {
