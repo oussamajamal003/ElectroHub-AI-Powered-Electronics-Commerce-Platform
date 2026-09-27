@@ -1,4 +1,22 @@
-# ElectroHub Task 02.2 — Latest Implemented Database Foundation
+# ElectroHub Database — Task 02.5 Implementation
+
+> Task 02.5 implementation supersedes the historical 02.2 catalog details below. Current local schema has 23 application models, including Brand and ProductSpecification. Shared DEV/PROD application and live schema verification are deferred to Gemini; see [database handoff](PRODUCT_FOUNDATION_HANDOFF.md).
+
+## Task 02.5 relationship extension
+
+```text
+Category 1 ─── N Product N ─── 0..1 Brand
+                    │
+                    ├── N ProductImage (sortOrder maps position)
+                    ├── N ProductSpecification
+                    └── 0..1 Inventory
+```
+
+Existing commerce edges remain unchanged. The optional Brand edge deliberately accommodates unresolved legacy manufacturer data. Refer to current schema and the migration handoff rather than the historical 02.2-only diagram below.
+
+---
+
+# Historical Task 02.2 Database Foundation
 
 > This document is synchronized to the current Task 02.2 baseline. Prisma is the schema/migration source of truth. The implemented application model set is 15 models; `_prisma_migrations` is Prisma metadata.
 

@@ -1,4 +1,10 @@
-# ElectroHub Task 02.2 — Latest Implemented Database Foundation
+# ElectroHub Migrations — Task 02.5 Implementation
+
+## Task 02.5 forward migration
+
+Prepared offline: apps/backend/prisma/migrations/20260928000000_product_foundation/migration.sql. This is additive and nullable for existing products; no fallback Brand, backfill, data deletion or position-column rename. Prisma validate/generate are local checks, not proof the migration is applied. Shared DEV/PROD ledger/physical checks and deployment are deferred to Gemini with separate production approval. See [exact execution boundary and checklist](PRODUCT_FOUNDATION_HANDOFF.md).
+
+# Historical Task 02.2 Database Foundation
 
 ## Task 02.4-C migration evidence (2026-09-26)
 

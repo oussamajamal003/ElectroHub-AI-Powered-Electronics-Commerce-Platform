@@ -1,4 +1,14 @@
-# ElectroHub Task 02.2 — Latest Implemented Database Foundation
+# ElectroHub Database — Task 02.5 Implementation
+
+> Task 02.5 implementation supersedes the historical 02.2 catalog details below. Current local schema has 23 application models, including Brand and ProductSpecification. Shared DEV/PROD application and live schema verification are deferred to Gemini; see [database handoff](PRODUCT_FOUNDATION_HANDOFF.md).
+
+## Task 02.5 tables
+
+New tables: brands (UUID PK, unique name/slug, optional metadata, timestamps) and product_specifications (UUID PK, Product FK, group/name/value/sortOrder, timestamps). Existing products receive nullable brandId, modelNumber and compareAtPrice. categories receives nullable imageUrl. product_images keeps physical position; Prisma exposes sortOrder. No existing table or transaction history is removed.
+
+---
+
+# Historical Task 02.2 Database Foundation
 
 > This document is synchronized to the current Task 02.2 baseline. Prisma is the schema/migration source of truth. The implemented application model set is 15 models; `_prisma_migrations` is Prisma metadata.
 

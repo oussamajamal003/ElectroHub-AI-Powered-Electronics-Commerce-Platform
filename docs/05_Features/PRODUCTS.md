@@ -1,5 +1,11 @@
 # Products
 
+## Implemented Task 02.5 foundation
+
+Six public read endpoints, exact Decimal-string prices, nullable legacy brand, primary-image summaries and detail galleries/grouped specifications are defined in [Product API](PRODUCT_API_02.5.md). Curated data and local illustration attribution are in [source evidence](PRODUCT_SOURCES_02.5.md). No storefront wiring, search/filter/sort, admin CRUD, reviews or commerce mutation is implemented by this task. Shared database validation remains delegated to Gemini.
+
+Brand is mandatory for all new/curated 02.5 products, while legacy rows without verifiable manufacturer data remain nullable until safely reconciled.
+
 ## 1. Purpose
 
 This document defines the product catalog functionality for ElectroHub.

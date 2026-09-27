@@ -1,4 +1,14 @@
-# ElectroHub Task 02.2 — Latest Implemented Database Foundation
+# ElectroHub Database — Task 02.5 Implementation
+
+> Task 02.5 implementation supersedes the historical 02.2 catalog details below. Current local schema has 23 application models, including Brand and ProductSpecification. Shared DEV/PROD application and live schema verification are deferred to Gemini; see [database handoff](PRODUCT_FOUNDATION_HANDOFF.md).
+
+## Task 02.5 indexes
+
+New products_brandId_idx supports the nullable FK; brands_name_key and brands_slug_key enforce identities. product_specifications_productId_group_sortOrder_idx supports grouped detail reads; ID is the deterministic tie-breaker in application ordering. Existing product SKU/slug uniqueness, status/category indexes and product_images_productId_position_idx remain. Category/brand metadata order by name then ID; product pages order by createdAt DESC then ID ASC. No speculative search indexes or search API introduced.
+
+---
+
+# Historical Task 02.2 Database Foundation
 
 > This document is synchronized to the current Task 02.2 baseline. Prisma is the schema/migration source of truth. The implemented application model set is 15 models; `_prisma_migrations` is Prisma metadata.
 
