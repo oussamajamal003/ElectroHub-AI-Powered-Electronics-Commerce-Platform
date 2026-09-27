@@ -1,0 +1,1 @@
+ALTER TYPE "SecurityEventType" ADD VALUE 'ACCOUNT_DELETED';

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken, JwtPayload } from '../utils/jwt.js';
 import { logger } from '../utils/logger.js';
+import { prisma } from '../lib/prisma.js';
 
 // Extend Express Request type to include user
 declare global {
@@ -15,27 +16,44 @@ declare global {
 /**
  * Middleware to require a valid JWT access token.
  */
-export const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+export const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
+  let payload: JwtPayload;
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       logger.warn('AUTH_UNAUTHORIZED', { reason: 'Missing or malformed Authorization header' });
-      return res.status(401).json({ error: 'Unauthenticated' });
+      res.status(401).json({ error: 'Unauthenticated' });
+      return;
     }
 
     const token = authHeader.split(' ')[1];
     if (!token) {
       logger.warn('AUTH_UNAUTHORIZED', { reason: 'Missing token' });
-      return res.status(401).json({ error: 'Unauthenticated' });
+      res.status(401).json({ error: 'Unauthenticated' });
+      return;
     }
 
-    const payload = verifyAccessToken(token);
-    req.user = payload;
-    
-    next();
+    payload = verifyAccessToken(token);
   } catch {
     logger.warn('AUTH_UNAUTHORIZED', { reason: 'Invalid or expired token' });
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    res.status(401).json({ error: 'Invalid or expired token' });
+    return;
+  }
+
+  try {
+    const user = await prisma.user.findFirst({
+      where: { id: payload.userId, isActive: true },
+      select: { id: true, role: { select: { name: true } } },
+    });
+    if (!user) {
+      logger.warn('AUTH_UNAUTHORIZED', { reason: 'Account is unavailable' });
+      res.status(401).json({ error: 'Unauthenticated' });
+      return;
+    }
+    req.user = { ...payload, role: user.role.name };
+    next();
+  } catch (error) {
+    next(error);
   }
 };
 

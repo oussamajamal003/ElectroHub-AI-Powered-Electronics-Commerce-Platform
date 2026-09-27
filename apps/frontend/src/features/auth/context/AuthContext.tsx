@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, LoginCredentials, RegisterData } from '../types';
 import { authApi, VerificationResponse } from '../api/auth';
+import { setAccessToken } from '@/lib/api';
 
 interface AuthState {
   user: User | null;
@@ -15,6 +16,7 @@ interface AuthContextValue extends AuthState {
   register: (data: RegisterData) => Promise<VerificationResponse>;
   verifyEmail: (data: { email: string; code: string }) => Promise<VerificationResponse>;
   logout: () => Promise<void>;
+  clearSession: () => void;
   updateProfile: (data: { firstName?: string; lastName?: string; email?: string }) => Promise<VerificationResponse>;
   verifyEmailChange: (code: string) => Promise<User>;
 }
@@ -123,6 +125,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const clearSession = () => {
+    setAccessToken(null);
+    setState({ user: null, isAuthenticated: false, isLoading: false, isInitializing: false });
+  };
+
   const updateProfile = async (data: { firstName?: string; lastName?: string; email?: string }) => {
     setState((prev) => ({ ...prev, isLoading: true }));
     try {
@@ -149,7 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, login, register, verifyEmail, logout, updateProfile, verifyEmailChange, finishGoogle }}>
+    <AuthContext.Provider value={{ ...state, login, register, verifyEmail, logout, clearSession, updateProfile, verifyEmailChange, finishGoogle }}>
       {children}
     </AuthContext.Provider>
   );

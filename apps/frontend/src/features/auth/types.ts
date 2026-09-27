@@ -4,6 +4,7 @@ export interface User {
   firstName: string;
   lastName: string;
   role: string;
+  authMethods?: { password: boolean; google: boolean };
 }
 
 export interface LoginCredentials {

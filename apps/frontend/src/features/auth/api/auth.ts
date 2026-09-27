@@ -18,6 +18,18 @@ export interface VerificationResponse extends AuthResponse {
 }
 
 export const authApi = {
+  reauthenticateDeletionWithPassword: async (password: string): Promise<{ message: string }> => {
+    return apiClient('/api/account/deletion/reauth/password', { method: 'POST', data: { password } });
+  },
+
+  prepareGoogleDeletionReauth: async (channel: string): Promise<{ authorizationUrl: string }> => {
+    return apiClient('/api/auth/google/deletion-reauth/start', { method: 'POST', data: { channel } });
+  },
+
+  deleteAccount: async (): Promise<{ message: string }> => {
+    return apiClient('/api/account', { method: 'DELETE', data: { confirmation: 'DELETE' } });
+  },
+
   finishGoogle: async (): Promise<{ user: User }> => {
     const response = await apiClient<{ accessToken: string }>('/api/auth/refresh', { method: 'POST' });
     setAccessToken(response.accessToken);

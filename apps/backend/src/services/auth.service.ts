@@ -138,7 +138,14 @@ export class AuthService {
     return {
       accessToken: generateAccessToken({ userId: user.id, role: user.role.name }),
       refreshToken,
-      user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role.name },
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role.name,
+        authMethods: await this.repository.getAccountAuthMethods(user.id),
+      },
     };
   }
 
@@ -290,6 +297,7 @@ export class AuthService {
       firstName: user.firstName,
       lastName: user.lastName,
       role: user.role.name,
+      authMethods: await this.repository.getAccountAuthMethods(userId),
     };
   }
 

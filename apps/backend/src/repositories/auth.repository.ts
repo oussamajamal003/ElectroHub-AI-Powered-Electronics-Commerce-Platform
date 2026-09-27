@@ -72,6 +72,14 @@ export class AuthRepository {
     });
   }
 
+  async getAccountAuthMethods(userId: string) {
+    const [user, linkedGoogle] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: { passwordHash: true } }),
+      prisma.oAuthAccount.findFirst({ where: { userId, provider: 'GOOGLE' }, select: { id: true } }),
+    ]);
+    return { password: Boolean(user?.passwordHash), google: Boolean(linkedGoogle) };
+  }
+
   async updatePasswordAndRevokeSessions(userId: string, passwordHash: string, eventType: SecurityEventType): Promise<void> {
     await prisma.$transaction(async (transaction) => {
       await transaction.user.update({ where: { id: userId }, data: { passwordHash } });

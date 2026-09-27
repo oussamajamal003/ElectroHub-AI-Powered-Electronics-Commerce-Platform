@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { describe, beforeEach, it, expect, vi } from 'vitest';
 import { ProfilePage } from './ProfilePage';
 import { useAuth } from '@/features/auth/context/AuthContext';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({
   useAuth: vi.fn(),
@@ -27,13 +28,14 @@ describe('ProfilePage', () => {
       isAuthenticated: true,
       login: vi.fn(),
       logout: vi.fn(),
+      clearSession: vi.fn(),
       updateProfile: mockUpdateProfile,
       verifyEmailChange: vi.fn(),
     } as any);
   });
 
   const renderWithRouter = (ui: React.ReactElement) => {
-    return render(<BrowserRouter>{ui}</BrowserRouter>);
+    return render(<QueryClientProvider client={new QueryClient()}><BrowserRouter>{ui}</BrowserRouter></QueryClientProvider>);
   };
 
   it('renders breadcrumb and title', () => {
@@ -84,6 +86,14 @@ describe('ProfilePage', () => {
     await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledWith({ firstName: 'Jane', lastName: 'Doe', email: 'new@example.com' }));
     expect(await screen.findByText(/A verification code was requested for the new address/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Verify your new email' })).toBeInTheDocument();
+  });
+
+  it('shows the Danger Zone at the bottom of the profile and opens a confirmation dialog', () => {
+    renderWithRouter(<ProfilePage />);
+    expect(screen.getByRole('heading', { name: 'Danger Zone' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Account' }));
+    expect(screen.getByRole('heading', { name: 'Delete your account?' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Permanently Delete Account' })).not.toBeInTheDocument();
   });
 });
 

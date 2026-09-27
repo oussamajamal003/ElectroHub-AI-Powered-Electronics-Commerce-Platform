@@ -41,7 +41,43 @@ describe('AuthModal Component', () => {
       login: mockLogin,
       register: mockRegister,
       verifyEmail: mockVerifyEmail,
+      isAuthenticated: false,
     });
+  });
+
+  it('preserves unfinished register values across an unauthenticated close and reopen', async () => {
+    const user = userEvent.setup();
+    const view = render(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="register" />);
+    await user.type(screen.getByLabelText(/Full Name/i), 'Alex Customer');
+    await user.type(screen.getByLabelText(/Email Address/i), 'alex@example.com');
+    await user.type(screen.getByLabelText(/^Password$/i), 'example-password');
+
+    view.rerender(<AuthModal open={false} onOpenChange={mockOnOpenChange} initialMode="register" />);
+    view.rerender(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="register" />);
+
+    expect(screen.getByLabelText(/Full Name/i)).toHaveValue('Alex Customer');
+    expect(screen.getByLabelText(/Email Address/i)).toHaveValue('alex@example.com');
+    expect(screen.getByLabelText(/^Password$/i)).toHaveValue('example-password');
+  });
+
+  it('clears registration and password drafts when authentication succeeds and remains clean after logout', async () => {
+    const user = userEvent.setup();
+    const view = render(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="register" />);
+    await user.type(screen.getByLabelText(/Full Name/i), 'Alex Customer');
+    await user.type(screen.getByLabelText(/Email Address/i), 'alex@example.com');
+    await user.type(screen.getByLabelText(/^Password$/i), 'example-password');
+    await user.type(screen.getByLabelText(/^Confirm Password$/i), 'example-password');
+
+    (useAuth as any).mockReturnValue({ login: mockLogin, register: mockRegister, verifyEmail: mockVerifyEmail, isAuthenticated: true });
+    view.rerender(<AuthModal open={false} onOpenChange={mockOnOpenChange} initialMode="register" />);
+
+    (useAuth as any).mockReturnValue({ login: mockLogin, register: mockRegister, verifyEmail: mockVerifyEmail, isAuthenticated: false });
+    view.rerender(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="register" />);
+
+    expect(screen.getByLabelText(/Full Name/i)).toHaveValue('');
+    expect(screen.getByLabelText(/Email Address/i)).toHaveValue('');
+    expect(screen.getByLabelText(/^Password$/i)).toHaveValue('');
+    expect(screen.getByLabelText(/^Confirm Password$/i)).toHaveValue('');
   });
 
   it('prefills Forgot Password from Login while keeping the email editable', async () => {

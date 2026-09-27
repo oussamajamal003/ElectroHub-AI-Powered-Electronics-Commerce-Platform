@@ -44,6 +44,13 @@ export class GoogleService {
     return this.session(user.id);
   }
 
+  async verifyDeletionIdentity(userId: string, subject: string) {
+    const linked = await this.repository.findIdentity(subject);
+    if (!linked || linked.user.id !== userId || !linked.user.isActive || linked.user.role.name !== 'CUSTOMER') {
+      throw new AppError('The Google account does not match this ElectroHub account.', 403, 'ACCOUNT_REAUTH_IDENTITY_MISMATCH');
+    }
+  }
+
   private async session(userId: string) {
     let result;
     try { result = await this.auth.establishCustomerSession(userId); }
