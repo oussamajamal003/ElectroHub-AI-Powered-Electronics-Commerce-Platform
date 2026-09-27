@@ -1,0 +1,1712 @@
+{
+  "categories": [
+    {
+      "name": "Smartphones",
+      "slug": "smartphones",
+      "description": "Smartphones for the ElectroHub development catalog.",
+      "imageUrl": "/images/categories/smartphones.svg"
+    },
+    {
+      "name": "Laptops",
+      "slug": "laptops",
+      "description": "Laptops for the ElectroHub development catalog.",
+      "imageUrl": "/images/categories/laptops.svg"
+    },
+    {
+      "name": "Tablets",
+      "slug": "tablets",
+      "description": "Tablets for the ElectroHub development catalog.",
+      "imageUrl": "/images/categories/tablets.svg"
+    },
+    {
+      "name": "Headphones",
+      "slug": "headphones",
+      "description": "Headphones for the ElectroHub development catalog.",
+      "imageUrl": "/images/categories/headphones.svg"
+    },
+    {
+      "name": "Monitors",
+      "slug": "monitors",
+      "description": "Monitors for the ElectroHub development catalog.",
+      "imageUrl": "/images/categories/monitors.svg"
+    },
+    {
+      "name": "Smartwatches",
+      "slug": "smartwatches",
+      "description": "Smartwatches for the ElectroHub development catalog.",
+      "imageUrl": "/images/categories/smartwatches.svg"
+    },
+    {
+      "name": "Gaming",
+      "slug": "gaming",
+      "description": "Gaming for the ElectroHub development catalog.",
+      "imageUrl": "/images/categories/gaming.svg"
+    },
+    {
+      "name": "Accessories",
+      "slug": "accessories",
+      "description": "Accessories for the ElectroHub development catalog.",
+      "imageUrl": "/images/categories/accessories.svg"
+    }
+  ],
+  "brands": [
+    {
+      "name": "Apple",
+      "slug": "apple",
+      "description": null,
+      "logoUrl": null
+    },
+    {
+      "name": "Samsung",
+      "slug": "samsung",
+      "description": null,
+      "logoUrl": null
+    },
+    {
+      "name": "Sony",
+      "slug": "sony",
+      "description": null,
+      "logoUrl": null
+    },
+    {
+      "name": "Lenovo",
+      "slug": "lenovo",
+      "description": null,
+      "logoUrl": null
+    },
+    {
+      "name": "HP",
+      "slug": "hp",
+      "description": null,
+      "logoUrl": null
+    },
+    {
+      "name": "ASUS",
+      "slug": "asus",
+      "description": null,
+      "logoUrl": null
+    },
+    {
+      "name": "Dell",
+      "slug": "dell",
+      "description": null,
+      "logoUrl": null
+    },
+    {
+      "name": "LG",
+      "slug": "lg",
+      "description": null,
+      "logoUrl": null
+    },
+    {
+      "name": "Acer",
+      "slug": "acer",
+      "description": null,
+      "logoUrl": null
+    },
+    {
+      "name": "JBL",
+      "slug": "jbl",
+      "description": null,
+      "logoUrl": null
+    }
+  ],
+  "products": [
+    {
+      "name": "Apple iPhone 15 128GB",
+      "slug": "apple-iphone-15-128gb",
+      "sku": "EH-025-001",
+      "brandSlug": "apple",
+      "categorySlug": "smartphones",
+      "description": "Compact OLED phone with A16 Bionic and a dual-camera system.",
+      "modelNumber": null,
+      "price": "699.00",
+      "compareAtPrice": "799.00",
+      "status": "ACTIVE",
+      "quantity": 0,
+      "sourceUrl": "https://support.apple.com/en-us/111831",
+      "images": [
+        {
+          "url": "/images/products/smartphones/front.svg",
+          "altText": "Apple iPhone 15 128GB — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/smartphones/detail.svg",
+          "altText": "Apple iPhone 15 128GB — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Display",
+          "name": "Screen",
+          "value": "6.1-inch OLED",
+          "sortOrder": 0
+        },
+        {
+          "group": "Display",
+          "name": "Resolution",
+          "value": "2556 x 1179",
+          "sortOrder": 1
+        },
+        {
+          "group": "Performance",
+          "name": "Chip",
+          "value": "A16 Bionic",
+          "sortOrder": 2
+        },
+        {
+          "group": "Storage",
+          "name": "Capacity",
+          "value": "128GB",
+          "sortOrder": 3
+        },
+        {
+          "group": "Camera",
+          "name": "Main camera",
+          "value": "48MP",
+          "sortOrder": 4
+        },
+        {
+          "group": "Connectivity",
+          "name": "Bluetooth",
+          "value": "5.3",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "Apple iPhone 16 128GB",
+      "slug": "apple-iphone-16-128gb",
+      "sku": "EH-025-002",
+      "brandSlug": "apple",
+      "categorySlug": "smartphones",
+      "description": "A18-powered phone with Camera Control and USB-C charging.",
+      "modelNumber": null,
+      "price": "799.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://www.apple.com/iphone-16/specs/",
+      "images": [
+        {
+          "url": "/images/products/smartphones/front.svg",
+          "altText": "Apple iPhone 16 128GB — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/smartphones/detail.svg",
+          "altText": "Apple iPhone 16 128GB — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Display",
+          "name": "Screen",
+          "value": "6.1-inch OLED",
+          "sortOrder": 0
+        },
+        {
+          "group": "Display",
+          "name": "Resolution",
+          "value": "2556 x 1179",
+          "sortOrder": 1
+        },
+        {
+          "group": "Performance",
+          "name": "Chip",
+          "value": "A18",
+          "sortOrder": 2
+        },
+        {
+          "group": "Storage",
+          "name": "Capacity",
+          "value": "128GB",
+          "sortOrder": 3
+        },
+        {
+          "group": "Camera",
+          "name": "Main camera",
+          "value": "48MP Fusion",
+          "sortOrder": 4
+        },
+        {
+          "group": "Connectivity",
+          "name": "Connector",
+          "value": "USB-C",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "Samsung Galaxy S24 256GB",
+      "slug": "samsung-galaxy-s24-256gb",
+      "sku": "EH-025-003",
+      "brandSlug": "samsung",
+      "categorySlug": "smartphones",
+      "description": "Korean-market Galaxy S24 reference configuration with a compact adaptive display.",
+      "modelNumber": null,
+      "price": "749.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://news.samsung.com/kr/%EC%84%B8%EC%83%81%EA%B3%BC-%EC%86%8C%ED%86%B5%ED%95%98%EB%8A%94-%EB%B0%A9%EC%8B%9D%EC%9D%84-%ED%98%81%EC%8B%A0%ED%95%98%EB%8A%94-%EC%83%88%EB%A1%9C%EC%9A%B4-ai%ED%8F%B0%EC%9D%98-%EC%8B%9C",
+      "images": [
+        {
+          "url": "/images/products/smartphones/front.svg",
+          "altText": "Samsung Galaxy S24 256GB — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/smartphones/detail.svg",
+          "altText": "Samsung Galaxy S24 256GB — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Display",
+          "name": "Screen",
+          "value": "6.2-inch Dynamic AMOLED 2X",
+          "sortOrder": 0
+        },
+        {
+          "group": "Display",
+          "name": "Resolution",
+          "value": "2340 x 1080",
+          "sortOrder": 1
+        },
+        {
+          "group": "Display",
+          "name": "Refresh rate",
+          "value": "1-120Hz adaptive",
+          "sortOrder": 2
+        },
+        {
+          "group": "Performance",
+          "name": "Processor",
+          "value": "Exynos 2400 (Korean market)",
+          "sortOrder": 3
+        },
+        {
+          "group": "Performance",
+          "name": "Memory",
+          "value": "8GB",
+          "sortOrder": 4
+        },
+        {
+          "group": "Storage",
+          "name": "Capacity",
+          "value": "256GB",
+          "sortOrder": 5
+        },
+        {
+          "group": "Battery",
+          "name": "Capacity",
+          "value": "4000mAh typical",
+          "sortOrder": 6
+        }
+      ]
+    },
+    {
+      "name": "Apple MacBook Air 13 M3 8GB 256GB",
+      "slug": "apple-macbook-air-13-m3",
+      "sku": "EH-025-004",
+      "brandSlug": "apple",
+      "categorySlug": "laptops",
+      "description": "Lightweight 2024 MacBook Air with the original 8GB reference configuration.",
+      "modelNumber": null,
+      "price": "999.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://support.apple.com/en-us/118551",
+      "images": [
+        {
+          "url": "/images/products/laptops/front.svg",
+          "altText": "Apple MacBook Air 13 M3 8GB 256GB — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/laptops/detail.svg",
+          "altText": "Apple MacBook Air 13 M3 8GB 256GB — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Display",
+          "name": "Screen",
+          "value": "13.6-inch Liquid Retina",
+          "sortOrder": 0
+        },
+        {
+          "group": "Display",
+          "name": "Resolution",
+          "value": "2560 x 1664",
+          "sortOrder": 1
+        },
+        {
+          "group": "Performance",
+          "name": "Chip",
+          "value": "Apple M3",
+          "sortOrder": 2
+        },
+        {
+          "group": "Performance",
+          "name": "Memory",
+          "value": "8GB unified",
+          "sortOrder": 3
+        },
+        {
+          "group": "Storage",
+          "name": "Capacity",
+          "value": "256GB SSD",
+          "sortOrder": 4
+        },
+        {
+          "group": "Connectivity",
+          "name": "Ports",
+          "value": "Two Thunderbolt / USB 4",
+          "sortOrder": 5
+        },
+        {
+          "group": "Connectivity",
+          "name": "Wireless",
+          "value": "Wi-Fi 6E; Bluetooth 5.3",
+          "sortOrder": 6
+        }
+      ]
+    },
+    {
+      "name": "Apple MacBook Air 15 M3 8GB 256GB",
+      "slug": "apple-macbook-air-15-m3",
+      "sku": "EH-025-005",
+      "brandSlug": "apple",
+      "categorySlug": "laptops",
+      "description": "Larger 2024 MacBook Air with a 15.3-inch display and M3 processor.",
+      "modelNumber": null,
+      "price": "1199.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://support.apple.com/en-us/118552",
+      "images": [
+        {
+          "url": "/images/products/laptops/front.svg",
+          "altText": "Apple MacBook Air 15 M3 8GB 256GB — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/laptops/detail.svg",
+          "altText": "Apple MacBook Air 15 M3 8GB 256GB — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Display",
+          "name": "Screen",
+          "value": "15.3-inch Liquid Retina",
+          "sortOrder": 0
+        },
+        {
+          "group": "Display",
+          "name": "Resolution",
+          "value": "2880 x 1864",
+          "sortOrder": 1
+        },
+        {
+          "group": "Performance",
+          "name": "Chip",
+          "value": "Apple M3",
+          "sortOrder": 2
+        },
+        {
+          "group": "Performance",
+          "name": "Memory",
+          "value": "8GB unified",
+          "sortOrder": 3
+        },
+        {
+          "group": "Storage",
+          "name": "Capacity",
+          "value": "256GB SSD",
+          "sortOrder": 4
+        },
+        {
+          "group": "Connectivity",
+          "name": "Ports",
+          "value": "Two Thunderbolt / USB 4",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "Lenovo ThinkPad X1 Carbon Gen 12",
+      "slug": "lenovo-thinkpad-x1-carbon-gen-12",
+      "sku": "EH-025-006",
+      "brandSlug": "lenovo",
+      "categorySlug": "laptops",
+      "description": "Business notebook reference configuration using manufacturer-listed options.",
+      "modelNumber": null,
+      "price": "1599.00",
+      "compareAtPrice": "1699.00",
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://psref.lenovo.com/syspool/Sys/PDF/ThinkPad/ThinkPad_X1_Carbon_Gen_12/ThinkPad_X1_Carbon_Gen_12_Spec.pdf",
+      "images": [
+        {
+          "url": "/images/products/laptops/front.svg",
+          "altText": "Lenovo ThinkPad X1 Carbon Gen 12 — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/laptops/detail.svg",
+          "altText": "Lenovo ThinkPad X1 Carbon Gen 12 — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Performance",
+          "name": "Processor",
+          "value": "Intel Core Ultra 5 125H",
+          "sortOrder": 0
+        },
+        {
+          "group": "Performance",
+          "name": "Graphics",
+          "value": "Intel Arc",
+          "sortOrder": 1
+        },
+        {
+          "group": "Connectivity",
+          "name": "USB-A",
+          "value": "Two USB 5Gbps ports",
+          "sortOrder": 2
+        },
+        {
+          "group": "Connectivity",
+          "name": "Thunderbolt",
+          "value": "Two Thunderbolt 4 ports",
+          "sortOrder": 3
+        },
+        {
+          "group": "Connectivity",
+          "name": "Video output",
+          "value": "HDMI",
+          "sortOrder": 4
+        },
+        {
+          "group": "Connectivity",
+          "name": "Audio",
+          "value": "3.5mm headphone / microphone combo jack",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "Apple iPad Air 11 M2 128GB Wi-Fi",
+      "slug": "apple-ipad-air-11-m2-128gb",
+      "sku": "EH-025-007",
+      "brandSlug": "apple",
+      "categorySlug": "tablets",
+      "description": "11-inch M2 tablet reference configuration with Wi-Fi connectivity.",
+      "modelNumber": null,
+      "price": "599.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://support.apple.com/en-us/119894",
+      "images": [
+        {
+          "url": "/images/products/tablets/front.svg",
+          "altText": "Apple iPad Air 11 M2 128GB Wi-Fi — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/tablets/detail.svg",
+          "altText": "Apple iPad Air 11 M2 128GB Wi-Fi — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Display",
+          "name": "Screen",
+          "value": "11-inch Liquid Retina",
+          "sortOrder": 0
+        },
+        {
+          "group": "Display",
+          "name": "Resolution",
+          "value": "2360 x 1640",
+          "sortOrder": 1
+        },
+        {
+          "group": "Performance",
+          "name": "Chip",
+          "value": "Apple M2",
+          "sortOrder": 2
+        },
+        {
+          "group": "Storage",
+          "name": "Capacity",
+          "value": "128GB",
+          "sortOrder": 3
+        },
+        {
+          "group": "Connectivity",
+          "name": "Wireless",
+          "value": "Wi-Fi 6E; Bluetooth 5.3",
+          "sortOrder": 4
+        },
+        {
+          "group": "Battery",
+          "name": "Capacity",
+          "value": "28.93Wh",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "Apple iPad 10 64GB Wi-Fi",
+      "slug": "apple-ipad-10-64gb",
+      "sku": "EH-025-008",
+      "brandSlug": "apple",
+      "categorySlug": "tablets",
+      "description": "Tenth-generation iPad with A14 Bionic and a USB-C connector.",
+      "modelNumber": null,
+      "price": "349.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 0,
+      "sourceUrl": "https://support.apple.com/en-us/111840",
+      "images": [
+        {
+          "url": "/images/products/tablets/front.svg",
+          "altText": "Apple iPad 10 64GB Wi-Fi — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/tablets/detail.svg",
+          "altText": "Apple iPad 10 64GB Wi-Fi — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Display",
+          "name": "Screen",
+          "value": "10.9-inch Liquid Retina",
+          "sortOrder": 0
+        },
+        {
+          "group": "Display",
+          "name": "Resolution",
+          "value": "2360 x 1640",
+          "sortOrder": 1
+        },
+        {
+          "group": "Display",
+          "name": "Brightness",
+          "value": "500 nits",
+          "sortOrder": 2
+        },
+        {
+          "group": "Performance",
+          "name": "Chip",
+          "value": "A14 Bionic",
+          "sortOrder": 3
+        },
+        {
+          "group": "Storage",
+          "name": "Capacity",
+          "value": "64GB",
+          "sortOrder": 4
+        },
+        {
+          "group": "Camera",
+          "name": "Rear camera",
+          "value": "12MP Wide",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "Samsung Galaxy Tab S9 128GB Wi-Fi",
+      "slug": "samsung-galaxy-tab-s9-128gb",
+      "sku": "EH-025-009",
+      "brandSlug": "samsung",
+      "categorySlug": "tablets",
+      "description": "AMOLED tablet reference configuration with included S Pen.",
+      "modelNumber": null,
+      "price": "699.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://news.samsung.com/us/samsung-galaxy-tab-s9-sets-new-standard-to-bring-galaxys-premium-experience-to-tablet-unpacked-2023/",
+      "images": [
+        {
+          "url": "/images/products/tablets/front.svg",
+          "altText": "Samsung Galaxy Tab S9 128GB Wi-Fi — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/tablets/detail.svg",
+          "altText": "Samsung Galaxy Tab S9 128GB Wi-Fi — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Display",
+          "name": "Screen",
+          "value": "11-inch Dynamic AMOLED 2X",
+          "sortOrder": 0
+        },
+        {
+          "group": "Performance",
+          "name": "Processor",
+          "value": "Snapdragon 8 Gen 2 for Galaxy",
+          "sortOrder": 1
+        },
+        {
+          "group": "Performance",
+          "name": "Memory",
+          "value": "8GB",
+          "sortOrder": 2
+        },
+        {
+          "group": "Storage",
+          "name": "Capacity",
+          "value": "128GB",
+          "sortOrder": 3
+        },
+        {
+          "group": "Battery",
+          "name": "Capacity",
+          "value": "8400mAh typical",
+          "sortOrder": 4
+        },
+        {
+          "group": "Durability",
+          "name": "Rating",
+          "value": "IP68",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "Sony WH-1000XM5",
+      "slug": "sony-wh-1000xm5",
+      "sku": "EH-025-010",
+      "brandSlug": "sony",
+      "categorySlug": "headphones",
+      "description": "Over-ear wireless headphones with active noise cancellation.",
+      "modelNumber": "WH-1000XM5",
+      "price": "299.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://www.sony.com/electronics/support/wireless-headphones-bluetooth-headphones/wh-1000xm5/specifications",
+      "images": [
+        {
+          "url": "/images/products/headphones/front.svg",
+          "altText": "Sony WH-1000XM5 — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/headphones/detail.svg",
+          "altText": "Sony WH-1000XM5 — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Audio",
+          "name": "Design",
+          "value": "Closed dynamic, over-ear",
+          "sortOrder": 0
+        },
+        {
+          "group": "Audio",
+          "name": "Codecs",
+          "value": "SBC, AAC, LDAC",
+          "sortOrder": 1
+        },
+        {
+          "group": "Connectivity",
+          "name": "Bluetooth",
+          "value": "5.2",
+          "sortOrder": 2
+        },
+        {
+          "group": "Battery",
+          "name": "Playback",
+          "value": "Up to 30 hours with noise cancellation",
+          "sortOrder": 3
+        },
+        {
+          "group": "Battery",
+          "name": "Charge time",
+          "value": "Approximately 3.5 hours",
+          "sortOrder": 4
+        },
+        {
+          "group": "Connectivity",
+          "name": "Input",
+          "value": "Stereo mini jack",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "JBL Tune 770NC",
+      "slug": "jbl-tune-770nc",
+      "sku": "EH-025-011",
+      "brandSlug": "jbl",
+      "categorySlug": "headphones",
+      "description": "Wireless over-ear headphones with adaptive noise cancellation.",
+      "modelNumber": null,
+      "price": "99.00",
+      "compareAtPrice": "199.00",
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://www.jbl.com/TUNE770NC.html",
+      "images": [
+        {
+          "url": "/images/products/headphones/front.svg",
+          "altText": "JBL Tune 770NC — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/headphones/detail.svg",
+          "altText": "JBL Tune 770NC — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Audio",
+          "name": "Driver",
+          "value": "40mm",
+          "sortOrder": 0
+        },
+        {
+          "group": "Audio",
+          "name": "Impedance",
+          "value": "32 ohms",
+          "sortOrder": 1
+        },
+        {
+          "group": "Audio",
+          "name": "Frequency response",
+          "value": "20Hz-20kHz",
+          "sortOrder": 2
+        },
+        {
+          "group": "Audio",
+          "name": "Noise cancellation",
+          "value": "Adaptive",
+          "sortOrder": 3
+        },
+        {
+          "group": "Connectivity",
+          "name": "Bluetooth",
+          "value": "5.3",
+          "sortOrder": 4
+        },
+        {
+          "group": "Audio",
+          "name": "Microphones",
+          "value": "One",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "Samsung Galaxy Buds2 Pro",
+      "slug": "samsung-galaxy-buds2-pro",
+      "sku": "EH-025-012",
+      "brandSlug": "samsung",
+      "categorySlug": "headphones",
+      "description": "In-ear wireless headphones with two-way drivers and active noise cancellation.",
+      "modelNumber": null,
+      "price": "149.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://news.samsung.com/fr/galaxy-buds2-pro",
+      "images": [
+        {
+          "url": "/images/products/headphones/front.svg",
+          "altText": "Samsung Galaxy Buds2 Pro — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/headphones/detail.svg",
+          "altText": "Samsung Galaxy Buds2 Pro — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Audio",
+          "name": "Design",
+          "value": "In-ear",
+          "sortOrder": 0
+        },
+        {
+          "group": "Audio",
+          "name": "Woofer",
+          "value": "10mm",
+          "sortOrder": 1
+        },
+        {
+          "group": "Audio",
+          "name": "Tweeter",
+          "value": "5.3mm",
+          "sortOrder": 2
+        },
+        {
+          "group": "Audio",
+          "name": "Codec",
+          "value": "Samsung SSC Hi-Fi (compatible devices required)",
+          "sortOrder": 3
+        },
+        {
+          "group": "Connectivity",
+          "name": "Bluetooth",
+          "value": "5.3",
+          "sortOrder": 4
+        },
+        {
+          "group": "Audio",
+          "name": "Spatial audio",
+          "value": "360 Audio (compatible devices required)",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "LG 27UL500-W",
+      "slug": "lg-27ul500-w",
+      "sku": "EH-025-013",
+      "brandSlug": "lg",
+      "categorySlug": "monitors",
+      "description": "27-inch IPS monitor with UHD resolution and HDR10 support.",
+      "modelNumber": "27UL500-W",
+      "price": "229.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://www.lg.com/us/support/products/documents/27UL500-W%20Spec%20Sheet.pdf",
+      "images": [
+        {
+          "url": "/images/products/monitors/front.svg",
+          "altText": "LG 27UL500-W — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/monitors/detail.svg",
+          "altText": "LG 27UL500-W — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Display",
+          "name": "Screen",
+          "value": "27-inch IPS",
+          "sortOrder": 0
+        },
+        {
+          "group": "Display",
+          "name": "Resolution",
+          "value": "3840 x 2160",
+          "sortOrder": 1
+        },
+        {
+          "group": "Display",
+          "name": "Refresh rate",
+          "value": "60Hz",
+          "sortOrder": 2
+        },
+        {
+          "group": "Display",
+          "name": "Response time",
+          "value": "5ms GtG at Faster setting",
+          "sortOrder": 3
+        },
+        {
+          "group": "Display",
+          "name": "Color gamut",
+          "value": "sRGB 98% typical",
+          "sortOrder": 4
+        },
+        {
+          "group": "Display",
+          "name": "Brightness",
+          "value": "300 cd/m2 typical",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "Dell P2422H",
+      "slug": "dell-p2422h",
+      "sku": "EH-025-014",
+      "brandSlug": "dell",
+      "categorySlug": "monitors",
+      "description": "23.8-inch Full HD IPS productivity monitor.",
+      "modelNumber": "P2422H",
+      "price": "179.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://www.dell.com/en-gb/shop/dell-24-monitor-p2422h/apd/210-azyx/",
+      "images": [
+        {
+          "url": "/images/products/monitors/front.svg",
+          "altText": "Dell P2422H — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/monitors/detail.svg",
+          "altText": "Dell P2422H — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Display",
+          "name": "Screen",
+          "value": "23.8-inch IPS",
+          "sortOrder": 0
+        },
+        {
+          "group": "Display",
+          "name": "Resolution",
+          "value": "1920 x 1080",
+          "sortOrder": 1
+        },
+        {
+          "group": "Display",
+          "name": "Refresh rate",
+          "value": "60Hz",
+          "sortOrder": 2
+        },
+        {
+          "group": "Display",
+          "name": "Brightness",
+          "value": "250 cd/m2",
+          "sortOrder": 3
+        },
+        {
+          "group": "Display",
+          "name": "Color gamut",
+          "value": "99% sRGB",
+          "sortOrder": 4
+        },
+        {
+          "group": "Connectivity",
+          "name": "Video ports",
+          "value": "HDMI, DisplayPort, VGA",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "ASUS TUF Gaming VG249Q1A",
+      "slug": "asus-tuf-gaming-vg249q1a",
+      "sku": "EH-025-015",
+      "brandSlug": "asus",
+      "categorySlug": "monitors",
+      "description": "Full HD IPS gaming monitor with adaptive synchronization.",
+      "modelNumber": "VG249Q1A",
+      "price": "159.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 0,
+      "sourceUrl": "https://www.asus.com/us/displays-desktops/monitors/tuf-gaming/tuf-gaming-vg249q1a/techspec/",
+      "images": [
+        {
+          "url": "/images/products/monitors/front.svg",
+          "altText": "ASUS TUF Gaming VG249Q1A — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/monitors/detail.svg",
+          "altText": "ASUS TUF Gaming VG249Q1A — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Display",
+          "name": "Screen",
+          "value": "23.8-inch IPS",
+          "sortOrder": 0
+        },
+        {
+          "group": "Display",
+          "name": "Resolution",
+          "value": "1920 x 1080",
+          "sortOrder": 1
+        },
+        {
+          "group": "Display",
+          "name": "Maximum refresh rate",
+          "value": "165Hz",
+          "sortOrder": 2
+        },
+        {
+          "group": "Display",
+          "name": "Response time",
+          "value": "1ms MPRT",
+          "sortOrder": 3
+        },
+        {
+          "group": "Connectivity",
+          "name": "Ports",
+          "value": "DisplayPort 1.2; two HDMI 1.4",
+          "sortOrder": 4
+        },
+        {
+          "group": "Audio",
+          "name": "Speakers",
+          "value": "Two 2W speakers",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "Apple Watch SE 2 40mm GPS",
+      "slug": "apple-watch-se-2-40mm-gps",
+      "sku": "EH-025-016",
+      "brandSlug": "apple",
+      "categorySlug": "smartwatches",
+      "description": "Second-generation GPS watch with a 40mm aluminum case.",
+      "modelNumber": null,
+      "price": "199.00",
+      "compareAtPrice": "299.00",
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://support.apple.com/en-us/111853",
+      "images": [
+        {
+          "url": "/images/products/smartwatches/front.svg",
+          "altText": "Apple Watch SE 2 40mm GPS — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/smartwatches/detail.svg",
+          "altText": "Apple Watch SE 2 40mm GPS — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Design",
+          "name": "Case",
+          "value": "40mm aluminum",
+          "sortOrder": 0
+        },
+        {
+          "group": "Performance",
+          "name": "Chip",
+          "value": "S8 SiP",
+          "sortOrder": 1
+        },
+        {
+          "group": "Performance",
+          "name": "Processor",
+          "value": "64-bit dual-core",
+          "sortOrder": 2
+        },
+        {
+          "group": "Performance",
+          "name": "Neural Engine",
+          "value": "Two cores",
+          "sortOrder": 3
+        },
+        {
+          "group": "Storage",
+          "name": "Capacity",
+          "value": "32GB",
+          "sortOrder": 4
+        },
+        {
+          "group": "Sensors",
+          "name": "Heart rate",
+          "value": "Second-generation optical sensor",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "Apple Watch Series 9 41mm GPS",
+      "slug": "apple-watch-series-9-41mm-gps",
+      "sku": "EH-025-017",
+      "brandSlug": "apple",
+      "categorySlug": "smartwatches",
+      "description": "GPS watch reference model with S9 SiP and on-device Siri processing.",
+      "modelNumber": null,
+      "price": "329.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://support.apple.com/en-us/111833",
+      "images": [
+        {
+          "url": "/images/products/smartwatches/front.svg",
+          "altText": "Apple Watch Series 9 41mm GPS — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/smartwatches/detail.svg",
+          "altText": "Apple Watch Series 9 41mm GPS — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Design",
+          "name": "Case",
+          "value": "41mm aluminum",
+          "sortOrder": 0
+        },
+        {
+          "group": "Performance",
+          "name": "Chip",
+          "value": "S9 SiP",
+          "sortOrder": 1
+        },
+        {
+          "group": "Performance",
+          "name": "Processor",
+          "value": "64-bit dual-core",
+          "sortOrder": 2
+        },
+        {
+          "group": "Performance",
+          "name": "Neural Engine",
+          "value": "Four cores",
+          "sortOrder": 3
+        },
+        {
+          "group": "Storage",
+          "name": "Capacity",
+          "value": "64GB",
+          "sortOrder": 4
+        },
+        {
+          "group": "Controls",
+          "name": "Gesture",
+          "value": "Double tap",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "Samsung Galaxy Watch6 40mm",
+      "slug": "samsung-galaxy-watch6-40mm",
+      "sku": "EH-025-018",
+      "brandSlug": "samsung",
+      "categorySlug": "smartwatches",
+      "description": "40mm Bluetooth smartwatch reference configuration.",
+      "modelNumber": null,
+      "price": "229.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://news.samsung.com/us/samsung-galaxy-watch6-series-classic-inspiring-best-self-day-night-unpacked-2023/",
+      "images": [
+        {
+          "url": "/images/products/smartwatches/front.svg",
+          "altText": "Samsung Galaxy Watch6 40mm — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/smartwatches/detail.svg",
+          "altText": "Samsung Galaxy Watch6 40mm — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Display",
+          "name": "Screen",
+          "value": "1.3-inch Super AMOLED",
+          "sortOrder": 0
+        },
+        {
+          "group": "Display",
+          "name": "Resolution",
+          "value": "432 x 432",
+          "sortOrder": 1
+        },
+        {
+          "group": "Performance",
+          "name": "Processor",
+          "value": "Exynos W930 dual-core 1.4GHz",
+          "sortOrder": 2
+        },
+        {
+          "group": "Performance",
+          "name": "Memory",
+          "value": "2GB",
+          "sortOrder": 3
+        },
+        {
+          "group": "Storage",
+          "name": "Capacity",
+          "value": "16GB",
+          "sortOrder": 4
+        },
+        {
+          "group": "Battery",
+          "name": "Capacity",
+          "value": "300mAh typical",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "Sony PlayStation 5 Launch Disc Edition",
+      "slug": "sony-playstation-5-launch-disc",
+      "sku": "EH-025-019",
+      "brandSlug": "sony",
+      "categorySlug": "gaming",
+      "description": "Original launch disc-console reference model, distinct from later Slim revisions.",
+      "modelNumber": null,
+      "price": "449.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://sonyinteractive.com/en/press-releases/2020/playstation-5-launches-this-november-at-399-for-ps5-digital-edition-and-499-for-ps5-with-ultra-hd-blu-ray-disc-drive/",
+      "images": [
+        {
+          "url": "/images/products/gaming/front.svg",
+          "altText": "Sony PlayStation 5 Launch Disc Edition — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/gaming/detail.svg",
+          "altText": "Sony PlayStation 5 Launch Disc Edition — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Performance",
+          "name": "CPU",
+          "value": "AMD Zen 2, eight cores",
+          "sortOrder": 0
+        },
+        {
+          "group": "Performance",
+          "name": "GPU",
+          "value": "AMD RDNA 2",
+          "sortOrder": 1
+        },
+        {
+          "group": "Performance",
+          "name": "Memory",
+          "value": "16GB GDDR6",
+          "sortOrder": 2
+        },
+        {
+          "group": "Storage",
+          "name": "Capacity",
+          "value": "825GB SSD",
+          "sortOrder": 3
+        },
+        {
+          "group": "Media",
+          "name": "Disc drive",
+          "value": "Ultra HD Blu-ray",
+          "sortOrder": 4
+        },
+        {
+          "group": "Connectivity",
+          "name": "Wireless",
+          "value": "Wi-Fi 6; Bluetooth 5.1",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "ASUS ROG Ally Z1 Extreme RC71L",
+      "slug": "asus-rog-ally-z1-extreme",
+      "sku": "EH-025-020",
+      "brandSlug": "asus",
+      "categorySlug": "gaming",
+      "description": "2023 Windows handheld reference model with Z1 Extreme.",
+      "modelNumber": "RC71L",
+      "price": "549.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://rog.asus.com/gaming-handhelds/rog-ally/rog-ally-2023/spec/",
+      "images": [
+        {
+          "url": "/images/products/gaming/front.svg",
+          "altText": "ASUS ROG Ally Z1 Extreme RC71L — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/gaming/detail.svg",
+          "altText": "ASUS ROG Ally Z1 Extreme RC71L — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Performance",
+          "name": "Processor",
+          "value": "AMD Ryzen Z1 Extreme",
+          "sortOrder": 0
+        },
+        {
+          "group": "Performance",
+          "name": "Memory",
+          "value": "16GB LPDDR5 6400MT/s",
+          "sortOrder": 1
+        },
+        {
+          "group": "Storage",
+          "name": "Capacity",
+          "value": "512GB PCIe 4.0 NVMe SSD",
+          "sortOrder": 2
+        },
+        {
+          "group": "Display",
+          "name": "Screen",
+          "value": "7-inch IPS-level touch",
+          "sortOrder": 3
+        },
+        {
+          "group": "Display",
+          "name": "Resolution",
+          "value": "1920 x 1080",
+          "sortOrder": 4
+        },
+        {
+          "group": "Display",
+          "name": "Refresh rate",
+          "value": "120Hz",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "Acer Predator Cestus 330",
+      "slug": "acer-predator-cestus-330",
+      "sku": "EH-025-021",
+      "brandSlug": "acer",
+      "categorySlug": "gaming",
+      "description": "Wired gaming mouse with adjustable sensitivity and RGB lighting.",
+      "modelNumber": "PMW920",
+      "price": "39.00",
+      "compareAtPrice": "139.00",
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://www.acer.com/in-en/predator/accessories/gaming-mice/cestus-330",
+      "images": [
+        {
+          "url": "/images/products/gaming/front.svg",
+          "altText": "Acer Predator Cestus 330 — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/gaming/detail.svg",
+          "altText": "Acer Predator Cestus 330 — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Controls",
+          "name": "Sensitivity",
+          "value": "Up to 16000 DPI",
+          "sortOrder": 0
+        },
+        {
+          "group": "Controls",
+          "name": "DPI presets",
+          "value": "Five",
+          "sortOrder": 1
+        },
+        {
+          "group": "Connectivity",
+          "name": "Connection",
+          "value": "Wired",
+          "sortOrder": 2
+        },
+        {
+          "group": "Controls",
+          "name": "Scroll",
+          "value": "Scroll wheel",
+          "sortOrder": 3
+        },
+        {
+          "group": "Design",
+          "name": "Lighting",
+          "value": "RGB",
+          "sortOrder": 4
+        },
+        {
+          "group": "Controls",
+          "name": "Buttons",
+          "value": "Seven programmable buttons",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "HP 975 Dual-Mode Wireless Keyboard",
+      "slug": "hp-975-dual-mode-wireless-keyboard",
+      "sku": "EH-025-022",
+      "brandSlug": "hp",
+      "categorySlug": "accessories",
+      "description": "Wireless productivity keyboard with multi-device switching.",
+      "modelNumber": "3Z726AA",
+      "price": "89.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 0,
+      "sourceUrl": "https://www.hp.com/us-en/shop/pdp/hp-975-dual-mode-wireless-keyboard-p-3z726aa-aba-1",
+      "images": [
+        {
+          "url": "/images/products/accessories/front.svg",
+          "altText": "HP 975 Dual-Mode Wireless Keyboard — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/accessories/detail.svg",
+          "altText": "HP 975 Dual-Mode Wireless Keyboard — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Connectivity",
+          "name": "Bluetooth devices",
+          "value": "Two",
+          "sortOrder": 0
+        },
+        {
+          "group": "Connectivity",
+          "name": "Dongle",
+          "value": "2.4GHz USB-A",
+          "sortOrder": 1
+        },
+        {
+          "group": "Controls",
+          "name": "Device switching",
+          "value": "Up to three devices",
+          "sortOrder": 2
+        },
+        {
+          "group": "Controls",
+          "name": "Pairing",
+          "value": "Microsoft Swift Pair",
+          "sortOrder": 3
+        },
+        {
+          "group": "Design",
+          "name": "Backlight",
+          "value": "Adjustable",
+          "sortOrder": 4
+        },
+        {
+          "group": "Battery",
+          "name": "Charging",
+          "value": "USB-C rechargeable",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "Lenovo Go USB-C Wireless Mouse",
+      "slug": "lenovo-go-usb-c-wireless-mouse",
+      "sku": "EH-025-023",
+      "brandSlug": "lenovo",
+      "categorySlug": "accessories",
+      "description": "Storm Grey wireless mouse with rechargeable battery and USB-C receiver.",
+      "modelNumber": "GY51C21210",
+      "price": "49.00",
+      "compareAtPrice": null,
+      "status": "ACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://www.lenovo.com/content/dam/lenovo/pcsd/global/en/products/accessories/lenovo-go/datasheet/lenovo-go-usb-c-wireless-mouse/LenovoGo-USB-C-Wireless-Mouse_Com_DS_7631-220928_AEM.pdf",
+      "images": [
+        {
+          "url": "/images/products/accessories/front.svg",
+          "altText": "Lenovo Go USB-C Wireless Mouse — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/accessories/detail.svg",
+          "altText": "Lenovo Go USB-C Wireless Mouse — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Controls",
+          "name": "Sensor",
+          "value": "Blue optical",
+          "sortOrder": 0
+        },
+        {
+          "group": "Controls",
+          "name": "DPI",
+          "value": "800 / 1600 / 2400",
+          "sortOrder": 1
+        },
+        {
+          "group": "Connectivity",
+          "name": "Wireless",
+          "value": "2.4GHz",
+          "sortOrder": 2
+        },
+        {
+          "group": "Connectivity",
+          "name": "Receiver",
+          "value": "Nano USB-C",
+          "sortOrder": 3
+        },
+        {
+          "group": "Battery",
+          "name": "Capacity",
+          "value": "380mAh",
+          "sortOrder": 4
+        },
+        {
+          "group": "Design",
+          "name": "Weight",
+          "value": "Starting at 71g",
+          "sortOrder": 5
+        }
+      ]
+    },
+    {
+      "name": "Sony DualSense Wireless Controller",
+      "slug": "sony-dualsense-wireless-controller",
+      "sku": "EH-025-024",
+      "brandSlug": "sony",
+      "categorySlug": "accessories",
+      "description": "Original PS5 controller reference model with haptic feedback and adaptive triggers.",
+      "modelNumber": null,
+      "price": "59.00",
+      "compareAtPrice": null,
+      "status": "INACTIVE",
+      "quantity": 12,
+      "sourceUrl": "https://sonyinteractive.com/en/press-releases/2020/playstation-5-launches-this-november-at-399-for-ps5-digital-edition-and-499-for-ps5-with-ultra-hd-blu-ray-disc-drive/",
+      "images": [
+        {
+          "url": "/images/products/accessories/front.svg",
+          "altText": "Sony DualSense Wireless Controller — generic demo illustration, front view",
+          "sortOrder": 0,
+          "isPrimary": true
+        },
+        {
+          "url": "/images/products/accessories/detail.svg",
+          "altText": "Sony DualSense Wireless Controller — generic demo illustration, alternate view",
+          "sortOrder": 1,
+          "isPrimary": false
+        }
+      ],
+      "specifications": [
+        {
+          "group": "Connectivity",
+          "name": "Wireless",
+          "value": "Bluetooth 5.1",
+          "sortOrder": 0
+        },
+        {
+          "group": "Connectivity",
+          "name": "USB",
+          "value": "USB Type-C",
+          "sortOrder": 1
+        },
+        {
+          "group": "Audio",
+          "name": "Microphone",
+          "value": "Built-in array",
+          "sortOrder": 2
+        },
+        {
+          "group": "Audio",
+          "name": "Speaker",
+          "value": "Built-in mono",
+          "sortOrder": 3
+        },
+        {
+          "group": "Controls",
+          "name": "Feedback",
+          "value": "Haptic dual actuators; adaptive triggers",
+          "sortOrder": 4
+        },
+        {
+          "group": "Sensors",
+          "name": "Motion",
+          "value": "Three-axis gyroscope and accelerometer",
+          "sortOrder": 5
+        }
+      ]
+    }
+  ]
+}

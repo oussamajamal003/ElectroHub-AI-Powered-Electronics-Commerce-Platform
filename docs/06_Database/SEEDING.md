@@ -1,4 +1,20 @@
-# ElectroHub Task 02.2 — Latest Implemented Database Foundation
+# ElectroHub Database — Task 02.5 Implementation
+
+> Task 02.5 implementation supersedes the historical 02.2 catalog details below. Current local schema has 23 application models, including Brand and ProductSpecification. Shared DEV/PROD application and live schema verification are deferred to Gemini; see [database handoff](PRODUCT_FOUNDATION_HANDOFF.md).
+
+## Task 02.5 curated DEV seed
+
+Existing seed now delegates product reconciliation to apps/backend/prisma/product-seed.ts using prisma/data/products.json. It requires explicit NODE_ENV=development/test and verifies BOTH configured PostgreSQL targets resolve to approved DEV pzxekjybdiulzmssalfo before writes. PROD, missing and unapproved destinations are rejected without printing credentials.
+
+Curated scope: 24 factual products, eight categories, ten represented brands, 48 image records and 146 specifications. Stable category/brand slugs and product SKUs use upserts; mismatched SKU/slug ownership aborts the transaction. Curated images/specs are replaced only for those products, and Inventory is reconciled. Existing legacy products and commerce references remain. Existing user/role provisioning in the full seed is retained and must be coordinated before execution. Never run this seed on PROD.
+
+Run only after Gemini verifies/applies migration, from apps/backend using the approved environment. Run twice and compare scoped IDs/counts plus unaffected legacy references. Mocked two-run tests do not replace real DEV proof. Manufacturer facts/source links and generic media attribution: [sources](../05_Features/PRODUCT_SOURCES_02.5.md).
+
+Brand is mandatory for all new/curated 02.5 products, while legacy rows without verifiable manufacturer data remain nullable until safely reconciled.
+
+---
+
+# Historical Task 02.2 Database Foundation
 
 > This document is synchronized to the current Task 02.2 baseline. Prisma is the schema/migration source of truth. The implemented application model set is 15 models; `_prisma_migrations` is Prisma metadata.
 

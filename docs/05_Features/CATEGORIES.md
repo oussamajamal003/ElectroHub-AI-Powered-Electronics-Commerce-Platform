@@ -1,5 +1,9 @@
 # Categories
 
+## Implemented Task 02.5 foundation
+
+GET /api/categories and GET /api/categories/:slug return active category metadata only, including nullable imageUrl. Lists use page/pageSize pagination, name/ID ordering and no nested product arrays. Categories remain flat; no hierarchy or management endpoints added. Product reads also require an active category. See [API contract](PRODUCT_API_02.5.md) and [database handoff](../06_Database/PRODUCT_FOUNDATION_HANDOFF.md).
+
 ## 1. Purpose
 
 This document defines the product-category system for ElectroHub.
