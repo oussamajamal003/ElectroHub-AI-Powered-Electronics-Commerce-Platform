@@ -10,7 +10,7 @@ const supportBaseURL = `http://localhost:${process.env.E2E_AUTH_BACKEND_PORT ?? 
 const outboxDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../test-results/auth-outbox');
 const email = (projectName: string) => `e2e-account-delete-${runId}-${projectName.toLowerCase()}@electrohub.invalid`;
 const password = 'DeleteAccount#2026';
-let deletedUserIds: string[] = [];
+const deletedUserIds: string[] = [];
 
 async function getVerificationCode(address: string) {
   const fileName = createHash('sha256').update(`${address}:Verify your ElectroHub account`).digest('hex');
