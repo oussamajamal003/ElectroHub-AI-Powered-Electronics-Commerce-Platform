@@ -45,4 +45,10 @@ describe('ProductCard', () => {
     
     expect(screen.getByRole('button', { name: /remove wireless headphones from wishlist/i })).toBeInTheDocument();
   });
+
+  it('hides actions only when explicitly requested by a display-only consumer', () => {
+    render(<ProductCard {...mockProduct} showActions={false} />);
+    expect(screen.getByText('Wireless Headphones')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /cart|wishlist/i })).not.toBeInTheDocument();
+  });
 });

@@ -56,7 +56,7 @@ export const productSchemas = {
   },
   ProductPagination: {
     type: 'object', required: ['page', 'pageSize', 'total'],
-    properties: { page: { type: 'integer', minimum: 1, maximum: 1000000 },
+    properties: { page: { type: 'integer', minimum: 1, maximum: 1000 },
       pageSize: { type: 'integer', minimum: 1, maximum: 100 }, total: { type: 'integer', minimum: 0 } },
   },
 };
@@ -67,7 +67,7 @@ const errorResponse = (description: string) => ({
 const collectionOperation = (schema: string, description: string) => ({
   tags: ['Products'], description,
   parameters: [
-    { name: 'page', in: 'query', schema: { type: 'integer', default: 1, minimum: 1, maximum: 1000000 } },
+    { name: 'page', in: 'query', schema: { type: 'integer', default: 1, minimum: 1, maximum: 1000 } },
     { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 20, minimum: 1, maximum: 100 } },
   ],
   responses: {

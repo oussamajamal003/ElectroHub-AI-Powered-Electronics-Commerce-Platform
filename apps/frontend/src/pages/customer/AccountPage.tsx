@@ -6,7 +6,6 @@ import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbP
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Footer } from '@/components/layout/Footer';
 import { SignOutModal } from '@/features/auth/components/SignOutModal';
 import styles from './AccountPage.module.scss';
 
@@ -115,8 +114,6 @@ export function AccountPage() {
           </Button>
         </div>
       </div>
-      <Footer />
-      
       <SignOutModal 
         open={showSignOut} 
         onOpenChange={setShowSignOut} 

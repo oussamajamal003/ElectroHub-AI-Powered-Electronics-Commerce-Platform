@@ -193,7 +193,7 @@ describe('CustomerHeader', () => {
   });
 
   // ── Search ─────────────────────────────────────────────────
-  it('expands search input when Search button is clicked', async () => {
+  it('navigates to Search without replacing header controls', async () => {
     vi.mocked(useAuth).mockReturnValue({
       user: null,
       isAuthenticated: false,
@@ -205,11 +205,12 @@ describe('CustomerHeader', () => {
     renderWithRouter(<CustomerHeader />);
     fireEvent.click(screen.getByRole('button', { name: 'Search' }));
 
-    const searchInput = await screen.findByRole('searchbox', { name: 'Search products' });
-    expect(searchInput).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/search');
+    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Cart' })).toBeInTheDocument();
   });
 
-  it('closes search input when back button clicked', async () => {
+  it('keeps navigation intact after Search activation', async () => {
     vi.mocked(useAuth).mockReturnValue({
       user: null,
       isAuthenticated: false,
@@ -220,9 +221,8 @@ describe('CustomerHeader', () => {
 
     renderWithRouter(<CustomerHeader />);
     fireEvent.click(screen.getByRole('button', { name: 'Search' }));
-    await screen.findByRole('searchbox', { name: 'Search products' });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Close search' }));
+    expect(window.location.pathname).toBe('/search');
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeInTheDocument();
     expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
   });

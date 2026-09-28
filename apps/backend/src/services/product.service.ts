@@ -17,7 +17,7 @@ const baseSelect = {
   category: { select: categorySelect }, brand: { select: brandSelect },
   inventory: { select: { quantity: true } },
 } satisfies Prisma.ProductSelect;
-const listSelect = {
+export const productSummarySelect = {
   ...baseSelect,
   images: {
     where: { isPrimary: true }, take: 1,
@@ -45,19 +45,23 @@ const mapBase = (product: BaseProduct) => ({
   availability: projectAvailability(product.status, product.inventory?.quantity),
 });
 const publicWhere = { status: ProductStatus.ACTIVE, category: { isActive: true } };
+export const publicProductWhere = publicWhere;
+export function mapProductSummary(product: Prisma.ProductGetPayload<{ select: typeof productSummarySelect }>) {
+  return { ...mapBase(product), primaryImage: product.images[0] ?? null };
+}
 
 export class ProductService {
   async list({ page, pageSize }: Pagination) {
     const [products, total] = await prisma.$transaction([
       prisma.product.findMany({
-        where: publicWhere, select: listSelect,
+        where: publicWhere, select: productSummarySelect,
         skip: (page - 1) * pageSize, take: pageSize,
         orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       }),
       prisma.product.count({ where: publicWhere }),
     ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
     return {
-      data: products.map(product => ({ ...mapBase(product), primaryImage: product.images[0] ?? null })),
+      data: products.map(mapProductSummary),
       meta: { page, pageSize, total },
     };
   }

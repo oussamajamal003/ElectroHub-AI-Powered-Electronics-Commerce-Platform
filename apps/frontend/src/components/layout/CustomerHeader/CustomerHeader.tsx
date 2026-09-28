@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   ShoppingCart,
@@ -9,11 +9,9 @@ import {
   User as UserIcon,
   Menu,
   X,
-  ChevronLeft,
   Package,
 } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
-import { Input } from '@/components/ui/Input';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -43,11 +41,6 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
   // Mobile menu
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Search expansion
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const searchInputRef = useRef<HTMLInputElement>(null);
-
   // Scroll state
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -65,22 +58,11 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (isMobileMenuOpen) setIsMobileMenuOpen(false);
-        if (isSearchOpen) {
-          setIsSearchOpen(false);
-          setSearchQuery('');
-        }
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isMobileMenuOpen, isSearchOpen]);
-
-  // Focus search input when opened
-  useEffect(() => {
-    if (isSearchOpen) {
-      setTimeout(() => searchInputRef.current?.focus(), 50);
-    }
-  }, [isSearchOpen]);
+  }, [isMobileMenuOpen]);
 
   const getInitials = (firstName: string, lastName: string) => {
     return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
@@ -91,21 +73,8 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
   }, []);
 
   const handleSearchOpen = () => {
-    setIsSearchOpen(true);
     setIsMobileMenuOpen(false);
-  };
-
-  const handleSearchClose = () => {
-    setIsSearchOpen(false);
-    setSearchQuery('');
-  };
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/products?search=${encodeURIComponent(searchQuery.trim())}`);
-      handleSearchClose();
-    }
+    navigate('/search');
   };
 
   const handleAccountClick = (e: React.MouseEvent) => {
@@ -151,9 +120,7 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
 
         <div className={styles.container}>
           <div
-            className={`${styles.headerMainContent} ${
-              isSearchOpen ? styles.searchActive : ''
-            }`}
+            className={styles.headerMainContent}
           >
             {/* LEFT — Mobile Toggle + Brand */}
             <div className={styles.leftSection}>
@@ -192,45 +159,7 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
 
             {/* RIGHT — Utility Icons + Avatar + Unified Search */}
             <div className={styles.actions}>
-              {isSearchOpen ? (
-                <form
-                  className={styles.searchForm}
-                  onSubmit={handleSearchSubmit}
-                  role="search"
-                >
-                  <button
-                    type="button"
-                    className={styles.searchBackButton}
-                    onClick={handleSearchClose}
-                    aria-label="Close search"
-                  >
-                    <ChevronLeft size={20} />
-                  </button>
-                  <Input
-                    ref={searchInputRef}
-                    type="search"
-                    placeholder="Search products..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    aria-label="Search products"
-                    inputSize="medium"
-                    fullWidth
-                    endAdornment={
-                      searchQuery ? (
-                        <button
-                          type="button"
-                          className={styles.searchClearButton}
-                          onClick={() => setSearchQuery('')}
-                          aria-label="Clear search"
-                        >
-                          <X size={14} />
-                        </button>
-                      ) : null
-                    }
-                  />
-                </form>
-              ) : (
-                <>
+
                   <button
                     type="button"
                     className={styles.iconButton}
@@ -337,8 +266,7 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
-                </>
-              )}
+
             </div>
           </div>
         </div>

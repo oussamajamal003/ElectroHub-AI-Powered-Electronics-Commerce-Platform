@@ -8,6 +8,7 @@ import { AuthProvider } from '@/features/auth/context/AuthContext';
 import { CustomerLayout } from '@/layouts/CustomerLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { AdminLoginPage } from '@/pages/admin/AdminLoginPage';
+import { SearchPage } from '@/features/search/SearchPage';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute/ProtectedRoute';
 
 export function AppRoutes() {
@@ -17,6 +18,8 @@ export function AppRoutes() {
         {/* Customer Public Routes */}
         <Route element={<CustomerLayout />}>
           <Route path="/" element={<HomePage />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/products" element={<SearchPage catalog />} />
           <Route path="/cart" element={<PlaceholderPage title="My Cart" type="cart" description="Your shopping cart will appear here." />} />
 
           {/* Customer Protected Routes — must be logged in */}

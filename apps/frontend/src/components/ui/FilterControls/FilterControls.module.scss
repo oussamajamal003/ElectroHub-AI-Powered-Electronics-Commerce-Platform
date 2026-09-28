@@ -1,0 +1,8 @@
+@use '../../../styles/abstracts/variables' as *;
+@use '../../../styles/abstracts/mixins' as *;
+.chips { display: flex; flex-wrap: wrap; gap: $spacing-2;
+  button { @include focus-ring; font: inherit; padding: $spacing-2 $spacing-4; border: 1px solid $color-border; background: $color-background; color: $color-text-secondary; cursor: pointer;
+    &[aria-pressed='true'] { background: $color-primary; color: $color-text-inverse; border-color: $color-primary; }
+  }
+}
+.select { min-width: 0; }

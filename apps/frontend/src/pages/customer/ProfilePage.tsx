@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/Input';
 import { PasswordInput } from '@/components/ui/PasswordInput/PasswordInput';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
-import { Footer } from '@/components/layout/Footer';
 import { ApiError } from '@/lib/api';
 import { OtpVerification } from '@/components/ui/OtpVerification';
 import { authApi } from '@/features/auth/api/auth';
@@ -236,7 +235,6 @@ export function ProfilePage() {
         </section>
         </div>
       </div>
-      <Footer />
       <AccountDeletionDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
