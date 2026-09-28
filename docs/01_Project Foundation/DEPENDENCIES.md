@@ -537,6 +537,10 @@ It covers critical workflows such as:
 - Recommendations
 - Admin workflows
 
+## Storybook
+
+Storybook is frontend dev-only tooling for isolated component development and visual QA. Keep `storybook`, `@storybook/react-vite`, and compatible addons in `apps/frontend` devDependencies. It does not add customer routes or production imports. See [Storybook Foundation](../08_Quality/STORYBOOK.md) for local commands and story policy.
+
 ---
 
 # 19. Development and Build Dependencies
