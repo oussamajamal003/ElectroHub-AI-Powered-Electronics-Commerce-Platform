@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { User, LoginCredentials, RegisterData } from '../types';
 import { authApi, VerificationResponse } from '../api/auth';
 import { setAccessToken } from '@/lib/api';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface AuthState {
   user: User | null;
@@ -24,6 +25,7 @@ interface AuthContextValue extends AuthState {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [state, setState] = useState<AuthState>({
     user: null,
     isAuthenticated: false,
@@ -64,12 +66,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    const clearExpiredSession = () => {
+      setAccessToken(null);
+      queryClient.clear();
+      setState({ user: null, isAuthenticated: false, isLoading: false, isInitializing: false });
+    };
+    window.addEventListener('electrohub:session-expired', clearExpiredSession);
+    return () => window.removeEventListener('electrohub:session-expired', clearExpiredSession);
+  }, [queryClient]);
+
   const login = async (credentials: LoginCredentials): Promise<VerificationResponse> => {
     setState((prev) => ({ ...prev, isLoading: true }));
     try {
       const response = await authApi.login(credentials);
       const authenticatedUser = response.user;
       if (authenticatedUser) {
+        queryClient.clear();
         setState((prev) => ({
           ...prev,
           user: authenticatedUser,
@@ -98,6 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await authApi.verifyEmail(data);
       const verifiedUser = response.user;
       if (verifiedUser && response.accessToken) {
+        queryClient.clear();
         setState((prev) => ({
           ...prev,
           user: verifiedUser,
@@ -115,6 +129,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await authApi.logout();
     } finally {
+      setAccessToken(null);
+      queryClient.clear();
       setState({
         user: null,
         isAuthenticated: false,
@@ -127,6 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const clearSession = () => {
     setAccessToken(null);
+    queryClient.clear();
     setState({ user: null, isAuthenticated: false, isLoading: false, isInitializing: false });
   };
 
@@ -152,6 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const finishGoogle = async () => {
     const { user } = await authApi.finishGoogle();
+    queryClient.clear();
     setState(previous => ({ ...previous, user, isAuthenticated: true }));
   };
 
