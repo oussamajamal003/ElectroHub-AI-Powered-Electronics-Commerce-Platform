@@ -88,6 +88,7 @@ Services must communicate through defined APIs/contracts rather than importing a
 ```text
 apps/frontend/
 │
+├── .storybook/
 ├── public/
 ├── src/
 │
@@ -116,6 +117,7 @@ The frontend should contain organized areas for:
 - Styling
 
 The exact internal structure will follow the frontend architecture documentation.
+Isolated component stories live beside their components; Storybook configuration is frontend-local and development-only.
 
 ---
 

@@ -82,3 +82,4 @@ venv/
 .temp/
 .tmp/
 scratch/
+apps/frontend/storybook-static/
