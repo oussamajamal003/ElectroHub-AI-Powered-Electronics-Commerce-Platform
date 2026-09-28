@@ -1,0 +1,65 @@
+@use '../../styles/abstracts/variables' as *;
+@use '../../styles/abstracts/mixins' as *;
+.container { width: 100%; max-width: 120rem; margin: 0 auto; padding: $spacing-6 $spacing-4 $spacing-10;
+  h1 { font-size: $font-size-4xl; font-weight: $font-weight-bold; line-height: $line-height-tight; margin: $spacing-8 0 $spacing-4; }
+  @include respond-to(md) { padding: $spacing-8 $spacing-8 $spacing-10; }
+  @include respond-to(lg) { padding: $spacing-10 $spacing-12; h1 { font-size: $spacing-16; } }
+  @include respond-to(2xl) { padding-inline: $spacing-16 + $spacing-4; }
+}
+.breadcrumb { display: flex; align-items: center; gap: $spacing-2; font-size: $font-size-base; a { color: $color-text-secondary; text-decoration: none; } }
+.subtitle { color: $color-text-secondary; font-size: $font-size-lg; margin-bottom: $spacing-10; }
+.tabs { width: 100%; display: flex; justify-content: flex-start; background: transparent; padding: 0; border-bottom: 1px solid $color-border; border-radius: 0; margin-bottom: $spacing-6;
+  button { padding: $spacing-4 $spacing-3; background: transparent !important; border-radius: 0; color: $color-text-secondary; font-size: $font-size-lg; box-shadow: none !important;
+    &[data-state='active'] { border-bottom: 2px solid $color-primary; color: $color-text-primary; }
+  }
+}
+.searchToolbar, .catalogToolbar { display: grid; align-items: end; gap: $spacing-3; margin-top: $spacing-5; }
+.searchToolbar { grid-template-columns: minmax(0, 1fr) minmax(11rem, 13rem); column-gap: $spacing-8; }
+.catalogToolbar { grid-template-columns: minmax(0, 1fr) auto minmax(11rem, 14rem); }
+.searchForm { min-width: 0; width: 100%; input { height: $spacing-10; min-height: $spacing-10; font-size: $font-size-lg; }
+}
+.catalogSearch { max-width: none; input { font-size: $font-size-base; } }
+@media (max-width: $breakpoint-md - 1px) {
+  .searchToolbar { grid-template-columns: minmax(0, 1fr); }
+  .catalogToolbar { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .catalogToolbar .searchForm { grid-column: 1 / -1; }
+  .catalogToolbar .resetButton { grid-column: 1 / -1; justify-self: end; }
+}
+.toolbar { margin-top: $spacing-3; padding: $spacing-4; width: 100%; display: grid; gap: $spacing-4; background: $color-surface; border: 1px solid $color-border; border-radius: 0;
+  &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; }
+}
+.filterRow { display: grid; grid-template-columns: 1fr; gap: $spacing-4; align-items: end; > * { min-width: 0; }
+  @include respond-to(md) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @include respond-to(lg) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.toolbar > [role='group'] { grid-column: 1 / -1; }
+.filterActions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: $spacing-2; }
+.activeFilters { display: flex; flex-wrap: wrap; gap: $spacing-2; margin-top: $spacing-4;
+  button { border: 1px solid $color-border; background: $color-surface; color: $color-text-primary; padding: $spacing-2 $spacing-3; cursor: pointer; }
+  button:hover { border-color: $color-primary; }
+  button:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; }
+}
+.results { margin-top: $spacing-6; > [role='status'] { color: $color-text-secondary; margin-bottom: $spacing-6; } }
+.grid { display: grid; gap: $spacing-6; grid-template-columns: minmax(0, 1fr); margin: $spacing-6 0; > * { min-width: 0; }
+  @include respond-to(md) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @include respond-to(lg) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @include respond-to(xl) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @include respond-to(2xl) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+.availability { font-size: $font-size-sm; color: $color-text-secondary; margin: $spacing-2 0; }
+.empty { text-align: center; padding: $spacing-16 $spacing-4; overflow-wrap: anywhere; h2 { font-size: $font-size-3xl; margin-bottom: $spacing-4; } p { color: $color-text-secondary; } button { margin: $spacing-2; } }
+.error { color: $color-error-foreground; padding: $spacing-3 0; }
+.skeleton { display: flex; flex-direction: column; min-width: 0; overflow: hidden; border: 1px solid $color-border; border-radius: 0; background: $color-background; }
+.skeletonImage { aspect-ratio: 1; margin: $spacing-4; background: $color-surface; animation: shimmer 1.5s ease-in-out infinite alternate; }
+.skeletonBody { display: flex; flex-direction: column; align-items: flex-start; padding: 0 $spacing-4 $spacing-4; .skeletonCategory { width: 36%; height: 1.5em; margin-bottom: $spacing-1; font-size: $font-size-xs; } .skeletonTitle { width: 78%; height: 1.4em; margin-bottom: $spacing-2; font-size: $font-size-base; } .skeletonPrice { width: 42%; height: 1.5em; margin-bottom: $spacing-4; font-size: $font-size-lg; } i { display: block; background: $color-surface; } }
+.skeletonAvailability { width: 42%; height: 1.5em; margin: $spacing-2 0; background: $color-surface; font-size: $font-size-sm; }
+@keyframes shimmer { to { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .skeletonImage { animation: none; } }
+.dropzone { margin-top: $spacing-6; border: 2px dashed $color-border; padding: $spacing-12 $spacing-4; min-height: 24rem; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: $spacing-4;
+  > svg { color: $color-text-muted; }
+  h2 { font-size: $font-size-lg; font-weight: $font-weight-medium; overflow-wrap: anywhere; max-width: 100%; margin: 0; }
+  p { margin: 0; color: $color-text-secondary; }
+}
+.dragging { border-color: $color-primary; background: $color-info-background; }
+.preview { max-width: 100%; max-height: 14rem; object-fit: contain; }
+.inlineActions { display: flex; flex-wrap: wrap; justify-content: center; gap: $spacing-2; }

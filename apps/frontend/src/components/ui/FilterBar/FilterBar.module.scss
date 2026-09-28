@@ -63,7 +63,7 @@
   padding: 6px $spacing-3;
   background-color: $color-surface;
   border: 1px solid $color-border;
-  border-radius: $radius-full;
+  border-radius: 0;
 }
 
 .filterLabel {
@@ -79,7 +79,7 @@
   padding: 2px;
   background: transparent;
   border: none;
-  border-radius: $radius-full;
+  border-radius: 0;
   color: $color-text-muted;
   cursor: pointer;
   transition: color $transition-normal, background-color $transition-normal;

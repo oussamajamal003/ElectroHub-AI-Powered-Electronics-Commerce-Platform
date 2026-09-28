@@ -11,12 +11,13 @@ export interface SelectProps extends React.ComponentPropsWithoutRef<typeof Selec
   options: { value: string; label: string; disabled?: boolean }[];
   selectSize?: 'small' | 'medium' | 'large';
   fullWidth?: boolean;
+  square?: boolean;
   'aria-label'?: string;
 }
 
 export const Select = forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger>, SelectProps>(
   (
-    { label, error, placeholder = 'Select an option...', options, selectSize = 'medium', fullWidth, disabled, 'aria-label': ariaLabel, ...props },
+    { label, error, placeholder = 'Select an option...', options, selectSize = 'medium', fullWidth, square, disabled, 'aria-label': ariaLabel, ...props },
     ref
   ) => {
     const isError = Boolean(error);
@@ -37,7 +38,7 @@ export const Select = forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger
           <SelectPrimitive.Trigger
             ref={ref}
             id={generatedId}
-            className={clsx(styles.trigger, styles[`size-${selectSize}`], isError && styles.error)}
+            className={clsx(styles.trigger, styles[`size-${selectSize}`], square && styles.square, isError && styles.error)}
             aria-label={ariaLabel}
           >
             <SelectPrimitive.Value placeholder={placeholder} />
@@ -48,7 +49,7 @@ export const Select = forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger
 
           <SelectPrimitive.Portal>
             <SelectPrimitive.Content
-              className={styles.content}
+              className={clsx(styles.content, square && styles.square)}
               position="popper"
               sideOffset={4}
             >
@@ -61,7 +62,7 @@ export const Select = forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger
                     key={option.value}
                     value={option.value}
                     disabled={option.disabled}
-                    className={styles.item}
+                    className={clsx(styles.item, square && styles.squareItem)}
                   >
                     <SelectPrimitive.ItemText>{option.label}</SelectPrimitive.ItemText>
                     <SelectPrimitive.ItemIndicator className={styles.itemIndicator}>

@@ -14,6 +14,8 @@ export interface ProductCardProps {
   onAddToCart?: (id: string | number) => void;
   onToggleWishlist?: (id: string | number) => void;
   className?: string;
+  showActions?: boolean;
+  square?: boolean;
 }
 
 export function ProductCard({
@@ -28,6 +30,8 @@ export function ProductCard({
   onAddToCart,
   onToggleWishlist,
   className = '',
+  showActions = true,
+  square = false,
 }: ProductCardProps) {
   const formatPrice = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -49,17 +53,17 @@ export function ProductCard({
   };
 
   return (
-    <div className={`${styles.card} ${className}`} data-testid="product-card">
+    <div className={`${styles.card} ${square ? styles.square : ''} ${className}`} data-testid="product-card">
       <div className={styles.imageArea}>
         <ProductImage src={imageUrl} alt={title} className={styles.image} />
-        <button
+        {showActions && <button
           type="button"
           className={`${styles.wishlistBtn} ${isWishlisted ? styles.wishlisted : ''}`}
           onClick={handleToggleWishlist}
           aria-label={isWishlisted ? `Remove ${title} from wishlist` : `Add ${title} to wishlist`}
         >
           <Heart className={styles.heartIcon} fill={isWishlisted ? 'currentColor' : 'none'} />
-        </button>
+        </button>}
       </div>
 
       <div className={styles.content}>
@@ -79,14 +83,14 @@ export function ProductCard({
           <span className={styles.price}>{formatPrice(price)}</span>
         </div>
 
-        <button
+        {showActions && <button
           type="button"
           className={styles.addBtn}
           onClick={handleAddToCart}
           aria-label={`Add ${title} to cart`}
         >
           Add to Cart
-        </button>
+        </button>}
       </div>
     </div>
   );

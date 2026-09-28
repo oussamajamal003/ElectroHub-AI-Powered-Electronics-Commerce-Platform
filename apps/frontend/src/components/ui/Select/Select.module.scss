@@ -44,11 +44,13 @@
   background-color: $color-background;
   color: $color-text-primary;
   border: 1px solid $color-border;
-  transition: all $transition-fast;
+  min-height: 44px;
+  transition: background-color $transition-fast, border-color $transition-fast, box-shadow $transition-fast;
   font-family: $font-family-base;
 
   &:hover {
     background-color: $color-surface;
+    border-color: $color-text-muted;
   }
 
   &:focus {
@@ -56,6 +58,8 @@
     border-color: $color-primary;
     outline: none;
   }
+
+  &:active { background-color: $color-surface; }
 
   &[data-placeholder] {
     color: $color-text-muted;
@@ -95,12 +99,13 @@
 }
 
 .content {
+  max-height: var(--radix-select-content-available-height);
   overflow: hidden;
   background-color: $color-background;
   border-radius: $radius-md;
   box-shadow: $shadow-lg;
   border: 1px solid $color-border;
-  z-index: $z-dropdown;
+  z-index: $z-page-overlay;
   width: var(--radix-select-trigger-width);
 }
 
@@ -116,7 +121,8 @@
   border-radius: $radius-sm;
   display: flex;
   align-items: center;
-  padding: $spacing-2 $spacing-6 $spacing-2 $spacing-8; // Padding for checkmark
+  min-height: 2.75rem;
+  padding: $spacing-2 $spacing-6 $spacing-2 $spacing-8;
   position: relative;
   user-select: none;
 
@@ -130,7 +136,11 @@
     background-color: $color-primary;
     color: $color-text-inverse;
   }
+
+  &[data-state='checked']:not([data-highlighted]) { background-color: $color-surface; color: $color-primary; font-weight: $font-weight-semibold; }
 }
+.square { border-radius: 0; }
+.squareItem { border-radius: 0; }
 
 .itemIndicator {
   position: absolute;

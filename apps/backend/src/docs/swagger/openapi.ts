@@ -1,5 +1,6 @@
 import { schemas } from './schemas/index.js';
 import { productPaths, productSchemas } from './product.openapi.js';
+import { searchPaths, searchSchemas } from './search.openapi.js';
 
 /**
  * OpenAPI 3.0.0 Specification Definition.
@@ -22,6 +23,7 @@ export const openapiDefinition = {
     },
   ],
   tags: [
+    { name: 'Search', description: 'Public text search and suggestions' },
     { name: 'Products', description: 'Product, category, and brand read foundation' },
     {
       name: 'Authentication',
@@ -45,7 +47,7 @@ export const openapiDefinition = {
         description: 'JWT authentication token',
       },
     },
-    schemas: { ...schemas, ...productSchemas },
+    schemas: { ...schemas, ...productSchemas, ...searchSchemas },
   },
-  paths: productPaths,
+  paths: { ...productPaths, ...searchPaths },
 };

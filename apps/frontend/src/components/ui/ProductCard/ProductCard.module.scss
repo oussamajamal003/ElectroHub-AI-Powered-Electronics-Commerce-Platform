@@ -5,7 +5,7 @@
   flex-direction: column;
   background-color: $color-background;
   border: 1px solid $color-border;
-  border-radius: $radius-2xl; // Figma requires 16px
+  border-radius: 0;
   overflow: hidden;
   transition: box-shadow $transition-normal, border-color $transition-normal;
   position: relative;
@@ -24,6 +24,7 @@
     outline-offset: $focus-ring-offset;
   }
 }
+.square { border-radius: 0; }
 
 .imageArea {
   position: relative;
@@ -44,7 +45,7 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: $radius-full;
+  border-radius: 0;
   background-color: $color-background;
   border: 1px solid $color-border;
   color: $color-text-secondary;
@@ -145,7 +146,7 @@
 .addBtn {
   width: 100%;
   padding: 10px $spacing-4;
-  border-radius: $radius-md;
+  border-radius: 0;
   background-color: $color-primary;
   color: $color-text-inverse;
   border: none;
