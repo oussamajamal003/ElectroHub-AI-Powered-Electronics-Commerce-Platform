@@ -8,9 +8,9 @@ import { ProductCard } from '@/components/ui/ProductCard';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/Pagination';
 import { SearchField } from '@/components/ui/SearchField/SearchField';
 import { FilterChipGroup, FilterSelect } from '@/components/ui/FilterControls/FilterControls';
-import type { Category, Brand } from '@/features/products/types';
 import { activeSearch, clearFilters, emptySearch, normalizeQuery, parseSearch, searchParams, type SearchState } from './searchState';
-import { fetchFilters, fetchSearch, fetchSuggestions, productCardProps, type SearchResults, type Suggestion } from './api';
+import { productCardProps, type Suggestion } from './api';
+import { useBrands, useCategories, useSearchResults } from './queries';
 import { ImageSearchShell } from './ImageSearchShell';
 import styles from './SearchPage.module.scss';
 
@@ -34,34 +34,17 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
   const [filterDraft, setFilterDraft] = useState<Pick<SearchState, 'category' | 'brand' | 'availability' | 'minPrice' | 'maxPrice'>>({});
   const filterButton = useRef<HTMLButtonElement>(null);
   const filterPanel = useRef<HTMLElement>(null);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [brands, setBrands] = useState<Brand[]>([]);
-  const [metadataError, setMetadataError] = useState('');
-  const [results, setResults] = useState<SearchResults>();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const categoriesQuery = useCategories(true);
+  const brandsQuery = useBrands(true);
+  const searchQuery = useSearchResults(state, active && tab === 'text');
+  const categories = categoriesQuery.data ?? [];
+  const brands = brandsQuery.data ?? [];
+  const results = active && tab === 'text' ? searchQuery.data : undefined;
+  const loading = active && tab === 'text' && searchQuery.isPending;
+  const error = searchQuery.isError && active && tab === 'text';
+  const metadataError = categoriesQuery.isError || brandsQuery.isError;
   const [formError, setFormError] = useState('');
-  const [retry, setRetry] = useState(0);
-  const requestId = useRef(0);
   useEffect(() => { setDraft(state.q); setFormError(''); }, [state]);
-  useEffect(() => {
-    if (!catalog) return;
-    const controller = new AbortController(); let current = true;
-    setMetadataError('');
-    fetchFilters(controller.signal).then(data => { if (current) { setCategories(data.categories); setBrands(data.brands); } })
-      .catch(() => { if (current) setMetadataError('Filters are temporarily unavailable. You can still search by text.'); });
-    return () => { current = false; controller.abort(); };
-  }, [retry, catalog]);
-  useEffect(() => {
-    const controller = new AbortController(); const sequence = ++requestId.current;
-    setResults(undefined); setError('');
-    if (!active || tab !== 'text') { setLoading(false); return () => controller.abort(); }
-    setLoading(true);
-    fetchSearch(state, controller.signal).then(data => { if (sequence === requestId.current && !controller.signal.aborted) setResults(data); })
-      .catch(() => { if (sequence === requestId.current && !controller.signal.aborted) setError('Search is temporarily unavailable. Please try again.'); })
-      .finally(() => { if (sequence === requestId.current && !controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, [state, active, tab, retry]);
   const commit = useCallback((next: SearchState, replace = false) => {
     try {
       const validated = parseSearch(searchParams(next));
@@ -109,7 +92,7 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
         <TabsContent value="text">
           <div className={catalog ? styles.catalogToolbar : styles.searchToolbar}>
             <form role="search" className={styles.searchForm + (catalog ? ' ' + styles.catalogSearch : '')} onSubmit={event => { event.preventDefault(); if (normalizedDraft !== state.q) commit({ ...state, q: normalizedDraft, page: 1 }, true); }}>
-              <SearchField value={draft} onChange={setDraft} onSelect={selectSuggestion} loadSuggestions={fetchSuggestions} />
+              <SearchField value={draft} onChange={setDraft} onSelect={selectSuggestion} />
             </form>
             {catalog && <Button ref={filterButton} type="button" variant="outline" aria-expanded={showFilters} aria-controls="search-filters" onClick={openFilters}><SlidersHorizontal size={18} /> Filters{filterCount ? ` (${filterCount})` : ''}</Button>}
             <FilterSelect label="Sort by" value={state.sort ?? (state.q ? 'relevance' : 'newest')} selectSize={catalog ? 'medium' : 'large'} choices={[
@@ -120,7 +103,7 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
             {parsed.error && <Button type="button" variant="link" onClick={() => setParams({})}>Clear search</Button>}</div>}
           {catalog && showFilters && <section ref={filterPanel} tabIndex={-1} id="search-filters" aria-label="Product filters" className={styles.toolbar}
             onKeyDown={event => { if (event.key === 'Escape') { setShowFilters(false); filterButton.current?.focus(); } }}>
-            {metadataError && <p role="status">{metadataError} <Button type="button" variant="link" onClick={() => setRetry(value => value + 1)}>Retry filters</Button></p>}
+            {metadataError && <p role="status">Filters are temporarily unavailable. You can still search by text. <Button type="button" variant="link" onClick={() => { void categoriesQuery.refetch(); void brandsQuery.refetch(); }}>Retry filters</Button></p>}
             <FilterChipGroup label="Category" value={filterDraft.category ?? ''} choices={[{ value: '', label: 'All' }, ...filterChoices(categories, filterDraft.category)]} onChange={value => setFilterDraft(previous => ({ ...previous, category: value || undefined }))} />
             <div className={styles.filterRow}>
               <FilterSelect label="Brand" value={filterDraft.brand ?? ''} choices={[{ value: '', label: 'All brands' }, ...filterChoices(brands, filterDraft.brand)]} onChange={value => setFilterDraft(previous => ({ ...previous, brand: value || undefined }))} />
@@ -147,7 +130,7 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
               </div>
               <div className={styles.skeletonAvailability} />
             </div>)}</div>}
-            {error && <div role="alert" className={styles.empty}><h2>Search unavailable</h2><p>{error}</p><Button type="button" onClick={() => setRetry(value => value + 1)}>Retry search</Button></div>}
+            {error && <div role="alert" className={styles.empty}><h2>Search unavailable</h2><p>Search is temporarily unavailable. Please try again.</p><Button type="button" onClick={() => void searchQuery.refetch()}>Retry search</Button></div>}
             {results && results.data.length > 0 && <div className={styles.grid}>{results.data.map(product => <div key={product.id}><ProductCard {...productCardProps(product)} /><p className={styles.availability}>{product.availability === 'AVAILABLE' ? 'Available' : 'Currently unavailable'}</p></div>)}</div>}
             {results && results.data.length === 0 && <div className={styles.empty}><h2>{state.q ? `No results for “${state.q}”` : 'No products found'}</h2><p>Try adjusting your search or filters.</p>{catalog && filterCount > 0 && <Button type="button" variant="link" onClick={() => commit(clearFilters({ ...state, q: normalizedDraft }))}>Reset filters</Button>}{state.q && <Button type="button" variant="link" onClick={() => { setDraft(''); update({ q: '' }); }}>Clear query</Button>}{state.page > 1 && <Button type="button" variant="link" onClick={() => commit({ ...state, page: 1 })}>First page</Button>}</div>}
             {totalPages > 1 && <Pagination aria-label="Search result pages"><PaginationContent>

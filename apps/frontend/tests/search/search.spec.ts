@@ -1,5 +1,127 @@
 import { test, expect } from '@playwright/test';
 
+test('Task 02.7 reuses Category and Brand cache from Home through Products and Search', async ({ page }) => {
+  const counts = { categories: 0, brands: 0 };
+  page.on('request', request => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname === '/api/categories') counts.categories++;
+    if (pathname === '/api/brands') counts.brands++;
+  });
+  await page.goto('/');
+  const categoriesResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/categories');
+  const brandsResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/brands');
+  await page.getByRole('link', { name: 'Products', exact: true }).first().click();
+  await expect(page.getByRole('heading', { name: 'All Products' })).toBeVisible();
+  await Promise.all([categoriesResponse, brandsResponse]);
+  await expect.poll(() => counts.categories).toBeGreaterThan(0);
+  await expect.poll(() => counts.brands).toBeGreaterThan(0);
+  await expect(page.getByTestId('product-card').first()).toBeVisible({ timeout: 30000 });
+  const initial = { ...counts };
+  expect(initial).toEqual({ categories: 2, brands: 2 });
+
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await expect(page).toHaveURL(/\/search$/);
+  await expect.poll(() => counts.categories).toBe(initial.categories);
+  await expect.poll(() => counts.brands).toBe(initial.brands);
+  const afterSearch = { ...counts };
+
+  await page.getByRole('link', { name: 'Products', exact: true }).first().click();
+  await expect(page).toHaveURL(/\/products$/);
+  await expect.poll(() => counts.categories).toBe(afterSearch.categories);
+  await expect.poll(() => counts.brands).toBe(afterSearch.brands);
+});
+
+test('Task 02.7 route loader stays in the customer shell at target widths', async ({ browser }, testInfo) => {
+  for (const width of [390, 768, 1440]) {
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    const page = await context.newPage();
+    await page.route(/SearchPage\.tsx/, async route => {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await route.continue();
+    });
+    await page.goto('/products');
+    const loader = page.getByRole('status');
+    await expect(loader).toContainText('Loading page…');
+    await expect(page.getByRole('banner')).toBeVisible();
+    const visual = await loader.locator('[aria-hidden="true"]').evaluate(element => {
+      const style = getComputedStyle(element);
+      const box = element.getBoundingClientRect();
+      return { color: style.color, animationName: style.animationName, origin: style.transformOrigin,
+        width: box.width, height: box.height, filter: style.filter };
+    });
+    expect(visual.color).toBe('rgb(37, 99, 235)');
+    expect(visual.animationName).toMatch(/turn/);
+    expect(visual.origin).toBe('20px 20px');
+    expect(visual.width).toBeGreaterThan(0);
+    expect(visual.height).toBeGreaterThan(0);
+    await page.screenshot({ path: testInfo.outputPath(`route-loader-${width}.png`) });
+    await expect(page.getByRole('heading', { name: 'All Products' })).toBeVisible();
+    await expect(page.getByRole('contentinfo')).toBeVisible();
+    await context.close();
+  }
+});
+
+test('Task 02.7 loader retains branding and status under reduced motion', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.route(/SearchPage\.tsx/, async route => {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await route.continue();
+  });
+  await page.goto('/products');
+  const status = page.getByRole('status');
+  await expect(status).toContainText('Loading page…');
+  const icon = status.locator('[aria-hidden="true"]');
+  await expect(icon).toBeVisible();
+  expect(await icon.evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+  await expect(status).toHaveAttribute('aria-live', 'polite');
+});
+
+test('Task 02.7 keeps Search results visible during a stale background refetch', async ({ page }) => {
+  await page.clock.install();
+  let release: (() => void) | undefined;
+  let searchCalls = 0;
+  let shouldHold = false;
+  await page.route('**/api/search/products?q=macbook', async route => {
+    searchCalls++;
+    if (shouldHold) {
+      shouldHold = false;
+      await new Promise<void>(resolve => { release = resolve; });
+    }
+    await route.continue();
+  });
+  await page.goto('/search?q=macbook');
+  const card = page.getByTestId('product-card').first();
+  await expect(card).toBeVisible({ timeout: 30000 });
+  const initialText = await card.innerText();
+  await page.clock.fastForward(31_000);
+  await page.getByRole('link', { name: 'Products', exact: true }).first().click();
+  shouldHold = true;
+  await page.goBack();
+  await expect.poll(() => searchCalls).toBeGreaterThan(1);
+  await expect(card).toBeVisible();
+  expect(await card.innerText()).toBe(initialText);
+  await expect(page.getByTestId('product-skeleton')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Search unavailable' })).toHaveCount(0);
+  release?.();
+  await expect(card).toBeVisible();
+});
+
+test('Task 02.7 reuses fresh Search results across customer navigation', async ({ page }) => {
+  const matchingRequests: string[] = [];
+  page.on('request', request => {
+    if (request.url().includes('/api/search/products?q=macbook')) matchingRequests.push(request.url());
+  });
+  await page.goto('/search?q=macbook');
+  await expect(page.getByTestId('product-card').first()).toBeVisible({ timeout: 30000 });
+  const initialRequests = matchingRequests.length;
+  expect(initialRequests).toBeGreaterThanOrEqual(1);
+  await page.getByRole('link', { name: 'Products', exact: true }).first().click();
+  await expect(page).toHaveURL(/\/products/);
+  await page.goBack();
+  await expect(page.getByTestId('product-card').first()).toBeVisible();
+  expect(matchingRequests).toHaveLength(initialRequests);
+});
+
 test('real Search API: matching fields, AND filters, sorting, exact prices and public summaries', async ({ request }) => {
   for (const query of ['macbook', 'sony headphones', 'apple laptop', 'iphone 16', 'WH-1000XM5', 'EH-025-001']) {
     const response = await request.get(`/api/search/products?${new URLSearchParams({ q: query })}`);
@@ -125,6 +247,7 @@ for (const width of [390, 768, 1440, 1920]) {
     await expect(page).toHaveURL(/sort=price-desc/);
     await page.goBack(); await expect(page.getByRole('combobox', { name: 'Sort by' })).toHaveText('Relevance');
     await page.goForward(); await expect(page.getByRole('combobox', { name: 'Sort by' })).toHaveText('Price: high to low');
+    await page.getByRole('button', { name: /Filters/ }).click();
     await page.getByRole('button', { name: 'Reset', exact: true }).click();
     await expect(page).toHaveURL(/\/products\?q=macbook$/);
     await page.goto('/search?q=macbook');

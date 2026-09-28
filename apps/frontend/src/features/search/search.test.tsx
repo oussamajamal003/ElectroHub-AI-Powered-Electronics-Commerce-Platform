@@ -4,9 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SearchPage } from './SearchPage';
 import { SearchField } from '@/components/ui/SearchField/SearchField';
 import { apiClient } from '@/lib/api';
-import { activeSearch, clearFilters, parseSearch, searchParams } from './searchState';
+import { activeSearch, clearFilters, emptySearch, parseSearch, searchParams } from './searchState';
 import type { Suggestion } from './api';
-vi.mock('@/lib/api', () => ({ apiClient: vi.fn() }));
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createQueryClient } from '@/lib/query';
+import { useBrands, useCategories } from './queries';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query';
+vi.mock('@/lib/api', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/api')>(), apiClient: vi.fn() }));
 const product = { id: 'product', name: 'Apple MacBook Air', slug: 'apple-macbook-air', price: '999.00', compareAtPrice: null,
   currency: 'USD', category: { id: 'laptops', name: 'Laptops', slug: 'laptops' }, brand: null, availability: 'AVAILABLE', primaryImage: null };
 const response = { data: [product], meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 } };
@@ -21,10 +26,16 @@ beforeEach(() => {
   URL.createObjectURL = vi.fn(() => 'blob:test-image'); URL.revokeObjectURL = vi.fn();
 });
 function Harness({ catalog = false }: { catalog?: boolean }) {
-  const navigate = useNavigate(); const location = useLocation();
-  return <><button onClick={() => navigate(-1)}>History back</button><button onClick={() => navigate(1)}>History forward</button><output data-testid="location">{location.search}</output><SearchPage catalog={catalog} /></>;
+  const navigate = useNavigate(); const location = useLocation(); const client = useQueryClient();
+  const state = (() => { try { return parseSearch(new URLSearchParams(location.search)); } catch { return emptySearch; } })();
+  return <><button onClick={() => navigate(-1)}>History back</button><button onClick={() => navigate(1)}>History forward</button><button onClick={() => void client.refetchQueries({ queryKey: queryKeys.search.products(state) })}>Refetch results</button><output data-testid="location">{location.search}</output><SearchPage catalog={catalog} /></>;
 }
-const page = (path: string | string[] = '/search', catalog = false) => render(<MemoryRouter initialEntries={Array.isArray(path) ? path : [path]} initialIndex={Array.isArray(path) ? path.length - 1 : 0}><Harness catalog={catalog} /></MemoryRouter>);
+function ReferenceConsumers() {
+  const categoriesA = useCategories(true); const categoriesB = useCategories(true);
+  const brandsA = useBrands(true); const brandsB = useBrands(true);
+  return <div>{categoriesA.data && categoriesB.data && brandsA.data && brandsB.data ? 'References ready' : 'Loading references'}</div>;
+}
+const page = (path: string | string[] = '/search', catalog = false) => render(<QueryClientProvider client={createQueryClient()}><MemoryRouter initialEntries={Array.isArray(path) ? path : [path]} initialIndex={Array.isArray(path) ? path.length - 1 : 0}><Harness catalog={catalog} /></MemoryRouter></QueryClientProvider>);
 describe('URL-backed Search state', () => {
   it('normalizes queries, ignores unrelated keys and round-trips committed state', () => {
     const state = parseSearch(new URLSearchParams('q=sony+++headphones&brand=sony&page=2&utm=demo'));
@@ -54,10 +65,10 @@ describe('Search page', () => {
     expect(screen.queryByText('Apple MacBook Air')).not.toBeInTheDocument();
     expect(input).toHaveValue('new');
   });
-  it('renders screenshot shell without loading all products initially', async () => {
+  it('renders screenshot shell without loading products initially and warms shared reference data', async () => {
     page(); await screen.findByRole('heading', { name: 'Search', level: 1 });
     expect(screen.getByRole('tab', { name: 'Text Search' })).toHaveAttribute('aria-selected', 'true');
-    await waitFor(() => expect(vi.mocked(apiClient).mock.calls.length).toBe(0));
+    await waitFor(() => expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/categories') || endpoint.startsWith('/api/brands')).length).toBe(2));
     expect(vi.mocked(apiClient).mock.calls.some(([endpoint]) => endpoint.startsWith('/api/search/products'))).toBe(false);
     expect(screen.queryByText(/0 results/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Search' })).not.toBeInTheDocument();
@@ -74,7 +85,7 @@ describe('Search page', () => {
     expect(await screen.findByTestId('product-card')).toHaveTextContent('Apple MacBook Air');
     expect(screen.getByTestId('product-card')).toHaveTextContent('999');
     expect(screen.queryByRole('button', { name: /Add .* to cart/ })).not.toBeInTheDocument();
-    expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(1);
+    await waitFor(() => expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(1));
     expect(screen.getByTestId('location')).toHaveTextContent('q=macbook');
   });
   it('debounces replacements and deletions, then returns to untouched state', async () => {
@@ -83,7 +94,7 @@ describe('Search page', () => {
     fireEvent.change(input, { target: { value: 'macbook' } });
     expect(screen.getByTestId('location')).not.toHaveTextContent('q=');
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('q=macbook'));
-    expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(1);
+    await waitFor(() => expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(1));
     fireEvent.change(input, { target: { value: 'mac' } });
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('q=mac'));
     fireEvent.change(input, { target: { value: '' } });
@@ -175,31 +186,62 @@ describe('Search page', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:test-image');
     expect(vi.mocked(apiClient).mock.calls.every(([endpoint]) => !endpoint.includes('image'))).toBe(true);
   });
+  it('preserves visible results during a background refetch', async () => {
+    let finishRefetch: ((value: typeof response) => void) | undefined;
+    let calls = 0;
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint.startsWith('/api/search/products') && calls++ > 0) return new Promise(resolve => { finishRefetch = resolve; }) as never;
+      if (endpoint.startsWith('/api/categories')) return { data: [], meta: { total: 0 } } as never;
+      if (endpoint.startsWith('/api/brands')) return { data: [], meta: { total: 0 } } as never;
+      return response as never;
+    });
+    page('/search?q=macbook');
+    expect(await screen.findByText('Apple MacBook Air')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Refetch results' }));
+    await waitFor(() => expect(finishRefetch).toBeDefined());
+    expect(screen.getByText('Apple MacBook Air')).toBeInTheDocument();
+    expect(screen.queryByTestId('product-skeleton')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Search unavailable' })).not.toBeInTheDocument();
+    await act(async () => { finishRefetch?.({ ...response, data: [{ ...product, name: 'Updated MacBook' }] }); });
+    expect(await screen.findByText('Updated MacBook')).toBeInTheDocument();
+  });
+});
+describe('shared Category and Brand query consumers', () => {
+  it('deduplicates simultaneous consumers by query key', async () => {
+    const client = createQueryClient();
+    vi.mocked(apiClient).mockImplementation(async endpoint => endpoint.startsWith('/api/categories')
+      ? { data: [], meta: { total: 0 } } as never : { data: [], meta: { total: 0 } } as never);
+    render(<QueryClientProvider client={client}><ReferenceConsumers /></QueryClientProvider>);
+    expect(await screen.findByText('References ready')).toBeInTheDocument();
+    expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/categories'))).toHaveLength(1);
+    expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/brands'))).toHaveLength(1);
+  });
 });
 describe('Accessible debounced suggestions', () => {
   it('starts suggestions after the independent 175 ms debounce', async () => {
     vi.useFakeTimers();
-    const load = vi.fn().mockResolvedValue({ data: [] });
+    vi.mocked(apiClient).mockResolvedValue({ data: [] });
     try {
-      render(<SearchField value="sam" onChange={vi.fn()} onSelect={vi.fn()} loadSuggestions={load} />);
+      render(<QueryClientProvider client={createQueryClient()}><SearchField value="sam" onChange={vi.fn()} onSelect={vi.fn()} /></QueryClientProvider>);
       fireEvent.focus(screen.getByRole('combobox'));
       await act(async () => { await vi.advanceTimersByTimeAsync(174); });
-      expect(load).not.toHaveBeenCalled();
+      expect(apiClient).not.toHaveBeenCalled();
       await act(async () => { await vi.advanceTimersByTimeAsync(1); });
-      expect(load).toHaveBeenCalledTimes(1);
+      expect(apiClient).toHaveBeenCalledTimes(1);
     } finally { vi.useRealTimers(); }
   });
   it('debounces, navigates by keyboard, selects with Enter and closes on Escape', async () => {
-    const load = vi.fn().mockResolvedValue({ data: [{ id: 'one', type: 'PRODUCT', label: 'MacBook', slug: 'macbook' }] });
+    vi.mocked(apiClient).mockResolvedValue({ data: [{ id: 'one', type: 'PRODUCT', label: 'MacBook', slug: 'macbook' }] });
     const select = vi.fn(); const change = vi.fn();
-    const { rerender } = render(<SearchField value="mac" onChange={change} onSelect={select} loadSuggestions={load} />);
-    fireEvent.focus(screen.getByRole('combobox')); expect(load).not.toHaveBeenCalled();
+    const client = createQueryClient();
+    const { rerender } = render(<QueryClientProvider client={client}><SearchField value="mac" onChange={change} onSelect={select} /></QueryClientProvider>);
+    fireEvent.focus(screen.getByRole('combobox')); expect(apiClient).not.toHaveBeenCalled();
     expect(await screen.findByRole('option')).toHaveTextContent('MacBook');
-    expect(load).toHaveBeenCalledTimes(1);
+    expect(apiClient).toHaveBeenCalledTimes(1);
     fireEvent.keyDown(screen.getByRole('combobox'), { key: 'ArrowDown' });
     expect(screen.getByRole('combobox')).toHaveAttribute('aria-activedescendant');
     fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' }); expect(select).toHaveBeenCalledWith(expect.objectContaining({ label: 'MacBook' }));
-    fireEvent.focus(screen.getByRole('combobox')); rerender(<SearchField value="macb" onChange={change} onSelect={select} loadSuggestions={load} />);
+    fireEvent.focus(screen.getByRole('combobox')); rerender(<QueryClientProvider client={client}><SearchField value="macb" onChange={change} onSelect={select} /></QueryClientProvider>);
     await screen.findByRole('option'); fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
@@ -207,13 +249,15 @@ describe('Accessible debounced suggestions', () => {
     let finishOld: ((response: { data: Suggestion[] }) => void) | undefined;
     const load = vi.fn().mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }))
       .mockResolvedValue({ data: [{ id: 'new', type: 'BRAND', label: 'Sony', slug: 'sony' }] });
-    const { rerender } = render(<SearchField value="mac" onChange={vi.fn()} onSelect={vi.fn()} loadSuggestions={load} />);
+    vi.mocked(apiClient).mockImplementation(load);
+    const client = createQueryClient();
+    const { rerender } = render(<QueryClientProvider client={client}><SearchField value="mac" onChange={vi.fn()} onSelect={vi.fn()} /></QueryClientProvider>);
     fireEvent.focus(screen.getByRole('combobox')); await waitFor(() => expect(load).toHaveBeenCalledTimes(1));
-    rerender(<SearchField value="sony" onChange={vi.fn()} onSelect={vi.fn()} loadSuggestions={load} />);
+    rerender(<QueryClientProvider client={client}><SearchField value="sony" onChange={vi.fn()} onSelect={vi.fn()} /></QueryClientProvider>);
     expect(await screen.findByRole('option')).toHaveTextContent('Sony');
     await act(async () => { finishOld?.({ data: [{ id: 'old', type: 'PRODUCT', label: 'Old Mac', slug: 'old' }] }); });
     expect(screen.queryByText('Old Mac')).not.toBeInTheDocument();
-    load.mockRejectedValue(new Error('Suggestion unavailable')); rerender(<SearchField value="fail" onChange={vi.fn()} onSelect={vi.fn()} loadSuggestions={load} />);
+    load.mockRejectedValue(new Error('Suggestion unavailable')); rerender(<QueryClientProvider client={client}><SearchField value="fail" onChange={vi.fn()} onSelect={vi.fn()} /></QueryClientProvider>);
     await waitFor(() => expect(load).toHaveBeenCalledTimes(3)); expect(screen.getByRole('combobox')).not.toBeDisabled();
   });
 });

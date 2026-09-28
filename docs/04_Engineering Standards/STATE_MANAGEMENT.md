@@ -82,6 +82,30 @@ Components should not duplicate server-state fetching logic unnecessarily.
 
 Query keys must be stable and descriptive.
 
+Task 02.7 uses the single `queryClient` and `queryKeys` in `apps/frontend/src/lib/query.ts`.
+The existing application provider remains the only provider. Search keys use the
+validated, committed URL state (not the input draft); suggestions use normalized
+text and limit. Prefixes permit targeted invalidation of products, categories,
+brands, search results, or suggestions. Do not persist this cache across sessions.
+
+Current public read policy: categories/brands are fresh for 10 minutes, products
+for 60 seconds, search results for 30 seconds, and suggestions for 10 seconds.
+Garbage collection is bounded to 30, 5, 2, and 1 minute respectively. Stale
+queries refetch on mount/reconnect, not window focus. One bounded retry applies
+only to network or server failures; 4xx and aborts do not retry. Cached
+availability is not real-time inventory.
+
+`AuthContext` remains the authority for `/api/auth/me` and clears the query
+cache on logout, session clearing, account deletion, or identity changes.
+Backend authorization remains authoritative. Components use feature query
+hooks and the central API client; query functions forward the cancellation
+signal. URL state remains authoritative for Search and Products navigation.
+
+Route chunk waits use `ElectroHubLoader`; structured product content uses
+skeletons, and actions use compact inline loading indicators. No artificial
+delay is added to navigation. Successful future mutations should invalidate
+only affected query-key families, never the whole public cache by default.
+
 Examples:
 
 ```ts
