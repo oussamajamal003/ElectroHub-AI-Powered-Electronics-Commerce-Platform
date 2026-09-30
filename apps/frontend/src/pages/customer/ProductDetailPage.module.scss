@@ -1,0 +1,45 @@
+@use '@/styles/abstracts' as *;
+.container { max-width: 120rem; margin-inline: auto; padding: $spacing-8 $spacing-4 $spacing-16; @include respond-to(md) { padding-inline: $spacing-8; } @include respond-to(lg) { padding-inline: $spacing-16; } }
+.breadcrumb { display: flex; flex-wrap: wrap; align-items: center; gap: $spacing-2; margin-bottom: $spacing-8; color: $color-text-secondary; a { color: $color-text-secondary; text-decoration: none; } }
+.productTop { display: grid; grid-template-columns: minmax(0, 1fr); gap: $spacing-8; @include respond-to(md) { grid-template-columns: repeat(2, minmax(0, 1fr)); } @include respond-to(lg) { grid-template-columns: minmax(0, 34fr) minmax(0, 66fr); gap: $spacing-12; } }
+.gallery { @include respond-to(md) { max-width: 35rem; } }
+.summary { h1 { margin: $spacing-2 0 $spacing-3; font-size: clamp($font-size-2xl, 2.25vw, 2.75rem); line-height: $line-height-tight; } }
+.category { color: $color-primary; text-transform: uppercase; font-size: $font-size-sm; font-weight: $font-weight-semibold; }
+.model { color: $color-text-secondary; font-size: $font-size-sm; }
+.rating { color: $color-warning-foreground; font-weight: $font-weight-medium; }
+.price { display: flex; flex-wrap: wrap; align-items: center; gap: $spacing-3; margin: $spacing-8 0 $spacing-4; strong { font-size: $font-size-3xl; } del { color: $color-text-muted; } }
+.discount { background: $color-success-background; color: $color-success-foreground; padding: $spacing-1 $spacing-2; font-weight: $font-weight-semibold; }
+.availability { color: $color-success-foreground; font-weight: $font-weight-semibold; }
+.unavailable { color: $color-error; font-weight: $font-weight-semibold; }
+.intro { color: $color-text-secondary; line-height: $line-height-relaxed; }
+.tabs { margin-top: $spacing-12; > div[role='tabpanel'] { padding-top: $spacing-6; > section > h2 { margin: 0 0 $spacing-3; } } }
+.specifications { > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: $spacing-4; padding: $spacing-3; border-bottom: 1px solid $color-border; } dt { color: $color-text-secondary; } dd { margin: 0; } }
+.review { border-bottom: 1px solid $color-border; padding: $spacing-4 0; display: grid; gap: $spacing-2; span { color: $color-warning-foreground; } p { margin: 0; overflow-wrap: anywhere; } time { color: $color-text-muted; font-size: $font-size-sm; } }
+.reviewPages { display: flex; flex-wrap: wrap; align-items: center; gap: $spacing-4; margin-top: $spacing-6; }
+.reviewForm { margin-top: $spacing-10; max-width: 42rem; border: 1px solid $color-border; background: $color-background; padding: $spacing-6;
+  h3 { margin: 0 0 $spacing-5; }
+  form { display: grid; gap: $spacing-3; }
+  label { font-weight: $font-weight-medium; }
+  textarea { width: 100%; border: 1px solid $color-border; padding: $spacing-3; font: inherit; resize: vertical; &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
+  small { color: $color-text-secondary; text-align: right; }
+}
+.reviewActions { display: flex; flex-wrap: wrap; gap: $spacing-3; margin-top: $spacing-2; }
+.reviewConfirm { margin-top: $spacing-4; padding-top: $spacing-4; border-top: 1px solid $color-border; p { margin: 0; font-weight: $font-weight-medium; } }
+.reviewFeedback { margin: $spacing-4 0 0; padding-top: $spacing-3; border-top: 1px solid $color-border; color: $color-text-secondary; }
+.reviewsHeading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: $spacing-3; margin-bottom: $spacing-3;
+  h2 { margin: 0; }
+  p { margin: 0; color: $color-text-secondary; }
+}
+.reviewGuest { margin-top: $spacing-8; max-width: 42rem; border: 1px solid $color-border; padding: $spacing-6; background: $color-background;
+  h3 { margin: 0; }
+  p { margin: $spacing-3 0 $spacing-5; color: $color-text-secondary; }
+}
+.reviewAuthLoading { max-width: 42rem; margin-top: $spacing-8; }
+.detailSkeletonGallery { aspect-ratio: 1; margin-top: $spacing-8; }
+.detailSkeletonThumbnails { display: flex; gap: $spacing-3; margin-top: $spacing-4; }
+.detailSkeletonSummary { display: grid; align-content: start; gap: $spacing-5; margin-top: $spacing-8; }
+.detailSkeletonTabs { margin-top: $spacing-12; }
+.related { margin-top: $spacing-16; }
+.relatedHeading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: $spacing-4; a { color: $color-primary; } }
+.relatedGrid { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: $spacing-6; @include respond-to(sm) { grid-template-columns: repeat(2, minmax(0, 1fr)); } @include respond-to(lg) { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 30rem) { .reviewForm { padding: $spacing-4; } .reviewActions > * { flex: 1 1 100%; } }

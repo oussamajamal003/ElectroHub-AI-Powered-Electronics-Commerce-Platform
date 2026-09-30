@@ -3,6 +3,7 @@ import request from 'supertest';
 import app from '../../app.js';
 import { prisma } from '../../lib/prisma.js';
 import { generateAccessToken } from '../../utils/jwt.js';
+import { AuthService } from '../../services/auth.service.js';
 
 vi.mock('../../lib/prisma.js', () => ({
   prisma: {
@@ -115,5 +116,22 @@ describe('Auth Controller - /api/auth/me', () => {
 
     expect(res.status).toBe(500);
     expect(res.body.error.code).toBe('INTERNAL_SERVER_ERROR');
+  });
+});
+
+describe('Auth refresh cookie preservation', () => {
+  it('keeps the refresh cookie on a transient backend failure', async () => {
+    const refresh = vi.spyOn(AuthService.prototype, 'refreshSession').mockRejectedValueOnce(new Error('Temporary database failure'));
+    const response = await request(app).post('/api/auth/refresh').set('Cookie', 'electrohub_refresh=valid-token');
+    expect(response.status).toBe(500);
+    expect(response.headers['set-cookie']).toBeUndefined();
+    refresh.mockRestore();
+  });
+  it('clears the cookie for a confirmed invalid refresh token', async () => {
+    const refresh = vi.spyOn(AuthService.prototype, 'refreshSession').mockRejectedValueOnce(new Error('Invalid or expired refresh token'));
+    const response = await request(app).post('/api/auth/refresh').set('Cookie', 'electrohub_refresh=invalid-token');
+    expect(response.status).toBe(401);
+    expect(response.headers['set-cookie']).toBeDefined();
+    refresh.mockRestore();
   });
 });

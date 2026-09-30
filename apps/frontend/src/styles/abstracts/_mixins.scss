@@ -50,6 +50,12 @@
   color: $color-text-primary;
 }
 
+@mixin company-hero-heading {
+  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  font-weight: $font-weight-bold;
+  line-height: $line-height-tight;
+}
+
 // --- Truncation ---
 @mixin text-truncate {
   overflow: hidden;

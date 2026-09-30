@@ -51,4 +51,33 @@ describe('ProductCard', () => {
     expect(screen.getByText('Wireless Headphones')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /cart|wishlist/i })).not.toBeInTheDocument();
   });
+
+  it('keeps a normal link by default and opts catalog consumers into client navigation', () => {
+    const onNavigate = vi.fn();
+    const view = render(<ProductCard {...mockProduct} href="/products/wireless-headphones" showActions={false} />);
+    const link = screen.getByRole('link', { name: 'Wireless Headphones' });
+    expect(link).toHaveAttribute('href', '/products/wireless-headphones');
+    view.rerender(<ProductCard {...mockProduct} href="/products/wireless-headphones" onNavigate={onNavigate} showActions={false} />);
+    link.addEventListener('click', event => event.preventDefault(), { once: true });
+    fireEvent.click(link, { ctrlKey: true });
+    expect(onNavigate).not.toHaveBeenCalled();
+    fireEvent.click(link);
+    expect(onNavigate).toHaveBeenCalledWith('/products/wireless-headphones');
+  });
+
+  it('renders the same Product alternate image before pointer interaction', () => {
+    render(<ProductCard {...mockProduct} imageUrl="/primary.jpg" secondaryImageUrl="/alternate.jpg" showActions={false} />);
+    expect(screen.getByAltText('Wireless Headphones')).toHaveAttribute('src', '/primary.jpg');
+    expect(screen.getByAltText('')).toHaveAttribute('src', '/alternate.jpg');
+    expect(screen.getByTestId('product-card')).toHaveAttribute('data-clickable', 'false');
+  });
+
+  it('navigates from the card surface without intercepting its image hover or action controls', () => {
+    const onNavigate = vi.fn();
+    render(<ProductCard {...mockProduct} href="/products/wireless-headphones" onNavigate={onNavigate} />);
+    fireEvent.click(screen.getByTestId('product-card').querySelector('img')!);
+    expect(onNavigate).toHaveBeenCalledWith('/products/wireless-headphones');
+    fireEvent.click(screen.getByRole('button', { name: /add wireless headphones to cart/i }));
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+  });
 });

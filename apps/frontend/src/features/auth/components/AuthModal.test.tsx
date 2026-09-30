@@ -155,9 +155,16 @@ describe('AuthModal Component', () => {
     await user.click(screen.getByRole('button', { name: 'Continue to Login' }));
 
     expect(screen.getByLabelText(/Email Address/i)).toHaveValue('john@gmail.com');
-    expect(screen.getByLabelText(/^Password$/i)).toHaveValue('');
+    expect(screen.getByLabelText(/^Password$/i)).toHaveValue('NewPassword#2026');
+    expect(window.location.search).not.toContain('NewPassword#2026');
+    expect(window.location.hash).not.toContain('NewPassword#2026');
+    expect(window.localStorage.getItem('NewPassword#2026')).toBeNull();
+    expect(window.sessionStorage.getItem('NewPassword#2026')).toBeNull();
     expect(mockLogin).not.toHaveBeenCalled();
     expect(mockOnOpenChange).not.toHaveBeenCalledWith(false);
+    const loginForm = screen.getByLabelText(/^Password$/i).closest('form')!;
+    fireEvent.submit(loginForm);
+    await waitFor(() => expect(mockLogin).toHaveBeenCalledWith({ email: 'john@gmail.com', password: 'NewPassword#2026' }));
   });
 
   describe('Login Popup & Mode Switching', () => {

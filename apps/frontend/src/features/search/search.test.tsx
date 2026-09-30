@@ -80,6 +80,27 @@ describe('Search page', () => {
     expect(await screen.findByText('Apple MacBook Air')).toBeInTheDocument();
     expect(vi.mocked(apiClient).mock.calls.some(([endpoint]) => endpoint === '/api/search/products?')).toBe(true);
   });
+  it('requests only the selected page and restores a cached page without skeletons', async () => {
+    let finishPageTwo: ((value: typeof response) => void) | undefined;
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint.startsWith('/api/search/products?page=2')) return new Promise(resolve => { finishPageTwo = resolve; }) as never;
+      if (endpoint.startsWith('/api/search/products')) return { ...response, meta: { ...response.meta, total: 40, totalPages: 2 } } as never;
+      return { data: [], meta: { total: 0 } } as never;
+    });
+    page('/products?page=1', true);
+    expect(await screen.findByText('Apple MacBook Air')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Go to page 2' }));
+    await waitFor(() => expect(finishPageTwo).toBeDefined());
+    expect(screen.getAllByTestId('product-skeleton')).toHaveLength(4);
+    expect(screen.queryByText('Apple MacBook Air')).not.toBeInTheDocument();
+    expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(2);
+    await act(async () => finishPageTwo?.({ ...response, data: [{ ...product, id: 'page-two', name: 'Page Two Product' }], meta: { ...response.meta, page: 2, total: 40, totalPages: 2 } }));
+    expect(await screen.findByText('Page Two Product')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'History back' }));
+    expect(screen.getByText('Apple MacBook Air')).toBeInTheDocument();
+    expect(screen.queryByTestId('product-skeleton')).not.toBeInTheDocument();
+    expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(2);
+  });
   it('submits exactly one product request and renders canonical product card without inert actions', async () => {
     page(); fireEvent.change(screen.getByRole('combobox', { name: 'Search products' }), { target: { value: 'macbook' } });
     expect(await screen.findByTestId('product-card')).toHaveTextContent('Apple MacBook Air');
@@ -114,7 +135,7 @@ describe('Search page', () => {
   it('applies drafted filters once, counts them and removes chips independently', async () => {
     page('/products?q=sony&page=2&brand=apple&availability=available', true); await screen.findByText('Apple MacBook Air');
     fireEvent.click(screen.getByRole('button', { name: 'Filters (2)' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Laptops' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Laptops' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Min price ($)' }), { target: { value: '50' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'Max price ($)' }), { target: { value: '1000' } });
     expect(screen.getByTestId('location')).not.toHaveTextContent('category=');
@@ -148,7 +169,7 @@ describe('Search page', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('?q=sony');
     expect(screen.getByTestId('location')).not.toHaveTextContent('brand');
     fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Laptops' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Laptops' }));
     expect(screen.getByTestId('location')).not.toHaveTextContent('category=laptops');
     fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
     expect(screen.getByTestId('location')).toHaveTextContent('category=laptops');

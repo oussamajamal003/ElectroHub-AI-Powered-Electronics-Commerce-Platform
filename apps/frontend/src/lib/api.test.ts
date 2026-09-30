@@ -29,6 +29,16 @@ describe('central API client', () => {
     await expect(apiClient('/api/products', { signal: controller.signal })).resolves.toBeUndefined();
     expect(fetchMock.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
   });
+  it('treats an unauthenticated current-user response as an expected auth result', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json(401, { error: 'Unauthenticated' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onExpired = vi.fn();
+    window.addEventListener('electrohub:session-expired', onExpired);
+    await expect(apiClient('/api/auth/me')).rejects.toMatchObject({ status: 401, message: 'Unauthenticated' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(onExpired).not.toHaveBeenCalled();
+    window.removeEventListener('electrohub:session-expired', onExpired);
+  });
   it('shares one silent refresh across concurrent 401 requests and retries once', async () => {
     let refreshCalls = 0;
     const fetchMock = vi.fn().mockImplementation(async (url: string, options: RequestInit) => {
@@ -63,6 +73,22 @@ describe('central API client', () => {
     expect(onExpired).toHaveBeenCalledTimes(1);
     await apiClient('/api/public');
     expect((fetchMock.mock.calls.at(-1)?.[1]?.headers as Headers).has('Authorization')).toBe(false);
+    window.removeEventListener('electrohub:session-expired', onExpired);
+  });
+  it('preserves authentication on a transient refresh failure', async () => {
+    setAccessToken('valid-token');
+    const onExpired = vi.fn();
+    window.addEventListener('electrohub:session-expired', onExpired);
+    const fetchMock = vi.fn().mockImplementation(async (url: string, options: RequestInit) => {
+      if (url === '/api/auth/refresh') return json(503, { error: 'Unavailable' });
+      if (url === '/api/protected') return json(401, { error: 'Expired access token' });
+      expect((options.headers as Headers).get('Authorization')).toBe('Bearer valid-token');
+      return json(200, { ok: true });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(apiClient('/api/protected')).rejects.toMatchObject({ status: 503 });
+    await expect(apiClient('/api/public')).resolves.toEqual({ ok: true });
+    expect(onExpired).not.toHaveBeenCalled();
     window.removeEventListener('electrohub:session-expired', onExpired);
   });
   it('does not retry refresh when the one replay also returns 401', async () => {

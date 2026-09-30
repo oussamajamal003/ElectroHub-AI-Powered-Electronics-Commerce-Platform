@@ -1,22 +1,57 @@
-@use '../../styles/abstracts/variables' as *;
+﻿@use '../../styles/abstracts/variables' as *;
 @use '../../styles/abstracts/mixins' as *;
-.container { width: 100%; max-width: 120rem; margin: 0 auto; padding: $spacing-6 $spacing-4 $spacing-10;
-  h1 { font-size: $font-size-4xl; font-weight: $font-weight-bold; line-height: $line-height-tight; margin: $spacing-8 0 $spacing-4; }
-  @include respond-to(md) { padding: $spacing-8 $spacing-8 $spacing-10; }
-  @include respond-to(lg) { padding: $spacing-10 $spacing-12; h1 { font-size: $spacing-16; } }
-  @include respond-to(2xl) { padding-inline: $spacing-16 + $spacing-4; }
+.container {
+  width: 100%;
+  max-width: 120rem;
+  margin: 0 auto;
+  padding: $spacing-4 $spacing-4 $spacing-10;
+
+  @include respond-to(md) {
+    padding: $spacing-5 $spacing-8 $spacing-10;
+  }
+  @include respond-to(lg) {
+    padding: $spacing-6 $spacing-12;
+  }
+  @include respond-to(2xl) {
+    padding-inline: $spacing-16 + $spacing-4;
+  }
+}
+
+.titleRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: $spacing-4;
+  margin: $spacing-2 0 0;
+}
+
+.pageTitle {
+  margin: 0;
+  font-family: $font-family-heading;
+  font-size: clamp(2rem, 3.5vw, 3rem);
+  font-weight: $font-weight-bold;
+  line-height: $line-height-tight;
+  color: $color-text-primary;
+}
+
+.resultCount {
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-regular;
+  white-space: nowrap;
 }
 .breadcrumb { display: flex; align-items: center; gap: $spacing-2; font-size: $font-size-base; a { color: $color-text-secondary; text-decoration: none; } }
-.subtitle { color: $color-text-secondary; font-size: $font-size-lg; margin-bottom: $spacing-10; }
-.tabs { width: 100%; display: flex; justify-content: flex-start; background: transparent; padding: 0; border-bottom: 1px solid $color-border; border-radius: 0; margin-bottom: $spacing-6;
+.subtitle { color: $color-text-secondary; font-size: $font-size-lg; margin: $spacing-1 0 0; }
+.tabs { width: 100%; display: flex; justify-content: flex-start; background: transparent; padding: 0; border-bottom: 1px solid $color-border; border-radius: 0; margin-top: $spacing-5; margin-bottom: $spacing-2;
   button { padding: $spacing-4 $spacing-3; background: transparent !important; border-radius: 0; color: $color-text-secondary; font-size: $font-size-lg; box-shadow: none !important;
     &[data-state='active'] { border-bottom: 2px solid $color-primary; color: $color-text-primary; }
   }
 }
-.searchToolbar, .catalogToolbar { display: grid; align-items: end; gap: $spacing-3; margin-top: $spacing-5; }
-.searchToolbar { grid-template-columns: minmax(0, 1fr) minmax(11rem, 13rem); column-gap: $spacing-8; }
+.container [role='tabpanel'] { margin-top: 0; }
+.searchToolbar, .catalogToolbar { display: grid; align-items: end; gap: $spacing-3; margin-top: $spacing-2; }
+.searchToolbar { grid-template-columns: minmax(0, 36rem) minmax(11rem, 13rem); column-gap: $spacing-6; }
 .catalogToolbar { grid-template-columns: minmax(0, 1fr) auto minmax(11rem, 14rem); }
-.searchForm { min-width: 0; width: 100%; input { height: $spacing-10; min-height: $spacing-10; font-size: $font-size-lg; }
+.searchForm { min-width: 0; width: 100%; input { height: 3.5rem; min-height: 3.5rem; font-size: $font-size-lg; }
 }
 .catalogSearch { max-width: none; input { font-size: $font-size-base; } }
 @media (max-width: $breakpoint-md - 1px) {
@@ -46,6 +81,7 @@
   @include respond-to(xl) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   @include respond-to(2xl) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
+.catalogGrid { @include respond-to(lg) { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .availability { font-size: $font-size-sm; color: $color-text-secondary; margin: $spacing-2 0; }
 .empty { text-align: center; padding: $spacing-16 $spacing-4; overflow-wrap: anywhere; h2 { font-size: $font-size-3xl; margin-bottom: $spacing-4; } p { color: $color-text-secondary; } button { margin: $spacing-2; } }
 .error { color: $color-error-foreground; padding: $spacing-3 0; }

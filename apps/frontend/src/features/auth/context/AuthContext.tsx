@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, LoginCredentials, RegisterData } from '../types';
 import { authApi, VerificationResponse } from '../api/auth';
-import { setAccessToken } from '@/lib/api';
+import { ApiError, setAccessToken } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 
 interface AuthState {
@@ -12,6 +12,7 @@ interface AuthState {
 }
 
 interface AuthContextValue extends AuthState {
+  rememberedUser: Pick<User, 'firstName' | 'lastName'> | null;
   finishGoogle: () => Promise<void>;
   login: (credentials: LoginCredentials) => Promise<VerificationResponse>;
   register: (data: RegisterData) => Promise<VerificationResponse>;
@@ -23,52 +24,136 @@ interface AuthContextValue extends AuthState {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+let restorePromise: Promise<User> | null = null;
+const headerIdentityKey = 'electrohub:header-identity';
+const userCacheKey = 'electrohub:cached-user';
+type HeaderIdentity = Pick<User, 'firstName' | 'lastName'>;
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const queryClient = useQueryClient();
-  const [state, setState] = useState<AuthState>({
+function readCachedUser(): User | null {
+  try {
+    const stored = sessionStorage.getItem(userCacheKey);
+    if (!stored) return null;
+    const user: unknown = JSON.parse(stored);
+    if (!user || typeof user !== 'object') return null;
+    const value = user as Record<string, unknown>;
+    if (typeof value.id !== 'string' || typeof value.email !== 'string') return null;
+    return user as User;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedUser(user: User): void {
+  try { sessionStorage.setItem(userCacheKey, JSON.stringify(user)); } catch { /* Storage can be unavailable. */ }
+}
+
+function removeCachedUser(): void {
+  try { sessionStorage.removeItem(userCacheKey); } catch { /* Storage can be unavailable. */ }
+}
+
+function readHeaderIdentity(): HeaderIdentity | null {
+  try {
+    const stored = sessionStorage.getItem(headerIdentityKey);
+    if (!stored) return null;
+    const identity: unknown = JSON.parse(stored);
+    if (!identity || typeof identity !== 'object') return null;
+    const value = identity as Record<string, unknown>;
+    if (typeof value.firstName !== 'string' || typeof value.lastName !== 'string') return null;
+    return { firstName: value.firstName, lastName: value.lastName };
+  } catch {
+    return null;
+  }
+}
+
+function saveHeaderIdentity(user: User): HeaderIdentity {
+  const identity = { firstName: user.firstName, lastName: user.lastName };
+  try { sessionStorage.setItem(headerIdentityKey, JSON.stringify(identity)); } catch { /* Storage can be unavailable. */ }
+  return identity;
+}
+
+function removeHeaderIdentity() {
+  try { sessionStorage.removeItem(headerIdentityKey); } catch { /* Storage can be unavailable. */ }
+}
+
+function restoreSession(): Promise<User> {
+  if (!restorePromise) {
+    restorePromise = (async () => {
+      const { accessToken } = await authApi.refreshSession();
+      setAccessToken(accessToken);
+      const { user } = await authApi.getCurrentUser();
+      return user;
+    })().finally(() => { restorePromise = null; });
+  }
+  return restorePromise;
+}
+
+function getInitialAuthState(): AuthState {
+  const cached = readCachedUser();
+  if (cached) {
+    return {
+      user: cached,
+      isAuthenticated: true,
+      isLoading: false,
+      isInitializing: false,
+    };
+  }
+  return {
     user: null,
     isAuthenticated: false,
     isLoading: false,
     isInitializing: true,
-  });
+  };
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
+  const [rememberedUser, setRememberedUser] = useState<HeaderIdentity | null>(readHeaderIdentity);
+  const remember = (user: User) => {
+    saveCachedUser(user);
+    setRememberedUser(saveHeaderIdentity(user));
+  };
+  const forget = () => {
+    removeCachedUser();
+    removeHeaderIdentity();
+    setRememberedUser(null);
+  };
+  const [state, setState] = useState<AuthState>(getInitialAuthState);
 
   useEffect(() => {
     let mounted = true;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
     async function initSession() {
       try {
-        const { user } = await authApi.getCurrentUser();
+        const user = await restoreSession();
         if (mounted) {
-          setState((prev) => ({
-            ...prev,
-            user,
-            isAuthenticated: true,
-            isInitializing: false,
-          }));
+          remember(user);
+          setState({ user, isAuthenticated: true, isLoading: false, isInitializing: false });
         }
-      } catch {
-        if (mounted) {
-          setState((prev) => ({
-            ...prev,
-            user: null,
-            isAuthenticated: false,
-            isInitializing: false,
-          }));
+      } catch (error) {
+        if (!mounted) return;
+        if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+          setAccessToken(null);
+          forget();
+          setState({ user: null, isAuthenticated: false, isLoading: false, isInitializing: false });
+        } else {
+          retryTimer = setTimeout(() => { void initSession(); }, 2000);
         }
       }
     }
 
-    initSession();
+    void initSession();
 
     return () => {
       mounted = false;
+      if (retryTimer) clearTimeout(retryTimer);
     };
   }, []);
 
   useEffect(() => {
     const clearExpiredSession = () => {
       setAccessToken(null);
+      forget();
       queryClient.clear();
       setState({ user: null, isAuthenticated: false, isLoading: false, isInitializing: false });
     };
@@ -83,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const authenticatedUser = response.user;
       if (authenticatedUser) {
         queryClient.clear();
+        remember(authenticatedUser);
         setState((prev) => ({
           ...prev,
           user: authenticatedUser,
@@ -112,6 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const verifiedUser = response.user;
       if (verifiedUser && response.accessToken) {
         queryClient.clear();
+        remember(verifiedUser);
         setState((prev) => ({
           ...prev,
           user: verifiedUser,
@@ -130,6 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await authApi.logout();
     } finally {
       setAccessToken(null);
+      forget();
       queryClient.clear();
       setState({
         user: null,
@@ -143,6 +231,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const clearSession = () => {
     setAccessToken(null);
+    forget();
     queryClient.clear();
     setState({ user: null, isAuthenticated: false, isLoading: false, isInitializing: false });
   };
@@ -151,6 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, isLoading: true }));
     try {
       const response = await authApi.updateProfile(data);
+      remember(response.user);
       setState((prev) => ({
         ...prev,
         user: response.user,
@@ -163,6 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyEmailChange = async (code: string): Promise<User> => {
     const response = await authApi.verifyEmailChange({ code });
+    remember(response.user);
     setState((previous) => ({ ...previous, user: response.user }));
     return response.user;
   };
@@ -170,11 +261,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const finishGoogle = async () => {
     const { user } = await authApi.finishGoogle();
     queryClient.clear();
+    remember(user);
     setState(previous => ({ ...previous, user, isAuthenticated: true }));
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, login, register, verifyEmail, logout, clearSession, updateProfile, verifyEmailChange, finishGoogle }}>
+    <AuthContext.Provider value={{ ...state, rememberedUser, login, register, verifyEmail, logout, clearSession, updateProfile, verifyEmailChange, finishGoogle }}>
       {children}
     </AuthContext.Provider>
   );

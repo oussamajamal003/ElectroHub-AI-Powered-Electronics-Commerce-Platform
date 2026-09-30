@@ -1,0 +1,13 @@
+@use '../../../styles/abstracts' as *;
+
+.list { display: grid; gap: 0; }
+.review { padding-block: $spacing-5; border-bottom: 1px solid $color-border;
+  p { margin: $spacing-3 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: $line-height-relaxed; }
+}
+.reviewHeader { display: flex; align-items: center; flex-wrap: wrap; gap: $spacing-3;
+  strong { margin-right: auto; }
+  time { color: $color-text-secondary; font-size: $font-size-sm; }
+  span { color: $color-warning-foreground; font-weight: $font-weight-medium; }
+}
+.empty { padding: $spacing-6; color: $color-text-secondary; background: $color-surface; border: 1px solid $color-border; }
+.emptyState { margin: $spacing-4 0 0; }

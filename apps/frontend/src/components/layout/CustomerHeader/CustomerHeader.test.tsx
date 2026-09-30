@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { describe, beforeEach, it, expect, vi } from 'vitest';
 import { CustomerHeader } from './CustomerHeader';
@@ -36,8 +36,10 @@ describe('CustomerHeader', () => {
     expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeInTheDocument();
     expect(screen.getByText('Home')).toBeInTheDocument();
     expect(screen.getByText('Products')).toBeInTheDocument();
-    expect(screen.getByText('Orders')).toBeInTheDocument();
-    expect(screen.getByText('Account')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'About' })).toHaveAttribute('href', '/about');
+    expect(screen.getByRole('link', { name: 'Contact' })).toHaveAttribute('href', '/contact');
+    expect(screen.queryByText('Orders')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Account' })).not.toBeInTheDocument();
 
     // Search, Cart, Wishlist, Account icon buttons/links
     expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
@@ -46,7 +48,7 @@ describe('CustomerHeader', () => {
     expect(screen.getByRole('button', { name: 'Account' })).toBeInTheDocument();
   });
 
-  it('opens login popup when unauthenticated Account nav link is clicked', async () => {
+  it('opens login popup when unauthenticated Account icon is clicked', async () => {
     vi.mocked(useAuth).mockReturnValue({
       user: null,
       isAuthenticated: false,
@@ -56,9 +58,7 @@ describe('CustomerHeader', () => {
     } as any);
 
     renderWithRouter(<CustomerHeader />);
-    // Click the desktop "Account" nav link specifically
-    const accountNavLink = screen.getByRole('link', { name: 'Account' });
-    accountNavLink.click();
+    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('Welcome Back')).toBeInTheDocument();
@@ -83,6 +83,8 @@ describe('CustomerHeader', () => {
 
     renderWithRouter(<CustomerHeader />);
     expect(screen.getByText('JD')).toBeInTheDocument();
+    expect(screen.getByText('Orders')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Account' })).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Account menu for John Doe' })
     ).toBeInTheDocument();
@@ -162,7 +164,7 @@ describe('CustomerHeader', () => {
     expect(screen.queryByRole('navigation', { name: 'Mobile Navigation' })).not.toBeInTheDocument();
   });
 
-  it('mobile menu contains only Home, Products, Orders, Account', () => {
+  it('mobile guest menu contains public destinations without Orders', () => {
     vi.mocked(useAuth).mockReturnValue({
       user: null,
       isAuthenticated: false,
@@ -179,10 +181,12 @@ describe('CustomerHeader', () => {
     // Primary items present
     expect(mobileNav.querySelector('a[href="/"]')).toBeTruthy();
     expect(mobileNav.querySelector('a[href="/products"]')).toBeTruthy();
-    expect(mobileNav.querySelector('a[href="/orders"]')).toBeTruthy();
-    expect(mobileNav.querySelector('a[href="/account"]')).toBeTruthy();
+    expect(mobileNav.querySelector('a[href="/about"]')).toBeTruthy();
+    expect(mobileNav.querySelector('a[href="/contact"]')).toBeTruthy();
+    expect(mobileNav.querySelector('a[href="/orders"]')).toBeNull();
+    expect(mobileNav.querySelector('a[href="/account"]')).toBeNull();
 
-    // Verify exactly 4 links in mobile navigation
+    // Verify exactly 4 links in mobile navigation (Home, Products, About, Contact)
     const allLinks = mobileNav.querySelectorAll('a');
     expect(allLinks).toHaveLength(4);
 
@@ -190,6 +194,97 @@ describe('CustomerHeader', () => {
     expect(mobileNav.querySelector('a[href="/account/profile"]')).toBeNull();
     expect(mobileNav.querySelector('a[href="/wishlist"]')).toBeNull();
     expect(mobileNav.querySelector('a[href="/cart"]')).toBeNull();
+  });
+
+  it('collapses the open mobile menu after successful login', async () => {
+    const login = vi.fn().mockResolvedValue({ user: { id: '1', firstName: 'John', lastName: 'Doe' } });
+    vi.mocked(useAuth).mockReturnValue({ user: null, isAuthenticated: false, isInitializing: false,
+      login, logout: mockLogout } as any);
+    renderWithRouter(<CustomerHeader />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'john@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password$/i), { target: { value: 'password123' } });
+    fireEvent.submit(screen.getByLabelText(/^Password$/i).closest('form')!);
+    await waitFor(() => expect(login).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Mobile Navigation' })).not.toBeInTheDocument());
+  });
+
+  it('does not contain a standalone Sign Out button in mobile navigation and collapses sidebar on signout', async () => {
+    const logout = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(useAuth).mockReturnValue({
+      user: { id: '1', firstName: 'John', lastName: 'Doe', email: 'john@example.com', role: 'CUSTOMER' },
+      isAuthenticated: true,
+      isInitializing: false,
+      login: vi.fn(),
+      logout,
+    } as any);
+    const { unmount } = renderWithRouter(<CustomerHeader />);
+
+    // Open mobile navigation
+    fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }));
+    const mobileNav = screen.getByRole('navigation', { name: 'Mobile Navigation' });
+
+    // Standalone signout button is absent from mobile nav
+    expect(mobileNav.querySelector('button')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sign Out' })).toBeNull();
+
+    unmount();
+
+    // When auth changes to unauthenticated on logout
+    vi.mocked(useAuth).mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      isInitializing: false,
+      login: vi.fn(),
+      logout,
+    } as any);
+    renderWithRouter(<CustomerHeader />);
+
+    // Mobile navigation must collapse immediately
+    expect(screen.queryByRole('navigation', { name: 'Mobile Navigation' })).not.toBeInTheDocument();
+  });
+
+  it('renders desktop navigation in strict order: Home -> Products -> Orders -> About -> Contact', () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: { id: '1', firstName: 'John', lastName: 'Doe', email: 'john@example.com', role: 'CUSTOMER' },
+      isAuthenticated: true, isInitializing: false, logout: vi.fn(),
+    } as any);
+
+    renderWithRouter(<CustomerHeader />);
+    const primaryNav = screen.getByRole('navigation', { name: 'Primary navigation' });
+    const links = Array.from(primaryNav.querySelectorAll('a')).map(el => el.textContent?.trim());
+    expect(links).toEqual(['Home', 'Products', 'Orders', 'About', 'Contact']);
+  });
+
+  it('does not flash Orders during auth initialization', () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      isInitializing: true,
+      login: vi.fn(),
+      logout: mockLogout,
+    } as any);
+
+    renderWithRouter(<CustomerHeader />);
+    expect(screen.queryByText('Orders')).not.toBeInTheDocument();
+  });
+
+  it('keeps the authenticated header structure during restoration of a remembered session', () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: null,
+      rememberedUser: { firstName: 'John', lastName: 'Doe' },
+      isAuthenticated: false,
+      isInitializing: true,
+      logout: mockLogout,
+    } as any);
+
+    renderWithRouter(<CustomerHeader />);
+    expect(screen.getByRole('link', { name: 'Orders' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Account menu for John Doe' })).toBeInTheDocument();
+    expect(screen.getByText('JD')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Restoring account' })).not.toBeInTheDocument();
   });
 
   // ── Search ─────────────────────────────────────────────────
@@ -243,8 +338,8 @@ describe('CustomerHeader', () => {
     expect(screen.getByRole('link', { name: 'Wishlist' })).toBeInTheDocument();
   });
 
-  // ── Promotional Utility Row ───────────────────────────────
-  it('renders the promotional utility row above the header', () => {
+  // ── Top Delivery Strip Removed ───────────────────────────────
+  it('does not render the top promotional delivery strip', () => {
     vi.mocked(useAuth).mockReturnValue({
       user: null,
       isAuthenticated: false,
@@ -254,8 +349,8 @@ describe('CustomerHeader', () => {
     } as any);
 
     renderWithRouter(<CustomerHeader />);
-    expect(screen.getByRole('region', { name: 'Announcement' })).toBeInTheDocument();
-    expect(screen.getByText('Free delivery on orders over $100')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Announcement' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Free delivery on orders over $100')).not.toBeInTheDocument();
   });
 
   // ── Cart & Wishlist Badges ────────────────────────────────

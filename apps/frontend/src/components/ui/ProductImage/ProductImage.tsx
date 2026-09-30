@@ -28,7 +28,7 @@ export function ProductImage({
 
   return (
     <div className={`${styles.container} ${containerClassName}`} data-testid="product-image-container">
-      {!hasError ? (
+      {!hasError && src ? (
         <img
           src={src}
           alt={alt}

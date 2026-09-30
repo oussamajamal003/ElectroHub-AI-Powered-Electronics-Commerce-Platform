@@ -1,5 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/features/auth/context/AuthContext';
+import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
 
 interface ProtectedRouteProps {
   requiredRole?: string;
@@ -10,7 +11,7 @@ export function ProtectedRoute({ requiredRole, redirectTo = '/' }: ProtectedRout
   const { isAuthenticated, user, isInitializing } = useAuth();
 
   if (isInitializing) {
-    return <div>Loading...</div>; // Or a proper full-page skeleton
+    return <ElectroHubLoader page />;
   }
 
   if (!isAuthenticated || !user) {

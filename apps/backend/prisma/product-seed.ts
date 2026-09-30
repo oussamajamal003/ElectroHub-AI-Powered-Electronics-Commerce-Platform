@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import rawData from './data/products.json';
+import { buildCatalogVariants } from './product-variants.js';
 import { moneySchema, pricingSchema, slugSchema, specificationSchema, mediaPathSchema } from '../src/validators/product.validator.js';
 
 const categorySchema = z.object({
@@ -21,7 +22,7 @@ const productSchema = z.object({
   images: z.array(z.object({
     url: mediaPathSchema, altText: z.string().min(1).max(255),
     sortOrder: z.number().int().nonnegative(), isPrimary: z.boolean(),
-  }).strict()).min(1),
+  }).strict()).min(2),
   specifications: z.array(specificationSchema).min(6).max(15),
 }).strict().refine(value => pricingSchema.safeParse({
   price: value.price, compareAtPrice: value.compareAtPrice,
@@ -61,7 +62,92 @@ export function validateProductDataset(input: unknown) {
   return data;
 }
 
-export const productDataset = validateProductDataset(rawData);
+const catalogMedia: Record<string, string> = {
+  smartphones: '/images/catalog/smartphones.jpg',
+  laptops: '/images/catalog/laptops.jpg',
+  tablets: '/images/catalog/tablets.jpg',
+  headphones: '/images/catalog/headphones.jpg',
+  monitors: '/images/catalog/monitors.jpg',
+  smartwatches: '/images/catalog/smartwatches.jpg',
+  gaming: '/images/catalog/gaming.jpg',
+  accessories: '/images/catalog/accessories.jpg',
+};
+const catalogDetailMedia: Record<string, string> = Object.fromEntries(Object.entries(catalogMedia)
+  .map(([category, image]) => [category, image.replace(/\.jpg$/, '-detail.jpg')]));
+
+const catalogMediaPools: Record<string, string[]> = Object.fromEntries(Object.keys(catalogMedia).map(category => [category, [
+  `/images/catalog/variety/${category}-01.jpg`,
+  `/images/catalog/variety/${category}-02.jpg`,
+  `/images/catalog/variety/${category}-03.jpg`,
+  catalogMedia[category]!,
+  catalogDetailMedia[category]!,
+]]));
+const smartphoneBrandMedia: Record<string, string[]> = {
+  samsung: [
+    '/images/catalog/variety/smartphones-samsung-01.jpg',
+    '/images/catalog/variety/smartphones-samsung-02.jpg',
+    '/images/catalog/variety/smartphones-samsung-03.jpg',
+    catalogMedia.smartphones!,
+  ],
+};
+const deviceMedia: Record<string, string[]> = {
+  'lenovo-thinkpad-x1-carbon-gen-12': ['thinkpad-01', 'thinkpad-02'],
+  'sony-wh-1000xm5': ['sonyheadphones-01', 'sonyheadphones-02'],
+  'jbl-tune-770nc': ['jblheadphones-01', 'jblheadphones-02'],
+  'samsung-galaxy-buds2-pro': ['galaxybuds-01', 'galaxybuds-02'],
+  'samsung-galaxy-watch6-40mm': ['galaxywatch-01', 'galaxywatch-02'],
+  'sony-playstation-5-launch-disc': ['playstation5-01', 'playstation5-02'],
+  'asus-rog-ally-z1-extreme': ['rogally-01', 'rogally-02'],
+  'acer-predator-cestus-330': ['acermouse-01', 'acermouse-02'],
+  'lg-27ul500-w': ['monitor-lg-01', 'monitor-lg-02'],
+  'dell-p2422h': ['monitor-dell-01', 'monitor-dell-02'],
+  'asus-tuf-gaming-vg249q1a': ['monitor-asus-01', 'monitor-asus-02'],
+  'hp-975-dual-mode-wireless-keyboard': ['accessory-hp-keyboard-01', 'accessory-hp-keyboard-02'],
+  'lenovo-go-usb-c-wireless-mouse': ['accessory-lenovo-mouse-01', 'accessory-lenovo-mouse-02'],
+  'sony-dualsense-wireless-controller': ['accessory-sony-controller-01', 'accessory-sony-controller-02'],
+};
+const variantMediaFamilies = [
+  { slug: 'apple-iphone-15-128gb', name: 'iphone15', defaultFinish: 'black', views: 3 },
+  { slug: 'apple-iphone-16-128gb', name: 'iphone16', defaultFinish: 'black', views: 3 },
+  { slug: 'apple-macbook-air-13-m3', name: 'macbook13', defaultFinish: 'silver', views: 6 },
+  { slug: 'apple-macbook-air-15-m3', name: 'macbook15', defaultFinish: 'silver', views: 6 },
+  { slug: 'apple-ipad-air-11-m2-128gb', name: 'ipadair', defaultFinish: 'blue', views: 4 },
+  { slug: 'apple-ipad-10-64gb', name: 'ipad10', defaultFinish: 'silver', views: 2 },
+  { slug: 'samsung-galaxy-tab-s9-128gb', name: 'galaxytab', defaultFinish: 'graphite', views: 2 },
+  { slug: 'apple-watch-se-2-40mm-gps', name: 'watchse', defaultFinish: 'midnight', views: 2 },
+  { slug: 'apple-watch-series-9-41mm-gps', name: 'watchseries9', defaultFinish: 'pink', views: 2 },
+];
+const productMediaOffsets: Record<string, number> = {};
+
+const curatedProducts = [...rawData.products, ...buildCatalogVariants(rawData.products)].map(product => {
+  const family = variantMediaFamilies.find(candidate => product.slug.startsWith(candidate.slug));
+  const finish = family ? (product.name.split(' — ')[1] ?? family.defaultFinish).toLowerCase().replace(/\s+/g, '') : null;
+  const variantMedia = family && finish
+    ? Array.from({ length: family.views }, (_, index) => `/images/catalog/variety/${family.name}-${finish}-${index + 1}.jpg`)
+    : null;
+  const key = variantMedia ? `${family!.name}/${finish}` : product.slug;
+  const pool = variantMedia ?? deviceMedia[product.slug]?.map(name => `/images/catalog/variety/${name}.jpg`)
+    ?? (product.categorySlug === 'smartphones' && smartphoneBrandMedia[product.brandSlug]
+      ? smartphoneBrandMedia[product.brandSlug]!
+      : catalogMediaPools[product.categorySlug]!);
+  const offset = productMediaOffsets[key] ?? 0;
+  productMediaOffsets[key] = offset + 1;
+  const primaryUrl = pool[offset % pool.length]!;
+  const alternateStep = 1 + Math.floor(offset / pool.length) % (pool.length - 1);
+  const alternateUrl = pool[(offset + alternateStep) % pool.length]!;
+  return {
+    ...product,
+    images: product.images.map((image, index) => index === 0
+      ? { ...image, url: primaryUrl, altText: `Illustrative ${product.brandSlug} ${product.categorySlug} product image; not an exact model photo` }
+      : { ...image, url: alternateUrl, altText: `Alternate illustrative ${product.categorySlug} product view` }),
+  };
+});
+
+export const productDataset = validateProductDataset({
+  ...rawData,
+  categories: rawData.categories.map(category => ({ ...category, imageUrl: catalogMedia[category.slug]! })),
+  products: curatedProducts,
+});
 
 export function assertDevSeedTarget(configuration: NodeJS.ProcessEnv) {
   if (!['development', 'test'].includes(configuration.NODE_ENV ?? '')) {
@@ -144,5 +230,5 @@ export async function seedProductDataset(client: PrismaClient, configuration = p
       images: data.products.reduce((count, product) => count + product.images.length, 0),
       specifications: data.products.reduce((count, product) => count + product.specifications.length, 0),
     };
-  }, { maxWait: 10000, timeout: 300000 });
+  }, { maxWait: 30000, timeout: 900000 });
 }

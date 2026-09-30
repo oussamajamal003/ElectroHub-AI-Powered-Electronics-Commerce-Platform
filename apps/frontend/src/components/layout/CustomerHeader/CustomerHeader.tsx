@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   ShoppingCart,
@@ -30,7 +30,9 @@ export interface CustomerHeaderProps {
 }
 
 export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHeaderProps) {
-  const { user, isAuthenticated, isInitializing } = useAuth();
+  const { user, rememberedUser, isAuthenticated, isInitializing } = useAuth();
+  const headerUser = isInitializing ? rememberedUser : user;
+  const showAuthenticatedHeader = isInitializing ? Boolean(rememberedUser) : isAuthenticated;
   const navigate = useNavigate();
 
   // Auth modals
@@ -40,6 +42,8 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
 
   // Mobile menu
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const mobileMenuToggle = useRef<HTMLButtonElement>(null);
+  const mobileSignOut = useRef(false);
 
   // Scroll state
   const [isScrolled, setIsScrolled] = useState(false);
@@ -51,6 +55,12 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const openAuth = () => { setAuthMode('login'); setShowAuthModal(true); };
+    window.addEventListener('electrohub:open-auth', openAuth);
+    return () => window.removeEventListener('electrohub:open-auth', openAuth);
   }, []);
 
   // Close mobile menu or search on Escape
@@ -68,6 +78,10 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
     return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
   };
 
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [isAuthenticated]);
+
   const closeMobileMenu = useCallback(() => {
     setIsMobileMenuOpen(false);
   }, []);
@@ -75,25 +89,6 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
   const handleSearchOpen = () => {
     setIsMobileMenuOpen(false);
     navigate('/search');
-  };
-
-  const handleAccountClick = (e: React.MouseEvent) => {
-    if (!isAuthenticated) {
-      e.preventDefault();
-      setAuthMode('login');
-      setShowAuthModal(true);
-    }
-  };
-
-  const handleMobileAccountClick = (e: React.MouseEvent) => {
-    closeMobileMenu();
-    if (!isAuthenticated) {
-      e.preventDefault();
-      setAuthMode('login');
-      setShowAuthModal(true);
-    } else {
-      navigate('/account');
-    }
   };
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -111,12 +106,6 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
         className={`${styles.header} ${isScrolled ? styles.scrolled : ''}`}
         role="banner"
       >
-        {/* ─── Subtle Promotional Utility Row ──────────────────────── */}
-        <div className={styles.utilityRow} role="region" aria-label="Announcement">
-          <p className={styles.utilityText}>
-            Free delivery on orders over $100
-          </p>
-        </div>
 
         <div className={styles.container}>
           <div
@@ -125,6 +114,7 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
             {/* LEFT — Mobile Toggle + Brand */}
             <div className={styles.leftSection}>
               <button
+                ref={mobileMenuToggle}
                 type="button"
                 className={styles.mobileMenuToggle}
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -139,7 +129,7 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
                 <div className={styles.logoIcon} aria-hidden="true">
                   <Zap size={18} className={styles.zap} />
                 </div>
-                <span className={styles.logoText}>ElectroHub</span>
+                <span className={styles.logoText}>Electro<span className={styles.logoHub}>Hub</span></span>
               </Link>
             </div>
 
@@ -147,14 +137,11 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
             <nav className={styles.navigation} aria-label="Primary navigation">
               <NavLink to="/" end className={navLinkClass}>Home</NavLink>
               <NavLink to="/products" className={navLinkClass}>Products</NavLink>
-              <NavLink to="/orders" className={navLinkClass}>Orders</NavLink>
-              <NavLink
-                to="/account"
-                className={navLinkClass}
-                onClick={handleAccountClick}
-              >
-                Account
-              </NavLink>
+              {showAuthenticatedHeader && (
+                <NavLink to="/orders" className={navLinkClass}>Orders</NavLink>
+              )}
+              <NavLink to="/about" className={navLinkClass}>About</NavLink>
+              <NavLink to="/contact" className={navLinkClass}>Contact</NavLink>
             </nav>
 
             {/* RIGHT — Utility Icons + Avatar + Unified Search */}
@@ -199,6 +186,11 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
                   </Link>
 
                   {/* Unauthenticated — Account icon */}
+                  {isInitializing && !rememberedUser && (
+                    <button type="button" className={styles.iconButton} aria-label="Restoring account" disabled>
+                      <UserIcon size={20} />
+                    </button>
+                  )}
                   {!isInitializing && !isAuthenticated && (
                     <button
                       type="button"
@@ -214,20 +206,21 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
                   )}
 
                   {/* Authenticated — Avatar dropdown */}
-                  {!isInitializing && isAuthenticated && user && (
+                  {showAuthenticatedHeader && headerUser && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
                           className={styles.avatarButton}
-                          aria-label={`Account menu for ${user.firstName} ${user.lastName}`}
+                          aria-label={`Account menu for ${headerUser.firstName} ${headerUser.lastName}`}
+                          disabled={isInitializing}
                         >
-                          <Avatar initials={getInitials(user.firstName, user.lastName)} />
+                          <Avatar initials={getInitials(headerUser.firstName, headerUser.lastName)} />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className={styles.dropdown}>
                         <div className={styles.userInfo}>
-                          <p className={styles.userName}>{user.firstName} {user.lastName}</p>
-                          <p className={styles.userEmail}>{user.email}</p>
+                          <p className={styles.userName}>{headerUser.firstName} {headerUser.lastName}</p>
+                          {user && <p className={styles.userEmail}>{user.email}</p>}
                         </div>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
@@ -284,16 +277,13 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
             <NavLink to="/products" className={mobileNavClass} onClick={closeMobileMenu}>
               Products
             </NavLink>
-            <NavLink to="/orders" className={mobileNavClass} onClick={closeMobileMenu}>
-              Orders
-            </NavLink>
-            <NavLink
-              to="/account"
-              className={mobileNavClass}
-              onClick={handleMobileAccountClick}
-            >
-              Account
-            </NavLink>
+            {showAuthenticatedHeader && (
+              <NavLink to="/orders" className={mobileNavClass} onClick={closeMobileMenu}>
+                Orders
+              </NavLink>
+            )}
+            <NavLink to="/about" className={mobileNavClass} onClick={closeMobileMenu}>About</NavLink>
+            <NavLink to="/contact" className={mobileNavClass} onClick={closeMobileMenu}>Contact</NavLink>
           </nav>
         )}
       </header>
@@ -302,11 +292,18 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
       <AuthModal
         open={showAuthModal}
         onOpenChange={setShowAuthModal}
+        onAuthenticated={closeMobileMenu}
         initialMode={authMode}
       />
       <SignOutModal
         open={showSignOut}
-        onOpenChange={setShowSignOut}
+        onOpenChange={open => {
+          setShowSignOut(open);
+          if (!open && mobileSignOut.current) {
+            mobileSignOut.current = false;
+            requestAnimationFrame(() => mobileMenuToggle.current?.focus());
+          }
+        }}
       />
     </>
   );

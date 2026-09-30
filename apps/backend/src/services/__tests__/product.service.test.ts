@@ -6,10 +6,12 @@ import { BrandService } from '../brand.service.js';
 import { paginationSchema, normalizeSlug, pricingSchema } from '../../validators/product.validator.js';
 
 const database = vi.hoisted(() => ({
-  product: { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
+  product: { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn(), groupBy: vi.fn() },
   category: { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
   brand: { findMany: vi.fn(), findUnique: vi.fn(), count: vi.fn() },
+  review: { groupBy: vi.fn(), aggregate: vi.fn() },
   $transaction: vi.fn(),
+  $queryRaw: vi.fn(),
 }));
 vi.mock('../../lib/prisma.js', () => ({ prisma: database }));
 const primary = { id: 'image-1', url: '/images/products/tablets/front.svg', altText: 'Demo tablet', sortOrder: 0, isPrimary: true };
@@ -24,36 +26,41 @@ const fixture = () => ({
 
 beforeEach(() => {
   vi.resetAllMocks();
-  database.$transaction.mockImplementation((operations: Promise<unknown>[]) => Promise.all(operations));
+  database.$transaction.mockImplementation((operation: Promise<unknown>[] | ((transaction: typeof database) => Promise<unknown>)) =>
+    typeof operation === 'function' ? operation(database) : Promise.all(operation));
+  database.product.groupBy.mockResolvedValue([]);
+  database.review.groupBy.mockResolvedValue([]);
+  database.review.aggregate.mockResolvedValue({ _count: { _all: 0 }, _avg: { rating: null } });
+});
+const listRow = (overrides: Record<string, unknown> = {}) => ({
+  total: 1n, id: 'product-1', name: 'Tablet', slug: 'tablet', price: '9999999999.99',
+  compareAtPrice: '9999999999.99', description: 'Demo', quantity: 2,
+  category: { id: 'category-1', name: 'Tablets', slug: 'tablets' }, brand: null,
+  images: [primary], reviewCount: 0n, averageRating: null, ...overrides,
 });
 
 describe('Product foundation services', () => {
   it('serializes exact money and nullable legacy brand without leaking internal fields', async () => {
-    database.product.findMany.mockResolvedValue([fixture()]);
-    database.product.count.mockResolvedValue(1);
+    database.$queryRaw.mockResolvedValue([listRow()]);
     const response = await new ProductService().list({ page: 2, pageSize: 10 });
+    expect(database.$queryRaw).toHaveBeenCalledTimes(1);
     expect(response.meta).toEqual({ page: 2, pageSize: 10, total: 1 });
     expect(response.data[0]).toMatchObject({ price: '9999999999.99', brand: null, availability: 'AVAILABLE', primaryImage: primary });
     expect(response.data[0]).not.toHaveProperty('inventory');
     expect(response.data[0]).not.toHaveProperty('specifications');
-    expect(response.data[0]).not.toHaveProperty('description');
-    expect(database.product.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      skip: 10, take: 10, where: { status: 'ACTIVE', category: { isActive: true } },
-      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-      select: expect.objectContaining({ images: expect.objectContaining({ where: { isPrimary: true }, take: 1 }) }),
-    }));
+    expect(response.data[0]?.description).toBe('Demo');
+    expect(database.$queryRaw.mock.calls[0][0].values.slice(-2)).toEqual([10, 10]);
+    expect(database.$queryRaw.mock.calls[0][0].text).toContain('LIMIT 2');
   });
 
   it('returns null media and reference price for legacy records', async () => {
-    database.product.findMany.mockResolvedValue([{ ...fixture(), images: [], compareAtPrice: null, inventory: null }]);
-    database.product.count.mockResolvedValue(1);
+    database.$queryRaw.mockResolvedValue([listRow({ images: [], compareAtPrice: null, quantity: null })]);
     const response = await new ProductService().list({ page: 1, pageSize: 20 });
     expect(response.data[0]).toMatchObject({ primaryImage: null, compareAtPrice: null, availability: 'UNAVAILABLE' });
   });
 
   it('returns empty bounded pages', async () => {
-    database.product.findMany.mockResolvedValue([]);
-    database.product.count.mockResolvedValue(0);
+    database.$queryRaw.mockResolvedValue([{ total: 0n, id: null }]);
     expect(await new ProductService().list({ page: 1, pageSize: 20 }))
       .toEqual({ data: [], meta: { page: 1, pageSize: 20, total: 0 } });
   });
@@ -87,15 +94,14 @@ describe('Product foundation services', () => {
   });
 
   it('lists lightweight categories and brands with deterministic bounded ordering', async () => {
-    database.category.findMany.mockResolvedValue([{ id: 'cat', name: 'Tablets', slug: 'tablets' }]);
-    database.category.count.mockResolvedValue(1);
+    database.$queryRaw.mockResolvedValue([{ total: 1n, id: 'cat', name: 'Tablets', slug: 'tablets',
+      description: null, imageUrl: null, productCount: 1n }]);
     database.brand.findMany.mockResolvedValue([{ id: 'brand', name: 'Apple', slug: 'apple' }]);
     database.brand.count.mockResolvedValue(1);
     expect((await new CategoryService().list({ page: 1, pageSize: 20 })).data).toHaveLength(1);
     expect((await new BrandService().list({ page: 1, pageSize: 20 })).data).toHaveLength(1);
-    expect(database.category.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { isActive: true }, take: 20, orderBy: [{ name: 'asc' }, { id: 'asc' }],
-    }));
+    expect(database.$transaction).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({ isolationLevel: 'RepeatableRead' }));
+    expect(database.$queryRaw.mock.calls[0][0].values.slice(-2)).toEqual([20, 0]);
     expect(database.brand.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 20 }));
   });
 
