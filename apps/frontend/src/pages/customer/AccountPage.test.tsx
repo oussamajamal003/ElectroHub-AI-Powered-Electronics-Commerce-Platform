@@ -4,10 +4,12 @@ import { BrowserRouter } from 'react-router-dom';
 import { describe, beforeEach, it, expect, vi } from 'vitest';
 import { AccountPage } from './AccountPage';
 import { useAuth } from '@/features/auth/context/AuthContext';
+import { useMyReviews } from '@/features/products/queries';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
+vi.mock('@/features/products/queries', () => ({ useMyReviews: vi.fn() }));
 
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -23,6 +25,7 @@ describe('AccountPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useMyReviews).mockReturnValue({ data: { data: [] }, isPending: false, isError: false, refetch: vi.fn() } as unknown as ReturnType<typeof useMyReviews>);
     vi.mocked(useAuth).mockReturnValue({
       user: { id: '1', firstName: 'John', lastName: 'Doe', email: 'john@example.com', role: 'CUSTOMER' },
       isAuthenticated: true,
@@ -54,7 +57,34 @@ describe('AccountPage', () => {
     expect(screen.getByText('Wishlist')).toBeInTheDocument();
     expect(screen.getByText('Delivery Tracking')).toBeInTheDocument();
     expect(screen.getByText('Account Settings')).toBeInTheDocument();
-    expect(screen.getByText('Coming soon')).toBeInTheDocument();
+    expect(screen.queryByText('Coming soon')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Account Settings Manage your profile and preferences/i })).toHaveAttribute('href', '/account/profile');
+  });
+
+  it('shows the current customer review empty state', () => {
+    renderWithRouter(<AccountPage />);
+    expect(screen.getByText('Your Reviews')).toBeInTheDocument();
+    expect(screen.getByText('No reviews yet')).toBeInTheDocument();
+  });
+
+  it('uses the review-card structure for loading placeholders', () => {
+    vi.mocked(useMyReviews).mockReturnValue({ data: undefined, isPending: true, isError: false, refetch: vi.fn() } as unknown as ReturnType<typeof useMyReviews>);
+    renderWithRouter(<AccountPage />);
+    const loading = screen.getByRole('status', { name: 'Loading your reviews' });
+    expect(loading.children).toHaveLength(3);
+    for (const card of Array.from(loading.children)) {
+      expect(card.className).toContain('reviewProduct');
+      expect(card.children).toHaveLength(5);
+    }
+  });
+
+  it('links reviewed products directly to their Reviews tab', () => {
+    vi.mocked(useMyReviews).mockReturnValue({ data: { data: [{
+      id: 'review-1', rating: 4, body: 'Excellent display', createdAt: '2026-09-01T00:00:00.000Z',
+      author: { displayName: 'John Doe' }, product: { slug: 'tablet-air', name: 'Tablet Air', primaryImage: null },
+    }] }, isPending: false, isError: false, refetch: vi.fn() } as unknown as ReturnType<typeof useMyReviews>);
+    renderWithRouter(<AccountPage />);
+    expect(screen.getByRole('link', { name: /Tablet Air.*4\/5/i })).toHaveAttribute('href', '/products/tablet-air#reviews');
   });
 
   it('renders Recent Orders empty state', () => {

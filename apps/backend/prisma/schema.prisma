@@ -100,6 +100,7 @@ model User {
   emailDeliveries    EmailDelivery[]
   securityEvents      SecurityEvent[]
   oauthAccounts       OAuthAccount[]
+  reviews             Review[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -193,6 +194,7 @@ model Product {
   cartItems  CartItem[]
   wishItems  WishlistItem[]
   orderItems OrderItem[]
+  reviews    Review[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -250,6 +252,24 @@ model ProductSpecification {
 
   @@index([productId, group, sortOrder])
   @@map("product_specifications")
+}
+
+model Review {
+  id        String   @id @default(uuid()) @db.Uuid
+  productId String   @db.Uuid
+  userId    String   @db.Uuid
+  rating    Int
+  body      String   @db.VarChar(2000)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([productId, userId])
+  @@index([productId, createdAt, id])
+  @@index([userId])
+  @@map("reviews")
 }
 
 model Inventory {

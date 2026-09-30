@@ -16,6 +16,7 @@
 
 import { UserRole } from '@prisma/client';
 import { assertDevSeedTarget, seedProductDataset } from './product-seed';
+import { seedReviewDataset } from './review-seed';
 import bcrypt from 'bcrypt';
 import { prisma } from '../src/lib/prisma';
 
@@ -137,6 +138,8 @@ async function main() {
 
   const productCounts = await seedProductDataset(prisma);
   console.log('    Curated product dataset:', productCounts);
+  const reviewCounts = await seedReviewDataset(prisma, customerRole.id);
+  console.log('    Synthetic review dataset:', reviewCounts);
 
   console.log('\n✅ Seed completed successfully.\n');
 

@@ -9,11 +9,19 @@ export const cachePolicy = {
   suggestions: { staleTime: 10_000, gcTime: 60_000 },
 } as const;
 
+// StrictMode remounts effects in development. Keeping the in-flight public read
+// allows React Query to share it instead of cancelling and starting duplicate SQL.
+export const catalogSignal = (context: { signal: AbortSignal }) => import.meta.env.DEV ? undefined : context.signal;
+
 export const queryKeys = {
   products: {
     all: ['products'] as const,
     list: (params: string) => ['products', 'list', params] as const,
     detail: (slug: string) => ['products', 'detail', slug] as const,
+    deals: (params: string) => ['products', 'deals', params] as const,
+    reviews: (slug: string, page: number) => ['products', 'reviews', slug, page] as const,
+    myReview: (slug: string) => ['products', 'reviews', slug, 'me'] as const,
+    myReviews: (page: number, pageSize: number) => ['reviews', 'me', page, pageSize] as const,
   },
   categories: { all: ['categories'] as const, detail: (slug: string) => ['categories', 'detail', slug] as const },
   brands: { all: ['brands'] as const, detail: (slug: string) => ['brands', 'detail', slug] as const },

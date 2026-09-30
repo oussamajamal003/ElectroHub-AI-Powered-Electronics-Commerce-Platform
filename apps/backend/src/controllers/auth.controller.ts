@@ -212,13 +212,13 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
       accessToken: result.accessToken,
     });
   } catch (error) {
-    clearRefreshCookie(res);
     if (
       error instanceof Error &&
       (error.message === 'Invalid or expired refresh token' ||
         error.message === 'Invalid refresh token' ||
         error.message === 'User inactive or not found')
     ) {
+      clearRefreshCookie(res);
       logger.warn('AUTH_REFRESH_FAILURE', { reason: error.message });
       return res.status(401).json({ error: 'Invalid or expired refresh token' });
     }

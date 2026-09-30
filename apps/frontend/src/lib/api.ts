@@ -52,12 +52,20 @@ async function refreshSession(): Promise<string | null> {
     refreshPromise = (async () => {
       try {
         const response = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
-        if (!response.ok) { setAccessToken(null); notifySessionExpired(); return null; }
+        if (response.status === 401 || response.status === 403) {
+          setAccessToken(null);
+          notifySessionExpired();
+          return null;
+        }
+        if (!response.ok) throw new ApiError(response.status, safeMessage(response.status));
         const body = await readResponse<{ accessToken: string }>(response);
         const token = typeof body?.accessToken === 'string' ? body.accessToken : null;
         setAccessToken(token);
         return token;
-      } catch { setAccessToken(null); notifySessionExpired(); return null; }
+      } catch (error) {
+        if (error instanceof ApiError) throw error;
+        throw new ApiError(0, 'Unable to connect. Please try again.');
+      }
     })().finally(() => { refreshPromise = null; });
   }
   return refreshPromise;
@@ -74,7 +82,7 @@ export async function apiClient<T = unknown>(endpoint: string, options: FetchOpt
   let response: Response;
   try {
     response = await fetch(url, config);
-    if (response.status === 401 && !/\/api\/auth\/(refresh|login|logout)(?:\?|$)/.test(url)) {
+    if (response.status === 401 && !/\/api\/auth\/(me|refresh|login|logout)(?:\?|$)/.test(url)) {
       const token = await refreshSession();
       if (!token || options.signal?.aborted) throw new ApiError(401, safeMessage(401));
       headers.set('Authorization', `Bearer ${token}`);

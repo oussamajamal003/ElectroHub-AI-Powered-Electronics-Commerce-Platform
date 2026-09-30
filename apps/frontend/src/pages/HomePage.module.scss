@@ -1,50 +1,174 @@
-@use "@/styles/abstracts" as *;
+@use '@/styles/abstracts' as *;
 
-.container {
-  padding: $spacing-4;
+.home { color: $color-text-primary; }
+.hero { display: grid; grid-template-columns: 1fr; align-items: center; gap: $spacing-8; padding: $spacing-10 $spacing-4; background: $color-surface;
+  img { width: 100%; max-height: 28rem; object-fit: contain; }
+  @include respond-to(md) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: $spacing-12 $spacing-8; }
+  @include respond-to(lg) { padding-inline: max($spacing-12, calc((100vw - 84rem) / 2)); }
+}
+.hero { position: relative; display: flex; min-height: 34rem; padding-block: $spacing-12; overflow: hidden; isolation: isolate; background: $color-secondary; color: $color-text-inverse;
+  &::before { position: absolute; z-index: -1; inset: 0; content: ''; background: linear-gradient(90deg, rgba(5, 10, 20, .92) 0%, rgba(5, 10, 20, .76) 38%, rgba(5, 10, 20, .12) 100%); }
+  img { position: absolute; z-index: -2; inset: 0; width: 100%; height: 100%; max-height: none; object-fit: cover; object-position: center; }
+  @include respond-to(lg) { min-height: 42rem; padding-inline: max($spacing-12, calc((100vw - 84rem) / 2)); }
+}
+.heroBg { position: absolute; z-index: -2; inset: 0; width: 100%; height: 100%; max-height: none; object-fit: cover; object-position: center; transition: opacity 0.8s ease-in-out; will-change: opacity; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .heroBg { transition: none; } }
+
+.heroCopy { position: relative; max-width: 42rem; h1 { font-size: clamp($font-size-3xl, 4vw, 3.75rem); line-height: $line-height-tight; margin: $spacing-2 0 $spacing-4; } p { color: $color-text-secondary; font-size: $font-size-lg; } }
+.hero .heroCopy p { color: $color-border; }
+.heroActions { display: flex; flex-wrap: wrap; gap: $spacing-3; align-items: center; }
+.secondaryLink { display: inline-flex; align-items: center; justify-content: center; min-height: $spacing-12; padding: $spacing-3 $spacing-6; margin-top: $spacing-4; border: 1px solid $color-border; color: $color-text-inverse; text-decoration: none; font-weight: $font-weight-semibold;
+  &:hover { background: $color-secondary-light; } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
+}
+.discoveryStrip {
+  background: $color-primary;
+  color: $color-text-inverse;
+  padding-inline: max($spacing-4, calc((100vw - 84rem) / 2));
+}
+.benefitsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  width: 100%;
+  max-width: 84rem;
+  margin: 0 auto;
 
   @include respond-to(md) {
-    padding: $spacing-8;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+.benefitItem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-4;
+  min-height: 6.5rem;
+  padding: $spacing-5 $spacing-6;
 
-.title {
-  font-family: $font-family-heading;
-  font-size: $font-size-3xl;
-  font-weight: $font-weight-bold;
-  color: $color-text-primary;
-  margin: 0 0 $spacing-2 0;
+  svg {
+    flex: none;
+    width: 1.875rem;
+    height: 1.875rem;
+    color: #ffffff;
+  }
+  span {
+    display: grid;
+    line-height: $line-height-tight;
+  }
+  strong {
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: #ffffff;
+  }
+  small {
+    margin-top: $spacing-1;
+    color: #dbeafe;
+    font-size: $font-size-base;
+  }
+  @media (max-width: $breakpoint-md - 1px) {
+    min-height: 4.5rem;
+    padding: $spacing-4 $spacing-4;
+    justify-content: flex-start;
+
+    & + & {
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+    }
+  }
+  @include respond-to(md) {
+    & + & {
+      border-left: 1px solid rgba(255, 255, 255, 0.25);
+    }
+  }
 }
-
-.subtitle {
-  font-family: $font-family-base;
-  font-size: $font-size-lg;
-  color: $color-text-secondary;
-  margin: 0;
-}
-
-.content {
-  margin-top: $spacing-8;
-}
-
-.triggerButton {
+.eyebrow { color: $color-primary; font-size: $font-size-sm; font-weight: $font-weight-semibold; text-transform: uppercase; letter-spacing: .08em; }
+.hero .seasonBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-3;
   padding: $spacing-2 $spacing-4;
-  background-color: $color-primary;
-  color: $color-text-inverse;
-  border: none;
-  border-radius: $radius-md;
-  cursor: pointer;
-  font-family: $font-family-base;
-  font-size: $font-size-base;
-  font-weight: $font-weight-medium;
-  transition: background-color $transition-fast;
+  margin-bottom: $spacing-5;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 9999px;
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  color: #f1f5f9;
+  font-family: $font-family-mono;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1;
 
-  &:hover {
-    background-color: $color-primary-dark;
-  }
-
-  &:focus-visible {
-    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
-    outline-offset: $focus-ring-offset;
+  &::before {
+    content: '';
+    width: 0.5rem;
+    height: 0.5rem;
+    flex: none;
+    border-radius: 9999px;
+    background: $color-accent;
+    box-shadow: 0 0 8px $color-accent, 0 0 12px rgba(6, 182, 212, 0.6);
   }
 }
+@media (max-width: $breakpoint-sm - 1px) {
+  .heroCopy h1 { margin-top: $spacing-2; }
+  .hero .seasonBadge {
+    font-size: 0.7rem;
+    padding: $spacing-1 $spacing-3;
+    margin-bottom: $spacing-3;
+    gap: $spacing-2;
+  }
+}
+.primaryLink { display: inline-flex; align-items: center; justify-content: center; min-height: $spacing-12; padding: $spacing-3 $spacing-6; margin-top: $spacing-4; color: $color-text-inverse; background: $color-primary; text-decoration: none; font-weight: $font-weight-semibold;
+  &:hover { background: $color-primary-dark; } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
+}
+.section { max-width: 90rem; margin: 0 auto; padding: $spacing-12 $spacing-4;
+  @include respond-to(md) { padding-inline: $spacing-8; } @include respond-to(lg) { padding-inline: $spacing-12; }
+}
+.discoveryStrip + .section { max-width: none; background: $color-surface; > * { max-width: 84rem; margin-inline: auto; } }
+.sectionHeading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: $spacing-4; margin-bottom: $spacing-8;
+  h2 { font-size: $font-size-3xl; margin: $spacing-2 0 0; } p { margin: 0; } a { color: $color-primary; text-decoration: none; font-weight: $font-weight-medium; }
+}
+.productGrid { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: $spacing-6;
+  @include respond-to(sm) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @include respond-to(lg) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.categorySection { max-width: none; background: $color-surface; > * { max-width: 84rem; margin-inline: auto; } }
+.categoryGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: $spacing-4;
+  @include respond-to(md) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @include respond-to(lg) { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+.categorySkeleton { display: grid; justify-items: center; gap: $spacing-3; min-height: 15rem; padding: $spacing-4; border: 1px solid $color-border; background: $color-background;
+  span { display: block; width: 80%; height: 1rem; background: $color-surface; }
+  span:first-child { width: 100%; height: 10rem; }
+  span:last-child { width: 45%; }
+}
+.sectionError { display: flex; align-items: center; flex-wrap: wrap; gap: $spacing-4; padding: $spacing-5; border: 1px solid $color-border; background: $color-background;
+  > svg { flex: none; color: $color-primary; }
+  > div { flex: 1 1 16rem; }
+  h3 { margin: 0; font-size: $font-size-base; }
+  p { margin: $spacing-1 0 0; color: $color-text-secondary; }
+  button { display: inline-flex; align-items: center; gap: $spacing-2; }
+}
+.promoGrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: $spacing-4; max-width: 90rem; margin: 0 auto; padding: $spacing-8 $spacing-4;
+  @include respond-to(md) { grid-template-columns: repeat(2, minmax(0, 1fr)); padding-inline: $spacing-8; }
+  @include respond-to(lg) { padding-inline: $spacing-12; }
+}
+.promoCard { position: relative; display: flex; align-items: center; justify-content: space-between; gap: $spacing-4; min-height: 15rem; padding: $spacing-6; overflow: hidden; border: 1px solid $color-border; background: linear-gradient(120deg, #f1f5ff, #e0e7ff); color: $color-text-primary; box-shadow: $shadow-sm; transition: box-shadow $transition-normal, border-color $transition-normal;
+  &:hover, &:focus-within { border-color: $color-primary; box-shadow: $shadow-md; }
+  &:nth-child(even) { background: linear-gradient(120deg, #eff6ff, #dbeafe); }
+  > div { position: relative; z-index: 1; max-width: 58%; }
+  .eyebrow { color: $color-primary-dark; margin: 0 0 $spacing-2; }
+  h2 { font-size: clamp($font-size-xl, 2vw, $font-size-3xl); line-height: $line-height-tight; margin: 0 0 $spacing-2; }
+  p:not(.eyebrow) { margin: 0 0 $spacing-4; color: $color-text-secondary; }
+  a { color: $color-primary-dark; font-weight: $font-weight-semibold; text-decoration: none; cursor: pointer; &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
+  img { width: 42%; height: 12rem; object-fit: contain; mix-blend-mode: multiply; transition: transform $transition-normal; }
+  &:hover img { transform: scale(1.025); }
+}
+.promoCard a { position: relative; z-index: 2; }
+.promoSkeleton { display: grid; align-content: center; gap: $spacing-4; min-height: 15rem; padding: $spacing-6; background: $color-surface;
+  span { height: 1.25rem; width: 40%; background: $color-border; }
+  span:nth-child(2) { width: 70%; height: 2rem; }
+  span:last-child { width: 30%; }
+}
+@media (prefers-reduced-motion: reduce) { .promoCard, .promoCard img { transition: none; } .promoCard:hover img { transform: none; } }

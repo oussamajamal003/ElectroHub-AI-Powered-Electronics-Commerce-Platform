@@ -1,6 +1,5 @@
 import express from 'express';
 import request from 'supertest';
-import { Prisma } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { searchSchema, suggestionsSchema, hasDiscovery } from '../src/validators/search.validator.js';
 import { searchWhere, searchOrder, relevance, escapeLike, escapeRegex } from '../src/services/search.sql.js';
@@ -8,14 +7,17 @@ import { SearchService } from '../src/services/search.service.js';
 import routes from '../src/routes/search.routes.js';
 import { errorHandler } from '../src/middleware/errorHandler.js';
 import { swaggerSpec } from '../src/docs/swagger/index.js';
-const database = vi.hoisted(() => ({ $queryRaw: vi.fn(), $transaction: vi.fn(), product: { findMany: vi.fn() } }));
+const database = vi.hoisted(() => ({ $queryRaw: vi.fn(), $transaction: vi.fn(), product: { findMany: vi.fn() },
+  review: { groupBy: vi.fn().mockResolvedValue([]) } }));
 vi.mock('../src/lib/prisma.js', () => ({ prisma: database }));
 vi.mock('../src/utils/logger.js', () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
-const fixture = (id: string) => ({ id, name: 'MacBook', slug: 'macbook', price: new Prisma.Decimal('9999999999.99'), compareAtPrice: null,
-  status: 'ACTIVE', category: { id: 'category', name: 'Laptops', slug: 'laptops' }, brand: null, inventory: null, images: [] });
+const fixture = (id: string, total = 1n) => ({ total, id, name: 'MacBook', slug: 'macbook', price: '9999999999.99', compareAtPrice: null,
+  description: null, quantity: null, category: { id: 'category', name: 'Laptops', slug: 'laptops' }, brand: null,
+  images: [], reviewCount: 0n, averageRating: null });
 beforeEach(() => {
   vi.resetAllMocks();
   database.$transaction.mockImplementation((callback: (transaction: typeof database) => Promise<unknown>) => callback(database));
+  database.review.groupBy.mockResolvedValue([]);
 });
 describe('Search validation and parameterized queries', () => {
   it('normalizes whitespace without removing meaningful punctuation', () => {
@@ -74,30 +76,28 @@ describe('Search validation and parameterized queries', () => {
 });
 describe('Search services', () => {
   it('returns a bounded newest-first catalog page for an empty query', async () => {
-    database.$queryRaw.mockResolvedValueOnce([{ total: 1n }]).mockResolvedValueOnce([{ id: 'catalog-item' }]);
-    database.product.findMany.mockResolvedValue([fixture('catalog-item')]);
+    database.$queryRaw.mockResolvedValueOnce([fixture('catalog-item')]);
     const result = await new SearchService().products(searchSchema.parse({}));
     expect(result.data.map(value => value.id)).toEqual(['catalog-item']);
     expect(result.meta).toEqual({ page: 1, pageSize: 20, total: 1, totalPages: 1 });
-    expect(database.$queryRaw.mock.calls[1][0].text).toContain('p."createdAt" DESC, p."id" ASC');
-    expect(database.$queryRaw.mock.calls[1][0].values.slice(-2)).toEqual([20, 0]);
-    expect(database.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: { in: ['catalog-item'] } }) }));
+    expect(database.$queryRaw.mock.calls[0][0].text).toContain('p."createdAt" DESC, p."id" ASC');
+    expect(database.$queryRaw.mock.calls[0][0].values.slice(-2)).toEqual([20, 0]);
+    expect(database.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(database.$queryRaw.mock.calls[0][0].text).toContain('GROUP BY r."productId"');
   });
   it('hydrates bounded IDs in rank order with canonical exact money and nullable brand', async () => {
-    database.$queryRaw.mockResolvedValueOnce([{ total: 21n }]).mockResolvedValueOnce([{ id: 'first' }, { id: 'second' }]);
-    database.product.findMany.mockResolvedValue([fixture('second'), fixture('first')]);
+    database.$queryRaw.mockResolvedValueOnce([fixture('first', 21n), fixture('second', 21n)]);
     const result = await new SearchService().products(searchSchema.parse({ q: 'macbook', pageSize: '2', page: '2' }));
     expect(result.data.map(value => value.id)).toEqual(['first', 'second']);
     expect(result.data[0]).toMatchObject({ price: '9999999999.99', brand: null, primaryImage: null, availability: 'UNAVAILABLE' });
     expect(result.data[0]).not.toHaveProperty('inventory');
     expect(result.meta).toEqual({ page: 2, pageSize: 2, total: 21, totalPages: 11 });
-    expect(database.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { status: 'ACTIVE', category: { isActive: true }, id: { in: ['first', 'second'] } } }));
-    expect(database.$queryRaw.mock.calls[1][0].values.slice(-2)).toEqual([2, 2]);
+    expect(database.$queryRaw.mock.calls[0][0].values.slice(-2)).toEqual([2, 2]);
   });
   it('returns empty beyond-end pages without product hydration', async () => {
-    database.$queryRaw.mockResolvedValueOnce([{ total: 0n }]).mockResolvedValueOnce([]);
+    database.$queryRaw.mockResolvedValueOnce([{ total: 0n, id: null }]);
     expect((await new SearchService().products(searchSchema.parse({ category: 'laptops' }))).data).toEqual([]);
-    expect(database.product.findMany).not.toHaveBeenCalled();
+    expect(database.$queryRaw).toHaveBeenCalledTimes(1);
   });
   it('returns bounded typed suggestions without internal fields', async () => {
     const suggestions = [{ id: 'one', type: 'PRODUCT', label: 'MacBook', slug: 'macbook' }];
@@ -113,7 +113,7 @@ describe('Search services', () => {
 describe('Search API', () => {
   const app = express(); app.set('trust proxy', 1); app.use('/api/search', routes); app.use(errorHandler);
   it('serves search and suggestion envelopes', async () => {
-    database.$queryRaw.mockResolvedValueOnce([{ total: 0n }]).mockResolvedValueOnce([]);
+    database.$queryRaw.mockResolvedValueOnce([{ total: 0n, id: null }]);
     expect((await request(app).get('/api/search/products')).body.meta.totalPages).toBe(0);
     database.$queryRaw.mockResolvedValue([]);
     expect((await request(app).get('/api/search/suggestions?q=mac')).body).toEqual({ data: [] });

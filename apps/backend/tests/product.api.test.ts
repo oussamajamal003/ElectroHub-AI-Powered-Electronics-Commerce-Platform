@@ -51,8 +51,9 @@ describe('Public product API contracts', () => {
     expect(response.body).toEqual({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Something went wrong. Please try again later.' } });
     expect(JSON.stringify(response.body)).not.toMatch(/Prisma|SQL|stack/);
   });
-  it('documents all six read endpoints', () => {
-    expect(Object.keys(productPaths).sort()).toEqual(['/products', '/products/{slug}', '/categories', '/categories/{slug}', '/brands', '/brands/{slug}'].sort());
+  it('documents the product and related read endpoints', () => {
+    expect(Object.keys(productPaths).sort()).toEqual(['/products', '/products/deals', '/products/{slug}',
+      '/products/{slug}/reviews', '/products/{slug}/reviews/me', '/reviews/me', '/categories', '/categories/{slug}', '/brands', '/brands/{slug}'].sort());
     expect(swaggerSpec).toMatchObject({ paths: productPaths, components: { schemas: {
       ProductDetail: { type: 'object' }, ProductSummary: { type: 'object' },
     } } });

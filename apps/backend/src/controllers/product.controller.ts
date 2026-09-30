@@ -29,5 +29,9 @@ function readController(service: ProductService | CategoryService | BrandService
 }
 
 export const productController = readController(new ProductService(), 280);
+export const dealsController = async (req: Request, res: Response, next: NextFunction) => {
+  try { res.json(await new ProductService().deals(paginationSchema.parse(req.query))); }
+  catch (error) { handleError(error, next); }
+};
 export const categoryController = readController(new CategoryService(), 120);
 export const brandController = readController(new BrandService(), 120);

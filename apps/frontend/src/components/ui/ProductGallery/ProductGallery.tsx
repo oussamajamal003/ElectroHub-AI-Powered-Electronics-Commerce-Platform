@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { ProductImage } from '../ProductImage';
 import styles from './ProductGallery.module.scss';
 
@@ -22,6 +22,8 @@ export function ProductGallery({
   className = '',
 }: ProductGalleryProps) {
   const [internalSelectedIndex, setInternalSelectedIndex] = useState(0);
+  const galleryId = useId();
+  const thumbnailRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const isControlled = selectedIndex !== undefined;
   const activeIndex = isControlled ? selectedIndex : internalSelectedIndex;
@@ -41,12 +43,12 @@ export function ProductGallery({
       e.preventDefault();
       const nextIndex = (index + 1) % images.length;
       handleSelect(nextIndex);
-      document.getElementById(`gallery-thumb-${nextIndex}`)?.focus();
+      thumbnailRefs.current[nextIndex]?.focus();
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
       const prevIndex = (index - 1 + images.length) % images.length;
       handleSelect(prevIndex);
-      document.getElementById(`gallery-thumb-${prevIndex}`)?.focus();
+      thumbnailRefs.current[prevIndex]?.focus();
     }
   };
 
@@ -64,7 +66,7 @@ export function ProductGallery({
 
   return (
     <div className={`${styles.gallery} ${className}`} data-testid="product-gallery">
-      <div className={styles.mainImage}>
+      <div id={`${galleryId}-image`} role="tabpanel" aria-label="Selected product image" aria-labelledby={images.length > 1 ? `${galleryId}-thumb-${activeIndex}` : undefined} className={styles.mainImage}>
         <ProductImage 
           src={mainImage!.src} 
           alt={mainImage!.alt} 
@@ -83,11 +85,12 @@ export function ProductGallery({
             return (
               <button
                 key={image.id}
-                id={`gallery-thumb-${index}`}
+                ref={element => { thumbnailRefs.current[index] = element; }}
+                id={`${galleryId}-thumb-${index}`}
                 role="tab"
                 aria-selected={isActive}
                 aria-label={`View ${image.alt}`}
-                aria-controls="main-product-image"
+                aria-controls={`${galleryId}-image`}
                 tabIndex={isActive ? 0 : -1}
                 className={`${styles.thumbnailBtn} ${isActive ? styles.active : ''}`}
                 onClick={() => handleSelect(index)}

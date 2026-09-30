@@ -35,4 +35,4 @@ export const specificationSchema = z.object({
 }).strict();
 
 export const mediaPathSchema = z.string().max(2048)
-  .regex(/^\/images\/(?:products|categories|brands)\/[a-z0-9/-]+\.(?:svg|webp|png|jpg)$/);
+  .regex(/^\/images\/(?:products|categories|brands|catalog)\/[a-z0-9/-]+\.(?:svg|webp|png|jpg)$/);

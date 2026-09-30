@@ -1,7 +1,9 @@
 import type { Preview } from '@storybook/react-vite';
+import { createElement } from 'react';
 import '../src/styles/main.scss';
 
 const preview: Preview = {
+  decorators: [Story => createElement('main', { style: { display: 'contents' } }, createElement(Story))],
   parameters: {
     backgrounds: {
       options: [

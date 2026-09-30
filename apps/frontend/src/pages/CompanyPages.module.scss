@@ -1,0 +1,163 @@
+@use '@/styles/abstracts' as *;
+
+.page { color: $color-text-primary; }
+.hero {
+  padding: clamp(4rem, 8vw, 8rem) $spacing-4;
+  text-align: center;
+  background: $color-secondary;
+  color: $color-text-inverse;
+
+  h1 {
+    max-width: 48rem;
+    margin: 0 auto $spacing-4;
+    @include company-hero-heading;
+  }
+
+  p {
+    max-width: 40rem;
+    margin: 0 auto;
+    color: $color-border;
+    font-size: $font-size-lg;
+    line-height: $line-height-relaxed;
+  }
+}
+
+.content {
+  max-width: 84rem;
+  margin: auto;
+  padding: $spacing-12 $spacing-4;
+  @include respond-to(md) { padding-inline: $spacing-8; }
+  @include respond-to(lg) { padding-inline: $spacing-12; }
+}
+
+.intro {
+  max-width: 48rem;
+  margin-bottom: $spacing-12;
+  h2 { font-size: $font-size-3xl; margin-bottom: $spacing-4; }
+  p { color: $color-text-secondary; line-height: $line-height-relaxed; font-size: $font-size-base; }
+}
+
+.section {
+  margin-block: $spacing-12;
+  h2 {
+    font-size: $font-size-3xl;
+    margin-bottom: $spacing-6;
+    letter-spacing: -0.01em;
+  }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: $spacing-6;
+  @include respond-to(sm) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @include respond-to(lg) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: $spacing-6;
+  border: 1px solid $color-border;
+  background: $color-background;
+  box-shadow: $shadow-sm;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    border-color: $color-primary;
+    box-shadow: $shadow-md;
+  }
+
+  .iconWrapper {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: $radius-md;
+    background: rgba($color-primary, 0.08);
+    color: $color-primary;
+    margin-bottom: $spacing-3;
+  }
+
+  h3 {
+    margin: $spacing-2 0 $spacing-2;
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $color-text-primary;
+  }
+
+  p {
+    margin: 0;
+    color: $color-text-secondary;
+    line-height: $line-height-relaxed;
+    font-size: $font-size-sm;
+  }
+}
+
+.cta {
+  margin-top: $spacing-16;
+  padding: clamp($spacing-10, 5vw, $spacing-16) $spacing-6;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  h2 {
+    font-size: clamp($font-size-2xl, 3vw, $font-size-3xl);
+    font-weight: $font-weight-bold;
+    margin: 0 0 $spacing-3;
+    line-height: $line-height-tight;
+    color: $color-text-primary;
+  }
+
+  p {
+    max-width: 32rem;
+    margin: 0 0 $spacing-6;
+    color: $color-text-secondary;
+    font-size: $font-size-base;
+    line-height: $line-height-relaxed;
+  }
+
+  .ctaButtonWrapper {
+    margin-top: $spacing-1;
+  }
+
+  .ctaButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.875rem;
+    padding: $spacing-3 $spacing-8;
+    color: white;
+    background: $color-primary;
+    text-decoration: none;
+    font-size: $font-size-base;
+    font-weight: $font-weight-semibold;
+    transition: background-color 0.2s ease, transform 0.15s ease, box-shadow 0.15s ease;
+
+    &:hover {
+      background: $color-primary-dark;
+      transform: translateY(-1px);
+      box-shadow: $shadow-md;
+    }
+
+    &:focus-visible {
+      outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+      outline-offset: $focus-ring-offset;
+    }
+  }
+}
+
+.contactLayout { display: grid; gap: $spacing-10; @include respond-to(lg) { grid-template-columns: 1fr 1fr; } }
+.contactCards { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: $spacing-4; margin-top: $spacing-6; @include respond-to(sm) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.form { display: grid; gap: $spacing-4; padding: $spacing-6; border: 1px solid $color-border; background: $color-background; box-shadow: $shadow-sm; h2 { margin: 0; } }
+.field { display: grid; gap: $spacing-2; label { font-weight: $font-weight-medium; } input, textarea { width: 100%; min-height: $spacing-12; padding: $spacing-3; border: 1px solid $color-border; border-radius: $radius-md; font: inherit; } textarea { min-height: 8rem; resize: vertical; } input:focus-visible, textarea:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
+.error { margin: 0; color: #b91c1c; font-size: $font-size-sm; }
+.notice { margin: 0; padding: $spacing-4; background: $color-surface; border: 1px solid $color-border; }
+.submit { min-height: $spacing-12; padding: $spacing-3 $spacing-6; border: 0; background: $color-primary; color: white; font: inherit; font-weight: $font-weight-semibold; cursor: pointer; &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } &:hover { background: $color-primary-dark; } }

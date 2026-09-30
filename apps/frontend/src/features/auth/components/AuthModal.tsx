@@ -24,6 +24,7 @@ export type AuthModalMode = 'login' | 'register' | 'verify' | 'changeVerificatio
 export interface AuthModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onAuthenticated?: () => void;
   initialMode?: AuthModalMode;
   onSwitchToRegister?: () => void;
   onSwitchToLogin?: () => void;
@@ -54,6 +55,7 @@ const normalizeErrorMessage = (err: unknown): string => {
 export function AuthModal({
   open,
   onOpenChange,
+  onAuthenticated,
   initialMode = 'login',
   onSwitchToRegister,
   onSwitchToLogin,
@@ -174,6 +176,10 @@ export function AuthModal({
       setVerificationEmail('');
       setChangeEmailError('');
       setTargetEmail('');
+    } else {
+      setLoginPassword('');
+      setResetPassword('');
+      setConfirmResetPassword('');
     }
   }, [open, initialMode]);
 
@@ -294,6 +300,7 @@ export function AuthModal({
 
     try {
       await login({ email: loginEmail.trim(), password: loginPassword });
+      onAuthenticated?.();
       onOpenChange(false);
       setLoginEmail('');
       setLoginPassword('');
@@ -453,6 +460,7 @@ export function AuthModal({
     setIsLoading(true);
     try {
       await verifyEmail({ email: targetEmail, code });
+      onAuthenticated?.();
       onOpenChange(false);
       navigate(from, { replace: true });
     } catch (err) {
@@ -559,7 +567,7 @@ export function AuthModal({
 
   const handleContinueToLogin = () => {
     setLoginEmail(targetEmail);
-    setLoginPassword('');
+    setLoginPassword(resetPassword);
     handleSwitchMode('login');
   };
 
@@ -666,6 +674,7 @@ export function AuthModal({
         {(mode === 'login' || mode === 'register' || mode === 'googleLink') && (
           <GoogleAuthButton disabled={isLoading} onBusyChange={setIsLoading} onLinkingChange={linking => setMode(linking ? 'googleLink' : 'login')} onSuccess={async () => {
             await finishGoogle();
+            onAuthenticated?.();
             onOpenChange(false);
             navigate(from);
           }} />

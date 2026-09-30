@@ -1,28 +1,107 @@
 @use '@/styles/abstracts/variables' as *;
 @use '@/styles/abstracts/mixins' as *;
 
-.footerContent { width: 100%; max-width: 120rem; margin-inline: auto; }
+.footerContent {
+  width: 100%;
+  max-width: 120rem;
+  margin-inline: auto;
+  padding: $spacing-12 $spacing-4 $spacing-8;
+
+  @include respond-to(md) {
+    padding: $spacing-12 $spacing-8 $spacing-8;
+  }
+  @include respond-to(lg) {
+    padding: $spacing-16 $spacing-12 $spacing-10;
+  }
+}
+
 .footerGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: $spacing-8;
+  grid-template-columns: 1fr;
+  gap: $spacing-10;
 
-  section, nav { display: grid; align-content: start; gap: $spacing-4; }
-  h2 { margin: 0; font-size: $font-size-base; text-transform: uppercase; }
-  p, a { color: $color-text-secondary; }
-  p { max-width: 18rem; margin: 0; line-height: $line-height-relaxed; }
-  a { text-decoration: none; }
-  a:hover { color: $color-primary; }
-  a:focus-visible { outline: 2px solid $color-primary; outline-offset: 3px; }
-  .brand { color: $color-primary; font-size: $font-size-4xl; font-weight: $font-weight-bold; }
+  @include respond-to(sm) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 
-  @include respond-to(md) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  @include respond-to(lg) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @include respond-to(lg) {
+    grid-template-columns: 1.5fr 1fr 1fr 1fr;
+    gap: $spacing-12;
+  }
 }
-.support { display: grid; justify-items: start; gap: $spacing-4; margin-top: $spacing-8;
-  h2 { margin: 0 0 $spacing-2; font-size: $font-size-base; text-transform: uppercase; }
-  a { color: $color-text-secondary; text-decoration: none; }
-  a:hover { color: $color-primary; }
-  a:focus-visible { outline: 2px solid $color-primary; outline-offset: 3px; }
+
+.leftCol {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-10;
 }
-.footerBottom { border-top: 1px solid $color-border; margin-top: $spacing-10; padding-top: $spacing-4; color: $color-text-secondary; }
+
+.brandInfo {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-3;
+
+  .brand {
+    color: $color-primary;
+    font-size: $font-size-3xl;
+    font-weight: $font-weight-bold;
+    text-decoration: none;
+    letter-spacing: -0.02em;
+
+    &:hover {
+      color: $color-primary-dark;
+    }
+  }
+
+  p {
+    max-width: 20rem;
+    margin: 0;
+    color: $color-text-secondary;
+    font-size: $font-size-base;
+    line-height: $line-height-normal;
+  }
+}
+
+.navGroup {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-3;
+
+  h2 {
+    margin: 0 0 $spacing-2;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-bold;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: $color-text-primary;
+  }
+
+  a {
+    color: $color-text-secondary;
+    font-size: 0.9375rem;
+    text-decoration: none;
+    line-height: 1.5;
+    transition: color 0.15s ease;
+
+    &:hover {
+      color: $color-primary;
+    }
+
+    &:focus-visible {
+      outline: 2px solid $color-primary;
+      outline-offset: 2px;
+    }
+  }
+}
+
+.footerBottom {
+  border-top: 1px solid $color-border;
+  margin-top: $spacing-12;
+  padding-top: $spacing-6;
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+
+  span {
+    display: block;
+  }
+}

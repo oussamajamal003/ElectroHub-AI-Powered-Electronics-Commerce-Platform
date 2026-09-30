@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { ProductCard } from '@/components/ui/ProductCard';
+import { ProductCard, ProductCardSkeleton } from '@/components/ui/ProductCard';
+import { StaggerItem } from '@/components/motion/Motion';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/Pagination';
 import { SearchField } from '@/components/ui/SearchField/SearchField';
 import { FilterChipGroup, FilterSelect } from '@/components/ui/FilterControls/FilterControls';
@@ -15,6 +16,7 @@ import { ImageSearchShell } from './ImageSearchShell';
 import styles from './SearchPage.module.scss';
 
 export function SearchPage({ catalog = false }: { catalog?: boolean }) {
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const serialized = params.toString();
   const parsed = useMemo(() => {
@@ -34,8 +36,8 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
   const [filterDraft, setFilterDraft] = useState<Pick<SearchState, 'category' | 'brand' | 'availability' | 'minPrice' | 'maxPrice'>>({});
   const filterButton = useRef<HTMLButtonElement>(null);
   const filterPanel = useRef<HTMLElement>(null);
-  const categoriesQuery = useCategories(true);
-  const brandsQuery = useBrands(true);
+  const categoriesQuery = useCategories(!catalog || showFilters || Boolean(state.category));
+  const brandsQuery = useBrands(!catalog || showFilters || Boolean(state.brand));
   const searchQuery = useSearchResults(state, active && tab === 'text');
   const categories = categoriesQuery.data ?? [];
   const brands = brandsQuery.data ?? [];
@@ -86,7 +88,13 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
   return <>
     <div className={styles.container}>
       <nav aria-label="Breadcrumb" className={styles.breadcrumb}><Link to="/">Home</Link><ChevronRight size={16} aria-hidden="true" /><span aria-current="page">{catalog ? 'All Products' : 'Search'}</span></nav>
-      <h1>{catalog ? 'All Products' : 'Search'}</h1>{!catalog && <p className={styles.subtitle}>Find laptops, phones, audio, and more.</p>}
+      <div className={styles.titleRow}>
+        <h1 className={styles.pageTitle}>{catalog ? 'All Products' : 'Search'}</h1>
+        {catalog && results && (
+          <span className={styles.resultCount}>{results.meta.total} products</span>
+        )}
+      </div>
+      {!catalog && <p className={styles.subtitle}>Find laptops, phones, audio, and more.</p>}
       <Tabs value={tab} onValueChange={setTab}>
         {!catalog && <TabsList className={styles.tabs} aria-label="Search method"><TabsTrigger value="text">Text Search</TabsTrigger><TabsTrigger value="image">Image Search</TabsTrigger></TabsList>}
         <TabsContent value="text">
@@ -103,6 +111,7 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
             {parsed.error && <Button type="button" variant="link" onClick={() => setParams({})}>Clear search</Button>}</div>}
           {catalog && showFilters && <section ref={filterPanel} tabIndex={-1} id="search-filters" aria-label="Product filters" className={styles.toolbar}
             onKeyDown={event => { if (event.key === 'Escape') { setShowFilters(false); filterButton.current?.focus(); } }}>
+            {(categoriesQuery.isPending || brandsQuery.isPending) && <p role="status">Loading filters…</p>}
             {metadataError && <p role="status">Filters are temporarily unavailable. You can still search by text. <Button type="button" variant="link" onClick={() => { void categoriesQuery.refetch(); void brandsQuery.refetch(); }}>Retry filters</Button></p>}
             <FilterChipGroup label="Category" value={filterDraft.category ?? ''} choices={[{ value: '', label: 'All' }, ...filterChoices(categories, filterDraft.category)]} onChange={value => setFilterDraft(previous => ({ ...previous, category: value || undefined }))} />
             <div className={styles.filterRow}>
@@ -124,14 +133,11 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
           </div>}
           <section aria-label="Search results" aria-busy={loading} className={styles.results}>
             <div role="status" aria-live="polite">{loading ? 'Searching products…' : results ? `${results.meta.total} ${results.meta.total === 1 ? 'result' : 'results'}${state.q ? ` for “${state.q}”` : ''}` : ''}</div>
-            {loading && <div className={styles.grid} aria-hidden="true">{Array.from({ length: 4 }, (_, index) => <div key={index}>
-              <div className={styles.skeleton} data-testid="product-skeleton">
-                <div className={styles.skeletonImage} data-testid="product-skeleton-image" /><div className={styles.skeletonBody}><i className={styles.skeletonCategory} /><i className={styles.skeletonTitle} /><i className={styles.skeletonPrice} /></div>
-              </div>
-              <div className={styles.skeletonAvailability} />
-            </div>)}</div>}
+            {loading && <div className={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`} aria-hidden="true">{Array.from({ length: 4 }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
             {error && <div role="alert" className={styles.empty}><h2>Search unavailable</h2><p>Search is temporarily unavailable. Please try again.</p><Button type="button" onClick={() => void searchQuery.refetch()}>Retry search</Button></div>}
-            {results && results.data.length > 0 && <div className={styles.grid}>{results.data.map(product => <div key={product.id}><ProductCard {...productCardProps(product)} /><p className={styles.availability}>{product.availability === 'AVAILABLE' ? 'Available' : 'Currently unavailable'}</p></div>)}</div>}
+            {results && results.data.length > 0 && <div className={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`}>{results.data.map((product, index) => catalog
+              ? <StaggerItem key={product.id} replay index={index % 4}><ProductCard {...productCardProps(product)} onNavigate={navigate} /></StaggerItem>
+              : <ProductCard key={product.id} {...productCardProps(product)} onNavigate={navigate} />)}</div>}
             {results && results.data.length === 0 && <div className={styles.empty}><h2>{state.q ? `No results for “${state.q}”` : 'No products found'}</h2><p>Try adjusting your search or filters.</p>{catalog && filterCount > 0 && <Button type="button" variant="link" onClick={() => commit(clearFilters({ ...state, q: normalizedDraft }))}>Reset filters</Button>}{state.q && <Button type="button" variant="link" onClick={() => { setDraft(''); update({ q: '' }); }}>Clear query</Button>}{state.page > 1 && <Button type="button" variant="link" onClick={() => commit({ ...state, page: 1 })}>First page</Button>}</div>}
             {totalPages > 1 && <Pagination aria-label="Search result pages"><PaginationContent>
               <PaginationItem><PaginationPrevious disabled={state.page <= 1} onClick={() => commit({ ...state, page: state.page - 1 })} /></PaginationItem>

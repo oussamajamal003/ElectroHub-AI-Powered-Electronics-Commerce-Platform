@@ -8,8 +8,15 @@ export interface ProductCardProps {
   category?: string;
   description?: string;
   price: number;
-  rating?: number;
+  rating?: number | null;
+  reviewCount?: number;
+  compareAtPrice?: number;
+  discountPercent?: number;
+  availability?: 'AVAILABLE' | 'UNAVAILABLE';
+  href?: string;
+  onNavigate?: (href: string) => void;
   imageUrl: string;
+  secondaryImageUrl?: string | null;
   isWishlisted?: boolean;
   onAddToCart?: (id: string | number) => void;
   onToggleWishlist?: (id: string | number) => void;
@@ -25,7 +32,14 @@ export function ProductCard({
   description,
   price,
   rating,
+  reviewCount,
+  compareAtPrice,
+  discountPercent,
+  availability,
+  href,
+  onNavigate,
   imageUrl,
+  secondaryImageUrl,
   isWishlisted = false,
   onAddToCart,
   onToggleWishlist,
@@ -52,10 +66,22 @@ export function ProductCard({
     onToggleWishlist?.(id);
   };
 
+  const handleTitleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!href || !onNavigate || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    onNavigate(href);
+  };
+
+  const handleCardClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!href || !onNavigate || !(event.target instanceof Element) || event.target.closest('a, button')) return;
+    onNavigate(href);
+  };
+
   return (
-    <div className={`${styles.card} ${square ? styles.square : ''} ${className}`} data-testid="product-card">
+    <div className={`${styles.card} ${square ? styles.square : ''} ${className}`} data-testid="product-card" data-clickable={Boolean(href && onNavigate)} onClick={handleCardClick}>
       <div className={styles.imageArea}>
-        <ProductImage src={imageUrl} alt={title} className={styles.image} />
+        <div className={styles.primaryImage}><ProductImage src={imageUrl} alt={title} className={styles.image} loading="lazy" decoding="async" /></div>
+        {secondaryImageUrl && secondaryImageUrl !== imageUrl && <div className={styles.secondaryImage} aria-hidden="true"><ProductImage src={secondaryImageUrl} alt="" className={styles.image} loading="lazy" decoding="async" /></div>}
         {showActions && <button
           type="button"
           className={`${styles.wishlistBtn} ${isWishlisted ? styles.wishlisted : ''}`}
@@ -68,20 +94,27 @@ export function ProductCard({
 
       <div className={styles.content}>
         {category && <span className={styles.category}>{category}</span>}
-        <h3 className={styles.title}>{title}</h3>
+        <h3 className={styles.title}>{href ? <a href={href} onClick={handleTitleClick}>{title}</a> : title}</h3>
         
-        {rating !== undefined && (
+        {rating !== undefined && rating !== null && (
           <div className={styles.rating}>
             <Star className={styles.starIcon} fill="currentColor" />
             <span className={styles.ratingValue}>{rating.toFixed(1)}</span>
+            {reviewCount !== undefined && <span className={styles.reviewCount}>({reviewCount})</span>}
           </div>
         )}
+        {reviewCount === 0 && <span className={styles.noReviews}>No reviews yet</span>}
         
         {description && <p className={styles.description}>{description}</p>}
         
         <div className={styles.priceContainer}>
           <span className={styles.price}>{formatPrice(price)}</span>
+          {compareAtPrice !== undefined && discountPercent !== undefined && discountPercent > 0 && <>
+            <span className={styles.comparePrice}>{formatPrice(compareAtPrice)}</span>
+            <span className={styles.discount}>-{discountPercent}%</span>
+          </>}
         </div>
+        {availability && <span className={styles.availability}>{availability === 'AVAILABLE' ? 'In stock' : 'Out of stock'}</span>}
 
         {showActions && <button
           type="button"
