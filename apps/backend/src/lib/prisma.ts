@@ -27,7 +27,7 @@ for (const parameter of ['sslmode', 'sslrootcert', 'sslcert', 'sslkey', 'pgbounc
 }
 const adapter = new PrismaPg({
   connectionString: runtimeUrl.toString(),
-  max: 20,
+  max: process.env.CI && env.NODE_ENV === 'test' ? 5 : 20,
   idleTimeoutMillis: 300000,
   connectionTimeoutMillis: 30000,
   ssl: ca ? { ca, rejectUnauthorized: true } : { rejectUnauthorized: true },

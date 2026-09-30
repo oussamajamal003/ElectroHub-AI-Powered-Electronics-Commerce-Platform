@@ -21,9 +21,8 @@ describe('Routing Foundation', () => {
   afterEach(cleanup);
   it('renders HomePage on the root route "/"', async () => {
     renderWithProviders('/');
-    const title = await screen.findAllByText('ElectroHub');
-    expect(title.length).toBeGreaterThan(0);
-    expect(await screen.findByText('AI-Powered Electronics Commerce Platform')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: /Next-gen tech,\s*delivered to you/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Shop Now' })).toHaveAttribute('href', '/products');
   });
 
   it('renders NotFoundPage on an unknown route', async () => {

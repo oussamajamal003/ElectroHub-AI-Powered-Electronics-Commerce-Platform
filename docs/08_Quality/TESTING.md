@@ -19,6 +19,10 @@ Infrastructure
 
 The project follows an evidence-based approach. A feature is not considered complete only because the implementation exists; relevant tests and verification evidence must pass.
 
+In CI, backend test files run with one worker and each test Prisma pool is bounded to five connections. This leaves headroom within the shared DEV session pool's observed 15-client limit while retaining the concurrent requests inside ownership/OTP tests. Development and production connection settings are unchanged.
+
+Branch validation must inspect GitHub Actions for the exact pushed commit; local checks alone do not establish branch CI success.
+
 ## 2. Testing Pyramid
 
 ```text
