@@ -631,4 +631,8 @@ The state-management implementation is production-ready when:
 
 ## 31. State Management Principle
 
+### Cart state (Task 03.2)
+
+The single application QueryClient owns authenticated Cart reads under user-scoped `cart` keys. Cart mutations replace only that Cart cache entry; they do not invalidate Product, Search, Category, Brand, Review, gallery, or Home queries. The guest adapter stores only versioned Product IDs and quantities in local storage and hydrates them through one bounded public API request. AuthContext still owns identity; Cart reconciliation waits for confirmed auth and clears guest storage only on success. There is no second global Cart store or persistent sensitive query cache.
+
 > **Use the simplest state mechanism that matches ownership: server state belongs to React Query, forms belong to React Hook Form, transient UI state belongs to React, and authoritative business state belongs to the backend.**

@@ -1,0 +1,26 @@
+@use '@/styles/abstracts' as *;
+.page { max-width: 120rem; margin-inline: auto; padding: $spacing-8 $spacing-4 $spacing-16; @include respond-to(md) { padding-inline: $spacing-8; } @include respond-to(lg) { padding-inline: $spacing-16; } h1 { font-size: clamp(2rem, 3vw, 3.5rem); margin: $spacing-6 0 $spacing-8; } }
+.breadcrumb { display: flex; align-items: center; gap: $spacing-2; color: $color-text-secondary; a { color: inherit; text-decoration: none; } }
+.layout { display: grid; gap: $spacing-8; align-items: start; @include respond-to(lg) { grid-template-columns: minmax(0, 2fr) minmax(20rem, 1fr); } }
+.list { border: 1px solid $color-border; min-width: 0; }
+.line + .line { border-top: 1px solid $color-border; }
+.line > div { border: 0; }
+.skeletonRow { display: flex; flex-wrap: wrap; align-items: center; gap: $spacing-4; padding: $spacing-4; min-height: 7rem; & + & { border-top: 1px solid $color-border; } @include respond-to(sm) { padding: $spacing-6; min-height: 9.25rem; } }
+.skeletonProduct { display: flex; align-items: center; gap: $spacing-4; flex: 1 1 15rem; min-width: 0; @include respond-to(sm) { gap: $spacing-6; } }
+.skeletonImage { flex: 0 0 80px; width: 80px; height: 80px; @include respond-to(sm) { flex-basis: 100px; width: 100px; height: 100px; } }
+.skeletonCopy { display: grid; gap: $spacing-2; flex: 1; min-width: 0; }
+.skeletonActions { display: flex; align-items: center; gap: $spacing-4; margin-inline-start: auto; }
+.skeletonSummary { min-height: 21rem; }
+.skeletonContinue { justify-self: center; }
+.warning { color: $color-error-foreground; margin: $spacing-2 $spacing-4 $spacing-4; font-size: $font-size-sm; }
+.summary { border: 1px solid $color-border; padding: $spacing-6; display: grid; gap: $spacing-4; h2 { margin: 0 0 $spacing-2; font-size: $font-size-xl; } .warning { margin: 0; } }
+.summaryLine { display: flex; justify-content: space-between; gap: $spacing-4; color: $color-text-secondary; }
+.free { color: $color-success-foreground; }
+.total { border-top: 1px solid $color-border; padding-top: $spacing-4; color: $color-text-primary; }
+.checkout { width: 100%; min-height: 48px; font-size: $font-size-base; }
+.deferred { margin: -$spacing-2 0 0; color: $color-text-secondary; text-align: center; font-size: $font-size-sm; }
+.continue { text-align: center; color: $color-text-secondary; text-decoration: none; &:hover { color: $color-primary; } }
+.empty { min-height: 20rem; border: 1px solid $color-border; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: $spacing-4; text-align: center; padding: $spacing-8; h2, p { margin: 0; } svg { color: $color-primary; } }
+.primaryLink { display: inline-flex; padding: $spacing-3 $spacing-6; background: $color-primary; color: white; text-decoration: none; }
+.notice { border: 1px solid $color-border; padding: $spacing-4; margin-bottom: $spacing-6; p { margin: 0 0 $spacing-3; } }
+@media (max-width: 30rem) { .summary { padding: $spacing-4; } }

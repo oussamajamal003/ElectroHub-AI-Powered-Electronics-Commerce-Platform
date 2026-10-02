@@ -93,6 +93,7 @@ export class ProductService {
     }
     return {
       ...mapBase(product), reviewCount: aggregates._count._all,
+      availableQuantity: Math.max(0, product.inventory?.quantity ?? 0),
       averageRating: aggregates._avg.rating?.toFixed(1) ?? null,
       description: product.description, sku: product.sku,
       modelNumber: product.modelNumber, images: product.images,

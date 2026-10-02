@@ -25,5 +25,5 @@ export function productCardProps(product: ProductSummary) {
     rating: product.averageRating == null ? null : Number(product.averageRating), reviewCount: product.reviewCount ?? 0,
     availability: product.availability, href: `/products/${encodeURIComponent(product.slug)}`,
     imageUrl: product.primaryImage?.url ?? '', secondaryImageUrl: product.secondaryImage?.url,
-    showActions: false, square: true };
+    showActions: true, square: true };
 }

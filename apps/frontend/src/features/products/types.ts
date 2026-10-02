@@ -33,6 +33,7 @@ export interface ProductSummary {
   secondaryImage?: ProductImage | null;
 }
 export interface ProductDetail extends Omit<ProductSummary, 'primaryImage' | 'secondaryImage'> {
+  availableQuantity: number;
   sku: string;
   modelNumber: string | null;
   images: ProductImage[];

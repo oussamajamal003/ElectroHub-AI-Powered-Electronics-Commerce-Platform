@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '../context/AuthContext';
@@ -13,10 +13,18 @@ interface SignOutModalProps {
 }
 
 export function SignOutModal({ open, onOpenChange }: SignOutModalProps) {
-  const { logout } = useAuth();
+  const { logout, finishLogoutTransition } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const pendingLogoutRoute = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (pendingLogoutRoute.current === null || location.pathname === pendingLogoutRoute.current) return;
+    pendingLogoutRoute.current = null;
+    finishLogoutTransition();
+  }, [finishLogoutTransition, location.pathname]);
 
   const handleSignOut = async () => {
     setIsLoading(true);
@@ -24,8 +32,11 @@ export function SignOutModal({ open, onOpenChange }: SignOutModalProps) {
     
     try {
       await logout();
+      const logoutStartedAt = location.pathname;
+      pendingLogoutRoute.current = logoutStartedAt === '/' ? null : logoutStartedAt;
       onOpenChange(false);
       navigate('/');
+      if (logoutStartedAt === '/') finishLogoutTransition();
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setError(err.message);

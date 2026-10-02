@@ -4,16 +4,19 @@ import { BrowserRouter } from 'react-router-dom';
 import { describe, beforeEach, it, expect, vi } from 'vitest';
 import { CustomerHeader } from './CustomerHeader';
 import { useAuth } from '@/features/auth/context/AuthContext';
+import { useCart } from '@/features/cart/context';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
+vi.mock('@/features/cart/context', () => ({ useCart: vi.fn() }));
 
 describe('CustomerHeader', () => {
   const mockLogout = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useCart).mockReturnValue({ totalQuantity: 0 } as ReturnType<typeof useCart>);
   });
 
   const renderWithRouter = (ui: React.ReactElement) => {
@@ -43,7 +46,7 @@ describe('CustomerHeader', () => {
 
     // Search, Cart, Wishlist, Account icon buttons/links
     expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Cart' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Cart, 0 items' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Wishlist' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Account' })).toBeInTheDocument();
   });
@@ -302,7 +305,7 @@ describe('CustomerHeader', () => {
 
     expect(window.location.pathname).toBe('/search');
     expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Cart' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Cart, 0 items' })).toBeInTheDocument();
   });
 
   it('keeps navigation intact after Search activation', async () => {
@@ -334,7 +337,7 @@ describe('CustomerHeader', () => {
 
     renderWithRouter(<CustomerHeader />);
     expect(screen.getByRole('link', { name: /ElectroHub — Home/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Cart' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Cart, 0 items' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Wishlist' })).toBeInTheDocument();
   });
 
@@ -366,7 +369,7 @@ describe('CustomerHeader', () => {
     renderWithRouter(<CustomerHeader cartCount={3} wishlistCount={2} />);
     
     // Cart link has accessible label including count
-    expect(screen.getByRole('link', { name: 'Cart (3)' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Cart, 3 items' })).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
 
     // Wishlist link has accessible label including count
@@ -385,7 +388,7 @@ describe('CustomerHeader', () => {
 
     renderWithRouter(<CustomerHeader cartCount={0} wishlistCount={0} />);
     
-    expect(screen.getByRole('link', { name: 'Cart' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Cart, 0 items' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Wishlist' })).toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
   });

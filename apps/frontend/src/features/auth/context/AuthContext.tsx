@@ -12,12 +12,15 @@ interface AuthState {
 }
 
 interface AuthContextValue extends AuthState {
+  isSessionVerified: boolean;
+  isLoggingOut: boolean;
   rememberedUser: Pick<User, 'firstName' | 'lastName'> | null;
   finishGoogle: () => Promise<void>;
   login: (credentials: LoginCredentials) => Promise<VerificationResponse>;
   register: (data: RegisterData) => Promise<VerificationResponse>;
   verifyEmail: (data: { email: string; code: string }) => Promise<VerificationResponse>;
   logout: () => Promise<void>;
+  finishLogoutTransition: () => void;
   clearSession: () => void;
   updateProfile: (data: { firstName?: string; lastName?: string; email?: string }) => Promise<VerificationResponse>;
   verifyEmailChange: (code: string) => Promise<User>;
@@ -107,6 +110,8 @@ function getInitialAuthState(): AuthState {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const [isSessionVerified, setSessionVerified] = useState(false);
+  const [isLoggingOut, setLoggingOut] = useState(false);
   const [rememberedUser, setRememberedUser] = useState<HeaderIdentity | null>(readHeaderIdentity);
   const remember = (user: User) => {
     saveCachedUser(user);
@@ -129,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (mounted) {
           remember(user);
           setState({ user, isAuthenticated: true, isLoading: false, isInitializing: false });
+          setSessionVerified(true);
         }
       } catch (error) {
         if (!mounted) return;
@@ -136,6 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAccessToken(null);
           forget();
           setState({ user: null, isAuthenticated: false, isLoading: false, isInitializing: false });
+          setSessionVerified(true);
         } else {
           retryTimer = setTimeout(() => { void initSession(); }, 2000);
         }
@@ -156,6 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       forget();
       queryClient.clear();
       setState({ user: null, isAuthenticated: false, isLoading: false, isInitializing: false });
+      setSessionVerified(true);
     };
     window.addEventListener('electrohub:session-expired', clearExpiredSession);
     return () => window.removeEventListener('electrohub:session-expired', clearExpiredSession);
@@ -168,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const authenticatedUser = response.user;
       if (authenticatedUser) {
         queryClient.clear();
+        setSessionVerified(true);
         remember(authenticatedUser);
         setState((prev) => ({
           ...prev,
@@ -198,6 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const verifiedUser = response.user;
       if (verifiedUser && response.accessToken) {
         queryClient.clear();
+        setSessionVerified(true);
         remember(verifiedUser);
         setState((prev) => ({
           ...prev,
@@ -212,6 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    setLoggingOut(true);
     setState((prev) => ({ ...prev, isLoading: true }));
     try {
       await authApi.logout();
@@ -219,6 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessToken(null);
       forget();
       queryClient.clear();
+      setSessionVerified(true);
       setState({
         user: null,
         isAuthenticated: false,
@@ -229,10 +241,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const finishLogoutTransition = () => setLoggingOut(false);
+
   const clearSession = () => {
     setAccessToken(null);
     forget();
     queryClient.clear();
+    setSessionVerified(true);
     setState({ user: null, isAuthenticated: false, isLoading: false, isInitializing: false });
   };
 
@@ -261,12 +276,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const finishGoogle = async () => {
     const { user } = await authApi.finishGoogle();
     queryClient.clear();
+    setSessionVerified(true);
     remember(user);
     setState(previous => ({ ...previous, user, isAuthenticated: true }));
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, rememberedUser, login, register, verifyEmail, logout, clearSession, updateProfile, verifyEmailChange, finishGoogle }}>
+    <AuthContext.Provider value={{ ...state, isSessionVerified, isLoggingOut, rememberedUser, login, register, verifyEmail, logout, finishLogoutTransition, clearSession, updateProfile, verifyEmailChange, finishGoogle }}>
       {children}
     </AuthContext.Provider>
   );

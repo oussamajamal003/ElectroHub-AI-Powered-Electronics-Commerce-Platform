@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/features/auth/context/AuthContext';
+import { useCart } from '@/features/cart/context';
+import { QuantitySelector } from '@/components/ui/QuantitySelector';
 import { useProduct, useMyReview, useReviewMutation, useReviews } from '@/features/products/queries';
 import { useSearchResults } from '@/features/search/queries';
 import { productCardProps } from '@/features/search/api';
@@ -25,6 +27,10 @@ function formatPrice(value: string) {
 }
 
 export function ProductDetailPage() {
+  const { addItem, data: cartData } = useCart();
+  const [cartQuantity, setCartQuantity] = useState(1);
+  const [cartPending, setCartPending] = useState(false);
+  const [cartFeedback, setCartFeedback] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -46,6 +52,12 @@ export function ProductDetailPage() {
   const { isAuthenticated, isInitializing } = useAuth();
   const productQuery = useProduct(slug);
   const product = productQuery.data?.data;
+  useEffect(() => { setCartQuantity(1); setCartFeedback(''); }, [product?.id]);
+  const currentCartQuantity = product ? cartData?.items.find(item => item.productId === product.id)?.quantity ?? 0 : 0;
+  const remainingQuantity = product ? Math.max(0, Math.min(999, product.availableQuantity - currentCartQuantity)) : 0;
+  useEffect(() => {
+    if (cartQuantity > remainingQuantity) setCartQuantity(1);
+  }, [cartQuantity, remainingQuantity]);
   const [reviewPage, setReviewPage] = useState(1);
   const [rating, setRating] = useState(5);
   const [body, setBody] = useState('');
@@ -108,6 +120,18 @@ export function ProductDetailPage() {
           {product.compareAtPrice && product.discountPercent !== null && <><del>{formatPrice(product.compareAtPrice)}</del><span className={styles.discount}>-{product.discountPercent}%</span></>}
         </div>
         <p className={product.availability === 'AVAILABLE' ? styles.availability : styles.unavailable}>{product.availability === 'AVAILABLE' ? 'In stock' : 'Currently unavailable'}</p>
+        <div className={styles.cartActions}>
+          <div className={styles.quantityRow}><span>Qty</span><QuantitySelector quantity={cartQuantity} productName={product.name} maxQuantity={remainingQuantity} disabled={product.availability !== 'AVAILABLE' || cartPending} onIncrease={() => setCartQuantity(value => Math.min(remainingQuantity, value + 1))} onDecrease={() => setCartQuantity(value => Math.max(1, value - 1))} /></div>
+          {product.availability !== 'AVAILABLE' || remainingQuantity === 0 ? <p role="status">{product.availability !== 'AVAILABLE' ? 'Currently unavailable.' : 'You already have the available stock in your cart.'}</p> : <p role="status">{remainingQuantity} more {remainingQuantity === 1 ? 'item' : 'items'} available to add.</p>}
+          <Button type="button" disabled={product.availability !== 'AVAILABLE' || remainingQuantity === 0 || cartPending} isLoading={cartPending} onClick={async () => {
+            setCartPending(true); setCartFeedback('');
+            try { await addItem(product.id, cartQuantity); setCartFeedback(`${product.name} added to cart.`); }
+            catch (error) { setCartFeedback(error instanceof ApiError && error.code === 'CART_STOCK_CONFLICT' || error instanceof Error && /^Only \d+ items? (?:is|are) currently available\.$/.test(error.message)
+              ? error.message : 'Could not add this product. Check availability and try again.'); }
+            finally { setCartPending(false); }
+          }}>Add to Cart</Button>
+          {cartFeedback && <p role="status" className={styles.cartFeedback}>{cartFeedback}</p>}
+        </div>
         {product.description && <p className={styles.intro}>{product.description}</p>}
       </section>
     </div>
@@ -129,7 +153,7 @@ export function ProductDetailPage() {
     <section className={styles.related} aria-labelledby="related-title"><div className={styles.relatedHeading}><h2 id="related-title">More in {product.category.name}</h2><Link to={`/products?category=${encodeURIComponent(product.category.slug)}`}>View category →</Link></div>
       {recommendations.isPending && <div role="status" aria-label="Loading related products" className={styles.relatedGrid}>{Array.from({ length: 4 }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
       {recommendations.isError && <p role="alert">Related products are unavailable. <Button type="button" onClick={() => void recommendations.refetch()}>Retry</Button></p>}
-      {related.length > 0 && <div className={styles.relatedGrid}>{related.map(item => <ProductCard key={item.id} {...productCardProps(item)} onNavigate={navigate} />)}</div>}
+      {related.length > 0 && <div className={styles.relatedGrid}>{related.map(item => <ProductCard key={item.id} {...productCardProps(item)} onNavigate={navigate} onAddToCart={() => addItem(item.id)} />)}</div>}
     </section>
   </main>;
 }

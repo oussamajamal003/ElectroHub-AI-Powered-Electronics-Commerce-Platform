@@ -398,6 +398,7 @@ Integrate Stripe Test Mode for:
 - Payment confirmation
 - Payment status
 
+
 No real customer payments are processed.
 
 ### 03.7 Order Management

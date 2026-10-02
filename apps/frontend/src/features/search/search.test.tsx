@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, useNavigate, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SearchPage } from './SearchPage';
+import { useCart } from '@/features/cart/context';
 import { SearchField } from '@/components/ui/SearchField/SearchField';
 import { apiClient } from '@/lib/api';
 import { activeSearch, clearFilters, emptySearch, parseSearch, searchParams } from './searchState';
@@ -12,11 +13,13 @@ import { useBrands, useCategories } from './queries';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query';
 vi.mock('@/lib/api', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/api')>(), apiClient: vi.fn() }));
+vi.mock('@/features/cart/context', () => ({ useCart: vi.fn() }));
 const product = { id: 'product', name: 'Apple MacBook Air', slug: 'apple-macbook-air', price: '999.00', compareAtPrice: null,
   currency: 'USD', category: { id: 'laptops', name: 'Laptops', slug: 'laptops' }, brand: null, availability: 'AVAILABLE', primaryImage: null };
 const response = { data: [product], meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 } };
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(useCart).mockReturnValue({ addItem: vi.fn() } as unknown as ReturnType<typeof useCart>);
   vi.mocked(apiClient).mockImplementation(async endpoint => {
     if (endpoint.startsWith('/api/categories')) return { data: [{ id: 'laptops', name: 'Laptops', slug: 'laptops', description: null, imageUrl: null }], meta: { total: 1 } } as never;
     if (endpoint.startsWith('/api/brands')) return { data: [{ id: 'apple', name: 'Apple', slug: 'apple', description: null, logoUrl: null }], meta: { total: 1 } } as never;
@@ -101,11 +104,11 @@ describe('Search page', () => {
     expect(screen.queryByTestId('product-skeleton')).not.toBeInTheDocument();
     expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(2);
   });
-  it('submits exactly one product request and renders canonical product card without inert actions', async () => {
+  it('submits exactly one product request and renders an actionable catalog card', async () => {
     page(); fireEvent.change(screen.getByRole('combobox', { name: 'Search products' }), { target: { value: 'macbook' } });
     expect(await screen.findByTestId('product-card')).toHaveTextContent('Apple MacBook Air');
     expect(screen.getByTestId('product-card')).toHaveTextContent('999');
-    expect(screen.queryByRole('button', { name: /Add .* to cart/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add .* to cart/ })).toBeInTheDocument();
     await waitFor(() => expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(1));
     expect(screen.getByTestId('location')).toHaveTextContent('q=macbook');
   });

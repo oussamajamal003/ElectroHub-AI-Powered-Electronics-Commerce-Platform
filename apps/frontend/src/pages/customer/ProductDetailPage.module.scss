@@ -12,6 +12,9 @@
 .availability { color: $color-success-foreground; font-weight: $font-weight-semibold; }
 .unavailable { color: $color-error; font-weight: $font-weight-semibold; }
 .intro { color: $color-text-secondary; line-height: $line-height-relaxed; }
+.cartActions { display: grid; justify-items: start; gap: $spacing-4; margin-top: $spacing-6; }
+.quantityRow { display: flex; align-items: center; gap: $spacing-4; }
+.cartFeedback { margin: 0; color: $color-text-secondary; }
 .tabs { margin-top: $spacing-12; > div[role='tabpanel'] { padding-top: $spacing-6; > section > h2 { margin: 0 0 $spacing-3; } } }
 .specifications { > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: $spacing-4; padding: $spacing-3; border-bottom: 1px solid $color-border; } dt { color: $color-text-secondary; } dd { margin: 0; } }
 .review { border-bottom: 1px solid $color-border; padding: $spacing-4 0; display: grid; gap: $spacing-2; span { color: $color-warning-foreground; } p { margin: 0; overflow-wrap: anywhere; } time { color: $color-text-muted; font-size: $font-size-sm; } }

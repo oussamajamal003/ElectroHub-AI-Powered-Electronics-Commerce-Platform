@@ -191,7 +191,12 @@
     outline: $focus-ring-width $focus-ring-style $focus-ring-color;
     outline-offset: $focus-ring-offset;
   }
+
+  &:disabled { cursor: not-allowed; opacity: 0.65; }
 }
+
+.cartFeedback { display: block; margin-top: $spacing-2; color: $color-error; font-size: $font-size-xs; }
+.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .card, .primaryImage, .secondaryImage, .wishlistBtn, .addBtn { transition: none; }
