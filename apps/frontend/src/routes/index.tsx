@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
 import { AuthProvider } from '@/features/auth/context/AuthContext';
+import { CartProvider } from '@/features/cart/CartProvider';
 import { CustomerLayout } from '@/layouts/CustomerLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { AdminLoginPage } from '@/pages/admin/AdminLoginPage';
@@ -15,6 +16,7 @@ const AboutPage = lazy(() => import('../pages/AboutPage').then(module => ({ defa
 const ContactPage = lazy(() => import('../pages/ContactPage').then(module => ({ default: module.ContactPage })));
 const SearchPage = lazy(() => import('@/features/search/SearchPage').then(module => ({ default: module.SearchPage })));
 const ProductDetailPage = lazy(() => import('../pages/customer/ProductDetailPage').then(module => ({ default: module.ProductDetailPage })));
+const CartPage = lazy(() => import('../pages/customer/CartPage').then(module => ({ default: module.CartPage })));
 const AccountPage = lazy(() => import('../pages/customer/AccountPage').then(module => ({ default: module.AccountPage })));
 const ProfilePage = lazy(() => import('../pages/customer/ProfilePage').then(module => ({ default: module.ProfilePage })));
 const route = (content: React.ReactNode) => <Suspense fallback={<ElectroHubLoader page />}>{content}</Suspense>;
@@ -22,6 +24,7 @@ const route = (content: React.ReactNode) => <Suspense fallback={<ElectroHubLoade
 export function AppRoutes() {
   return (
     <AuthProvider>
+      <CartProvider>
       <Routes>
         {/* Customer Public Routes */}
         <Route element={<CustomerLayout />}>
@@ -31,7 +34,7 @@ export function AppRoutes() {
           <Route path="/search" element={route(<SearchPage />)} />
           <Route path="/products" element={route(<SearchPage catalog />)} />
           <Route path="/products/:slug" element={route(<ProductDetailPage />)} />
-          <Route path="/cart" element={<PlaceholderPage title="My Cart" type="cart" description="Your shopping cart will appear here." />} />
+          <Route path="/cart" element={route(<CartPage />)} />
           <Route path="/orders" element={<OrdersPage />} />
 
           {/* Customer Protected Routes — must be logged in */}
@@ -56,6 +59,7 @@ export function AppRoutes() {
         {/* Fallback */}
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      </CartProvider>
     </AuthProvider>
   );
 }

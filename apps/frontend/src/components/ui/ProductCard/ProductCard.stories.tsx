@@ -53,5 +53,10 @@ export const Unavailable: Story = { args: { ...productCardProps({ ...product,
 export const OutOfStock: Story = { args: { ...productCardProps({ ...product, availability: 'UNAVAILABLE' }) } };
 
 export const WithRatingAndActions: Story = {
-  args: { ...productCardProps(product), rating: 4.8, showActions: true },
+  args: { ...productCardProps(product), rating: 4.8, showActions: true, onAddToCart: async () => undefined },
 };
+export const AddToCart: Story = { args: { ...productCardProps(product), onAddToCart: async () => undefined } };
+export const Added: Story = { args: { ...productCardProps(product), onAddToCart: async () => undefined },
+  play: async ({ canvasElement }) => { canvasElement.querySelector<HTMLButtonElement>('button[aria-label^="Add "]')?.click(); } };
+export const AddPending: Story = { args: { ...productCardProps(product), onAddToCart: () => new Promise<void>(() => undefined) },
+  play: async ({ canvasElement }) => { canvasElement.querySelector<HTMLButtonElement>('button[aria-label^="Add "]')?.click(); } };

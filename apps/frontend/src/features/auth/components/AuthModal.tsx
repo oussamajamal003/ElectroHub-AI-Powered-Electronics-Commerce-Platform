@@ -22,6 +22,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 export type AuthModalMode = 'login' | 'register' | 'verify' | 'changeVerificationEmail' | 'forgot' | 'resetVerify' | 'resetNew' | 'resetSuccess' | 'googleLink';
 
 export interface AuthModalProps {
+  returnTo?: '/cart';
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAuthenticated?: () => void;
@@ -53,6 +54,7 @@ const normalizeErrorMessage = (err: unknown): string => {
 };
 
 export function AuthModal({
+  returnTo,
   open,
   onOpenChange,
   onAuthenticated,
@@ -63,7 +65,7 @@ export function AuthModal({
   const { login, register, verifyEmail, finishGoogle, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string })?.from || '/account';
+  const from = returnTo ?? (location.state as { from?: string })?.from ?? '/account';
   const [mode, setMode] = useState<AuthModalMode>(initialMode);
   const [isLoading, setIsLoading] = useState(false);
 

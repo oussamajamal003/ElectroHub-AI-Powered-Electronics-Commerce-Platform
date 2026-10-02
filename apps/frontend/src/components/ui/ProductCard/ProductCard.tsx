@@ -1,5 +1,7 @@
 import { Heart, Star } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { ProductImage } from '../ProductImage';
+import { ApiError } from '@/lib/api';
 import styles from './ProductCard.module.scss';
 
 export interface ProductCardProps {
@@ -18,7 +20,7 @@ export interface ProductCardProps {
   imageUrl: string;
   secondaryImageUrl?: string | null;
   isWishlisted?: boolean;
-  onAddToCart?: (id: string | number) => void;
+  onAddToCart?: (id: string | number) => Promise<void> | void;
   onToggleWishlist?: (id: string | number) => void;
   className?: string;
   showActions?: boolean;
@@ -47,6 +49,10 @@ export function ProductCard({
   showActions = true,
   square = false,
 }: ProductCardProps) {
+  const [cartState, setCartState] = useState<'idle' | 'adding' | 'added' | 'error'>('idle');
+  const [cartError, setCartError] = useState('Could not add item. Please try again.');
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (resetTimer.current) clearTimeout(resetTimer.current); }, []);
   const formatPrice = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -54,10 +60,19 @@ export function ProductCard({
     }).format(amount);
   };
 
-  const handleAddToCart = (e: React.MouseEvent) => {
+  const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    onAddToCart?.(id);
+    if (!onAddToCart) return;
+    setCartState('adding');
+    try { await onAddToCart(id); setCartState('added'); }
+    catch (error) {
+      setCartError(error instanceof ApiError && error.code === 'CART_STOCK_CONFLICT' || error instanceof Error && /^Only \d+ items? (?:is|are) currently available\.$/.test(error.message)
+        ? error.message : 'Could not add item. Please try again.');
+      setCartState('error');
+    }
+    if (resetTimer.current) clearTimeout(resetTimer.current);
+    resetTimer.current = setTimeout(() => setCartState('idle'), 2500);
   };
 
   const handleToggleWishlist = (e: React.MouseEvent) => {
@@ -82,7 +97,7 @@ export function ProductCard({
       <div className={styles.imageArea}>
         <div className={styles.primaryImage}><ProductImage src={imageUrl} alt={title} className={styles.image} loading="lazy" decoding="async" /></div>
         {secondaryImageUrl && secondaryImageUrl !== imageUrl && <div className={styles.secondaryImage} aria-hidden="true"><ProductImage src={secondaryImageUrl} alt="" className={styles.image} loading="lazy" decoding="async" /></div>}
-        {showActions && <button
+        {showActions && onToggleWishlist && <button
           type="button"
           className={`${styles.wishlistBtn} ${isWishlisted ? styles.wishlisted : ''}`}
           onClick={handleToggleWishlist}
@@ -116,14 +131,17 @@ export function ProductCard({
         </div>
         {availability && <span className={styles.availability}>{availability === 'AVAILABLE' ? 'In stock' : 'Out of stock'}</span>}
 
-        {showActions && <button
+        {showActions && onAddToCart && <button
           type="button"
           className={styles.addBtn}
           onClick={handleAddToCart}
+          disabled={availability === 'UNAVAILABLE' || cartState === 'adding'}
           aria-label={`Add ${title} to cart`}
         >
-          Add to Cart
+          {availability === 'UNAVAILABLE' ? 'Out of stock' : cartState === 'adding' ? 'Adding…' : cartState === 'added' ? 'Added ✓' : cartState === 'error' ? 'Try again' : 'Add to Cart'}
         </button>}
+        {cartState === 'error' && <span role="alert" className={styles.cartFeedback}>{cartError}</span>}
+        {cartState === 'added' && <span role="status" className={styles.srOnly}>{title} added to cart.</span>}
       </div>
     </div>
   );

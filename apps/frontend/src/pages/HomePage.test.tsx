@@ -4,14 +4,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HomePage } from './HomePage';
 import { useCategories } from '@/features/search/queries';
 import { useDeals, useProducts } from '@/features/products/queries';
+import { useCart } from '@/features/cart/context';
 
 vi.mock('@/features/search/queries', () => ({ useCategories: vi.fn() }));
 vi.mock('@/features/products/queries', () => ({ useDeals: vi.fn(), useProducts: vi.fn() }));
+vi.mock('@/features/cart/context', () => ({ useCart: vi.fn() }));
 
 const renderPage = () => render(<MemoryRouter><HomePage /></MemoryRouter>);
 
 describe('Home catalog sections', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); vi.mocked(useCart).mockReturnValue({ addItem: vi.fn() } as unknown as ReturnType<typeof useCart>); });
 
   it('reserves content-shaped sections while queries load in the approved order', () => {
     vi.mocked(useCategories).mockReturnValue({ isPending: true } as ReturnType<typeof useCategories>);

@@ -20,6 +20,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/DropdownMenu';
 import { useAuth } from '@/features/auth/context/AuthContext';
+import { useCart } from '@/features/cart/context';
 import { AuthModal, AuthModalMode } from '@/features/auth/components/AuthModal';
 import { SignOutModal } from '@/features/auth/components/SignOutModal';
 import styles from './CustomerHeader.module.scss';
@@ -29,7 +30,10 @@ export interface CustomerHeaderProps {
   wishlistCount?: number;
 }
 
-export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHeaderProps) {
+export function CustomerHeader({ cartCount: countOverride, wishlistCount = 0 }: CustomerHeaderProps) {
+  const { totalQuantity } = useCart();
+  const cartCount = countOverride ?? totalQuantity;
+  const [authReturnTo, setAuthReturnTo] = useState<'/cart' | undefined>();
   const { user, rememberedUser, isAuthenticated, isInitializing } = useAuth();
   const headerUser = isInitializing ? rememberedUser : user;
   const showAuthenticatedHeader = isInitializing ? Boolean(rememberedUser) : isAuthenticated;
@@ -58,7 +62,10 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
   }, []);
 
   useEffect(() => {
-    const openAuth = () => { setAuthMode('login'); setShowAuthModal(true); };
+    const openAuth = (event: Event) => {
+      setAuthReturnTo((event as CustomEvent<{ returnTo?: string }>).detail?.returnTo === '/cart' ? '/cart' : undefined);
+      setAuthMode('login'); setShowAuthModal(true);
+    };
     window.addEventListener('electrohub:open-auth', openAuth);
     return () => window.removeEventListener('electrohub:open-auth', openAuth);
   }, []);
@@ -159,7 +166,7 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
                   <Link
                     to="/cart"
                     className={styles.iconButton}
-                    aria-label={cartCount > 0 ? `Cart (${cartCount})` : 'Cart'}
+                    aria-label={cartCount > 0 ? `Cart, ${cartCount} ${cartCount === 1 ? 'item' : 'items'}` : 'Cart, 0 items'}
                   >
                     <ShoppingCart size={20} />
                     {cartCount > 0 && (
@@ -197,6 +204,7 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
                       className={styles.iconButton}
                       aria-label="Account"
                       onClick={() => {
+                        setAuthReturnTo(undefined);
                         setAuthMode('login');
                         setShowAuthModal(true);
                       }}
@@ -294,6 +302,7 @@ export function CustomerHeader({ cartCount = 0, wishlistCount = 0 }: CustomerHea
         onOpenChange={setShowAuthModal}
         onAuthenticated={closeMobileMenu}
         initialMode={authMode}
+        returnTo={authReturnTo}
       />
       <SignOutModal
         open={showSignOut}

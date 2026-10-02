@@ -1,5 +1,33 @@
 # Cart
 
+## Task 03.2 — Current Cart Contract
+
+Cart is available to guests and authenticated customers. The current implementation uses one frontend Cart feature boundary: guests persist only `{productId, quantity}` in versioned `electrohub.cart.v1` local storage, while authenticated customers use the existing React Query client and a server Cart scoped to the authenticated user ID. Prices, stock, Product status, images, and totals are never trusted from guest storage or request bodies. This section describes implemented 03.2 behavior; later checkout sections below are future architecture, not a live checkout promise.
+
+### API
+
+- `POST /api/cart/validate` accepts `{items: [{productId, quantity}]}` for bounded public guest hydration; it never exposes private User data.
+- `GET /api/cart` returns the authenticated customer's current Cart.
+- `POST /api/cart/items` adds `{productId, quantity}` and returns the updated Cart (`201`).
+- `PATCH /api/cart/items/:productId` sets `{quantity}` and returns the updated Cart.
+- `DELETE /api/cart/items/:productId` removes a line and returns the updated Cart.
+- `POST /api/cart/reconcile` merges bounded guest items and returns the updated Cart.
+- Successful responses use `{data: Cart}`. Errors use the existing sanitized `{error: {code, message}}` envelope. Mutations require an authenticated `CUSTOMER`; the client cannot select a User Cart by ID.
+
+Cart inputs permit at most 50 distinct lines and 999 units per line, additionally limited by stock. Server reads preserve known unavailable lines. Cart DTO lines include current Product name, slug, category, image, price, requested quantity, stock, availability, and line total; the Cart includes total quantity, Decimal-derived subtotal, `0.00` shipping, total, and a checkout-eligibility flag. No Review, full specification, or private User relation is returned.
+
+### Merge and availability
+
+When a Product exists in both carts, reconciliation uses `max(serverQuantity, guestQuantity)`, not addition. The transaction is retry-safe and never duplicates a line. Guest storage is cleared only after a confirmed successful merge. On failure the guest items remain recoverable and the Cart offers Retry or removal of pending saved items. Logout retains the server Cart but does not copy it into guest storage.
+
+Cart does not reserve or decrement inventory. A line whose requested quantity now exceeds stock remains visible and blocks checkout intent until corrected. Out-of-stock, inactive, and missing Products remain visible where possible and can be removed. Price is always read from the current Product. The Header badge counts units, not lines.
+Quantity controls update the visible line, totals, and Header badge immediately while the affected line is pending; a rejected server validation restores the last confirmed Cart. Other lines remain interactive. If reconciliation returns an error after a possible commit, the client confirms the user-scoped server Cart before reporting a failed merge or clearing guest storage.
+If a background Cart revalidation fails, cached rows remain visible with a retry warning, while the guest checkout-intent action stays disabled until current availability is confirmed.
+
+Task 03.2 does not create Checkout, payment, orders, Wishlist persistence, migrations, or seed data. Guest checkout intent opens the existing sign-in flow and returns to `/cart`; the authenticated Checkout CTA is visibly deferred until Task 03.5 supplies a real route.
+
+---
+
 ## 1. Purpose
 
 This document defines the shopping-cart functionality for ElectroHub.
@@ -43,7 +71,7 @@ The frontend may provide immediate interaction feedback, but the backend remains
 
 ## 3. Cart Ownership
 
-A cart belongs to an authenticated customer.
+An authenticated cart belongs to one authenticated customer. Guest carts are local to the browser.
 
 The backend must verify:
 

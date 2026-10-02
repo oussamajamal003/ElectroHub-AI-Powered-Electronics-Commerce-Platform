@@ -5,10 +5,12 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProductDetailPage } from './ProductDetailPage';
 import { useAuth } from '@/features/auth/context/AuthContext';
+import { useCart } from '@/features/cart/context';
 import { useProduct, useMyReview, useReviewMutation, useReviews } from '@/features/products/queries';
 import { useSearchResults } from '@/features/search/queries';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: vi.fn() }));
+vi.mock('@/features/cart/context', () => ({ useCart: vi.fn() }));
 vi.mock('@/features/products/queries', () => ({ useProduct: vi.fn(), useMyReview: vi.fn(), useReviewMutation: vi.fn(), useReviews: vi.fn() }));
 vi.mock('@/features/search/queries', () => ({ useSearchResults: vi.fn() }));
 
@@ -17,7 +19,7 @@ const product = {
   category: { id: 'c-1', name: 'Tablets', slug: 'tablets' }, brand: null,
   images: [{ id: 'image-1', url: '/images/catalog/tablets.jpg', altText: 'Tablet', sortOrder: 0, isPrimary: true }],
   specifications: [], price: '100.00', compareAtPrice: null, discountPercent: null,
-  averageRating: null, reviewCount: 0, availability: 'AVAILABLE', description: 'A tablet', currency: 'USD',
+  averageRating: null, reviewCount: 0, availability: 'AVAILABLE', availableQuantity: 13, description: 'A tablet', currency: 'USD',
 };
 
 const testQueryClient = new QueryClient();
@@ -26,6 +28,7 @@ const renderPage = () => render(<QueryClientProvider client={testQueryClient}><M
 describe('Product details loading and review auth state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useCart).mockReturnValue({ addItem: vi.fn() } as unknown as ReturnType<typeof useCart>);
     vi.mocked(useAuth).mockReturnValue({ isInitializing: true, isAuthenticated: false } as ReturnType<typeof useAuth>);
     vi.mocked(useProduct).mockReturnValue({ data: { data: product }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
     vi.mocked(useReviews).mockReturnValue({ data: { data: [], meta: { page: 1, pageSize: 10, total: 0, totalPages: 0 } }, isPending: false, isError: false } as unknown as ReturnType<typeof useReviews>);
@@ -50,5 +53,25 @@ describe('Product details loading and review auth state', () => {
     vi.mocked(useAuth).mockReturnValue({ isInitializing: false, isAuthenticated: false } as ReturnType<typeof useAuth>);
     view.rerender(<QueryClientProvider client={testQueryClient}><MemoryRouter initialEntries={['/products/test-tablet']}><Routes><Route path="/products/:slug" element={<ProductDetailPage />} /></Routes></MemoryRouter></QueryClientProvider>);
     expect(screen.getByText('Sign in to write a review of this product.')).toBeInTheDocument();
+  });
+
+  it('limits additions to remaining stock and resets a now-invalid selection', async () => {
+    const view = renderPage();
+    expect(screen.getByText('13 more items available to add.')).toBeInTheDocument();
+    const increase = screen.getByRole('button', { name: 'Increase quantity for Test Tablet' });
+    for (let index = 0; index < 6; index++) await userEvent.click(increase);
+    expect(screen.getByText('7', { selector: '[aria-live="polite"]' })).toBeInTheDocument();
+
+    vi.mocked(useCart).mockReturnValue({ addItem: vi.fn(), data: { items: [{ productId: 'p-1', quantity: 8 }] } } as unknown as ReturnType<typeof useCart>);
+    view.rerender(<QueryClientProvider client={testQueryClient}><MemoryRouter initialEntries={['/products/test-tablet']}><Routes><Route path="/products/:slug" element={<ProductDetailPage />} /></Routes></MemoryRouter></QueryClientProvider>);
+    expect(screen.getByText('1', { selector: '[aria-live="polite"]' })).toBeInTheDocument();
+    expect(screen.getByText('5 more items available to add.')).toBeInTheDocument();
+  });
+
+  it('disables Add when the current Cart already contains all available stock', () => {
+    vi.mocked(useCart).mockReturnValue({ addItem: vi.fn(), data: { items: [{ productId: 'p-1', quantity: 13 }] } } as unknown as ReturnType<typeof useCart>);
+    renderPage();
+    expect(screen.getByText('You already have the available stock in your cart.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add to Cart' })).toBeDisabled();
   });
 });

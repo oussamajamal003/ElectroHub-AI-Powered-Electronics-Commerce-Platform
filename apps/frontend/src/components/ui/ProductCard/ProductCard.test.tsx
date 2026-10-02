@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { ProductCard } from './ProductCard';
+import { ApiError } from '@/lib/api';
 
 describe('ProductCard', () => {
   const mockProduct = {
@@ -31,6 +32,11 @@ describe('ProductCard', () => {
     fireEvent.click(screen.getByRole('button', { name: /add wireless headphones to cart/i }));
     expect(handleAdd).toHaveBeenCalledWith('p1');
   });
+  it('shows a sanitized stock conflict when an Add request exceeds current inventory', async () => {
+    render(<ProductCard {...mockProduct} onAddToCart={() => Promise.reject(new ApiError(409, 'Only 2 items are currently available.', undefined, 'CART_STOCK_CONFLICT'))} />);
+    fireEvent.click(screen.getByRole('button', { name: /add wireless headphones to cart/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Only 2 items are currently available.');
+  });
 
   it('calls onToggleWishlist when heart button is clicked', () => {
     const handleWishlist = vi.fn();
@@ -41,7 +47,7 @@ describe('ProductCard', () => {
   });
 
   it('displays correct aria-label for wishlisted state', () => {
-    render(<ProductCard {...mockProduct} isWishlisted={true} />);
+    render(<ProductCard {...mockProduct} isWishlisted={true} onToggleWishlist={vi.fn()} />);
     
     expect(screen.getByRole('button', { name: /remove wireless headphones from wishlist/i })).toBeInTheDocument();
   });
@@ -74,7 +80,7 @@ describe('ProductCard', () => {
 
   it('navigates from the card surface without intercepting its image hover or action controls', () => {
     const onNavigate = vi.fn();
-    render(<ProductCard {...mockProduct} href="/products/wireless-headphones" onNavigate={onNavigate} />);
+    render(<ProductCard {...mockProduct} href="/products/wireless-headphones" onNavigate={onNavigate} onAddToCart={vi.fn()} />);
     fireEvent.click(screen.getByTestId('product-card').querySelector('img')!);
     expect(onNavigate).toHaveBeenCalledWith('/products/wireless-headphones');
     fireEvent.click(screen.getByRole('button', { name: /add wireless headphones to cart/i }));

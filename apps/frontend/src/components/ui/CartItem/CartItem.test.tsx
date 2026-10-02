@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { CartItem } from './CartItem';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 describe('CartItem Component', () => {
   const mockProps = {
@@ -33,9 +34,7 @@ describe('CartItem Component', () => {
 
   it('calls onRemove when remove button is clicked', () => {
     render(<CartItem {...mockProps} />);
-    // There are 2 remove buttons (desktop and mobile), so we can get all by label
-    const removeButtons = screen.getAllByLabelText(/Remove Wireless Headphones from cart/);
-    fireEvent.click(removeButtons[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Wireless Headphones from cart' }));
     expect(mockProps.onRemove).toHaveBeenCalledWith('123');
   });
 
@@ -43,11 +42,30 @@ describe('CartItem Component', () => {
     render(<CartItem {...mockProps} />);
     
     // Increase
-    fireEvent.click(screen.getByLabelText('Increase quantity'));
+    fireEvent.click(screen.getByLabelText('Increase quantity for Wireless Headphones'));
     expect(mockProps.onQuantityChange).toHaveBeenCalledWith('123', 3);
 
     // Decrease
-    fireEvent.click(screen.getByLabelText('Decrease quantity'));
+    fireEvent.click(screen.getByLabelText('Decrease quantity for Wireless Headphones'));
     expect(mockProps.onQuantityChange).toHaveBeenCalledWith('123', 1);
+  });
+
+  it('reduces stale quantity directly to current stock when stock fell', () => {
+    render(<CartItem {...mockProps} quantity={4} maxQuantity={2} />);
+    fireEvent.click(screen.getByLabelText('Decrease quantity for Wireless Headphones'));
+    expect(mockProps.onQuantityChange).toHaveBeenCalledWith('123', 2);
+    expect(screen.getByLabelText('Increase quantity for Wireless Headphones')).toBeDisabled();
+  });
+
+  it('navigates from product content, but not quantity or remove controls', () => {
+    render(<MemoryRouter initialEntries={['/cart']}><Routes>
+      <Route path="/cart" element={<CartItem {...mockProps} productHref="/products/headphones" />} />
+      <Route path="/products/:slug" element={<p>Product details route</p>} />
+    </Routes></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'Increase quantity for Wireless Headphones' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Wireless Headphones from cart' }));
+    expect(screen.queryByText('Product details route')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('link', { name: /Wireless Headphones/ }));
+    expect(screen.getByText('Product details route')).toBeInTheDocument();
   });
 });
