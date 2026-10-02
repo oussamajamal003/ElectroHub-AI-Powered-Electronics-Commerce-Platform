@@ -108,7 +108,7 @@ describe('CartProvider authenticated quantity updates', () => {
 
   it('accepts rapid quantity changes immediately and serializes every server write', async () => {
     vi.mocked(useAuth).mockReturnValue({ isSessionVerified: true, isAuthenticated: true, user } as ReturnType<typeof useAuth>);
-    const responses: Array<(value: ReturnType<typeof cart>) => void> = [];
+    const responses: Array<() => void> = [];
     const requestedQuantities: number[] = [];
     vi.mocked(apiClient).mockImplementation((endpoint, options) => {
       if (endpoint === '/api/cart') return Promise.resolve(cart(2) as never);

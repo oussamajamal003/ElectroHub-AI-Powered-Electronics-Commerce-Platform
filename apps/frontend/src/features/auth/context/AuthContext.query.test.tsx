@@ -10,6 +10,7 @@ import { ApiError } from '@/lib/api';
 import { CustomerHeader } from '@/components/layout/CustomerHeader/CustomerHeader';
 
 vi.mock('../api/auth', () => ({ authApi: { refreshSession: vi.fn(), getCurrentUser: vi.fn(), logout: vi.fn() } }));
+vi.mock('@/features/cart/context', () => ({ useCart: () => ({ totalQuantity: 0, isLoggingOut: false }) }));
 
 function Controls() {
   const auth = useAuth();
