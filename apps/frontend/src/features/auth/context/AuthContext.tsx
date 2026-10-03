@@ -3,6 +3,7 @@ import { User, LoginCredentials, RegisterData } from '../types';
 import { authApi, VerificationResponse } from '../api/auth';
 import { ApiError, setAccessToken } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
+import { readCachedUser, restoreSession } from '../sessionRestore';
 
 interface AuthState {
   user: User | null;
@@ -27,24 +28,9 @@ interface AuthContextValue extends AuthState {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-let restorePromise: Promise<User> | null = null;
 const headerIdentityKey = 'electrohub:header-identity';
 const userCacheKey = 'electrohub:cached-user';
 type HeaderIdentity = Pick<User, 'firstName' | 'lastName'>;
-
-function readCachedUser(): User | null {
-  try {
-    const stored = sessionStorage.getItem(userCacheKey);
-    if (!stored) return null;
-    const user: unknown = JSON.parse(stored);
-    if (!user || typeof user !== 'object') return null;
-    const value = user as Record<string, unknown>;
-    if (typeof value.id !== 'string' || typeof value.email !== 'string') return null;
-    return user as User;
-  } catch {
-    return null;
-  }
-}
 
 function saveCachedUser(user: User): void {
   try { sessionStorage.setItem(userCacheKey, JSON.stringify(user)); } catch { /* Storage can be unavailable. */ }
@@ -76,18 +62,6 @@ function saveHeaderIdentity(user: User): HeaderIdentity {
 
 function removeHeaderIdentity() {
   try { sessionStorage.removeItem(headerIdentityKey); } catch { /* Storage can be unavailable. */ }
-}
-
-function restoreSession(): Promise<User> {
-  if (!restorePromise) {
-    restorePromise = (async () => {
-      const { accessToken } = await authApi.refreshSession();
-      setAccessToken(accessToken);
-      const { user } = await authApi.getCurrentUser();
-      return user;
-    })().finally(() => { restorePromise = null; });
-  }
-  return restorePromise;
 }
 
 function getInitialAuthState(): AuthState {

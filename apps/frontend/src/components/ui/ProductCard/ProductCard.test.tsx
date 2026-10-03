@@ -11,6 +11,7 @@ describe('ProductCard', () => {
     description: 'Premium noise cancellation',
     price: 129.99,
     rating: 4.8,
+    reviewCount: 318,
     imageUrl: '/test.jpg'
   };
 
@@ -22,7 +23,16 @@ describe('ProductCard', () => {
     expect(screen.getByText('Premium noise cancellation')).toBeInTheDocument();
     expect(screen.getByText('$129.99')).toBeInTheDocument();
     expect(screen.getByText('4.8')).toBeInTheDocument();
+    expect(screen.getByText('(318)')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Rated 4.8 out of 5.' }).querySelectorAll('svg')).toHaveLength(5);
     expect(screen.getByAltText('Wireless Headphones')).toBeInTheDocument();
+  });
+
+  it('keeps the approved zero-review presentation without fabricated stars or counts', () => {
+    render(<ProductCard {...mockProduct} rating={null} reviewCount={0} />);
+    expect(screen.getByText('No reviews yet')).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: /Rated/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('(0)')).not.toBeInTheDocument();
   });
 
   it('calls onAddToCart when add button is clicked', () => {
@@ -50,6 +60,10 @@ describe('ProductCard', () => {
     render(<ProductCard {...mockProduct} isWishlisted={true} onToggleWishlist={vi.fn()} />);
     
     expect(screen.getByRole('button', { name: /remove wireless headphones from wishlist/i })).toBeInTheDocument();
+  });
+  it('exposes optimistic Wishlist mutations as busy until the request settles', () => {
+    render(<ProductCard {...mockProduct} isWishlisted wishlistPending onToggleWishlist={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /remove wireless headphones from wishlist/i })).toHaveAttribute('aria-busy', 'true');
   });
 
   it('hides actions only when explicitly requested by a display-only consumer', () => {

@@ -18,7 +18,7 @@ export async function fetchCollection<Metadata extends Category | Brand>(resourc
   return data;
 }
 export function productCardProps(product: ProductSummary) {
-  return { id: product.id, title: product.name, category: product.category.name,
+  return { id: product.id, wishlistProduct: product, title: product.name, category: product.category.name,
     description: product.description ?? undefined,
     price: Number(product.price), compareAtPrice: product.compareAtPrice === null ? undefined : Number(product.compareAtPrice),
     discountPercent: product.discountPercent ?? undefined,

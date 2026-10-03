@@ -8,6 +8,7 @@ import { ProductCard } from '@/components/ui/ProductCard';
 import { ProductCardSkeleton } from '@/components/ui/ProductCard/ProductCardSkeleton';
 import { productCardProps } from '@/features/search/api';
 import { useCart } from '@/features/cart/context';
+import { useWishlist } from '@/features/wishlist/context';
 import { useCategories } from '@/features/search/queries';
 import { useDeals, useProducts } from '@/features/products/queries';
 import { BenefitsReveal, HeroEntrance, SectionReveal, StaggerContainer, StaggerItem } from '@/components/motion/Motion';
@@ -106,6 +107,7 @@ function CategorySkeleton() {
 
 export function HomePage() {
   const { addItem } = useCart();
+  const wishlist = useWishlist();
   const location = useLocation();
   const navigate = useNavigate();
   const [accountDeleted, setAccountDeleted] = useState(false);
@@ -129,6 +131,7 @@ export function HomePage() {
   }, [location.hash]);
 
   return <div className={styles.home}>
+    {wishlist?.error && <Alert variant="error">{wishlist.error}</Alert>}
     {accountDeleted && <Alert variant="success">Your account has been deleted.</Alert>}
     <HeroEntrance className={styles.hero}>
       <div className={styles.heroCopy}>
@@ -174,7 +177,7 @@ export function HomePage() {
       <SectionReveal replay className={styles.sectionHeading}><div><p className={styles.eyebrow}>Worth a look</p><h2 id="deals-title">Featured Deals</h2></div><Link to="/products?sort=price-asc">Shop products →</Link></SectionReveal>
       {deals.isPending && <div role="status" aria-label="Loading deals" className={styles.productGrid}>{Array.from({ length: 6 }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
       {deals.isError && !deals.data && <SectionError title="Unable to load deals" message="Today's deals couldn't be loaded." retry={() => void deals.refetch()} />}
-      {deals.data && <StaggerContainer replay className={styles.productGrid}>{deals.data.data.map((product, index) => <StaggerItem key={product.id} index={index}><ProductCard {...productCardProps(product)} onNavigate={navigate} onAddToCart={() => addItem(product.id)} /></StaggerItem>)}</StaggerContainer>}
+      {deals.data && <StaggerContainer replay className={styles.productGrid}>{deals.data.data.map((product, index) => <StaggerItem key={product.id} index={index}><ProductCard {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} /></StaggerItem>)}</StaggerContainer>}
       {deals.data?.data.length === 0 && <p>No deals are available right now.</p>}
     </section>
     <section className={styles.promoGrid} aria-label="Explore electronics">
@@ -189,7 +192,7 @@ export function HomePage() {
       <SectionReveal replay className={styles.sectionHeading}><div><p className={styles.eyebrow}>Just arrived</p><h2 id="new-arrivals-title">New Arrivals</h2></div><Link to="/products">View all products →</Link></SectionReveal>
       {arrivals.isPending && <div role="status" aria-label="Loading new arrivals" className={styles.productGrid}>{Array.from({ length: 6 }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
       {arrivals.isError && !arrivals.data && <SectionError title="Unable to load new arrivals" message="We couldn't load the latest products right now." retry={() => void arrivals.refetch()} />}
-      {arrivals.data && <StaggerContainer replay className={styles.productGrid}>{arrivals.data.data.map((product, index) => <StaggerItem key={product.id} index={index}><ProductCard {...productCardProps(product)} onNavigate={navigate} onAddToCart={() => addItem(product.id)} /></StaggerItem>)}</StaggerContainer>}
+      {arrivals.data && <StaggerContainer replay className={styles.productGrid}>{arrivals.data.data.map((product, index) => <StaggerItem key={product.id} index={index}><ProductCard {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} /></StaggerItem>)}</StaggerContainer>}
       {arrivals.data?.data.length === 0 && <p>No products are available yet.</p>}
     </section>
   </div>;

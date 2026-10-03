@@ -60,3 +60,7 @@ export const Added: Story = { args: { ...productCardProps(product), onAddToCart:
   play: async ({ canvasElement }) => { canvasElement.querySelector<HTMLButtonElement>('button[aria-label^="Add "]')?.click(); } };
 export const AddPending: Story = { args: { ...productCardProps(product), onAddToCart: () => new Promise<void>(() => undefined) },
   play: async ({ canvasElement }) => { canvasElement.querySelector<HTMLButtonElement>('button[aria-label^="Add "]')?.click(); } };
+export const WishlistUnsaved: Story = { args: { onToggleWishlist: () => undefined, isWishlisted: false } };
+export const WishlistSaved: Story = { args: { onToggleWishlist: () => undefined, isWishlisted: true } };
+export const WishlistPending: Story = { args: { onToggleWishlist: () => undefined, isWishlisted: true, wishlistPending: true } };
+export const WishlistOutOfStock: Story = { args: { onToggleWishlist: () => undefined, isWishlisted: true, availability: 'UNAVAILABLE', onAddToCart: async () => undefined } };

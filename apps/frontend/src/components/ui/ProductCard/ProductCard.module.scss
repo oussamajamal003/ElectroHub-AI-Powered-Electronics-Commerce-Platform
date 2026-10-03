@@ -51,19 +51,19 @@
 
 .wishlistBtn {
   position: absolute;
-  top: $spacing-6;
+  bottom: $spacing-6;
   right: $spacing-6;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 0;
   background-color: $color-background;
   border: 1px solid $color-border;
   color: $color-text-secondary;
   cursor: pointer;
-  opacity: 0;
+  opacity: 1;
   z-index: 2;
   transition: opacity $transition-normal, color $transition-normal, background-color $transition-normal;
 
@@ -125,24 +125,16 @@
 .discount { margin-left: $spacing-2; color: $color-success; font-size: $font-size-sm; font-weight: $font-weight-semibold; }
 .availability { display: block; margin-bottom: $spacing-3; color: $color-text-secondary; font-size: $font-size-sm; }
 
-.rating {
+.ratingRow {
   display: flex;
   align-items: center;
   gap: $spacing-1;
   margin-bottom: $spacing-2;
-  color: $color-warning;
 }
-
-.starIcon {
-  width: 16px;
-  height: 16px;
-}
-
-.ratingValue {
-  font-family: $font-family-base;
-  font-size: $font-size-sm;
-  font-weight: $font-weight-medium;
-  color: $color-text-secondary;
+.rating {
+  gap: $spacing-1;
+  margin-bottom: 0;
+  :global(svg) { width: 16px; height: 16px; }
 }
 
 .description {

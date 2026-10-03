@@ -1,7 +1,9 @@
-import { Heart, Star } from 'lucide-react';
+import { WishlistButton } from '../WishlistButton/WishlistButton';
 import { useEffect, useRef, useState } from 'react';
 import { ProductImage } from '../ProductImage';
+import { Rating } from '../Rating/Rating';
 import { ApiError } from '@/lib/api';
+import type { ProductSummary } from '@/features/products/types';
 import styles from './ProductCard.module.scss';
 
 export interface ProductCardProps {
@@ -19,9 +21,11 @@ export interface ProductCardProps {
   onNavigate?: (href: string) => void;
   imageUrl: string;
   secondaryImageUrl?: string | null;
+  wishlistProduct?: ProductSummary;
   isWishlisted?: boolean;
+  wishlistPending?: boolean;
   onAddToCart?: (id: string | number) => Promise<void> | void;
-  onToggleWishlist?: (id: string | number) => void;
+  onToggleWishlist?: (id: string | number, product?: ProductSummary) => void;
   className?: string;
   showActions?: boolean;
   square?: boolean;
@@ -42,7 +46,9 @@ export function ProductCard({
   onNavigate,
   imageUrl,
   secondaryImageUrl,
+  wishlistProduct,
   isWishlisted = false,
+  wishlistPending = false,
   onAddToCart,
   onToggleWishlist,
   className = '',
@@ -75,12 +81,6 @@ export function ProductCard({
     resetTimer.current = setTimeout(() => setCartState('idle'), 2500);
   };
 
-  const handleToggleWishlist = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onToggleWishlist?.(id);
-  };
-
   const handleTitleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (!href || !onNavigate || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
@@ -97,14 +97,8 @@ export function ProductCard({
       <div className={styles.imageArea}>
         <div className={styles.primaryImage}><ProductImage src={imageUrl} alt={title} className={styles.image} loading="lazy" decoding="async" /></div>
         {secondaryImageUrl && secondaryImageUrl !== imageUrl && <div className={styles.secondaryImage} aria-hidden="true"><ProductImage src={secondaryImageUrl} alt="" className={styles.image} loading="lazy" decoding="async" /></div>}
-        {showActions && onToggleWishlist && <button
-          type="button"
-          className={`${styles.wishlistBtn} ${isWishlisted ? styles.wishlisted : ''}`}
-          onClick={handleToggleWishlist}
-          aria-label={isWishlisted ? `Remove ${title} from wishlist` : `Add ${title} to wishlist`}
-        >
-          <Heart className={styles.heartIcon} fill={isWishlisted ? 'currentColor' : 'none'} />
-        </button>}
+        {showActions && onToggleWishlist && <WishlistButton title={title} saved={isWishlisted} pending={wishlistPending}
+          className={styles.wishlistBtn} onToggle={() => wishlistProduct ? onToggleWishlist(id, wishlistProduct) : onToggleWishlist(id)} />}
       </div>
 
       <div className={styles.content}>
@@ -112,10 +106,9 @@ export function ProductCard({
         <h3 className={styles.title}>{href ? <a href={href} onClick={handleTitleClick}>{title}</a> : title}</h3>
         
         {rating !== undefined && rating !== null && (
-          <div className={styles.rating}>
-            <Star className={styles.starIcon} fill="currentColor" />
-            <span className={styles.ratingValue}>{rating.toFixed(1)}</span>
-            {reviewCount !== undefined && <span className={styles.reviewCount}>({reviewCount})</span>}
+          <div className={styles.ratingRow}>
+            <Rating value={rating} className={styles.rating} />
+            {reviewCount !== undefined && <span className={styles.reviewCount} aria-label={`${reviewCount} reviews`}>({reviewCount})</span>}
           </div>
         )}
         {reviewCount === 0 && <span className={styles.noReviews}>No reviews yet</span>}

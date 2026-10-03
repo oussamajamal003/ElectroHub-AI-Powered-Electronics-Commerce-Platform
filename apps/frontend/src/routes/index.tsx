@@ -1,7 +1,8 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { NotFoundPage } from '../pages/NotFoundPage';
-import { PlaceholderPage } from '../pages/PlaceholderPage';
+import { WishlistProvider } from '@/features/wishlist/WishlistProvider';
+import { WishlistPage } from '@/pages/customer/WishlistPage';
 import { AuthProvider } from '@/features/auth/context/AuthContext';
 import { CartProvider } from '@/features/cart/CartProvider';
 import { CustomerLayout } from '@/layouts/CustomerLayout';
@@ -25,6 +26,7 @@ export function AppRoutes() {
   return (
     <AuthProvider>
       <CartProvider>
+      <WishlistProvider>
       <Routes>
         {/* Customer Public Routes */}
         <Route element={<CustomerLayout />}>
@@ -35,13 +37,13 @@ export function AppRoutes() {
           <Route path="/products" element={route(<SearchPage catalog />)} />
           <Route path="/products/:slug" element={route(<ProductDetailPage />)} />
           <Route path="/cart" element={route(<CartPage />)} />
+          <Route path="/wishlist" element={route(<WishlistPage />)} />
           <Route path="/orders" element={<OrdersPage />} />
 
           {/* Customer Protected Routes — must be logged in */}
           <Route element={<ProtectedRoute requiredRole="CUSTOMER" redirectTo="/" />}>
             <Route path="/account" element={route(<AccountPage />)} />
             <Route path="/account/profile" element={route(<ProfilePage />)} />
-            <Route path="/wishlist" element={<PlaceholderPage title="Wishlist" type="wishlist" description="Products you save for later will appear here." />} />
           </Route>
         </Route>
 
@@ -59,6 +61,7 @@ export function AppRoutes() {
         {/* Fallback */}
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      </WishlistProvider>
       </CartProvider>
     </AuthProvider>
   );

@@ -635,4 +635,8 @@ The state-management implementation is production-ready when:
 
 The single application QueryClient owns authenticated Cart reads under user-scoped `cart` keys. Cart mutations replace only that Cart cache entry; they do not invalidate Product, Search, Category, Brand, Review, gallery, or Home queries. The guest adapter stores only versioned Product IDs and quantities in local storage and hydrates them through one bounded public API request. AuthContext still owns identity; Cart reconciliation waits for confirmed auth and clears guest storage only on success. There is no second global Cart store or persistent sensitive query cache.
 
+### Wishlist state (Task 03.3)
+
+Authenticated keys are `['wishlist', 'current', userId]`; guest hydration keys encode the sorted normalized ID set. `features/wishlist` owns the storage adapter and provider, using the existing QueryClient/API client. Hearts are controlled presentation components. Versioned intended membership overlays confirmed query data while authenticated writes serialize/coalesce; failure rolls back the final intent. Reads are cancelled before writes/reconciliation. Background refresh preserves usable content. Login waits for confirmed customer identity and server data, installs union cache before clearing accepted guest IDs, and retains unresolved entries or failed merges. Logout retains presentation only through route departure and never copies account products into guest storage. Wishlist writes do not invalidate other feature families.
+
 > **Use the simplest state mechanism that matches ownership: server state belongs to React Query, forms belong to React Hook Form, transient UI state belongs to React, and authoritative business state belongs to the backend.**

@@ -13,6 +13,9 @@ import { Select } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { useCart } from '@/features/cart/context';
+import { useWishlist } from '@/features/wishlist/context';
+import { WishlistButton } from '@/components/ui/WishlistButton/WishlistButton';
+import { Rating } from '@/components/ui/Rating/Rating';
 import { QuantitySelector } from '@/components/ui/QuantitySelector';
 import { useProduct, useMyReview, useReviewMutation, useReviews } from '@/features/products/queries';
 import { useSearchResults } from '@/features/search/queries';
@@ -28,6 +31,7 @@ function formatPrice(value: string) {
 
 export function ProductDetailPage() {
   const { addItem, data: cartData } = useCart();
+  const wishlist = useWishlist();
   const [cartQuantity, setCartQuantity] = useState(1);
   const [cartPending, setCartPending] = useState(false);
   const [cartFeedback, setCartFeedback] = useState('');
@@ -115,7 +119,7 @@ export function ProductDetailPage() {
         <p className={styles.category}>{product.category.name}{product.brand ? ` · ${product.brand.name}` : ''}</p>
         <h1 id="product-title">{product.name}</h1>
         <p className={styles.model}>SKU: {product.sku}{product.modelNumber ? ` · Model: ${product.modelNumber}` : ''}</p>
-        <p className={styles.rating}>{product.averageRating === null ? 'No reviews yet' : `★ ${product.averageRating} (${product.reviewCount} reviews)`}</p>
+        <Rating value={Number(product.averageRating ?? 0)} reviewCount={product.reviewCount} className={styles.rating} />
         <div className={styles.price}><strong>{formatPrice(product.price)}</strong>
           {product.compareAtPrice && product.discountPercent !== null && <><del>{formatPrice(product.compareAtPrice)}</del><span className={styles.discount}>-{product.discountPercent}%</span></>}
         </div>
@@ -123,13 +127,16 @@ export function ProductDetailPage() {
         <div className={styles.cartActions}>
           <div className={styles.quantityRow}><span>Qty</span><QuantitySelector quantity={cartQuantity} productName={product.name} maxQuantity={remainingQuantity} disabled={product.availability !== 'AVAILABLE' || cartPending} onIncrease={() => setCartQuantity(value => Math.min(remainingQuantity, value + 1))} onDecrease={() => setCartQuantity(value => Math.max(1, value - 1))} /></div>
           {product.availability !== 'AVAILABLE' || remainingQuantity === 0 ? <p role="status">{product.availability !== 'AVAILABLE' ? 'Currently unavailable.' : 'You already have the available stock in your cart.'}</p> : <p role="status">{remainingQuantity} more {remainingQuantity === 1 ? 'item' : 'items'} available to add.</p>}
-          <Button type="button" disabled={product.availability !== 'AVAILABLE' || remainingQuantity === 0 || cartPending} isLoading={cartPending} onClick={async () => {
+          <div className={styles.purchaseButtons}><Button type="button" disabled={product.availability !== 'AVAILABLE' || remainingQuantity === 0 || cartPending} isLoading={cartPending} onClick={async () => {
             setCartPending(true); setCartFeedback('');
             try { await addItem(product.id, cartQuantity); setCartFeedback(`${product.name} added to cart.`); }
             catch (error) { setCartFeedback(error instanceof ApiError && error.code === 'CART_STOCK_CONFLICT' || error instanceof Error && /^Only \d+ items? (?:is|are) currently available\.$/.test(error.message)
               ? error.message : 'Could not add this product. Check availability and try again.'); }
             finally { setCartPending(false); }
           }}>Add to Cart</Button>
+          {wishlist && <WishlistButton title={product.name} saved={wishlist.productIds.includes(product.id)} pending={wishlist.pending.includes(product.id)} onToggle={() => wishlist.toggle(product.id)} />}
+          </div>
+          {wishlist?.error && <p role="alert">{wishlist.error}</p>}
           {cartFeedback && <p role="status" className={styles.cartFeedback}>{cartFeedback}</p>}
         </div>
         {product.description && <p className={styles.intro}>{product.description}</p>}
@@ -153,7 +160,7 @@ export function ProductDetailPage() {
     <section className={styles.related} aria-labelledby="related-title"><div className={styles.relatedHeading}><h2 id="related-title">More in {product.category.name}</h2><Link to={`/products?category=${encodeURIComponent(product.category.slug)}`}>View category →</Link></div>
       {recommendations.isPending && <div role="status" aria-label="Loading related products" className={styles.relatedGrid}>{Array.from({ length: 4 }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
       {recommendations.isError && <p role="alert">Related products are unavailable. <Button type="button" onClick={() => void recommendations.refetch()}>Retry</Button></p>}
-      {related.length > 0 && <div className={styles.relatedGrid}>{related.map(item => <ProductCard key={item.id} {...productCardProps(item)} onNavigate={navigate} onAddToCart={() => addItem(item.id)} />)}</div>}
+      {related.length > 0 && <div className={styles.relatedGrid}>{related.map(item => <ProductCard key={item.id} {...productCardProps(item)} isWishlisted={wishlist?.productIds.includes(item.id)} wishlistPending={wishlist?.pending.includes(item.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(item.id)} />)}</div>}
     </section>
   </main>;
 }

@@ -1,0 +1,22 @@
+@use '@/styles/abstracts' as *;
+.page { max-width: 120rem; margin-inline: auto; padding: $spacing-8 $spacing-4 $spacing-16;
+  @include respond-to(md) { padding-inline: $spacing-8; } @include respond-to(lg) { padding-inline: $spacing-16; }
+}
+.breadcrumb { display: flex; gap: $spacing-2; align-items: center; color: $color-text-secondary; a { color: inherit; text-decoration: none; } }
+.heading { display: flex; align-items: baseline; justify-content: space-between; gap: $spacing-4; margin: $spacing-6 0 $spacing-8;
+  h1 { font-size: clamp(2rem, 3vw, 3.5rem); margin: 0; } span { color: $color-text-secondary; white-space: nowrap; }
+}
+.grid, .skeletons { display: grid; grid-template-columns: minmax(0, 1fr); gap: $spacing-6;
+  @include respond-to(sm) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @include respond-to(lg) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @include respond-to(xl) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @include respond-to(2xl) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+.skeletons { grid-column: 1 / -1; }
+.notice { padding: $spacing-4; border: 1px solid $color-border; margin-bottom: $spacing-6; p { margin: 0 0 $spacing-3; } }
+.empty { min-height: 20rem; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: $spacing-4; padding: $spacing-8;
+  border: 1px solid $color-border; text-align: center; h2, p { margin: 0; } svg { color: $color-primary; }
+}
+.primaryLink { display: inline-flex; background: $color-primary; color: #fff; padding: $spacing-3 $spacing-6; text-decoration: none; }
+.unavailable { border: 1px solid $color-border; padding: $spacing-6; display: flex; flex-direction: column; gap: $spacing-4; h2, p { margin: 0; } }
+.primaryLink:focus-visible, .breadcrumb a:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }

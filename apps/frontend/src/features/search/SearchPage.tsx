@@ -12,12 +12,15 @@ import { FilterChipGroup, FilterSelect } from '@/components/ui/FilterControls/Fi
 import { activeSearch, clearFilters, emptySearch, normalizeQuery, parseSearch, searchParams, type SearchState } from './searchState';
 import { productCardProps, type Suggestion } from './api';
 import { useCart } from '@/features/cart/context';
+import { useWishlist } from '@/features/wishlist/context';
 import { useBrands, useCategories, useSearchResults } from './queries';
+import { getProductGridSkeletonCount } from './skeletonCount';
 import { ImageSearchShell } from './ImageSearchShell';
 import styles from './SearchPage.module.scss';
 
 export function SearchPage({ catalog = false }: { catalog?: boolean }) {
   const { addItem } = useCart();
+  const wishlist = useWishlist();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const serialized = params.toString();
@@ -89,6 +92,7 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
     Math.max(1, Math.min(state.page - 2, totalPages - 4)) + index);
   return <>
     <div className={styles.container}>
+      {wishlist?.error && <p role="alert">{wishlist.error}</p>}
       <nav aria-label="Breadcrumb" className={styles.breadcrumb}><Link to="/">Home</Link><ChevronRight size={16} aria-hidden="true" /><span aria-current="page">{catalog ? 'All Products' : 'Search'}</span></nav>
       <div className={styles.titleRow}>
         <h1 className={styles.pageTitle}>{catalog ? 'All Products' : 'Search'}</h1>
@@ -135,11 +139,11 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
           </div>}
           <section aria-label="Search results" aria-busy={loading} className={styles.results}>
             <div role="status" aria-live="polite">{loading ? 'Searching products…' : results ? `${results.meta.total} ${results.meta.total === 1 ? 'result' : 'results'}${state.q ? ` for “${state.q}”` : ''}` : ''}</div>
-            {loading && <div className={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`} aria-hidden="true">{Array.from({ length: 4 }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
+            {loading && <div className={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`} aria-hidden="true">{Array.from({ length: getProductGridSkeletonCount(state.pageSize) }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
             {error && <div role="alert" className={styles.empty}><h2>Search unavailable</h2><p>Search is temporarily unavailable. Please try again.</p><Button type="button" onClick={() => void searchQuery.refetch()}>Retry search</Button></div>}
             {results && results.data.length > 0 && <div className={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`}>{results.data.map((product, index) => catalog
-              ? <StaggerItem key={product.id} replay index={index % 4}><ProductCard {...productCardProps(product)} onNavigate={navigate} onAddToCart={() => addItem(product.id)} /></StaggerItem>
-              : <ProductCard key={product.id} {...productCardProps(product)} onNavigate={navigate} onAddToCart={() => addItem(product.id)} />)}</div>}
+              ? <StaggerItem key={product.id} replay index={index % 4}><ProductCard {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} /></StaggerItem>
+              : <ProductCard key={product.id} {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} />)}</div>}
             {results && results.data.length === 0 && <div className={styles.empty}><h2>{state.q ? `No results for “${state.q}”` : 'No products found'}</h2><p>Try adjusting your search or filters.</p>{catalog && filterCount > 0 && <Button type="button" variant="link" onClick={() => commit(clearFilters({ ...state, q: normalizedDraft }))}>Reset filters</Button>}{state.q && <Button type="button" variant="link" onClick={() => { setDraft(''); update({ q: '' }); }}>Clear query</Button>}{state.page > 1 && <Button type="button" variant="link" onClick={() => commit({ ...state, page: 1 })}>First page</Button>}</div>}
             {totalPages > 1 && <Pagination aria-label="Search result pages"><PaginationContent>
               <PaginationItem><PaginationPrevious disabled={state.page <= 1} onClick={() => commit({ ...state, page: state.page - 1 })} /></PaginationItem>
