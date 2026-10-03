@@ -38,3 +38,9 @@ Figma Make screenshot
 ```
 
 Storybook is not imported by the customer application, is not exposed through customer routing, and is not published as part of the frontend production build.
+
+## Task 03.3 Wishlist
+
+`WishlistPage.stories.tsx` renders the actual `WishlistPageContent` with deterministic local Product fixtures: Guest, Authenticated, Empty, Loading, Error, BackgroundError, MergeRecovery, OutOfStock, Unavailable and Pending. `WishlistButton.stories.tsx` covers Unsaved, Saved, Pending, Error and DetailsActions (the real Button and heart using the Details action layout). ProductCard adds WishlistUnsaved, WishlistSaved, WishlistPending and WishlistOutOfStock. No default API calls occur. Page stories exercise actual ProductCards and their independent Add-to-Cart action.
+
+Run `npx playwright test -c playwright.cart-storybook.config.ts wishlist.stories.spec.ts` from `apps/frontend` for actual axe WCAG 2 A/AA checks, no API request assertions, overflow checks and screenshots at 390/768/1440/1920. Full Product Details composition is checked by the catalog browser suite, not claimed as a standalone Storybook page.

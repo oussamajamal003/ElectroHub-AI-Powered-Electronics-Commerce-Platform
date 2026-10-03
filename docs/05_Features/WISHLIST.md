@@ -4,7 +4,17 @@
 
 This document defines the wishlist functionality for ElectroHub.
 
-The wishlist allows authenticated customers to save products for later.
+The wishlist allows guests and authenticated customers to save products for later. Task 03.3 is a bounded set of at most 50 Product IDs; it has no quantity, totals, price reservation, or inventory reservation.
+
+During authenticated refresh, the latest confirmed user-scoped count sizes the loading grid (at most 10 cards). Unknown count metadata remains distinct from a confirmed zero. The item-count label shows a skeleton and the header badge stays hidden until Wishlist loading resolves; stored estimates are never displayed as current counts. Successful mutation and reconciliation responses persist the confirmed count metadata before notifying query-cache consumers. This makes the refresh count available in the same publication step, including 0→1. Unresolved authenticated data never renders the resolved-empty state.
+
+Guest and authenticated presentation use the same current-membership count and missing-item loading predicate. Usable cards stay visible during background reads; optimistic membership changes update the displayed and skeleton-count basis together. Mode-specific storage and protected reads remain necessary: guest IDs are browser-owned, while authenticated membership must be confirmed by the account endpoint. Shared presentation cannot eliminate upstream token-refresh or account API latency. A live comparison using the same saved Product in separate guest/authenticated browsers confirmed one first-frame skeleton, no false Empty state, a hidden unresolved badge, one membership/hydration request, and cards/badge in the same DOM update. Response-to-card time was 35.1 ms for guest and 35.4 ms for authenticated; total time was 3.00 seconds versus 7.28 seconds. The authenticated token refresh took 2.71 seconds and account Wishlist read 3.64 seconds, versus guest validation at 1.99 seconds. This read-only comparison made no account Wishlist mutations. Total-duration parity remains unclosed.
+
+When guest-saved IDs require reconciliation, call reconcile directly rather than waiting for a preliminary Wishlist GET. Its complete response populates the same user-scoped query cache with a 30-second freshness window before guest storage is cleared. A failed merge still enables the fallback account read and preserves retry behavior. Header counts consume the feature providers directly, without a separate badge fetch or count store.
+
+On refresh with an existing customer hint, the server-confirmed refresh token starts Cart and Wishlist reads in parallel with `/auth/me`. Their results are held by the shared session-read bootstrap helper and consumed by the ordinary user-scoped queries only after identity verification. They are not displayed or persisted under the cached identity while verification is pending. Invalid sessions discard the pending reads. This removes the `/auth/me` → commerce-read waterfall without introducing count stores or weakening server authorization.
+
+Wishlist is imported eagerly at the route boundary to avoid an additional lazy/Suspense reveal wait when data is fast. Focused browser measurement reduced that wait from approximately 252 ms to 62 ms after required data was usable. Live authenticated DEV checks confirmed 0→1, 2→3, 3→2 and 12→10 capped refresh skeleton counts, no first-frame Empty flash, one Wishlist GET per refresh, and a badge in the same render as cards. The account's original Wishlist was restored. Latest live total load was 7.49–9.64 seconds versus Products at 1.43 seconds: token refresh took 3.07–3.65 seconds and Wishlist responses took 3.55–5.64 seconds. Cards appeared 33–54 ms after the Wishlist response and Cart badges within 30–47 ms of the Cart response. Overall speed remains unclosed; backend optimization is outside this frontend-only task.
 
 Customers can:
 
@@ -36,13 +46,13 @@ Prisma
 Supabase PostgreSQL
 ```
 
-The backend is authoritative for wishlist ownership and contents.
+The backend is authoritative for authenticated ownership and contents. Guests store only `{ productIds: string[] }` under `electrohub.wishlist.v1`; one bounded public validation request hydrates current public Product summaries. Storage is untrusted, normalized, deduplicated, and bounded; failed writes are reported.
 
 ---
 
 ## 3. Wishlist Ownership
 
-Each wishlist belongs to an authenticated customer.
+Each server wishlist belongs to an authenticated customer. Guest wishlists are isolated browser-local Product ID sets.
 
 The backend must verify:
 
@@ -103,7 +113,7 @@ Wishlist Ownership
 Product / Wishlist Relationship
 ```
 
-The UI should update immediately after successful confirmation.
+The UI updates optimistically. Authenticated writes are serialized with versioned per-Product intent; newer intent overlays earlier responses, and failed final intent rolls back to confirmed membership. Removal restores focus to the next/previous heart or Explore Products.
 
 ---
 
@@ -165,10 +175,10 @@ Inventory Validation
  ↓
 Cart Updated
  ↓
-Optional Wishlist Removal
+Product Remains Saved
 ```
 
-The system should clearly define whether the product remains in the wishlist or is removed after the operation.
+Add to Cart reuses Task 03.2 and never removes the Wishlist entry. Cart stock validation remains authoritative and independent.
 
 ---
 
@@ -262,12 +272,12 @@ The implementation must handle rollback correctly.
 
 ## 15. Authentication
 
-Wishlist operations require authentication unless an explicitly approved guest-wishlist strategy is introduced.
+Task 03.3 approves public guest Wishlist UI and hydration. Persistent account endpoints require `requireAuth` and `requireRole('CUSTOMER')`; no client-selected ownership is accepted.
 
 Unauthenticated users should receive an appropriate UX path, such as:
 
 ```text
-Sign in to save products.
+Save as a guest, then sign in to merge with your account.
 ```
 
 ---
@@ -280,9 +290,15 @@ Typical endpoints may include:
 GET    /api/wishlist
 POST   /api/wishlist/items
 DELETE /api/wishlist/items/:productId
+POST   /api/wishlist/validate
+POST   /api/wishlist/reconcile
 ```
 
-The exact contract follows the backend implementation and `API_GUIDELINES.md`.
+Strict Add body: `{ productId: UUID }`. Strict validation/reconciliation body: `{ productIds: UUID[] }`, duplicates normalized, maximum 50 distinct IDs. Responses use `{ data: { items, totalItems } }`; each item has `productId`, current lean `product` summary or null, and `AVAILABLE`, `OUT_OF_STOCK`, or `UNAVAILABLE`. Reconcile additionally returns safe `unresolved` entries. New Add is 201, duplicate Add and idempotent Remove are 200; capacity is 409. Public validation is rate-limited.
+
+Reconciliation is transactional SET UNION with Serializable retries and existing unique constraints. Install returned user-scoped cache before clearing accepted guest IDs. Invalid guests remain locally recoverable; failed merge retains both sources and has explicit Retry/Remove controls. Logout never copies server contents to guest storage.
+
+Active out-of-stock Products can be saved and remain removable. New inactive/missing saves are rejected; existing unavailable entries remain placeholders without unpublished metadata. Product/Review hydration is batched, and prices use the existing Decimal-derived summary mapping. No Product, Search, Review, Home, Cart, or Inventory mutation/invalidation is introduced by Wishlist actions.
 
 ---
 
@@ -445,4 +461,4 @@ Wishlist functionality is complete when:
 
 ## 26. Wishlist Principle
 
-> **The wishlist provides persistent product discovery for authenticated customers while keeping ownership, product validity, and saved-item state authoritative on the backend.**
+> **The wishlist supports browser-local guest discovery and persistent authenticated discovery, while the backend remains authoritative for product validity and authenticated ownership.**

@@ -1,0 +1,9 @@
+@use '@/styles/abstracts' as *;
+.button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
+  flex-shrink: 0; background: $color-background; color: $color-text-secondary; border: 1px solid $color-border; cursor: pointer;
+  transition: color $transition-normal, border-color $transition-normal;
+  &[aria-pressed='true'], &:hover { color: $color-error; border-color: $color-error; }
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
+  &[data-pending='true'] { border-style: dashed; }
+}
+@media (prefers-reduced-motion: reduce) { .button { transition: none; } }

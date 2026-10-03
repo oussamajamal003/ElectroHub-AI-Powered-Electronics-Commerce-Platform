@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, useNavigate, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SearchPage } from './SearchPage';
+import { getProductGridSkeletonCount } from './skeletonCount';
 import { useCart } from '@/features/cart/context';
 import { SearchField } from '@/components/ui/SearchField/SearchField';
 import { apiClient } from '@/lib/api';
@@ -15,7 +16,8 @@ import { queryKeys } from '@/lib/query';
 vi.mock('@/lib/api', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/api')>(), apiClient: vi.fn() }));
 vi.mock('@/features/cart/context', () => ({ useCart: vi.fn() }));
 const product = { id: 'product', name: 'Apple MacBook Air', slug: 'apple-macbook-air', price: '999.00', compareAtPrice: null,
-  currency: 'USD', category: { id: 'laptops', name: 'Laptops', slug: 'laptops' }, brand: null, availability: 'AVAILABLE', primaryImage: null };
+  currency: 'USD', category: { id: 'laptops', name: 'Laptops', slug: 'laptops' }, brand: null, availability: 'AVAILABLE', primaryImage: null,
+  averageRating: '4.7', reviewCount: 318 };
 const response = { data: [product], meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 } };
 beforeEach(() => {
   vi.clearAllMocks();
@@ -52,6 +54,9 @@ describe('URL-backed Search state', () => {
   });
 });
 describe('Search page', () => {
+  it('bounds structural catalog skeletons by the requested page size', () => {
+    expect([1, 3, 8, 12, 100].map(getProductGridSkeletonCount)).toEqual([1, 3, 8, 10, 10]);
+  });
   it('accepts a new query while loading and ignores the cancelled response', async () => {
     let finishOld: ((value: typeof response) => void) | undefined;
     vi.mocked(apiClient).mockImplementation(async endpoint => {
@@ -94,7 +99,7 @@ describe('Search page', () => {
     expect(await screen.findByText('Apple MacBook Air')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Go to page 2' }));
     await waitFor(() => expect(finishPageTwo).toBeDefined());
-    expect(screen.getAllByTestId('product-skeleton')).toHaveLength(4);
+    expect(screen.getAllByTestId('product-skeleton')).toHaveLength(10);
     expect(screen.queryByText('Apple MacBook Air')).not.toBeInTheDocument();
     expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(2);
     await act(async () => finishPageTwo?.({ ...response, data: [{ ...product, id: 'page-two', name: 'Page Two Product' }], meta: { ...response.meta, page: 2, total: 40, totalPages: 2 } }));
@@ -108,6 +113,8 @@ describe('Search page', () => {
     page(); fireEvent.change(screen.getByRole('combobox', { name: 'Search products' }), { target: { value: 'macbook' } });
     expect(await screen.findByTestId('product-card')).toHaveTextContent('Apple MacBook Air');
     expect(screen.getByTestId('product-card')).toHaveTextContent('999');
+    expect(screen.getByRole('img', { name: 'Rated 4.7 out of 5.' })).toBeInTheDocument();
+    expect(screen.getByText('(318)')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Add .* to cart/ })).toBeInTheDocument();
     await waitFor(() => expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(1));
     expect(screen.getByTestId('location')).toHaveTextContent('q=macbook');

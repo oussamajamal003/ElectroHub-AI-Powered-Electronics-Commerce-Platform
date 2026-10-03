@@ -1,16 +1,4 @@
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import { App } from './app/App';
-import './styles/main.scss';
-
-const rootElement = document.getElementById('root');
-
-if (!rootElement) {
-  throw new Error('Root element not found');
-}
-
-createRoot(rootElement).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-);
+// Start both module downloads together; auth's small dependency graph can
+// restore the session while the React application is still downloading.
+void import('./features/auth/sessionRestore').then(({ preloadSessionRestore }) => preloadSessionRestore());
+void import('./render');

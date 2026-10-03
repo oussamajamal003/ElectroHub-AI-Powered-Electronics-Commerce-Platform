@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/DropdownMenu';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { useCart } from '@/features/cart/context';
+import { useWishlist } from '@/features/wishlist/context';
 import { AuthModal, AuthModalMode } from '@/features/auth/components/AuthModal';
 import { SignOutModal } from '@/features/auth/components/SignOutModal';
 import styles from './CustomerHeader.module.scss';
@@ -30,7 +31,9 @@ export interface CustomerHeaderProps {
   wishlistCount?: number;
 }
 
-export function CustomerHeader({ cartCount: countOverride, wishlistCount = 0 }: CustomerHeaderProps) {
+export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishlistOverride }: CustomerHeaderProps) {
+  const wishlist = useWishlist();
+  const wishlistCount = wishlist?.isLoading ? 0 : wishlistOverride ?? wishlist?.totalItems ?? 0;
   const { totalQuantity } = useCart();
   const cartCount = countOverride ?? totalQuantity;
   const [authReturnTo, setAuthReturnTo] = useState<'/cart' | undefined>();

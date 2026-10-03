@@ -5,11 +5,12 @@ export function ProductCardSkeleton() {
   return <div className={styles.card} data-testid="product-skeleton" aria-hidden="true">
     <div className={styles.imageArea} data-testid="product-skeleton-image"><Skeleton width="100%" height="100%" /></div>
     <div className={`${styles.content} ${styles.skeletonContent}`}>
-      <Skeleton width="38%" height={16} />
-      <Skeleton width="85%" height={24} />
-      <Skeleton width="66%" height={18} />
-      <Skeleton width="48%" height={26} />
-      <Skeleton width="32%" height={18} />
+      <Skeleton data-skeleton-part="category" width="34%" height={14} />
+      <Skeleton data-skeleton-part="title" width="82%" height={24} />
+      <Skeleton data-skeleton-part="rating" width="72%" height={16} />
+      <Skeleton data-skeleton-part="description" width="90%" height={36} />
+      <Skeleton data-skeleton-part="price" width="52%" height={26} />
+      <Skeleton data-skeleton-part="action" width="100%" height={40} />
     </div>
   </div>;
 }

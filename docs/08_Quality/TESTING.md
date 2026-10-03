@@ -432,3 +432,13 @@ A feature is considered tested when:
 ## 25. Testing Principle
 
 > **Testing verifies behavior, not implementation claims. A feature is complete only when its important behavior has been demonstrated with appropriate evidence.**
+
+## Task 03.3 Wishlist evidence
+
+- Backend: `src/services/__tests__/wishlist.service.test.ts` and `src/routes/wishlist.routes.test.ts`; mocked Prisma and route auth, no live database.
+- Frontend: `src/features/wishlist/*.test.ts*` and `src/pages/customer/WishlistPage.test.tsx`; focused ProductCard/Cart regressions.
+- Browser: `npx playwright test -c playwright.catalog.config.ts wishlist.spec.ts`. These flows intercept API responses and explicitly map A–T in the implementation report.
+- Storybook: focused `wishlist.stories.spec.ts` scans actual local fixtures at four viewports.
+- Non-intercepted smoke: start this branch API/frontend, then `WISHLIST_SMOKE_URL=http://127.0.0.1:3102 node tests/wishlist-local-smoke.mjs` (set the environment variable using your shell). It reads real catalog APIs and exercises guest save/refresh/removal, writes evidence under ignored `test-results`, and never claims authenticated hosted persistence.
+
+Production `npm run build` is required in addition to standalone typecheck, because project-reference settings also validate test/story code. No migration, seed or PROD writes are part of these checks.

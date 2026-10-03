@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { queryKeys } from '@/lib/query';
+import { useSessionReadBootstrap } from '@/lib/useSessionReadBootstrap';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { MAX_CART_LINES, MAX_CART_QUANTITY, clearGuestCart, readGuestCart, writeGuestCart } from './storage';
 import type { CartData, CartInputItem } from './types';
 import { CartContext } from './context';
 const EMPTY_CART: CartData = { items: [], totalQuantity: 0, subtotal: '0.00', shipping: '0.00', total: '0.00', currency: 'USD', canCheckout: false };
+const readServerCart = (signal?: AbortSignal) => apiClient<{ data: CartData }>('/api/cart', { signal });
 
 function withoutCartItem(data: CartData | undefined, productId: string): CartData | undefined {
   if (!data) return undefined;
@@ -36,6 +38,7 @@ function withPendingQuantities(data: CartData | undefined, quantities: Record<st
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, isSessionVerified, isLoggingOut } = useAuth();
+  const readCart = useSessionReadBootstrap(readServerCart, isAuthenticated && user?.role === 'CUSTOMER' && !isLoggingOut);
   const client = useQueryClient();
   const [guestItems, setGuestItems] = useState(readGuestCart);
   const [mergeError, setMergeError] = useState<string | null>(null);
@@ -77,7 +80,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const serverQuery = useQuery({ queryKey: serverKey,
-    queryFn: ({ signal }) => apiClient<{ data: CartData }>('/api/cart', { signal }),
+    queryFn: ({ signal }) => readCart(signal),
     enabled: authenticated, staleTime: 30_000 });
   if (authenticated && serverQuery.data?.data) lastServerCart.current = serverQuery.data.data;
   const guestQuery = useQuery({ queryKey: queryKeys.cart.guest(guestKey),

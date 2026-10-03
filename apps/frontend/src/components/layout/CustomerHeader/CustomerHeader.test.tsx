@@ -4,6 +4,8 @@ import { BrowserRouter } from 'react-router-dom';
 import { describe, beforeEach, it, expect, vi } from 'vitest';
 import { CustomerHeader } from './CustomerHeader';
 import { useAuth } from '@/features/auth/context/AuthContext';
+import { WishlistContext } from '@/features/wishlist/context';
+import { wishlistFixture } from '@/features/wishlist/fixtures';
 import { useCart } from '@/features/cart/context';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({
@@ -357,6 +359,17 @@ describe('CustomerHeader', () => {
   });
 
   // ── Cart & Wishlist Badges ────────────────────────────────
+  it('hides the Wishlist badge until its authenticated count resolves', () => {
+    vi.mocked(useAuth).mockReturnValue({ user: null, isAuthenticated: false, isInitializing: false, logout: mockLogout } as any);
+    const { rerender } = renderWithRouter(<WishlistContext.Provider value={wishlistFixture({ isLoading: true, data: undefined, expectedCount: 3, totalItems: 3 })}><CustomerHeader /></WishlistContext.Provider>);
+    expect(screen.getByRole('link', { name: 'Wishlist' })).toBeInTheDocument();
+    expect(screen.queryByText('3', { exact: true })).not.toBeInTheDocument();
+    rerender(<BrowserRouter><WishlistContext.Provider value={wishlistFixture({ totalItems: 3 })}><CustomerHeader /></WishlistContext.Provider></BrowserRouter>);
+    expect(screen.getByRole('link', { name: 'Wishlist (3)' })).toBeInTheDocument();
+    rerender(<BrowserRouter><WishlistContext.Provider value={wishlistFixture({ data: { items: [], totalItems: 0 }, totalItems: 0 })}><CustomerHeader /></WishlistContext.Provider></BrowserRouter>);
+    expect(screen.getByRole('link', { name: 'Wishlist' })).toBeInTheDocument();
+    expect(screen.queryByText('0', { exact: true })).not.toBeInTheDocument();
+  });
   it('renders cart and wishlist badges when counts are greater than 0', () => {
     vi.mocked(useAuth).mockReturnValue({
       user: null,
