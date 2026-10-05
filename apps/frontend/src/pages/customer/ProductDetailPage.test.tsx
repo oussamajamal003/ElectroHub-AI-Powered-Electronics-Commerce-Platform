@@ -74,4 +74,27 @@ describe('Product details loading and review auth state', () => {
     expect(screen.getByText('You already have the available stock in your cart.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add to Cart' })).toBeDisabled();
   });
+  it('keeps usable product content and controls after a background availability failure', () => {
+    vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, stockStatus: 'IN_STOCK' } }, isPending: false, isError: true } as unknown as ReturnType<typeof useProduct>);
+    renderPage();
+    expect(screen.getByRole('heading', { name: 'Test Tablet' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry availability' })).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Loading product details' })).not.toBeInTheDocument();
+  });
+  it.each([['IN_STOCK', 8, 'In Stock'], ['LOW_STOCK', 2, 'Low Stock'], ['OUT_OF_STOCK', 0, 'Out of Stock']] as const)('renders %s with authoritative quantity controls', (stockStatus, availableQuantity, label) => {
+    vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, stockStatus, availableQuantity, purchasable: availableQuantity > 0, availability: availableQuantity > 0 ? 'AVAILABLE' : 'UNAVAILABLE' } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
+    renderPage();
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add to Cart' }).hasAttribute('disabled')).toBe(availableQuantity === 0);
+    expect(screen.getByRole('button', { name: 'Increase quantity for Test Tablet' }).hasAttribute('disabled')).toBe(availableQuantity === 0);
+    if (stockStatus === 'LOW_STOCK') expect(screen.getByText('Only 2 left')).toBeInTheDocument();
+  });
+  it.each([undefined, null])('treats missing inventory status as unavailable rather than Out of Stock (%s)', stockStatus => {
+    vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, stockStatus, availableQuantity: 0, purchasable: false, availability: 'UNAVAILABLE' } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
+    renderPage();
+    expect(screen.getByText('Unavailable', { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText('Out of Stock', { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add to Cart' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Increase quantity for Test Tablet' })).toBeDisabled();
+  });
 });

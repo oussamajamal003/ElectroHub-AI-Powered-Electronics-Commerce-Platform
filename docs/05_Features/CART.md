@@ -1,5 +1,9 @@
 # Cart
 
+## Task 03.4A Inventory compatibility
+
+Each Cart line adds nullable `stockStatus` derived from quantity/threshold. This is independent of line `availability: LOW_STOCK` (requested quantity exceeds current stock). Missing/invalid Inventory is UNAVAILABLE; valid zero stock is OUT_OF_STOCK. Reads preserve invalid quantities and removable rows; no silent adjustment/deletion. Additions and quantity updates are validated on the server. A strict reduction is a corrective Cart operation: the service compares the requested final quantity with the persisted Cart quantity, still requires the owned line, active Product/category, valid Inventory, and a positive bounded quantity, but does not require the reduced quantity to fit current stock. Equal-quantity updates and increases retain full stock validation. Checkout remains blocked until all lines are valid. Cart operations never update Inventory. See [Inventory](INVENTORY.md).
+
 ## Task 03.2 — Current Cart Contract
 
 Cart is available to guests and authenticated customers. The current implementation uses one frontend Cart feature boundary: guests persist only `{productId, quantity}` in versioned `electrohub.cart.v1` local storage, while authenticated customers use the existing React Query client and a server Cart scoped to the authenticated user ID. Prices, stock, Product status, images, and totals are never trusted from guest storage or request bodies. This section describes implemented 03.2 behavior; later checkout sections below are future architecture, not a live checkout promise.
@@ -134,16 +138,9 @@ Current product data can be resolved from the product record.
 
 ## 6. Quantity Updates
 
-Customers can increase or decrease quantities.
+Customers can increase or decrease quantities. The backend compares the requested final quantity with the persisted Cart quantity inside its transaction; it does not trust a client-supplied operation type.
 
-The backend must revalidate:
-
-```text
-Product Exists
-Product Is Purchasable
-Quantity Is Valid
-Inventory Is Sufficient
-```
+Every update requires an existing owned Cart line, an existing active Product/category, valid Inventory, and a positive quantity within the Cart limit. Increases and equal-quantity updates also require the requested quantity to fit current stock. A strict decrease may correct an existing line after stock drops, even when the resulting requested quantity still exceeds stock. This only corrects Cart intent: it does not reserve or mutate Inventory, and it does not make the Cart eligible for checkout.
 
 The UI should prevent obviously invalid actions, but backend validation remains mandatory.
 

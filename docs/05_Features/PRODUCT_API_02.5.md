@@ -1,5 +1,9 @@
 # Task 02.5 — Public Product API
 
+## Task 03.4A additive availability contract
+
+Public Product list/detail, deals and Search Product summaries now include `stockStatus: IN_STOCK | LOW_STOCK | OUT_OF_STOCK | null`, `availableQuantity: number`, and `purchasable: boolean`. The quantity/threshold projection is part of the existing bounded query, not a per-Product Inventory request. Low-stock threshold and stored Inventory status are not exposed. Missing/invalid Inventory yields null/0/false; inactive Products remain hidden. Existing binary availability and Decimal prices remain compatible. This supersedes the original quantity-exclusion statement below. No Inventory endpoint or write API is added.
+
 ## Routes and response contract
 
 | Method | Path | Result |

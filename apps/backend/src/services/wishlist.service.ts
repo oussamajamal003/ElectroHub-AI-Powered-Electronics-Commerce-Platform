@@ -14,7 +14,7 @@ async function hydrate(productIds: string[], client: Prisma.TransactionClient = 
   const items = productIds.map(productId => {
     const product = byId.get(productId) ?? null;
     return { productId, product, availability: !product ? 'UNAVAILABLE' as const :
-      product.availability === 'AVAILABLE' ? 'AVAILABLE' as const : 'OUT_OF_STOCK' as const };
+      product.stockStatus === null ? 'UNAVAILABLE' as const : product.availability === 'AVAILABLE' ? 'AVAILABLE' as const : 'OUT_OF_STOCK' as const };
   });
   return { items, totalItems: items.length };
 }

@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import type { SearchInput } from '../validators/search.validator.js';
 import { escapeLike, relevance, searchFrom, searchOrder, searchWhere } from './search.sql.js';
+import { projectInventory } from './inventory.service.js';
 
 export interface SearchSuggestion { id: string; type: 'PRODUCT' | 'BRAND' | 'CATEGORY'; label: string; slug: string }
 export type ProductListingProfile = Record<string, number>;
@@ -15,6 +16,7 @@ interface ProductRow {
   compareAtPrice: string | null;
   description: string | null;
   quantity: number | null;
+  lowStockAt: number | null;
   category: { id: string; name: string; slug: string } | null;
   brand: { id: string; name: string; slug: string } | null;
   images: { id: string; url: string; altText: string | null; sortOrder: number; isPrimary: boolean }[] | null;
@@ -31,7 +33,8 @@ function mapProductRow(row: ProductRow) {
     id: row.id, name: row.name, slug: row.slug,
     price: price.toFixed(2), compareAtPrice: compareAtPrice?.toFixed(2) ?? null,
     currency: 'USD' as const, category: row.category, brand: row.brand,
-    availability: row.quantity !== null && row.quantity > 0 ? 'AVAILABLE' as const : 'UNAVAILABLE' as const,
+    availability: projectInventory(row.quantity === null ? null : { quantity: row.quantity, lowStockAt: row.lowStockAt ?? 5 }).purchasable ? 'AVAILABLE' as const : 'UNAVAILABLE' as const,
+    ...projectInventory(row.quantity === null ? null : { quantity: row.quantity, lowStockAt: row.lowStockAt ?? 5 }),
     discountPercent: compareAtPrice?.gt(price)
       ? compareAtPrice.minus(price).div(compareAtPrice).mul(100)
         .toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP).toNumber() : null,
@@ -62,7 +65,7 @@ export class SearchService {
         FROM "reviews" r JOIN page ON page."id" = r."productId" GROUP BY r."productId"
       )
       SELECT total.total, p."id", p."name", p."slug", p."price"::text AS price,
-        p."compareAtPrice"::text AS "compareAtPrice", p."description", i."quantity",
+        p."compareAtPrice"::text AS "compareAtPrice", p."description", i."quantity", i."lowStockAt",
         jsonb_build_object('id', c."id", 'name', c."name", 'slug', c."slug") AS category,
         CASE WHEN b."id" IS NULL THEN NULL ELSE jsonb_build_object('id', b."id", 'name', b."name", 'slug', b."slug") END AS brand,
         images.images, rating."reviewCount", rating."averageRating"

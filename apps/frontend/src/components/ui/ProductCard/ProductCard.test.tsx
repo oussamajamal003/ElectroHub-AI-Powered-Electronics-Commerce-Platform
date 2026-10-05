@@ -4,6 +4,29 @@ import { ProductCard } from './ProductCard';
 import { ApiError } from '@/lib/api';
 
 describe('ProductCard', () => {
+  it.each([['IN_STOCK', 'In Stock', 8], ['LOW_STOCK', 'Low Stock', 2], ['OUT_OF_STOCK', 'Out of Stock', 0]] as const)('renders authoritative %s without blocking navigation or heart', (stockStatus, label, quantity) => {
+    const navigate = vi.fn();
+    const heart = vi.fn();
+    render(<ProductCard id="stock" title="Stock phone" imageUrl="/phone.jpg" price={10} href="/products/phone" onNavigate={navigate}
+      stockStatus={stockStatus} availableQuantity={quantity} purchasable={quantity > 0} availability={quantity > 0 ? 'AVAILABLE' : 'UNAVAILABLE'} onAddToCart={vi.fn()} onToggleWishlist={heart} />);
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add Stock phone to cart' }).hasAttribute('disabled')).toBe(quantity === 0);
+    fireEvent.click(screen.getByRole('button', { name: 'Add Stock phone to wishlist' }));
+    expect(heart).toHaveBeenCalledOnce();
+    expect(navigate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('link', { name: 'Stock phone' }));
+    expect(navigate).toHaveBeenCalledWith('/products/phone');
+  });
+  it('does not invent Out of Stock for missing or unresolved inventory', () => {
+    const { rerender } = render(<ProductCard id="stock" title="Phone" imageUrl="/phone.jpg" price={10} availability="UNAVAILABLE" purchasable={false} onAddToCart={vi.fn()} />);
+    expect(screen.getByText('Unavailable', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.queryByText('Out of Stock')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add Phone to cart' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add Phone to cart' })).toHaveTextContent('Unavailable');
+    rerender(<ProductCard id="stock" title="Phone" imageUrl="/phone.jpg" price={10} availability="UNAVAILABLE" stockStatus={null} purchasable={false} onAddToCart={vi.fn()} />);
+    expect(screen.getByText('Unavailable', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.queryByText('Out of Stock')).not.toBeInTheDocument();
+  });
   const mockProduct = {
     id: 'p1',
     title: 'Wireless Headphones',

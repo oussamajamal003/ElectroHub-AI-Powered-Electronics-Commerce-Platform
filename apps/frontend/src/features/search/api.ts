@@ -23,7 +23,7 @@ export function productCardProps(product: ProductSummary) {
     price: Number(product.price), compareAtPrice: product.compareAtPrice === null ? undefined : Number(product.compareAtPrice),
     discountPercent: product.discountPercent ?? undefined,
     rating: product.averageRating == null ? null : Number(product.averageRating), reviewCount: product.reviewCount ?? 0,
-    availability: product.availability, href: `/products/${encodeURIComponent(product.slug)}`,
+    availability: product.availability, stockStatus: product.stockStatus, availableQuantity: product.availableQuantity, purchasable: product.purchasable, href: `/products/${encodeURIComponent(product.slug)}`,
     imageUrl: product.primaryImage?.url ?? '', secondaryImageUrl: product.secondaryImage?.url,
     showActions: true, square: true };
 }

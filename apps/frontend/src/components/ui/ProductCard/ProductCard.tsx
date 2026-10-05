@@ -5,6 +5,9 @@ import { Rating } from '../Rating/Rating';
 import { ApiError } from '@/lib/api';
 import type { ProductSummary } from '@/features/products/types';
 import styles from './ProductCard.module.scss';
+import { StatusBadge } from '../StatusBadge';
+import { stockPresentation } from '@/features/products/stockPresentation';
+import type { StockStatus } from '@/features/products/types';
 
 export interface ProductCardProps {
   id: string | number;
@@ -17,6 +20,9 @@ export interface ProductCardProps {
   compareAtPrice?: number;
   discountPercent?: number;
   availability?: 'AVAILABLE' | 'UNAVAILABLE';
+  stockStatus?: StockStatus | null;
+  availableQuantity?: number;
+  purchasable?: boolean;
   href?: string;
   onNavigate?: (href: string) => void;
   imageUrl: string;
@@ -42,6 +48,9 @@ export function ProductCard({
   compareAtPrice,
   discountPercent,
   availability,
+  stockStatus,
+  availableQuantity,
+  purchasable,
   href,
   onNavigate,
   imageUrl,
@@ -55,6 +64,8 @@ export function ProductCard({
   showActions = true,
   square = false,
 }: ProductCardProps) {
+  const stock = stockPresentation(stockStatus === undefined ? availability === 'AVAILABLE' ? 'IN_STOCK' : null : stockStatus);
+  const unavailable = stockStatus === 'OUT_OF_STOCK' || purchasable === false || availability === 'UNAVAILABLE';
   const [cartState, setCartState] = useState<'idle' | 'adding' | 'added' | 'error'>('idle');
   const [cartError, setCartError] = useState('Could not add item. Please try again.');
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -122,16 +133,19 @@ export function ProductCard({
             <span className={styles.discount}>-{discountPercent}%</span>
           </>}
         </div>
-        {availability && <span className={styles.availability}>{availability === 'AVAILABLE' ? 'In stock' : 'Out of stock'}</span>}
+        {(stockStatus !== undefined || availability) && <div className={styles.availability}>
+          <StatusBadge size="sm" variant={stock.variant}>{stock.label}</StatusBadge>
+          {stockStatus === 'LOW_STOCK' && availableQuantity !== undefined && <small>Only {availableQuantity} left</small>}
+        </div>}
 
         {showActions && onAddToCart && <button
           type="button"
           className={styles.addBtn}
           onClick={handleAddToCart}
-          disabled={availability === 'UNAVAILABLE' || cartState === 'adding'}
+          disabled={unavailable || cartState === 'adding'}
           aria-label={`Add ${title} to cart`}
         >
-          {availability === 'UNAVAILABLE' ? 'Out of stock' : cartState === 'adding' ? 'Adding…' : cartState === 'added' ? 'Added ✓' : cartState === 'error' ? 'Try again' : 'Add to Cart'}
+          {unavailable ? stockStatus === 'OUT_OF_STOCK' ? 'Out of stock' : 'Unavailable' : cartState === 'adding' ? 'Adding…' : cartState === 'added' ? 'Added ✓' : cartState === 'error' ? 'Try again' : 'Add to Cart'}
         </button>}
         {cartState === 'error' && <span role="alert" className={styles.cartFeedback}>{cartError}</span>}
         {cartState === 'added' && <span role="status" className={styles.srOnly}>{title} added to cart.</span>}

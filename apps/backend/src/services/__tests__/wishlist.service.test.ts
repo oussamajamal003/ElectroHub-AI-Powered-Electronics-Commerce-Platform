@@ -17,6 +17,16 @@ beforeEach(() => {
   database.wishlist.findUnique.mockResolvedValue(null); database.wishlist.create.mockResolvedValue({ id: 'wishlist' });
 });
 describe('Wishlist service', () => {
+  it('preserves inventory quantity across save/remove and separates missing inventory from OOS', async () => {
+    const service = new WishlistService();
+    await service.add('owner', productId);
+    database.wishlist.findUnique.mockResolvedValue({ id: 'wishlist', items: [{ productId }] });
+    await service.remove('owner', productId);
+    expect(product.inventory.quantity).toBe(0);
+    database.product.findMany.mockResolvedValue([{ ...product, inventory: null }]);
+    const result = await service.validate([productId]);
+    expect(result.items[0]).toMatchObject({ availability: 'UNAVAILABLE', product: { stockStatus: null, purchasable: false } });
+  });
   it('batch hydrates current Decimal summaries and keeps out-of-stock products', async () => {
     const result = await new WishlistService().validate([productId, productId, otherId]);
     expect(result).toMatchObject({ totalItems: 2, items: [{ availability: 'OUT_OF_STOCK', product: { price: '19.99' } }, { product: null, availability: 'UNAVAILABLE' }] });

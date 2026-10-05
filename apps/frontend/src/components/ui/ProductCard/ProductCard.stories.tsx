@@ -48,9 +48,12 @@ export const Discounted: Story = { args: { ...productCardProps({ ...product,
 export const NoReviews: Story = { args: { ...productCardProps(product), rating: null, reviewCount: 0 } };
 
 export const Unavailable: Story = { args: { ...productCardProps({ ...product,
-  availability: 'UNAVAILABLE', averageRating: null, reviewCount: 0 }) } };
+  availability: 'UNAVAILABLE', purchasable: false, averageRating: null, reviewCount: 0 }), onAddToCart: async () => undefined } };
 
-export const OutOfStock: Story = { args: { ...productCardProps({ ...product, availability: 'UNAVAILABLE' }) } };
+export const OutOfStock: Story = { args: { ...productCardProps({ ...product, availability: 'UNAVAILABLE', stockStatus: 'OUT_OF_STOCK', availableQuantity: 0, purchasable: false }), onAddToCart: async () => undefined } };
+export const InStock: Story = { args: { stockStatus: 'IN_STOCK', availableQuantity: 8, purchasable: true, onAddToCart: async () => undefined } };
+export const LowStock: Story = { args: { stockStatus: 'LOW_STOCK', availableQuantity: 2, purchasable: true, onAddToCart: async () => undefined } };
+export const SavedOutOfStock: Story = { args: { ...OutOfStock.args, isWishlisted: true, onToggleWishlist: () => undefined } };
 
 export const WithRatingAndActions: Story = {
   args: { ...productCardProps(product), rating: 4.8, showActions: true, onAddToCart: async () => undefined },

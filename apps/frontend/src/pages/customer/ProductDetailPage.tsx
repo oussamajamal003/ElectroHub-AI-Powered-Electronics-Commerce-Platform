@@ -16,7 +16,6 @@ import { useCart } from '@/features/cart/context';
 import { useWishlist } from '@/features/wishlist/context';
 import { WishlistButton } from '@/components/ui/WishlistButton/WishlistButton';
 import { Rating } from '@/components/ui/Rating/Rating';
-import { QuantitySelector } from '@/components/ui/QuantitySelector';
 import { useProduct, useMyReview, useReviewMutation, useReviews } from '@/features/products/queries';
 import { useSearchResults } from '@/features/search/queries';
 import { productCardProps } from '@/features/search/api';
@@ -24,6 +23,7 @@ import { ApiError } from '@/lib/api';
 import { queryKeys } from '@/lib/query';
 import type { ProductDetail, ProductResponse } from '@/features/products/types';
 import styles from './ProductDetailPage.module.scss';
+import { ProductPurchaseActions } from './ProductPurchaseActions';
 
 function formatPrice(value: string) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value));
@@ -87,7 +87,7 @@ export function ProductDetailPage() {
   }, [product?.id, reviewQuery.data?.summary, queryClient, slug]);
 
   if (productQuery.isPending) return <main className={styles.container} role="status" aria-label="Loading product details"><div aria-hidden="true"><Skeleton width="38%" height={20} /><div className={styles.productTop}><div><div className={styles.detailSkeletonGallery}><Skeleton width="100%" height="100%" /></div><div className={styles.detailSkeletonThumbnails}><Skeleton width={74} height={74} /><Skeleton width={74} height={74} /></div></div><div className={styles.detailSkeletonSummary}><Skeleton width="28%" height={18} /><Skeleton width="90%" height={42} /><Skeleton width="55%" height={20} /><Skeleton width="42%" height={36} /><Skeleton width="82%" height={80} /><Skeleton width="65%" height={20} /></div></div><div className={styles.detailSkeletonTabs}><Skeleton width="100%" height={50} /></div></div></main>;
-  if (productQuery.isError || !product) return <main className={styles.container}><h1>Product unavailable</h1><p>This product could not be loaded.</p><Button type="button" onClick={() => void productQuery.refetch()}>Retry</Button></main>;
+  if (!product) return <main className={styles.container}><h1>Product unavailable</h1><p>This product could not be loaded.</p><Button type="button" onClick={() => void productQuery.refetch()}>Retry</Button></main>;
 
   const submitReview = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -112,6 +112,7 @@ export function ProductDetailPage() {
   const related = recommendations.data?.data.filter(item => item.id !== product.id).slice(0, 4) ?? [];
 
   return <main className={styles.container}>
+    {productQuery.isError && <div role="status"><p>Current availability could not be refreshed. The last confirmed product is still visible.</p><Button type="button" variant="ghost" onClick={() => void productQuery.refetch()}>Retry availability</Button></div>}
     <nav className={styles.breadcrumb} aria-label="Breadcrumb"><Link to="/">Home</Link><ChevronRight size={16} aria-hidden="true" /><Link to="/products">Products</Link><ChevronRight size={16} aria-hidden="true" /><Link to={`/products?category=${encodeURIComponent(product.category.slug)}`}>{product.category.name}</Link><ChevronRight size={16} aria-hidden="true" /><span aria-current="page">{product.name}</span></nav>
     <div className={styles.productTop}>
       <ProductGallery className={styles.gallery} images={product.images.map(image => ({ id: image.id, src: image.url, alt: image.altText ?? product.name }))} />
@@ -123,22 +124,16 @@ export function ProductDetailPage() {
         <div className={styles.price}><strong>{formatPrice(product.price)}</strong>
           {product.compareAtPrice && product.discountPercent !== null && <><del>{formatPrice(product.compareAtPrice)}</del><span className={styles.discount}>-{product.discountPercent}%</span></>}
         </div>
-        <p className={product.availability === 'AVAILABLE' ? styles.availability : styles.unavailable}>{product.availability === 'AVAILABLE' ? 'In stock' : 'Currently unavailable'}</p>
-        <div className={styles.cartActions}>
-          <div className={styles.quantityRow}><span>Qty</span><QuantitySelector quantity={cartQuantity} productName={product.name} maxQuantity={remainingQuantity} disabled={product.availability !== 'AVAILABLE' || cartPending} onIncrease={() => setCartQuantity(value => Math.min(remainingQuantity, value + 1))} onDecrease={() => setCartQuantity(value => Math.max(1, value - 1))} /></div>
-          {product.availability !== 'AVAILABLE' || remainingQuantity === 0 ? <p role="status">{product.availability !== 'AVAILABLE' ? 'Currently unavailable.' : 'You already have the available stock in your cart.'}</p> : <p role="status">{remainingQuantity} more {remainingQuantity === 1 ? 'item' : 'items'} available to add.</p>}
-          <div className={styles.purchaseButtons}><Button type="button" disabled={product.availability !== 'AVAILABLE' || remainingQuantity === 0 || cartPending} isLoading={cartPending} onClick={async () => {
+        <ProductPurchaseActions product={product} quantity={cartQuantity} remainingQuantity={remainingQuantity} pending={cartPending} feedback={cartFeedback}
+          onQuantityChange={setCartQuantity} wishlistError={wishlist?.error}
+          wishlistAction={wishlist && <WishlistButton title={product.name} saved={wishlist.productIds.includes(product.id)} pending={wishlist.pending.includes(product.id)} onToggle={() => wishlist.toggle(product.id)} />}
+          onAdd={async () => {
             setCartPending(true); setCartFeedback('');
             try { await addItem(product.id, cartQuantity); setCartFeedback(`${product.name} added to cart.`); }
             catch (error) { setCartFeedback(error instanceof ApiError && error.code === 'CART_STOCK_CONFLICT' || error instanceof Error && /^Only \d+ items? (?:is|are) currently available\.$/.test(error.message)
               ? error.message : 'Could not add this product. Check availability and try again.'); }
             finally { setCartPending(false); }
-          }}>Add to Cart</Button>
-          {wishlist && <WishlistButton title={product.name} saved={wishlist.productIds.includes(product.id)} pending={wishlist.pending.includes(product.id)} onToggle={() => wishlist.toggle(product.id)} />}
-          </div>
-          {wishlist?.error && <p role="alert">{wishlist.error}</p>}
-          {cartFeedback && <p role="status" className={styles.cartFeedback}>{cartFeedback}</p>}
-        </div>
+          }} />
         {product.description && <p className={styles.intro}>{product.description}</p>}
       </section>
     </div>

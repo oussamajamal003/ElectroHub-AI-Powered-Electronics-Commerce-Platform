@@ -27,7 +27,8 @@ function withPendingQuantities(data: CartData | undefined, quantities: Record<st
     if (quantity === undefined || !item.product) return item;
     const priceCents = Math.round(Number(item.product.price) * 100);
     return { ...item, quantity, lineTotal: ((priceCents * quantity) / 100).toFixed(2),
-      availability: item.availability === 'LOW_STOCK' && quantity <= item.availableQuantity ? 'AVAILABLE' as const : item.availability };
+      availability: item.availability === 'LOW_STOCK' || item.availability === 'AVAILABLE'
+        ? quantity > item.availableQuantity ? 'LOW_STOCK' as const : 'AVAILABLE' as const : item.availability };
   });
   const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
   const subtotalCents = items.reduce((sum, item) => sum + (item.lineTotal === null ? 0 : Math.round(Number(item.lineTotal) * 100)), 0);
@@ -182,10 +183,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setPendingQuantities(pendingQuantitiesRef.current);
 
     const operation = authenticated ? enqueueServer(`/api/cart/items/${encodeURIComponent(productId)}`, 'PATCH', { quantity }) : enqueueGuest(async () => {
-      const next = readGuestCart().map(item => item.productId === productId ? { ...item, quantity } : item);
+      const current = readGuestCart();
+      const currentQuantity = current.find(item => item.productId === productId)?.quantity;
+      const isDecrease = currentQuantity !== undefined && quantity < currentQuantity;
+      const next = current.map(item => item.productId === productId ? { ...item, quantity } : item);
       const response = await apiClient<{ data: CartData }>('/api/cart/validate', { method: 'POST', data: { items: next } });
       const changed = response.data.items.find(item => item.productId === productId);
-      if (changed?.availability !== 'AVAILABLE') throw new Error(changed?.availability === 'LOW_STOCK' ? `Only ${changed.availableQuantity} ${changed.availableQuantity === 1 ? 'item is' : 'items are'} currently available.` : 'Product is unavailable.');
+      if (!isDecrease && changed?.availability !== 'AVAILABLE') throw new Error(changed?.availability === 'LOW_STOCK' ? `Only ${changed.availableQuantity} ${changed.availableQuantity === 1 ? 'item is' : 'items are'} currently available.` : 'Product is unavailable.');
       saveGuest(next);
       client.setQueryData(queryKeys.cart.guest(JSON.stringify(next)), response);
     });

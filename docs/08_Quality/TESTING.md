@@ -1,5 +1,9 @@
 # Testing Strategy
 
+## Task 03.4A focused Inventory verification
+
+Run backend Inventory/Product/Cart/Wishlist service tests and Cart/Wishlist route tests; frontend ProductCard, Details, Cart/Wishlist pages/providers; `npx playwright test -c playwright.catalog.config.ts tests/catalog/inventory.spec.ts`; and Inventory Storybook axe checks. Browser edge states are intercepted UI evidence, not live API/database persistence. `inventory.postgres.test.ts` requires explicitly configured local `INVENTORY_TEST_DATABASE_URL`, rejects non-local hosts, uses an isolated schema and applies the actual CHECK SQL. It runs genuine SQL row-lock concurrency through a transaction adapter, not full Prisma integration. Without that configuration, its two tests are skipped—not passed. See [final matrices](../tasks/Phase-03/TASK_03.4A_IMPLEMENTATION_EVIDENCE.md).
+
 ## 1. Purpose
 
 This document defines the overall testing strategy for ElectroHub.

@@ -1,5 +1,9 @@
 # Products
 
+## Task 03.4A inventory projection
+
+Product and Search summaries/details add current `stockStatus`, `availableQuantity` and `purchasable`, consumed through the existing ProductCard adapter. A missing/invalid Inventory is unavailable with null stock status; zero quantity is genuine OUT_OF_STOCK. Price/review/media contracts are unchanged. Details keeps cached content during background failures and retains selected gallery image on stock refresh. See [Inventory](INVENTORY.md) for threshold semantics and remaining-add limits.
+
 ## Implemented Task 02.5 foundation
 
 Six public read endpoints, exact Decimal-string prices, nullable legacy brand, primary-image summaries and detail galleries/grouped specifications are defined in [Product API](PRODUCT_API_02.5.md). Curated data and local illustration attribution are in [source evidence](PRODUCT_SOURCES_02.5.md). No storefront wiring, search/filter/sort, admin CRUD, reviews or commerce mutation is implemented by this task. Shared database validation remains delegated to Gemini.

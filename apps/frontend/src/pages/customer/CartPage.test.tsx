@@ -65,6 +65,21 @@ describe('cart page states', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove Phone from cart' }));
     await waitFor(() => expect(removeItem).toHaveBeenCalledWith('8f2813b4-a388-44d3-b51e-5d4c40386677'));
   });
+  it('allows reducing an out-of-stock quantity while blocking increases and checkout', async () => {
+    const setQuantity = vi.fn().mockResolvedValue(undefined);
+    const removeItem = vi.fn().mockResolvedValue(undefined);
+    show({ ...base, setQuantity, removeItem, data: { items: [{ id: 'line-1', productId: '8f2813b4-a388-44d3-b51e-5d4c40386677', quantity: 3,
+      product: { slug: 'phone', name: 'Phone', category: 'Phones', price: '19.99', image: null },
+      availableQuantity: 0, stockStatus: 'OUT_OF_STOCK', availability: 'OUT_OF_STOCK', lineTotal: '59.97' }], totalQuantity: 3, subtotal: '59.97',
+      shipping: '0.00', total: '59.97', currency: 'USD', canCheckout: false } });
+    expect(screen.getByText('Out of stock. Reduce quantity or remove this item to continue.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in to Checkout' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Increase quantity for Phone' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Decrease quantity for Phone' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Decrease quantity for Phone' }));
+    await waitFor(() => expect(setQuantity).toHaveBeenCalledWith('8f2813b4-a388-44d3-b51e-5d4c40386677', 2));
+    expect(screen.getByRole('button', { name: 'Remove Phone from cart' })).toBeEnabled();
+  });
   it('shows the sanitized stock conflict when inventory falls before an update', async () => {
     const setQuantity = vi.fn().mockRejectedValue(new ApiError(409, 'Only 2 items are currently available.', undefined, 'CART_STOCK_CONFLICT'));
     show({ ...base, setQuantity, data: { items: [{ id: 'line-1', productId: '8f2813b4-a388-44d3-b51e-5d4c40386677', quantity: 2,

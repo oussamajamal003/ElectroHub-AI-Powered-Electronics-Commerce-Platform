@@ -48,10 +48,10 @@ export function CartPageContent({ cart }: { cart: CartContextValue }) {
     <CartItem id={item.productId} title={item.product?.name ?? 'Product unavailable'} subtitle={item.product?.category}
       productHref={item.product ? `/products/${encodeURIComponent(item.product.slug)}` : undefined}
       price={item.product ? Number(item.product.price) : null} imageUrl={item.product?.image?.url ?? ''} quantity={item.quantity}
-      maxQuantity={Math.min(999, item.availableQuantity)} unavailable={item.availability === 'OUT_OF_STOCK' || item.availability === 'UNAVAILABLE' || item.availability === 'NOT_FOUND'}
+      stockStatus={item.stockStatus} maxQuantity={Math.min(999, item.availableQuantity)} unavailable={item.availability === 'OUT_OF_STOCK' || item.availability === 'UNAVAILABLE' || item.availability === 'NOT_FOUND'}
       onQuantityChange={(_, quantity) => void act(() => cart.setQuantity(item.productId, quantity))}
       onRemove={() => void act(() => cart.removeItem(item.productId))} />
-    {item.availability !== 'AVAILABLE' && <p className={styles.warning} role="status">{item.availability === 'LOW_STOCK' ? `Only ${item.availableQuantity} left. Reduce quantity to continue.` : item.availability === 'OUT_OF_STOCK' ? 'Out of stock. Remove this item to continue.' : 'This product is unavailable. Remove it to continue.'}</p>}
+      {item.availability !== 'AVAILABLE' && <p className={styles.warning} role="status">{item.availability === 'LOW_STOCK' ? `Only ${item.availableQuantity} left. Reduce quantity to continue.` : item.availability === 'OUT_OF_STOCK' ? 'Out of stock. Reduce quantity or remove this item to continue.' : 'This product is unavailable. Remove it to continue.'}</p>}
   </div>;
 
   return <main className={styles.page}>
