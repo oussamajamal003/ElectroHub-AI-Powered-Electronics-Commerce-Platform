@@ -6,6 +6,7 @@ export interface CartLine {
   product: { slug: string; name: string; category: string; price: string;
     image: { url: string; altText: string | null } | null } | null;
   availableQuantity: number;
+  stockStatus?: import('@/features/products/types').StockStatus | null;
   availability: 'AVAILABLE' | 'LOW_STOCK' | 'OUT_OF_STOCK' | 'UNAVAILABLE' | 'NOT_FOUND';
   lineTotal: string | null;
 }

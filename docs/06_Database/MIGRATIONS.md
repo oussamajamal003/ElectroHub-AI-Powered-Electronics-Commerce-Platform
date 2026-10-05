@@ -1,5 +1,9 @@
 # ElectroHub Migrations — Task 02.5 Implementation
 
+## Task 03.4A CHECK-only migration — live gate reported complete
+
+`20261005000000_inventory_nonnegative` adds CHECK constraints for `inventory.quantity >= 0` and `inventory.lowStockAt >= 0`. Existing schema fields, enum, relations and historical migrations are unchanged. The owner-supplied Gemini live gate reports 11 repository migrations and 11 applied migrations on both DEV (`pzxekjybdiulzmssalfo`) and PROD (`yepfgjehdstlxbpespun`), this migration applied in both environments, both CHECK constraints passing in both environments, and no schema drift. The gate report did not include its execution timestamp or transcript identifier; its backend/database source fingerprint is recorded in the [Task 03.4A evidence](../tasks/Phase-03/TASK_03.4A_IMPLEMENTATION_EVIDENCE.md#gemini-live-gate-source-fingerprint). Codex did not access or modify either database during the final frontend/documentation closure. The two local PostgreSQL tests remain SKIPPED because `INVENTORY_TEST_DATABASE_URL` was not configured. See the [inventory handoff](TASK_03.4A_INVENTORY_HANDOFF.md).
+
 ## Task 02.5 forward migration
 
 Prepared offline: apps/backend/prisma/migrations/20260928000000_product_foundation/migration.sql. This is additive and nullable for existing products; no fallback Brand, backfill, data deletion or position-column rename. Prisma validate/generate are local checks, not proof the migration is applied. Shared DEV/PROD ledger/physical checks and deployment are deferred to Gemini with separate production approval. See [exact execution boundary and checklist](PRODUCT_FOUNDATION_HANDOFF.md).

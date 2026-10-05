@@ -1,5 +1,6 @@
 export type Money = string;
 export type ProductAvailability = 'AVAILABLE' | 'UNAVAILABLE';
+export type StockStatus = 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
 export interface ProductRelationSummary { id: string; name: string; slug: string }
 export interface ProductImage {
   id: string;
@@ -27,6 +28,9 @@ export interface ProductSummary {
   reviewCount: number;
   currency: 'USD';
   availability: ProductAvailability;
+  stockStatus?: StockStatus | null;
+  availableQuantity?: number;
+  purchasable?: boolean;
   category: ProductRelationSummary;
   brand: ProductRelationSummary | null;
   primaryImage: ProductImage | null;

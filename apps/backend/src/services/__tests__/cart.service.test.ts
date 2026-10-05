@@ -6,6 +6,7 @@ const database = vi.hoisted(() => ({
   product: { findMany: vi.fn() },
   cart: { findUnique: vi.fn(), upsert: vi.fn() },
   cartItem: { findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn(), deleteMany: vi.fn() },
+  inventory: { update: vi.fn() },
   $transaction: vi.fn(),
 }));
 vi.mock('../../lib/prisma.js', () => ({ prisma: database }));
@@ -15,6 +16,26 @@ const userId = '62a990ff-7909-4bbb-b42f-8f20b6d97af4';
 const product = (quantity = 5) => ({ id: productId, slug: 'phone', name: 'Phone', price: new Prisma.Decimal('19.99'),
   status: 'ACTIVE', category: { name: 'Phones', isActive: true }, inventory: { quantity },
   images: [{ url: '/phone.jpg', altText: 'Phone' }] });
+
+function configureExistingCart(quantity: number, ownerId = userId) {
+  let persistedQuantity = quantity;
+  database.cart.findUnique.mockImplementation(async ({ where, select }: { where: { userId: string }; select?: { items?: unknown } }) => {
+    if (where.userId !== ownerId) return null;
+    return select?.items
+      ? { id: 'cart-1', items: [{ id: 'line-1', productId, quantity: persistedQuantity }] }
+      : { id: 'cart-1' };
+  });
+  database.cartItem.findUnique.mockImplementation(async ({ where }: { where: { cartId_productId: { cartId: string; productId: string } } }) => {
+    if (where.cartId_productId.cartId !== 'cart-1' || where.cartId_productId.productId !== productId) return null;
+    return { id: 'line-1', quantity: persistedQuantity };
+  });
+  database.cartItem.update.mockImplementation(async ({ where, data }: { where: { id: string }; data: { quantity: number } }) => {
+    if (where.id !== 'line-1') throw new Error('Unexpected Cart line update.');
+    persistedQuantity = data.quantity;
+    return { id: 'line-1', productId, quantity: persistedQuantity };
+  });
+  return { getPersistedQuantity: () => persistedQuantity };
+}
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -28,6 +49,27 @@ beforeEach(() => {
 });
 
 describe('CartService', () => {
+  it('add, update and remove never change the current inventory snapshot', async () => {
+    const snapshot = product(6);
+    database.product.findMany.mockResolvedValue([snapshot]);
+    const service = new CartService();
+    await service.add(userId, { productId, quantity: 1 });
+    database.cart.findUnique.mockResolvedValue({ id: 'cart-1', items: [{ id: 'line-1', productId, quantity: 1 }] });
+    database.cartItem.findUnique.mockResolvedValue({ id: 'line-1', quantity: 1 });
+    await service.setQuantity(userId, productId, 2);
+    await service.remove(userId, productId);
+    expect(snapshot.inventory.quantity).toBe(6);
+    expect(database.cartItem.update).toHaveBeenCalledWith(expect.objectContaining({ data: { quantity: 2 } }));
+  });
+  it('keeps threshold stock status separate from insufficient requested quantity', async () => {
+    const valid = await new CartService().validateGuest([{ productId, quantity: 1 }]);
+    expect(valid.items[0]).toMatchObject({ stockStatus: 'LOW_STOCK', availability: 'AVAILABLE' });
+    const invalid = await new CartService().validateGuest([{ productId, quantity: 6 }]);
+    expect(invalid.items[0]).toMatchObject({ stockStatus: 'LOW_STOCK', availability: 'LOW_STOCK', quantity: 6 });
+    database.product.findMany.mockResolvedValue([{ ...product(), inventory: null }]);
+    const missing = await new CartService().validateGuest([{ productId, quantity: 1 }]);
+    expect(missing.items[0]).toMatchObject({ stockStatus: null, availability: 'UNAVAILABLE' });
+  });
   it('hydrates guest items in one product query with exact Decimal totals', async () => {
     const result = await new CartService().validateGuest([{ productId, quantity: 3 }]);
     expect(database.product.findMany).toHaveBeenCalledTimes(1);
@@ -48,9 +90,63 @@ describe('CartService', () => {
   });
   it('rejects an update above current stock without changing the line', async () => {
     database.cart.findUnique.mockResolvedValue({ id: 'cart-1' });
-    database.cartItem.findUnique.mockResolvedValue({ id: 'line-1' });
+    database.cartItem.findUnique.mockResolvedValue({ id: 'line-1', quantity: 2 });
     database.product.findMany.mockResolvedValue([product(2)]);
     await expect(new CartService().setQuantity(userId, productId, 3)).rejects.toMatchObject({ code: 'CART_STOCK_CONFLICT' });
+    expect(database.cartItem.update).not.toHaveBeenCalled();
+  });
+  it.each([
+    { existing: 3, stock: 5, requested: 2, succeeds: true },
+    { existing: 3, stock: 5, requested: 3, succeeds: true },
+    { existing: 3, stock: 5, requested: 4, succeeds: true },
+    { existing: 3, stock: 3, requested: 4, succeeds: false },
+    { existing: 5, stock: 3, requested: 4, succeeds: true },
+    { existing: 5, stock: 3, requested: 3, succeeds: true },
+    { existing: 5, stock: 3, requested: 2, succeeds: true },
+    { existing: 5, stock: 3, requested: 6, succeeds: false },
+    { existing: 3, stock: 0, requested: 2, succeeds: true },
+    { existing: 3, stock: 0, requested: 1, succeeds: true },
+    { existing: 3, stock: 0, requested: 4, succeeds: false },
+    { existing: 1, stock: 0, requested: 2, succeeds: false },
+  ])('compares requested quantity $requested with persisted quantity $existing at stock $stock', async ({ existing, stock, requested, succeeds }) => {
+    const inventoryProduct = product(stock);
+    const cart = configureExistingCart(existing);
+    database.product.findMany.mockResolvedValue([inventoryProduct]);
+
+    if (succeeds) {
+      await new CartService().setQuantity(userId, productId, requested);
+      expect(database.cartItem.update).toHaveBeenCalledWith({ where: { id: 'line-1' }, data: { quantity: requested } });
+      expect(cart.getPersistedQuantity()).toBe(requested);
+    } else {
+      await expect(new CartService().setQuantity(userId, productId, requested)).rejects.toMatchObject({ code: 'CART_STOCK_CONFLICT' });
+      expect(database.cartItem.update).not.toHaveBeenCalled();
+      expect(cart.getPersistedQuantity()).toBe(existing);
+    }
+
+    expect(inventoryProduct.inventory.quantity).toBe(stock);
+    expect(database.inventory.update).not.toHaveBeenCalled();
+  });
+  it('preserves Product, Inventory, quantity, and ownership checks for corrections', async () => {
+    configureExistingCart(3);
+    database.product.findMany.mockResolvedValue([{ ...product(0), inventory: null }]);
+    await expect(new CartService().setQuantity(userId, productId, 2)).rejects.toMatchObject({ code: 'INVENTORY_NOT_FOUND' });
+
+    configureExistingCart(3);
+    database.product.findMany.mockResolvedValue([]);
+    await expect(new CartService().setQuantity(userId, productId, 2)).rejects.toMatchObject({ code: 'PRODUCT_NOT_FOUND' });
+
+    configureExistingCart(3);
+    database.product.findMany.mockResolvedValue([{ ...product(0), status: 'INACTIVE' }]);
+    await expect(new CartService().setQuantity(userId, productId, 2)).rejects.toMatchObject({ code: 'PRODUCT_UNAVAILABLE' });
+
+    configureExistingCart(3, 'another-user');
+    await expect(new CartService().setQuantity(userId, productId, 2)).rejects.toMatchObject({ code: 'CART_ITEM_NOT_FOUND' });
+    expect(database.cartItem.update).not.toHaveBeenCalled();
+    expect(database.inventory.update).not.toHaveBeenCalled();
+  });
+  it('still rejects invalid quantities before looking up or changing the Cart', async () => {
+    await expect(new CartService().setQuantity(userId, productId, 0)).rejects.toMatchObject({ code: 'INVALID_CART_QUANTITY' });
+    expect(database.cart.findUnique).not.toHaveBeenCalled();
     expect(database.cartItem.update).not.toHaveBeenCalled();
   });
   it('rejects out-of-stock and inactive Product additions', async () => {

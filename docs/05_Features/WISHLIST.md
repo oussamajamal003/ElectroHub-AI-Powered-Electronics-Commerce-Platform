@@ -1,5 +1,9 @@
 # Wishlist
 
+## Task 03.4A stock presentation
+
+Saved Product summaries reuse Product's derived `stockStatus`, `availableQuantity` and `purchasable`. Active out-of-stock Products remain saved, navigable and removable, with Add-to-Cart disabled. Missing/invalid Inventory is unavailable rather than mislabeled Out of Stock. Existing membership/reconciliation/privacy rules remain unchanged; Wishlist never reserves or mutates stock. See [Inventory](INVENTORY.md).
+
 ## 1. Purpose
 
 This document defines the wishlist functionality for ElectroHub.

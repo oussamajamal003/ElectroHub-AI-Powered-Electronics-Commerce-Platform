@@ -1,5 +1,9 @@
 # ElectroHub Task 02.2 — Latest Implemented Database Foundation
 
+## Task 03.4A Inventory core extension
+
+No model/column/enum change. A forward CHECK-only migration is prepared for nonnegative Inventory quantity and threshold. Internal stock mutations lock the unique row and guard quantity/threshold in an atomic transactional update; customer reads derive status rather than trusting the persisted enum. Migration application and genuine database concurrency remain explicit verification gates. See [Inventory handoff](../06_Database/TASK_03.4A_INVENTORY_HANDOFF.md).
+
 > This document is synchronized to the current Task 02.2 baseline. Prisma is the schema/migration source of truth. The implemented application model set is 15 models; `_prisma_migrations` is Prisma metadata.
 
 ## Environments

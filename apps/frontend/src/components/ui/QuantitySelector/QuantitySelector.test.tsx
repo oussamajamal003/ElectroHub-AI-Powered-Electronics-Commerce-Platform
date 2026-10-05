@@ -35,4 +35,13 @@ describe('QuantitySelector Component', () => {
     
     expect(screen.getByLabelText('Increase quantity')).toBeDisabled();
   });
+
+  it('can disable only the increment control', () => {
+    const onDecrease = vi.fn();
+    render(<QuantitySelector quantity={3} maxQuantity={10} increaseDisabled onIncrease={vi.fn()} onDecrease={onDecrease} />);
+    expect(screen.getByLabelText('Increase quantity')).toBeDisabled();
+    expect(screen.getByLabelText('Decrease quantity')).toBeEnabled();
+    fireEvent.click(screen.getByLabelText('Decrease quantity'));
+    expect(onDecrease).toHaveBeenCalledOnce();
+  });
 });

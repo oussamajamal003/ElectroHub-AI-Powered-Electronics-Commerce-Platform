@@ -57,6 +57,23 @@ describe('CartItem Component', () => {
     expect(screen.getByLabelText('Increase quantity for Wireless Headphones')).toBeDisabled();
   });
 
+  it('lets an out-of-stock line decrease while blocking increase and keeping remove available', () => {
+    render(<CartItem {...mockProps} quantity={3} maxQuantity={0} unavailable stockStatus="OUT_OF_STOCK" />);
+    expect(screen.getByText('Out of Stock')).toBeInTheDocument();
+    expect(screen.getByLabelText('Increase quantity for Wireless Headphones')).toBeDisabled();
+    expect(screen.getByLabelText('Decrease quantity for Wireless Headphones')).toBeEnabled();
+    fireEvent.click(screen.getByLabelText('Decrease quantity for Wireless Headphones'));
+    expect(mockProps.onQuantityChange).toHaveBeenCalledWith('123', 2);
+    expect(screen.getByRole('button', { name: 'Remove Wireless Headphones from cart' })).toBeEnabled();
+  });
+
+  it('keeps remove available and disables decrement at one for an out-of-stock line', () => {
+    render(<CartItem {...mockProps} quantity={1} maxQuantity={0} unavailable stockStatus="OUT_OF_STOCK" />);
+    expect(screen.getByLabelText('Increase quantity for Wireless Headphones')).toBeDisabled();
+    expect(screen.getByLabelText('Decrease quantity for Wireless Headphones')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Remove Wireless Headphones from cart' })).toBeEnabled();
+  });
+
   it('navigates from product content, but not quantity or remove controls', () => {
     render(<MemoryRouter initialEntries={['/cart']}><Routes>
       <Route path="/cart" element={<CartItem {...mockProps} productHref="/products/headphones" />} />

@@ -23,6 +23,31 @@ beforeEach(() => {
 });
 
 describe('CartProvider guest adapter', () => {
+  it('accepts a server-validated decrease for an out-of-stock line but rejects an increase', async () => {
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ version: 1, items: [{ productId, quantity: 3 }] }));
+    vi.mocked(apiClient).mockImplementation(async (_endpoint, options) => {
+      const items = (options?.data as { items: { productId: string; quantity: number }[] }).items;
+      const firstItem = items[0];
+      if (!firstItem) throw new Error('Expected a Cart item in the validation request.');
+      return { data: { items: items.map(item => ({ ...item, availability: 'OUT_OF_STOCK', stockStatus: 'OUT_OF_STOCK', availableQuantity: 0,
+        product: { slug: 'phone', name: 'Phone', category: 'Phones', price: '19.99', image: null }, lineTotal: (item.quantity * 19.99).toFixed(2) })),
+        totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0), subtotal: (firstItem.quantity * 19.99).toFixed(2), shipping: '0.00',
+        total: (firstItem.quantity * 19.99).toFixed(2), currency: 'USD', canCheckout: false } } as never;
+    });
+    const client = createQueryClient();
+    const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}><CartProvider>{children}</CartProvider></QueryClientProvider>;
+    const { result } = renderHook(() => useCart(), { wrapper });
+    await waitFor(() => expect(result.current.data?.items[0]).toMatchObject({ quantity: 3, availability: 'OUT_OF_STOCK' }));
+
+    await act(async () => { await expect(result.current.setQuantity(productId, 4)).rejects.toThrow('Product is unavailable.'); });
+    expect(JSON.parse(localStorage.getItem(CART_STORAGE_KEY)!)).toEqual({ version: 1, items: [{ productId, quantity: 3 }] });
+
+    await act(async () => { await result.current.setQuantity(productId, 2); });
+    expect(result.current.data?.items[0]).toMatchObject({ quantity: 2, availability: 'OUT_OF_STOCK' });
+    expect(result.current.data?.canCheckout).toBe(false);
+    expect(JSON.parse(localStorage.getItem(CART_STORAGE_KEY)!)).toEqual({ version: 1, items: [{ productId, quantity: 2 }] });
+  });
+
   it('serializes simultaneous adds and preserves both quantities', async () => {
     const client = createQueryClient();
     const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}><CartProvider>{children}</CartProvider></QueryClientProvider>;
@@ -61,6 +86,25 @@ describe('CartProvider guest adapter', () => {
 });
 
 describe('CartProvider authenticated quantity updates', () => {
+  it('never makes an optimistic over-stock quantity checkout-valid', async () => {
+    const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4' };
+    vi.mocked(useAuth).mockReturnValue({ isSessionVerified: true, isAuthenticated: true, user } as ReturnType<typeof useAuth>);
+    let rejectUpdate!: (error: Error) => void;
+    vi.mocked(apiClient).mockImplementation(() => new Promise((_resolve, reject) => { rejectUpdate = reject; }));
+    const client = createQueryClient();
+    client.setQueryData(queryKeys.cart.current(user.id), { data: { items: [{ id: 'line-1', productId, quantity: 2,
+      product: { slug: 'phone', name: 'Phone', category: 'Phones', price: '19.99', image: null }, availableQuantity: 3, availability: 'AVAILABLE', lineTotal: '39.98' }],
+      totalQuantity: 2, subtotal: '39.98', total: '39.98', shipping: '0.00', currency: 'USD', canCheckout: true } });
+    const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}><CartProvider>{children}</CartProvider></QueryClientProvider>;
+    const { result } = renderHook(() => useCart(), { wrapper });
+    let update!: Promise<void>;
+    act(() => { update = result.current.setQuantity(productId, 4); });
+    expect(result.current.data?.items[0]).toMatchObject({ quantity: 4, availability: 'LOW_STOCK' });
+    expect(result.current.data?.canCheckout).toBe(false);
+    await waitFor(() => expect(rejectUpdate).toBeDefined());
+    await act(async () => { rejectUpdate(new Error('Stock conflict')); await expect(update).rejects.toThrow(); });
+    expect(result.current.data?.items[0]?.quantity).toBe(2);
+  });
   const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4' };
   const cart = (quantity: number) => ({ data: { items: [{ id: 'line-1', productId, quantity,
     product: { slug: 'phone', name: 'Phone', category: 'Phones', price: '19.99', image: null },

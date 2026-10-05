@@ -11,6 +11,8 @@ export interface QuantitySelectorProps {
   size?: 'small' | 'medium' | 'large';
   className?: string;
   disabled?: boolean;
+  increaseDisabled?: boolean;
+  decreaseDisabled?: boolean;
   productName?: string;
 }
 
@@ -87,10 +89,12 @@ export function QuantitySelector({
   size = 'medium',
   className = '',
   disabled = false,
+  increaseDisabled = false,
+  decreaseDisabled = false,
   productName,
 }: QuantitySelectorProps) {
-  const isDecreaseDisabled = disabled || quantity <= minQuantity;
-  const isIncreaseDisabled = disabled || (maxQuantity !== undefined && quantity >= maxQuantity);
+  const isDecreaseDisabled = disabled || decreaseDisabled || quantity <= minQuantity;
+  const isIncreaseDisabled = disabled || increaseDisabled || (maxQuantity !== undefined && quantity >= maxQuantity);
 
   const decreaseHold = useHoldAction(onDecrease, isDecreaseDisabled);
   const increaseHold = useHoldAction(onIncrease, isIncreaseDisabled);

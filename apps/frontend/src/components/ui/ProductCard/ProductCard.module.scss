@@ -123,7 +123,7 @@
 .reviewCount, .noReviews { color: $color-text-secondary; font-size: $font-size-sm; }
 .comparePrice { margin-left: $spacing-2; color: $color-text-muted; text-decoration: line-through; font-size: $font-size-sm; }
 .discount { margin-left: $spacing-2; color: $color-success; font-size: $font-size-sm; font-weight: $font-weight-semibold; }
-.availability { display: block; margin-bottom: $spacing-3; color: $color-text-secondary; font-size: $font-size-sm; }
+.availability { display: flex; align-items: center; gap: $spacing-2; min-height: 28px; margin-bottom: $spacing-3; color: $color-text-secondary; font-size: $font-size-sm; flex-wrap: wrap; }
 
 .ratingRow {
   display: flex;

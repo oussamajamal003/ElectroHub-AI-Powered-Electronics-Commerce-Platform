@@ -47,7 +47,7 @@ it('shows one loading skeleton for a last-confirmed empty Wishlist until the ser
 it('matches ProductCard skeleton parts in order and proportions', () => {
   const view = renderPage(wishlistFixture({ data: undefined, isLoading: true, expectedCount: 1 }));
   const parts = [...view.container.querySelectorAll('[data-skeleton-part]')].map(element => element.getAttribute('data-skeleton-part'));
-  expect(parts).toEqual(['category', 'title', 'rating', 'description', 'price', 'action']);
+  expect(parts).toEqual(['category', 'title', 'rating', 'description', 'price', 'stock', 'action']);
   expect(view.getByTestId('product-skeleton-image')).toBeInTheDocument();
 });
 it('keeps usable cards visible without appending partial skeletons during refresh', () => {

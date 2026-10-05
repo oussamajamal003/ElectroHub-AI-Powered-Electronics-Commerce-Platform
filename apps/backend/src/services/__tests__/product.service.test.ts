@@ -84,6 +84,12 @@ describe('Product foundation services', () => {
     database.product.findFirst.mockResolvedValue(null);
     await expect(new ProductService().detail('missing')).rejects.toMatchObject({ statusCode: 404, code: 'PRODUCT_NOT_FOUND' });
   });
+  it('projects threshold-derived DTOs and invalid Inventory consistently in list and detail', async () => {
+    database.$queryRaw.mockResolvedValue([listRow({ quantity: 3, lowStockAt: 2 })]);
+    expect((await new ProductService().list({ page: 1, pageSize: 20 })).data[0]).toMatchObject({ stockStatus: 'IN_STOCK', availableQuantity: 3, purchasable: true });
+    database.product.findFirst.mockResolvedValue({ ...fixture(), inventory: { quantity: 3, lowStockAt: -1 } });
+    expect(await new ProductService().detail('tablet')).toMatchObject({ stockStatus: null, availableQuantity: 0, purchasable: false, availability: 'UNAVAILABLE' });
+  });
 
   it.each([
     ['ACTIVE', 1, 'AVAILABLE'], ['ACTIVE', 0, 'UNAVAILABLE'],

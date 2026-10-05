@@ -1,5 +1,17 @@
 # Inventory
 
+## Task 03.4A — implemented customer/core boundary
+
+Customer status is derived from current `quantity` and `lowStockAt`, not the persisted status enum: zero is OUT_OF_STOCK, positive quantity at/below threshold is LOW_STOCK, otherwise IN_STOCK. Invalid/missing Inventory has null stock status and is unavailable, not genuine Out of Stock. Threshold zero is supported. Stored status remains compatible and internal writes synchronize it.
+
+`apps/backend/src/services/inventory.service.ts` owns snapshots, purchase validation, and internal set/increase/decrease primitives. Inputs are integers within PostgreSQL's signed integer range; set accepts zero, deltas must be positive. A transaction locks the unique Product Inventory row with `FOR UPDATE`, guards the locked quantity/threshold on update, rejects underflow/overflow, and writes quantity/status together. Existing transaction clients are accepted without nesting. There is no customer or Admin stock-write route.
+
+Product/Search DTOs add `stockStatus`, `availableQuantity`, and `purchasable`; existing binary `availability`, Decimal price strings, bounded images, grouped reviews, and visibility rules remain. Cart stock status is separate from Cart line `LOW_STOCK`, which still means requested quantity exceeds availability. Cart quantities remain unchanged until explicit correction. Cart/Wishlist never reserve or write Inventory. Saved out-of-stock Products remain navigable/removable.
+
+The existing StatusBadge presents success/warning/error states and compact low-stock feedback. Product Details uses remaining stock minus Cart quantity, resets invalid transient selection to one, and retains cached content/gallery state during background refresh. Shared ProductCard adapters cover Home, Products, Search, related Products and Wishlist without extra Inventory requests or polling.
+
+The owner-supplied Gemini live gate reports `20261005000000_inventory_nonnegative` applied on DEV (`pzxekjybdiulzmssalfo`) and PROD (`yepfgjehdstlxbpespun`), 11/11 migrations on both, both physical CHECK constraints passing, no schema drift, authenticated DEV Cart/Wishlist checks passing, and one-success/one-`INVENTORY_CONFLICT` last-unit concurrency with final quantity zero. This is external live evidence, not a local Codex database test; the two local PostgreSQL tests remain SKIPPED because `INVENTORY_TEST_DATABASE_URL` was not configured. After that Gemini gate, `CartService.setQuantity` was changed to allow a genuine reduction of an existing Cart line without requiring the reduced quantity to fit stock. The service source fingerprint therefore changed: authenticated Cart quantity-correction evidence is stale and requires the targeted DEV re-gate documented in the [handoff](../06_Database/TASK_03.4A_INVENTORY_HANDOFF.md). No migration or PROD re-verification is required for this service-only correction, and no database operation was performed by Codex. See the [evidence matrices and source fingerprint](../tasks/Phase-03/TASK_03.4A_IMPLEMENTATION_EVIDENCE.md). The Checkout, Orders, alerts and Admin workflows described below remain future architecture, not implemented 03.4A features.
+
 ## 1. Purpose
 
 This document defines the inventory management system for ElectroHub.

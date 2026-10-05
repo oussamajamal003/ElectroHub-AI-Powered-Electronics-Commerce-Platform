@@ -39,6 +39,10 @@ Figma Make screenshot
 
 Storybook is not imported by the customer application, is not exposed through customer routing, and is not published as part of the frontend production build.
 
+## Task 03.4A Inventory states
+
+`StatusBadge.stories.tsx` covers success/warning/error. `ProductCard.stories.tsx` covers InStock, LowStock, OutOfStock and SavedOutOfStock. `ProductPurchaseActions.stories.tsx` renders the production Details action composition: InStock, LowStock, OutOfStock, AtMaximum, Loading, Added and interactive StockShrink. CartPage covers LowStock conflict, ExactStock, Unavailable and MixedStock; WishlistPage covers InStock, LowStock, OutOfStock and MixedStock. No default API request is needed. `tests/storybook/inventory.stories.spec.ts` checks 22 states at 390/768/1440/1920 with WCAG A/AA axe, overflow and no API assertions. The axe instance is isolated from the Storybook addon to prevent concurrent audit collisions. Full Details/gallery remain route-level browser evidence, not a fabricated Storybook page.
+
 ## Task 03.3 Wishlist
 
 `WishlistPage.stories.tsx` renders the actual `WishlistPageContent` with deterministic local Product fixtures: Guest, Authenticated, Empty, Loading, Error, BackgroundError, MergeRecovery, OutOfStock, Unavailable and Pending. `WishlistButton.stories.tsx` covers Unsaved, Saved, Pending, Error and DetailsActions (the real Button and heart using the Details action layout). ProductCard adds WishlistUnsaved, WishlistSaved, WishlistPending and WishlistOutOfStock. No default API calls occur. Page stories exercise actual ProductCards and their independent Add-to-Cart action.

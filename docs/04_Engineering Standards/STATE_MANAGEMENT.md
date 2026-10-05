@@ -1,5 +1,9 @@
 # State Management
 
+## Task 03.4A Inventory state
+
+Availability remains server-derived Product/Search/Cart/Wishlist query data in the existing QueryClient. No Inventory global store, per-card query, polling or broad invalidation is added. Cached Details content/gallery remain visible through background refresh or failure. Cart optimistic quantities re-evaluate line validity against confirmed stock and never mark an over-stock line checkout-valid. Persisted guest IDs/quantities remain untrusted and hydrate through existing validation. Ephemeral Details selection resets to one when remaining addable stock shrinks below it; persisted Cart quantities are not silently changed.
+
 ## 1. Purpose
 
 This document defines the state-management strategy for the ElectroHub React frontend.

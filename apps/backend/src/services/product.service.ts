@@ -2,6 +2,7 @@ import { Prisma, ProductStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { SearchService } from './search.service.js';
+import { projectInventory } from './inventory.service.js';
 
 export interface Pagination { page: number; pageSize: number }
 export type Availability = 'AVAILABLE' | 'UNAVAILABLE';
@@ -16,7 +17,7 @@ const imageSelect = { id: true, url: true, altText: true, sortOrder: true, isPri
 const baseSelect = {
   id: true, name: true, slug: true, price: true, compareAtPrice: true, status: true,
   category: { select: categorySelect }, brand: { select: brandSelect },
-  inventory: { select: { quantity: true } },
+  inventory: { select: { quantity: true, lowStockAt: true } },
 } satisfies Prisma.ProductSelect;
 export const productSummarySelect = {
   ...baseSelect, description: true,
@@ -55,7 +56,8 @@ const mapBase = (product: BaseProduct) => ({
   id: product.id, name: product.name, slug: product.slug,
   price: product.price.toFixed(2), compareAtPrice: product.compareAtPrice?.toFixed(2) ?? null,
   currency: 'USD' as const, category: product.category, brand: product.brand,
-  availability: projectAvailability(product.status, product.inventory?.quantity),
+  availability: projectInventory(product.inventory, product.status === ProductStatus.ACTIVE).purchasable ? 'AVAILABLE' as const : 'UNAVAILABLE' as const,
+  ...projectInventory(product.inventory, product.status === ProductStatus.ACTIVE),
   discountPercent: product.compareAtPrice?.gt(product.price)
     ? product.compareAtPrice.minus(product.price).div(product.compareAtPrice).mul(100)
       .toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP).toNumber() : null,
@@ -93,7 +95,6 @@ export class ProductService {
     }
     return {
       ...mapBase(product), reviewCount: aggregates._count._all,
-      availableQuantity: Math.max(0, product.inventory?.quantity ?? 0),
       averageRating: aggregates._avg.rating?.toFixed(1) ?? null,
       description: product.description, sku: product.sku,
       modelNumber: product.modelNumber, images: product.images,

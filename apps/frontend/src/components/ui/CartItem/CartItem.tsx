@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom';
 import { QuantitySelector } from '../QuantitySelector';
 import { ProductImage } from '../ProductImage';
 import styles from './CartItem.module.scss';
+import { StatusBadge } from '../StatusBadge';
+import { stockPresentation } from '@/features/products/stockPresentation';
+import type { StockStatus } from '@/features/products/types';
 
 export interface CartItemProps {
   id: string | number;
@@ -19,6 +22,7 @@ export interface CartItemProps {
   unavailable?: boolean;
   disabled?: boolean;
   productHref?: string;
+  stockStatus?: StockStatus | null;
 }
 
 export function CartItem({
@@ -36,7 +40,9 @@ export function CartItem({
   unavailable = false,
   disabled = false,
   productHref,
+  stockStatus,
 }: CartItemProps) {
+  const stock = stockPresentation(stockStatus ?? null);
   const formatPrice = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -52,7 +58,7 @@ export function CartItem({
 
   const handleDecrease = () => {
     if (quantity <= 1) return;
-    const next = maxQuantity !== undefined && quantity > maxQuantity ? maxQuantity : quantity - 1;
+    const next = maxQuantity !== undefined && maxQuantity > 0 && quantity > maxQuantity ? maxQuantity : quantity - 1;
     onQuantityChange(id, next);
   };
 
@@ -70,6 +76,7 @@ export function CartItem({
           <div className={styles.titleInfo}>
             <h4 className={styles.title}>{title}</h4>
             {subtitle && <p className={styles.subtitle}>{subtitle}</p>}
+            {stockStatus !== undefined && <StatusBadge size="sm" variant={stock.variant}>{stock.label}</StatusBadge>}
             <div className={styles.priceContainer}>
               {price === null ? <span className={styles.price}>Price unavailable</span> : discountPrice !== undefined ? <>
                 <span className={styles.discountPrice}>{formatPrice(discountPrice)}</span>
@@ -91,7 +98,8 @@ export function CartItem({
             <QuantitySelector 
               quantity={quantity} 
               maxQuantity={maxQuantity}
-              disabled={disabled || unavailable}
+              disabled={disabled}
+              increaseDisabled={unavailable}
               productName={title}
               onIncrease={handleIncrease} 
               onDecrease={handleDecrease}
