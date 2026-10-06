@@ -1,5 +1,16 @@
 # ElectroHub Migrations — Task 02.5 Implementation
 
+## Task 03.5 Checkout core — deployed and verified 2026-10-06
+
+`20261006000000_checkout_core` was applied through Prisma to DEV (`pzxekjybdiulzmssalfo`), then to PROD (`yepfgjehdstlxbpespun`) only after all eight real DEV transaction/concurrency/idempotency tests and the real browser-to-DEV purchase passed. Both environments now have 12 completed migrations. The new migration checksum is `4b8a8afbdaeee67ba9e6f58accc9f704d03692100e9a714bd04ba966f88893ca` in the repository and both ledgers. Read-back verified eight columns, two enums, owner/attempt uniqueness, four CHECK constraints and retained foreign keys. Preflight Orders were zero in both databases; PROD still has zero Orders/OrderItems after deployment. No PROD seed or purchase fixtures ran.
+
+Historical files and all existing ledger rows were preserved byte-for-byte. The foundation migration's PROD checksum corresponds to UTF-8 BOM + CRLF and the OTP migration's PROD checksum corresponds to CRLF; DEV used LF. SQL content/semantics are identical, and the owner explicitly approved documenting these historical formatting differences without normalization or ledger repair. There were no other unexplained migration differences.
+
+Prisma's physical-schema diff also proposes dropping seven pre-existing auth/email defaults that are explicitly declared in historical SQL (`gen_random_uuid()` for five IDs and `CURRENT_TIMESTAMP` for two updatedAt fields). These historical database defaults were independently inspected and preserved; the diff was never applied. After excluding those exact documented defaults, there is no remaining physical-schema difference. Checkout/Order columns, enums, indexes, relations and CHECKs agree with the new migration/schema. This is scoped agreement, not a claim that Prisma's raw global diff is empty.
+
+See [Task 03.5 evidence](../tasks/Phase-03/TASK_03.5_IMPLEMENTATION_EVIDENCE.md) and [Checkout core contract](../05_Features/CHECKOUT_CORE_03.5.md). Earlier phase entries below preserve their original historical status and are superseded by this current deployment evidence.
+
+
 ## Task 03.4A CHECK-only migration — live gate reported complete
 
 `20261005000000_inventory_nonnegative` adds CHECK constraints for `inventory.quantity >= 0` and `inventory.lowStockAt >= 0`. Existing schema fields, enum, relations and historical migrations are unchanged. The owner-supplied Gemini live gate reports 11 repository migrations and 11 applied migrations on both DEV (`pzxekjybdiulzmssalfo`) and PROD (`yepfgjehdstlxbpespun`), this migration applied in both environments, both CHECK constraints passing in both environments, and no schema drift. The gate report did not include its execution timestamp or transcript identifier; its backend/database source fingerprint is recorded in the [Task 03.4A evidence](../tasks/Phase-03/TASK_03.4A_IMPLEMENTATION_EVIDENCE.md#gemini-live-gate-source-fingerprint). Codex did not access or modify either database during the final frontend/documentation closure. The two local PostgreSQL tests remain SKIPPED because `INVENTORY_TEST_DATABASE_URL` was not configured. See the [inventory handoff](TASK_03.4A_INVENTORY_HANDOFF.md).

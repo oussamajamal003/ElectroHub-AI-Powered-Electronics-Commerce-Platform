@@ -1,3 +1,7 @@
+# Task 03.5 Checkout schema additions
+
+The actual `schema.prisma` now adds Order checkout attempt UUID/request hash, delivery and Card-method enums, shipping phone and two UTC date snapshots; OrderItem gains nullable `productImageUrl`. Owner/attempt uniqueness protects idempotency. Decimal(12,2), existing relationships and historical migration files remain unchanged. Forward migration `20261006000000_checkout_core` adds positive-item/nonnegative-money checks. Public reference is derived as `ORD-<Order UUID>`, not an `orderNumber` column. No Payment or Delivery record is created by 03.5. See [Checkout Core](../05_Features/CHECKOUT_CORE_03.5.md) and [deployment evidence](../tasks/Phase-03/TASK_03.5_IMPLEMENTATION_EVIDENCE.md). Historical examples below are conceptual/future examples and are not substitutes for the current schema.
+
 # ElectroHub Database — Task 02.5 Implementation
 
 > Task 02.5 implementation supersedes the historical 02.2 catalog details below. Current local schema has 23 application models, including Brand and ProductSpecification. Shared DEV/PROD application and live schema verification are deferred to Gemini; see [database handoff](PRODUCT_FOUNDATION_HANDOFF.md).

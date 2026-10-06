@@ -52,6 +52,7 @@ beforeAll(async () => {
   categoryId = category.id;
   const product = await prisma.product.create({ data: { categoryId, sku: `DELETE-${marker}`, name: 'Deletion test item', slug: `deletion-test-${marker}`, price: '12.00' } });
   productId = product.id;
+  const now = new Date();
   const orderFields = {
     userId,
     subtotal: '12.00',
@@ -62,10 +63,16 @@ beforeAll(async () => {
     shippingLine1: '123 Test Street',
     shippingCity: 'Test City',
     shippingCountry: 'Test Country',
+    shippingPhone: '+1 555 000 0000',
+    deliveryMethod: 'STANDARD' as const,
+    paymentMethod: 'CARD' as const,
+    checkoutRequestHash: crypto.createHash('sha256').update(`deletion-${marker}`).digest('hex'),
+    estimatedDeliveryStart: now,
+    estimatedDeliveryEnd: now,
   };
-  const activeOrder = await prisma.order.create({ data: { ...orderFields, status: 'PREPARING', items: { create: { productId, productName: product.name, sku: product.sku, unitPrice: '12.00', quantity: 1, lineTotal: '12.00' } } } });
+  const activeOrder = await prisma.order.create({ data: { ...orderFields, checkoutAttemptId: crypto.randomUUID(), status: 'PREPARING', items: { create: { productId, productName: product.name, sku: product.sku, unitPrice: '12.00', quantity: 1, lineTotal: '12.00' } } } });
   await prisma.delivery.create({ data: { orderId: activeOrder.id, status: 'PREPARING', trackingCode: `TRACK-${marker}`, latitude: '33.8938', longitude: '35.5018' } });
-  await prisma.order.create({ data: { ...orderFields, status: 'DELIVERED' } });
+  await prisma.order.create({ data: { ...orderFields, checkoutAttemptId: crypto.randomUUID(), status: 'DELIVERED' } });
   await prisma.cart.create({ data: { userId, items: { create: { productId, quantity: 1 } } } });
   await prisma.wishlist.create({ data: { userId, items: { create: { productId } } } });
 }, 60000);

@@ -1,5 +1,9 @@
 # Inventory
 
+## Task 03.5 Checkout consumption
+
+Order creation now reuses the existing decreaseStock transaction-client primitive after deterministic Product/category/Inventory locking. Order/OrderItem snapshots, Inventory decrement and Cart clear are atomic. The economic Cart revision excludes stock; locked Inventory is revalidated independently. Cart/Wishlist still do not reserve or mutate stock. Live 03.5 transaction, rollback and concurrency evidence is recorded separately in [Task 03.5 evidence](../tasks/Phase-03/TASK_03.5_IMPLEMENTATION_EVIDENCE.md); earlier Task 03.4A source fingerprints remain historical evidence of that revision. See [Checkout Core and handoffs](CHECKOUT_CORE_03.5.md).
+
 ## Task 03.4A — implemented customer/core boundary
 
 Customer status is derived from current `quantity` and `lowStockAt`, not the persisted status enum: zero is OUT_OF_STOCK, positive quantity at/below threshold is LOW_STOCK, otherwise IN_STOCK. Invalid/missing Inventory has null stock status and is unavailable, not genuine Out of Stock. Threshold zero is supported. Stored status remains compatible and internal writes synchronize it.

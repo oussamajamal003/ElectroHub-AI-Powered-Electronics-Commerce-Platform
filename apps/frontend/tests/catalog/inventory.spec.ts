@@ -126,14 +126,12 @@ test('O: unavailable Products remain recoverable without an Out of Stock claim (
   await expect(page.getByRole('heading', { name: 'Product unavailable' })).toBeVisible();
 });
 
-test('R–T: responsive stock controls, keyboard and reduced motion (intercepted API)', async ({ page }) => {
+for (const width of [390, 768, 1440, 1920]) test(`R–T: responsive stock controls, keyboard and reduced motion at ${width} (intercepted API)`, async ({ page }) => {
   await inventoryHarness(page, 2);
-  for (const width of [390, 768, 1440, 1920]) {
-    await page.goto('/products');
-    await page.evaluate(() => localStorage.removeItem('electrohub.cart.v1'));
     await page.setViewportSize({ width, height: 1000 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto('/products');
+    const productsReady = page.waitForResponse(response => new URL(response.url()).pathname === '/api/search/products');
+    await page.goto('/products'); await productsReady;
     const card = page.getByTestId('product-card').first();
     await expect(card.getByText('Low Stock')).toBeVisible();
     await expect(card.getByRole('button', { name: /to cart/ })).toBeVisible();
@@ -175,7 +173,6 @@ test('R–T: responsive stock controls, keyboard and reduced motion (intercepted
     await expect(page.getByTestId('product-card').getByText('Low Stock')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/inventory-wishlist-${width}.png`, fullPage: true });
-  }
 });
 
 test('M: authenticated stock-conflict response rolls back quantity and shows sanitized feedback (intercepted API)', async ({ page }) => {

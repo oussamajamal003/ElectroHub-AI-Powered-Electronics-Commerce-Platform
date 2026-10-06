@@ -1,5 +1,14 @@
 # Checkout
 
+## Implemented in Task 03.5
+
+The current Shipping/Delivery/Card-method/Review/persisted-Confirmation contract is defined in [Checkout Core 03.5](CHECKOUT_CORE_03.5.md). Orders are received and unpaid: no payment, email, PDF, tracking or management action is implemented by this phase. Controlled React state/shared controls are used; React Hook Form and frontend Zod were not added.
+
+## Future payment and order-management roadmap — not implemented by 03.5
+
+The following retained material describes future 03.6/03.7 and later functionality. Its payment-first workflows, example endpoints, document actions and broader Definition of Done are not the implemented 03.5 API or completion criteria.
+
+
 ## 1. Purpose
 
 This document defines the checkout workflow for ElectroHub.

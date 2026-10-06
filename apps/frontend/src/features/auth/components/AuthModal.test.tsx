@@ -45,6 +45,18 @@ describe('AuthModal Component', () => {
     });
   });
 
+  it.each(['/checkout', '/checkout/confirmation/ORD-33333333-3333-4333-8333-333333333333'] as const)('returns a successful login to the validated %s location', async returnTo => {
+    mockLogin.mockResolvedValue({});
+    render(<AuthModal open onOpenChange={mockOnOpenChange} returnTo={returnTo} />);
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'customer@example.invalid' } });
+    const password = screen.getByLabelText(/^Password$/i);
+    fireEvent.change(password, { target: { value: 'test-only-password' } });
+    const form = password.closest('form'); if (!form) throw new Error('Expected Login form');
+    fireEvent.submit(form);
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(returnTo, { replace: true }));
+    expect(mockOnOpenChange).toHaveBeenCalledWith(false);
+  });
+
   it('preserves unfinished register values across an unauthenticated close and reopen', async () => {
     const user = userEvent.setup();
     const view = render(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="register" />);

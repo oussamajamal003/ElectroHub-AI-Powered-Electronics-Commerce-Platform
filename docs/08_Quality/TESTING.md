@@ -1,5 +1,12 @@
 # Testing Strategy
 
+## Task 03.5 Checkout verification
+
+Focused unit/API/component tests verify validation, authority, idempotency, guards, drafts and Cart cache installation. `playwright.checkout.config.ts` provides explicitly intercepted UI coverage; it is not database proof. Production Checkout stories and axe checks use `playwright.cart-storybook.config.ts checkout.stories.spec.ts`. Screenshot capture waits for actual API/step readiness, and ignored local evidence lives under `apps/frontend/screenshots/checkout-visual` and `checkout-live` so Playwright output cleanup cannot erase it.
+
+The opt-in `CHECKOUT_LIVE_DEV=true` backend `checkout.live.test.ts` uses real customer login/routes/DEV PostgreSQL and disposable fixture IDs, including genuine last-unit/same-Cart concurrency. The rollback case injects a controlled second Inventory failure into the production OrderService inside a real database transaction. `scripts/checkout-browser-gate.cjs` exercises Chromium → localhost → real DEV with no interception. Both gates verify cleanup and reject PROD targeting. Local Inventory PostgreSQL tests remain skipped without their isolated test URL; the real DEV gate is separately labeled. See [Task 03.5 evidence](../tasks/Phase-03/TASK_03.5_IMPLEMENTATION_EVIDENCE.md) for exact runs, failures corrected and deployment evidence.
+
+
 ## Task 03.4A focused Inventory verification
 
 Run backend Inventory/Product/Cart/Wishlist service tests and Cart/Wishlist route tests; frontend ProductCard, Details, Cart/Wishlist pages/providers; `npx playwright test -c playwright.catalog.config.ts tests/catalog/inventory.spec.ts`; and Inventory Storybook axe checks. Browser edge states are intercepted UI evidence, not live API/database persistence. `inventory.postgres.test.ts` requires explicitly configured local `INVENTORY_TEST_DATABASE_URL`, rejects non-local hosts, uses an isolated schema and applies the actual CHECK SQL. It runs genuine SQL row-lock concurrency through a transaction adapter, not full Prisma integration. Without that configuration, its two tests are skipped—not passed. See [final matrices](../tasks/Phase-03/TASK_03.4A_IMPLEMENTATION_EVIDENCE.md).

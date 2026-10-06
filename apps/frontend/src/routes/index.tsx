@@ -10,6 +10,7 @@ import { AdminLayout } from '@/layouts/AdminLayout';
 import { AdminLoginPage } from '@/pages/admin/AdminLoginPage';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute/ProtectedRoute';
 import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
+import { CheckoutDraftSession } from '@/features/checkout/CheckoutDraftSession';
 import { OrdersPage } from '@/pages/customer/OrdersPage';
 
 const HomePage = lazy(() => import('../pages/HomePage').then(module => ({ default: module.HomePage })));
@@ -20,6 +21,8 @@ const ProductDetailPage = lazy(() => import('../pages/customer/ProductDetailPage
 const CartPage = lazy(() => import('../pages/customer/CartPage').then(module => ({ default: module.CartPage })));
 const AccountPage = lazy(() => import('../pages/customer/AccountPage').then(module => ({ default: module.AccountPage })));
 const ProfilePage = lazy(() => import('../pages/customer/ProfilePage').then(module => ({ default: module.ProfilePage })));
+const CheckoutPage = lazy(() => import('@/features/checkout/CheckoutPage').then(module => ({ default: module.CheckoutPage })));
+const ConfirmationPage = lazy(() => import('@/features/checkout/ConfirmationPage').then(module => ({ default: module.ConfirmationPage })));
 const route = (content: React.ReactNode) => <Suspense fallback={<ElectroHubLoader page />}>{content}</Suspense>;
 
 export function AppRoutes() {
@@ -27,6 +30,7 @@ export function AppRoutes() {
     <AuthProvider>
       <CartProvider>
       <WishlistProvider>
+      <CheckoutDraftSession />
       <Routes>
         {/* Customer Public Routes */}
         <Route element={<CustomerLayout />}>
@@ -40,6 +44,10 @@ export function AppRoutes() {
           <Route path="/wishlist" element={route(<WishlistPage />)} />
           <Route path="/orders" element={<OrdersPage />} />
 
+          <Route element={<ProtectedRoute requiredRole="CUSTOMER" redirectTo="/cart" requireVerifiedSession preserveReturnPath />}>
+            <Route path="/checkout" element={route(<CheckoutPage />)} />
+            <Route path="/checkout/confirmation/:orderReference" element={route(<ConfirmationPage />)} />
+          </Route>
           {/* Customer Protected Routes — must be logged in */}
           <Route element={<ProtectedRoute requiredRole="CUSTOMER" redirectTo="/" />}>
             <Route path="/account" element={route(<AccountPage />)} />

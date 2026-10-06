@@ -8,13 +8,13 @@ const item = { id: 'line-1', productId: '8f2813b4-a388-44d3-b51e-5d4c40386677', 
   product: { slug: 'iphone-15-pro', name: 'Apple iPhone 15 Pro', category: 'Phones', price: '1099.99',
     image: { url: '/images/catalog/variety/apple-phone-generic-01.jpg', altText: 'Apple iPhone 15 Pro' } },
   availableQuantity: 4, stockStatus: 'LOW_STOCK' as const, availability: 'AVAILABLE' as const, lineTotal: '1099.99' };
-const populated: CartData = { items: [item], totalQuantity: 1, subtotal: '1099.99', shipping: '0.00', total: '1099.99', currency: 'USD', canCheckout: true };
-const empty: CartData = { items: [], totalQuantity: 0, subtotal: '0.00', shipping: '0.00', total: '0.00', currency: 'USD', canCheckout: false };
+const populated: CartData = { items: [item], totalQuantity: 1, subtotal: '1099.99', shipping: '0.00', total: '1099.99', currency: 'USD', canCheckout: true, revision: 'test-revision' };
+const empty: CartData = { items: [], totalQuantity: 0, subtotal: '0.00', shipping: '0.00', total: '0.00', currency: 'USD', canCheckout: false, revision: 'test-revision' };
 const cart = (data: CartData | undefined, options: Partial<CartContextValue> = {}): CartContextValue => ({ data,
   totalQuantity: data?.totalQuantity ?? 0, isGuest: true, isLoggingOut: false, isLoading: false, isError: false, isMutating: false, pendingProductIds: [], pendingRemoveProductIds: [],
   mergeError: null, pendingGuestItems: [], addItem: async () => undefined, setQuantity: async () => undefined,
   removeItem: async () => undefined, retry: async () => undefined, retryMerge: async () => undefined,
-  removePendingGuestItem: () => undefined, ...options });
+  removePendingGuestItem: () => undefined, submitCheckout: async operation => (await operation()).result, ...options });
 
 const meta = { title: 'Customer/Cart Page', component: CartPageContent,
   decorators: [Story => <MemoryRouter><Story /></MemoryRouter>] } satisfies Meta<typeof CartPageContent>;
@@ -27,7 +27,7 @@ export const Empty: Story = { args: { cart: cart(empty) } };
 export const Loading: Story = { args: { cart: cart(undefined, { isLoading: true }) } };
 export const Error: Story = { args: { cart: cart(undefined, { isError: true }) } };
 export const RevalidationError: Story = { args: { cart: cart(populated, { isError: true }) } };
-export const Unavailable: Story = { args: { cart: cart({ ...populated, items: [{ ...item, quantity: 3, lineTotal: '3299.97', availability: 'OUT_OF_STOCK', stockStatus: 'OUT_OF_STOCK', availableQuantity: 0 }], totalQuantity: 3, subtotal: '3299.97', total: '3299.97', canCheckout: false }) } };
-export const LowStock: Story = { args: { cart: cart({ ...populated, items: [{ ...item, quantity: 3, availableQuantity: 2, availability: 'LOW_STOCK', lineTotal: '3299.97' }], totalQuantity: 3, subtotal: '3299.97', total: '3299.97', canCheckout: false }) } };
+export const Unavailable: Story = { args: { cart: cart({ ...populated, items: [{ ...item, quantity: 3, lineTotal: '3299.97', availability: 'OUT_OF_STOCK', stockStatus: 'OUT_OF_STOCK', availableQuantity: 0 }], totalQuantity: 3, subtotal: '3299.97', total: '3299.97', canCheckout: false, revision: 'test-revision' }) } };
+export const LowStock: Story = { args: { cart: cart({ ...populated, items: [{ ...item, quantity: 3, availableQuantity: 2, availability: 'LOW_STOCK', lineTotal: '3299.97' }], totalQuantity: 3, subtotal: '3299.97', total: '3299.97', canCheckout: false, revision: 'test-revision' }) } };
 export const ExactStock: Story = { args: { cart: cart({ ...populated, items: [{ ...item, availableQuantity: 1 }] }) } };
-export const MixedStock: Story = { args: { cart: cart({ ...populated, items: [item, { ...item, id: 'line-2', productId: '41f516ae-8385-4dcb-9a85-90b5dc9fe363', availability: 'OUT_OF_STOCK', stockStatus: 'OUT_OF_STOCK', availableQuantity: 0 }], totalQuantity: 2, subtotal: '2199.98', total: '2199.98', canCheckout: false }) } };
+export const MixedStock: Story = { args: { cart: cart({ ...populated, items: [item, { ...item, id: 'line-2', productId: '41f516ae-8385-4dcb-9a85-90b5dc9fe363', availability: 'OUT_OF_STOCK', stockStatus: 'OUT_OF_STOCK', availableQuantity: 0 }], totalQuantity: 2, subtotal: '2199.98', total: '2199.98', canCheckout: false, revision: 'test-revision' }) } };

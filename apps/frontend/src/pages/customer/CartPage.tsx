@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { CartItem } from '@/components/ui/CartItem';
@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { ApiError } from '@/lib/api';
 import { useCart, type CartContextValue } from '@/features/cart/context';
 import type { CartLine } from '@/features/cart/types';
+import { customerReturnPath } from '@/features/auth/returnPath';
 import styles from './CartPage.module.scss';
 
 function money(value: string) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value)); }
@@ -29,6 +30,8 @@ function CartSkeleton() {
 }
 
 export function CartPageContent({ cart }: { cart: CartContextValue }) {
+  const navigate = useNavigate(); const location = useLocation();
+  const returnTo = customerReturnPath(location.state?.from) ?? '/checkout';
   const [actionError, setActionError] = useState('');
 
   useEffect(() => {
@@ -71,8 +74,8 @@ export function CartPageContent({ cart }: { cart: CartContextValue }) {
         <div className={styles.summaryLine}><span>Shipping</span><span className={styles.free}>Free</span></div>
         <div className={`${styles.summaryLine} ${styles.total}`}><strong>Total</strong><strong>{money(cart.data.total)}</strong></div>
         {!cart.data.canCheckout && <p className={styles.warning}>Remove unavailable items or reduce quantities to continue.</p>}
-        {cart.isGuest ? <Button type="button" className={styles.checkout} disabled={!cart.data.canCheckout || cart.isError} onClick={() => window.dispatchEvent(new CustomEvent('electrohub:open-auth', { detail: { returnTo: '/cart' } }))}>Sign in to Checkout</Button>
-          : <><Button type="button" className={styles.checkout} disabled>Proceed to Checkout</Button><p className={styles.deferred}>Checkout is coming soon.</p></>}
+        {cart.isGuest ? <Button type="button" className={styles.checkout} disabled={!cart.data.canCheckout || cart.isError} onClick={() => window.dispatchEvent(new CustomEvent('electrohub:open-auth', { detail: { returnTo } }))}>Sign in to Checkout</Button>
+          : <Button type="button" className={styles.checkout} disabled={!cart.data.canCheckout || cart.isError || cart.isLoading || cart.isLoggingOut || cart.isMutating || Boolean(cart.mergeError)} onClick={() => navigate(returnTo)}>Proceed to Checkout</Button>}
         <Link className={styles.continue} to="/products">Continue shopping</Link>
       </aside>
     </div>}

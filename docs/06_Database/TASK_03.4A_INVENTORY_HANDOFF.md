@@ -37,3 +37,7 @@ Read the authoritative `docs/tasks/Phase-03/TASK_03.4_CUSTOMER_INVENTORY.md` fir
 ## Reproducible local concurrency gate (separate from Gemini live evidence)
 
 Set `INVENTORY_TEST_DATABASE_URL` only to an authorized disposable local PostgreSQL database, then run `npx vitest run src/services/__tests__/inventory.postgres.test.ts` from `apps/backend`. The tests create/drop an isolated schema, apply the actual CHECK migration and compete to decrement the last unit using the service's real SQL lock through a transaction adapter. They never connect to hosted DEV/PROD. Both local tests were SKIPPED in the Codex run because that environment was absent; mocks do not substitute for the local gate, and the local skip must not be reported as a local pass. The separately reported Gemini DEV gate did exercise real live concurrency.
+
+## Task 03.5 consumption
+
+Checkout now reuses `InventoryService.decreaseStock(productId, quantity, tx)` in its Order transaction, with sorted Product/category/Inventory locks and a shared Cart-row lock. Cart/Wishlist still never mutate stock. Order snapshots, stock decrement and Cart clear commit/roll back together. See [03.5 contract and 03.6/03.7 handoffs](../05_Features/CHECKOUT_CORE_03.5.md); Task 05.3 must preserve the existing Inventory primitive and deterministic lock order.

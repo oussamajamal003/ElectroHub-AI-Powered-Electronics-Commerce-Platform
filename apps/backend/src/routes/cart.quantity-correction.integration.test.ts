@@ -18,6 +18,7 @@ const database = vi.hoisted(() => ({
   cart: { findUnique: vi.fn() },
   cartItem: { findUnique: vi.fn(), update: vi.fn() },
   inventory: { update: vi.fn() },
+  $queryRaw: vi.fn(),
   $transaction: vi.fn(),
 }));
 
@@ -37,6 +38,7 @@ app.use(errorHandler);
 
 beforeEach(() => {
   vi.resetAllMocks();
+  database.$queryRaw.mockResolvedValue([]);
   fixture.quantity = 3;
   fixture.stock = 0;
   fixture.active = true;

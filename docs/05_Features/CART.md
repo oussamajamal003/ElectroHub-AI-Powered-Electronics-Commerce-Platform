@@ -1,5 +1,9 @@
 # Cart
 
+## Task 03.5 Checkout integration
+
+Authenticated valid Cart now opens `/checkout`; guest checkout uses the existing auth modal with a validated Checkout return path. Cart DTO adds a server economic `revision` (identity/items/quantities/prices/delivery config, not stock). Add/update/remove/reconcile share the Cart-row lock with Order creation. CartProvider remains the sole Cart authority and exposes its existing queue for checkout: cancel stale reads, submit, then install the authoritative Cart response before Confirmation navigation. No Cart operation itself reserves/decrements Inventory. Earlier 03.2 deferred-CTA statements below are historical and superseded by this section. See [implemented contract](CHECKOUT_CORE_03.5.md).
+
 ## Task 03.4A Inventory compatibility
 
 Each Cart line adds nullable `stockStatus` derived from quantity/threshold. This is independent of line `availability: LOW_STOCK` (requested quantity exceeds current stock). Missing/invalid Inventory is UNAVAILABLE; valid zero stock is OUT_OF_STOCK. Reads preserve invalid quantities and removable rows; no silent adjustment/deletion. Additions and quantity updates are validated on the server. A strict reduction is a corrective Cart operation: the service compares the requested final quantity with the persisted Cart quantity, still requires the owned line, active Product/category, valid Inventory, and a positive bounded quantity, but does not require the reduced quantity to fit current stock. Equal-quantity updates and increases retain full stock validation. Checkout remains blocked until all lines are valid. Cart operations never update Inventory. See [Inventory](INVENTORY.md).
