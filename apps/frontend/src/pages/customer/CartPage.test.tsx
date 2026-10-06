@@ -7,12 +7,12 @@ import { ApiError } from '@/lib/api';
 
 const base: CartContextValue = { data: undefined, totalQuantity: 0, isGuest: true, isLoggingOut: false, isLoading: false, isError: false,
   isMutating: false, pendingProductIds: [], pendingRemoveProductIds: [], mergeError: null, pendingGuestItems: [], addItem: vi.fn(), setQuantity: vi.fn(), removeItem: vi.fn(),
-  retry: vi.fn(), retryMerge: vi.fn(), removePendingGuestItem: vi.fn() };
+  retry: vi.fn(), retryMerge: vi.fn(), removePendingGuestItem: vi.fn(), submitCheckout: async operation => (await operation()).result };
 const show = (cart: CartContextValue) => render(<MemoryRouter><CartPageContent cart={cart} /></MemoryRouter>);
 
 describe('cart page states', () => {
   it('shows an actionable guest empty state', () => {
-    show({ ...base, data: { items: [], totalQuantity: 0, subtotal: '0.00', shipping: '0.00', total: '0.00', currency: 'USD', canCheckout: false } });
+    show({ ...base, data: { items: [], totalQuantity: 0, subtotal: '0.00', shipping: '0.00', total: '0.00', currency: 'USD', canCheckout: false, revision: 'test-revision' } });
     expect(screen.getByText('Your cart is empty')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Explore Products' })).toHaveAttribute('href', '/products');
   });
@@ -20,7 +20,7 @@ describe('cart page states', () => {
     const data = { items: [{ id: 'line-1', productId: '8f2813b4-a388-44d3-b51e-5d4c40386677', quantity: 1,
       product: { slug: 'phone', name: 'Phone', category: 'Phones', price: '20.00', image: null },
       availableQuantity: 2, availability: 'AVAILABLE' as const, lineTotal: '20.00' }], totalQuantity: 1, subtotal: '20.00',
-      shipping: '0.00', total: '20.00', currency: 'USD' as const, canCheckout: true };
+      shipping: '0.00', total: '20.00', currency: 'USD' as const, canCheckout: true, revision: 'test-revision' };
     show({ ...base, isGuest: false, isLoggingOut: true, isLoading: true, totalQuantity: 1, data });
     expect(screen.getByText('Phone')).toBeInTheDocument();
     expect(screen.queryByText('Your cart is empty')).not.toBeInTheDocument();
@@ -41,7 +41,7 @@ describe('cart page states', () => {
       product: { slug: name.toLowerCase(), name, category: 'Phones', price: '10.00', image: null },
       availableQuantity: 5, availability: 'AVAILABLE' as const, lineTotal: '20.00' });
     show({ ...base, pendingProductIds: [firstId], data: { items: [createLine(firstId, 'Phone'), createLine(secondId, 'Tablet')],
-      totalQuantity: 4, subtotal: '40.00', shipping: '0.00', total: '40.00', currency: 'USD', canCheckout: true } });
+      totalQuantity: 4, subtotal: '40.00', shipping: '0.00', total: '40.00', currency: 'USD', canCheckout: true, revision: 'test-revision' } });
     expect(screen.getByRole('button', { name: 'Increase quantity for Phone' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Increase quantity for Tablet' })).toBeEnabled();
   });
@@ -49,7 +49,7 @@ describe('cart page states', () => {
     show({ ...base, isError: true, data: { items: [{ id: null, productId: '8f2813b4-a388-44d3-b51e-5d4c40386677', quantity: 1,
       product: { slug: 'apple-iphone-15-pro', name: 'Apple iPhone 15 Pro', category: 'Phones', price: '1099.99', image: null },
       availableQuantity: 2, availability: 'AVAILABLE', lineTotal: '1099.99' }], totalQuantity: 1, subtotal: '1099.99',
-      shipping: '0.00', total: '1099.99', currency: 'USD', canCheckout: true } });
+      shipping: '0.00', total: '1099.99', currency: 'USD', canCheckout: true, revision: 'test-revision' } });
     expect(screen.getByText('Apple iPhone 15 Pro')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry availability' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in to Checkout' })).toBeDisabled();
@@ -59,7 +59,7 @@ describe('cart page states', () => {
     show({ ...base, removeItem, data: { items: [{ id: 'line-1', productId: '8f2813b4-a388-44d3-b51e-5d4c40386677', quantity: 2,
       product: { slug: 'phone', name: 'Phone', category: 'Phones', price: '19.99', image: null },
       availableQuantity: 0, availability: 'UNAVAILABLE', lineTotal: '39.98' }], totalQuantity: 2, subtotal: '39.98',
-      shipping: '0.00', total: '39.98', currency: 'USD', canCheckout: false } });
+      shipping: '0.00', total: '39.98', currency: 'USD', canCheckout: false, revision: 'test-revision' } });
     expect(screen.getByText('This product is unavailable. Remove it to continue.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in to Checkout' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Remove Phone from cart' }));
@@ -71,7 +71,7 @@ describe('cart page states', () => {
     show({ ...base, setQuantity, removeItem, data: { items: [{ id: 'line-1', productId: '8f2813b4-a388-44d3-b51e-5d4c40386677', quantity: 3,
       product: { slug: 'phone', name: 'Phone', category: 'Phones', price: '19.99', image: null },
       availableQuantity: 0, stockStatus: 'OUT_OF_STOCK', availability: 'OUT_OF_STOCK', lineTotal: '59.97' }], totalQuantity: 3, subtotal: '59.97',
-      shipping: '0.00', total: '59.97', currency: 'USD', canCheckout: false } });
+      shipping: '0.00', total: '59.97', currency: 'USD', canCheckout: false, revision: 'test-revision' } });
     expect(screen.getByText('Out of stock. Reduce quantity or remove this item to continue.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in to Checkout' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Increase quantity for Phone' })).toBeDisabled();
@@ -85,7 +85,7 @@ describe('cart page states', () => {
     show({ ...base, setQuantity, data: { items: [{ id: 'line-1', productId: '8f2813b4-a388-44d3-b51e-5d4c40386677', quantity: 2,
       product: { slug: 'phone', name: 'Phone', category: 'Phones', price: '19.99', image: null },
       availableQuantity: 5, availability: 'AVAILABLE', lineTotal: '39.98' }], totalQuantity: 2, subtotal: '39.98',
-      shipping: '0.00', total: '39.98', currency: 'USD', canCheckout: true } });
+      shipping: '0.00', total: '39.98', currency: 'USD', canCheckout: true, revision: 'test-revision' } });
     fireEvent.click(screen.getByRole('button', { name: 'Increase quantity for Phone' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Only 2 items are currently available.');
     expect(screen.getByText('Phone')).toBeInTheDocument();

@@ -14,6 +14,9 @@ export const cachePolicy = {
 export const catalogSignal = (context: { signal: AbortSignal }) => import.meta.env.DEV ? undefined : context.signal;
 
 export const queryKeys = {
+  checkout: { current: (userId: string, revision: string) => ['checkout', userId, revision] as const },
+  orders: { confirmation: (userId: string, reference: string) => ['orders', 'confirmation', userId, reference] as const,
+    attempt: (userId: string, key: string) => ['orders', 'attempt', userId, key] as const },
   wishlist: { all: ['wishlist'] as const, current: (userId: string) => ['wishlist', 'current', userId] as const,
     guest: (ids: string) => ['wishlist', 'guest', ids] as const },
   cart: { all: ['cart'] as const, current: (userId: string) => ['cart', 'current', userId] as const,

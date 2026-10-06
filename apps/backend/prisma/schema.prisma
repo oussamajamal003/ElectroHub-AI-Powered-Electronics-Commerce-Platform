@@ -51,6 +51,16 @@ enum PaymentProvider {
   STRIPE
 }
 
+enum CheckoutDeliveryMethod {
+  STANDARD
+  EXPRESS
+  OVERNIGHT
+}
+
+enum CheckoutPaymentMethod {
+  CARD
+}
+
 enum DeliveryStatus {
   CONFIRMED
   PREPARING
@@ -355,6 +365,14 @@ model Order {
   total        Decimal     @db.Decimal(12, 2)
   currency     String      @default("USD") @db.VarChar(3)
 
+  checkoutAttemptId     String @db.Uuid
+  checkoutRequestHash   String @db.VarChar(64)
+  deliveryMethod        CheckoutDeliveryMethod
+  paymentMethod         CheckoutPaymentMethod
+  shippingPhone         String @db.VarChar(32)
+  estimatedDeliveryStart DateTime @db.Date
+  estimatedDeliveryEnd   DateTime @db.Date
+
   shippingRecipient  String   @db.VarChar(200)
   shippingLine1      String   @db.VarChar(255)
   shippingLine2      String?  @db.VarChar(255)
@@ -378,6 +396,7 @@ model Order {
   @@index([createdAt])
   @@index([userId, createdAt])
   @@index([status, createdAt])
+  @@unique([userId, checkoutAttemptId])
   @@map("orders")
 }
 
@@ -387,6 +406,7 @@ model OrderItem {
   productId   String  @db.Uuid
   productName String  @db.VarChar(255)
   sku         String  @db.VarChar(100)
+  productImageUrl String? @db.VarChar(2048)
   unitPrice   Decimal @db.Decimal(12, 2)
   quantity    Int
   lineTotal   Decimal @db.Decimal(12, 2)

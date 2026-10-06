@@ -18,11 +18,12 @@ import { OtpVerification } from '@/components/ui/OtpVerification';
 import { X } from 'lucide-react';
 
 import { useNavigate, useLocation } from 'react-router-dom';
+import { customerReturnPath } from '../returnPath';
 
 export type AuthModalMode = 'login' | 'register' | 'verify' | 'changeVerificationEmail' | 'forgot' | 'resetVerify' | 'resetNew' | 'resetSuccess' | 'googleLink';
 
 export interface AuthModalProps {
-  returnTo?: '/cart';
+  returnTo?: import('../returnPath').CustomerReturnPath;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAuthenticated?: () => void;
@@ -65,7 +66,9 @@ export function AuthModal({
   const { login, register, verifyEmail, finishGoogle, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = returnTo ?? (location.state as { from?: string })?.from ?? '/account';
+  const savedReturn = (location.state as { from?: string })?.from;
+  const from = customerReturnPath(returnTo) ?? customerReturnPath(savedReturn) ??
+    (savedReturn === '/account/profile' ? '/account/profile' : '/account');
   const [mode, setMode] = useState<AuthModalMode>(initialMode);
   const [isLoading, setIsLoading] = useState(false);
 

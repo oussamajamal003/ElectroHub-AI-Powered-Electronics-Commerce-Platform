@@ -1,0 +1,2 @@
+# Keep only the new Checkout migration checksum stable across Windows/Linux.
+apps/backend/prisma/migrations/20261006000000_checkout_core/migration.sql text eol=lf

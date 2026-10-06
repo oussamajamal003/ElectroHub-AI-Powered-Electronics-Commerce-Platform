@@ -23,6 +23,7 @@ import { useAuth } from '@/features/auth/context/AuthContext';
 import { useCart } from '@/features/cart/context';
 import { useWishlist } from '@/features/wishlist/context';
 import { AuthModal, AuthModalMode } from '@/features/auth/components/AuthModal';
+import { customerReturnPath, type CustomerReturnPath } from '@/features/auth/returnPath';
 import { SignOutModal } from '@/features/auth/components/SignOutModal';
 import styles from './CustomerHeader.module.scss';
 
@@ -36,7 +37,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
   const wishlistCount = wishlist?.isLoading ? 0 : wishlistOverride ?? wishlist?.totalItems ?? 0;
   const { totalQuantity } = useCart();
   const cartCount = countOverride ?? totalQuantity;
-  const [authReturnTo, setAuthReturnTo] = useState<'/cart' | undefined>();
+  const [authReturnTo, setAuthReturnTo] = useState<CustomerReturnPath | undefined>();
   const { user, rememberedUser, isAuthenticated, isInitializing } = useAuth();
   const headerUser = isInitializing ? rememberedUser : user;
   const showAuthenticatedHeader = isInitializing ? Boolean(rememberedUser) : isAuthenticated;
@@ -66,7 +67,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
 
   useEffect(() => {
     const openAuth = (event: Event) => {
-      setAuthReturnTo((event as CustomEvent<{ returnTo?: string }>).detail?.returnTo === '/cart' ? '/cart' : undefined);
+      setAuthReturnTo(customerReturnPath((event as CustomEvent<{ returnTo?: string }>).detail?.returnTo));
       setAuthMode('login'); setShowAuthModal(true);
     };
     window.addEventListener('electrohub:open-auth', openAuth);

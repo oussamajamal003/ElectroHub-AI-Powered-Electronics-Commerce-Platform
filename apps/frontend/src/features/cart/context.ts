@@ -19,6 +19,7 @@ export interface CartContextValue {
   retry: () => Promise<void>;
   retryMerge: () => Promise<void>;
   removePendingGuestItem: (productId: string) => void;
+  submitCheckout: <T>(operation: () => Promise<{ cart: CartData; result: T }>) => Promise<T>;
 }
 
 export const CartContext = createContext<CartContextValue | null>(null);

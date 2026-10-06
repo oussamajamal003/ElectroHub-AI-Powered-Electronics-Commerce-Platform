@@ -7,6 +7,7 @@ const database = vi.hoisted(() => ({
   cart: { findUnique: vi.fn(), upsert: vi.fn() },
   cartItem: { findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn(), deleteMany: vi.fn() },
   inventory: { update: vi.fn() },
+  $queryRaw: vi.fn(),
   $transaction: vi.fn(),
 }));
 vi.mock('../../lib/prisma.js', () => ({ prisma: database }));
@@ -39,6 +40,7 @@ function configureExistingCart(quantity: number, ownerId = userId) {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  database.$queryRaw.mockResolvedValue([]);
   database.$transaction.mockImplementation((operation: (client: typeof database) => Promise<unknown>) => operation(database));
   database.product.findMany.mockResolvedValue([product()]);
   database.cart.findUnique.mockResolvedValue(null);
@@ -49,6 +51,13 @@ beforeEach(() => {
 });
 
 describe('CartService', () => {
+  it('bounds retries for raw adapter serialization conflicts and returns the Cart conflict contract', async () => {
+    database.$transaction.mockRejectedValue(new Prisma.PrismaClientKnownRequestError('Transaction write conflict', {
+      code: 'P2010', clientVersion: '6.12.0', meta: { code: 'N/A', message: 'Transaction write conflict' },
+    }));
+    await expect(new CartService().add(userId, { productId, quantity: 1 })).rejects.toMatchObject({ statusCode: 409, code: 'CART_CONFLICT' });
+    expect(database.$transaction).toHaveBeenCalledTimes(3); expect(database.inventory.update).not.toHaveBeenCalled();
+  });
   it('add, update and remove never change the current inventory snapshot', async () => {
     const snapshot = product(6);
     database.product.findMany.mockResolvedValue([snapshot]);

@@ -11,6 +11,7 @@ export interface CartLine {
   lineTotal: string | null;
 }
 export interface CartData {
+  revision: string;
   items: CartLine[];
   totalQuantity: number;
   subtotal: string;

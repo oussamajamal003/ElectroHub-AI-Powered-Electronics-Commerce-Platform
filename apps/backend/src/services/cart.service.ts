@@ -2,6 +2,9 @@ import { Prisma, ProductStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { projectInventory, validateInventoryPurchase } from './inventory.service.js';
+import { cartRevision } from './checkout.domain.js';
+import { lockCart } from './cart.lock.js';
+import { isSerializationConflict } from './transaction-conflict.js';
 
 export const MAX_CART_LINES = 50;
 export const MAX_CART_QUANTITY = 999;
@@ -13,7 +16,7 @@ function validateQuantity(quantity: number) {
 }
 
 const productSelect = {
-  id: true, slug: true, name: true, price: true, status: true,
+  id: true, slug: true, name: true, sku: true, categoryId: true, price: true, status: true,
   category: { select: { name: true, isActive: true } },
   inventory: { select: { quantity: true, lowStockAt: true } },
   images: { take: 1, orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }], select: { url: true, altText: true } },
@@ -36,7 +39,7 @@ export function resolveMergeQuantity(serverQuantity: number, guestQuantity: numb
   return Math.max(serverQuantity, guestQuantity);
 }
 
-function formatCart(lines: CartLine[]) {
+function formatCart(lines: CartLine[], cartId = 'guest') {
   let subtotal = new Prisma.Decimal(0);
   let totalQuantity = 0;
   const items = lines.map(({ id, productId, quantity, product }) => {
@@ -56,7 +59,7 @@ function formatCart(lines: CartLine[]) {
       lineTotal: lineTotal?.toFixed(2) ?? null,
     };
   });
-  return { items, totalQuantity, subtotal: subtotal.toFixed(2), shipping: '0.00',
+  return { revision: cartRevision(cartId, items), items, totalQuantity, subtotal: subtotal.toFixed(2), shipping: '0.00',
     total: subtotal.toFixed(2), currency: 'USD' as const,
     canCheckout: items.length > 0 && items.every(item => item.availability === 'AVAILABLE') };
 }
@@ -66,12 +69,12 @@ async function loadProducts(productIds: string[], client: Prisma.TransactionClie
   return new Map(products.map(product => [product.id, product]));
 }
 
-async function currentCart(userId: string, client: Prisma.TransactionClient = prisma) {
+export async function currentCart(userId: string, client: Prisma.TransactionClient = prisma) {
   const cart = await client.cart.findUnique({ where: { userId }, select: { id: true,
     items: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { id: true, productId: true, quantity: true } },
   } });
   const products = await loadProducts(cart?.items.map(item => item.productId) ?? [], client);
-  return { cart, data: formatCart(cart?.items.map(item => ({ ...item, product: products.get(item.productId) ?? null })) ?? []) };
+  return { cart, products, data: formatCart(cart?.items.map(item => ({ ...item, product: products.get(item.productId) ?? null })) ?? [], cart?.id ?? userId) };
 }
 
 function requireActiveProduct(product: CartProduct | undefined): asserts product is CartProduct {
@@ -103,7 +106,9 @@ async function transaction<T>(operation: (client: Prisma.TransactionClient) => P
       });
     }
     catch (error) {
-      if (attempt === 2 || !(error instanceof Prisma.PrismaClientKnownRequestError) || !['P2002', 'P2034', 'P2028'].includes(error.code)) throw error;
+      if (attempt === 2 && isSerializationConflict(error)) throw new AppError('Cart changed. Please try again.', 409, 'CART_CONFLICT');
+      if (attempt === 2 || !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        !(isSerializationConflict(error) || ['P2002', 'P2028'].includes(error.code))) throw error;
       await new Promise(resolve => setTimeout(resolve, 50 * (attempt + 1) + Math.random() * 50));
     }
   }
@@ -122,6 +127,7 @@ export class CartService {
     validateQuantity(input.quantity);
     await transaction(async client => {
       const cart = await client.cart.upsert({ where: { userId }, create: { userId }, update: {}, select: { id: true } });
+      await lockCart(client, cart.id);
       const existing = await client.cartItem.findUnique({ where: { cartId_productId: { cartId: cart.id, productId: input.productId } }, select: { id: true, quantity: true } });
       if (!existing && await client.cartItem.count({ where: { cartId: cart.id } }) >= MAX_CART_LINES) {
         throw new AppError('Cart is full.', 409, 'CART_FULL');
@@ -140,6 +146,7 @@ export class CartService {
     validateQuantity(quantity);
     await transaction(async client => {
       const cart = await client.cart.findUnique({ where: { userId }, select: { id: true } });
+      if (cart) await lockCart(client, cart.id);
       const existing = cart && await client.cartItem.findUnique({ where: { cartId_productId: { cartId: cart.id, productId } }, select: { id: true, quantity: true } });
       if (!existing) throw new AppError('Cart item not found.', 404, 'CART_ITEM_NOT_FOUND');
       const products = await loadProducts([productId], client);
@@ -155,8 +162,13 @@ export class CartService {
   }
 
   async remove(userId: string, productId: string) {
-    const cart = await prisma.cart.findUnique({ where: { userId }, select: { id: true } });
-    if (cart) await prisma.cartItem.deleteMany({ where: { cartId: cart.id, productId } });
+    await transaction(async client => {
+      const cart = await client.cart.findUnique({ where: { userId }, select: { id: true } });
+      if (cart) {
+        await lockCart(client, cart.id);
+        await client.cartItem.deleteMany({ where: { cartId: cart.id, productId } });
+      }
+    });
     return this.get(userId);
   }
 
@@ -164,6 +176,7 @@ export class CartService {
     input.forEach(item => validateQuantity(item.quantity));
     await transaction(async client => {
       const cart = await client.cart.upsert({ where: { userId }, create: { userId }, update: {}, select: { id: true } });
+      await lockCart(client, cart.id);
       const existing = await client.cartItem.findMany({ where: { cartId: cart.id }, select: { id: true, productId: true, quantity: true } });
       const byProduct = new Map(existing.map(item => [item.productId, item]));
       if (new Set([...existing.map(item => item.productId), ...input.map(item => item.productId)]).size > MAX_CART_LINES) {

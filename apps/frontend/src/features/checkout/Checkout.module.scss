@@ -1,0 +1,46 @@
+@use '@/styles/abstracts' as *;
+.page { max-width: 120rem; margin-inline: auto; padding: $spacing-8 $spacing-4 $spacing-16; @include respond-to(md) { padding-inline: $spacing-8; } @include respond-to(lg) { padding-inline: $spacing-16; } h1 { font-size: clamp(2rem, 3vw, 3rem); margin: 0 0 $spacing-6; } }
+.breadcrumb { display: flex; flex-wrap: wrap; gap: $spacing-2; align-items: center; margin: 0 0 $spacing-8; color: $color-text-secondary; font-size: $font-size-sm; a { color: inherit; text-decoration: none; &:hover { color: $color-primary; } } }
+.layout { display: grid; align-items: start; gap: $spacing-6; @include respond-to(lg) { grid-template-columns: minmax(0, 1fr) minmax(24rem, 27.5rem); gap: $spacing-10; } }
+.panel, .summary, .confirmationCard { border: 1px solid $color-border; padding: $spacing-6; background: $color-background; min-width: 0; h2 { margin: 0 0 $spacing-6; font-size: $font-size-2xl; } @include respond-to(md) { padding: $spacing-8; } }
+.summary { display: grid; gap: $spacing-5; h2 { font-size: $font-size-xl; margin-bottom: 0; } @include respond-to(lg) { position: sticky; top: 6rem; } }
+.summaryItems { display: grid; gap: $spacing-4; }
+.summaryItem { display: grid; grid-template-columns: 4rem minmax(0, 1fr) auto; gap: $spacing-4; align-items: start; padding-bottom: $spacing-5; border-bottom: 1px solid $color-border; min-width: 0; img, .imagePlaceholder { width: 4rem; height: 4rem; object-fit: contain; background: $color-surface; border: 1px solid $color-border; } > div { min-width: 0; display: grid; gap: $spacing-1; } strong { overflow-wrap: break-word; word-break: normal; line-height: $line-height-normal; } span { font-size: $font-size-sm; color: $color-text-secondary; } > strong { font-size: $font-size-sm; white-space: nowrap; text-align: right; } }
+.imagePlaceholder { background: $color-surface; }
+.totalRow { display: flex; justify-content: space-between; gap: $spacing-4; color: $color-text-secondary; min-width: 0; > span:first-child { overflow-wrap: anywhere; } > :last-child { flex-shrink: 0; } }
+.grandTotal { padding-top: $spacing-5; border-top: 1px solid $color-border; color: $color-text-primary; font-size: $font-size-xl; }
+.free { color: $color-success-foreground; }
+.subtle { color: $color-text-secondary; font-size: $font-size-sm; display: flex; gap: $spacing-2; align-items: center; line-height: 1.6; margin: 0; }
+.stepper { display: flex; align-items: center; list-style: none; padding: 0; margin: 0 0 $spacing-6; max-width: 48rem; width: 100%; }
+.stepItem { display: flex; align-items: center; flex: 1; min-width: 0; &:last-child { flex: 0 0 auto; } }
+.stepButton { background: none; border: none; display: inline-flex; align-items: center; gap: $spacing-2; padding: $spacing-1 0; color: $color-text-secondary; font: inherit; font-size: $font-size-sm; font-weight: $font-weight-medium; cursor: pointer; white-space: nowrap; &:disabled { cursor: default; opacity: 1; } &:not(:disabled):hover { color: $color-primary-dark; .stepLabel { text-decoration: underline; text-underline-offset: .2em; } } &:focus-visible { outline: 2px solid $color-primary; outline-offset: 4px; } @include respond-to(md) { font-size: $font-size-base; gap: $spacing-3; } }
+.stepNumber { border: 1px solid $color-border; width: 2rem; height: 2rem; display: grid; place-items: center; flex-shrink: 0; font-weight: $font-weight-semibold; font-size: $font-size-sm; color: $color-text-secondary; background: $color-background; @include respond-to(md) { width: 2.25rem; height: 2.25rem; } }
+.stepper .activeStep, .stepper .doneStep { color: $color-primary; font-weight: $font-weight-semibold; .stepNumber { color: white; background: $color-primary; border-color: $color-primary; } }
+.stepConnector { flex: 1; height: 1px; background: $color-border; margin: 0 $spacing-2; min-width: 0.5rem; @include respond-to(md) { margin: 0 $spacing-3; min-width: 1rem; } }
+.connectorDone { background: $color-primary; }
+@media (max-width: 420px) { .stepButton { font-size: $font-size-xs; gap: $spacing-1; } .stepNumber { width: 1.75rem; height: 1.75rem; font-size: $font-size-xs; } .stepConnector { margin: 0 $spacing-1; min-width: 0.25rem; } }
+.formGrid { display: grid; gap: $spacing-5; @include respond-to(md) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.fullWidth { grid-column: 1 / -1; }
+.actions { display: flex; flex-wrap: wrap; gap: $spacing-4; margin-top: $spacing-8; align-items: center; > * { min-height: 3rem; } @media (max-width: 30rem) { flex-direction: column-reverse; align-items: stretch; > * { width: 100%; justify-content: center; } } }
+.primaryLink, .secondaryLink { display: inline-flex; align-items: center; justify-content: center; padding: $spacing-3 $spacing-6; min-height: 3rem; text-decoration: none; font-weight: 600; border: 1px solid $color-border; text-align: center; &:focus-visible { outline: 2px solid $color-primary; outline-offset: 4px; } }
+.primaryLink { background: $color-primary; color: white; border-color: $color-primary; }
+.secondaryLink { color: $color-text-primary; }
+.deliveryOptions { display: grid; gap: $spacing-4; }
+.deliveryOption { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: $spacing-3; border: 1px solid $color-border; padding: $spacing-5; cursor: pointer; input { accent-color: $color-primary; width: 1.125rem; height: 1.125rem; } > span { display: grid; gap: $spacing-1; min-width: 0; } small { color: $color-text-secondary; } > strong { white-space: nowrap; } &:focus-within { outline: 2px solid $color-primary; outline-offset: 2px; } @media (max-width: 30rem) { padding: $spacing-4; grid-template-columns: auto minmax(0, 1fr) auto; > svg { display: none; } } }
+.selectedOption { border-color: $color-primary; background: rgba($color-primary, .04); }
+.paymentChoice { display: inline-flex; flex-wrap: wrap; align-items: center; gap: $spacing-3; padding: $spacing-4; color: $color-primary; border: 1px solid $color-primary; }
+.providerShell { border: 1px solid $color-border; padding: $spacing-6; margin-top: $spacing-6; text-align: center; color: $color-text-secondary; h3 { color: $color-text-primary; font-size: $font-size-lg; margin: $spacing-3 0; } p { margin: 0; line-height: 1.7; } }
+.reviewCard { display: flex; align-items: start; justify-content: space-between; gap: $spacing-3; border: 1px solid $color-border; padding: $spacing-5; margin-top: $spacing-5; > div { min-width: 0; overflow-wrap: anywhere; } h3 { font-size: $font-size-base; margin: 0 0 $spacing-2; } p, address { margin: 0; font-style: normal; color: $color-text-secondary; line-height: 1.8; } small { color: $color-text-secondary; } }
+.editAction { color: $color-primary !important; font-weight: $font-weight-medium; cursor: pointer; padding: $spacing-1 $spacing-3; &:hover { color: $color-primary-dark !important; background-color: rgba($color-primary, .06) !important; } &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; } }
+.notice { border: 1px solid $color-border; padding: $spacing-5; margin-bottom: $spacing-6; line-height: 1.7; p { margin: 0 0 $spacing-3; } }
+.empty { min-height: 20rem; display: grid; justify-items: center; align-content: center; text-align: center; gap: $spacing-4; h2, p { margin: 0; } }
+.processing { min-height: 25rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: $spacing-5; padding: $spacing-8 $spacing-4; text-align: center; h1 { font-size: $font-size-2xl; margin: $spacing-4 0 0; } p { color: $color-text-secondary; margin: 0; } }
+.confirmation { max-width: 60rem; text-align: center; padding-top: $spacing-12; h1 { margin: $spacing-6 0 $spacing-3; } > .primaryLink { margin-top: $spacing-8; min-width: 16rem; } }
+.successIcon { width: 6rem; height: 6rem; margin-inline: auto; display: grid; place-items: center; color: $color-success-foreground; background: rgba($color-success-foreground, .07); border-radius: 50%; }
+.intro { color: $color-text-secondary; line-height: 1.7; margin: 0 auto $spacing-8; max-width: 40rem; }
+.confirmationCard { text-align: start; display: grid; gap: $spacing-5; }
+.orderHeading { display: flex; align-items: start; flex-wrap: wrap; justify-content: space-between; gap: $spacing-3; > div { min-width: 0; flex: 1; } h2 { color: $color-primary; font-size: $font-size-xl; overflow-wrap: anywhere; margin: $spacing-2 0 0; } }
+.eyebrow { text-transform: uppercase; color: $color-text-secondary; font-size: $font-size-sm; letter-spacing: .03em; }
+.orderStatus { padding: $spacing-2 $spacing-3; border: 1px solid $color-border; font-size: $font-size-sm; white-space: nowrap; }
+.orderDate { padding-top: $spacing-5; border-top: 1px solid $color-border; p { margin: $spacing-2 0; } address { font-style: normal; line-height: 1.7; overflow-wrap: anywhere; color: $color-text-secondary; } }
+.orderDateSection { border-bottom: 1px solid $color-border; padding-bottom: $spacing-5; margin-bottom: $spacing-2; }

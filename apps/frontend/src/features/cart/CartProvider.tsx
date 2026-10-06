@@ -7,7 +7,7 @@ import { useAuth } from '@/features/auth/context/AuthContext';
 import { MAX_CART_LINES, MAX_CART_QUANTITY, clearGuestCart, readGuestCart, writeGuestCart } from './storage';
 import type { CartData, CartInputItem } from './types';
 import { CartContext } from './context';
-const EMPTY_CART: CartData = { items: [], totalQuantity: 0, subtotal: '0.00', shipping: '0.00', total: '0.00', currency: 'USD', canCheckout: false };
+const EMPTY_CART: CartData = { revision: '', items: [], totalQuantity: 0, subtotal: '0.00', shipping: '0.00', total: '0.00', currency: 'USD', canCheckout: false };
 const readServerCart = (signal?: AbortSignal) => apiClient<{ data: CartData }>('/api/cart', { signal });
 
 function withoutCartItem(data: CartData | undefined, productId: string): CartData | undefined {
@@ -237,6 +237,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setMergeError(null);
   };
 
+  async function submitCheckout<T>(operation: () => Promise<{ cart: CartData; result: T }>): Promise<T> {
+    const requestUserId = user?.id;
+    const purchase = mutationQueue.current.catch(() => undefined).then(async () => {
+      if (!authenticated || !requestUserId || identityRef.current !== requestUserId) throw new Error('Session changed. Please sign in again.');
+      setMutating(true);
+      try {
+        await client.cancelQueries({ queryKey: queryKeys.cart.current(requestUserId) });
+        const response = await operation();
+        if (identityRef.current !== requestUserId) throw new Error('Session changed. Restore your order after signing in.');
+        await client.cancelQueries({ queryKey: queryKeys.cart.current(requestUserId) });
+        client.setQueryData(queryKeys.cart.current(requestUserId), { data: response.cart });
+        lastServerCart.current = response.cart;
+        return response.result;
+      } finally { setMutating(false); }
+    });
+    mutationQueue.current = purchase;
+    return purchase;
+  }
+
   const authoritativeData = authenticated ? serverQuery.data?.data : guest ? guestItems.length ? guestQuery.data?.data : EMPTY_CART : undefined;
   const transitioningData = isLoggingOut ? serverQuery.data?.data ?? lastServerCart.current : undefined;
   const awaitingGuestMerge = authenticated && guestItems.length > 0 && !mergeError && mergedForUser !== user?.id;
@@ -249,7 +268,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   return <CartContext.Provider value={{ data, totalQuantity: authenticated ? data?.totalQuantity ?? 0 : guest ? data?.totalQuantity ?? guestItems.reduce((sum, item) => sum + item.quantity, 0) : 0,
     isGuest: guest && !isLoggingOut, isLoggingOut, isLoading: !isSessionVerified || isLoggingOut || (authenticated ? serverQuery.isPending || hidePreMergeCart : guest && guestItems.length > 0 && guestQuery.isPending),
     isError: authenticated ? serverQuery.isError : guest && guestItems.length > 0 && guestQuery.isError,
-    isMutating, pendingProductIds: Object.keys(pendingQuantities), pendingRemoveProductIds: Object.keys(pendingRemovals), mergeError, pendingGuestItems: authenticated ? guestItems : [], addItem, setQuantity, removeItem, retry, retryMerge, removePendingGuestItem }}>
+    isMutating, pendingProductIds: Object.keys(pendingQuantities), pendingRemoveProductIds: Object.keys(pendingRemovals), mergeError, pendingGuestItems: authenticated ? guestItems : [], addItem, setQuantity, removeItem, retry, retryMerge, removePendingGuestItem, submitCheckout }}>
     {children}
   </CartContext.Provider>;
 }

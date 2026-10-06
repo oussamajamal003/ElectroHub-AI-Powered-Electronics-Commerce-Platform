@@ -8,6 +8,7 @@ import { useAuth } from '@/features/auth/context/AuthContext';
 import { CartProvider } from './CartProvider';
 import { useCart } from './context';
 import { CART_STORAGE_KEY } from './storage';
+import { cart as checkoutCart } from '@/features/checkout/fixtures';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: vi.fn() }));
 vi.mock('@/lib/api', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/api')>(), apiClient: vi.fn() }));
@@ -19,6 +20,42 @@ beforeEach(() => {
     const items = (options?.data as { items: { productId: string; quantity: number }[] }).items;
     return { data: { items: items.map(item => ({ ...item, availability: 'AVAILABLE', availableQuantity: 9 })),
       totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0), subtotal: '1.00', shipping: '0.00', total: '1.00', currency: 'USD', canCheckout: true } } as never;
+  });
+});
+
+describe('CartProvider checkout commit boundary', () => {
+  it('cancels an older Cart read before installing the committed empty Cart so purchased rows cannot resurrect', async () => {
+    const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4', role: 'CUSTOMER' };
+    vi.mocked(useAuth).mockReturnValue({ isSessionVerified: true, isAuthenticated: true, user } as ReturnType<typeof useAuth>);
+    let resolveOlder!: (value: unknown) => void;
+    vi.mocked(apiClient).mockImplementation(() => new Promise(resolve => { resolveOlder = resolve; }));
+    const client = createQueryClient(); const key = queryKeys.cart.current(user.id);
+    client.setQueryData(key, { data: checkoutCart });
+    const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}><CartProvider>{children}</CartProvider></QueryClientProvider>;
+    const { result } = renderHook(() => useCart(), { wrapper });
+    let older!: Promise<void>; act(() => { older = result.current.retry(); });
+    await waitFor(() => expect(resolveOlder).toBeTypeOf('function'));
+    const empty = { ...checkoutCart, items: [], totalQuantity: 0, subtotal: '0.00', total: '0.00', canCheckout: false, revision: 'b'.repeat(64) };
+    await act(async () => { expect(await result.current.submitCheckout(async () => ({ cart: empty, result: 'confirmed' }))).toBe('confirmed'); });
+    expect(result.current.data?.items).toEqual([]); expect(result.current.totalQuantity).toBe(0);
+    await act(async () => { resolveOlder({ data: checkoutCart }); await older; });
+    expect(result.current.data?.items).toEqual([]); expect(client.getQueryData(key)).toEqual({ data: empty });
+  });
+  it('queues purchase behind an already accepted authenticated Cart mutation', async () => {
+    const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4', role: 'CUSTOMER' };
+    vi.mocked(useAuth).mockReturnValue({ isSessionVerified: true, isAuthenticated: true, user } as ReturnType<typeof useAuth>);
+    let settleAdd!: (value: unknown) => void;
+    vi.mocked(apiClient).mockImplementation(() => new Promise(resolve => { settleAdd = resolve; }));
+    const client = createQueryClient(); client.setQueryData(queryKeys.cart.current(user.id), { data: checkoutCart });
+    const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}><CartProvider>{children}</CartProvider></QueryClientProvider>;
+    const { result } = renderHook(() => useCart(), { wrapper });
+    let add!: Promise<void>; act(() => { add = result.current.addItem(productId); });
+    await waitFor(() => expect(settleAdd).toBeTypeOf('function'));
+    const purchase = vi.fn(async () => ({ cart: { ...checkoutCart, items: [], totalQuantity: 0 }, result: 'confirmed' }));
+    let pending!: Promise<string>; act(() => { pending = result.current.submitCheckout(purchase); });
+    expect(purchase).not.toHaveBeenCalled();
+    await act(async () => { settleAdd({ data: checkoutCart }); await add; await pending; });
+    expect(purchase).toHaveBeenCalledTimes(1); expect(result.current.totalQuantity).toBe(0);
   });
 });
 
