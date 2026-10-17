@@ -58,7 +58,7 @@ describe('Google OAuth ownership and sessions', () => {
   }, 30000);
 
   it('email collision never auto-links; a verified local password proves ownership', async () => {
-    const role = await prisma.role.findUniqueOrThrow({ where: { name: 'CUSTOMER' } });
+    const role = await prisma.role.upsert({ where: { name: 'CUSTOMER' }, create: { name: 'CUSTOMER' }, update: {} });
     const localEmail = emails[1];
     const localIdentity = { ...identity, sub: `local-${marker}`, email: localEmail };
     const user = await prisma.user.create({ data: { email: localEmail, passwordHash: await hashPassword(password), firstName: 'Local', lastName: 'Customer', emailVerifiedAt: new Date(), roleId: role.id } });
@@ -74,7 +74,8 @@ describe('Google OAuth ownership and sessions', () => {
   }, 60000);
 
   it('rejects admin Google sessions while preserving admin password login', async () => {
-    const role = await prisma.role.findUniqueOrThrow({ where: { name: 'ADMIN' } });
+    // Roles are not created by migrations; a fresh (CI) database has none until something provisions them.
+    const role = await prisma.role.upsert({ where: { name: 'ADMIN' }, create: { name: 'ADMIN' }, update: {} });
     const admin = await prisma.user.create({ data: { email: emails[2], firstName: 'Admin', lastName: 'Test', passwordHash: await hashPassword(password), emailVerifiedAt: new Date(), roleId: role.id, oauthAccounts: { create: { provider: 'GOOGLE', providerAccountId: `admin-${marker}`, providerEmail: emails[2] } } } });
     await expect(service.signIn({ ...identity, sub: `admin-${marker}`, email: emails[2] })).rejects.toMatchObject({ code: 'GOOGLE_ACCOUNT_UNAVAILABLE' });
     const login = await new AuthService().login(admin.email, password);
@@ -117,7 +118,7 @@ describe('Google OAuth ownership and sessions', () => {
   }, 30000);
 
   it('links through the HTTP boundary only after password proof and then supports refresh, me and logout', async () => {
-    const role = await prisma.role.findUniqueOrThrow({ where: { name: 'CUSTOMER' } });
+    const role = await prisma.role.upsert({ where: { name: 'CUSTOMER' }, create: { name: 'CUSTOMER' }, update: {} });
     const local = { ...identity, sub: `http-link-${marker}`, email: emails[3] };
     await prisma.user.create({ data: { email: local.email, passwordHash: await hashPassword(password), firstName: 'Link', lastName: 'Customer', emailVerifiedAt: new Date(), roleId: role.id } });
     vi.spyOn(googleProvider, 'verifyCode').mockResolvedValue(local);
@@ -129,9 +130,14 @@ describe('Google OAuth ownership and sessions', () => {
     await agent.post('/api/auth/google/link').set('Origin', 'http://localhost:3000').send({ password: 'wrong' }).expect(400);
     const linked = await agent.post('/api/auth/google/link').set('Origin', 'http://localhost:3000').send({ password }).expect(200);
     await agent.get('/api/auth/me').set('Authorization', `Bearer ${linked.body.accessToken}`).expect(200);
-    const refresh = await agent.post('/api/auth/refresh').expect(200);
+    // The response also expires the legacy same-name cookie on Path=/api/auth/refresh. Browsers key cookies by name + path, but
+    // supertest's jar keys by name only and would drop the live token, so send the issued /api/auth cookie explicitly.
+    const issued = (linked.headers['set-cookie'] as unknown as string[]).find(cookie => cookie.startsWith('electrohub_refresh=') && /Path=\/api\/auth;/.test(cookie));
+    expect(issued).toBeTruthy();
+    const refresh = await request(app).post('/api/auth/refresh').set('Cookie', issued!.split(';')[0]).expect(200);
     expect(refresh.body.accessToken).toBeTruthy();
-    await agent.post('/api/auth/logout').expect(200);
-    await agent.post('/api/auth/refresh').expect(401);
+    const rotated = (refresh.headers['set-cookie'] as unknown as string[]).find(cookie => cookie.startsWith('electrohub_refresh=') && /Path=\/api\/auth;/.test(cookie))!.split(';')[0];
+    await request(app).post('/api/auth/logout').set('Cookie', rotated).expect(200);
+    await request(app).post('/api/auth/refresh').set('Cookie', rotated).expect(401);
   }, 60000);
 });

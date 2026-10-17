@@ -44,7 +44,7 @@ beforeAll(async () => {
   userId = user.id;
   accessToken = generateAccessToken({ userId, role: 'CUSTOMER' });
   refreshToken = `refresh-${marker}`;
-  await prisma.refreshToken.create({ data: { userId, tokenHash: crypto.createHash('sha256').update(refreshToken).digest('hex'), expiresAt: new Date(Date.now() + 60_000) } });
+  await prisma.refreshToken.create({ data: { userId, tokenHash: crypto.createHash('sha256').update(refreshToken).digest('hex'), expiresAt: new Date(Date.now() + 60_000), familyId: crypto.randomUUID() } });
   await prisma.passwordResetToken.create({ data: { userId, tokenHash: crypto.createHash('sha256').update(marker).digest('hex'), expiresAt: new Date(Date.now() + 60_000) } });
   await prisma.otpChallenge.create({ data: { userId, purpose: 'PASSWORD_RESET', destination: originalEmail, codeHash: 'hashed-test-code', expiresAt: new Date(Date.now() + 60_000) } });
   await prisma.emailDelivery.create({ data: { userId, type: 'SECURITY_ALERT', recipient: originalEmail, failureReason: 'private provider diagnostic' } });

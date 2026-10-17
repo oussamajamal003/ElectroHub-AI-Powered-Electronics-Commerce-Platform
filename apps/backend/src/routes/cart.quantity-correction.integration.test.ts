@@ -31,6 +31,18 @@ vi.mock('../middleware/auth.js', () => ({
   requireRole: () => (_req: Request, _res: Response, next: NextFunction) => next(),
 }));
 
+const product = () => ({
+  id: fixture.productId,
+  slug: 'phone',
+  name: 'Phone',
+  price: new Prisma.Decimal('19.99'),
+  status: fixture.active ? 'ACTIVE' : 'INACTIVE',
+  isTestFixture: false,
+  category: { name: 'Phones', isActive: true },
+  inventory: fixture.inventoryPresent ? { quantity: fixture.stock, lowStockAt: 5 } : null,
+  images: [],
+});
+
 const app = express();
 app.use(express.json());
 app.use('/api', cartRoutes);
@@ -44,10 +56,12 @@ beforeEach(() => {
   fixture.active = true;
   fixture.inventoryPresent = true;
   database.$transaction.mockImplementation(async (operation: (client: typeof database) => Promise<unknown>) => operation(database));
-  database.cart.findUnique.mockImplementation(async ({ where, select }: { where: { userId: string }; select?: { items?: unknown } }) => {
+  database.cart.findUnique.mockImplementation(async ({ where, select }: { where: { userId: string }; select?: { items?: { select?: { product?: unknown } } } }) => {
     if (where.userId !== fixture.userId) return null;
+    // cartResponse reads lines with their product in one query; currentCart reads lines only.
+    const line = { id: 'line-1', productId: fixture.productId, quantity: fixture.quantity };
     return select?.items
-      ? { id: 'cart-1', items: [{ id: 'line-1', productId: fixture.productId, quantity: fixture.quantity }] }
+      ? { id: 'cart-1', items: [select.items.select?.product ? { ...line, product: product() } : line] }
       : { id: 'cart-1' };
   });
   database.cartItem.findUnique.mockImplementation(async ({ where }: { where: { cartId_productId: { cartId: string; productId: string } } }) => {
@@ -61,16 +75,7 @@ beforeEach(() => {
   });
   database.product.findMany.mockImplementation(async ({ where }: { where: { id: { in: string[] } } }) => {
     if (!where.id.in.includes(fixture.productId)) return [];
-    return [{
-      id: fixture.productId,
-      slug: 'phone',
-      name: 'Phone',
-      price: new Prisma.Decimal('19.99'),
-      status: fixture.active ? 'ACTIVE' : 'INACTIVE',
-      category: { name: 'Phones', isActive: true },
-      inventory: fixture.inventoryPresent ? { quantity: fixture.stock, lowStockAt: 5 } : null,
-      images: [],
-    }];
+    return [product()];
   });
 });
 

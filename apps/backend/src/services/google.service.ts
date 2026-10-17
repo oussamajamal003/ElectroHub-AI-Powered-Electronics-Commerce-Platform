@@ -12,7 +12,11 @@ export class GoogleService {
   async signIn(identity: GoogleIdentity) {
     const linked = await this.repository.findIdentity(identity.sub);
     if (linked) return this.session(linked.user.id);
-    if (await this.repository.findUser(identity.email)) return { linkingRequired: true as const };
+    if (await this.repository.findUser(identity.email)) {
+      // A concurrent first sign-in may have committed this user together with this exact identity between the two reads above.
+      const created = await this.repository.findIdentity(identity.sub);
+      return created ? this.session(created.user.id) : { linkingRequired: true as const };
+    }
     try {
       const user = await this.repository.createCustomer(identity);
       return this.session(user.id);
