@@ -1,29 +1,49 @@
-# Task 03.6: Integration closure, DEV synchronization and PROD migration readiness (2026-10-17)
+# Task 03.6: Integration closure, DEV synchronization and PROD migration readiness
 
-**Implementation phase: CLOSED BY PROJECT OWNER — RELEASE ACCEPTANCE SUBJECT TO TRACKED GATES.**
-Principal Architect: 91/100, with controlled integration authorized. Operational and production payment acceptance: **NOT ACCEPTED** (tracked below).
+| | |
+|---|---|
+| Implementation | **CLOSED — ACCEPTED** (Final Architect decision, 94/100) |
+| Accepted commit | `a824eb42fe0e3c4663ccf1c7dceac2c8fa2ae490` |
+| DEV migration ledger | 19/19 finished |
+| PROD migration ledger | 15/19 finished |
+| PROD migration execution | **NO-GO**; blockers B1–B5 transferred to the DATABASE, AUTH and Release workstreams |
+| Production payment acceptance | **NOT YET APPROVED**; R1–R8 tracked under the production release acceptance process |
+
+Do not reopen the implementation because of the separately gated production work. The release blockers are not unfinished Task 03.6 work unless an investigation establishes an actual regression in the accepted code.
+
+Last updated: 2026-10-17.
 
 ## A. Closure record
 
-### Test reconciliation (current source, offline)
+### Verification at the closed commit
+| Evidence | Source | Result |
+|---|---|---|
+| Development CI, run `39061797904` (10 jobs) | GitHub Actions | **10/10 success**: Frontend Lint/Typecheck/Test/Build, Backend Lint/Typecheck/Test/Build, AI Service Test, Migration Safety Policy |
+| Security Audit, run `39061797922` | GitHub Actions | **success** (NPM Audit) |
+| Backend / Test in CI | disposable loopback Postgres, every migration applied | unit and integration suites passed |
+| Frontend Vitest, local | current source | 719/719 |
+| Backend Vitest `src/**` unit, local | current source | 756 passed, 2 skipped |
+| Isolated Playwright `failed-payment-dismiss` at 1366 and 390 | disposable stack | 2/2 (see `TASK_03.6_RECURRING_CHECKOUT_ERRORS_AND_ISOLATED_DEV.md`) |
 
-| Suite | Result |
-|---|---|
-| Frontend Vitest (full) | **719/719 passed**, 96 files |
-| Backend Vitest `src/**`, unit and mocked; excludes `*integration*` and `*.live.test.ts` | **756 passed**, 2 skipped |
-| Backend `scripts/*.test.cjs` (acceptance, migration-safety and guard tooling) | all passed |
-| Typecheck (backend `tsc --noEmit`, frontend `tsc -b`) | clean |
-| ESLint (backend `src`, frontend) | clean |
-| Frontend production build | OK |
-| Isolated Playwright `failed-payment-dismiss` at 1366 and 390 | 2/2 passed (see `TASK_03.6_RECURRING_CHECKOUT_ERRORS_AND_ISOLATED_DEV.md`) |
+### Test reconciliation
+- **Historical failures.** The seven historical Checkout/Try Again unit failures no longer reproduce on the current source.
+- **Integration suites.** CI ran the backend integration suites against a disposable database for the first time. That surfaced four obsolete fixtures or mocks:
+  - `familyId` in a refresh-token fixture;
+  - role provisioning;
+  - the supertest cookie-jar handling of the legacy cookie path;
+  - the nested cart read.
 
-The seven historical Checkout/Try Again unit failures no longer reproduce. The current suite passes in full, so none needed reclassifying as a regression or an obsolete assertion. The conflicting intercepted Chromium scenarios were not re-run here (they need a running stack).
+  These were corrected without weakening any assertion.
+- **Regressions fixed** (commits `e1f57d2` and `a824eb4`):
+  1. A paid checkout's draft could be re-persisted by a late state update.
+  2. Concurrent first-time Google sign-ins could show a spurious "linking required" prompt.
 
-Integration suites under `tests/**` and the `src/**` `*integration*` suites were not run, because they would target the `.env` database (shared DEV).
+  Both are covered by tests.
+- **Not re-run:** the intercepted Chromium scenarios (tracked under R6).
 
 ### Accepted financial invariants
-These are backed by existing real evidence (earlier reports, not re-run):
-- **Failed payment:** Try Again opens a fresh, empty Payment Element, and nothing is submitted automatically.
+These are backed by existing real evidence (earlier authorized runs, not repeated):
+- **Try Again** opens a fresh, empty Payment Element, with no automatic submission.
 - **Terminal outcomes** are authoritative from the provider.
 - **No duplicates:** no duplicate capture, Order or inventory mutation.
 - **Webhooks** are verified by signature.
@@ -31,70 +51,83 @@ These are backed by existing real evidence (earlier reports, not re-run):
 - **Cancel purchase** is limited to verified never-confirmed purchases.
 - **Payment isolation boundary** is in place.
 
-Real Stripe Test Mode evidence: `pi_3URYW5…` (decline, then Try Again, then success, 1 order) and `pi_3URZGx…` (never confirmed, then Cancel purchase).
+Stripe Test Mode evidence: `pi_3URYW5…` (decline, then Try Again, then success, 1 order) and `pi_3URZGx…` (never confirmed, then Cancel purchase).
 
-### Transferred release risks (open, NOT fixed)
-| ID | Risk |
-|---|---|
-| R1 | Real 3DS challenge completion is not accepted |
-| R2 | The Stripe 3DS overlay persists during in-app navigation |
-| R3 | AUTH refresh-token rotation and session-revocation defect |
-| R4 | The recovery worker has no supervision or alerting |
-| R5 | Hosted-pooler latency and load-related 503s |
-| R6 | Remaining browser acceptance gaps: intercepted Chromium scenarios, and Payment Element not re-run on the current source |
-| R7 | PROD migration parity and production cutover (see D) |
-| R8 | K–S acceptance scenarios not executed |
+### Release risks (open, NOT fixed, and blocking production payment acceptance)
+| ID | Risk | Owner | Gate to close |
+|---|---|---|---|
+| R1 | Real 3DS challenge completion is not accepted | PAYMENT + FRONTEND | Authorized Test Mode 3DS challenge run, completed end to end |
+| R2 | The Stripe 3DS overlay persists during in-app navigation | FRONTEND | Fix plus browser evidence |
+| R3 | AUTH refresh-token rotation and session-revocation defect | AUTH | Security concurrency tests plus Architect review |
+| R4 | The recovery worker has no supervision or alerting | OBSERVABILITY + PAYMENT | Supervisor, alerting and a runbook in place |
+| R5 | Hosted-pooler latency and load-related 503s | PERFORMANCE + DATABASE | Load or latency evidence within budget |
+| R6 | Browser acceptance gaps: intercepted Chromium scenarios, and the Payment Element not re-run on the closed source | FRONTEND + INTEGRATION | Scenarios re-run green; authorized Payment Element check |
+| R7 | PROD migration parity and production cutover | DATABASE + Architect + Owner | Section D: drift decision, cutover authorization, post-cutover parity |
+| R8 | K–S acceptance scenarios not executed | INTEGRATION | Separately approved execution |
 
 ## B. Integration record
-**Not pushed.** The current state is described here.
-- Branch `feature/Stripe` → `origin` (github.com/oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerce-Platform), base `3d69b97`.
-- **CI safety.**
-  - `ci.yml` runs on `feature/**` pushes, but applies `prisma migrate deploy` only to a disposable loopback Postgres after asserting the target.
-  - `dev-migration.yml` runs only on `workflow_dispatch`, with an approved SHA and a gated environment.
-  - No PROD migration or deploy workflow exists.
+| | |
+|---|---|
+| Branch | `feature/Stripe`, pushed to `origin` (github.com/oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerce-Platform), fast-forward from `3d69b97`; no force-push |
+| Commits | `a2b4380` (Task 03.6 integration), `e1f57d2` (CI key permissions, paid-draft race, `.gitignore`), `a824eb4` (Google sign-in race, integration-test alignment) |
+| CI | run `39061797904` success (10/10); run `39061797922` success. The earlier runs `39058157815` and `39060967984` failed and were fixed as described in A |
+| PR, merge, deploy | none |
+| Migrations triggered by the push | none on DEV or PROD |
 
-  A push therefore cannot migrate DEV or PROD, or deploy.
-- **Change set.** 425 paths across several workstreams: PAYMENT, FRONTEND, AUTH (refresh lineage), DATABASE (storefront visibility), OBSERVABILITY and CI. `schema.prisma` and the migrations interleave these workstreams, so a "Task 03.6 only" commit is not separable without producing a schema that doesn't match the code.
-- **Secret scan.** Every match was a placeholder: `.env.example` `[YOUR-…]`, `sk_test_your`, and offline test fixtures. Paths to exclude: `.claude/`, `apps/frontend/diag.txt`, `docs/tasks/Phase-03/*.patch`, and the raw logs under `docs/tasks/Phase-03/evidence/`. `apps/backend/.isolated/` is already git-ignored.
-- **Pending decision:** the commit scope (see the final note).
+How CI handles migrations:
+- `ci.yml` applies migrations only to a loopback disposable Postgres, and asserts the target first.
+- `dev-migration.yml` runs only on a gated `workflow_dispatch`.
+- No PROD migration or deploy workflow exists.
+
+Excluded from the commits and git-ignored: `.claude/`, `apps/frontend/diag.txt`, `docs/tasks/Phase-03/*REVIEW.patch`, `apps/backend/.isolated/`, and the raw evidence logs.
+
+Every secret-scan match was a placeholder or an offline test fixture.
 
 ## C. DEV migration parity
-**NOT VERIFIED in this session.**
-- **Identity.** The repository `.env` targets project `pzxekjybdiulzmssalfo` (`electrohub-dev`, ap-northeast-2) through the Supabase pooler: `DATABASE_URL` on 6543 (pgbouncer), `DIRECT_URL` on 5432 (session).
-- **Blocked reads.** The local permission policy refused both read-only DEV reads I attempted (Supabase `execute_sql` in a read-only transaction, and `prisma migrate status`). No DEV query ran.
-- **No migration executed.**
-- **Earlier evidence.** The master handoff §173 records `20261016…` being applied to DEV earlier. That is a prior report, not fresh evidence. "DEV: 19/19" is **not** claimed.
+- **Target.** Project `pzxekjybdiulzmssalfo` (`electrohub-dev`, ap-northeast-2), the target of the repository `.env` through the Supabase pooler. `DIRECT_URL` uses the 5432 session pooler.
+- **Ledger.** **19/19 finished, with 0 failed or rolled-back rows.** This comes from a fresh read-only Prisma ledger check recorded in the Principal Architect review for `a824eb4`. The implementing agent's own read-only DEV queries were blocked by local permission policy, so this agent did not run that check.
+- **Migrations executed during closure:** none.
+- **DEV checksum, from the Architect's earlier read-only DEV ledger evidence:** `20261012120000_payment_purchase_ownership` is recorded as `0cf4bc6b88a2222b47e691100364b0e961b5bb20b61149dfb759b651ef177ff8`, the CRLF byte form. The committed LF blob is `a45372e2e25895345b7499e6d7d82b852e75a1a5e29b03b8b1fcf53a0f8cc310`. The PROD cutover must pin and verify its intended byte form before execution.
+- **Not covered by this record:** the DEV affected-column details (`dismissedAt`, `confirmationStartedAt`).
 
-## D. PROD read-only readiness
-Project `yepfgjehdstlxbpespun` (`electrohub`, ap-northeast-1). The query ran inside `BEGIN READ ONLY`, so no write was possible.
+## D. PROD migration readiness (read-only)
+Project `yepfgjehdstlxbpespun` (`electrohub`, ap-northeast-1). Inspected inside `BEGIN READ ONLY`; no write was possible.
+
+**Status: NOT READY. Execution is not authorized.**
 
 | Check | Repository | DEV | PROD | Status |
 |---|---|---|---|---|
-| Migration count | 19 | not verified | **15 finished, 0 failed or rolled back** | Drift (4 pending) |
-| Checksums (15 applied) | see note | not verified | 14 match a repository byte form | **`20240101000000_database_foundation` drift** |
-| `dismissedAt` | `timestamp(3)` NULL | not verified | absent | Pending |
-| `confirmationStartedAt` | `timestamp(3)` NULL | not verified | absent | Pending |
-| Payment schema | 29+ columns, `submittedAt`/`restoredAt`/etc. | not verified | `payment_attempts` has 29 columns, without the 012120 columns | Pending |
+| Migration count | 19 | 19/19 finished (Architect check) | **15/19 finished**, 0 failed or rolled back | Drift: 4 pending |
+| Checksums (applied 15) | see below | not in this record | 14 match a repository byte form | **`20240101000000_database_foundation` drift** |
+| `dismissedAt` | `timestamp(3)` NULL | — | absent | Pending |
+| `confirmationStartedAt` | `timestamp(3)` NULL | — | absent | Pending |
+| Payment schema | includes the 012120 columns | — | 29 columns, without 012120 | Pending |
 
-### Checksum note
-Prisma hashes raw file bytes. The repository has two byte forms: LF (the git index and Linux CI) and CRLF (the Windows working tree). The PROD ledger mixes both forms, depending on which machine applied each migration.
-
-`20260925020000_remove_users_phone` is applied as CRLF (`15de2423…`). The staged change, which commits that file as CRLF with `-text` in `.gitattributes`, makes the repository match the ledger.
-
-`20240101000000_database_foundation` in PROD is `5de060a3…`, which matches neither repository form (`a41f086f…` CRLF, `cb2baf5e…` LF). The file was most likely edited after PROD applied it (commit `f3934ed`). **Do not edit it, and do not `migrate resolve`.** It needs a DATABASE-owner decision.
+### Checksum drift: unresolved
+- **The drift.** PROD records `20240101000000_database_foundation` as `5de060a3…`, which matches neither repository byte form (`a41f086f…` CRLF, `cb2baf5e…` LF). The file most likely changed after PROD applied it (commit `f3934ed`).
+- **Required before any execution:** the DATABASE owner's documented decision on this drift.
+- **Not permitted under this authorization:** editing the file, `migrate resolve`, or altering the ledger.
+- **Line endings.** `20260925020000_remove_users_phone` is committed as CRLF (`15de2423…`) to match its applied checksum. Prisma hashes raw bytes, and the ledgers mix LF and CRLF forms.
 
 ### Pending in PROD, in order
-1. `20261012120000_payment_purchase_ownership` (`0cf4bc6b…`): additive nullable columns, a unique index on `payment_attempt_items.sourceCartItemId`, and a CHECK constraint. These take short ACCESS EXCLUSIVE locks; the tables are small.
-2. `20261013000000_refresh_token_rotation_lineage` (`51495598…`): **revokes and expires every PROD refresh token**, so all users are signed out. It sets `familyId` NOT NULL and uses `lock_timeout` 10s. This is an AUTH-owned change with customer impact (R3).
+1. `20261012120000_payment_purchase_ownership` (LF blob `a45372e2…`; a CRLF checkout gives `0cf4bc6b…`, so the byte form must be pinned; see the authorization packet): additive nullable columns, a unique index and a CHECK constraint, with short locks.
+2. `20261013000000_refresh_token_rotation_lineage` (`51495598…`). **This signs everyone out of PROD.**
+   - It revokes and expires every existing PROD refresh token.
+   - It sets `familyId` NOT NULL, with `lock_timeout` 10s.
+   - It is owned by AUTH and is linked to R3.
+   - The global sign-out must be communicated, and accepted by the Owner, before the cutover.
 3. `20261015000000_payment_attempt_dismissed_at` (`e124407f…`): adds a nullable column (metadata-only).
 4. `20261016000000_payment_attempt_confirmation_started` (`97f32ab9…`): adds a nullable column (metadata-only).
 
-### Cutover plan (requires separate Owner authorization naming PROD and these four migrations)
-1. **Verify.** Take a PITR or backup snapshot. Check the ledger, and confirm `database_foundation` drift is accepted.
-2. **Deploy code before columns are used.** The current code needs every column, so deploy the backend only after migrate.
-3. **Run the migrations.** Use `prisma migrate deploy` from an LF checkout through the 5432 session pooler, in a maintenance window, with the worker stopped. Expected duration is seconds.
-4. **Run parity queries.** Check the ledger shows 19 finished rows, check the columns and indexes, and confirm 0 failed rows.
-5. **Abort criteria:** a lock timeout, a failed row, or a checksum mismatch.
-6. **Roll forward, never `reset`.** Recovery is the snapshot. Reversing the additive columns is a manual `DROP COLUMN` only with DATABASE approval. Token revocation is irreversible by design.
+The current GO/NO-GO status (**NO-GO**) and the full cutover plan are in `TASK_03.6_PROD_MIGRATION_AUTHORIZATION_PACKET.md`.
 
-**No PROD write was performed. PROD execution is not authorized.**
+### Cutover prerequisites and plan (execution requires separate authorization naming PROD and these four migrations)
+1. The DATABASE owner's drift decision is documented.
+2. The Owner accepts the global sign-out.
+3. A PITR or backup snapshot is confirmed.
+4. **Migrate before the new code ships.** Run `prisma migrate deploy` from an LF checkout through the 5432 session pooler, in a maintenance window with the recovery worker stopped. Expected duration is seconds.
+5. **Run parity queries.** The ledger must show 19 finished rows with 0 failed, and the columns and indexes must be present.
+6. **Abort criteria:** a lock timeout, a failed ledger row, or a checksum mismatch.
+7. **Roll forward only, never `reset`.** Recovery is the snapshot. Reversing the additive columns needs DATABASE approval. Token revocation is irreversible by design.
+
+No PROD write, migration, `migrate resolve`, deploy or merge was performed.

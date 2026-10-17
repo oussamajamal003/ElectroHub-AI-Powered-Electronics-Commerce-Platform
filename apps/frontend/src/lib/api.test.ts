@@ -60,6 +60,46 @@ describe('central API client', () => {
     expect(refreshCalls).toBe(1);
     expect(fetchMock).toHaveBeenCalledTimes(5);
   });
+  it('a refresh that loses a concurrent rotation (409) retries with the cookie the winner set instead of signing the user out', async () => {
+    vi.useFakeTimers();
+    try {
+      let refreshCalls = 0;
+      const fetchMock = vi.fn().mockImplementation(async (url: string, options: RequestInit) => {
+        if (url === '/api/auth/refresh') {
+          refreshCalls++;
+          return refreshCalls < 3 ? json(409, { error: { code: 'REFRESH_ROTATION_IN_PROGRESS', message: 'Retry.' } }, { 'retry-after': '1' }) : json(200, { accessToken: 'winner-token' });
+        }
+        return (options.headers as Headers).get('Authorization') === 'Bearer winner-token' ? json(200, { data: url }) : json(401, { error: 'Expired' });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      const onExpired = vi.fn();
+      window.addEventListener('electrohub:session-expired', onExpired);
+      const pending = apiClient('/api/products');
+      await vi.advanceTimersByTimeAsync(900);
+      expect(refreshCalls).toBe(1); // the first retry waits for the advertised Retry-After of one second, not the shorter built-in delay
+      await vi.advanceTimersByTimeAsync(2_500);
+      await expect(pending).resolves.toEqual({ data: '/api/products' });
+      expect(refreshCalls).toBe(3);
+      expect(onExpired).not.toHaveBeenCalled();
+      window.removeEventListener('electrohub:session-expired', onExpired);
+    } finally { vi.useRealTimers(); }
+  });
+  it('stops retrying a 409 refresh after a bounded number of attempts and surfaces it without signing out', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi.fn().mockImplementation(async (url: string) => url === '/api/auth/refresh'
+        ? json(409, { error: { code: 'REFRESH_ROTATION_IN_PROGRESS', message: 'Retry.' } }) : json(401, { error: 'Expired' }));
+      vi.stubGlobal('fetch', fetchMock);
+      const onExpired = vi.fn();
+      window.addEventListener('electrohub:session-expired', onExpired);
+      const pending = apiClient('/api/products').catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(9_000);
+      expect(await pending).toBeInstanceOf(ApiError);
+      expect(fetchMock.mock.calls.filter(([url]) => url === '/api/auth/refresh')).toHaveLength(4); // first try plus three retries
+      expect(onExpired).not.toHaveBeenCalled();
+      window.removeEventListener('electrohub:session-expired', onExpired);
+    } finally { vi.useRealTimers(); }
+  });
   it('shares a failed refresh, clears the token, and notifies AuthContext once', async () => {
     setAccessToken('old-sensitive-token');
     let releaseRefresh: ((response: Response) => void) | undefined;

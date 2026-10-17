@@ -242,28 +242,43 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
   });
 
   describe('F4 two simultaneous refreshes of the same token', () => {
-    it('commits exactly one successor; the loser follows the grace contract and mints nothing', async () => {
+    it('commits exactly one successor; the loser receives no token of any kind (409) and nothing is revoked', async () => {
       await login('raw-1');
 
-      const results = await Promise.all([service.refreshSession('raw-1'), service.refreshSession('raw-1')]);
+      const results = await Promise.allSettled([service.refreshSession('raw-1'), service.refreshSession('raw-1')]);
 
-      const winners = results.filter((result) => result.refreshToken !== null);
-      const losers = results.filter((result) => result.refreshToken === null);
+      const winners = results.filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof service.refreshSession>>> => result.status === 'fulfilled');
+      const losers = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
       expect(winners).toHaveLength(1);
       expect(losers).toHaveLength(1);
-      expect(losers[0].accessToken).toEqual(expect.any(String));
+      expect(losers[0].reason).toMatchObject({ statusCode: 409, code: 'REFRESH_ROTATION_IN_PROGRESS' });
+      expect(winners[0].value.refreshToken).toEqual(expect.any(String));
 
       expect(db.rowsByUser(USER_ID)).toHaveLength(2);
-      const successor = db.byHash(sha(winners[0].refreshToken!))!;
+      const successor = db.byHash(sha(winners[0].value.refreshToken))!;
       expect(db.isLive(successor)).toBe(true);
       expect(successor.familyId).toBe(db.byHash(sha('raw-1'))!.familyId);
       expect(db.byHash(sha('raw-1'))!.replacedByTokenHash).toBe(successor.tokenHash);
+      expect(liveRows()).toHaveLength(1); // the loser caused no revocation
       expectConsistentLocking();
     });
   });
 
-  describe('replay detection', () => {
-    it('reuse after the grace window revokes every session of the user, including the successor', async () => {
+  describe('replay detection (R3)', () => {
+    it('immediate replay of a rotated token authenticates nothing, revokes nothing and creates no second successor', async () => {
+      await login('raw-1');
+      await login('other-device');
+      const next = (await service.refreshSession('raw-1')).refreshToken!;
+
+      await expect(service.refreshSession('raw-1')).rejects.toMatchObject({ statusCode: 409, code: 'REFRESH_ROTATION_IN_PROGRESS' });
+
+      expect(liveRows()).toHaveLength(2); // the successor and the other device's session both survive
+      expect(db.isLive(db.byHash(sha(next))!)).toBe(true);
+      expect(db.rowsByUser(USER_ID)).toHaveLength(3);
+      expectConsistentLocking();
+    });
+
+    it('replay after the window revokes only the replayed session family and leaves other devices alone', async () => {
       await login('raw-1');
       await login('other-device');
       const next = (await service.refreshSession('raw-1')).refreshToken!;
@@ -271,9 +286,29 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
 
       await expect(service.refreshSession('raw-1')).rejects.toMatchObject({ code: 'REFRESH_TOKEN_REUSED' });
 
-      expect(liveRows()).toHaveLength(0);
-      expect(db.byHash(sha(next))!.expiresAt.getTime()).toBe(EPOCH);
+      expect(db.byHash(sha(next))!.expiresAt.getTime()).toBe(EPOCH);        // the compromised family, successor included
+      expect(db.isLive(db.byHash(sha('other-device'))!)).toBe(true);        // another session is untouched
+      expect(liveRows()).toHaveLength(1);
       expectConsistentLocking();
+    });
+
+    it('after reuse revokes the family, the legitimate holder of the successor can no longer refresh', async () => {
+      await login('raw-1');
+      const next = (await service.refreshSession('raw-1')).refreshToken!;
+      db.byHash(sha('raw-1'))!.updatedAt = new Date(Date.now() - 11_000);
+      await expect(service.refreshSession('raw-1')).rejects.toMatchObject({ code: 'REFRESH_TOKEN_REUSED' });
+
+      await expect(service.refreshSession(next)).rejects.toMatchObject({ statusCode: 401 });
+    });
+
+    it('logout racing a concurrent refresh never leaves a live session and never revokes other devices', async () => {
+      await login('raw-1');
+      await login('other-device');
+      const outcomes = await Promise.allSettled([service.logout('raw-1'), service.refreshSession('raw-1')]);
+      expect(outcomes[0].status).toBe('fulfilled');
+      const family = db.byHash(sha('raw-1'))!.familyId;
+      expect(db.rowsByUser(USER_ID).filter(row => row.familyId === family && db.isLive(row))).toHaveLength(0);
+      expect(db.isLive(db.byHash(sha('other-device'))!)).toBe(true);
     });
   });
 
@@ -630,11 +665,10 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
       await expect(service.refreshSession('raw-1')).rejects.toBe(lostAck);
       expect(db.rowsByUser(USER_ID)).toHaveLength(2); // the commit did apply
 
-      // Client retries with the old cookie inside the grace window: the durable successor authorizes it,
-      // and neither a replay revocation nor a second successor happens.
-      const retry = await service.refreshSession('raw-1');
-      expect(retry.refreshToken).toBeNull();
-      expect(retry.accessToken).toEqual(expect.any(String));
+      // The client lost the response and still holds the old cookie. A superseded token authenticates nothing: inside the window it gets a
+      // retry signal (409), with no token, no revocation and no second successor. (Without the new cookie the session ends when the window
+      // lapses; that residual cost of a lost acknowledgement is documented, not hidden by issuing tokens to a superseded credential.)
+      await expect(service.refreshSession('raw-1')).rejects.toMatchObject({ statusCode: 409, code: 'REFRESH_ROTATION_IN_PROGRESS' });
       expect(db.rowsByUser(USER_ID)).toHaveLength(2);
       expect(liveRows()).toHaveLength(1);
       expect(db.rowsByUser(USER_ID).every((row) => row.expiresAt.getTime() !== EPOCH)).toBe(true);

@@ -363,145 +363,84 @@ describe('AuthService', () => {
       });
     });
 
-    it('should detect reuse outside grace period and revoke all user refresh tokens', async () => {
-      const revokedAt = new Date(Date.now() - 30_000); // 30 seconds ago (outside 10s grace)
-      vi.mocked(prisma.refreshToken.findUnique).mockResolvedValueOnce({
-        id: 'tok-stolen',
-        userId: mockUser.id,
-        tokenHash: 'hash-stolen',
-        expiresAt: new Date(Date.now() + 3600 * 1000),
-        isRevoked: true,
-        createdAt: new Date(Date.now() - 60_000),
-        updatedAt: revokedAt,
-      } as unknown as RefreshToken);
+    describe('superseded refresh tokens never authenticate on their own (R3)', () => {
+      type Repository = {
+        findRefreshTokenByHash: (hash: string) => Promise<unknown>; hasActiveFamilyToken: (hash: string) => Promise<boolean>;
+        revokeRefreshTokenFamily: (hash: string) => Promise<void>; revokeAllUserRefreshTokens: (userId: string) => Promise<void>;
+        rotateRefreshToken: (...args: unknown[]) => Promise<boolean>; findUserById: (id: string) => Promise<unknown>;
+      };
+      const repository = () => (authService as unknown as { repository: Repository }).repository;
+      const row = (overrides: Record<string, unknown>) => ({ id: 'tok-old', userId: mockUser.id, tokenHash: 'h', expiresAt: new Date(Date.now() + 3_600_000), isRevoked: true,
+        replacedByTokenHash: 'successor-hash', updatedAt: new Date(Date.now() - 3_000), ...overrides });
+      const arrange = (stored: unknown, { familyAlive = true } = {}) => {
+        const repo = repository();
+        vi.spyOn(repo, 'findRefreshTokenByHash').mockResolvedValue(stored);
+        vi.spyOn(repo, 'hasActiveFamilyToken').mockResolvedValue(familyAlive);
+        const revokeFamily = vi.spyOn(repo, 'revokeRefreshTokenFamily').mockResolvedValue();
+        const revokeAll = vi.spyOn(repo, 'revokeAllUserRefreshTokens').mockResolvedValue();
+        const findUser = vi.spyOn(repo, 'findUserById').mockResolvedValue(mockUser);
+        const rotate = vi.spyOn(repo, 'rotateRefreshToken').mockResolvedValue(true);
+        return { revokeFamily, revokeAll, findUser, rotate };
+      };
 
-      vi.mocked(prisma.refreshToken.updateMany).mockResolvedValueOnce({ count: 3 });
-
-      await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({
-        statusCode: 401,
-        code: 'REFRESH_TOKEN_REUSED',
+      it('genuine concurrency: a token rotated seconds ago gets NO token and NO revocation, only a retry signal (409)', async () => {
+        const spies = arrange(row({ updatedAt: new Date(Date.now() - 2_000) }));
+        await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({ statusCode: 409, code: 'REFRESH_ROTATION_IN_PROGRESS' });
+        expect(spies.revokeFamily).not.toHaveBeenCalled(); expect(spies.revokeAll).not.toHaveBeenCalled();
+        expect(spies.findUser).not.toHaveBeenCalled(); expect(spies.rotate).not.toHaveBeenCalled(); // no access token minted, no successor created
       });
 
-      // Verifies all user tokens were revoked and expired
-      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
-        where: { userId: mockUser.id },
-        data: { isRevoked: true, expiresAt: new Date(0) },
-      });
-    });
-
-    it('should allow concurrent refresh within the 10-second grace window when the durable successor is active', async () => {
-      const recentlyRevoked = new Date(Date.now() - 2_000);
-      const tokenHash = sha(rawToken);
-
-      vi.mocked(prisma.refreshToken.findUnique)
-        .mockResolvedValueOnce(activeRow({ id: 'tok-racing', tokenHash, isRevoked: true, updatedAt: recentlyRevoked }))
-        // Durable pointer written by the winning rotation
-        .mockResolvedValueOnce({ userId: mockUser.id, familyId: FAMILY_ID, replacedByTokenHash: 'hash-replacement' } as unknown as RefreshToken);
-      vi.mocked(prisma.refreshToken.findFirst).mockResolvedValueOnce(
-        activeRow({ id: 'tok-replacement', tokenHash: 'hash-replacement' })
-      );
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(mockUser as unknown as User);
-
-      const result = await authService.refreshSession(rawToken);
-
-      expect(result.accessToken).toBeDefined();
-      expect(result.refreshToken).toBeNull(); // Do not overwrite new cookie
-      expect(result.userId).toBe(mockUser.id);
-      // Successor must belong to the same user and family and still be active
-      expect(prisma.refreshToken.findFirst).toHaveBeenCalledWith({
-        where: {
-          tokenHash: 'hash-replacement',
-          userId: mockUser.id,
-          familyId: FAMILY_ID,
-          isRevoked: false,
-          expiresAt: { gt: expect.any(Date) },
-        },
-      });
-      expect(prisma.$queryRaw).not.toHaveBeenCalled();
-      expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
-    });
-
-    it('should reject grace refresh when the revoked token has no durable successor (e.g. logout, restart, other instance)', async () => {
-      const recentlyRevoked = new Date(Date.now() - 2_000);
-      const tokenHash = sha(rawToken);
-
-      vi.mocked(prisma.refreshToken.findUnique)
-        .mockResolvedValueOnce(activeRow({ tokenHash, isRevoked: true, updatedAt: recentlyRevoked }))
-        .mockResolvedValueOnce({ userId: mockUser.id, familyId: FAMILY_ID, replacedByTokenHash: null } as unknown as RefreshToken);
-
-      // An active token on another device must never be borrowed: no successor lookup happens at all.
-      await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({
-        statusCode: 401,
-        code: 'SESSION_REVOKED',
-      });
-      expect(prisma.refreshToken.findFirst).not.toHaveBeenCalled();
-    });
-
-    it('should reject concurrent grace refresh with 401 when the durable successor is no longer active (e.g. logged out)', async () => {
-      const recentlyRevoked = new Date(Date.now() - 2_000);
-      const tokenHash = sha(rawToken);
-
-      vi.mocked(prisma.refreshToken.findUnique)
-        .mockResolvedValueOnce(activeRow({ tokenHash, isRevoked: true, updatedAt: recentlyRevoked }))
-        .mockResolvedValueOnce({ userId: mockUser.id, familyId: FAMILY_ID, replacedByTokenHash: 'hash-successor' } as unknown as RefreshToken);
-      vi.mocked(prisma.refreshToken.findFirst).mockResolvedValueOnce(null);
-
-      await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({
-        statusCode: 401,
-        code: 'SESSION_REVOKED',
-      });
-    });
-
-    it('should reject refresh outside grace window (> 10s) and revoke all user tokens', async () => {
-      const elevenSecondsAgo = new Date(Date.now() - 11_000); // 11s ago (> 10s grace boundary)
-      vi.mocked(prisma.refreshToken.findUnique).mockResolvedValueOnce(
-        activeRow({ id: 'tok-past-grace', tokenHash: 'hash-past-grace', isRevoked: true, updatedAt: elevenSecondsAgo })
-      );
-      vi.mocked(prisma.refreshToken.updateMany).mockResolvedValueOnce({ count: 2 });
-
-      await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({
-        statusCode: 401,
-        code: 'REFRESH_TOKEN_REUSED',
+      it('immediate stolen-token replay never authenticates: the superseded token yields no access token on its own', async () => {
+        const spies = arrange(row({ updatedAt: new Date(Date.now() - 500) }));
+        const outcome = await authService.refreshSession(rawToken).then(value => ({ value }), error => ({ error }));
+        expect('value' in outcome).toBe(false);
+        expect(spies.findUser).not.toHaveBeenCalled();
       });
 
-      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
-        where: { userId: mockUser.id },
-        data: { isRevoked: true, expiresAt: expect.any(Date) },
+      it('delayed replay (outside the window) revokes only that session family, never every session of the user', async () => {
+        const spies = arrange(row({ updatedAt: new Date(Date.now() - 30_000) }));
+        await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({ statusCode: 401, code: 'REFRESH_TOKEN_REUSED' });
+        expect(spies.revokeFamily).toHaveBeenCalledTimes(1); expect(spies.revokeAll).not.toHaveBeenCalled();
+        expect(spies.findUser).not.toHaveBeenCalled();
       });
-    });
 
-    it('should resolve a lost rotation race from the winner durable successor', async () => {
-      const tokenHash = sha(rawToken);
-
-      vi.mocked(prisma.refreshToken.findUnique)
-        .mockResolvedValueOnce(activeRow({ tokenHash }))
-        .mockResolvedValueOnce({ userId: mockUser.id, familyId: FAMILY_ID, replacedByTokenHash: 'hash-winner' } as unknown as RefreshToken);
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(mockUser as unknown as User);
-      // Inside our transaction the winner has already revoked the token: not eligible
-      vi.mocked(prisma.refreshToken.findFirst)
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(activeRow({ id: 'tok-winner', tokenHash: 'hash-winner' }));
-
-      const result = await authService.refreshSession(rawToken);
-
-      expect(result.accessToken).toBeDefined();
-      expect(result.refreshToken).toBeNull();
-      expect(result.userId).toBe(mockUser.id);
-      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
-    });
-
-    it('should reject losing race rotation if the token has no durable successor', async () => {
-      vi.mocked(prisma.refreshToken.findUnique)
-        .mockResolvedValueOnce(activeRow())
-        .mockResolvedValueOnce({ userId: mockUser.id, familyId: FAMILY_ID, replacedByTokenHash: null } as unknown as RefreshToken);
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(mockUser as unknown as User);
-      vi.mocked(prisma.refreshToken.findFirst).mockResolvedValueOnce(null);
-
-      await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({
-        statusCode: 401,
-        code: 'SESSION_REVOKED',
+      it('a revoked token with no rotation pointer inside the window is reuse, not concurrency', async () => {
+        const spies = arrange(row({ replacedByTokenHash: null, updatedAt: new Date(Date.now() - 1_000) }));
+        await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({ statusCode: 401, code: 'REFRESH_TOKEN_REUSED' });
+        expect(spies.revokeFamily).toHaveBeenCalledTimes(1);
       });
-      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+
+      it('inside the window but with the session family already dead is reuse (401), never a retry signal', async () => {
+        const spies = arrange(row({}), { familyAlive: false });
+        await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({ statusCode: 401, code: 'REFRESH_TOKEN_REUSED' });
+        expect(spies.revokeFamily).toHaveBeenCalledTimes(1);
+      });
+
+      it('a token revoked by logout or password change (expiry in the past) is rejected as expired without reuse revocation', async () => {
+        const spies = arrange(row({ expiresAt: new Date(0), replacedByTokenHash: null }));
+        await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({ statusCode: 401, code: 'EXPIRED_REFRESH_TOKEN' });
+        expect(spies.revokeFamily).not.toHaveBeenCalled(); expect(spies.revokeAll).not.toHaveBeenCalled();
+      });
+
+      it('losing the atomic rotation race returns 409 while the family is alive and issues no token and no second successor', async () => {
+        const spies = arrange(row({ isRevoked: false, replacedByTokenHash: null }));
+        spies.rotate.mockResolvedValueOnce(false);
+        await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({ statusCode: 409, code: 'REFRESH_ROTATION_IN_PROGRESS' });
+        expect(spies.rotate).toHaveBeenCalledTimes(1);
+      });
+
+      it('losing the atomic rotation race after the family died is a plain 401', async () => {
+        const spies = arrange(row({ isRevoked: false, replacedByTokenHash: null }), { familyAlive: false });
+        spies.rotate.mockResolvedValueOnce(false);
+        await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({ statusCode: 401, code: 'SESSION_REVOKED' });
+      });
+
+      it('a normally active token still rotates exactly once and returns both tokens', async () => {
+        const spies = arrange(row({ isRevoked: false, replacedByTokenHash: null }));
+        const result = await authService.refreshSession(rawToken);
+        expect(result.accessToken).toBeTruthy(); expect(result.refreshToken).toMatch(/^[0-9a-f]{128}$/);
+        expect(spies.rotate).toHaveBeenCalledTimes(1);
+      });
     });
 
     it('should revoke the whole session family and expire it on logout, under the user lifecycle lock', async () => {

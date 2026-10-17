@@ -10,6 +10,9 @@ import { AppError } from '../middleware/errorHandler.js';
 
 const normalizeEmail = (email: string) => email.toLowerCase().trim();
 
+/** How long after a rotation a presented superseded token is treated as a concurrent request (409, no token, no revocation) rather than reuse. */
+export const CONCURRENT_ROTATION_WINDOW_MS = 10_000;
+
 export class AuthService {
   private repository: AuthRepository;
 
@@ -172,46 +175,25 @@ export class AuthService {
       throw new AppError('Invalid or expired refresh token', 401, 'EXPIRED_REFRESH_TOKEN');
     }
 
-    // Check if token was already revoked
+    // A superseded (already rotated or revoked) refresh token NEVER authenticates on its own. Two situations differ only in what happens next:
+    //  - concurrent: it was rotated moments ago and its session family is still alive. This is indistinguishable from a harmless browser race
+    //    (two requests carrying the same cookie), and timing alone cannot separate it from theft, so the request gets NO token of any kind and
+    //    nothing is revoked: the caller is told to retry and re-read the cookie the winning request set (HTTP 409).
+    //  - replay: anything else (outside the window, or the family is already dead) is reuse. The presented token's whole session family is
+    //    revoked, never every session of the user, and the request is rejected.
     if (storedToken.isRevoked) {
       const msSinceRevocation = Date.now() - storedToken.updatedAt.getTime();
-      const CONCURRENCY_GRACE_PERIOD_MS = 10_000; // 10s grace window for concurrent requests
-
-      if (msSinceRevocation <= CONCURRENCY_GRACE_PERIOD_MS) {
-        // Concurrency grace window: another request within the same client session just rotated this token.
-        // Confirm that the EXACT successor issued to replace this token in this session lineage is still active.
-        // This guarantees grace authorization is strictly tied to this session's rotation and prevents cross-device leakage.
-        const successorToken = await this.repository.findRotationSuccessor(tokenHash);
-        if (!successorToken) {
-          throw new AppError('Invalid or expired refresh token', 401, 'SESSION_REVOKED');
-        }
-
-        const user = await this.repository.findUserById(storedToken.userId);
-        if (!user || !user.isActive) {
-          throw new AppError('User inactive or not found', 401, 'USER_INACTIVE');
-        }
-
-        const roleName = user.role?.name ?? 'CUSTOMER';
-        const payload: JwtPayload = {
-          userId: user.id,
-          role: roleName,
-        };
-        const newAccessToken = generateAccessToken(payload);
-
-        return {
-          accessToken: newAccessToken,
-          refreshToken: null, // Keep existing new refresh cookie untouched
-          userId: user.id,
-        };
+      if (msSinceRevocation <= CONCURRENT_ROTATION_WINDOW_MS && storedToken.replacedByTokenHash &&
+        await this.repository.hasActiveFamilyToken(tokenHash)) {
+        throw new AppError('Session refresh already in progress. Retry.', 409, 'REFRESH_ROTATION_IN_PROGRESS');
       }
 
-      // Reused outside grace window: Token Theft / Replay Attack detected!
-      // Invalidate ALL refresh tokens for this user immediately under RFC 6819 reuse protection.
-      await this.repository.revokeAllUserRefreshTokens(storedToken.userId);
+      await this.repository.revokeRefreshTokenFamily(tokenHash);
       logger.warn('AUTH_REFRESH_TOKEN_REUSE_DETECTED', {
         userId: storedToken.userId,
         tokenId: storedToken.id,
         msSinceRevocation,
+        scope: 'family',
       });
       throw new AppError('Invalid or expired refresh token', 401, 'REFRESH_TOKEN_REUSED');
     }
@@ -234,18 +216,11 @@ export class AuthService {
 
     const rotated = await this.repository.rotateRefreshToken(user.id, tokenHash, newTokenHash, expiresAt);
     if (!rotated) {
-      // Rotation lost the atomic race to a concurrent request in this exact tick.
-      // Confirm that the winning concurrent request issued an active replacement for this token.
-      const successorToken = await this.repository.findRotationSuccessor(tokenHash);
-      if (!successorToken) {
-        throw new AppError('Invalid or expired refresh token', 401, 'SESSION_REVOKED');
+      // Rotation lost the atomic race. The loser gets no token (see above): 409 while the session family is alive, 401 once it is not.
+      if (await this.repository.hasActiveFamilyToken(tokenHash)) {
+        throw new AppError('Session refresh already in progress. Retry.', 409, 'REFRESH_ROTATION_IN_PROGRESS');
       }
-
-      return {
-        accessToken: newAccessToken,
-        refreshToken: null,
-        userId: user.id,
-      };
+      throw new AppError('Invalid or expired refresh token', 401, 'SESSION_REVOKED');
     }
 
     return {

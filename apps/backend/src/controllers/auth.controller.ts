@@ -229,6 +229,11 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
       accessToken: result.accessToken,
     });
   } catch (error) {
+    if (error instanceof AppError && error.code === 'REFRESH_ROTATION_IN_PROGRESS') {
+      // A concurrent request rotated this session a moment ago: no token is issued, the cookie is NOT cleared, and nothing is revoked.
+      res.setHeader('Retry-After', '1');
+      return res.status(409).json({ error: { code: error.code, message: 'Session refresh already in progress. Retry.' } });
+    }
     if (
       (error instanceof AppError && error.statusCode === 401) ||
       (error instanceof Error &&

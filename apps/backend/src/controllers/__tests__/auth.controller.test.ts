@@ -190,17 +190,16 @@ describe('Auth refresh cookie preservation', () => {
     logoutSpy.mockRestore();
   });
 
-  it('handles concurrent refresh within grace window without cookie overwriting', async () => {
-    const refresh = vi.spyOn(AuthService.prototype, 'refreshSession').mockResolvedValueOnce({
-      accessToken: 'concurrent-access-token-789',
-      refreshToken: null,
-      userId: 'usr-123',
-    });
+  it('answers a concurrent rotation with 409 and a retry hint: no token, no cookie change, no sign-out', async () => {
+    const refresh = vi.spyOn(AuthService.prototype, 'refreshSession').mockRejectedValueOnce(
+      new AppError('Session refresh already in progress. Retry.', 409, 'REFRESH_ROTATION_IN_PROGRESS'));
 
     const response = await request(app).post('/api/auth/refresh').set('Cookie', 'electrohub_refresh=recently-rotated-token');
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({ accessToken: 'concurrent-access-token-789' });
-    // Cookie is preserved, not overwritten or cleared
+    expect(response.status).toBe(409);
+    expect(response.headers['retry-after']).toBe('1');
+    expect(response.body).toEqual({ error: { code: 'REFRESH_ROTATION_IN_PROGRESS', message: 'Session refresh already in progress. Retry.' } });
+    expect(response.body.accessToken).toBeUndefined();
+    // The cookie is neither overwritten nor cleared: the winning request owns the new one.
     expect(response.headers['set-cookie']).toBeUndefined();
     refresh.mockRestore();
   });

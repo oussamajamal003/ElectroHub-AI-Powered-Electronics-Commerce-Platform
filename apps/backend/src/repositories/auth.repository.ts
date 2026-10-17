@@ -300,6 +300,20 @@ export class AuthRepository {
   }
 
   /**
+   * True when the session family of the presented token still has an unrevoked, unexpired member. Read from committed PostgreSQL state only.
+   * Used to separate a concurrent rotation (family alive) from reuse of a token whose session is already over.
+   */
+  async hasActiveFamilyToken(tokenHash: string): Promise<boolean> {
+    const token = await prisma.refreshToken.findUnique({ where: { tokenHash }, select: { userId: true, familyId: true } });
+    if (!token) return false;
+    const active = await prisma.refreshToken.findFirst({
+      where: { userId: token.userId, familyId: token.familyId, isRevoked: false, expiresAt: { gt: new Date() } },
+      select: { id: true },
+    });
+    return Boolean(active);
+  }
+
+  /**
    * Find the latest active (non-revoked, non-expired) refresh token for a user.
    */
   async findLatestActiveRefreshToken(userId: string): Promise<RefreshToken | null> {
