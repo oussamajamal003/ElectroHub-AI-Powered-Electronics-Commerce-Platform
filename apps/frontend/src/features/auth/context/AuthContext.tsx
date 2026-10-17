@@ -14,6 +14,9 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   isSessionVerified: boolean;
+  /** Session restore reached no verdict (server/network failure) after bounded automatic retries. */
+  sessionUnavailable: boolean;
+  retrySession: () => void;
   isLoggingOut: boolean;
   rememberedUser: Pick<User, 'firstName' | 'lastName'> | null;
   finishGoogle: () => Promise<void>;
@@ -28,21 +31,29 @@ interface AuthContextValue extends AuthState {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const SESSION_RESTORE_ATTEMPTS = 3;
+const SESSION_RESTORE_RETRY_MS = 2000;
 const headerIdentityKey = 'electrohub:header-identity';
 const userCacheKey = 'electrohub:cached-user';
 type HeaderIdentity = Pick<User, 'firstName' | 'lastName'>;
 
 function saveCachedUser(user: User): void {
-  try { sessionStorage.setItem(userCacheKey, JSON.stringify(user)); } catch { /* Storage can be unavailable. */ }
+  try {
+    sessionStorage.setItem(userCacheKey, JSON.stringify(user));
+    localStorage.setItem(userCacheKey, JSON.stringify(user));
+  } catch { /* Storage can be unavailable. */ }
 }
 
 function removeCachedUser(): void {
-  try { sessionStorage.removeItem(userCacheKey); } catch { /* Storage can be unavailable. */ }
+  try {
+    sessionStorage.removeItem(userCacheKey);
+    localStorage.removeItem(userCacheKey);
+  } catch { /* Storage can be unavailable. */ }
 }
 
 function readHeaderIdentity(): HeaderIdentity | null {
   try {
-    const stored = sessionStorage.getItem(headerIdentityKey);
+    const stored = sessionStorage.getItem(headerIdentityKey) || localStorage.getItem(headerIdentityKey);
     if (!stored) return null;
     const identity: unknown = JSON.parse(stored);
     if (!identity || typeof identity !== 'object') return null;
@@ -56,27 +67,25 @@ function readHeaderIdentity(): HeaderIdentity | null {
 
 function saveHeaderIdentity(user: User): HeaderIdentity {
   const identity = { firstName: user.firstName, lastName: user.lastName };
-  try { sessionStorage.setItem(headerIdentityKey, JSON.stringify(identity)); } catch { /* Storage can be unavailable. */ }
+  try {
+    sessionStorage.setItem(headerIdentityKey, JSON.stringify(identity));
+    localStorage.setItem(headerIdentityKey, JSON.stringify(identity));
+  } catch { /* Storage can be unavailable. */ }
   return identity;
 }
 
 function removeHeaderIdentity() {
-  try { sessionStorage.removeItem(headerIdentityKey); } catch { /* Storage can be unavailable. */ }
+  try {
+    sessionStorage.removeItem(headerIdentityKey);
+    localStorage.removeItem(headerIdentityKey);
+  } catch { /* Storage can be unavailable. */ }
 }
 
 function getInitialAuthState(): AuthState {
   const cached = readCachedUser();
-  if (cached) {
-    return {
-      user: cached,
-      isAuthenticated: true,
-      isLoading: false,
-      isInitializing: false,
-    };
-  }
   return {
-    user: null,
-    isAuthenticated: false,
+    user: cached,
+    isAuthenticated: Boolean(cached),
     isLoading: false,
     isInitializing: true,
   };
@@ -85,6 +94,8 @@ function getInitialAuthState(): AuthState {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [isSessionVerified, setSessionVerified] = useState(false);
+  const [sessionUnavailable, setSessionUnavailable] = useState(false);
+  const [restoreEpoch, setRestoreEpoch] = useState(0);
   const [isLoggingOut, setLoggingOut] = useState(false);
   const [rememberedUser, setRememberedUser] = useState<HeaderIdentity | null>(readHeaderIdentity);
   const remember = (user: User) => {
@@ -101,11 +112,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let attempt = 0;
 
     async function initSession() {
+      attempt++;
       try {
         const user = await restoreSession();
         if (mounted) {
+          setSessionUnavailable(false);
           remember(user);
           setState({ user, isAuthenticated: true, isLoading: false, isInitializing: false });
           setSessionVerified(true);
@@ -116,9 +130,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAccessToken(null);
           forget();
           setState({ user: null, isAuthenticated: false, isLoading: false, isInitializing: false });
+          setSessionUnavailable(false);
           setSessionVerified(true);
+        } else if (attempt < SESSION_RESTORE_ATTEMPTS) {
+          retryTimer = setTimeout(() => { void initSession(); }, SESSION_RESTORE_RETRY_MS * attempt);
         } else {
-          retryTimer = setTimeout(() => { void initSession(); }, 2000);
+          // No verdict: neither signed in nor signed out. Stop automatic retries so screens can show
+          // an actionable state instead of an endless skeleton and an endless refresh loop.
+          setSessionUnavailable(true);
         }
       }
     }
@@ -129,7 +148,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false;
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, []);
+  }, [restoreEpoch]);
+  // Customer-initiated: one new bounded restore cycle. A verified session is never restarted.
+  const retrySession = () => {
+    if (isSessionVerified) return;
+    setSessionUnavailable(false);
+    setRestoreEpoch(value => value + 1);
+  };
 
   useEffect(() => {
     const clearExpiredSession = () => {
@@ -156,6 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ...prev,
           user: authenticatedUser,
           isAuthenticated: true,
+          isInitializing: false,
         }));
       }
       return response;
@@ -187,6 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ...prev,
           user: verifiedUser,
           isAuthenticated: true,
+          isInitializing: false,
         }));
       }
       return response;
@@ -252,11 +279,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryClient.clear();
     setSessionVerified(true);
     remember(user);
-    setState(previous => ({ ...previous, user, isAuthenticated: true }));
+    setState(previous => ({ ...previous, user, isAuthenticated: true, isInitializing: false }));
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, isSessionVerified, isLoggingOut, rememberedUser, login, register, verifyEmail, logout, finishLogoutTransition, clearSession, updateProfile, verifyEmailChange, finishGoogle }}>
+    <AuthContext.Provider value={{ ...state, isSessionVerified, sessionUnavailable, retrySession, isLoggingOut, rememberedUser, login, register, verifyEmail, logout, finishLogoutTransition, clearSession, updateProfile, verifyEmailChange, finishGoogle }}>
       {children}
     </AuthContext.Provider>
   );

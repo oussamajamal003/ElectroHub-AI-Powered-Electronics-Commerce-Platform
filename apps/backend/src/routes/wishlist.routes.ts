@@ -6,6 +6,11 @@ import { AppError } from '../middleware/errorHandler.js';
 import { MAX_WISHLIST_ITEMS, WishlistService } from '../services/wishlist.service.js';
 
 const router = Router();
+router.use('/wishlist', (req, res, next) => {
+  res.set('Cache-Control', 'private, no-store');
+  if (req.method === 'GET') { delete req.headers['if-none-match']; delete req.headers['if-modified-since']; }
+  next();
+});
 const service = new WishlistService();
 const productId = z.string().uuid().transform(value => value.toLowerCase());
 const collection = z.object({ productIds: z.array(productId).max(100).transform(ids => [...new Set(ids)]) }).strict();

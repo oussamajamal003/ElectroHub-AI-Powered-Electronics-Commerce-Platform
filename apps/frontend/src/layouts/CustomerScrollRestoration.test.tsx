@@ -31,4 +31,18 @@ describe('CustomerScrollRestoration', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/account'));
     await waitFor(() => expect(scrollY).toBe(0));
   });
+
+  it('glides to the top on page-number navigation instead of jumping', async () => {
+    const scrollTo = vi.fn();
+    vi.stubGlobal('scrollTo', scrollTo);
+    window.requestAnimationFrame = callback => window.setTimeout(() => callback(performance.now()), 0);
+    window.cancelAnimationFrame = handle => window.clearTimeout(handle);
+    const router = createMemoryRouter([
+      { path: '/scroll-test-smooth', element: <ScrollControls /> },
+    ], { initialEntries: ['/scroll-test-smooth'] });
+    render(<RouterProvider router={router} />);
+    scrollTo.mockClear();
+    await router.navigate('/scroll-test-smooth?page=2', { state: { smoothTop: true } });
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 0, behavior: 'smooth' })));
+  });
 });

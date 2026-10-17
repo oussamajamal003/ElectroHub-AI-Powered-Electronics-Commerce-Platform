@@ -2,8 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/features/auth/context/AuthContext';
-import { queryKeys } from '@/lib/query';
-import { useSessionReadBootstrap } from '@/lib/useSessionReadBootstrap';
+import { catalogSignal, queryKeys } from '@/lib/query';
 import { wishlistApi } from './api';
 import { WishlistContext } from './context';
 import { MAX_WISHLIST_ITEMS, readAuthenticatedWishlistCount, readAuthenticatedWishlistCountRevision, readWishlist, writeAuthenticatedWishlistCount, writeWishlist, WISHLIST_STORAGE_KEY } from './storage';
@@ -18,7 +17,7 @@ type Intent = { saved: boolean; version: number };
 type OptimisticProducts = { scope: string; items: Record<string, WishlistItem> };
 
 export function WishlistProvider({ children }: { children: ReactNode }) {
-  const { user, isAuthenticated, isSessionVerified, isLoggingOut: authLoggingOut, finishLogoutTransition } = useAuth();
+  const { user, isAuthenticated, isSessionVerified, isLoggingOut: authLoggingOut, finishLogoutTransition, sessionUnavailable, retrySession } = useAuth();
   const location = useLocation();
   const logoutOrigin = useRef<string | null>(null);
   const logoutDeparted = useRef(false);
@@ -38,7 +37,6 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
   const epochRef = useRef(0);
   if (observedIdentity.current !== identity) { observedIdentity.current = identity; epochRef.current++; }
   const [guestIds, setGuestIds] = useState(readWishlist);
-  const readServerWishlist = useSessionReadBootstrap(wishlistApi.get, Boolean(countIdentity) && !authLoggingOut && guestIds.length === 0);
   const guestRef = useRef(guestIds);
   guestRef.current = guestIds;
   const [intents, setIntents] = useState<Record<string, Intent>>({});
@@ -68,11 +66,11 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
     };
   }, []);
   const serverKey = queryKeys.wishlist.current(identity ?? 'unknown');
-  const server = useQuery({ queryKey: serverKey, queryFn: async ({ signal }) => {
+  const server = useQuery({ queryKey: serverKey, queryFn: async context => {
     const requestIdentity = identity;
     if (!requestIdentity) throw new Error('Wishlist identity is not ready.');
     const requestRevision = readAuthenticatedWishlistCountRevision(requestIdentity);
-    const response = await readServerWishlist(signal);
+    const response = await wishlistApi.get(catalogSignal(context));
     if (readAuthenticatedWishlistCountRevision(requestIdentity) !== requestRevision || Object.keys(intentRef.current).length > 0 || pendingAuthenticatedMutationOwners.has(requestIdentity)) {
       const latest = client.getQueryData<{ data: WishlistData }>(queryKeys.wishlist.current(requestIdentity));
       if (latest) return latest;
@@ -160,6 +158,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
         await client.cancelQueries({ queryKey: queryKeys.wishlist.current(owner) });
         try {
           const result = await (intent.saved ? wishlistApi.add(productId) : wishlistApi.remove(productId));
+          await client.cancelQueries({ queryKey: queryKeys.wishlist.current(owner) });
           if (identityRef.current !== owner || epochRef.current !== epoch) break;
           writeAuthenticatedWishlistCount(owner, result.data.totalItems);
           client.setQueryData(queryKeys.wishlist.current(owner), result);
@@ -251,16 +250,17 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
   const missingDetails = !data || productIds.some(id => !itemsById.has(id));
   // Both modes wait only for missing item data, never for a background read
   // when all current cards are already usable.
-  const isLoading = !isSessionVerified || Boolean(mergePending) ||
+  // A disabled query stays "pending" forever, so query state only counts once the session has a verdict.
+  const isLoading = !isSessionVerified ? !sessionUnavailable : Boolean(mergePending) ||
     (!activeQuery.isError && missingDetails && (activeQuery.isPending || activeQuery.isFetching || activeQuery.isPlaceholderData));
   const totalItems = isLoggingOut ? retained.current?.totalItems ?? 0
     : mergePending || !data ? expectedCount ?? 0 : data.totalItems;
   return <WishlistContext.Provider value={{ data: visible, expectedCount, productIds: isLoggingOut ? retained.current?.items.map(item => item.productId) ?? [] : productIds,
     totalItems,
     isLoading,
-    isError: identity ? server.isError : guest.isError, isLoggingOut, isMerging, error, mergeError,
+    isError: !isSessionVerified && sessionUnavailable || (identity ? server.isError : guest.isError), isLoggingOut, isMerging, error, mergeError,
     unresolved: identity ? unresolvedIds : [], pending: [...new Set([...Object.keys(presentationIntents), ...(!identity ? guestIds.filter(id => !base?.items.some(item => item.productId === id) && !optimisticItems[id]) : [])])], toggle,
-    retry: async () => { await (identity ? server.refetch() : guest.refetch()); }, retryMerge,
+    retry: async () => { if (!isSessionVerified && sessionUnavailable) { retrySession(); return; } await (identity ? server.refetch() : guest.refetch()); }, retryMerge,
     discardGuest: productId => { const next = guestRef.current.filter(id => id !== productId); if (writeWishlist(next)) { guestRef.current = next; setGuestIds(next); setUnresolvedIds(ids => ids.filter(id => id !== productId)); if (!next.length) setMergeError(null); } else setError('Browser storage could not be updated.'); },
   }}>{children}</WishlistContext.Provider>;
 }

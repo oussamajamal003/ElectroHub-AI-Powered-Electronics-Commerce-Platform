@@ -1,2 +1,4 @@
-# Keep only the new Checkout migration checksum stable across Windows/Linux.
+# Keep reviewed forward commerce migration checksums stable across Windows/Linux.
 apps/backend/prisma/migrations/20261006000000_checkout_core/migration.sql text eol=lf
+apps/backend/prisma/migrations/20261007000000_stripe_orchestration/migration.sql text eol=lf
+apps/backend/prisma/migrations/20260925020000_remove_users_phone/migration.sql -text

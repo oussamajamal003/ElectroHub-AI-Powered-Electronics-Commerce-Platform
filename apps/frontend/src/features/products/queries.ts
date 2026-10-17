@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { cachePolicy, catalogSignal, queryKeys } from '@/lib/query';
-import type { Brand, Category, MyReviewItem, ProductCollection, ProductDetail, ProductResponse, ProductSummary, Review, ReviewCollection, ReviewMutationResponse } from './types';
+import type { MyReviewItem, ProductCollection, ProductDetail, ProductResponse, ProductSummary, Review, ReviewCollection, ReviewMutationResponse } from './types';
 import type { SearchResults } from '@/features/search/api';
 
 export function useProducts(params: URLSearchParams, enabled = true) {
@@ -14,19 +14,7 @@ export function useProducts(params: URLSearchParams, enabled = true) {
 export function useProduct(slug: string, enabled = true) {
   return useQuery({ queryKey: queryKeys.products.detail(slug),
     queryFn: ({ signal }) => apiClient<ProductResponse<ProductDetail>>(`/api/products/${encodeURIComponent(slug)}`, { signal }),
-    enabled: enabled && Boolean(slug), ...cachePolicy.products });
-}
-
-export function useCategory(slug: string, enabled = true) {
-  return useQuery({ queryKey: queryKeys.categories.detail(slug),
-    queryFn: ({ signal }) => apiClient<ProductResponse<Category>>(`/api/categories/${encodeURIComponent(slug)}`, { signal }),
-    enabled: enabled && Boolean(slug), ...cachePolicy.reference });
-}
-
-export function useBrand(slug: string, enabled = true) {
-  return useQuery({ queryKey: queryKeys.brands.detail(slug),
-    queryFn: ({ signal }) => apiClient<ProductResponse<Brand>>(`/api/brands/${encodeURIComponent(slug)}`, { signal }),
-    enabled: enabled && Boolean(slug), ...cachePolicy.reference });
+    enabled: enabled && Boolean(slug), ...cachePolicy.products, staleTime: 0, refetchOnMount: 'always' });
 }
 
 export function useDeals(pageSize = 6) {

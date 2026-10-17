@@ -132,6 +132,13 @@ describe('Curated product dataset and seed safety', () => {
     expect(() => assertDevSeedTarget({ NODE_ENV: 'test', DATABASE_URL: dev, DIRECT_URL: 'postgresql://postgres:example@db.yepfgjehdstlxbpespun.supabase.co/postgres' })).toThrow();
     expect(() => assertDevSeedTarget({ NODE_ENV: 'test', DATABASE_URL: 'postgresql://postgres:example@localhost/postgres', DIRECT_URL: dev })).toThrow();
     expect(() => assertDevSeedTarget({})).toThrow();
+    // Isolated payment development: a verified disposable loopback database is an approved target; look-alikes are not.
+    const disposable = 'postgresql://postgres:example@localhost:55433/electrohub_disposable';
+    expect(() => assertDevSeedTarget({ NODE_ENV: 'development', DATABASE_URL: disposable, DIRECT_URL: disposable })).not.toThrow();
+    expect(() => assertDevSeedTarget({ NODE_ENV: 'production', DATABASE_URL: disposable, DIRECT_URL: disposable })).toThrow();
+    expect(() => assertDevSeedTarget({ NODE_ENV: 'development', DATABASE_URL: disposable, DIRECT_URL: dev })).toThrow();
+    expect(() => assertDevSeedTarget({ NODE_ENV: 'development', DATABASE_URL: 'postgresql://p:e@db.example.com:5432/electrohub_disposable',
+      DIRECT_URL: 'postgresql://p:e@db.example.com:5432/electrohub_disposable' })).toThrow();
   });
   it('reconciles stable curated identities twice without touching a legacy product', async () => {
     const legacy = { id: 'legacy', sku: 'LEGACY', slug: 'legacy', name: 'Unresolved', brandId: null };

@@ -77,4 +77,26 @@ describe('ProtectedRoute', () => {
     expect(screen.queryByText('Admin Dashboard Content')).not.toBeInTheDocument();
     expect(screen.getByText('Admin Login Page')).toBeInTheDocument();
   });
+
+  it('holds a protected route while a cached identity is still being verified', () => {
+    (useAuth as any).mockReturnValue({
+      isAuthenticated: false,
+      user: null,
+      isInitializing: true,
+      isSessionVerified: false,
+    });
+    render(
+      <MemoryRouter initialEntries={['/account']}>
+        <Routes>
+          <Route path="/" element={<div>Home Page Content</div>} />
+          <Route element={<ProtectedRoute requiredRole="CUSTOMER" redirectTo="/" />}>
+            <Route path="/account" element={<div>Private Account Content</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.queryByText('Private Account Content')).not.toBeInTheDocument();
+    expect(screen.queryByText('Home Page Content')).not.toBeInTheDocument();
+  });
 });

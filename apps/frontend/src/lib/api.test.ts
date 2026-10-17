@@ -10,6 +10,14 @@ function json(status: number, body: unknown, headers?: Record<string, string>) {
 }
 
 describe('central API client', () => {
+  it('bypasses HTTP caches for private collections without disabling catalog caching', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => json(200, { data: {} }));
+    vi.stubGlobal('fetch', fetchMock);
+    for (const path of ['/api/cart', '/api/wishlist', '/api/auth/me']) await apiClient(path);
+    await apiClient('/api/products');
+    expect(fetchMock.mock.calls.slice(0, 3).every(call => call[1].cache === 'no-store')).toBe(true);
+    expect(fetchMock.mock.calls[3]?.[1]?.cache).toBeUndefined();
+  });
   it('preserves structured 4xx errors and request ID', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(429,
       { error: { code: 'RATE_LIMITED', message: 'Too many requests.' } }, { 'x-request-id': 'req-1' })));
@@ -51,6 +59,46 @@ describe('central API client', () => {
     expect(responses).toHaveLength(2);
     expect(refreshCalls).toBe(1);
     expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+  it('a refresh that loses a concurrent rotation (409) retries with the cookie the winner set instead of signing the user out', async () => {
+    vi.useFakeTimers();
+    try {
+      let refreshCalls = 0;
+      const fetchMock = vi.fn().mockImplementation(async (url: string, options: RequestInit) => {
+        if (url === '/api/auth/refresh') {
+          refreshCalls++;
+          return refreshCalls < 3 ? json(409, { error: { code: 'REFRESH_ROTATION_IN_PROGRESS', message: 'Retry.' } }, { 'retry-after': '1' }) : json(200, { accessToken: 'winner-token' });
+        }
+        return (options.headers as Headers).get('Authorization') === 'Bearer winner-token' ? json(200, { data: url }) : json(401, { error: 'Expired' });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      const onExpired = vi.fn();
+      window.addEventListener('electrohub:session-expired', onExpired);
+      const pending = apiClient('/api/products');
+      await vi.advanceTimersByTimeAsync(900);
+      expect(refreshCalls).toBe(1); // the first retry waits for the advertised Retry-After of one second, not the shorter built-in delay
+      await vi.advanceTimersByTimeAsync(2_500);
+      await expect(pending).resolves.toEqual({ data: '/api/products' });
+      expect(refreshCalls).toBe(3);
+      expect(onExpired).not.toHaveBeenCalled();
+      window.removeEventListener('electrohub:session-expired', onExpired);
+    } finally { vi.useRealTimers(); }
+  });
+  it('stops retrying a 409 refresh after a bounded number of attempts and surfaces it without signing out', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi.fn().mockImplementation(async (url: string) => url === '/api/auth/refresh'
+        ? json(409, { error: { code: 'REFRESH_ROTATION_IN_PROGRESS', message: 'Retry.' } }) : json(401, { error: 'Expired' }));
+      vi.stubGlobal('fetch', fetchMock);
+      const onExpired = vi.fn();
+      window.addEventListener('electrohub:session-expired', onExpired);
+      const pending = apiClient('/api/products').catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(9_000);
+      expect(await pending).toBeInstanceOf(ApiError);
+      expect(fetchMock.mock.calls.filter(([url]) => url === '/api/auth/refresh')).toHaveLength(4); // first try plus three retries
+      expect(onExpired).not.toHaveBeenCalled();
+      window.removeEventListener('electrohub:session-expired', onExpired);
+    } finally { vi.useRealTimers(); }
   });
   it('shares a failed refresh, clears the token, and notifies AuthContext once', async () => {
     setAccessToken('old-sensitive-token');

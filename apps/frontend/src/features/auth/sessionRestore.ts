@@ -9,7 +9,7 @@ let tokenReady = false;
 
 export function readCachedUser(): User | null {
   try {
-    const stored = sessionStorage.getItem(userCacheKey);
+    const stored = sessionStorage.getItem(userCacheKey) || localStorage.getItem(userCacheKey);
     if (!stored) return null;
     const user: unknown = JSON.parse(stored);
     if (!user || typeof user !== 'object') return null;

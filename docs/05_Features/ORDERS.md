@@ -1,5 +1,9 @@
 # Orders
 
+> **Task 03.6 source update (2026-10-07):** The current implementation uses owned Stripe Test Mode manual authorization, atomic purchase commit, durable capture/recovery, and provider-verified Paid confirmation. Public POST /api/orders no longer creates an unpaid purchase; it returns PAYMENT_REQUIRED. See [Payment Core 03.6](PAYMENT_CORE_03.6.md) for current contracts and [implementation evidence](../tasks/Phase-03/TASK_03.6_IMPLEMENTATION_EVIDENCE.md) for verified gates. Earlier phase descriptions below remain historical or future scope; they do not prove 03.6 deployment. PayPal, saved cards, management, email/PDF and real-money payments remain deferred.
+
+> **Task 03.6 Scenarios 2–6 frontend update (2026-10-15):** `/orders` renders each owned order as a card with its reference, UTC order date, shared `PaymentStatus` badge (Paid / Pending / Failed / Refunded from `paymentState`), product thumbnails, quantities, formatted line totals, "Total paid"/"Order total" and a View Order link. Loading uses skeleton cards, an empty history uses the shared `EmptyState`, and a failed read uses `ErrorState` with Retry. The `GET /api/orders` contract is unchanged. A payment that becomes PAID while the customer is elsewhere invalidates the `orders` query so the history shows it. Evidence: [Scenarios 2–6 handoff](../tasks/Phase-03/TASK_03.6_SCENARIOS_2_6_FRONTEND_HANDOFF.md).
+
 ## Implemented in Task 03.5
 
 The current Shipping/Delivery/Card-method/Review/persisted-Confirmation contract is defined in [Checkout Core 03.5](CHECKOUT_CORE_03.5.md). Orders are received and unpaid: no payment, email, PDF, tracking or management action is implemented by this phase. Controlled React state/shared controls are used; React Hook Form and frontend Zod were not added.

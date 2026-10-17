@@ -7,7 +7,7 @@ import { ApiError } from '@/lib/api';
 
 const base: CartContextValue = { data: undefined, totalQuantity: 0, isGuest: true, isLoggingOut: false, isLoading: false, isError: false,
   isMutating: false, pendingProductIds: [], pendingRemoveProductIds: [], mergeError: null, pendingGuestItems: [], addItem: vi.fn(), setQuantity: vi.fn(), removeItem: vi.fn(),
-  retry: vi.fn(), retryMerge: vi.fn(), removePendingGuestItem: vi.fn(), submitCheckout: async operation => (await operation()).result };
+  retry: vi.fn(), validateRoute: vi.fn(), retryMerge: vi.fn(), removePendingGuestItem: vi.fn(), submitCheckout: async operation => (await operation()).result };
 const show = (cart: CartContextValue) => render(<MemoryRouter><CartPageContent cart={cart} /></MemoryRouter>);
 
 describe('cart page states', () => {

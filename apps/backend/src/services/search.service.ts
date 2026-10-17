@@ -99,7 +99,11 @@ export class SearchService {
           FROM (SELECT p."id", p."name" AS "label", p."slug", ${relevance(query)} AS rank
             ${searchFrom} ${searchWhere(productInput)} ORDER BY rank ASC, p."createdAt" DESC, p."id" ASC LIMIT ${limit}) productMatches
         UNION ALL SELECT "id", 'BRAND', "name", "slug", 3 FROM "brands" WHERE "name" ILIKE ${contains}
-        UNION ALL SELECT "id", 'CATEGORY', "name", "slug", 4 FROM "categories" WHERE "isActive" = true AND "name" ILIKE ${contains}
+        UNION ALL SELECT c."id", 'CATEGORY', c."name", c."slug", 4 FROM "categories" c
+          WHERE c."isActive" = true AND c."name" ILIKE ${contains} AND EXISTS (
+            SELECT 1 FROM "products" p
+            WHERE p."categoryId" = c."id" AND p."status" = 'ACTIVE' AND p."isTestFixture" = false AND p."storefrontVisible" = true
+          )
       ) suggestions ORDER BY rank ASC, LOWER("label") ASC, "type" ASC, "id" ASC LIMIT ${limit}`);
     return { data };
   }

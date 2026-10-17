@@ -10,7 +10,7 @@ const services = vi.hoisted(() => ({ list: vi.fn(), detail: vi.fn() }));
 vi.mock('../src/services/product.service.js', () => ({ ProductService: class { list = services.list; detail = services.detail; } }));
 vi.mock('../src/services/category.service.js', () => ({ CategoryService: class { list = services.list; detail = services.detail; } }));
 vi.mock('../src/services/brand.service.js', () => ({ BrandService: class { list = services.list; detail = services.detail; } }));
-vi.mock('../src/utils/logger.js', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
+vi.mock('../src/utils/logger.js', () => ({ logger: { warn: vi.fn(), error: vi.fn() }, logSafely: vi.fn() }));
 const app = express();
 app.use('/api', routes);
 app.use(errorHandler);

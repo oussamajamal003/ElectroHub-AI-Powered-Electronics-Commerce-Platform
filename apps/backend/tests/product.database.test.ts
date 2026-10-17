@@ -24,7 +24,7 @@ describe.skipIf(!enabled)('Product foundation DEV database constraints (explicit
   }, 60000);
   it('preserves nullable legacy brands, Decimal precision, restrictive FKs and dependent cascades', async () => {
     const product = await prisma.product.create({ data: {
-      name: marker, slug: marker, sku: marker, categoryId,
+      name: marker, slug: marker, sku: marker, categoryId, isTestFixture: true,
       price: new Prisma.Decimal('9999999999.99'),
       images: { create: { url: '/images/products/tablets/front.svg', sortOrder: 7 } },
       specifications: { create: { group: 'Test', name: 'Test', value: 'Test' } },
@@ -35,7 +35,7 @@ describe.skipIf(!enabled)('Product foundation DEV database constraints (explicit
     await prisma.product.update({ where: { id: product.id }, data: { brandId } });
     await expect(prisma.brand.delete({ where: { id: brandId } })).rejects.toMatchObject({ code: 'P2003' });
     await expect(prisma.category.delete({ where: { id: categoryId } })).rejects.toMatchObject({ code: 'P2003' });
-    await expect(prisma.product.create({ data: { name: marker, slug: marker, sku: marker, categoryId, price: 1 } })).rejects.toMatchObject({ code: 'P2002' });
+    await expect(prisma.product.create({ data: { name: marker, slug: marker, sku: marker, categoryId, price: 1, isTestFixture: true } })).rejects.toMatchObject({ code: 'P2002' });
     await expect(prisma.brand.create({ data: { name: `${marker}-other`, slug: marker } })).rejects.toMatchObject({ code: 'P2002' });
     await expect(prisma.category.create({ data: { name: `${marker}-other`, slug: marker } })).rejects.toMatchObject({ code: 'P2002' });
     expect((await prisma.productImage.findFirstOrThrow({ where: { productId: product.id } })).sortOrder).toBe(7);
@@ -46,7 +46,7 @@ describe.skipIf(!enabled)('Product foundation DEV database constraints (explicit
   }, 60000);
   it('rolls back a failed transaction without leaving product rows', async () => {
     await expect(prisma.$transaction(async transaction => {
-      await transaction.product.create({ data: { name: marker, slug: `${marker}-rollback`, sku: `${marker}-rollback`, categoryId, price: 1 } });
+      await transaction.product.create({ data: { name: marker, slug: `${marker}-rollback`, sku: `${marker}-rollback`, categoryId, price: 1, isTestFixture: true } });
       throw new Error('Expected rollback');
     })).rejects.toThrow('Expected rollback');
     expect(await prisma.product.count({ where: { sku: `${marker}-rollback` } })).toBe(0);

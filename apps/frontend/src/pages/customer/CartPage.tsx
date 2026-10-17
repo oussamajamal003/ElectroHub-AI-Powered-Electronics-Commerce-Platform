@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { PendingPurchases, usePaymentPurchases } from '@/features/checkout/PaymentPurchases';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -29,7 +30,7 @@ function CartSkeleton() {
   </div>;
 }
 
-export function CartPageContent({ cart }: { cart: CartContextValue }) {
+export function CartPageContent({ cart, pendingPurchases, hasPendingPurchases = false }: { cart: CartContextValue; pendingPurchases?: ReactNode; hasPendingPurchases?: boolean }) {
   const navigate = useNavigate(); const location = useLocation();
   const returnTo = customerReturnPath(location.state?.from) ?? '/checkout';
   const [actionError, setActionError] = useState('');
@@ -60,14 +61,15 @@ export function CartPageContent({ cart }: { cart: CartContextValue }) {
   return <main className={styles.page}>
     <nav className={styles.breadcrumb} aria-label="Breadcrumb"><Link to="/">Home</Link><ChevronRight size={16} aria-hidden="true" /><span aria-current="page">Cart</span></nav>
     <h1>Shopping Cart</h1>
+    {pendingPurchases}
     {cart.mergeError && <div className={styles.notice} role="alert"><p>{cart.mergeError}</p><Button type="button" onClick={() => void cart.retryMerge()}>Retry saved items</Button>
       <ul>{cart.pendingGuestItems.map(item => <li key={item.productId}>Saved product {item.productId.slice(0, 8)} · Qty {item.quantity} <Button type="button" variant="ghost" onClick={() => cart.removePendingGuestItem(item.productId)}>Remove saved item</Button></li>)}</ul></div>}
     {cart.isError && cart.data && <div className={styles.notice} role="alert"><p>Current availability could not be confirmed. Your cart is still visible.</p><Button type="button" onClick={() => void cart.retry()}>Retry availability</Button></div>}
     {actionError && <p className={styles.notice} role="alert">{actionError}</p>}
-    {cart.isLoading && !cart.data && <CartSkeleton />}
-    {cart.isError && !cart.data && <div className={styles.empty} role="alert"><h2>Unable to load your cart</h2><p>Your items are still saved. Please try again.</p><Button type="button" onClick={() => void cart.retry()}>Retry</Button></div>}
-    {cart.data && cart.data.items.length === 0 && <div className={styles.empty}><ShoppingCart size={42} aria-hidden="true" /><h2>Your cart is empty</h2><p>Explore our latest electronics and find your next upgrade.</p><Link className={styles.primaryLink} to="/products">Explore Products</Link></div>}
-    {cart.data && cart.data.items.length > 0 && <div className={styles.layout}>
+    {((cart.isLoading && (!cart.data || cart.data.items.length === 0)) || Boolean(cart.isAddPending || (cart.isMutating && (!cart.data || cart.data.items.length === 0)))) && <CartSkeleton />}
+    {cart.isError && !cart.data && !cart.isLoading && !cart.isMutating && <div className={styles.empty} role="alert"><h2>Unable to load your cart</h2><p>Your items are still saved. Please try again.</p><Button type="button" onClick={() => void cart.retry()}>Retry</Button></div>}
+    {!cart.isLoading && !cart.isMutating && !cart.isAddPending && !cart.isError && cart.data && cart.data.items.length === 0 && <div className={styles.empty}><ShoppingCart size={42} aria-hidden="true" /><h2>{hasPendingPurchases ? 'No active cart items' : 'Your cart is empty'}</h2><p>Explore our latest electronics and find your next upgrade.</p><Link className={styles.primaryLink} to="/products">Explore Products</Link></div>}
+    {!cart.isAddPending && !((cart.isLoading && !cart.data) || Boolean(cart.isMutating && (!cart.data || cart.data.items.length === 0))) && cart.data && cart.data.items.length > 0 && <div className={styles.layout}>
       <div className={styles.list}>{cart.data.items.map(line)}</div>
       <aside className={styles.summary} aria-labelledby="cart-summary-heading"><h2 id="cart-summary-heading">Order Summary</h2>
         <div className={styles.summaryLine}><span>Subtotal ({cart.data.totalQuantity} {cart.data.totalQuantity === 1 ? 'item' : 'items'})</span><span>{money(cart.data.subtotal)}</span></div>
@@ -83,15 +85,7 @@ export function CartPageContent({ cart }: { cart: CartContextValue }) {
 }
 
 export function CartPage() {
-  const cart = useCart();
-  const [revalidateCached] = useState(() => Boolean(cart.data) && !cart.isLoading);
-  const retry = cart.retry;
-  const didRevalidate = useRef(false);
-  useEffect(() => {
-    if (revalidateCached && !didRevalidate.current) {
-      didRevalidate.current = true;
-      void retry();
-    }
-  }, [revalidateCached, retry]);
-  return <CartPageContent cart={cart} />;
+  const cart = useCart(); const purchases = usePaymentPurchases();
+  const pending = purchases.data?.data.some(item => item.pending) ?? false;
+  return <CartPageContent cart={{ ...cart, isLoading: cart.isLoading || !cart.data?.items.length && !cart.isGuest && purchases.isLoading }} hasPendingPurchases={pending} pendingPurchases={!cart.isGuest ? <PendingPurchases /> : undefined} />;
 }

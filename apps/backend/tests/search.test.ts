@@ -10,7 +10,7 @@ import { swaggerSpec } from '../src/docs/swagger/index.js';
 const database = vi.hoisted(() => ({ $queryRaw: vi.fn(), $transaction: vi.fn(), product: { findMany: vi.fn() },
   review: { groupBy: vi.fn().mockResolvedValue([]) } }));
 vi.mock('../src/lib/prisma.js', () => ({ prisma: database }));
-vi.mock('../src/utils/logger.js', () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
+vi.mock('../src/utils/logger.js', () => ({ logger: { error: vi.fn(), warn: vi.fn() }, logSafely: vi.fn() }));
 const fixture = (id: string, total = 1n) => ({ total, id, name: 'MacBook', slug: 'macbook', price: '9999999999.99', compareAtPrice: null,
   description: null, quantity: null, category: { id: 'category', name: 'Laptops', slug: 'laptops' }, brand: null,
   images: [], reviewCount: 0n, averageRating: null });
@@ -37,8 +37,10 @@ describe('Search validation and parameterized queries', () => {
   it('uses AND across tokens and filters and parameterizes hostile input', () => {
     const input = searchSchema.parse({ q: "sony %_' OR 1=1 --", category: 'headphones', brand: 'sony', availability: 'available', minPrice: '1.20', maxPrice: '9999999999.99' });
     const where = searchWhere(input);
-    expect(where.text).not.toContain(input.q);
-    expect(where.text).toContain('p."status" = \'ACTIVE\' AND c."isActive" = true');
+    expect(where.text).toContain('p."status" = \'ACTIVE\'');
+    expect(where.text).toContain('p."isTestFixture" = false');
+    expect(where.text).toContain('p."storefrontVisible" = true');
+    expect(where.text).toContain('c."isActive" = true');
     expect(where.text).toContain('COALESCE(i."quantity", 0) > 0');
     expect(where.text).toContain('EXISTS (SELECT 1 FROM "product_specifications" ps');
     for (const field of ['group', 'name', 'value']) expect(where.text).toContain(`ps."${field}" ILIKE`);
@@ -105,6 +107,9 @@ describe('Search services', () => {
     expect(await new SearchService().suggestions('mac', 8)).toEqual({ data: suggestions });
     const sql = database.$queryRaw.mock.calls[0][0];
     expect(sql.text).toContain('UNION ALL'); expect(sql.text).toContain('c."isActive" = true');
+    expect(sql.text).toContain('p."isTestFixture" = false');
+    expect(sql.text).toContain('p."storefrontVisible" = true');
+    expect(sql.text).toContain('FROM "products" p');
     expect(sql.text).toContain('product_specifications'); expect(sql.text).toContain('ps."value" ILIKE');
     expect(sql.text.match(/EXISTS \(SELECT 1 FROM "product_specifications"/g)).toHaveLength(2);
     expect(sql.text).not.toContain('quantity'); expect(sql.values.at(-1)).toBe(8);

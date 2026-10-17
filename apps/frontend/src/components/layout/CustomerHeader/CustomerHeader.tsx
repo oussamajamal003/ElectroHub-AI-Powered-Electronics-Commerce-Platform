@@ -34,9 +34,15 @@ export interface CustomerHeaderProps {
 
 export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishlistOverride }: CustomerHeaderProps) {
   const wishlist = useWishlist();
-  const wishlistCount = wishlist?.isLoading ? 0 : wishlistOverride ?? wishlist?.totalItems ?? 0;
-  const { totalQuantity } = useCart();
-  const cartCount = countOverride ?? totalQuantity;
+  const { data: cartData } = useCart();
+  // Badges count exactly the items the Cart and Wishlist pages render, so they appear with the list and never before it.
+  // Cached or expected counts are not used: until the items resolve there is no badge.
+  const cartCount = countOverride ?? cartData?.totalQuantity ?? 0;
+  const wishlistCount = wishlistOverride ?? wishlist?.data?.items.length ?? 0;
+  // Unresolved state is announced without a number; no visual placeholder is rendered. "Unresolved" means no
+  // authoritative Cart yet — still loading OR the read failed — so a failed read never announces a false "0 items".
+  const cartCountUnresolved = countOverride === undefined && !cartData;
+  const wishlistCountUnresolved = wishlistOverride === undefined && wishlist?.isLoading && !wishlist.data;
   const [authReturnTo, setAuthReturnTo] = useState<CustomerReturnPath | undefined>();
   const { user, rememberedUser, isAuthenticated, isInitializing } = useAuth();
   const headerUser = isInitializing ? rememberedUser : user;
@@ -110,6 +116,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
       ? `${styles.mobileMenuItem} ${styles.mobileMenuItemActive}`
       : styles.mobileMenuItem;
 
+
   return (
     <>
       {/* ─── Header Shell ────────────────────────────────────────── */}
@@ -170,7 +177,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                   <Link
                     to="/cart"
                     className={styles.iconButton}
-                    aria-label={cartCount > 0 ? `Cart, ${cartCount} ${cartCount === 1 ? 'item' : 'items'}` : 'Cart, 0 items'}
+                    aria-label={cartCountUnresolved ? 'Cart' : cartCount > 0 ? `Cart, ${cartCount} ${cartCount === 1 ? 'item' : 'items'}` : 'Cart, 0 items'}
                   >
                     <ShoppingCart size={20} />
                     {cartCount > 0 && (
@@ -183,7 +190,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                   <Link
                     to="/wishlist"
                     className={styles.iconButton}
-                    aria-label={wishlistCount > 0 ? `Wishlist (${wishlistCount})` : 'Wishlist'}
+                    aria-label={wishlistCount > 0 && !wishlistCountUnresolved ? `Wishlist (${wishlistCount})` : 'Wishlist'}
                   >
                     <Heart
                       size={20}
@@ -197,11 +204,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                   </Link>
 
                   {/* Unauthenticated — Account icon */}
-                  {isInitializing && !rememberedUser && (
-                    <button type="button" className={styles.iconButton} aria-label="Restoring account" disabled>
-                      <UserIcon size={20} />
-                    </button>
-                  )}
+                  {isInitializing && !rememberedUser && <span className={styles.authPlaceholder} aria-hidden="true" />}
                   {!isInitializing && !isAuthenticated && (
                     <button
                       type="button"

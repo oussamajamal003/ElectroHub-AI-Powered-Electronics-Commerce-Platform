@@ -20,6 +20,14 @@ app.use(errorHandler);
 beforeEach(() => { vi.clearAllMocks(); service.get.mockResolvedValue({ items: [] }); service.add.mockResolvedValue({ items: [] }); service.validateGuest.mockResolvedValue({ items: [] }); });
 
 describe('Cart routes', () => {
+  it('returns fresh JSON even when a private collection is requested with an old validator', async () => {
+    const first = await request(app).get('/api/cart');
+    const next = await request(app).get('/api/cart').set('If-None-Match', first.headers.etag);
+    expect(next.status).toBe(200);
+    expect(next.headers['cache-control']).toBe('private, no-store');
+    expect(next.body).toEqual(first.body);
+    expect(service.get).toHaveBeenCalledTimes(2);
+  });
   it('returns sanitized server stock conflicts for authenticated Add and quantity update', async () => {
     service.add.mockRejectedValue(new AppError('Only 3 items are currently available.', 409, 'CART_STOCK_CONFLICT'));
     service.setQuantity.mockRejectedValue(new AppError('Only 3 items are currently available.', 409, 'CART_STOCK_CONFLICT'));

@@ -33,3 +33,44 @@ export function clearGuestCart(): boolean {
   try { localStorage.removeItem(CART_STORAGE_KEY); return true; }
   catch { return false; }
 }
+
+const AUTHENTICATED_CART_COUNT_PREFIX = 'electrohub.cart.auth-count.v1:';
+
+function authenticatedCartCountKey(userId: string): string | null {
+  return userId.trim() ? `${AUTHENTICATED_CART_COUNT_PREFIX}${encodeURIComponent(userId)}` : null;
+}
+
+export function readAuthenticatedCartCount(userId: string): number | undefined {
+  const key = authenticatedCartCountKey(userId);
+  if (!key) return undefined;
+  try {
+    const value = sessionStorage.getItem(key);
+    if (value === null) return undefined;
+    const count = Number(value);
+    if (Number.isSafeInteger(count) && count >= 0 && count <= MAX_CART_LINES * MAX_CART_QUANTITY) {
+      return count;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function writeAuthenticatedCartCount(userId: string, count: number): boolean {
+  const key = authenticatedCartCountKey(userId);
+  if (!key || !Number.isSafeInteger(count) || count < 0) return false;
+  try {
+    sessionStorage.setItem(key, String(count));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearAuthenticatedCartCount(userId: string): void {
+  const key = authenticatedCartCountKey(userId);
+  if (!key) return;
+  try {
+    sessionStorage.removeItem(key);
+  } catch { /* Storage can be unavailable. */ }
+}

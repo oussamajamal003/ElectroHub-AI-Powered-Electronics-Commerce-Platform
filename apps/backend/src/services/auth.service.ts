@@ -6,8 +6,12 @@ import { otpService, OtpVerificationError, OTP_CONFIG } from './otp.service.js';
 import { emailService } from './email.service.js';
 import { OtpPurpose, SecurityEventType, User, Role } from '@prisma/client';
 import { logger } from '../utils/logger.js';
+import { AppError } from '../middleware/errorHandler.js';
 
 const normalizeEmail = (email: string) => email.toLowerCase().trim();
+
+/** How long after a rotation a presented superseded token is treated as a concurrent request (409, no token, no revocation) rather than reuse. */
+export const CONCURRENT_ROTATION_WINDOW_MS = 10_000;
 
 export class AuthService {
   private repository: AuthRepository;
@@ -134,7 +138,12 @@ export class AuthService {
 
   private async createSession(user: User & { role: Role }) {
     const refreshToken = crypto.randomBytes(64).toString('hex');
-    await this.repository.createRefreshToken(user.id, crypto.createHash('sha256').update(refreshToken).digest('hex'), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    // Re-validates the account under the lifecycle lock: a password change, reset, deactivation or role change
+    // that committed after this user was read (and its credentials verified) must not yield a surviving session.
+    const issued = await this.repository.createSessionRefreshToken(user, crypto.createHash('sha256').update(refreshToken).digest('hex'), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    if (!issued) {
+      throw new Error('Invalid credentials');
+    }
     return {
       accessToken: generateAccessToken({ userId: user.id, role: user.role.name }),
       refreshToken,
@@ -152,23 +161,52 @@ export class AuthService {
   /**
    * Refresh the access token using a valid refresh token.
    * Employs rotation: revokes the old refresh token and creates a new one.
+   * Includes reuse detection and a concurrent grace window for race-condition resilience.
    */
   async refreshSession(rawRefreshToken: string) {
     const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
     
-    const storedToken = await this.repository.findValidRefreshToken(tokenHash);
+    const storedToken = await this.repository.findRefreshTokenByHash(tokenHash);
     if (!storedToken) {
-      throw new Error('Invalid or expired refresh token');
+      throw new AppError('Invalid or expired refresh token', 401, 'INVALID_REFRESH_TOKEN');
+    }
+
+    if (storedToken.expiresAt <= new Date()) {
+      throw new AppError('Invalid or expired refresh token', 401, 'EXPIRED_REFRESH_TOKEN');
+    }
+
+    // A superseded (already rotated or revoked) refresh token NEVER authenticates on its own. Two situations differ only in what happens next:
+    //  - concurrent: it was rotated moments ago and its session family is still alive. This is indistinguishable from a harmless browser race
+    //    (two requests carrying the same cookie), and timing alone cannot separate it from theft, so the request gets NO token of any kind and
+    //    nothing is revoked: the caller is told to retry and re-read the cookie the winning request set (HTTP 409).
+    //  - replay: anything else (outside the window, or the family is already dead) is reuse. The presented token's whole session family is
+    //    revoked, never every session of the user, and the request is rejected.
+    if (storedToken.isRevoked) {
+      const msSinceRevocation = Date.now() - storedToken.updatedAt.getTime();
+      if (msSinceRevocation <= CONCURRENT_ROTATION_WINDOW_MS && storedToken.replacedByTokenHash &&
+        await this.repository.hasActiveFamilyToken(tokenHash)) {
+        throw new AppError('Session refresh already in progress. Retry.', 409, 'REFRESH_ROTATION_IN_PROGRESS');
+      }
+
+      await this.repository.revokeRefreshTokenFamily(tokenHash);
+      logger.warn('AUTH_REFRESH_TOKEN_REUSE_DETECTED', {
+        userId: storedToken.userId,
+        tokenId: storedToken.id,
+        msSinceRevocation,
+        scope: 'family',
+      });
+      throw new AppError('Invalid or expired refresh token', 401, 'REFRESH_TOKEN_REUSED');
     }
 
     const user = await this.repository.findUserById(storedToken.userId);
     if (!user || !user.isActive) {
-      throw new Error('User inactive or not found');
+      throw new AppError('User inactive or not found', 401, 'USER_INACTIVE');
     }
 
+    const roleName = user.role?.name ?? 'CUSTOMER';
     const payload: JwtPayload = {
       userId: user.id,
-      role: user.role.name,
+      role: roleName,
     };
     const newAccessToken = generateAccessToken(payload);
 
@@ -178,7 +216,11 @@ export class AuthService {
 
     const rotated = await this.repository.rotateRefreshToken(user.id, tokenHash, newTokenHash, expiresAt);
     if (!rotated) {
-      throw new Error('Invalid or expired refresh token');
+      // Rotation lost the atomic race. The loser gets no token (see above): 409 while the session family is alive, 401 once it is not.
+      if (await this.repository.hasActiveFamilyToken(tokenHash)) {
+        throw new AppError('Session refresh already in progress. Retry.', 409, 'REFRESH_ROTATION_IN_PROGRESS');
+      }
+      throw new AppError('Invalid or expired refresh token', 401, 'SESSION_REVOKED');
     }
 
     return {
@@ -189,11 +231,11 @@ export class AuthService {
   }
 
   /**
-   * Logout user by revoking their specific refresh token.
+   * Logout: revoke the presented token's whole session family (all rotated generations), leaving other devices' sessions untouched.
    */
   async logout(rawRefreshToken: string) {
     const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
-    await this.repository.revokeRefreshToken(tokenHash);
+    await this.repository.revokeRefreshTokenFamily(tokenHash);
   }
 
   /**
@@ -229,7 +271,7 @@ export class AuthService {
         try {
           await otpService.resendChallenge(challengeId);
     } catch {
-      logger.warn('Password reset resend was not completed', { userId: user.id, reason: 'resend_not_completed' });
+      logger.error('Password reset resend was not completed', { userId: user.id, reason: 'resend_not_completed' });
         }
       }
     }

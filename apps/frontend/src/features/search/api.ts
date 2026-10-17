@@ -4,8 +4,9 @@ import { searchParams, type SearchState } from './searchState';
 
 export interface SearchResults extends ProductCollection<ProductSummary> { meta: ProductCollection<ProductSummary>['meta'] & { totalPages: number } }
 export interface Suggestion { id: string; type: 'PRODUCT' | 'CATEGORY' | 'BRAND'; label: string; slug: string }
-export const fetchSearch = (state: SearchState, signal?: AbortSignal) =>
-  apiClient<SearchResults>(`/api/search/products?${searchParams(state)}`, { signal });
+export const fetchSearch = async (state: SearchState, signal?: AbortSignal) => {
+  return apiClient<SearchResults>(`/api/search/products?${searchParams(state)}`, { signal });
+};
 export const fetchSuggestions = (q: string, signal: AbortSignal) =>
   apiClient<{ data: Suggestion[] }>(`/api/search/suggestions?${new URLSearchParams({ q, limit: '8' })}`, { signal });
 export async function fetchCollection<Metadata extends Category | Brand>(resource: 'categories' | 'brands', signal?: AbortSignal) {

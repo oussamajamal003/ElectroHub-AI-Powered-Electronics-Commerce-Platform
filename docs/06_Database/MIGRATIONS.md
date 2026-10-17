@@ -1,3 +1,7 @@
+## Task 03.6 deployment progress — 2026-10-07
+
+Forward migration: 20261007000000_stripe_orchestration. SHA-256: 8efc55f8e823583e439f92dcbea0bd2b3e125c2eefaa9372cee5d2a82753090a. DEV project pzxekjybdiulzmssalfo: Prisma deployment, completed ledger/checksum and physical-schema/CHECK/RLS verification PASS. PROD project yepfgjehdstlxbpespun: applied only after mandatory DEV gates passed; completed ledger/checksum and physical-schema/CHECK/RLS verification PASS. Twelve historical migration entries and their existing ledger rows remained unchanged. Approved historical BOM/CRLF differences and seven historical physical defaults remain preserved; no normalization or ledger rewrite. PROD fixtures, seeds, and purchase tests were not run. [Current evidence](../tasks/Phase-03/TASK_03.6_IMPLEMENTATION_EVIDENCE.md).
+
 # ElectroHub Migrations — Task 02.5 Implementation
 
 ## Task 03.5 Checkout core — deployed and verified 2026-10-06

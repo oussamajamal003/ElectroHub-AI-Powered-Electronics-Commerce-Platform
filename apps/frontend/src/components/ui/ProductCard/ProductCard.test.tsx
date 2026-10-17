@@ -1,9 +1,22 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { ProductCard } from './ProductCard';
 import { ApiError } from '@/lib/api';
 
 describe('ProductCard', () => {
+  it('acknowledges immediately, submits once, and restores the action after rejection', async () => {
+    let reject!: (error: Error) => void;
+    const add = vi.fn(() => new Promise<void>((_resolve, fail) => { reject = fail; }));
+    render(<ProductCard id="pending" title="Pending phone" imageUrl="/phone.jpg" price={10} onAddToCart={add} />);
+    const button = screen.getByRole('button', { name: 'Add Pending phone to cart' });
+    fireEvent.click(button); fireEvent.click(button);
+    expect(button).toBeDisabled();
+    expect(button).toHaveTextContent('Adding');
+    expect(add).toHaveBeenCalledTimes(1);
+    await act(async () => reject(new ApiError(409, 'Only 1 item is available.', undefined, 'CART_STOCK_CONFLICT')));
+    expect(button).not.toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Only 1 item is available.');
+  });
   it.each([['IN_STOCK', 'In Stock', 8], ['LOW_STOCK', 'Low Stock', 2], ['OUT_OF_STOCK', 'Out of Stock', 0]] as const)('renders authoritative %s without blocking navigation or heart', (stockStatus, label, quantity) => {
     const navigate = vi.fn();
     const heart = vi.fn();

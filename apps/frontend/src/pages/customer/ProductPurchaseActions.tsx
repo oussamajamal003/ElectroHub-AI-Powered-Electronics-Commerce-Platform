@@ -16,9 +16,10 @@ export interface ProductPurchaseActionsProps {
   wishlistAction?: ReactNode;
   onQuantityChange: (quantity: number) => void;
   onAdd: () => Promise<void> | void;
+  onBuyNow?: () => Promise<void> | void;
 }
 
-export function ProductPurchaseActions({ product, quantity, remainingQuantity, pending = false, feedback, wishlistError, wishlistAction, onQuantityChange, onAdd }: ProductPurchaseActionsProps) {
+export function ProductPurchaseActions({ product, quantity, remainingQuantity, pending = false, feedback, wishlistError, wishlistAction, onQuantityChange, onAdd, onBuyNow }: ProductPurchaseActionsProps) {
   const stock = stockPresentation(product.stockStatus === undefined ? product.availability === 'AVAILABLE' ? 'IN_STOCK' : null : product.stockStatus);
   const unavailable = product.stockStatus === 'OUT_OF_STOCK' || product.purchasable === false || product.availability !== 'AVAILABLE';
   return <>
@@ -28,7 +29,7 @@ export function ProductPurchaseActions({ product, quantity, remainingQuantity, p
         onIncrease={() => onQuantityChange(Math.min(remainingQuantity, quantity + 1))} onDecrease={() => onQuantityChange(Math.max(1, quantity - 1))} /></div>
       {unavailable || remainingQuantity === 0 ? <p role="status">{unavailable ? 'Currently unavailable.' : 'You already have the available stock in your cart.'}</p>
         : <p role="status">{remainingQuantity} more {remainingQuantity === 1 ? 'item' : 'items'} available to add.</p>}
-      <div className={styles.purchaseButtons}><Button type="button" disabled={unavailable || remainingQuantity === 0 || pending} isLoading={pending} onClick={() => void onAdd()}>Add to Cart</Button>{wishlistAction}</div>
+      <div className={styles.purchaseButtons}><Button type="button" disabled={unavailable || remainingQuantity === 0 || pending} isLoading={pending} onClick={() => void onAdd()}>Add to Cart</Button>{onBuyNow && <Button type="button" variant="outline" className={styles.buyNowButton} disabled={unavailable || pending || (product.availableQuantity ?? 0) < quantity} onClick={() => void onBuyNow()}>Buy Now</Button>}{wishlistAction}</div>
       {wishlistError && <p role="alert">{wishlistError}</p>}
       {feedback && <p role="status" className={styles.cartFeedback}>{feedback}</p>}
     </div>

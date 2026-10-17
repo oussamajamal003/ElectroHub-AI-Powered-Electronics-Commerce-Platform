@@ -1,5 +1,9 @@
 # Cart
 
+## Task 03.6 payment integration
+
+Cart remains the sole frontend authority. Buy Now awaits the existing add/reconcile queue and preserves unrelated lines. Final consent runs through that same queue; stale reads are canceled and the authoritative committed/compensated Cart is installed before navigation. Only the internal authorized purchase transaction consumes stock and clears purchased rows. Pending provider outcomes retain the owned attempt; cancellation/refund compensation merges newer Cart intent rather than overwriting it. See [payment core](PAYMENT_CORE_03.6.md) for the transaction and once-only restoration boundary. Earlier 03.5 evidence below is historical and does not prove Stripe capture.
+
 ## Task 03.5 Checkout integration
 
 Authenticated valid Cart now opens `/checkout`; guest checkout uses the existing auth modal with a validated Checkout return path. Cart DTO adds a server economic `revision` (identity/items/quantities/prices/delivery config, not stock). Add/update/remove/reconcile share the Cart-row lock with Order creation. CartProvider remains the sole Cart authority and exposes its existing queue for checkout: cancel stale reads, submit, then install the authoritative Cart response before Confirmation navigation. No Cart operation itself reserves/decrements Inventory. Earlier 03.2 deferred-CTA statements below are historical and superseded by this section. See [implemented contract](CHECKOUT_CORE_03.5.md).
@@ -498,3 +502,15 @@ Cart functionality is complete when:
 ## 27. Cart Principle
 
 > **The cart provides a convenient customer experience, but the backend remains authoritative for ownership, pricing, inventory, and checkout validation.**
+
+### Startup and mutation read ownership
+
+Cart and Wishlist load globally after verified authentication. Unknown header counts show a loading skeleton, not an authoritative zero. Development StrictMode shares the owner-keyed startup read; production retains transport cancellation.
+
+Cart re-entry validates availability through a listener in the persistent application route shell. The history-entry key detects rapid away/back navigation even if React never commits the intermediate pathname. Initial page loading uses the provider's startup query. Entry during an accepted Add waits for that mutation and consumes its successful validated snapshot once, within the existing 30-second authenticated / 15-second guest freshness window, instead of issuing another GET. Other re-entries request current availability; genuine failures remain visible and keep checkout disabled.
+
+Private collection requests bypass browser HTTP caching. Their API routes return `private, no-store` and ignore conditional GET validators so inventory validation always returns JSON. A read started during a mutation is canceled at publication of the authoritative mutation response. Genuine availability failures remain visible and disable checkout.
+
+Add actions acknowledge pending state immediately, reject duplicate button submissions, and publish the mutation's returned Cart without an extra success refetch. Provider-owned pending state survives route navigation; Cart shows a skeleton until confirmation and rolls back optimistic quantities on rejection.
+
+Offline browser journeys: build the frontend, then run `npx playwright test -c playwright.cart.config.ts`. Port 3127 must be free; the runner never reuses or kills another service. APIs and Stripe are intercepted before navigation. These tests do not establish DEV database latency or real inventory/Stripe integration.

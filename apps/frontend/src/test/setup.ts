@@ -36,6 +36,16 @@ if (typeof window !== 'undefined') {
   window.HTMLElement.prototype.scrollIntoView = function() {};
   window.HTMLElement.prototype.hasPointerCapture = function() { return false; };
   window.HTMLElement.prototype.releasePointerCapture = function() {};
+
+  // jsdom has no top layer, so `:modal` / `:fullscreen` can never match. nwsapi 2.2.27 nevertheless resolves them by
+  // re-entering element.matches() until the stack overflows (then swallows the error): ~0.6 s per call. floating-ui's
+  // isTopLayer() (Radix Popper: Select, Tooltip, DropdownMenu) asks `:modal` repeatedly while positioning, which pushed
+  // single Select/Tooltip tests past the 60 s timeout. Answer these exact, never-matching probes directly.
+  const nativeMatches = window.Element.prototype.matches;
+  window.Element.prototype.matches = function(this: Element, selector: string) {
+    if (selector === ':modal' || selector === ':fullscreen') return false;
+    return nativeMatches.call(this, selector);
+  };
 }
 
 

@@ -7,4 +7,43 @@
   button { width: 100%; }
 }
 .icon { display: grid; place-items: center; width: 4.5rem; height: 4.5rem; margin-inline: auto; border-radius: 50%; color: $color-error; background: $color-error-background; }
-.loading { width: min(100%, 30rem); height: 21rem; background: $color-surface; }
+
+// Order history: Cart/Checkout card language (1px border, square corners, 4px spacing scale), readable at compact widths.
+.history { max-width: 120rem; margin-inline: auto; padding: $spacing-8 $spacing-4 $spacing-16; display: grid; gap: $spacing-6; align-content: start;
+  @include respond-to(md) { padding-inline: $spacing-8; } @include respond-to(lg) { padding-inline: $spacing-16; }
+  h1 { margin: 0; font-size: clamp(2rem, 3vw, 3rem); }
+}
+.orderList { margin: 0; padding: 0; list-style: none; display: grid; gap: $spacing-4; max-width: 64rem; }
+.orderCard { display: grid; gap: $spacing-5; padding: $spacing-5; border: 1px solid $color-border; background: $color-background;
+  transition: border-color $transition-fast, box-shadow $transition-fast;
+  &:hover { border-color: rgba($color-primary, .35); box-shadow: $shadow-sm; }
+  @include respond-to(md) { padding: $spacing-6; }
+}
+.orderHeader { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: $spacing-3; }
+.orderIdentity { display: grid; gap: $spacing-1; min-width: 0;
+  h2 { margin: 0; font-size: $font-size-base; font-weight: $font-weight-semibold; letter-spacing: .01em; overflow-wrap: anywhere; }
+  p { margin: 0; font-size: $font-size-sm; color: $color-text-secondary; }
+}
+.eyebrow { font-size: $font-size-xs; font-weight: $font-weight-semibold; letter-spacing: .06em; text-transform: uppercase; color: $color-text-secondary; }
+.orderItems { margin: 0; padding: 0; list-style: none; display: grid; gap: $spacing-3; }
+.orderLine { display: grid; grid-template-columns: 4rem minmax(0, 1fr) auto; align-items: center; gap: $spacing-4;
+  > div { display: grid; gap: $spacing-1; min-width: 0; strong { overflow-wrap: anywhere; } span { font-size: $font-size-sm; color: $color-text-secondary; } }
+}
+.orderImage { width: 4rem; height: 4rem; background: $color-surface; border: 1px solid $color-border; }
+.lineTotal { font-size: $font-size-sm; font-weight: $font-weight-semibold; white-space: nowrap; }
+.orderFooter { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: $spacing-3; padding-top: $spacing-4; border-top: 1px solid $color-border;
+  p { margin: 0; display: flex; align-items: baseline; gap: $spacing-3; span { color: $color-text-secondary; font-size: $font-size-sm; } strong { font-size: $font-size-lg; } }
+}
+.primaryLink, .secondaryLink { display: inline-flex; align-items: center; justify-content: center; min-height: 2.75rem; padding: $spacing-2 $spacing-5; font-size: $font-size-sm;
+  font-weight: $font-weight-semibold; text-decoration: none; border: 1px solid $color-border; transition: border-color $transition-fast, color $transition-fast, background-color $transition-fast;
+  &:focus-visible { outline: 2px solid $color-primary; outline-offset: 3px; }
+}
+.primaryLink { color: $color-text-inverse; background: $color-primary; border-color: $color-primary; &:hover { background: $color-primary-dark; } }
+.secondaryLink { color: $color-text-primary; &:hover { color: $color-primary; border-color: $color-primary; } }
+.empty { max-width: 64rem; border: 1px solid $color-border; }
+.visuallyHidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.pagination { justify-self: center; }
+// Loading placeholder: same layout as .orderCard, but never reacts to hover or focus.
+.skeletonCard { display: grid; gap: $spacing-5; padding: $spacing-5; border: 1px solid $color-border; background: $color-background; pointer-events: none;
+  @include respond-to(md) { padding: $spacing-6; }
+}

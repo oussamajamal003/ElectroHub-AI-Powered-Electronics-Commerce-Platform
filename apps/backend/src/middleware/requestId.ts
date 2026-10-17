@@ -17,7 +17,7 @@ export function requestId(req: Request, res: Response, next: NextFunction): void
   const headerId = req.headers['x-request-id'];
   
   // Use client ID if provided and safe length, otherwise generate new UUID
-  const id = (typeof headerId === 'string' && headerId.length > 0 && headerId.length <= 100) 
+  const id = (typeof headerId === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(headerId))
     ? headerId 
     : randomUUID();
 

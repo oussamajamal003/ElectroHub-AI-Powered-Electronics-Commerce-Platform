@@ -162,6 +162,13 @@
   }
 }
 
+.authStatus {
+  justify-self: center;
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+  white-space: nowrap;
+}
+
 // ─────────────────────────────────────────────────────────────
 // CENTER — Desktop Navigation
 // ─────────────────────────────────────────────────────────────
@@ -279,6 +286,12 @@
       transform: none;
     }
   }
+}
+
+.authPlaceholder {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
 }
 
 // Compact badge for Cart / Wishlist

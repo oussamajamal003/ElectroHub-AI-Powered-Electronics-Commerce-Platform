@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { businessDate, cartRevision, checkoutRequestSchema, checkoutTotals, deliveryMethods, requestHash, shippingSchema } from '../checkout.domain.js';
+import { businessDate, buyNowSchema, buyNowScopeId, cartRevision, checkoutRequestSchema, checkoutTotals, deliveryMethods, isBuyNowRequest, requestHash, shippingSchema } from '../checkout.domain.js';
 const shipping = { recipient: 'Jane Customer', line1: '123 Example Street', city: 'Beirut', postalCode: '1100', country: 'Lebanon', phone: '+961 70 123 456' };
 describe('Checkout domain', () => {
   it.each(Object.keys(shipping))('requires a nonblank %s', key => {
@@ -51,5 +51,36 @@ describe('Checkout domain', () => {
   });
   it('delivery estimates skip weekends using UTC dates', () => {
     expect(businessDate(new Date('2026-10-09T22:00:00Z'), 1).toISOString()).toBe('2026-10-12T00:00:00.000Z');
+  });
+  it('validates Buy Now payload and enforces product uuid and positive quantity', () => {
+    const valid = { productId: '99999999-9999-4999-8999-999999999999', quantity: 2 };
+    expect(buyNowSchema.safeParse(valid).success).toBe(true);
+    expect(buyNowSchema.safeParse({ productId: 'invalid', quantity: 1 }).success).toBe(false);
+    expect(buyNowSchema.safeParse({ productId: valid.productId, quantity: 0 }).success).toBe(false);
+    expect(buyNowSchema.safeParse({ productId: valid.productId, quantity: -1 }).success).toBe(false);
+    expect(buyNowSchema.safeParse({ productId: valid.productId, quantity: 1000 }).success).toBe(false);
+    expect(buyNowSchema.safeParse({ productId: valid.productId, quantity: 1.5 }).success).toBe(false);
+  });
+  it('enforces consistency between checkout scope and buyNow payload', () => {
+    const base = { shipping, deliveryMethod: 'STANDARD' as const, paymentMethod: 'CARD' as const, expectedRevision: 'a'.repeat(64) };
+    const buyNow = { productId: '99999999-9999-4999-8999-999999999999', quantity: 1 };
+    expect(checkoutRequestSchema.safeParse(base).success).toBe(true);
+    expect(checkoutRequestSchema.safeParse({ ...base, scope: 'CART_CHECKOUT' }).success).toBe(true);
+    expect(checkoutRequestSchema.safeParse({ ...base, scope: 'BUY_NOW', buyNow }).success).toBe(true);
+    expect(checkoutRequestSchema.safeParse({ ...base, scope: 'BUY_NOW' }).success).toBe(false);
+    expect(checkoutRequestSchema.safeParse({ ...base, scope: 'CART_CHECKOUT', buyNow }).success).toBe(false);
+    expect(checkoutRequestSchema.safeParse({ ...base, buyNow }).success).toBe(false);
+  });
+  it('detects buy now requests and scopes hashes correctly', () => {
+    const base = checkoutRequestSchema.parse({ shipping, deliveryMethod: 'STANDARD', paymentMethod: 'CARD', expectedRevision: 'a'.repeat(64) });
+    const buyNowReq = checkoutRequestSchema.parse({
+      ...base,
+      scope: 'BUY_NOW',
+      buyNow: { productId: '99999999-9999-4999-8999-999999999999', quantity: 1 },
+    });
+    expect(isBuyNowRequest(base)).toBe(false);
+    expect(isBuyNowRequest(buyNowReq)).toBe(true);
+    expect(requestHash(buyNowReq)).not.toBe(requestHash(base));
+    expect(buyNowScopeId('usr-123')).toBe('buy-now:usr-123');
   });
 });

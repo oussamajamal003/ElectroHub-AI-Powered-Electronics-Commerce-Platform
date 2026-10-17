@@ -69,6 +69,7 @@ export function ProductCard({
   const [cartState, setCartState] = useState<'idle' | 'adding' | 'added' | 'error'>('idle');
   const [cartError, setCartError] = useState('Could not add item. Please try again.');
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const additionPending = useRef(false);
   useEffect(() => () => { if (resetTimer.current) clearTimeout(resetTimer.current); }, []);
   const formatPrice = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -80,7 +81,9 @@ export function ProductCard({
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!onAddToCart) return;
+    if (!onAddToCart || additionPending.current) return;
+    additionPending.current = true;
+    if (resetTimer.current) clearTimeout(resetTimer.current);
     setCartState('adding');
     try { await onAddToCart(id); setCartState('added'); }
     catch (error) {
@@ -88,6 +91,7 @@ export function ProductCard({
         ? error.message : 'Could not add item. Please try again.');
       setCartState('error');
     }
+    additionPending.current = false;
     if (resetTimer.current) clearTimeout(resetTimer.current);
     resetTimer.current = setTimeout(() => setCartState('idle'), 2500);
   };

@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
-import { logger } from '../utils/logger.js';
+import { logSafely } from '../utils/logger.js';
+import { logContext } from '../utils/logContext.js';
 
 /**
  * HTTP request logging middleware.
@@ -17,19 +18,40 @@ export function requestLogger(
   res: Response,
   next: NextFunction
 ): void {
-  const start = Date.now();
+  const start = performance.now();
+  const json = res.json;
+  res.json = function (body: unknown): Response {
+    // Record only the public error code, never the response payload.
+    if (body && typeof body === 'object' && 'error' in body) {
+      const error = body.error;
+      if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && /^[A-Z0-9_]{1,100}$/.test(error.code)) {
+        res.locals.errorCode = error.code;
+      }
+    }
+    return json.call(this, body);
+  };
 
-  res.on('finish', () => {
-    const duration = Date.now() - start;
+  logSafely('info', 'HTTP request started', { operation: 'http.started', requestId: req.id, method: req.method });
+  let completed = false;
+  const complete = (aborted: boolean) => {
+    if (completed) return;
+    completed = true;
+    const duration = Math.round((performance.now() - start) * 100) / 100;
 
-    logger.info('HTTP request', {
+    const failed = aborted || res.statusCode >= 400;
+    const level = failed && !res.locals.errorLogged ? 'error' : 'info';
+    logSafely(level, 'HTTP request', {
+      operation: aborted ? 'http.aborted' : 'http.completed',
       requestId: req.id,
       method: req.method,
-      path: req.originalUrl.startsWith('/api/auth/google') ? req.originalUrl.split('?')[0] : req.originalUrl,
+      route: req.route ? `${req.baseUrl}${req.route.path}` : 'unmatched',
       statusCode: res.statusCode,
-      duration: `${duration}ms`,
+      durationMs: duration,
+      code: failed ? res.locals.errorCode ?? `HTTP_${aborted ? 'ABORTED' : res.statusCode}` : undefined,
     });
-  });
+  };
+  res.once('finish', () => complete(false));
+  res.once('close', () => complete(!res.writableFinished));
 
-  next();
+  logContext.run({ requestId: req.id }, next);
 }

@@ -105,3 +105,10 @@
     display: block;
   }
 }
+
+.headerLockWrapper {
+  position: sticky;
+  top: 0;
+  z-index: $z-header;
+  width: 100%;
+}

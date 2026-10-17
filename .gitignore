@@ -19,6 +19,9 @@ out/
 .env.development.local
 .env.test.local
 .env.production.local
+# Any other local variant (e.g. .env.test-customer, .env.staging); only the .env.example templates are tracked.
+.env.*
+!.env.example
 
 # --- IDE ---
 .vscode/
@@ -83,3 +86,18 @@ venv/
 .tmp/
 scratch/
 apps/frontend/storybook-static/
+
+# curl cookie jars must never be committed
+cookies.txt
+
+# Isolated local payment development (disposable PostgreSQL, generated test credentials)
+apps/backend/.isolated/
+
+# Local backend cache (test and tooling artifacts, never committed)
+apps/backend/.cache/
+
+# Local agent settings, diagnostics and review patches (not tracked)
+.claude/
+apps/frontend/diag.txt
+docs/tasks/Phase-03/AUTH_REFRESH_LINEAGE_REVIEW.patch
+docs/tasks/Phase-03/CI_MIGRATION_SAFETY_REVIEW.patch

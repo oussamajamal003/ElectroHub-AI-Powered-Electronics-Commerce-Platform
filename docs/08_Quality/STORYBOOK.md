@@ -52,3 +52,7 @@ Run `npx playwright test -c playwright.cart-storybook.config.ts wishlist.stories
 ## Task 03.5 Checkout core
 
 `features/checkout/Checkout.stories.tsx` renders production Stepper, Shipping, Delivery, PaymentShell, Summary, Review/Conflict, Processing and Confirmation/loading/error states. No card fields or payment-success claims are fabricated. `tests/storybook/checkout.stories.spec.ts` runs WCAG A/AA axe and overflow checks at 390/768/1440/1920. Run it with the existing `playwright.cart-storybook.config.ts`; route-level Checkout tests use `playwright.checkout.config.ts`. Intercepted UI evidence is separate from the opt-in real authenticated DEV backend gate.
+
+## Task 03.6 production payment states
+
+Checkout stories now cover provider mount area, unpaid Review, Processing, pending/action-required/decline/cancellation/compensation/refund/incident recovery and provider-verified Paid Confirmation. The production PaymentRecovery and Confirmation components use safe deterministic fixtures; stories never submit to Stripe. Run the focused checkout.stories.spec.ts through playwright.cart-storybook.config.ts for four-width axe and overflow coverage. Actual hosted input and financial effects require the separate real Stripe/DEV gates.
