@@ -22,7 +22,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import app from '../src/app.js';
 import { prisma } from '../src/lib/prisma.js';
-import { otpService, OTP_CONFIG } from '../src/services/otp.service.js';
+import { otpService } from '../src/services/otp.service.js';
 import { emailService } from '../src/services/email.service.js';
 
 

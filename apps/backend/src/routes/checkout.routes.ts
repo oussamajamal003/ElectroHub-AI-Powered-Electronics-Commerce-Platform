@@ -5,9 +5,10 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { CheckoutService } from '../services/checkout.service.js';
 import { OrderService } from '../services/order.service.js';
+import { orderPaginationSchema } from '../validators/order.validator.js';
 
 const router = Router(); const checkout = new CheckoutService(); const orders = new OrderService();
-router.use(['/checkout', '/orders'], requireAuth, requireRole('CUSTOMER'));
+router.use(['/checkout', '/orders'], requireAuth, requireRole('CUSTOMER'), (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false,
   message: { error: { code: 'RATE_LIMITED', message: 'Too many checkout attempts. Please try again later.' } } });
 const handle = (error: unknown) => error instanceof z.ZodError
@@ -26,7 +27,7 @@ const handle = (error: unknown) => error instanceof z.ZodError
  * /orders:
  *   post:
  *     tags: [Checkout]
- *     summary: Atomically create an unpaid Order from the authenticated Cart
+ *     summary: Legacy unpaid creation disabled; use owned payment-attempt orchestration
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: header
@@ -59,10 +60,7 @@ const handle = (error: unknown) => error instanceof z.ZodError
  *               paymentMethod: { type: string, enum: [CARD] }
  *               expectedRevision: { type: string, pattern: '^[a-f0-9]{64}$' }
  *     responses:
- *       201: { description: Persisted unpaid Confirmation and committed empty Cart in data }
- *       200: { description: Compatible committed attempt replay with the current Cart }
- *       400: { description: Strict payload or attempt validation failure }
- *       409: { description: Cart, stock, price or idempotency conflict; no partial effects }
+ *       409: { description: PAYMENT_REQUIRED; no Order, stock or Cart effects }
  * /orders/{orderReference}/confirmation:
  *   get:
  *     tags: [Checkout]
@@ -74,7 +72,7 @@ const handle = (error: unknown) => error instanceof z.ZodError
  *         required: true
  *         schema: { type: string, description: ORD- followed by the Order UUID }
  *     responses:
- *       200: { description: Persisted unpaid Confirmation in data }
+ *       200: { description: Persisted owner-scoped Confirmation with explicit payment state; legacy unpaid Orders remain readable }
  *       404: { description: Order not found for this account }
  * /orders/attempts/{attemptId}/confirmation:
  *   get:
@@ -90,11 +88,18 @@ const handle = (error: unknown) => error instanceof z.ZodError
  *       200: { description: Previously committed Confirmation in data }
  *       404: { description: No committed attempt found for this account }
  */
+const buyNowQuery = z.object({ scope: z.literal('BUY_NOW'), productId: z.string().uuid(), quantity: z.coerce.number().int().min(1).max(999) }).strict();
 router.get('/checkout', async (req, res, next) => {
-  try { res.json({ data: await checkout.get(req.user!.userId) }); } catch (error) { next(handle(error)); }
+  try {
+    const buyNow = req.query.scope === undefined ? undefined : buyNowQuery.parse(req.query);
+    res.json({ data: await checkout.get(req.user!.userId, buyNow ? { productId: buyNow.productId, quantity: buyNow.quantity } : undefined) });
+  } catch (error) { next(handle(error)); }
+});
+router.get('/orders', async (req, res, next) => {
+  try { res.json(await orders.list(req.user!.userId, orderPaginationSchema.parse(req.query))); } catch (error) { next(handle(error)); }
 });
 router.post('/orders', limiter, async (req, res, next) => {
-  try { const data = await orders.create(req.user!.userId, req.get('Idempotency-Key') ?? '', req.body); res.status(data.replayed ? 200 : 201).json({ data }); }
+  try { await orders.create(req.user!.userId, req.get('Idempotency-Key') ?? '', req.body); }
   catch (error) { next(handle(error)); }
 });
 router.get('/orders/attempts/:attemptId/confirmation', async (req, res, next) => {

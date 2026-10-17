@@ -1,0 +1,18 @@
+@use '@/styles/abstracts' as *;
+
+// Sits in the card's action column, above the status badge, so it never covers the badge, price or Try Again.
+.trigger {
+  align-self: flex-end; flex: 0 0 auto;
+  // 44px: the minimum touch target; always visible (never hover-only).
+  display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem;
+  padding: 0; border: 1px solid transparent; border-radius: 0; background: transparent; color: $color-text-secondary; cursor: pointer;
+  transition: color $transition-fast, border-color $transition-fast, background-color $transition-fast;
+  &:hover { color: $color-error; border-color: $color-border; background: $color-surface; }
+  &:focus-visible { outline: none; @include focus-ring; }
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+}
+
+.dialog { display: grid; gap: $spacing-4; width: min(100% - #{$spacing-8}, 28rem); padding: $spacing-6; }
+.title { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; }
+.description { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: $spacing-3; }

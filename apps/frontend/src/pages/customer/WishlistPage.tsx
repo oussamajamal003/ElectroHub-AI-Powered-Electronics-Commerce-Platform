@@ -34,8 +34,8 @@ export function WishlistPageContent({ wishlist, onAddToCart, onNavigate }: {
   return <main className={styles.page} ref={root}>
     <nav className={styles.breadcrumb} aria-label="Breadcrumb"><Link to="/">Home</Link><ChevronRight size={16} aria-hidden="true" /><span aria-current="page">Wishlist</span></nav>
     <div className={styles.heading}><h1>Wishlist</h1>{displayedCount === undefined
-      ? <span role="status" aria-label="Wishlist count loading"><Skeleton width="4rem" height={16} /></span>
-      : <span role="status" aria-label={`${displayedCount} ${displayedCount === 1 ? 'item' : 'items'}`}>{displayedCount} {displayedCount === 1 ? 'item' : 'items'}</span>}</div>
+      ? wishlist.isError ? null : <span role="status" aria-label="Wishlist count loading"><Skeleton width="4rem" height={16} /></span>
+      : displayedCount > 0 && <span role="status" aria-label={`${displayedCount} ${displayedCount === 1 ? 'item' : 'items'}`}>{displayedCount} {displayedCount === 1 ? 'item' : 'items'}</span>}</div>
     {wishlist.error && <div className={styles.notice} role="alert">{wishlist.error}</div>}
     {wishlist.mergeError && <div className={styles.notice} role="alert"><p>{wishlist.mergeError}</p><Button onClick={() => void wishlist.retryMerge()}>Retry saved products</Button>
       <ul>{wishlist.unresolved.map(productId => <li key={productId}>Saved product unavailable <Button variant="ghost" onClick={() => wishlist.discardGuest(productId)}>Remove saved product</Button></li>)}</ul></div>}

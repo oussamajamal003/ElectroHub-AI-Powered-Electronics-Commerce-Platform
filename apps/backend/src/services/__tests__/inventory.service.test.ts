@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '@prisma/client';
 import { InventoryService, MAX_STOCK, deriveStockStatus, projectInventory, validateInventoryPurchase } from '../inventory.service.js';
 
 const database = vi.hoisted(() => ({ $queryRaw: vi.fn(), $transaction: vi.fn(), inventory: { update: vi.fn() }, product: { findUnique: vi.fn() } }));
@@ -53,6 +54,12 @@ describe('Inventory core', () => {
     await new InventoryService().setStock(productId, 0, database as unknown as Parameters<InventoryService['setStock']>[2]);
     expect(database.$transaction).not.toHaveBeenCalled();
     expect(database.inventory.update).toHaveBeenCalledWith({ where: { productId, quantity: 5, lowStockAt: 5 }, data: { quantity: 0, status: 'OUT_OF_STOCK' } });
+  });
+  it.each(['P2028', 'P2034'])('preserves transaction-aborting %s for the outer transaction coordinator', async code => {
+    const failure = new Prisma.PrismaClientKnownRequestError('Transaction outcome is not a stock conflict.', { code, clientVersion: 'test' });
+    database.inventory.update.mockRejectedValueOnce(failure);
+    await expect(new InventoryService().decreaseStock(productId, 1,
+      database as unknown as Parameters<InventoryService['decreaseStock']>[2])).rejects.toBe(failure);
   });
   it('validates current snapshots without exposing inactive Products as purchasable', async () => {
     const service = new InventoryService();

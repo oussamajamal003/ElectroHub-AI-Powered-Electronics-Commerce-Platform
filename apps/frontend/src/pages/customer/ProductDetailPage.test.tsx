@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -8,6 +8,7 @@ import { useAuth } from '@/features/auth/context/AuthContext';
 import { useCart } from '@/features/cart/context';
 import { useProduct, useMyReview, useReviewMutation, useReviews } from '@/features/products/queries';
 import { useSearchResults } from '@/features/search/queries';
+import { ApiError } from '@/lib/api';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: vi.fn() }));
 vi.mock('@/features/cart/context', () => ({ useCart: vi.fn() }));
@@ -23,7 +24,7 @@ const product = {
 };
 
 const testQueryClient = new QueryClient();
-const renderPage = () => render(<QueryClientProvider client={testQueryClient}><MemoryRouter initialEntries={['/products/test-tablet']}><Routes><Route path="/products/:slug" element={<ProductDetailPage />} /></Routes></MemoryRouter></QueryClientProvider>);
+const renderPage = () => render(<QueryClientProvider client={testQueryClient}><MemoryRouter initialEntries={['/products/test-tablet']}><Routes><Route path="/products/:slug" element={<ProductDetailPage />} /><Route path="/checkout" element={<h1>Checkout destination</h1>} /><Route path="/checkout/buy-now" element={<h1>Buy Now Checkout destination</h1>} /></Routes></MemoryRouter></QueryClientProvider>);
 
 describe('Product details loading and review auth state', () => {
   beforeEach(() => {
@@ -35,6 +36,38 @@ describe('Product details loading and review auth state', () => {
     vi.mocked(useMyReview).mockReturnValue({ isPending: true } as ReturnType<typeof useMyReview>);
     vi.mocked(useReviewMutation).mockReturnValue({ isPending: false, mutateAsync: vi.fn() } as unknown as ReturnType<typeof useReviewMutation>);
     vi.mocked(useSearchResults).mockReturnValue({ data: { data: [], meta: { page: 1, pageSize: 5, total: 0, totalPages: 0 } }, isPending: false, isError: false } as unknown as ReturnType<typeof useSearchResults>);
+  });
+
+  it('Buy Now does not mutate the persistent Cart and navigates to Buy Now checkout with selected quantity', async () => {
+    const addItem = vi.fn();
+    vi.mocked(useCart).mockReturnValue({ addItem, data: { items: [{ productId: 'other', quantity: 2 }] } } as unknown as ReturnType<typeof useCart>);
+    vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, purchasable: true, stockStatus: 'IN_STOCK' } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
+    renderPage(); await userEvent.click(screen.getByRole('button', { name: 'Increase quantity for Test Tablet' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Buy Now' }));
+    expect(addItem).not.toHaveBeenCalled();
+    expect(await screen.findByRole('heading', { name: 'Buy Now Checkout destination' })).toBeInTheDocument();
+  });
+  it('Add to Cart adds to persistent Cart without navigating away', async () => {
+    const addItem = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(useCart).mockReturnValue({ addItem } as unknown as ReturnType<typeof useCart>);
+    vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, purchasable: true, stockStatus: 'IN_STOCK' } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
+    renderPage(); await userEvent.click(screen.getByRole('button', { name: 'Add to Cart' }));
+    expect(addItem).toHaveBeenCalledWith('p-1', 1);
+    expect(screen.queryByRole('heading', { name: 'Buy Now Checkout destination' })).not.toBeInTheDocument();
+  });
+  it('keeps an addition pending once and restores the button after a stock rejection', async () => {
+    let reject!: (reason: Error) => void;
+    const addItem = vi.fn(() => new Promise<void>((_resolve, fail) => { reject = fail; }));
+    vi.mocked(useCart).mockReturnValue({ addItem } as unknown as ReturnType<typeof useCart>);
+    vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, purchasable: true, stockStatus: 'IN_STOCK' } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
+    renderPage();
+    const button = screen.getByRole('button', { name: 'Add to Cart' });
+    fireEvent.click(button); fireEvent.click(button);
+    expect(addItem).toHaveBeenCalledTimes(1);
+    expect(button).toBeDisabled();
+    await act(async () => reject(new ApiError(409, 'Only 1 item is available.', undefined, 'CART_STOCK_CONFLICT')));
+    expect(screen.getByRole('button', { name: 'Add to Cart' })).toBeEnabled();
+    expect(screen.getByText('Only 1 item is available.')).toBeInTheDocument();
   });
 
   it('renders a structural detail skeleton instead of plain text', () => {
@@ -74,12 +107,20 @@ describe('Product details loading and review auth state', () => {
     expect(screen.getByText('You already have the available stock in your cart.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add to Cart' })).toBeDisabled();
   });
-  it('keeps usable product content and controls after a background availability failure', () => {
+  it('does not reveal stale cached product content after a background availability failure', () => {
     vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, stockStatus: 'IN_STOCK' } }, isPending: false, isError: true } as unknown as ReturnType<typeof useProduct>);
     renderPage();
-    expect(screen.getByRole('heading', { name: 'Test Tablet' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Retry availability' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Product unavailable' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Test Tablet' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add to Cart' })).not.toBeInTheDocument();
     expect(screen.queryByRole('status', { name: 'Loading product details' })).not.toBeInTheDocument();
+  });
+  it('hides stale product details while the authoritative refresh is in flight', () => {
+    vi.mocked(useProduct).mockReturnValue({ data: { data: product }, isPending: false, isFetching: true, isError: false } as unknown as ReturnType<typeof useProduct>);
+    renderPage();
+    expect(screen.getByRole('status', { name: 'Loading product details' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Test Tablet' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Buy Now' })).not.toBeInTheDocument();
   });
   it.each([['IN_STOCK', 8, 'In Stock'], ['LOW_STOCK', 2, 'Low Stock'], ['OUT_OF_STOCK', 0, 'Out of Stock']] as const)('renders %s with authoritative quantity controls', (stockStatus, availableQuantity, label) => {
     vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, stockStatus, availableQuantity, purchasable: availableQuantity > 0, availability: availableQuantity > 0 ? 'AVAILABLE' : 'UNAVAILABLE' } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);

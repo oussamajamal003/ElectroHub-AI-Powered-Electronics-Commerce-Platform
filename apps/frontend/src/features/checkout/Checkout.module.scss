@@ -10,7 +10,7 @@
 .totalRow { display: flex; justify-content: space-between; gap: $spacing-4; color: $color-text-secondary; min-width: 0; > span:first-child { overflow-wrap: anywhere; } > :last-child { flex-shrink: 0; } }
 .grandTotal { padding-top: $spacing-5; border-top: 1px solid $color-border; color: $color-text-primary; font-size: $font-size-xl; }
 .free { color: $color-success-foreground; }
-.subtle { color: $color-text-secondary; font-size: $font-size-sm; display: flex; gap: $spacing-2; align-items: center; line-height: 1.6; margin: 0; }
+.subtle { color: $color-text-secondary; font-size: $font-size-sm; display: flex; gap: $spacing-2; align-items: center; line-height: 1.6; margin: 0; svg { flex-shrink: 0; } }
 .stepper { display: flex; align-items: center; list-style: none; padding: 0; margin: 0 0 $spacing-6; max-width: 48rem; width: 100%; }
 .stepItem { display: flex; align-items: center; flex: 1; min-width: 0; &:last-child { flex: 0 0 auto; } }
 .stepButton { background: none; border: none; display: inline-flex; align-items: center; gap: $spacing-2; padding: $spacing-1 0; color: $color-text-secondary; font: inherit; font-size: $font-size-sm; font-weight: $font-weight-medium; cursor: pointer; white-space: nowrap; &:disabled { cursor: default; opacity: 1; } &:not(:disabled):hover { color: $color-primary-dark; .stepLabel { text-decoration: underline; text-underline-offset: .2em; } } &:focus-visible { outline: 2px solid $color-primary; outline-offset: 4px; } @include respond-to(md) { font-size: $font-size-base; gap: $spacing-3; } }
@@ -21,26 +21,559 @@
 @media (max-width: 420px) { .stepButton { font-size: $font-size-xs; gap: $spacing-1; } .stepNumber { width: 1.75rem; height: 1.75rem; font-size: $font-size-xs; } .stepConnector { margin: 0 $spacing-1; min-width: 0.25rem; } }
 .formGrid { display: grid; gap: $spacing-5; @include respond-to(md) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .fullWidth { grid-column: 1 / -1; }
-.actions { display: flex; flex-wrap: wrap; gap: $spacing-4; margin-top: $spacing-8; align-items: center; > * { min-height: 3rem; } @media (max-width: 30rem) { flex-direction: column-reverse; align-items: stretch; > * { width: 100%; justify-content: center; } } }
-.primaryLink, .secondaryLink { display: inline-flex; align-items: center; justify-content: center; padding: $spacing-3 $spacing-6; min-height: 3rem; text-decoration: none; font-weight: 600; border: 1px solid $color-border; text-align: center; &:focus-visible { outline: 2px solid $color-primary; outline-offset: 4px; } }
+.actions { display: flex; flex-wrap: wrap; gap: $spacing-4; margin-top: $spacing-8; align-items: center; > * { min-height: 3rem; }
+  // One type scale for every step action: link-buttons (Back to Cart) and Buttons (Continue, Review, Place Order) match.
+  > button, > a { font-size: $font-size-sm; } @media (max-width: 30rem) { flex-direction: column-reverse; align-items: stretch; > * { width: 100%; justify-content: center; } } }
+.primaryLink, .secondaryLink { font-size: $font-size-sm; display: inline-flex; align-items: center; justify-content: center; padding: $spacing-3 $spacing-6; min-height: 3rem; text-decoration: none; font-weight: 600; border: 1px solid $color-border; text-align: center; &:focus-visible { outline: 2px solid $color-primary; outline-offset: 4px; } }
 .primaryLink { background: $color-primary; color: white; border-color: $color-primary; }
 .secondaryLink { color: $color-text-primary; }
 .deliveryOptions { display: grid; gap: $spacing-4; }
 .deliveryOption { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: $spacing-3; border: 1px solid $color-border; padding: $spacing-5; cursor: pointer; input { accent-color: $color-primary; width: 1.125rem; height: 1.125rem; } > span { display: grid; gap: $spacing-1; min-width: 0; } small { color: $color-text-secondary; } > strong { white-space: nowrap; } &:focus-within { outline: 2px solid $color-primary; outline-offset: 2px; } @media (max-width: 30rem) { padding: $spacing-4; grid-template-columns: auto minmax(0, 1fr) auto; > svg { display: none; } } }
 .selectedOption { border-color: $color-primary; background: rgba($color-primary, .04); }
 .paymentChoice { display: inline-flex; flex-wrap: wrap; align-items: center; gap: $spacing-3; padding: $spacing-4; color: $color-primary; border: 1px solid $color-primary; }
-.providerShell { border: 1px solid $color-border; padding: $spacing-6; margin-top: $spacing-6; text-align: center; color: $color-text-secondary; h3 { color: $color-text-primary; font-size: $font-size-lg; margin: $spacing-3 0; } p { margin: 0; line-height: 1.7; } }
+.providerShell { margin-top: $spacing-6; text-align: left; color: $color-text-secondary; h3 { color: $color-text-primary; font-size: $font-size-lg; margin: $spacing-3 0; } p { margin: 0; line-height: 1.7; } }
 .reviewCard { display: flex; align-items: start; justify-content: space-between; gap: $spacing-3; border: 1px solid $color-border; padding: $spacing-5; margin-top: $spacing-5; > div { min-width: 0; overflow-wrap: anywhere; } h3 { font-size: $font-size-base; margin: 0 0 $spacing-2; } p, address { margin: 0; font-style: normal; color: $color-text-secondary; line-height: 1.8; } small { color: $color-text-secondary; } }
 .editAction { color: $color-primary !important; font-weight: $font-weight-medium; cursor: pointer; padding: $spacing-1 $spacing-3; &:hover { color: $color-primary-dark !important; background-color: rgba($color-primary, .06) !important; } &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; } }
 .notice { border: 1px solid $color-border; padding: $spacing-5; margin-bottom: $spacing-6; line-height: 1.7; p { margin: 0 0 $spacing-3; } }
 .empty { min-height: 20rem; display: grid; justify-items: center; align-content: center; text-align: center; gap: $spacing-4; h2, p { margin: 0; } }
-.processing { min-height: 25rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: $spacing-5; padding: $spacing-8 $spacing-4; text-align: center; h1 { font-size: $font-size-2xl; margin: $spacing-4 0 0; } p { color: $color-text-secondary; margin: 0; } }
+.processingWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 16rem);
+  width: 100%;
+  padding: $spacing-8 $spacing-4;
+  box-sizing: border-box;
+}
+.recoveryWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 13.75rem);
+  width: 100%;
+  padding: $spacing-8 $spacing-4;
+  box-sizing: border-box;
+}
+
+.processing {
+  min-height: 25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-5;
+  padding: $spacing-8 $spacing-4;
+  text-align: center;
+  max-width: 44rem;
+  width: 100%;
+
+  h1 {
+    font-size: $font-size-2xl;
+    margin: $spacing-4 0 0;
+  }
+
+  p {
+    color: $color-text-secondary;
+    margin: 0;
+  }
+}
+
+.recoveryProgressFeedback {
+  width: 100%;
+  max-width: 18rem;
+  height: 0.25rem;
+  background: $color-border;
+  border-radius: $radius-full;
+  overflow: hidden;
+  position: relative;
+  margin-top: $spacing-2;
+}
+
+.recoveryProgressBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 40%;
+  background: $color-primary;
+  border-radius: $radius-full;
+  animation: recoveryProgressShimmer 1.8s ease-in-out infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    width: 100%;
+    opacity: 0.7;
+  }
+}
+
+@keyframes recoveryProgressShimmer {
+  0% {
+    left: -40%;
+    width: 30%;
+  }
+  50% {
+    left: 30%;
+    width: 50%;
+  }
+  100% {
+    left: 100%;
+    width: 30%;
+  }
+}
 .confirmation { max-width: 60rem; text-align: center; padding-top: $spacing-12; h1 { margin: $spacing-6 0 $spacing-3; } > .primaryLink { margin-top: $spacing-8; min-width: 16rem; } }
 .successIcon { width: 6rem; height: 6rem; margin-inline: auto; display: grid; place-items: center; color: $color-success-foreground; background: rgba($color-success-foreground, .07); border-radius: 50%; }
 .intro { color: $color-text-secondary; line-height: 1.7; margin: 0 auto $spacing-8; max-width: 40rem; }
 .confirmationCard { text-align: start; display: grid; gap: $spacing-5; }
-.orderHeading { display: flex; align-items: start; flex-wrap: wrap; justify-content: space-between; gap: $spacing-3; > div { min-width: 0; flex: 1; } h2 { color: $color-primary; font-size: $font-size-xl; overflow-wrap: anywhere; margin: $spacing-2 0 0; } }
+.orderHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $spacing-4;
+
+  @media (max-width: 30rem) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: $spacing-3;
+  }
+}
+
+.orderRefCol {
+  min-width: 0;
+  flex: 1;
+
+  h2 {
+    color: $color-primary;
+    font-size: $font-size-xl;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    margin: $spacing-2 0 0;
+  }
+}
+
+.orderBadges {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  flex-shrink: 0;
+  white-space: nowrap;
+
+  @media (max-width: 30rem) {
+    white-space: normal;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    width: 100%;
+  }
+}
 .eyebrow { text-transform: uppercase; color: $color-text-secondary; font-size: $font-size-sm; letter-spacing: .03em; }
 .orderStatus { padding: $spacing-2 $spacing-3; border: 1px solid $color-border; font-size: $font-size-sm; white-space: nowrap; }
 .orderDate { padding-top: $spacing-5; border-top: 1px solid $color-border; p { margin: $spacing-2 0; } address { font-style: normal; line-height: 1.7; overflow-wrap: anywhere; color: $color-text-secondary; } }
 .orderDateSection { border-bottom: 1px solid $color-border; padding-bottom: $spacing-5; margin-bottom: $spacing-2; }
+.paymentRecovery {
+  max-width: 35rem;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-inline: auto;
+
+  h1 {
+    font-size: clamp(2rem, 2.5vw, 2.25rem);
+    line-height: 1.2;
+    margin: $spacing-8 0 $spacing-2;
+  }
+
+  .notice {
+    width: 100%;
+    margin-block: $spacing-6;
+    box-sizing: border-box;
+  }
+  .failureNotice { width: 100%; box-sizing: border-box; }
+}
+.failureIntro {
+  max-width: 33rem;
+  margin: 0;
+  color: $color-text-secondary;
+  font-size: $font-size-lg;
+  line-height: 1.5;
+}
+.failureIcon { width: 5rem; height: 5rem; display: grid; place-items: center; margin-inline: auto; border-radius: 50%; color: $color-error-foreground; background: $color-error-background; }
+.savedPaymentIcon { width: 5rem; height: 5rem; display: grid; place-items: center; margin-inline: auto; border-radius: 50%; color: $color-primary; background: rgba($color-primary, .06); }
+.failureNotice {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr) 1.5rem;
+  align-items: start;
+  gap: $spacing-3;
+  border: 1px solid $color-error-border;
+  color: $color-error-foreground;
+  background: $color-error-background;
+  padding: $spacing-5;
+  font-size: $font-size-lg;
+  line-height: 1.5;
+  margin-block: $spacing-8 $spacing-6;
+  p { margin: 0; }
+}
+.failureCardIcon { margin-top: .15rem; }
+.failureCopy { display: grid; gap: $spacing-1; strong { font-weight: $font-weight-semibold; } }
+.failureCardBalance { width: 1.5rem; }
+.recoveryActions {
+  display: grid;
+  gap: $spacing-4;
+  width: 100%;
+  max-width: 35rem;
+  margin-inline: auto;
+
+  > button,
+  > a {
+    width: 100%;
+    min-height: 3.125rem;
+    justify-content: center;
+    font-size: $font-size-lg;
+  }
+}
+
+@keyframes paymentSkeletonPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+.paymentSkeleton {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+  width: 100%;
+  text-align: left;
+  animation: paymentSkeletonPulse 1.8s ease-in-out infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+.deliverySkeleton {
+  display: grid;
+  gap: $spacing-4;
+  width: 100%;
+}
+
+.deliveryOptionSkeleton {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: $spacing-3;
+  border: 1px solid $color-border;
+  padding: $spacing-5;
+  background: $color-background;
+  animation: paymentSkeletonPulse 1.8s ease-in-out infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+
+  @media (max-width: 30rem) {
+    padding: $spacing-4;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+
+    .skeletonTruck {
+      display: none;
+    }
+  }
+}
+
+.skeletonRadio {
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: $radius-full;
+  background: $color-border;
+}
+
+.skeletonTruck {
+  width: 1.375rem;
+  height: 1.375rem;
+  background: $color-border;
+}
+
+.skeletonDetails {
+  display: grid;
+  gap: $spacing-1;
+  min-width: 0;
+}
+
+.skeletonTitle {
+  max-width: 100%;
+  height: 1.125rem;
+  background: $color-border;
+}
+
+.skeletonEstimate {
+  max-width: 100%;
+  height: 0.875rem;
+  background: $color-surface;
+  border: 1px solid $color-border;
+}
+
+.skeletonPrice {
+  height: 1.125rem;
+  background: $color-border;
+}
+
+.skeletonTab {
+  width: 7.5rem;
+  height: 2.75rem;
+  background: $color-surface;
+  border: 1px solid $color-border;
+}
+
+.skeletonFields {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-3;
+}
+
+.skeletonGroup {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+}
+
+.skeletonLabel {
+  width: 30%;
+  height: 0.875rem;
+  background: $color-border;
+}
+
+.skeletonLabelHalf {
+  width: 48%;
+  height: 0.875rem;
+  background: $color-border;
+}
+
+.skeletonInput {
+  width: 100%;
+  height: 2.75rem;
+  background: $color-surface;
+  border: 1px solid $color-border;
+}
+
+.skeletonRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $spacing-3;
+}
+
+.inlineNotice {
+  border: 1px solid $color-border;
+  background: $color-surface;
+  padding: $spacing-3 $spacing-4;
+  margin-bottom: $spacing-6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-3;
+
+  p {
+    margin: 0;
+    color: $color-text-primary;
+    font-size: $font-size-sm;
+    line-height: $line-height-normal;
+  }
+}
+
+.inlineActions {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-2;
+  flex-wrap: wrap;
+
+  @media (max-width: 30rem) {
+    width: 100%;
+    > button {
+      width: 100%;
+    }
+  }
+}
+
+.providerError {
+  border: 1px solid $color-error-border;
+  background: $color-error-background;
+  color: $color-error-foreground;
+  padding: $spacing-4;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: $spacing-4;
+  text-align: left;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
+
+  p {
+    margin: 0;
+    font-size: $font-size-sm;
+    line-height: $line-height-normal;
+    color: $color-error-foreground;
+  }
+}
+
+.elementWrapper {
+  position: relative;
+  width: 100%;
+  iframe { display: block; }
+}
+
+.elementHidden {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.elementVisible {
+  opacity: 1;
+  transition: opacity 0.15s ease-in;
+}
+
+.elementSkeletonOverlay {
+  width: 100%;
+  background: $color-background;
+  z-index: 1;
+}
+
+.orderBadges {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-2;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  justify-content: flex-end;
+
+  @media (max-width: 30rem) {
+    justify-content: flex-start;
+    width: 100%;
+  }
+}
+
+.savedUpdates { max-width: 120rem; margin: $spacing-4 auto; padding-inline: $spacing-4; @include respond-to(md) { padding-inline: $spacing-8; } @include respond-to(lg) { padding-inline: $spacing-16; } }
+.pendingPurchase { border-bottom: 1px solid $color-border; padding-block: $spacing-4; &:last-child { border-bottom: 0; } h3 { font-size: $font-size-lg; } }
+
+.pendingPurchases { margin-bottom: $spacing-6;
+  h2 { font-size: $font-size-lg; margin: 0 0 $spacing-1; }
+}
+.purchaseRow { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid $color-border; }
+.purchaseItems { min-width: 0; }
+.purchaseItem { display: flex; align-items: center; gap: 12px;
+  img, .purchaseThumbnail { width: 56px; height: 56px; object-fit: contain; flex-shrink: 0; }
+  strong { overflow-wrap: anywhere; }
+  span { display: block; font-size: 14px; }
+}
+.purchaseDetails { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0;
+  time { font-size: 12px; }
+}
+.purchaseBadge { font-size: 12px; padding: 4px 8px; background: $color-surface; color: $color-primary; }
+.purchaseRow { flex-direction: column; @include respond-to(md) { flex-direction: row; } }
+.purchaseDetails { align-items: flex-start; @include respond-to(md) { align-items: flex-end; } }
+
+.purchaseExit { display: grid; grid-template-rows: 1fr; overflow: hidden; animation: purchase-resolution 450ms ease forwards;
+  > div { min-height: 0; overflow: hidden; }
+}
+@keyframes purchase-resolution { 0%, 35% { grid-template-rows: 1fr; opacity: 1; } 100% { grid-template-rows: 0fr; opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .purchaseExit { animation: none; } }
+.reconciliationProcessing {
+  flex-direction: column;
+  .processing { min-height: 18rem; }
+  .recoveryActions { display: flex; justify-content: center; flex-wrap: wrap; gap: $spacing-4; width: 100%; max-width: 32rem; }
+  .recoveryActions a { flex: 1; min-width: 10rem; }
+}
+.savedPurchaseHistory {
+  margin-bottom: $spacing-6;
+  h2 { margin: 0 0 $spacing-2; font-size: $font-size-lg; }
+  p { margin: 0 0 $spacing-3; font-size: $font-size-sm; color: $color-text-secondary; }
+  ul { margin: 0; padding: 0; list-style: none; display: grid; gap: $spacing-3; }
+}
+// Saved-purchase cards follow the Cart line rhythm (CartItem spacing and 80/100px media).
+.purchaseList { margin: 0; padding: 0; list-style: none; display: grid; gap: $spacing-3; }
+.purchaseSectionNote { margin: 0 0 $spacing-3; font-size: $font-size-sm; color: $color-text-secondary; }
+.purchaseCard { position: relative; display: flex; flex-wrap: wrap; gap: $spacing-4; padding: $spacing-4; border: 1px solid $color-border; background: $color-background;
+  border-inline-start: 3px solid $color-primary;
+  &[data-tone='failure'] { border-inline-start-color: $color-error; }
+  &[data-tone='success'] { border-inline-start-color: $color-success; }
+  @include respond-to(sm) { gap: $spacing-6; padding: $spacing-6; }
+}
+.purchaseCardItems { display: grid; gap: $spacing-4; flex: 1 1 18rem; min-width: 0; }
+.purchaseCardItem { display: flex; align-items: center; gap: $spacing-4; min-width: 0; @include respond-to(sm) { gap: $spacing-6; } }
+.purchaseCardImage { flex: 0 0 80px; width: 80px; height: 80px; background: $color-surface; @include respond-to(sm) { flex-basis: 100px; width: 100px; height: 100px; } }
+.purchaseCardCopy { display: grid; gap: $spacing-1; min-width: 0;
+  strong { font-size: $font-size-base; overflow-wrap: anywhere; }
+  span { font-size: $font-size-sm; color: $color-text-secondary; }
+}
+.purchaseCardMeta { display: flex; flex-direction: column; align-items: flex-start; gap: $spacing-2; flex: 1 1 14rem;
+  @include respond-to(md) { flex: 0 0 16rem; align-items: flex-end; text-align: right; }
+  // Wider desktop column: status copy fits in two lines instead of stretching the card.
+  @include respond-to(lg) { flex-basis: 21rem; }
+  p { margin: 0; font-size: $font-size-sm; color: $color-text-secondary; }
+  .primaryLink { margin-top: $spacing-2; width: 100%; @include respond-to(md) { width: auto; } }
+}
+.purchaseCardTotal { font-size: $font-size-lg; }
+// Subtle indeterminate progress, only while a payment is genuinely pending.
+.purchaseProgress { position: relative; display: block; width: 100%; max-width: 10rem; height: 3px; overflow: hidden; background: rgba($color-primary, .12);
+  > span { position: absolute; inset-block: 0; width: 40%; background: $color-primary; animation: purchase-progress 1.6s ease-in-out infinite; }
+}
+@keyframes purchase-progress { 0% { left: -40%; } 100% { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .purchaseProgress > span { animation: none; left: 0; width: 100%; opacity: .5; } }
+.visuallyHidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+// Stage 2 "Checking your payment": premium verification state, distinct from Stage 1 processing.
+.checking {
+  min-height: 25rem; width: 100%; max-width: 40rem; margin-inline: auto; padding: $spacing-10 $spacing-4;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: $spacing-4; text-align: center;
+  h1 { font-size: $font-size-2xl; margin: $spacing-4 0 0; }
+}
+.checkingVisual { position: relative; width: 6rem; height: 6rem; display: grid; place-items: center; }
+.checkingBadge {
+  position: relative; z-index: 1; width: 4.25rem; height: 4.25rem; border-radius: $radius-full; display: grid; place-items: center;
+  color: $color-primary; background: $color-background; border: 1px solid rgba($color-primary, 0.2); box-shadow: $shadow-md;
+  [data-state='unconfirmed'] & { color: $color-text-secondary; border-color: $color-border; box-shadow: $shadow-sm; }
+}
+.checkingPulse {
+  position: absolute; inset: 0; border-radius: $radius-full; background: rgba($color-primary, 0.12);
+  animation: checking-pulse 1.8s ease-out infinite;
+}
+.checkingArc {
+  position: absolute; inset: 0.375rem; border-radius: $radius-full; border: 2px solid transparent;
+  border-top-color: $color-primary; border-right-color: rgba($color-accent, 0.7);
+  animation: checking-spin 1.2s linear infinite;
+}
+@keyframes checking-pulse { 0% { transform: scale(0.82); opacity: 0.9; } 100% { transform: scale(1.18); opacity: 0; } }
+@keyframes checking-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .checkingPulse { animation: none; opacity: 0.5; transform: none; }
+  .checkingArc { animation: none; }
+}
+.checkingCopy { display: grid; gap: $spacing-2; p { margin: 0; color: $color-text-secondary; line-height: 1.6; } }
+.checkingNote { font-size: $font-size-sm; }
+.checkingHint {
+  display: inline-flex; align-items: center; gap: $spacing-2; margin: 0; padding: $spacing-2 $spacing-4;
+  border-radius: $radius-full; background: $color-surface; color: $color-text-secondary; font-size: $font-size-sm;
+  svg { color: $color-primary; flex: none; }
+}
+.checkingActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: $spacing-4; margin-top: $spacing-2; > button { min-height: 2.75rem; font-size: $font-size-sm; } }
+.checkingLink {
+  color: $color-primary; font-weight: 600; text-decoration: none;
+  &:hover { text-decoration: underline; }
+  &:focus-visible { outline: 2px solid $color-primary; outline-offset: 4px; }
+}
+
+// Saved-purchase retry: the purchase context comes before secure card entry on small screens.
+.retryLayout > .retrySummary { order: -1; @include respond-to(lg) { order: 0; } }
+.retrySummary { border-top: 3px solid $color-primary; padding-top: $spacing-4; }
+.retryLabel { display: inline-flex; align-items: center; gap: $spacing-2; margin: 0; font-size: $font-size-sm; font-weight: 600; color: $color-primary; }
+
+// Payment outcome notifications stay bottom-right from tablet up. On phones the checkout actions stack full-width at the
+// bottom of the screen, so the notice appears just below the sticky header instead of covering Review / Place Order.
+ol.paymentToasts { pointer-events: none; @media (max-width: 47.99rem) { top: max(3.75rem, env(safe-area-inset-top)); bottom: auto; width: 100%; padding: $spacing-3 $spacing-4; } }

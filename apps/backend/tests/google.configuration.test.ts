@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import app from '../src/app.js';
 import { env } from '../src/config/env.js';
+import { logger } from '../src/utils/logger.js';
 
 const original = { ...env };
-afterEach(() => Object.assign(env, original));
+afterEach(() => { Object.assign(env, original); vi.restoreAllMocks(); });
 
 describe('Google local callback configuration', () => {
   const configure = () => {
@@ -41,8 +42,10 @@ describe('Google local callback configuration', () => {
 
   it('requires a signed completion cookie rather than trusting a status query', async () => {
     configure();
+    const error = vi.spyOn(logger, 'error');
     const response = await request(app).get('/api/auth/google/complete?status=success').expect(200);
     expect(response.text).toContain('"status":"failure"');
+    expect(error).toHaveBeenCalledWith('Google completion failed', expect.objectContaining({ operation: 'auth.google.complete.failed' }));
   });
 
   it('binds cancellation completion to the signed transaction channel', async () => {

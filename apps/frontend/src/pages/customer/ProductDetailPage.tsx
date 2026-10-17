@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate, useParams, useNavigationType } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
@@ -24,6 +24,7 @@ import { queryKeys } from '@/lib/query';
 import type { ProductDetail, ProductResponse } from '@/features/products/types';
 import styles from './ProductDetailPage.module.scss';
 import { ProductPurchaseActions } from './ProductPurchaseActions';
+import { saveBuyNow } from '@/features/checkout/buyNow';
 
 function formatPrice(value: string) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value));
@@ -34,6 +35,7 @@ export function ProductDetailPage() {
   const wishlist = useWishlist();
   const [cartQuantity, setCartQuantity] = useState(1);
   const [cartPending, setCartPending] = useState(false);
+  const cartAction = useRef(false);
   const [cartFeedback, setCartFeedback] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
@@ -55,7 +57,9 @@ export function ProductDetailPage() {
   }, [slug, navigationType]);
   const { isAuthenticated, isInitializing } = useAuth();
   const productQuery = useProduct(slug);
-  const product = productQuery.data?.data;
+  // A stale cached detail may have become non-public (for example, a test fixture).
+  // Render only after a fresh server read so a denied product never flashes from cache.
+  const product = productQuery.isError || productQuery.isFetching ? undefined : productQuery.data?.data;
   useEffect(() => { setCartQuantity(1); setCartFeedback(''); }, [product?.id]);
   const currentCartQuantity = product ? cartData?.items.find(item => item.productId === product.id)?.quantity ?? 0 : 0;
   const remainingQuantity = product ? Math.max(0, Math.min(999, product.availableQuantity - currentCartQuantity)) : 0;
@@ -86,7 +90,7 @@ export function ProductDetailPage() {
       current?.data.id === productId ? { ...current, data: { ...current.data, ...summary } } : current);
   }, [product?.id, reviewQuery.data?.summary, queryClient, slug]);
 
-  if (productQuery.isPending) return <main className={styles.container} role="status" aria-label="Loading product details"><div aria-hidden="true"><Skeleton width="38%" height={20} /><div className={styles.productTop}><div><div className={styles.detailSkeletonGallery}><Skeleton width="100%" height="100%" /></div><div className={styles.detailSkeletonThumbnails}><Skeleton width={74} height={74} /><Skeleton width={74} height={74} /></div></div><div className={styles.detailSkeletonSummary}><Skeleton width="28%" height={18} /><Skeleton width="90%" height={42} /><Skeleton width="55%" height={20} /><Skeleton width="42%" height={36} /><Skeleton width="82%" height={80} /><Skeleton width="65%" height={20} /></div></div><div className={styles.detailSkeletonTabs}><Skeleton width="100%" height={50} /></div></div></main>;
+  if (productQuery.isPending || productQuery.isFetching) return <main className={styles.container} role="status" aria-label="Loading product details"><div aria-hidden="true"><Skeleton width="38%" height={20} /><div className={styles.productTop}><div><div className={styles.detailSkeletonGallery}><Skeleton width="100%" height="100%" /></div><div className={styles.detailSkeletonThumbnails}><Skeleton width={74} height={74} /><Skeleton width={74} height={74} /></div></div><div className={styles.detailSkeletonSummary}><Skeleton width="28%" height={18} /><Skeleton width="90%" height={42} /><Skeleton width="55%" height={20} /><Skeleton width="42%" height={36} /><Skeleton width="82%" height={80} /><Skeleton width="65%" height={20} /></div></div><div className={styles.detailSkeletonTabs}><Skeleton width="100%" height={50} /></div></div></main>;
   if (!product) return <main className={styles.container}><h1>Product unavailable</h1><p>This product could not be loaded.</p><Button type="button" onClick={() => void productQuery.refetch()}>Retry</Button></main>;
 
   const submitReview = async (event: React.FormEvent) => {
@@ -110,6 +114,24 @@ export function ProductDetailPage() {
     }
   };
   const related = recommendations.data?.data.filter(item => item.id !== product.id).slice(0, 4) ?? [];
+  const addToCart = async () => {
+    if (cartAction.current || !product.purchasable || remainingQuantity < cartQuantity) return;
+    cartAction.current = true;
+    setCartPending(true); setCartFeedback('');
+    try {
+      await addItem(product.id, cartQuantity);
+      setCartFeedback(`${product.name} added to cart.`);
+    } catch (error) {
+      setCartFeedback(error instanceof ApiError && error.code === 'CART_STOCK_CONFLICT' || error instanceof Error && /^Only \d+ items? (?:is|are) currently available\.$/.test(error.message)
+        ? error.message : 'Could not add this product. Check availability and try again.');
+    } finally { cartAction.current = false; setCartPending(false); }
+  };
+  // Buy Now purchases only this product/quantity through a server-owned BUY_NOW scope; the persistent Cart is never read or changed.
+  const buyNow = () => {
+    if (cartAction.current || !product.purchasable || product.availableQuantity < cartQuantity) return;
+    if (!saveBuyNow({ productId: product.id, quantity: cartQuantity })) { setCartFeedback('Buy Now needs browser session storage to be enabled.'); return; }
+    navigate('/checkout/buy-now');
+  };
 
   return <main className={styles.container}>
     {productQuery.isError && <div role="status"><p>Current availability could not be refreshed. The last confirmed product is still visible.</p><Button type="button" variant="ghost" onClick={() => void productQuery.refetch()}>Retry availability</Button></div>}
@@ -127,13 +149,7 @@ export function ProductDetailPage() {
         <ProductPurchaseActions product={product} quantity={cartQuantity} remainingQuantity={remainingQuantity} pending={cartPending} feedback={cartFeedback}
           onQuantityChange={setCartQuantity} wishlistError={wishlist?.error}
           wishlistAction={wishlist && <WishlistButton title={product.name} saved={wishlist.productIds.includes(product.id)} pending={wishlist.pending.includes(product.id)} onToggle={() => wishlist.toggle(product.id)} />}
-          onAdd={async () => {
-            setCartPending(true); setCartFeedback('');
-            try { await addItem(product.id, cartQuantity); setCartFeedback(`${product.name} added to cart.`); }
-            catch (error) { setCartFeedback(error instanceof ApiError && error.code === 'CART_STOCK_CONFLICT' || error instanceof Error && /^Only \d+ items? (?:is|are) currently available\.$/.test(error.message)
-              ? error.message : 'Could not add this product. Check availability and try again.'); }
-            finally { setCartPending(false); }
-          }} />
+          onAdd={() => addToCart()} onBuyNow={buyNow} />
         {product.description && <p className={styles.intro}>{product.description}</p>}
       </section>
     </div>

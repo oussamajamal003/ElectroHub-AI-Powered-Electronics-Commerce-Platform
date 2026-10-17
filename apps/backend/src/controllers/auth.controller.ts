@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../services/auth.service.js';
 import { ZodError } from 'zod';
 import { logger } from '../utils/logger.js';
+import { AppError } from '../middleware/errorHandler.js';
 import {
   registerSchema,
   loginSchema,
@@ -50,11 +51,25 @@ export function setRefreshCookie(res: Response, token: string) {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax', // Use 'none' if backend and frontend are on different domains in production
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    path: '/api/auth/refresh', // Restrict path to only the refresh endpoint for extra security
+    path: '/api/auth', // Path scoped to /api/auth so both refresh and logout receive the cookie
+  });
+  // Proactively clear legacy path cookie to prevent duplicate cookie ambiguity in browser
+  res.clearCookie(COOKIE_NAME, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/api/auth/refresh',
   });
 }
 
 export function clearRefreshCookie(res: Response) {
+  res.clearCookie(COOKIE_NAME, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/api/auth',
+  });
+  // Clear legacy path as well to prevent orphaned cookies on existing clients
   res.clearCookie(COOKIE_NAME, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -197,14 +212,16 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
   try {
     const rawRefreshToken = req.cookies[COOKIE_NAME];
     
-    if (!rawRefreshToken) {
+    if (!rawRefreshToken || typeof rawRefreshToken !== 'string' || !rawRefreshToken.trim()) {
       logger.warn('AUTH_REFRESH_FAILURE', { reason: 'Refresh token missing' });
       return res.status(401).json({ error: 'Refresh token missing' });
     }
 
     const result = await authService.refreshSession(rawRefreshToken);
     
-    setRefreshCookie(res, result.refreshToken);
+    if (result.refreshToken) {
+      setRefreshCookie(res, result.refreshToken);
+    }
 
     logger.info('AUTH_REFRESH_SUCCESS', { userId: result.userId });
 
@@ -213,10 +230,11 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
     });
   } catch (error) {
     if (
-      error instanceof Error &&
-      (error.message === 'Invalid or expired refresh token' ||
-        error.message === 'Invalid refresh token' ||
-        error.message === 'User inactive or not found')
+      (error instanceof AppError && error.statusCode === 401) ||
+      (error instanceof Error &&
+        (error.message === 'Invalid or expired refresh token' ||
+          error.message === 'Invalid refresh token' ||
+          error.message === 'User inactive or not found'))
     ) {
       clearRefreshCookie(res);
       logger.warn('AUTH_REFRESH_FAILURE', { reason: error.message });
@@ -233,7 +251,8 @@ export const logout = async (req: Request, res: Response) => {
       await authService.logout(rawRefreshToken);
     }
     logger.info('AUTH_LOGOUT_SUCCESS');
-  } catch {
+  } catch (error) {
+    logger.error('AUTH_LOGOUT_FAILURE', { operation: 'auth.logout.failed', error });
     // If logout fails for some reason, ignore it since we're clearing the cookie anyway
   } finally {
     clearRefreshCookie(res);

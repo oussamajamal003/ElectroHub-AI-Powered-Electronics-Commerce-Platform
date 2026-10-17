@@ -1,19 +1,43 @@
+import { PaymentNotifications } from '@/features/checkout/PaymentPurchases';
 import { Outlet } from 'react-router-dom';
 import { CustomerHeader } from '@/components/layout/CustomerHeader/CustomerHeader';
 import { Footer } from '@/components/layout/Footer';
 import { Link } from 'react-router-dom';
 import styles from './CustomerLayout.module.scss';
 import { CustomerScrollRestoration } from './CustomerScrollRestoration';
+import { usePaymentLock } from '@/features/checkout/PaymentLockContext';
 
 export function CustomerLayout() {
+  const { isLocked } = usePaymentLock();
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <CustomerScrollRestoration />
-      <CustomerHeader />
+      <div
+        data-testid="header-lock-wrapper"
+        className={styles.headerLockWrapper}
+        inert={isLocked ? true : undefined}
+        aria-disabled={isLocked ? true : undefined}
+        style={isLocked ? { pointerEvents: 'none', userSelect: 'none' } : undefined}
+        onClickCapture={isLocked ? e => { e.preventDefault(); e.stopPropagation(); } : undefined}
+        onKeyDownCapture={isLocked ? e => { e.preventDefault(); e.stopPropagation(); } : undefined}
+      >
+        <CustomerHeader />
+
+      </div>
       <main style={{ flex: 1 }}>
+        <PaymentNotifications />
         <Outlet />
       </main>
-            <Footer>
+      <div
+        data-testid="footer-lock-wrapper"
+        inert={isLocked ? true : undefined}
+        aria-disabled={isLocked ? true : undefined}
+        style={isLocked ? { pointerEvents: 'none', userSelect: 'none' } : undefined}
+        onClickCapture={isLocked ? e => { e.preventDefault(); e.stopPropagation(); } : undefined}
+        onKeyDownCapture={isLocked ? e => { e.preventDefault(); e.stopPropagation(); } : undefined}
+      >
+        <Footer>
         <div className={styles.footerContent}>
           <div className={styles.footerGrid}>
             <div className={styles.leftCol}>
@@ -62,6 +86,7 @@ export function CustomerLayout() {
           </div>
         </div>
       </Footer>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { Prisma } from '@prisma/client';
-import { CartService, resolveMergeQuantity } from '../cart.service.js';
+import { Prisma, type PrismaClient } from '@prisma/client';
+import { CartService, buyNowProjection, resolveMergeQuantity } from '../cart.service.js';
 
 const database = vi.hoisted(() => ({
   product: { findMany: vi.fn() },
@@ -10,20 +10,23 @@ const database = vi.hoisted(() => ({
   $queryRaw: vi.fn(),
   $transaction: vi.fn(),
 }));
+const cartLogger = vi.hoisted(() => ({ warn: vi.fn(), error: vi.fn() }));
 vi.mock('../../lib/prisma.js', () => ({ prisma: database }));
+vi.mock('../../utils/logger.js', () => ({ logger: cartLogger }));
 
 const productId = '8f2813b4-a388-44d3-b51e-5d4c40386677';
 const userId = '62a990ff-7909-4bbb-b42f-8f20b6d97af4';
 const product = (quantity = 5) => ({ id: productId, slug: 'phone', name: 'Phone', price: new Prisma.Decimal('19.99'),
-  status: 'ACTIVE', category: { name: 'Phones', isActive: true }, inventory: { quantity },
+  status: 'ACTIVE', isTestFixture: false, category: { name: 'Phones', isActive: true }, inventory: { quantity },
   images: [{ url: '/phone.jpg', altText: 'Phone' }] });
 
-function configureExistingCart(quantity: number, ownerId = userId) {
+// The Cart response is one read that nests each line's Product, so the stubbed row carries the Product the test configures.
+function configureExistingCart(quantity: number, ownerId = userId, row: ReturnType<typeof product> = product()) {
   let persistedQuantity = quantity;
   database.cart.findUnique.mockImplementation(async ({ where, select }: { where: { userId: string }; select?: { items?: unknown } }) => {
     if (where.userId !== ownerId) return null;
     return select?.items
-      ? { id: 'cart-1', items: [{ id: 'line-1', productId, quantity: persistedQuantity }] }
+      ? { id: 'cart-1', items: [{ id: 'line-1', productId, quantity: persistedQuantity, product: row }] }
       : { id: 'cart-1' };
   });
   database.cartItem.findUnique.mockImplementation(async ({ where }: { where: { cartId_productId: { cartId: string; productId: string } } }) => {
@@ -51,19 +54,56 @@ beforeEach(() => {
 });
 
 describe('CartService', () => {
+  it('routes Cart reads through the injected database client', async () => {
+    const isolated = { cart: { findUnique: vi.fn().mockResolvedValue(null) } } as unknown as PrismaClient;
+    const service = new CartService(isolated);
+    await expect(service.get(userId)).resolves.toMatchObject({ items: [], totalQuantity: 0, subtotal: '0.00' });
+    expect(isolated.cart.findUnique).toHaveBeenCalledTimes(1);
+    expect(database.cart.findUnique).not.toHaveBeenCalled();
+  });
+
   it('bounds retries for raw adapter serialization conflicts and returns the Cart conflict contract', async () => {
-    database.$transaction.mockRejectedValue(new Prisma.PrismaClientKnownRequestError('Transaction write conflict', {
+    database.cart.upsert.mockRejectedValue(new Prisma.PrismaClientKnownRequestError('Transaction write conflict', {
       code: 'P2010', clientVersion: '6.12.0', meta: { code: 'N/A', message: 'Transaction write conflict' },
     }));
     await expect(new CartService().add(userId, { productId, quantity: 1 })).rejects.toMatchObject({ statusCode: 409, code: 'CART_CONFLICT' });
     expect(database.$transaction).toHaveBeenCalledTimes(3); expect(database.inventory.update).not.toHaveBeenCalled();
+    expect(cartLogger.error).toHaveBeenNthCalledWith(1, 'Cart transaction failed.', expect.objectContaining({
+      event: 'cart.transaction.failed', operation: 'cart_add', stage: 'cart_upsert', prismaCode: 'P2010',
+      transactionOutcome: 'rolled_back', retryNumber: 1, retriesCompleted: 0, willRetry: true,
+    }));
+    expect(cartLogger.error).toHaveBeenNthCalledWith(3, 'Cart transaction failed.', expect.objectContaining({ retryNumber: 3, willRetry: false }));
+    expect(cartLogger.error.mock.calls.flat().join(' ')).not.toContain(userId);
+  });
+  it('does not retry an uncertain transaction outcome and records it without sensitive data', async () => {
+    database.cart.upsert.mockRejectedValue(new Prisma.PrismaClientKnownRequestError('Transaction API error', {
+      code: 'P2028', clientVersion: '6.12.0', meta: { operation: 'transaction' },
+    }));
+    await expect(new CartService().add(userId, { productId, quantity: 1 })).rejects.toMatchObject({ code: 'P2028' });
+    expect(database.$transaction).toHaveBeenCalledTimes(1);
+    expect(cartLogger.error).toHaveBeenCalledWith('Cart transaction failed.', expect.objectContaining({
+      event: 'cart.transaction.failed', operation: 'cart_add', stage: 'cart_upsert', prismaCode: 'P2028',
+      transactionOutcome: 'unknown', retryNumber: 1, retriesCompleted: 0, willRetry: false,
+    }));
+  });
+  it('keeps retrying a known-aborted unique conflict with sanitized diagnostics', async () => {
+    database.cart.upsert.mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+      code: 'P2002', clientVersion: '6.12.0', meta: { target: ['userId'] },
+    }));
+    await new CartService().add(userId, { productId, quantity: 1 });
+    expect(database.$transaction).toHaveBeenCalledTimes(2);
+    expect(cartLogger.error).toHaveBeenCalledWith('Cart transaction failed.', expect.objectContaining({
+      operation: 'cart_add', stage: 'cart_upsert', prismaCode: 'P2002', transactionOutcome: 'rolled_back',
+      retryNumber: 1, retriesCompleted: 0, willRetry: true,
+    }));
+    expect(cartLogger.error.mock.calls.flat().join(' ')).not.toContain(userId);
   });
   it('add, update and remove never change the current inventory snapshot', async () => {
     const snapshot = product(6);
     database.product.findMany.mockResolvedValue([snapshot]);
     const service = new CartService();
     await service.add(userId, { productId, quantity: 1 });
-    database.cart.findUnique.mockResolvedValue({ id: 'cart-1', items: [{ id: 'line-1', productId, quantity: 1 }] });
+    database.cart.findUnique.mockResolvedValue({ id: 'cart-1', items: [{ id: 'line-1', productId, quantity: 1, product: snapshot }] });
     database.cartItem.findUnique.mockResolvedValue({ id: 'line-1', quantity: 1 });
     await service.setQuantity(userId, productId, 2);
     await service.remove(userId, productId);
@@ -84,6 +124,15 @@ describe('CartService', () => {
     expect(database.product.findMany).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ totalQuantity: 3, subtotal: '59.97', total: '59.97', shipping: '0.00', canCheckout: true });
     expect(JSON.stringify(result)).not.toContain('email');
+  });
+  it('rejects a marked disposable fixture from customer add and Buy Now projections', async () => {
+    database.product.findMany.mockResolvedValue([]);
+    await expect(new CartService().add(userId, { productId, quantity: 1 })).rejects.toMatchObject({ statusCode: 404, code: 'PRODUCT_NOT_FOUND' });
+    expect(database.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: [productId] }, isTestFixture: false } }));
+    const projection = await new CartService().validateGuest([{ productId, quantity: 1 }]);
+    expect(projection.items[0]).toMatchObject({ product: null, availability: 'NOT_FOUND' });
+    const buyNow = await buyNowProjection(userId, { productId, quantity: 1 });
+    expect(buyNow.data.items[0]).toMatchObject({ product: null, availability: 'NOT_FOUND' });
   });
   it('keeps missing and out-of-stock lines visible but blocks checkout', async () => {
     database.product.findMany.mockResolvedValue([product(0)]);
@@ -119,7 +168,7 @@ describe('CartService', () => {
     { existing: 1, stock: 0, requested: 2, succeeds: false },
   ])('compares requested quantity $requested with persisted quantity $existing at stock $stock', async ({ existing, stock, requested, succeeds }) => {
     const inventoryProduct = product(stock);
-    const cart = configureExistingCart(existing);
+    const cart = configureExistingCart(existing, userId, inventoryProduct);
     database.product.findMany.mockResolvedValue([inventoryProduct]);
 
     if (succeeds) {
@@ -166,16 +215,16 @@ describe('CartService', () => {
     expect(database.cartItem.create).not.toHaveBeenCalled();
   });
   it('revalidates existing lines without silently changing or deleting them', async () => {
-    database.cart.findUnique.mockResolvedValue({ id: 'cart-1', items: [{ id: 'line-1', productId, quantity: 4 }] });
-    database.product.findMany.mockResolvedValue([product(2)]);
+    const line = (row: ReturnType<typeof product>) => ({ id: 'cart-1', items: [{ id: 'line-1', productId, quantity: 4, product: row }] });
+    database.cart.findUnique.mockResolvedValue(line(product(2)));
     const lowStock = await new CartService().get(userId);
     expect(lowStock.items).toMatchObject([{ quantity: 4, availableQuantity: 2, availability: 'LOW_STOCK' }]);
     expect(lowStock.canCheckout).toBe(false);
-    database.product.findMany.mockResolvedValue([product(0)]);
+    database.cart.findUnique.mockResolvedValue(line(product(0)));
     const outOfStock = await new CartService().get(userId);
     expect(outOfStock.items).toMatchObject([{ quantity: 4, availability: 'OUT_OF_STOCK' }]);
     expect(outOfStock.canCheckout).toBe(false);
-    database.product.findMany.mockResolvedValue([{ ...product(), status: 'INACTIVE' }]);
+    database.cart.findUnique.mockResolvedValue(line({ ...product(), status: 'INACTIVE' }));
     const unavailable = await new CartService().get(userId);
     expect(unavailable.items).toMatchObject([{ quantity: 4, availability: 'UNAVAILABLE' }]);
     expect(unavailable.canCheckout).toBe(false);
@@ -185,7 +234,7 @@ describe('CartService', () => {
   it('merges by maximum rather than adding again on retry', async () => {
     const existing = { id: 'line-1', productId, quantity: 2 };
     database.cartItem.findMany.mockResolvedValue([existing]);
-    database.cart.findUnique.mockResolvedValue({ id: 'cart-1', items: [existing] });
+    database.cart.findUnique.mockResolvedValue({ id: 'cart-1', items: [{ ...existing, product: product() }] });
     database.cartItem.update.mockImplementation(async ({ data }: { data: { quantity: number } }) => { existing.quantity = data.quantity; return existing; });
     const input = [{ productId, quantity: 3 }];
     await new CartService().reconcile(userId, input);

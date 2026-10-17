@@ -10,6 +10,14 @@ function json(status: number, body: unknown, headers?: Record<string, string>) {
 }
 
 describe('central API client', () => {
+  it('bypasses HTTP caches for private collections without disabling catalog caching', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => json(200, { data: {} }));
+    vi.stubGlobal('fetch', fetchMock);
+    for (const path of ['/api/cart', '/api/wishlist', '/api/auth/me']) await apiClient(path);
+    await apiClient('/api/products');
+    expect(fetchMock.mock.calls.slice(0, 3).every(call => call[1].cache === 'no-store')).toBe(true);
+    expect(fetchMock.mock.calls[3]?.[1]?.cache).toBeUndefined();
+  });
   it('preserves structured 4xx errors and request ID', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(429,
       { error: { code: 'RATE_LIMITED', message: 'Too many requests.' } }, { 'x-request-id': 'req-1' })));

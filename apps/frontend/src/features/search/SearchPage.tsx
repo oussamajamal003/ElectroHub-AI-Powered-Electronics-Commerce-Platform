@@ -35,6 +35,7 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
   const state = parsed.state;
   const active = !parsed.error && (catalog || activeSearch(state));
   const [draft, setDraft] = useState(state.q);
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const normalizedDraft = normalizeQuery(draft);
   const [tab, setTab] = useState('text');
   const [showFilters, setShowFilters] = useState(false);
@@ -51,21 +52,35 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
   const error = searchQuery.isError && active && tab === 'text';
   const metadataError = categoriesQuery.isError || brandsQuery.isError;
   const [formError, setFormError] = useState('');
-  useEffect(() => { setDraft(state.q); setFormError(''); }, [state]);
-  const commit = useCallback((next: SearchState, replace = false) => {
+  useEffect(() => {
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    draftTimer.current = null;
+    setDraft(state.q);
+    setFormError('');
+  }, [serialized, state.q]);
+  useEffect(() => () => { if (draftTimer.current) clearTimeout(draftTimer.current); }, []);
+  // smoothTop: page-number navigation glides to the top of the results instead of jumping (see CustomerScrollRestoration).
+  const commit = useCallback((next: SearchState, replace = false, smoothTop = false) => {
     try {
       const validated = parseSearch(searchParams(next));
-      setFormError(''); setParams(searchParams(validated), { replace }); return true;
+      setFormError(''); setParams(searchParams(validated), { replace, state: smoothTop ? { smoothTop: true } : undefined }); return true;
     } catch (failure) { setFormError(failure instanceof Error ? failure.message : 'Check your search values.'); return false; }
   }, [setParams]);
-  useEffect(() => {
-    if (parsed.error || tab !== 'text' || normalizedDraft === state.q) return;
-    const timer = setTimeout(() => commit({ ...state, q: normalizedDraft, page: 1 }, true), 275);
-    return () => clearTimeout(timer);
-  }, [normalizedDraft, state, parsed.error, tab, commit]);
+  const changeDraft = (value: string) => {
+    setDraft(value);
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    const query = normalizeQuery(value);
+    if (parsed.error || tab !== 'text' || query === state.q) { draftTimer.current = null; return; }
+    draftTimer.current = setTimeout(() => {
+      draftTimer.current = null;
+      commit({ ...state, q: query, page: 1 }, true);
+    }, 275);
+  };
   const update = (patch: Partial<SearchState>) => commit({ ...state, q: normalizedDraft, ...patch, page: 1 });
   const selectSuggestion = (suggestion: Suggestion) => {
-    if (suggestion.type === 'PRODUCT') { setDraft(suggestion.label); update({ q: suggestion.label }); }
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    draftTimer.current = null;
+    if (suggestion.type === 'PRODUCT') { setDraft(suggestion.label); commit({ ...state, q: normalizeQuery(suggestion.label), page: 1 }); }
     else commit({ ...state, [suggestion.type === 'BRAND' ? 'brand' : 'category']: suggestion.slug, page: 1 });
   };
   const filterChoices = (data: { name: string; slug: string }[], current?: string) => {
@@ -105,8 +120,8 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
         {!catalog && <TabsList className={styles.tabs} aria-label="Search method"><TabsTrigger value="text">Text Search</TabsTrigger><TabsTrigger value="image">Image Search</TabsTrigger></TabsList>}
         <TabsContent value="text">
           <div className={catalog ? styles.catalogToolbar : styles.searchToolbar}>
-            <form role="search" className={styles.searchForm + (catalog ? ' ' + styles.catalogSearch : '')} onSubmit={event => { event.preventDefault(); if (normalizedDraft !== state.q) commit({ ...state, q: normalizedDraft, page: 1 }, true); }}>
-              <SearchField value={draft} onChange={setDraft} onSelect={selectSuggestion} />
+            <form role="search" className={styles.searchForm + (catalog ? ' ' + styles.catalogSearch : '')} onSubmit={event => { event.preventDefault(); if (draftTimer.current) clearTimeout(draftTimer.current); draftTimer.current = null; if (normalizedDraft !== state.q) commit({ ...state, q: normalizedDraft, page: 1 }, true); }}>
+              <SearchField value={draft} onChange={changeDraft} onSelect={selectSuggestion} />
             </form>
             {catalog && <Button ref={filterButton} type="button" variant="outline" aria-expanded={showFilters} aria-controls="search-filters" onClick={openFilters}><SlidersHorizontal size={18} /> Filters{filterCount ? ` (${filterCount})` : ''}</Button>}
             <FilterSelect label="Sort by" value={state.sort ?? (state.q ? 'relevance' : 'newest')} selectSize={catalog ? 'medium' : 'large'} choices={[
@@ -137,7 +152,7 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
             {state.availability && <button type="button" onClick={() => removeFilter({ availability: undefined })} aria-label={`Remove availability filter ${state.availability}`}>{state.availability === 'available' ? 'Available' : 'Unavailable'} ×</button>}
             {priceText && <button type="button" onClick={() => removeFilter({ minPrice: undefined, maxPrice: undefined })} aria-label={`Remove price filter ${priceText}`}>{priceText} ×</button>}
           </div>}
-          <section aria-label="Search results" aria-busy={loading} className={styles.results}>
+          <section aria-label="Search results" aria-busy={loading || (active && tab === 'text' && searchQuery.isFetching) || undefined} className={styles.results}>
             <div role="status" aria-live="polite">{loading ? 'Searching products…' : results ? `${results.meta.total} ${results.meta.total === 1 ? 'result' : 'results'}${state.q ? ` for “${state.q}”` : ''}` : ''}</div>
             {loading && <div className={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`} aria-hidden="true">{Array.from({ length: getProductGridSkeletonCount(state.pageSize) }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
             {error && <div role="alert" className={styles.empty}><h2>Search unavailable</h2><p>Search is temporarily unavailable. Please try again.</p><Button type="button" onClick={() => void searchQuery.refetch()}>Retry search</Button></div>}
@@ -146,9 +161,9 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
               : <ProductCard key={product.id} {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} />)}</div>}
             {results && results.data.length === 0 && <div className={styles.empty}><h2>{state.q ? `No results for “${state.q}”` : 'No products found'}</h2><p>Try adjusting your search or filters.</p>{catalog && filterCount > 0 && <Button type="button" variant="link" onClick={() => commit(clearFilters({ ...state, q: normalizedDraft }))}>Reset filters</Button>}{state.q && <Button type="button" variant="link" onClick={() => { setDraft(''); update({ q: '' }); }}>Clear query</Button>}{state.page > 1 && <Button type="button" variant="link" onClick={() => commit({ ...state, page: 1 })}>First page</Button>}</div>}
             {totalPages > 1 && <Pagination aria-label="Search result pages"><PaginationContent>
-              <PaginationItem><PaginationPrevious disabled={state.page <= 1} onClick={() => commit({ ...state, page: state.page - 1 })} /></PaginationItem>
-              {pages.map(page => <PaginationItem key={page}><PaginationLink aria-label={`Go to page ${page}`} isActive={page === state.page} onClick={() => commit({ ...state, page })}>{page}</PaginationLink></PaginationItem>)}
-              <PaginationItem><PaginationNext disabled={state.page >= totalPages} onClick={() => commit({ ...state, page: state.page + 1 })} /></PaginationItem>
+              <PaginationItem><PaginationPrevious disabled={state.page <= 1} onClick={() => commit({ ...state, page: state.page - 1 }, false, true)} /></PaginationItem>
+              {pages.map(page => <PaginationItem key={page}><PaginationLink aria-label={`Go to page ${page}`} isActive={page === state.page} onClick={() => commit({ ...state, page }, false, true)}>{page}</PaginationLink></PaginationItem>)}
+              <PaginationItem><PaginationNext disabled={state.page >= totalPages} onClick={() => commit({ ...state, page: state.page + 1 }, false, true)} /></PaginationItem>
             </PaginationContent></Pagination>}
           </section>
         </TabsContent>

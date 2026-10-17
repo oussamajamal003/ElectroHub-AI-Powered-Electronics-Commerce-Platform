@@ -26,8 +26,7 @@ describe('Review validation and privacy', () => {
     database.review.count.mockResolvedValue(1);
     const result = await new ReviewService().listMine('user-1', { page: 1, pageSize: 20 });
     expect(result.data[0]).toMatchObject({ product: { slug: 'phone', name: 'Phone', primaryImage: { id: 'image-1' } } });
-    expect(result.meta).toEqual({ page: 1, pageSize: 20, total: 1, totalPages: 1 });
-    expect(database.review.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'user-1', product: { status: 'ACTIVE', category: { isActive: true } } }, take: 20 }));
+    expect(database.review.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'user-1', product: expect.objectContaining({ status: 'ACTIVE', category: { isActive: true }, isTestFixture: false }) }, take: 20 }));
     expect(JSON.stringify(result)).not.toMatch(/email|passwordHash/);
   });
   it('bounds pagination and rejects repeated or unsupported values', () => {

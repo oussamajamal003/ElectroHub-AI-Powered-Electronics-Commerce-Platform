@@ -1,0 +1,60 @@
+name: Disposable PostgreSQL
+description: >
+  Starts a throwaway PostgreSQL 17 container on loopback with a per-run random password and a per-run
+  self-signed CA, and exports DATABASE_URL, DIRECT_URL and DB_SSL_CA_CERT_PATH for later steps in the job.
+  The backend runtime always requires verified TLS, so the server is TLS-enabled. This action never reads a
+  repository or environment secret and can only ever point later steps at 127.0.0.1.
+
+runs:
+  using: composite
+  steps:
+    - name: Start disposable PostgreSQL (TLS, loopback only)
+      shell: bash
+      run: |
+        set -euo pipefail
+        dir="$RUNNER_TEMP/electrohub-ci-pg"
+        mkdir -p "$dir"
+        cd "$dir"
+
+        # Per-run CA and server certificate valid for localhost / 127.0.0.1 only.
+        openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=electrohub-ci-ca" -keyout ca.key -out ca.crt
+        openssl req -newkey rsa:2048 -nodes -subj "/CN=localhost" -keyout server.key -out server.csr
+        printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\n' > san.cnf
+        openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 1 -out server.crt -extfile san.cnf
+        sudo chown 999:999 server.key server.crt
+        chmod 600 server.key
+
+        password="$(openssl rand -hex 24)"
+        echo "::add-mask::$password"
+        port=55432
+
+        docker run -d --name electrohub-ci-pg \
+          -p "127.0.0.1:${port}:5432" \
+          -e POSTGRES_PASSWORD="$password" \
+          -e POSTGRES_DB=electrohub_ci \
+          -v "$dir:/certs:ro" \
+          postgres:17 \
+          -c ssl=on -c ssl_cert_file=/certs/server.crt -c ssl_key_file=/certs/server.key
+
+        for attempt in $(seq 1 60); do
+          if docker exec electrohub-ci-pg pg_isready -U postgres -d electrohub_ci -h 127.0.0.1 >/dev/null 2>&1; then
+            ready=1
+            break
+          fi
+          sleep 1
+        done
+        if [ "${ready:-0}" != "1" ]; then
+          echo "Disposable PostgreSQL did not become ready" >&2
+          docker logs electrohub-ci-pg | tail -n 20 >&2 || true
+          exit 1
+        fi
+
+        # sslmode=disable only affects the Prisma CLI over loopback; the application runtime ignores it and
+        # enforces verified TLS against ca.crt itself.
+        url="postgresql://postgres:${password}@localhost:${port}/electrohub_ci?sslmode=disable"
+        {
+          echo "DATABASE_URL=$url"
+          echo "DIRECT_URL=$url"
+          echo "DB_SSL_CA_CERT_PATH=$dir/ca.crt"
+          echo "ELECTROHUB_DISPOSABLE_DATABASE=1"
+        } >> "$GITHUB_ENV"

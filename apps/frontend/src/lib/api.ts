@@ -71,25 +71,38 @@ async function refreshSession(): Promise<string | null> {
   return refreshPromise;
 }
 
+export function isAbortError(error: unknown): boolean {
+  if (!error) return false;
+  if (typeof error === 'object') {
+    const err = error as { name?: string };
+    if (err.name === 'AbortError') return true;
+  }
+  return typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'AbortError';
+}
+
 export async function apiClient<T = unknown>(endpoint: string, options: FetchOptions = {}): Promise<T> {
   const url = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const { data, ...requestOptions } = options;
   const headers = new Headers(options.headers);
   if (data !== undefined && !(data instanceof FormData)) headers.set('Content-Type', 'application/json');
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
-  const config: RequestInit = { ...requestOptions, headers, credentials: 'include' };
+  const privateCollection = /^\/api\/(?:cart|wishlist|auth\/me)(?:\/|\?|$)/.test(url);
+  const config: RequestInit = { ...requestOptions, headers, credentials: 'include',
+    ...(privateCollection ? { cache: 'no-store' as const } : {}) };
   if (data !== undefined) config.body = data instanceof FormData ? data : JSON.stringify(data);
   let response: Response;
   try {
     response = await fetch(url, config);
     if (response.status === 401 && !/\/api\/auth\/(me|refresh|login|logout)(?:\?|$)/.test(url)) {
+      if (options.signal?.aborted) throw new DOMException('The user aborted a request.', 'AbortError');
       const token = await refreshSession();
-      if (!token || options.signal?.aborted) throw new ApiError(401, safeMessage(401));
+      if (options.signal?.aborted) throw new DOMException('The user aborted a request.', 'AbortError');
+      if (!token) throw new ApiError(401, safeMessage(401));
       headers.set('Authorization', `Bearer ${token}`);
       response = await fetch(url, config);
     }
   } catch (error) {
-    if (error instanceof ApiError || (error instanceof DOMException && error.name === 'AbortError')) throw error;
+    if (error instanceof ApiError || isAbortError(error)) throw error;
     throw new ApiError(0, 'Unable to connect. Please try again.');
   }
   return readResponse<T>(response);

@@ -6,6 +6,7 @@ import { otpService, OtpVerificationError, OTP_CONFIG } from './otp.service.js';
 import { emailService } from './email.service.js';
 import { OtpPurpose, SecurityEventType, User, Role } from '@prisma/client';
 import { logger } from '../utils/logger.js';
+import { AppError } from '../middleware/errorHandler.js';
 
 const normalizeEmail = (email: string) => email.toLowerCase().trim();
 
@@ -134,7 +135,12 @@ export class AuthService {
 
   private async createSession(user: User & { role: Role }) {
     const refreshToken = crypto.randomBytes(64).toString('hex');
-    await this.repository.createRefreshToken(user.id, crypto.createHash('sha256').update(refreshToken).digest('hex'), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    // Re-validates the account under the lifecycle lock: a password change, reset, deactivation or role change
+    // that committed after this user was read (and its credentials verified) must not yield a surviving session.
+    const issued = await this.repository.createSessionRefreshToken(user, crypto.createHash('sha256').update(refreshToken).digest('hex'), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    if (!issued) {
+      throw new Error('Invalid credentials');
+    }
     return {
       accessToken: generateAccessToken({ userId: user.id, role: user.role.name }),
       refreshToken,
@@ -152,23 +158,73 @@ export class AuthService {
   /**
    * Refresh the access token using a valid refresh token.
    * Employs rotation: revokes the old refresh token and creates a new one.
+   * Includes reuse detection and a concurrent grace window for race-condition resilience.
    */
   async refreshSession(rawRefreshToken: string) {
     const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
     
-    const storedToken = await this.repository.findValidRefreshToken(tokenHash);
+    const storedToken = await this.repository.findRefreshTokenByHash(tokenHash);
     if (!storedToken) {
-      throw new Error('Invalid or expired refresh token');
+      throw new AppError('Invalid or expired refresh token', 401, 'INVALID_REFRESH_TOKEN');
+    }
+
+    if (storedToken.expiresAt <= new Date()) {
+      throw new AppError('Invalid or expired refresh token', 401, 'EXPIRED_REFRESH_TOKEN');
+    }
+
+    // Check if token was already revoked
+    if (storedToken.isRevoked) {
+      const msSinceRevocation = Date.now() - storedToken.updatedAt.getTime();
+      const CONCURRENCY_GRACE_PERIOD_MS = 10_000; // 10s grace window for concurrent requests
+
+      if (msSinceRevocation <= CONCURRENCY_GRACE_PERIOD_MS) {
+        // Concurrency grace window: another request within the same client session just rotated this token.
+        // Confirm that the EXACT successor issued to replace this token in this session lineage is still active.
+        // This guarantees grace authorization is strictly tied to this session's rotation and prevents cross-device leakage.
+        const successorToken = await this.repository.findRotationSuccessor(tokenHash);
+        if (!successorToken) {
+          throw new AppError('Invalid or expired refresh token', 401, 'SESSION_REVOKED');
+        }
+
+        const user = await this.repository.findUserById(storedToken.userId);
+        if (!user || !user.isActive) {
+          throw new AppError('User inactive or not found', 401, 'USER_INACTIVE');
+        }
+
+        const roleName = user.role?.name ?? 'CUSTOMER';
+        const payload: JwtPayload = {
+          userId: user.id,
+          role: roleName,
+        };
+        const newAccessToken = generateAccessToken(payload);
+
+        return {
+          accessToken: newAccessToken,
+          refreshToken: null, // Keep existing new refresh cookie untouched
+          userId: user.id,
+        };
+      }
+
+      // Reused outside grace window: Token Theft / Replay Attack detected!
+      // Invalidate ALL refresh tokens for this user immediately under RFC 6819 reuse protection.
+      await this.repository.revokeAllUserRefreshTokens(storedToken.userId);
+      logger.warn('AUTH_REFRESH_TOKEN_REUSE_DETECTED', {
+        userId: storedToken.userId,
+        tokenId: storedToken.id,
+        msSinceRevocation,
+      });
+      throw new AppError('Invalid or expired refresh token', 401, 'REFRESH_TOKEN_REUSED');
     }
 
     const user = await this.repository.findUserById(storedToken.userId);
     if (!user || !user.isActive) {
-      throw new Error('User inactive or not found');
+      throw new AppError('User inactive or not found', 401, 'USER_INACTIVE');
     }
 
+    const roleName = user.role?.name ?? 'CUSTOMER';
     const payload: JwtPayload = {
       userId: user.id,
-      role: user.role.name,
+      role: roleName,
     };
     const newAccessToken = generateAccessToken(payload);
 
@@ -178,7 +234,18 @@ export class AuthService {
 
     const rotated = await this.repository.rotateRefreshToken(user.id, tokenHash, newTokenHash, expiresAt);
     if (!rotated) {
-      throw new Error('Invalid or expired refresh token');
+      // Rotation lost the atomic race to a concurrent request in this exact tick.
+      // Confirm that the winning concurrent request issued an active replacement for this token.
+      const successorToken = await this.repository.findRotationSuccessor(tokenHash);
+      if (!successorToken) {
+        throw new AppError('Invalid or expired refresh token', 401, 'SESSION_REVOKED');
+      }
+
+      return {
+        accessToken: newAccessToken,
+        refreshToken: null,
+        userId: user.id,
+      };
     }
 
     return {
@@ -189,11 +256,11 @@ export class AuthService {
   }
 
   /**
-   * Logout user by revoking their specific refresh token.
+   * Logout: revoke the presented token's whole session family (all rotated generations), leaving other devices' sessions untouched.
    */
   async logout(rawRefreshToken: string) {
     const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
-    await this.repository.revokeRefreshToken(tokenHash);
+    await this.repository.revokeRefreshTokenFamily(tokenHash);
   }
 
   /**
@@ -229,7 +296,7 @@ export class AuthService {
         try {
           await otpService.resendChallenge(challengeId);
     } catch {
-      logger.warn('Password reset resend was not completed', { userId: user.id, reason: 'resend_not_completed' });
+      logger.error('Password reset resend was not completed', { userId: user.id, reason: 'resend_not_completed' });
         }
       }
     }

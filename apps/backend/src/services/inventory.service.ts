@@ -5,6 +5,7 @@ import { AppError } from '../middleware/errorHandler.js';
 
 export const MAX_STOCK = 2147483647;
 export interface InventoryInput { quantity: number; lowStockAt?: number }
+export interface LockedInventorySnapshot extends InventoryInput { productId: string }
 
 function validInteger(value: number, minimum = 0) {
   return Number.isInteger(value) && value >= minimum && value <= MAX_STOCK;
@@ -55,28 +56,35 @@ export class InventoryService {
 
   setStock(productId: string, quantity: number, client?: Prisma.TransactionClient) { return this.change(productId, quantity, 'set', client); }
   increaseStock(productId: string, quantity: number, client?: Prisma.TransactionClient) { return this.change(productId, quantity, 'increase', client); }
-  decreaseStock(productId: string, quantity: number, client?: Prisma.TransactionClient) { return this.change(productId, quantity, 'decrease', client); }
+  decreaseStock(productId: string, quantity: number, client?: Prisma.TransactionClient, lockedInventory?: LockedInventorySnapshot) {
+    return this.change(productId, quantity, 'decrease', client, lockedInventory);
+  }
 
   private validateId(productId: string) {
     if (!z.string().uuid().safeParse(productId).success) throw new AppError('Invalid product ID.', 400, 'INVALID_PRODUCT_ID');
   }
 
-  private async change(productId: string, amount: number, operation: 'set' | 'increase' | 'decrease', client?: Prisma.TransactionClient) {
+  private async change(productId: string, amount: number, operation: 'set' | 'increase' | 'decrease', client?: Prisma.TransactionClient, lockedInventory?: LockedInventorySnapshot) {
     this.validateId(productId);
     if (!validInteger(amount, operation === 'set' ? 0 : 1)) throw new AppError('Invalid quantity.', 400, 'INVALID_QUANTITY');
+    if (lockedInventory && (!client || operation !== 'decrease' || lockedInventory.productId !== productId)) {
+      throw new Error('A matching Inventory snapshot requires a transactional decrement.');
+    }
     const execute = async (transaction: Prisma.TransactionClient) => {
-      const rows = await transaction.$queryRaw<{ quantity: number; lowStockAt: number }[]>(Prisma.sql`
+      const rows = lockedInventory ? [lockedInventory] : await transaction.$queryRaw<{ quantity: number; lowStockAt: number }[]>(Prisma.sql`
         SELECT "quantity", "lowStockAt" FROM "inventory" WHERE "productId" = ${productId}::uuid FOR UPDATE`);
       const inventory = rows[0];
       if (!inventory) throw new AppError('Inventory is unavailable.', 409, 'INVENTORY_NOT_FOUND');
-      deriveStockStatus(inventory.quantity, inventory.lowStockAt);
+      const lowStockAt = inventory.lowStockAt ?? 5;
+      deriveStockStatus(inventory.quantity, lowStockAt);
       const quantity = operation === 'set' ? amount : operation === 'increase' ? inventory.quantity + amount : inventory.quantity - amount;
       if (!validInteger(quantity)) throw new AppError('Stock adjustment exceeds available inventory limits.', 409, 'INVENTORY_CONFLICT');
-      return transaction.inventory.update({ where: { productId, quantity: inventory.quantity, lowStockAt: inventory.lowStockAt }, data: { quantity, status: deriveStockStatus(quantity, inventory.lowStockAt) } });
+      return transaction.inventory.update({ where: { productId, quantity: inventory.quantity, lowStockAt }, data: { quantity, status: deriveStockStatus(quantity, lowStockAt) } });
     };
     try { return await (client ? execute(client) : prisma.$transaction(execute)); }
     catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && ['P2025', 'P2028', 'P2034'].includes(error.code)) {
+        if (client && ['P2028', 'P2034'].includes(error.code)) throw error;
         throw new AppError('Inventory changed. Please retry the adjustment.', 409, 'INVENTORY_CONFLICT');
       }
       throw error;

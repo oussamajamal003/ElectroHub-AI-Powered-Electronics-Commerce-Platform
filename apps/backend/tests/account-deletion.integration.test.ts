@@ -50,7 +50,7 @@ beforeAll(async () => {
   await prisma.emailDelivery.create({ data: { userId, type: 'SECURITY_ALERT', recipient: originalEmail, failureReason: 'private provider diagnostic' } });
   const category = await prisma.category.create({ data: { name: `Delete ${marker.slice(0, 8)}`, slug: `delete-${marker}`, description: 'Disposable account deletion test category' } });
   categoryId = category.id;
-  const product = await prisma.product.create({ data: { categoryId, sku: `DELETE-${marker}`, name: 'Deletion test item', slug: `deletion-test-${marker}`, price: '12.00' } });
+  const product = await prisma.product.create({ data: { categoryId, sku: `DELETE-${marker}`, name: 'Deletion test item', slug: `deletion-test-${marker}`, price: '12.00', isTestFixture: true } });
   productId = product.id;
   const now = new Date();
   const orderFields = {

@@ -1,7 +1,27 @@
-name: Verify Prisma Migration on Linux
+name: Verify Prisma Migrations on Linux
+
+# Replays the whole migration history on a brand-new disposable PostgreSQL 17 (Linux, LF checkout). It uses
+# no shared-database credentials and cannot reach DEV or PROD, so it is safe on pull requests and for manual
+# runs. It does NOT replace the approval-gated dev-migration.yml, which is the only workflow that may touch
+# a shared database.
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'apps/backend/prisma/**'
+      - '.github/workflows/verify-migration.yml'
+      - '.github/actions/disposable-postgres/**'
+
+concurrency:
+  group: verify-migration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   verify-migration:
@@ -18,10 +38,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Prisma Migrate Deploy
-        env:
-          DATABASE_URL: ${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}
+      - name: Start disposable PostgreSQL
+        uses: ./.github/actions/disposable-postgres
+
+      - name: Assert the database target is the disposable instance
+        run: |
+          node -e "
+          const urls = [process.env.DATABASE_URL, process.env.DIRECT_URL];
+          const ok = process.env.ELECTROHUB_DISPOSABLE_DATABASE === '1' && urls.every((value) => {
+            try { const u = new URL(value); return ['localhost', '127.0.0.1'].includes(u.hostname) && u.port === '55432'; } catch { return false; }
+          });
+          if (!ok) { console.error('Refusing to continue: database target is not the disposable loopback instance.'); process.exit(1); }
+          console.log('Database target: disposable loopback PostgreSQL.');
+          "
+
+      - name: Run Prisma Migrate Deploy (disposable database)
         run: |
           cd apps/backend
           npx prisma migrate deploy
+
+      - name: Prisma Migrate Status (disposable database)
+        run: |
+          cd apps/backend
+          npx prisma migrate status

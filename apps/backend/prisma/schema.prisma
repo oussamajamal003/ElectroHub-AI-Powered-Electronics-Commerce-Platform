@@ -4,7 +4,10 @@
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
+  // relationJoins makes relationLoadStrategy "join" the default (one SQL round trip per
+  // relation read). Rollback: remove "relationJoins", run `prisma generate`, and drop any
+  // explicit relationLoadStrategy arguments (they require this preview feature to typecheck).
+  previewFeatures = ["driverAdapters", "relationJoins"]
 }
 
 datasource db {
@@ -32,6 +35,7 @@ enum InventoryStatus {
 }
 
 enum OrderStatus {
+  AWAITING_CAPTURE
   CONFIRMED
   PREPARING
   OUT_FOR_DELIVERY
@@ -111,6 +115,7 @@ model User {
   securityEvents      SecurityEvent[]
   oauthAccounts       OAuthAccount[]
   reviews             Review[]
+  paymentAttempts     PaymentAttempt[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -195,6 +200,8 @@ model Product {
   price       Decimal       @db.Decimal(12, 2)
   compareAtPrice Decimal?    @db.Decimal(12, 2)
   status      ProductStatus @default(ACTIVE)
+  isTestFixture Boolean      @default(false)
+  storefrontVisible Boolean  @default(true)
 
   category   Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   brand      Brand?         @relation(fields: [brandId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -204,6 +211,7 @@ model Product {
   cartItems  CartItem[]
   wishItems  WishlistItem[]
   orderItems OrderItem[]
+  paymentAttemptItems PaymentAttemptItem[]
   reviews    Review[]
 
   createdAt DateTime @default(now())
@@ -304,6 +312,7 @@ model Cart {
 
   user  User       @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   items CartItem[]
+  paymentAttempts PaymentAttempt[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -387,6 +396,7 @@ model Order {
   items    OrderItem[]
   payment  Payment?
   delivery Delivery?
+  paymentAttempt PaymentAttempt?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -432,8 +442,11 @@ model Payment {
   currency          String          @default("USD") @db.VarChar(3)
   paidAt            DateTime?
   failureReason     String?
+  cardBrand         String? @db.VarChar(32)
+  cardLast4         String? @db.VarChar(4)
+  refundedAt        DateTime?
 
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -441,6 +454,131 @@ model Payment {
   @@index([status])
   @@index([provider, status])
   @@map("payments")
+}
+
+enum PaymentAttemptState {
+  PREPARING
+  AWAITING_INPUT
+  ACTION_REQUIRED
+  DECLINED
+  PROCESSING
+  AUTHORIZED
+  CAPTURE_PENDING
+  PAID
+  CANCEL_PENDING
+  CANCELED
+  COMPENSATION_PENDING
+  COMPENSATED
+  REFUND_PENDING
+  REFUNDED
+  INCIDENT
+}
+
+enum PaymentWorkState {
+  READY
+  LEASED
+  DONE
+  INCIDENT
+}
+
+model PaymentAttempt {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  cartId String? @db.Uuid
+  cartIdentity String @db.Uuid
+  // Nullable unique claim prevents two active purchase attempts for one Cart.
+  activeCartId String? @unique @db.Uuid
+  idempotencyKey String @db.Uuid
+  requestHash String @db.VarChar(64)
+  revision String @db.VarChar(64)
+  request Json
+  subtotal Decimal @db.Decimal(12, 2)
+  shippingCost Decimal @db.Decimal(12, 2)
+  total Decimal @db.Decimal(12, 2)
+  amountCents Int
+  currency String @default("USD") @db.VarChar(3)
+  stripeAccountId String @db.VarChar(255)
+  providerIntentId String? @unique @db.VarChar(255)
+  providerStatus String? @db.VarChar(64)
+  state PaymentAttemptState @default(PREPARING)
+  cancelRequested Boolean @default(false)
+  failureCode String? @db.VarChar(64)
+  authorizationExpiresAt DateTime?
+  expiresAt DateTime
+  orderId String? @unique @db.Uuid
+  refundId String? @unique @db.VarChar(255)
+  refundAmountCents Int?
+  compensatedAt DateTime?
+  // Only IDs/quantities not merged back into Cart; never a second Product store.
+  recoveryRemainder Json?
+  // Durable submission transfers exact cart lines to this immutable purchase.
+  submittedAt DateTime?
+  confirmationStartedAt DateTime?
+  restoredAt DateTime?
+  notificationReadState String? @db.VarChar(32)
+  // Customer-only hide for a failed card. Financial and audit records are never deleted or changed by this flag.
+  dismissedAt DateTime?
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  cart Cart? @relation(fields: [cartId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  order Order? @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  items PaymentAttemptItem[]
+  work PaymentWork?
+  events StripeEvent[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@index([cartId])
+  @@index([state, expiresAt])
+  @@map("payment_attempts")
+}
+
+model PaymentAttemptItem {
+  sourceCartItemId String? @unique @db.Uuid
+  snapshotCartItemId String? @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
+  attemptId String @db.Uuid
+  productId String @db.Uuid
+  productName String @db.VarChar(255)
+  sku String @db.VarChar(100)
+  imageUrl String? @db.VarChar(2048)
+  quantity Int
+  unitPrice Decimal @db.Decimal(12, 2)
+  lineTotal Decimal @db.Decimal(12, 2)
+  attempt PaymentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  @@unique([attemptId, productId])
+  @@index([productId])
+  @@map("payment_attempt_items")
+}
+
+model PaymentWork {
+  id String @id @default(uuid()) @db.Uuid
+  attemptId String @unique @db.Uuid
+  state PaymentWorkState @default(READY)
+  nextRunAt DateTime @default(now())
+  retryCount Int @default(0)
+  leaseToken String? @db.Uuid
+  leaseUntil DateTime?
+  lastError String? @db.VarChar(64)
+  attempt PaymentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([state, nextRunAt])
+  @@index([state, leaseUntil])
+  @@map("payment_work")
+}
+
+model StripeEvent {
+  id String @id @db.VarChar(255)
+  type String @db.VarChar(100)
+  providerIntentId String? @db.VarChar(255)
+  attemptId String? @db.Uuid
+  disposition String @db.VarChar(32)
+  attempt PaymentAttempt? @relation(fields: [attemptId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt DateTime @default(now())
+  @@index([attemptId])
+  @@map("stripe_events")
 }
 
 model Delivery {
@@ -468,6 +606,12 @@ model RefreshToken {
   tokenHash String   @unique @db.VarChar(255)
   expiresAt DateTime
   isRevoked Boolean  @default(false)
+  // Session family: every generation of one login shares this value. The application always sets it
+  // explicitly (new family on login, inherited on rotation). There is deliberately NO database default:
+  // an old-version instance that omits it fails its INSERT instead of silently minting a disconnected family.
+  familyId  String   @db.Uuid
+  // Durable successor pointer, written in the same transaction that revokes this token.
+  replacedByTokenHash String? @unique @db.VarChar(255)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
@@ -476,6 +620,7 @@ model RefreshToken {
 
   @@index([userId])
   @@index([tokenHash])
+  @@index([familyId])
   @@map("refresh_tokens")
 }
 

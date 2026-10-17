@@ -62,7 +62,12 @@ const mapBase = (product: BaseProduct) => ({
     ? product.compareAtPrice.minus(product.price).div(product.compareAtPrice).mul(100)
       .toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP).toNumber() : null,
 });
-const publicWhere = { status: ProductStatus.ACTIVE, category: { isActive: true } };
+const publicWhere = {
+  status: ProductStatus.ACTIVE,
+  isTestFixture: false,
+  storefrontVisible: true,
+  category: { isActive: true },
+};
 export const publicProductWhere = publicWhere;
 export function mapProductSummary(product: Prisma.ProductGetPayload<{ select: typeof productSummarySelect }>, aggregate: ReviewAggregate = emptyReviewAggregate) {
   return { ...mapBase(product), ...aggregate, description: product.description?.slice(0, 160) ?? null,

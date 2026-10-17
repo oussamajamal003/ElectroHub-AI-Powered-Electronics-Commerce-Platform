@@ -1,3 +1,4 @@
+import { resolvePaymentIsolation } from '../src/payment-isolation.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import rawData from './data/products.json';
@@ -153,6 +154,9 @@ export function assertDevSeedTarget(configuration: NodeJS.ProcessEnv) {
   if (!['development', 'test'].includes(configuration.NODE_ENV ?? '')) {
     throw new Error('Product seed requires an explicit development or test environment.');
   }
+  // A verified disposable database (every URL loopback AND named electrohub_disposable*/electrohub_ci*, the same rule as the payment
+  // isolation boundary) is also an approved seed target, so isolated payment development never needs shared DEV credentials.
+  if (resolvePaymentIsolation({ ...configuration, NODE_ENV: 'development', npm_lifecycle_event: undefined }).target === 'disposable') return;
   const devProject = 'pzxekjybdiulzmssalfo';
   for (const key of ['DATABASE_URL', 'DIRECT_URL']) {
     const value = configuration[key];

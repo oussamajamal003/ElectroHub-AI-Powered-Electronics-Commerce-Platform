@@ -3,12 +3,13 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createQueryClient } from '@/lib/query';
 import { queryKeys } from '@/lib/query';
-import { apiClient } from '@/lib/api';
+import { ApiError, apiClient } from '@/lib/api';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { CartProvider } from './CartProvider';
 import { useCart } from './context';
 import { CART_STORAGE_KEY } from './storage';
 import { cart as checkoutCart } from '@/features/checkout/fixtures';
+import { StrictMode } from 'react';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: vi.fn() }));
 vi.mock('@/lib/api', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/api')>(), apiClient: vi.fn() }));
@@ -24,6 +25,68 @@ beforeEach(() => {
 });
 
 describe('CartProvider checkout commit boundary', () => {
+  it.each([0, 30_001])('reuses a just-confirmed mutation on Cart entry only within its freshness window (%ims)', async age => {
+    const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4', role: 'CUSTOMER' };
+    vi.mocked(useAuth).mockReturnValue({ isSessionVerified: true, isAuthenticated: true, user } as ReturnType<typeof useAuth>);
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    try {
+      vi.mocked(apiClient).mockResolvedValue({ data: checkoutCart } as never);
+      const client = createQueryClient();
+      client.setQueryData(queryKeys.cart.current(user.id), { data: checkoutCart });
+      const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}><CartProvider>{children}</CartProvider></QueryClientProvider>;
+      const { result } = renderHook(() => useCart(), { wrapper });
+      await act(async () => { await result.current.addItem(productId); });
+      clock.mockReturnValue(1_000_000 + age);
+      await act(async () => { await result.current.validateRoute(); });
+      expect(vi.mocked(apiClient).mock.calls.filter(([, options]) => options?.method !== 'POST')).toHaveLength(age ? 1 : 0);
+      // Consuming the fresh snapshot cannot exempt a later route entry.
+      await act(async () => { await result.current.validateRoute(); });
+      expect(vi.mocked(apiClient).mock.calls.filter(([, options]) => options?.method !== 'POST')).toHaveLength(age ? 2 : 1);
+    } finally { clock.mockRestore(); }
+  });
+  it('shares one owned startup read through development StrictMode remounts', async () => {
+    const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4', role: 'CUSTOMER' };
+    vi.mocked(useAuth).mockReturnValue({ isSessionVerified: true, isAuthenticated: true, user } as ReturnType<typeof useAuth>);
+    let finish!: (value: unknown) => void;
+    vi.mocked(apiClient).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const client = createQueryClient();
+    const wrapper = ({ children }: { children: React.ReactNode }) => <StrictMode><QueryClientProvider client={client}><CartProvider>{children}</CartProvider></QueryClientProvider></StrictMode>;
+    const { result } = renderHook(() => useCart(), { wrapper });
+    await waitFor(() => expect(finish).toBeTypeOf('function'));
+    expect(apiClient).toHaveBeenCalledTimes(1);
+    expect(result.current.isLoading).toBe(true);
+    await act(async () => finish({ data: checkoutCart }));
+    await waitFor(() => expect(result.current.data).toEqual(checkoutCart));
+  });
+  it.each(['stale success', 'stale failure'])('does not let a read started during Add overwrite confirmed inventory: %s', async outcome => {
+    const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4', role: 'CUSTOMER' };
+    vi.mocked(useAuth).mockReturnValue({ isSessionVerified: true, isAuthenticated: true, user } as ReturnType<typeof useAuth>);
+    let finishAdd!: (value: unknown) => void;
+    let finishRead!: (value: unknown) => void;
+    let failRead!: (reason: Error) => void;
+    vi.mocked(apiClient).mockImplementation((_path, options) => options?.method === 'POST'
+      ? new Promise(resolve => { finishAdd = resolve; })
+      : new Promise((resolve, reject) => { finishRead = resolve; failRead = reject; }));
+    const client = createQueryClient(); const key = queryKeys.cart.current(user.id);
+    client.setQueryData(key, { data: checkoutCart });
+    const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}><CartProvider>{children}</CartProvider></QueryClientProvider>;
+    const { result } = renderHook(() => useCart(), { wrapper });
+    let adding!: Promise<void>; act(() => { adding = result.current.addItem(productId); });
+    await waitFor(() => expect(finishAdd).toBeTypeOf('function'));
+    let reading!: Promise<void>; act(() => { reading = result.current.retry(); });
+    await waitFor(() => expect(finishRead).toBeTypeOf('function'));
+    const confirmed = { ...checkoutCart, revision: 'c'.repeat(64) };
+    await act(async () => { finishAdd({ data: confirmed }); await adding; });
+    await act(async () => {
+      if (outcome === 'stale success') finishRead({ data: { ...checkoutCart, canCheckout: false } });
+      else failRead(new Error('Old request failed'));
+      await reading;
+    });
+    expect(client.getQueryData(key)).toEqual({ data: confirmed });
+    expect(client.getQueryState(key)?.status).toBe('success');
+    expect(result.current.isAddPending).toBe(false);
+    expect(apiClient).toHaveBeenCalledTimes(2);
+  });
   it('cancels an older Cart read before installing the committed empty Cart so purchased rows cannot resurrect', async () => {
     const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4', role: 'CUSTOMER' };
     vi.mocked(useAuth).mockReturnValue({ isSessionVerified: true, isAuthenticated: true, user } as ReturnType<typeof useAuth>);
@@ -124,7 +187,7 @@ describe('CartProvider guest adapter', () => {
 
 describe('CartProvider authenticated quantity updates', () => {
   it('never makes an optimistic over-stock quantity checkout-valid', async () => {
-    const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4' };
+    const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4', role: 'CUSTOMER' };
     vi.mocked(useAuth).mockReturnValue({ isSessionVerified: true, isAuthenticated: true, user } as ReturnType<typeof useAuth>);
     let rejectUpdate!: (error: Error) => void;
     vi.mocked(apiClient).mockImplementation(() => new Promise((_resolve, reject) => { rejectUpdate = reject; }));
@@ -142,7 +205,7 @@ describe('CartProvider authenticated quantity updates', () => {
     await act(async () => { rejectUpdate(new Error('Stock conflict')); await expect(update).rejects.toThrow(); });
     expect(result.current.data?.items[0]?.quantity).toBe(2);
   });
-  const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4' };
+  const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4', role: 'CUSTOMER' };
   const cart = (quantity: number) => ({ data: { items: [{ id: 'line-1', productId, quantity,
     product: { slug: 'phone', name: 'Phone', category: 'Phones', price: '19.99', image: null },
     availableQuantity: 5, availability: 'AVAILABLE' as const, lineTotal: (quantity * 19.99).toFixed(2) }],
@@ -270,7 +333,7 @@ describe('CartProvider authenticated quantity updates', () => {
 });
 
 describe('CartProvider guest reconciliation transition', () => {
-  const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4' };
+  const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4', role: 'CUSTOMER' };
   it('hides stale quantity, installs the merged response immediately, and ignores an older Cart GET', async () => {
     vi.mocked(useAuth).mockReturnValue({ isSessionVerified: true, isAuthenticated: true, user } as ReturnType<typeof useAuth>);
     localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ version: 1, items: [{ productId, quantity: 9 }] }));
@@ -315,5 +378,20 @@ describe('CartProvider guest reconciliation transition', () => {
     await act(async () => { resolveOlderGet(makeCart(7)); await olderRefresh; });
     expect(result.current.data?.items[0]?.quantity).toBe(9);
     expect(result.current.totalQuantity).toBe(9);
+  });
+});
+
+describe('CartProvider failed authenticated add', () => {
+  it('reports the failure without waiting for a cart re-read that never resolves', async () => {
+    const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4', role: 'CUSTOMER' };
+    vi.mocked(useAuth).mockReturnValue({ isSessionVerified: true, isAuthenticated: true, user } as ReturnType<typeof useAuth>);
+    vi.mocked(apiClient).mockImplementation((_path, options) => options?.method === 'POST'
+      ? Promise.reject(new ApiError(500, 'Internal error'))
+      : new Promise(() => undefined));
+    const client = createQueryClient();
+    const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}><CartProvider>{children}</CartProvider></QueryClientProvider>;
+    const { result } = renderHook(() => useCart(), { wrapper });
+    await expect(result.current.addItem(productId)).rejects.toThrow('Internal error');
+    expect(result.current.isAddPending).toBe(false);
   });
 });

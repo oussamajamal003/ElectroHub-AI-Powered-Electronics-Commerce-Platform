@@ -1,3 +1,7 @@
+## Task 03.6 payment evidence categories
+
+Deterministic payment domain, provider, orchestration, route and raw signed webhook tests are separate from genuine financial proof. PAYMENT_STRIPE_LIVE_DEV=true enables payment.stripe.live.test.ts using exact DEV identity, real authenticated routes, official Stripe Test Mode and disposable fixtures; it rejects PROD and cleans only recorded fixture identities. Fault injection occurs around actual provider/DB work to prove rollback and same-identity recovery. scripts/stripe-browser-gate.cjs uses the real local app, hosted Payment Element, Stripe CLI forwarding and a scoped restarted worker without API interception. Focused Checkout Playwright uses explicitly intercepted SDK/API states and therefore proves UI only. STRIPE_ENTRY_PROBE=true enables a real hosted-entry probe with intercepted application setup, not purchase proof. Required captures must be opened, not merely written. Never persist raw secrets in HAR/trace artifacts. [Verified results and remaining gates](../tasks/Phase-03/TASK_03.6_IMPLEMENTATION_EVIDENCE.md).
+
 # Testing Strategy
 
 ## Task 03.5 Checkout verification
@@ -453,3 +457,12 @@ A feature is considered tested when:
 - Non-intercepted smoke: start this branch API/frontend, then `WISHLIST_SMOKE_URL=http://127.0.0.1:3102 node tests/wishlist-local-smoke.mjs` (set the environment variable using your shell). It reads real catalog APIs and exercises guest save/refresh/removal, writes evidence under ignored `test-results`, and never claims authenticated hosted persistence.
 
 Production `npm run build` is required in addition to standalone typecheck, because project-reference settings also validate test/story code. No migration, seed or PROD writes are part of these checks.
+
+## Frontend loading baseline (intercepted)
+
+`apps/frontend/tests/checkout/loading-baseline.spec.ts` runs under `playwright.checkout.config.ts` with every API and the Stripe SDK intercepted. It records request counts per navigation, time to useful content, layout shift, provider mounts, setup/resume POST counts and time to order acknowledgement at 0 ms and at a fixed 400 ms injected delay per API request, and writes `test-results/checkout/loading-baseline.json`. The delay exposes how many requests a screen issues in sequence. It asserts only deterministic counts (one Cart read per cold load, no skeleton on a client-side return, one setup POST, one secure-entry mount, one submit, one resume POST under StrictMode); millisecond values are recorded, not asserted, because they depend on the machine. It also captures the saved-purchase retry page's unverified and refused states at 390 and 1440 px. These are frontend-only measurements: they are not backend, database or live Stripe timings.
+
+```bash
+cd apps/frontend
+npx playwright test -c playwright.checkout.config.ts tests/checkout/loading-baseline.spec.ts
+```

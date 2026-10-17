@@ -5,7 +5,8 @@ import { describe, beforeEach, it, expect, vi } from 'vitest';
 import { CustomerHeader } from './CustomerHeader';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { WishlistContext } from '@/features/wishlist/context';
-import { wishlistFixture } from '@/features/wishlist/fixtures';
+import { wishlistFixture, wishlistProduct } from '@/features/wishlist/fixtures';
+import type { WishlistItem } from '@/features/wishlist/types';
 import { useCart } from '@/features/cart/context';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({
@@ -18,12 +19,52 @@ describe('CustomerHeader', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useCart).mockReturnValue({ totalQuantity: 0 } as ReturnType<typeof useCart>);
+    vi.mocked(useCart).mockReturnValue({ data: { totalQuantity: 0 }, isLoading: false } as unknown as ReturnType<typeof useCart>);
   });
 
   const renderWithRouter = (ui: React.ReactElement) => {
     return render(<BrowserRouter>{ui}</BrowserRouter>);
   };
+  it('does not announce false empty collections while startup is unresolved', () => {
+    vi.mocked(useAuth).mockReturnValue({ user: null, isInitializing: true, isAuthenticated: false } as ReturnType<typeof useAuth>);
+    vi.mocked(useCart).mockReturnValue({ data: undefined, isLoading: true } as unknown as ReturnType<typeof useCart>);
+    renderWithRouter(<WishlistContext.Provider value={wishlistFixture({ isLoading: true, data: undefined, expectedCount: 0, totalItems: 0 })}><CustomerHeader /></WishlistContext.Provider>);
+    // No skeleton or busy state while unresolved; the accessible name does not invent a count.
+    expect(screen.getByRole('link', { name: 'Cart' })).not.toHaveAttribute('aria-busy');
+    expect(screen.getByRole('link', { name: 'Wishlist' })).not.toHaveAttribute('aria-busy');
+    expect(screen.queryByRole('link', { name: 'Cart, 0 items' })).not.toBeInTheDocument();
+  });
+
+  it('does not announce a false 0 when the Cart read failed (no authoritative Cart)', () => {
+    vi.mocked(useAuth).mockReturnValue({ user: null, isInitializing: false, isAuthenticated: false } as ReturnType<typeof useAuth>);
+    vi.mocked(useCart).mockReturnValue({ data: undefined, isLoading: false, isError: true } as unknown as ReturnType<typeof useCart>);
+    renderWithRouter(<CustomerHeader />);
+    expect(screen.getByRole('link', { name: 'Cart' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Cart, 0 items' })).not.toBeInTheDocument();
+    expect(screen.queryByText('0', { exact: true })).not.toBeInTheDocument();
+  });
+
+  it('never carries one customer\'s Cart count into the next customer\'s unresolved state; background refetch keeps the verified count', () => {
+    vi.mocked(useAuth).mockReturnValue({ user: null, isInitializing: false, isAuthenticated: false } as ReturnType<typeof useAuth>);
+    vi.mocked(useCart).mockReturnValue({ data: { totalQuantity: 4 }, isLoading: false } as unknown as ReturnType<typeof useCart>);
+    const { rerender } = renderWithRouter(<CustomerHeader />);
+    expect(screen.getByRole('link', { name: 'Cart, 4 items' })).toBeInTheDocument();
+    // Background refetch with data present: the verified count stays.
+    vi.mocked(useCart).mockReturnValue({ data: { totalQuantity: 4 }, isLoading: true } as unknown as ReturnType<typeof useCart>);
+    rerender(<BrowserRouter><CustomerHeader /></BrowserRouter>);
+    expect(screen.getByRole('link', { name: 'Cart, 4 items' })).toBeInTheDocument();
+    // Customer switch: the next customer's Cart is unresolved, so no number (neither 4 nor 0) is shown.
+    vi.mocked(useCart).mockReturnValue({ data: undefined, isLoading: true } as unknown as ReturnType<typeof useCart>);
+    rerender(<BrowserRouter><CustomerHeader /></BrowserRouter>);
+    expect(screen.getByRole('link', { name: 'Cart' })).toBeInTheDocument();
+    expect(screen.queryByText('4', { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText('0', { exact: true })).not.toBeInTheDocument();
+    // Their authoritative empty Cart resolves to an explicit 0 label with no badge.
+    vi.mocked(useCart).mockReturnValue({ data: { totalQuantity: 0 }, isLoading: false } as unknown as ReturnType<typeof useCart>);
+    rerender(<BrowserRouter><CustomerHeader /></BrowserRouter>);
+    expect(screen.getByRole('link', { name: 'Cart, 0 items' })).toBeInTheDocument();
+    expect(screen.queryByText('0', { exact: true })).not.toBeInTheDocument();
+  });
 
   // ── Unauthenticated state ──────────────────────────────────
   it('renders correctly in unauthenticated state', () => {
@@ -275,7 +316,21 @@ describe('CustomerHeader', () => {
     expect(screen.queryByText('Orders')).not.toBeInTheDocument();
   });
 
-  it('keeps the authenticated header structure during restoration of a remembered session', () => {
+  it('does not expose a guest Account control while the session is unresolved', () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      isInitializing: true,
+      login: vi.fn(),
+      logout: mockLogout,
+    } as any);
+
+    renderWithRouter(<CustomerHeader />);
+    expect(screen.queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Login' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the stable header shell without guest controls during session restoration', () => {
     vi.mocked(useAuth).mockReturnValue({
       user: null,
       rememberedUser: { firstName: 'John', lastName: 'Doe' },
@@ -285,11 +340,12 @@ describe('CustomerHeader', () => {
     } as any);
 
     renderWithRouter(<CustomerHeader />);
+    expect(screen.queryByTestId('auth-hydration-header')).not.toBeInTheDocument();
+    expect(screen.queryByText('Restoring your session…')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Orders' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Account menu for John Doe' })).toBeInTheDocument();
     expect(screen.getByText('JD')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Restoring account' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Login' })).not.toBeInTheDocument();
   });
 
   // ── Search ─────────────────────────────────────────────────
@@ -359,14 +415,18 @@ describe('CustomerHeader', () => {
   });
 
   // ── Cart & Wishlist Badges ────────────────────────────────
-  it('hides the Wishlist badge until its authenticated count resolves', () => {
+  it('shows the Wishlist badge only once resolved items render, and keeps it through a background refetch', () => {
     vi.mocked(useAuth).mockReturnValue({ user: null, isAuthenticated: false, isInitializing: false, logout: mockLogout } as any);
+    // Typed from the shared fixture product (not an index into fixture data, which may be undefined/null).
+    const items: WishlistItem[] = [1, 2, 3].map(n => ({ productId: `wish-${n}`, product: { ...wishlistProduct, id: `wish-${n}` }, availability: 'AVAILABLE' }));
     const { rerender } = renderWithRouter(<WishlistContext.Provider value={wishlistFixture({ isLoading: true, data: undefined, expectedCount: 3, totalItems: 3 })}><CustomerHeader /></WishlistContext.Provider>);
     expect(screen.getByRole('link', { name: 'Wishlist' })).toBeInTheDocument();
     expect(screen.queryByText('3', { exact: true })).not.toBeInTheDocument();
-    rerender(<BrowserRouter><WishlistContext.Provider value={wishlistFixture({ totalItems: 3 })}><CustomerHeader /></WishlistContext.Provider></BrowserRouter>);
+    rerender(<BrowserRouter><WishlistContext.Provider value={wishlistFixture({ data: { items, totalItems: 3 }, productIds: items.map(item => item.productId), totalItems: 3 })}><CustomerHeader /></WishlistContext.Provider></BrowserRouter>);
     expect(screen.getByRole('link', { name: 'Wishlist (3)' })).toBeInTheDocument();
-    rerender(<BrowserRouter><WishlistContext.Provider value={wishlistFixture({ data: { items: [], totalItems: 0 }, totalItems: 0 })}><CustomerHeader /></WishlistContext.Provider></BrowserRouter>);
+    rerender(<BrowserRouter><WishlistContext.Provider value={wishlistFixture({ isLoading: true, data: { items, totalItems: 3 }, productIds: items.map(item => item.productId), totalItems: 3 })}><CustomerHeader /></WishlistContext.Provider></BrowserRouter>);
+    expect(screen.getByRole('link', { name: 'Wishlist (3)' })).toBeInTheDocument();
+    rerender(<BrowserRouter><WishlistContext.Provider value={wishlistFixture({ data: { items: [], totalItems: 0 }, productIds: [], totalItems: 0 })}><CustomerHeader /></WishlistContext.Provider></BrowserRouter>);
     expect(screen.getByRole('link', { name: 'Wishlist' })).toBeInTheDocument();
     expect(screen.queryByText('0', { exact: true })).not.toBeInTheDocument();
   });

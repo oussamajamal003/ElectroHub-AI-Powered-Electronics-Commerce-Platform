@@ -1,5 +1,9 @@
 # Inventory
 
+## Task 03.6 payment commit and compensation
+
+Verified manual card authorization precedes the existing atomic purchase transaction; provider capture happens afterward, outside database locks. Unknown capture outcomes retain purchased stock. Only freshly verified terminal cancellation or successful refund permits transactional once-only stock restoration through InventoryService. Durable attempt/work fencing prevents overlapping or stale workers from repeating restoration. Cart and Wishlist operations still never reserve or consume Inventory. See [payment core](PAYMENT_CORE_03.6.md); legacy evidence below remains tied to its historical source revision.
+
 ## Task 03.5 Checkout consumption
 
 Order creation now reuses the existing decreaseStock transaction-client primitive after deterministic Product/category/Inventory locking. Order/OrderItem snapshots, Inventory decrement and Cart clear are atomic. The economic Cart revision excludes stock; locked Inventory is revalidated independently. Cart/Wishlist still do not reserve or mutate stock. Live 03.5 transaction, rollback and concurrency evidence is recorded separately in [Task 03.5 evidence](../tasks/Phase-03/TASK_03.5_IMPLEMENTATION_EVIDENCE.md); earlier Task 03.4A source fingerprints remain historical evidence of that revision. See [Checkout Core and handoffs](CHECKOUT_CORE_03.5.md).

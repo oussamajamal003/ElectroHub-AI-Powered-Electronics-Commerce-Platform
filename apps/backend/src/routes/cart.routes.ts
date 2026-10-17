@@ -6,6 +6,13 @@ import { AppError } from '../middleware/errorHandler.js';
 import { CartService, MAX_CART_LINES, MAX_CART_QUANTITY } from '../services/cart.service.js';
 
 const router = Router();
+router.use('/cart', (req, res, next) => {
+  res.set('Cache-Control', 'private, no-store');
+  // Availability JSON is required on every read; do not return an empty 304
+  // to an owner whose token/session or inventory may have changed.
+  if (req.method === 'GET') { delete req.headers['if-none-match']; delete req.headers['if-modified-since']; }
+  next();
+});
 const service = new CartService();
 const productId = z.string().uuid();
 const item = z.object({ productId, quantity: z.number().int().min(1).max(MAX_CART_QUANTITY) }).strict();

@@ -15,6 +15,14 @@ vi.mock('../middleware/auth.js', () => ({ requireAuth: (req: Request, res: Respo
 const app = express(); app.use(express.json()); app.use('/api', routes); app.use(errorHandler);
 const productId = '8f2813b4-a388-44d3-b51e-5d4c40386677';
 beforeEach(() => { vi.clearAllMocks(); service.get.mockResolvedValue({ items: [], totalItems: 0 }); service.validate.mockResolvedValue({ items: [], totalItems: 0 }); });
+it('returns fresh private JSON rather than a conditional empty response', async () => {
+  const first = await request(app).get('/api/wishlist').set('Authorization', 'customer');
+  const next = await request(app).get('/api/wishlist').set('Authorization', 'customer').set('If-None-Match', first.headers.etag);
+  expect(next.status).toBe(200);
+  expect(next.headers['cache-control']).toBe('private, no-store');
+  expect(next.body).toEqual(first.body);
+  expect(service.get).toHaveBeenCalledTimes(2);
+});
 it('public hydration deduplicates UUIDs and rejects ownership fields', async () => {
   expect((await request(app).post('/api/wishlist/validate').send({ productIds: [productId, productId] })).status).toBe(200);
   expect(service.validate).toHaveBeenCalledWith([productId]);

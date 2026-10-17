@@ -28,3 +28,11 @@ function ShrinkActions(args: ProductPurchaseActionsProps) {
   return <><ProductPurchaseActions {...args} product={{ ...args.product, stockStatus: 'LOW_STOCK', availableQuantity: shrunk ? 3 : 5 }} remainingQuantity={shrunk ? 3 : 5} quantity={quantity} onQuantityChange={setQuantity} />
     <Button onClick={() => { setShrunk(true); setQuantity(1); }}>Simulate stock shrinking to 3</Button></>;
 }
+
+// Production Buy Now controls; story handlers never purchase or call provider APIs.
+export const BuyNowAvailable: Story = { args: { onBuyNow: () => undefined } };
+export const BuyNowOutOfStock: Story = { args: { ...OutOfStock.args, onBuyNow: () => undefined } };
+export const BuyNowPending: Story = { args: { pending: true, onBuyNow: () => undefined } };
+export const BuyNowGuest: Story = { args: { onBuyNow: () => undefined, feedback: 'Checkout requires sign-in after Cart is updated.' } };
+export const BuyNowFailure: Story = { args: { onBuyNow: () => undefined, feedback: 'Could not add this product. Check availability and try again.' } };
+export const BuyNowInvalidQuantity: Story = { args: { ...AtMaximum.args, remainingQuantity: 0, onBuyNow: () => undefined } };

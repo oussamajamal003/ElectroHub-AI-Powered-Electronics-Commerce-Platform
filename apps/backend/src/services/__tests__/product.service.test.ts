@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@prisma/client';
-import { ProductService, projectAvailability } from '../product.service.js';
+import { ProductService, projectAvailability, publicProductWhere } from '../product.service.js';
 import { CategoryService } from '../category.service.js';
 import { BrandService } from '../brand.service.js';
 import { paginationSchema, normalizeSlug, pricingSchema } from '../../validators/product.validator.js';
@@ -72,7 +72,7 @@ describe('Product foundation services', () => {
     expect(detail.specifications).toHaveLength(1);
     expect(detail.specifications[0]).toEqual({ group: 'Display', items: fixture().specifications });
     expect(database.product.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: { slug: 'tablet', status: 'ACTIVE', category: { isActive: true } },
+      where: { slug: 'tablet', status: 'ACTIVE', isTestFixture: false, storefrontVisible: true, category: { isActive: true } },
       select: expect.objectContaining({
         images: expect.objectContaining({ orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }] }),
         specifications: expect.objectContaining({ orderBy: [{ group: 'asc' }, { sortOrder: 'asc' }, { id: 'asc' }] }),
@@ -83,6 +83,12 @@ describe('Product foundation services', () => {
   it('returns structured product not-found for hidden/missing records', async () => {
     database.product.findFirst.mockResolvedValue(null);
     await expect(new ProductService().detail('missing')).rejects.toMatchObject({ statusCode: 404, code: 'PRODUCT_NOT_FOUND' });
+  });
+  it('uses the explicit fixture marker for customer visibility without excluding legitimate low prices', () => {
+    expect(publicProductWhere).toMatchObject({ isTestFixture: false, storefrontVisible: true });
+    expect(publicProductWhere).not.toHaveProperty('price');
+    expect(new Prisma.Decimal('0.25').toFixed(2)).toBe('0.25');
+    expect(new Prisma.Decimal('1.00').toFixed(2)).toBe('1.00');
   });
   it('projects threshold-derived DTOs and invalid Inventory consistently in list and detail', async () => {
     database.$queryRaw.mockResolvedValue([listRow({ quantity: 3, lowStockAt: 2 })]);
@@ -109,12 +115,21 @@ describe('Product foundation services', () => {
     expect(database.$transaction).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({ isolationLevel: 'RepeatableRead' }));
     expect(database.$queryRaw.mock.calls[0][0].values.slice(-2)).toEqual([20, 0]);
     expect(database.brand.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 20 }));
+    expect(database.$queryRaw.mock.calls[0][0].text).toContain('p."isTestFixture" = false AND p."storefrontVisible" = true');
+    expect(database.$queryRaw.mock.calls[0][0].text).toContain('FROM visible_categories');
+    expect(database.$queryRaw.mock.calls[0][0].text).toContain('EXISTS (');
   });
 
   it('resolves category/brand details and structured not-found errors', async () => {
     database.category.findFirst.mockResolvedValue({ slug: 'tablets' });
     database.brand.findUnique.mockResolvedValue({ slug: 'apple' });
-    expect(await new CategoryService().detail('tablets')).toEqual({ slug: 'tablets' });
+    database.category.findFirst.mockResolvedValue({ id: 'category-1', slug: 'tablets' });
+    database.product.count.mockResolvedValue(1);
+    expect(await new CategoryService().detail('tablets')).toEqual({ id: 'category-1', slug: 'tablets', productCount: 1 });
+    expect(database.category.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: {
+      slug: 'tablets', isActive: true, products: { some: { status: 'ACTIVE', isTestFixture: false, storefrontVisible: true } },
+    } }));
+    expect(database.product.count).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ isTestFixture: false, storefrontVisible: true }) }));
     expect(await new BrandService().detail('apple')).toEqual({ slug: 'apple' });
     database.category.findFirst.mockResolvedValue(null);
     database.brand.findUnique.mockResolvedValue(null);

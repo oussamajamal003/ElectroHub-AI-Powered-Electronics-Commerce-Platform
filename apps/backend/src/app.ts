@@ -10,21 +10,23 @@ import { requestId } from './middleware/requestId.js';
 import { notFoundHandler } from './middleware/notFoundHandler.js';
 import routes from './routes/index.js';
 import { env } from './config/env.js';
+import stripeWebhookRoutes from './routes/stripe-webhook.routes.js';
 
 /**
  * Express application.
  *
  * Middleware order:
  * 1. Request ID
- * 2. Helmet (security headers)
- * 3. CORS
- * 4. JSON body parsing
- * 5. Cookie parsing
- * 6. Request logging
- * 7. Routes
- * 8. Swagger UI
- * 9. Not Found handler
- * 10. Error handler (must be last)
+ * 2. Request logging and correlation context
+ * 3. Helmet (security headers)
+ * 4. CORS
+ * 5. Exact-byte signed Stripe webhook
+ * 6. JSON body parsing
+ * 7. Cookie parsing
+ * 8. Routes
+ * 9. Swagger UI
+ * 10. Not Found handler
+ * 11. Error handler (must be last)
  */
 const app = express();
 
@@ -33,6 +35,7 @@ app.set('trust proxy', 1);
 
 // Request ID (should be very first to track everything)
 app.use(requestId);
+app.use(requestLogger);
 
 // Security headers
 app.use(helmet());
@@ -45,6 +48,9 @@ app.use(
   })
 );
 
+// Signed Stripe ingress receives exact bytes before JSON parsing.
+app.use(stripeWebhookRoutes);
+
 // JSON body parsing with strict size limit
 app.use(express.json({ limit: '10kb' }));
 
@@ -53,9 +59,6 @@ app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 // Cookie parsing
 app.use(cookieParser());
-
-// Request logging
-app.use(requestLogger);
 
 // API routes
 if (env.NODE_ENV === 'test') {

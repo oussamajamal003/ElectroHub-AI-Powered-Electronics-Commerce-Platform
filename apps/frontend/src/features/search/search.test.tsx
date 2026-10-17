@@ -99,8 +99,10 @@ describe('Search page', () => {
     expect(await screen.findByText('Apple MacBook Air')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Go to page 2' }));
     await waitFor(() => expect(finishPageTwo).toBeDefined());
-    expect(screen.getAllByTestId('product-skeleton')).toHaveLength(10);
-    expect(screen.queryByText('Apple MacBook Air')).not.toBeInTheDocument();
+    // The current page stays rendered while the next one loads, so the page never collapses mid-navigation.
+    expect(screen.queryByTestId('product-skeleton')).not.toBeInTheDocument();
+    expect(screen.getByText('Apple MacBook Air')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Search results' })).toHaveAttribute('aria-busy', 'true');
     expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(2);
     await act(async () => finishPageTwo?.({ ...response, data: [{ ...product, id: 'page-two', name: 'Page Two Product' }], meta: { ...response.meta, page: 2, total: 40, totalPages: 2 } }));
     expect(await screen.findByText('Page Two Product')).toBeInTheDocument();

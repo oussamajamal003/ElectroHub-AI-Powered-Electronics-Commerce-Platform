@@ -90,7 +90,10 @@ export const completeGoogle = (req: Request, res: Response) => {
     const completion = z.object({ status: z.enum(['success', 'failure', 'cancelled', 'linking_required']), channel: z.string().uuid().optional(), expiresAt: z.number() }).parse(JSON.parse(Buffer.from(payload, 'base64url').toString()));
     if (completion.expiresAt <= Date.now()) throw new Error();
     popup(res, completion.status, false, completion.channel);
-  } catch { popup(res, 'failure', false); }
+  } catch (error) {
+    logger.error('Google completion failed', { operation: 'auth.google.complete.failed', error });
+    popup(res, 'failure', false);
+  }
 };
 
 function createAuthorization(data: z.infer<typeof transactionSchema>) {
@@ -119,7 +122,10 @@ export const startGoogle = (req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
     res.redirect(createAuthorization(data));
-  } catch { popup(res, 'failure'); }
+  } catch (error) {
+    logger.error('Google authorization failed', { operation: 'auth.google.start.failed', error });
+    popup(res, 'failure');
+  }
 };
 
 export const prepareGoogleDeletionReauth = (req: Request, res: Response, next: NextFunction) => {
@@ -165,9 +171,9 @@ export const callbackGoogle = async (req: Request, res: Response) => {
     }
     setRefreshCookie(res, result.refreshToken);
     popup(res, 'success', true, channel);
-  } catch {
+  } catch (error) {
     res.clearCookie(cookieName, clearOptions);
-    logger.warn('GOOGLE_AUTH_FAILED');
+    logger.error('GOOGLE_AUTH_FAILED', { operation: 'auth.google.callback.failed', error });
     popup(res, 'failure', true, channel);
   }
 };

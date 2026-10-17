@@ -71,7 +71,15 @@ DB_SSL_CA_CERT_PATH
 
 The database connection must point to the correct environment.
 
-The application uses `DATABASE_URL` for runtime queries and `DIRECT_URL` for Prisma migrations. Runtime PostgreSQL TLS verification is mandatory in production. `DB_SSL_CA_CERT_PATH` supplies a custom trusted CA when the database certificate chain requires one. Development and test runtime connections use a database-scoped TLS compatibility setting for the current DEV pooler; this does not change global Node TLS verification. Prisma migration commands use `DIRECT_URL` and need their own valid certificate chain or approved DEV connection settings.
+The current API and durable payment runner both import `src/lib/prisma.ts`, which selects `DIRECT_URL || DATABASE_URL` for runtime queries. Startup validation currently requires both variables, so `DIRECT_URL` wins in a normally configured process. `DIRECT_URL` is a variable name, not proof of a direct endpoint: the DEV example uses Supabase's IPv4 session pooler on port 5432; `DATABASE_URL` uses the transaction pooler on port 6543. A true direct endpoint has the `db.<project-ref>.supabase.co` hostname. Do not infer the active mode from the variable name or change connection modes without approved measurements.
+
+Prisma schema configuration declares `url = env("DATABASE_URL")` and `directUrl = env("DIRECT_URL")`; Prisma migration operations use the direct URL. Runtime adapter configuration strips URL-level SSL and `pgbouncer` flags and requires certificate verification in all environments (`rejectUnauthorized: true`). `DB_SSL_CA_CERT_PATH` supplies a trusted CA when needed. There is no development TLS bypass. CLI migration certificate configuration is separate; this task does not apply migrations.
+
+Environment selection is per process: development loads `.env` then `.env.local`; test loads `.env` then `.env.test.local`; production loads `.env` then `.env.production.local`. The later local file overrides inherited variables except the protected port, frontend origin and active webhook signing secret. Financial harnesses and their scoped runner use the test selection and verify runtime values against preflight in memory; credentials are never printed.
+
+The Prisma adapter cap is **10 connections per process**, or **5** when `CI` is set and `NODE_ENV=test`. The API and durable runner are independent processes: one of each can request up to **20**, or **10** for two CI test processes. Additional API instances, test workers, verifier parents and scripts add their own capacity. This is configured capacity, not observed session usage. The historical Supavisor limit of 15 is not currently verified; no pool-size change or claim that exhaustion caused latency is justified from that historical number alone. The global singleton only deduplicates clients within one process, not across processes. Module reload reuses both the client and adapter.
+
+The API closes its HTTP server and exits on shutdown; process exit releases its connections, but it does not currently explicitly await Prisma disconnect. The durable runner disconnects after its normal loop. One-shot scripts must explicitly disconnect Prisma or end their direct `pg` pools; interrupted financial harnesses preserve records and stop only their own process handles. Budget and runner reliability must be verified on the approved environment before financial execution.
 
 `E2E_OTP_OUTBOX_DIR` is for isolated browser tests only. When `NODE_ENV=test`, the email adapter captures messages sent to `.invalid` addresses in this local directory. Keep it under an ignored test output folder and do not set it in production. The real Brevo API is used only outside `NODE_ENV=test`; test mocking is not activated by an inherited `VITEST` flag.
 
@@ -316,3 +324,7 @@ Environment configuration is complete when:
 # 22. Environment Principle
 
 > **Configuration belongs to the environment; secrets belong in protected secret storage, never in source code.**
+
+## Task 03.6 Stripe Test Mode
+
+Backend STRIPE_SECRET_KEY must be a Test Mode server key. STRIPE_WEBHOOK_SECRET authenticates exact raw webhook bytes; the local Stripe CLI supplies its current listener secret in memory. Frontend VITE_STRIPE_PUBLISHABLE_KEY is the matching publishable Test Mode key. Missing/unsupported configuration keeps payment unavailable safely. No raw key values belong in docs, logs, traces or fixtures. The durable runner shares the app's database/provider environment; build backend then run npm run payment:worker under supervision in Phase 06. PROD migration and application deployment are distinct gates; see [Payment Core](../05_Features/PAYMENT_CORE_03.6.md).

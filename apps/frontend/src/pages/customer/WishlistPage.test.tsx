@@ -35,7 +35,8 @@ it('uses one neutral skeleton without inventing a zero count when the count is u
 });
 it('shows a definitive zero count only after an empty result resolves', () => {
   renderPage(wishlistFixture({ data: { items: [], totalItems: 0 }, expectedCount: 0, totalItems: 0 }));
-  expect(screen.getByRole('status', { name: '0 items' })).toBeInTheDocument();
+  expect(screen.queryByRole('status', { name: '0 items' })).not.toBeInTheDocument();
+  expect(screen.queryByText('0 items')).not.toBeInTheDocument();
   expect(screen.getByText('Your wishlist is empty')).toBeInTheDocument();
 });
 it('shows one loading skeleton for a last-confirmed empty Wishlist until the server resolves', () => {

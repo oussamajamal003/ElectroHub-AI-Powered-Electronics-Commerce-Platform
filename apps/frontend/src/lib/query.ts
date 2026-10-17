@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import { ApiError } from './api';
+import { ApiError, isAbortError } from './api';
 import { searchParams, type SearchState } from '@/features/search/searchState';
 
 export const cachePolicy = {
@@ -14,6 +14,7 @@ export const cachePolicy = {
 export const catalogSignal = (context: { signal: AbortSignal }) => import.meta.env.DEV ? undefined : context.signal;
 
 export const queryKeys = {
+  payments: { status: (userId: string, attemptId: string) => ['payments', userId, attemptId] as const },
   checkout: { current: (userId: string, revision: string) => ['checkout', userId, revision] as const },
   orders: { confirmation: (userId: string, reference: string) => ['orders', 'confirmation', userId, reference] as const,
     attempt: (userId: string, key: string) => ['orders', 'attempt', userId, key] as const },
@@ -40,7 +41,7 @@ export const queryKeys = {
 } as const;
 
 export function shouldRetry(failureCount: number, error: unknown) {
-  if (failureCount >= 1 || (error instanceof DOMException && error.name === 'AbortError')) return false;
+  if (failureCount >= 1 || isAbortError(error)) return false;
   if (error instanceof ApiError) return error.status === 0 || error.status >= 500;
   return false;
 }

@@ -89,7 +89,7 @@ describe('Google OAuth ownership and sessions', () => {
     const state = url.searchParams.get('state');
     const log = vi.spyOn(logger, 'info');
     const failure = await agent.get('/api/auth/google/callback').query({ state: 'tampered', code: 'sensitive-code' }).expect(200);
-    expect(log).toHaveBeenCalledWith('HTTP request', expect.objectContaining({ path: '/api/auth/google/callback' }));
+    expect(log).toHaveBeenCalledWith('HTTP request', expect.objectContaining({ route: '/api/auth/google/callback' }));
     expect(JSON.stringify(log.mock.calls)).not.toContain('sensitive-code');
     expect(failure.text).toContain('failure');
     expect(failure.text).not.toContain('sensitive-code');

@@ -18,7 +18,7 @@ const data = (ids: string[]): { data: WishlistData } => ({ data: { items: ids.ma
 const auth = (id: string | null, isLoggingOut = false, isSessionVerified = true) => {
   const customer = { id: id ?? 'owner', role: 'CUSTOMER', email: 'wishlist@example.invalid', firstName: 'Wish', lastName: 'Customer' };
   vi.mocked(useAuth).mockReturnValue({ isAuthenticated: Boolean(id), isSessionVerified, isLoggingOut,
-    isLoading: false, isInitializing: false, rememberedUser: null,
+    isLoading: false, isInitializing: false, rememberedUser: null, sessionUnavailable: false, retrySession: vi.fn(),
     finishLogoutTransition: vi.fn(), clearSession: vi.fn(), finishGoogle: async () => undefined,
     login: async () => ({}), register: async () => ({}), verifyEmail: async () => ({}),
     updateProfile: async () => ({}), verifyEmailChange: async () => customer, logout: async () => undefined,
@@ -33,6 +33,24 @@ beforeEach(() => {
   vi.restoreAllMocks(); vi.resetAllMocks(); localStorage.clear(); sessionStorage.clear();
   vi.mocked(wishlistApi.validate).mockImplementation(async ids => data(ids));
   vi.mocked(wishlistApi.get).mockResolvedValue(data([]));
+});
+it('ignores a read started during Add after the authoritative mutation completes', async () => {
+  const { result, client } = setup('owner');
+  await waitFor(() => expect(result.current.isLoading).toBe(false));
+  let finishAdd!: (value: ReturnType<typeof data>) => void;
+  let finishRead!: (value: ReturnType<typeof data>) => void;
+  vi.mocked(wishlistApi.add).mockImplementation(() => new Promise(resolve => { finishAdd = resolve; }));
+  vi.mocked(wishlistApi.get).mockImplementation(() => new Promise(resolve => { finishRead = resolve; }));
+  act(() => result.current.toggle(first));
+  await waitFor(() => expect(finishAdd).toBeTypeOf('function'));
+  let reading!: Promise<unknown>;
+  act(() => { reading = client.refetchQueries({ queryKey: queryKeys.wishlist.current('owner') }); });
+  await waitFor(() => expect(finishRead).toBeTypeOf('function'));
+  await act(async () => { finishAdd(data([first])); });
+  await waitFor(() => expect(result.current.pending).not.toContain(first));
+  await act(async () => { finishRead(data([])); await reading; });
+  expect(result.current.productIds).toEqual([first]);
+  expect(client.getQueryData(queryKeys.wishlist.current('owner'))).toEqual(data([first]));
 });
 it('guest hearts change immediately, persist and synchronize cross-tab changes', async () => {
   const { result } = setup(); act(() => result.current.toggle(first));
@@ -181,18 +199,19 @@ it('uses cached authenticated identity before session verification on the first 
   expect(result.current.data).toBeUndefined();
   expect(wishlistApi.get).not.toHaveBeenCalled();
 });
-it('overlaps the protected read with user verification and consumes it once after verification', async () => {
+it('starts the protected read once the cached identity is verified', async () => {
   writeAuthenticatedWishlistCount('owner', 3);
   let finishRead!: (value: { data: WishlistData }) => void;
   vi.mocked(wishlistApi.get).mockImplementation(() => new Promise(resolve => { finishRead = resolve; }));
   const { result, rerender, client } = setup('owner', false);
   act(() => window.dispatchEvent(new Event('electrohub:session-token-ready')));
-  expect(wishlistApi.get).toHaveBeenCalledTimes(1);
-  await act(async () => finishRead(data([first, second])));
-  expect(result.current.data).toBeUndefined();
-  expect(result.current.isLoading).toBe(true);
+  expect(wishlistApi.get).not.toHaveBeenCalled();
+  expect(result.current.expectedCount).toBe(3);
   expect(client.getQueryData(queryKeys.wishlist.current('owner'))).toBeUndefined();
   auth('owner'); rerender();
+  await waitFor(() => expect(finishRead).toBeTypeOf('function'));
+  expect(wishlistApi.get).toHaveBeenCalledTimes(1);
+  await act(async () => finishRead(data([first, second])));
   await waitFor(() => expect(result.current.isLoading).toBe(false));
   expect(result.current.totalItems).toBe(2);
   expect(wishlistApi.get).toHaveBeenCalledTimes(1);

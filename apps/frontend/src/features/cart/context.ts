@@ -11,12 +11,15 @@ export interface CartContextValue {
   isMutating: boolean;
   pendingProductIds: string[];
   pendingRemoveProductIds: string[];
+  pendingAdditions?: Record<string, number>;
+  isAddPending?: boolean;
   mergeError: string | null;
   pendingGuestItems: CartInputItem[];
   addItem: (productId: string, quantity?: number) => Promise<void>;
   setQuantity: (productId: string, quantity: number) => Promise<void>;
   removeItem: (productId: string) => Promise<void>;
-  retry: () => Promise<void>;
+  retry: (options?: { onlyIfStale?: boolean }) => Promise<void>;
+  validateRoute: () => Promise<void>;
   retryMerge: () => Promise<void>;
   removePendingGuestItem: (productId: string) => void;
   submitCheckout: <T>(operation: () => Promise<{ cart: CartData; result: T }>) => Promise<T>;

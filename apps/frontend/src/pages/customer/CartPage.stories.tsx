@@ -13,7 +13,7 @@ const empty: CartData = { items: [], totalQuantity: 0, subtotal: '0.00', shippin
 const cart = (data: CartData | undefined, options: Partial<CartContextValue> = {}): CartContextValue => ({ data,
   totalQuantity: data?.totalQuantity ?? 0, isGuest: true, isLoggingOut: false, isLoading: false, isError: false, isMutating: false, pendingProductIds: [], pendingRemoveProductIds: [],
   mergeError: null, pendingGuestItems: [], addItem: async () => undefined, setQuantity: async () => undefined,
-  removeItem: async () => undefined, retry: async () => undefined, retryMerge: async () => undefined,
+  removeItem: async () => undefined, retry: async () => undefined, validateRoute: async () => undefined, retryMerge: async () => undefined,
   removePendingGuestItem: () => undefined, submitCheckout: async operation => (await operation()).result, ...options });
 
 const meta = { title: 'Customer/Cart Page', component: CartPageContent,

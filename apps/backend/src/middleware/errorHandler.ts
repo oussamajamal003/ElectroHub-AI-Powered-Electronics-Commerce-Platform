@@ -1,6 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { logger } from '../utils/logger.js';
-import { env } from '../config/env.js';
+import { logSafely } from '../utils/logger.js';
 
 /**
  * Application error with structured code and status.
@@ -14,7 +13,8 @@ export class AppError extends Error {
     message: string,
     statusCode: number,
     code: string,
-    isOperational = true
+    isOperational = true,
+    public readonly diagnosticCause?: unknown
   ) {
     super(message);
     this.statusCode = statusCode;
@@ -39,7 +39,10 @@ export function errorHandler(
   _next: NextFunction
 ): void {
   if (err instanceof AppError) {
-    logger.warn('Application error', {
+    res.locals.errorLogged = true;
+    logSafely('error', 'Application error', {
+      operation: 'http.handled_error',
+      error: err.diagnosticCause ?? err,
       requestId: _req.id,
       code: err.code,
       statusCode: err.statusCode,
@@ -56,10 +59,11 @@ export function errorHandler(
   }
 
   // Unexpected errors
-  logger.error('Unexpected error', {
+  res.locals.errorLogged = true;
+    logSafely('error', 'Unexpected error', {
     requestId: _req.id,
-    message: err.message,
-    stack: env.NODE_ENV !== 'production' ? err.stack : undefined,
+    operation: 'http.unexpected_error',
+    error: err,
   });
 
   res.status(500).json({

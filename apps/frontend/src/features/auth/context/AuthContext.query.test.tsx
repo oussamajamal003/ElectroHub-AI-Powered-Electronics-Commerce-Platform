@@ -17,6 +17,7 @@ function Controls() {
   return <><button onClick={auth.clearSession}>Clear session</button>
     <button onClick={() => void auth.logout()}>Log out</button>
     <span>{auth.isInitializing ? 'Initializing' : auth.isAuthenticated ? 'Signed in' : 'Signed out'}</span>
+    <span data-testid="auth-state">{auth.isInitializing ? 'INITIALIZING' : auth.isAuthenticated ? 'AUTHENTICATED' : 'UNAUTHENTICATED'}</span>
     <span>{auth.rememberedUser ? `Remembered ${auth.rememberedUser.firstName}` : 'No remembered user'}</span></>;
 }
 
@@ -75,19 +76,23 @@ describe('AuthContext query cache boundary', () => {
     expect(screen.getByText('Remembered John')).toBeInTheDocument();
   });
 
-  it('keeps Orders and the profile avatar mounted through a successful refresh', async () => {
+  it('keeps guest controls out of the header until a cached identity is verified', async () => {
     sessionStorage.setItem('electrohub:header-identity', JSON.stringify({ firstName: 'John', lastName: 'Doe' }));
+    sessionStorage.setItem('electrohub:cached-user', JSON.stringify({ id: 'customer', firstName: 'John', lastName: 'Doe', email: 'john@example.com', role: 'CUSTOMER' }));
     let resolveRefresh!: (value: { accessToken: string }) => void;
     vi.mocked(authApi.refreshSession).mockReturnValue(new Promise(resolve => { resolveRefresh = resolve; }));
     vi.mocked(authApi.getCurrentUser).mockResolvedValue({ user: { id: 'customer', firstName: 'John', lastName: 'Doe', email: 'john@example.com', role: 'CUSTOMER' } });
-    render(<QueryClientProvider client={createQueryClient()}><AuthProvider><MemoryRouter><CustomerHeader /></MemoryRouter></AuthProvider></QueryClientProvider>);
-    const orders = screen.getByRole('link', { name: 'Orders' });
-    const profile = screen.getByRole('button', { name: 'Account menu for John Doe' });
-    expect(profile).toBeDisabled();
+    render(<QueryClientProvider client={createQueryClient()}><AuthProvider><><Controls /><MemoryRouter><CustomerHeader /></MemoryRouter></></AuthProvider></QueryClientProvider>);
+    expect(screen.queryByText('Restoring your session…')).not.toBeInTheDocument();
+    expect(screen.getByTestId('auth-state')).toHaveTextContent('INITIALIZING');
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Account menu for John Doe' })).toBeInTheDocument();
     resolveRefresh({ accessToken: 'valid' });
-    await waitFor(() => expect(profile).not.toBeDisabled());
-    expect(screen.getByRole('link', { name: 'Orders' })).toBe(orders);
-    expect(screen.getByRole('button', { name: 'Account menu for John Doe' })).toBe(profile);
+    await screen.findByText('Signed in');
+    await screen.findByRole('link', { name: 'Orders' });
+    expect(screen.getByTestId('auth-state')).toHaveTextContent('AUTHENTICATED');
+    expect(screen.getByRole('button', { name: 'Account menu for John Doe' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();
   });
 

@@ -64,7 +64,7 @@ describe('Logger', () => {
     const lastLog = testTransport.logOutput[testTransport.logOutput.length - 1];
     
     expect(lastLog.message).toBe('User login');
-    expect(lastLog.username).toBe('testuser');
+    expect(lastLog.username).toBe('[REDACTED]');
     expect(lastLog).not.toHaveProperty('password');
   });
 });

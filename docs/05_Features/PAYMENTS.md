@@ -1,5 +1,7 @@
 # Payments
 
+> **Task 03.6 source update (2026-10-07):** The current implementation uses owned Stripe Test Mode manual authorization, atomic purchase commit, durable capture/recovery, and provider-verified Paid confirmation. Public POST /api/orders no longer creates an unpaid purchase; it returns PAYMENT_REQUIRED. See [Payment Core 03.6](PAYMENT_CORE_03.6.md) for current contracts and [implementation evidence](../tasks/Phase-03/TASK_03.6_IMPLEMENTATION_EVIDENCE.md) for verified gates. Earlier phase descriptions below remain historical or future scope; they do not prove 03.6 deployment. PayPal, saved cards, management, email/PDF and real-money payments remain deferred.
+
 ## 1. Purpose
 
 This document defines the payment architecture for ElectroHub.
@@ -408,22 +410,17 @@ Authentication Tokens
 
 ## 21. Payment API
 
-Typical endpoints may include:
+Current Task 03.6 endpoints are:
 
 ```text
-POST /api/payments/create
-POST /api/payments/confirm
-GET  /api/payments/:id
-GET  /api/orders/:id/payment-receipt
+POST /api/checkout/payment-attempts
+GET  /api/checkout/payment-attempts/:attemptId
+POST /api/checkout/payment-attempts/:attemptId/reconcile
+POST /api/checkout/payment-attempts/:attemptId/cancel
+POST /api/webhooks/stripe
 ```
 
-Webhook endpoint if implemented:
-
-```text
-POST /api/payments/webhook
-```
-
-The exact contract follows the backend implementation.
+The authenticated backend owns attempt identity, order creation, reconciliation, and webhook acceptance. Stripe.js confirms the owner-scoped attempt from the browser; there is no public `/api/payments/intent` or `/api/payments/confirm` endpoint. Status projections include `recoveryActive`: a current worker lease keeps the Checkout shell locked, while queued durable recovery remains navigable. See [Payment Core 03.6](PAYMENT_CORE_03.6.md) for the exact contract.
 
 ---
 

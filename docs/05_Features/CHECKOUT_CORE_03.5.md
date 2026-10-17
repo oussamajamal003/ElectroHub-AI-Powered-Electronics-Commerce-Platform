@@ -1,5 +1,7 @@
 # Task 03.5 — implemented Checkout and Order core
 
+> **Task 03.6 source update (2026-10-07):** The current implementation uses owned Stripe Test Mode manual authorization, atomic purchase commit, durable capture/recovery, and provider-verified Paid confirmation. Public POST /api/orders no longer creates an unpaid purchase; it returns PAYMENT_REQUIRED. See [Payment Core 03.6](PAYMENT_CORE_03.6.md) for current contracts and [implementation evidence](../tasks/Phase-03/TASK_03.6_IMPLEMENTATION_EVIDENCE.md) for verified gates. Earlier phase descriptions below remain historical or future scope; they do not prove 03.6 deployment. PayPal, saved cards, management, email/PDF and real-money payments remain deferred.
+
 ## Boundary and unpaid semantics
 
 Authenticated customers complete Shipping → Delivery → Payment Method → Review → Processing → persisted Confirmation. Controlled React forms reuse Input/Button and existing design tokens. Processing uses ElectroHubLoader. `CONFIRMED` means the Order was received, **not paid**. Card is the selected method only; no PAN, CVV, expiry or fabricated last-four is collected. No Payment or tracking Delivery record, provider request, email, PDF or management screen is created.

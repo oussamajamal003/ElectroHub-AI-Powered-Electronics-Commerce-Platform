@@ -118,9 +118,26 @@ jobs:
       - name: Lint
         run: npm run lint --workspace=@electrohub/backend
 
+  workflow-policy:
+    name: Workflow / Migration Safety Policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.11.0'
+      - name: Policy self-tests
+        run: node --test .github/scripts/*.test.cjs
+      - name: Check workflows cannot deploy migrations or use shared-database credentials
+        run: node .github/scripts/check-workflow-policy.cjs
+
   backend-test:
     name: Backend / Test
     runs-on: ubuntu-latest
+    # No shared-database secret is available to, or referenced by, this job. All database work targets a
+    # disposable PostgreSQL started below. Migrations are deployed to shared environments only by the
+    # approval-gated .github/workflows/dev-migration.yml.
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
@@ -130,14 +147,23 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      - name: Start disposable PostgreSQL
+        uses: ./.github/actions/disposable-postgres
+      - name: Assert the database target is the disposable instance
+        run: |
+          node -e "
+          const urls = [process.env.DATABASE_URL, process.env.DIRECT_URL];
+          const ok = process.env.ELECTROHUB_DISPOSABLE_DATABASE === '1' && urls.every((value) => {
+            try { const u = new URL(value); return ['localhost', '127.0.0.1'].includes(u.hostname) && u.port === '55432'; } catch { return false; }
+          });
+          if (!ok) { console.error('Refusing to continue: database target is not the disposable loopback instance.'); process.exit(1); }
+          console.log('Database target: disposable loopback PostgreSQL.');
+          "
       - name: Setup test environment file
         run: |
           cat << 'EOF' > apps/backend/.env.test.local
           NODE_ENV=test
           PORT=5001
-          DATABASE_URL="${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}"
-          DIRECT_URL="${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}"
-          JWT_SECRET=test-jwt-secret
           JWT_REFRESH_SECRET=test-jwt-refresh-secret
           AI_SERVICE_URL=http://localhost:8000
           STRIPE_SECRET_KEY=sk_test_placeholder
@@ -145,31 +171,16 @@ jobs:
           BREVO_API_KEY=test-brevo-api-key
           CLOUDINARY_URL=cloudinary://test-key:test-secret@test-cloud
           EOF
+          node -e "require('fs').appendFileSync('apps/backend/.env.test.local', 'JWT_SECRET=' + require('crypto').randomBytes(32).toString('base64') + '\n')"
       - name: Generate Prisma Client
-        env:
-          DATABASE_URL: "${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}"
-          DIRECT_URL: "${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}"
         run: npm run prisma:generate --workspace=@electrohub/backend
       - name: Validate Prisma Schema
-        env:
-          DATABASE_URL: "${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}"
-          DIRECT_URL: "${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}"
         run: npm exec --workspace=@electrohub/backend -- prisma validate
-      - name: Prisma Migrate Deploy
-        env:
-          DATABASE_URL: "${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}"
-          DIRECT_URL: "${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}"
+      - name: Apply migrations to the disposable database
         run: npm exec --workspace=@electrohub/backend -- prisma migrate deploy
-      - name: Prisma Migrate Status
-        env:
-          DATABASE_URL: "${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}"
-          DIRECT_URL: "${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}"
+      - name: Prisma Migrate Status (disposable database)
         run: npm exec --workspace=@electrohub/backend -- prisma migrate status
-      - name: Test (unit tests and integration tests)
-        env:
-          DATABASE_URL: "${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}"
-          DIRECT_URL: "${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}"
-          DB_SSL_CA_CERT_PATH: ${{ github.workspace }}/apps/backend/prisma/supabase-ca.pem
+      - name: Test (unit tests and integration tests, disposable database)
         run: npm run test:ci --workspace=@electrohub/backend
 
   backend-build:
