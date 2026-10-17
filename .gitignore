@@ -92,3 +92,9 @@ cookies.txt
 
 # Isolated local payment development (disposable PostgreSQL, generated test credentials)
 apps/backend/.isolated/
+
+# Local agent settings, diagnostics and review patches (not tracked)
+.claude/
+apps/frontend/diag.txt
+docs/tasks/Phase-03/AUTH_REFRESH_LINEAGE_REVIEW.patch
+docs/tasks/Phase-03/CI_MIGRATION_SAFETY_REVIEW.patch

@@ -274,7 +274,9 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
   };
   useEffect(() => { if (params.get('step') !== step) setParams({ step }, { replace: true }); }, [params, step, setParams]);
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'auto' }); }, [step]);
-  useEffect(() => { if (draftOwner.current === userId) saveDraft(userId, draftRef.current, scope); }, [userId, draft, scope]);
+  // A verified-paid checkout cleared its draft; a late state update must never persist it again.
+  const paidDraftCleared = useRef(false);
+  useEffect(() => { if (draftOwner.current === userId && !paidDraftCleared.current) saveDraft(userId, draftRef.current, scope); }, [userId, draft, scope]);
   const endSession = useCallback(() => {
     isMounted.current = false;
   }, []);
@@ -336,6 +338,7 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
       markPaymentTiming('confirmation-navigation', { attemptId: result.attemptId });
       const orderRef = result.confirmation.orderReference;
       acknowledgePaymentOutcome(userId, result, client);
+      paidDraftCleared.current = true;
       clearDraft(userId, scope); forgetSubmittedPurchase(userId, scope); setSecret(null); if (isBuyNow) clearBuyNow();
       setPaymentState('IDLE');
       if (result.confirmation) {

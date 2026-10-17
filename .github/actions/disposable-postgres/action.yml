@@ -21,8 +21,9 @@ runs:
         openssl req -newkey rsa:2048 -nodes -subj "/CN=localhost" -keyout server.key -out server.csr
         printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\n' > san.cnf
         openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 1 -out server.crt -extfile san.cnf
-        sudo chown 999:999 server.key server.crt
+        # Restrict the key before handing it to the postgres UID (999): after chown the runner user can no longer chmod it.
         chmod 600 server.key
+        sudo chown 999:999 server.key server.crt
 
         password="$(openssl rand -hex 24)"
         echo "::add-mask::$password"
