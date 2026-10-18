@@ -153,7 +153,7 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
               <ChevronDown size={18} strokeWidth={1.75} aria-hidden="true" className={`${styles.chevron} ${showFilters ? styles.chevronOpen : ''}`} />
             </button>}
             <FilterSelect label="Sort by" value={state.sort ?? (state.q ? 'relevance' : 'newest')} selectSize={catalog ? 'medium' : 'large'}
-              compact={catalog ? { icon: <ArrowUpDown size={20} strokeWidth={1.75} />, triggerClassName: styles.sortTrigger, contentClassName: styles.sortContent } : undefined} choices={[
+              compact={catalog ? { icon: <ArrowUpDown size={20} strokeWidth={1.75} />, triggerClassName: styles.sortTrigger ?? '', contentClassName: styles.sortContent ?? '' } : undefined} choices={[
               { value: 'relevance', label: 'Relevance' }, { value: 'price-asc', label: 'Price: low to high' }, { value: 'price-desc', label: 'Price: high to low' }, { value: 'newest', label: 'Newest' }, { value: 'name-asc', label: 'Name: A–Z' },
             ]} onChange={value => update({ sort: value as SearchState['sort'] })} />
           </div>
