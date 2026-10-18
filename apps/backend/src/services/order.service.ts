@@ -35,6 +35,30 @@ export function confirmation(order: StoredOrder) {
       imageUrl: item.productImageUrl, quantity: item.quantity, unitPrice: item.unitPrice.toFixed(2), lineTotal: item.lineTotal.toFixed(2) })) };
 }
 
+/** History card projection: the compatible Confirmation shape plus the purchased unit count (sum of quantities, not lines). */
+export function orderSummary(order: StoredOrder) {
+  return { ...confirmation(order), itemCount: order.items.reduce((count, item) => count + item.quantity, 0) };
+}
+
+/**
+ * Customer Order Details (Task 03.7): allowlisted purchase-time facts only. Adds stable line identity and the
+ * persisted payment dates; provider ids, failure reasons, request hashes and attempt keys are never serialized.
+ */
+export function orderDetails(order: StoredOrder) {
+  const base = orderSummary(order);
+  return { ...base, items: base.items.map((item, index) => ({ id: order.items[index]!.id, ...item })),
+    payment: order.payment ? { paidAt: order.payment.paidAt?.toISOString() ?? null, refundedAt: order.payment.refundedAt?.toISOString() ?? null } : null };
+}
+
+/** Accepts the public `ORD-<UUID>` reference (or the bare UUID kept for legacy links); returns the lowercase Order id. */
+export function parseOrderReference(reference: string) {
+  if (reference.length > 40) throw new AppError('Invalid order reference.', 400, 'ORDER_REFERENCE_INVALID');
+  const candidate = /^ord-/i.test(reference) ? reference.slice(4) : reference;
+  const parsed = attemptSchema.safeParse(candidate);
+  if (!parsed.success) throw new AppError('Invalid order reference.', 400, 'ORDER_REFERENCE_INVALID');
+  return parsed.data.toLowerCase();
+}
+
 export class OrderService {
   constructor(private readonly database: PrismaClient = prisma, private readonly inventory = new InventoryService()) {}
 
@@ -45,7 +69,14 @@ export class OrderService {
         skip: (page - 1) * pageSize, take: pageSize }),
       this.database.order.count({ where }),
     ]);
-    return { data: orders.map(confirmation), meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } };
+    return { data: orders.map(orderSummary), meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } };
+  }
+
+  /** Read-only: one owner-scoped query. Missing and other customers' Orders are the same 404. */
+  async getDetails(userId: string, reference: string) {
+    const order = await this.database.order.findFirst({ where: { id: parseOrderReference(reference), userId }, include });
+    if (!order) throw new AppError('Order not found.', 404, 'ORDER_NOT_FOUND');
+    return orderDetails(order);
   }
 
   async getConfirmation(userId: string, reference: string) {

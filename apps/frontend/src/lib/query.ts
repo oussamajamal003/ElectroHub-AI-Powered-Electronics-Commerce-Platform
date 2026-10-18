@@ -17,7 +17,10 @@ export const queryKeys = {
   payments: { status: (userId: string, attemptId: string) => ['payments', userId, attemptId] as const },
   checkout: { current: (userId: string, revision: string) => ['checkout', userId, revision] as const },
   orders: { confirmation: (userId: string, reference: string) => ['orders', 'confirmation', userId, reference] as const,
-    attempt: (userId: string, key: string) => ['orders', 'attempt', userId, key] as const },
+    attempt: (userId: string, key: string) => ['orders', 'attempt', userId, key] as const,
+    // Order Management (03.7): account-scoped, distinct from the Confirmation DTO cache.
+    list: (userId: string, page: number, pageSize: number) => ['orders', 'list', userId, page, pageSize] as const,
+    detail: (userId: string, reference: string) => ['orders', 'detail', userId, reference] as const },
   wishlist: { all: ['wishlist'] as const, current: (userId: string) => ['wishlist', 'current', userId] as const,
     guest: (ids: string) => ['wishlist', 'guest', ids] as const },
   cart: { all: ['cart'] as const, current: (userId: string) => ['cart', 'current', userId] as const,

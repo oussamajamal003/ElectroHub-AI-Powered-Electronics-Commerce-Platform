@@ -1,0 +1,76 @@
+@use '@/styles/abstracts' as *;
+
+// Order Details ("Order details page.png"): broad primary column + narrower summary column from lg; stacked below.
+.header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: $spacing-4; margin-bottom: $spacing-8;
+  @include respond-to(lg) { align-items: center; }
+}
+.titleBlock { min-width: 0; flex: 1 1 22rem;
+  h1 { margin: 0; font-size: clamp(1.75rem, 2.4vw, 2.5rem); line-height: $line-height-tight; overflow-wrap: anywhere;
+    // Focus is moved here programmatically (tabIndex -1) for screen readers; the heading is not interactive, so no ring.
+    &:focus { outline: none; } }
+  p { margin: $spacing-2 0 0; color: $color-text-secondary; font-size: $font-size-base; @include respond-to(md) { font-size: $font-size-lg; } }
+}
+.note { margin: (-$spacing-4) 0 $spacing-6; padding: $spacing-3 $spacing-4; border-left: 3px solid $color-border; background: $color-surface; color: $color-text-secondary; }
+.refreshNotice { margin-bottom: $spacing-6; }
+
+.layout { display: grid; gap: $spacing-6; align-items: start;
+  @include respond-to(lg) { grid-template-columns: minmax(0, 2fr) minmax(20rem, 1fr); gap: $spacing-8; }
+}
+.main, .aside { display: grid; gap: $spacing-6; min-width: 0; @include respond-to(lg) { gap: $spacing-8; } }
+
+.card { display: grid; gap: $spacing-5; padding: $spacing-5; border: 1px solid $color-border; background: $color-background; min-width: 0;
+  @include respond-to(md) { padding: $spacing-8; }
+  h2 { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; @include respond-to(md) { font-size: $font-size-xl; } }
+}
+.iconHeading { display: flex; align-items: center; gap: $spacing-3; svg { width: 1.375rem; height: 1.375rem; color: $color-primary; flex-shrink: 0; } }
+
+.items { margin: 0; padding: 0; list-style: none; display: grid; gap: $spacing-5; }
+.item { display: grid; grid-template-columns: 4rem minmax(0, 1fr); gap: $spacing-3 $spacing-4; align-items: start;
+  @include respond-to(sm) { grid-template-columns: 5rem minmax(0, 1fr) auto; }
+  & + & { padding-top: $spacing-5; border-top: 1px solid $color-border; }
+}
+.itemImage { width: 4rem; height: 4rem; background: $color-surface; border: 1px solid $color-border; @include respond-to(sm) { width: 5rem; height: 5rem; } }
+.itemText { display: grid; gap: $spacing-1; min-width: 0;
+  strong { font-size: $font-size-base; overflow-wrap: anywhere; @include respond-to(md) { font-size: $font-size-lg; } }
+  span { font-size: $font-size-sm; color: $color-text-secondary; }
+}
+// Phones: amounts move under the text, aligned with it, so long names never collide with prices.
+.itemAmounts { display: grid; gap: $spacing-1; grid-column: 2; min-width: 0;
+  @include respond-to(sm) { grid-column: auto; text-align: right; }
+  strong { font-size: $font-size-base; white-space: nowrap; @include respond-to(md) { font-size: $font-size-lg; } }
+  span { font-size: $font-size-sm; color: $color-text-secondary; white-space: nowrap; }
+}
+
+.address { display: grid; gap: $spacing-1; font-style: normal; line-height: $line-height-normal; overflow-wrap: anywhere; font-size: $font-size-base;
+  @include respond-to(md) { font-size: $font-size-lg; } }
+.delivery { display: grid; gap: $spacing-2; padding-top: $spacing-5; border-top: 1px solid $color-border; color: $color-text-secondary;
+  p { margin: 0; }
+  > p:first-child { display: flex; align-items: flex-start; gap: $spacing-2; font-size: $font-size-base; @include respond-to(md) { font-size: $font-size-lg; }
+    svg { width: 1.25rem; height: 1.25rem; flex-shrink: 0; margin-top: .2em; } }
+}
+.subtle { font-size: $font-size-sm; }
+
+.totals { display: grid; gap: $spacing-3; margin: 0;
+  div { display: flex; justify-content: space-between; gap: $spacing-4; color: $color-text-secondary; font-size: $font-size-base; @include respond-to(md) { font-size: $font-size-lg; } }
+  dd { margin: 0; white-space: nowrap; }
+}
+.free { color: $color-success-foreground; }
+.totals .grandTotal { margin-top: $spacing-3; padding-top: $spacing-5; border-top: 1px solid $color-border; color: $color-text-primary;
+  font-weight: $font-weight-bold; font-size: $font-size-lg; @include respond-to(md) { font-size: $font-size-xl; }
+}
+.paymentFacts { display: grid; gap: $spacing-1; padding-top: $spacing-4; border-top: 1px solid $color-border; color: $color-text-secondary; font-size: $font-size-sm;
+  p { margin: 0; } }
+
+.backLink { display: flex; align-items: center; justify-content: center; min-height: 3.125rem; padding: $spacing-3 $spacing-6; font-size: $font-size-base;
+  font-weight: $font-weight-medium; color: $color-text-primary; text-decoration: none; background: $color-background; border: 1px solid $color-border;
+  transition: border-color $transition-fast, color $transition-fast;
+  @include respond-to(md) { font-size: $font-size-lg; }
+  &:hover { color: $color-primary; border-color: $color-primary; }
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
+}
+
+.stateArea { display: grid; place-items: center; min-height: clamp(18rem, 42vh, 30rem); }
+.unavailable { width: 100%; max-width: 34rem; padding: $spacing-10 $spacing-6; background: $color-background; }
+.stateActions { display: flex; flex-wrap: wrap; justify-content: center; gap: $spacing-3; }
+
+@media (prefers-reduced-motion: reduce) { .backLink { transition: none; } }

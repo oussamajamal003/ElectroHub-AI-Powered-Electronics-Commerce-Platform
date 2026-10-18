@@ -216,6 +216,12 @@
 .failureCardIcon { margin-top: .15rem; }
 .failureCopy { display: grid; gap: $spacing-1; strong { font-weight: $font-weight-semibold; } }
 .failureCardBalance { width: 1.5rem; }
+// Confirmation (03.7): full-width stacked actions directly below the card, aligned to its edges.
+.confirmationActions { display: grid; gap: $spacing-4; width: 100%; margin-top: $spacing-10;
+  > a { width: 100%; min-height: 3.125rem; font-size: $font-size-lg; }
+  > .primaryLink:hover { background: $color-primary-dark; border-color: $color-primary-dark; }
+  > .secondaryLink { background: $color-background; &:hover { color: $color-primary; border-color: $color-primary; } }
+}
 .recoveryActions {
   display: grid;
   gap: $spacing-4;
