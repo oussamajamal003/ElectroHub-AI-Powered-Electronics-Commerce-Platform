@@ -9,33 +9,40 @@
   position: relative;
   overflow: hidden;
   font-family: $font-family-base;
-  font-weight: $font-weight-bold;
-  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  font-size: $font-size-sm;
   line-height: $line-height-normal;
+  letter-spacing: 0.005em;
   text-align: center;
   white-space: nowrap;
   border-radius: 0;
-  transition: all $transition-fast;
+  transition: background-color $transition-fast, border-color $transition-fast, color $transition-fast,
+    box-shadow $transition-fast, transform 100ms ease;
   cursor: pointer;
   border: 1px solid transparent; // for outline variant consistency
+  -webkit-tap-highlight-color: transparent;
 
   /* Default Spacing */
   padding: 0 $spacing-6;
 
   &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 $focus-ring-width $focus-ring-color;
-    border-color: $color-border;
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
   }
 
   &.loading {
     cursor: wait;
-    opacity: 0.8;
+    opacity: 0.85;
   }
 
   &:disabled,
   &.disabled {
     cursor: not-allowed;
+    box-shadow: none;
   }
 
   .content {
@@ -54,17 +61,27 @@
     animation: spin 0.75s linear infinite;
     margin-right: $spacing-2;
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    &:active:not(:disabled) { transform: none; }
+    .spinner { animation-duration: 1.5s; }
+  }
 }
 
 /* SIZES */
 .size-small {
   height: 32px;
+  padding: 0 $spacing-4;
+  font-size: 0.8125rem; // 13px
 }
 .size-medium {
   height: 40px;
 }
 .size-large {
   height: 48px;
+  font-size: $font-size-base;
+  padding: 0 $spacing-8;
 }
 
 /* VARIANTS */
@@ -74,6 +91,7 @@
 
   &:hover:not(:disabled) {
     background-color: $color-primary-dark;
+    box-shadow: 0 6px 16px -6px rgb(37 99 235 / 0.55);
   }
 
   &:active:not(:disabled) {
@@ -103,12 +121,17 @@
 }
 
 .variant-outline {
-  background-color: transparent;
+  background-color: $color-background;
   border-color: $color-border;
   color: $color-primary;
 
   &:hover:not(:disabled) {
-    background-color: $color-surface;
+    border-color: $color-primary;
+    background-color: rgb(37 99 235 / 0.04);
+  }
+
+  &:active:not(:disabled) {
+    background-color: rgb(37 99 235 / 0.1);
   }
 
   &:disabled {
@@ -121,7 +144,12 @@
   color: $color-text-primary;
 
   &:hover:not(:disabled) {
-    background-color: $color-surface;
+    background-color: #f1f5f9;
+    color: $color-primary;
+  }
+
+  &:active:not(:disabled) {
+    background-color: $color-border;
   }
 
   &:disabled {
@@ -150,10 +178,16 @@
   padding: 0;
   height: auto;
   border: none;
-  font-weight: $font-weight-regular;
+  font-weight: $font-weight-medium;
+  text-underline-offset: 3px;
 
   &:hover:not(:disabled) {
+    color: $color-primary-dark;
     text-decoration: underline;
+  }
+
+  &:active:not(:disabled) {
+    transform: none;
   }
 
   &:disabled {

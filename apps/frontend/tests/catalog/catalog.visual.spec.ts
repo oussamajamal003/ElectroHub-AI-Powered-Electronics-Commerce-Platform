@@ -332,7 +332,7 @@ test('combined live Search, filters, sort, reset and browser history stay synchr
   await page.getByRole('option', { name: 'Available', exact: true }).click();
   await page.getByLabel('Min price ($)').fill('700');
   await page.getByLabel('Max price ($)').fill('800');
-  await page.getByRole('button', { name: 'Apply filters' }).click();
+  // No Apply button: each filter change updates the URL and results automatically.
   await expect(page).toHaveURL(/category=smartphones/);
   await expect(page).toHaveURL(/brand=samsung/);
   await expect(page).toHaveURL(/availability=available/);
@@ -343,8 +343,7 @@ test('combined live Search, filters, sort, reset and browser history stay synchr
   await page.getByRole('option', { name: 'Price: high to low' }).click();
   await expect(page).toHaveURL(/sort=price-desc/);
   const filteredUrl = page.url();
-  await page.getByRole('button', { name: /Filters/ }).click();
-  await page.getByRole('button', { name: 'Reset' }).click();
+  await page.getByRole('button', { name: 'Clear all filters' }).click();
   await expect(page).toHaveURL(/q=galaxy/);
   await expect(page).not.toHaveURL(/category=|brand=|availability=|minPrice=|maxPrice=/);
   await expect(page.getByRole('link', { name: 'Samsung Galaxy S24 256GB' }).first()).toBeVisible();

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Award, Headphones, PackageCheck, ShieldCheck, Sparkles, Truck, Zap } from 'lucide-react';
+import { ArrowRight, Award, Headphones, PackageCheck, ShieldCheck, Sparkles, Truck, Zap } from 'lucide-react';
 import { SectionReveal, StaggerContainer, StaggerItem } from '@/components/motion/Motion';
 import styles from './CompanyPages.module.scss';
 
@@ -20,7 +20,13 @@ const values = [
 export function AboutPage() {
   return (
     <div className={styles.page}>
-      <section className={styles.hero}>
+      <section className={styles.hero} onPointerMove={event => {
+        // Spotlight follows the pointer; purely decorative, so it is skipped for reduced-motion users.
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        const box = event.currentTarget.getBoundingClientRect();
+        event.currentTarget.style.setProperty('--spot-x', `${event.clientX - box.left}px`);
+        event.currentTarget.style.setProperty('--spot-y', `${event.clientY - box.top}px`);
+      }}>
         <h1>Technology made simple.</h1>
         <p>ElectroHub brings useful electronics together in one clear, easy shopping experience.</p>
       </section>
@@ -100,6 +106,7 @@ export function AboutPage() {
           <div className={styles.ctaButtonWrapper}>
             <Link to="/products" className={styles.ctaButton}>
               Explore Products
+              <ArrowRight aria-hidden="true" size={18} />
             </Link>
           </div>
         </SectionReveal>

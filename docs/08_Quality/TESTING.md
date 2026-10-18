@@ -4,6 +4,12 @@ Deterministic payment domain, provider, orchestration, route and raw signed webh
 
 # Testing Strategy
 
+## Task 03.7 Order Management verification
+
+Mocked-persistence API contract tests live in `apps/backend/src/routes/orders.management.test.ts`. The opt-in real DEV read gate is `ORDERS_LIVE_DEV=true NODE_ENV=test npx vitest run src/services/__tests__/orders.management.live.test.ts`, run from `apps/backend`. It reuses `assertSyntheticDevEnvironment`, writes only labeled `orders-gate-*` fixtures, and cleans them up only after every test passes.
+
+Frontend component and query tests are in `features/orders/*.test.tsx` and `pages/customer/OrdersPage.test.tsx`. Browser journeys and visual captures are in `tests/orders/orders.spec.ts`: run `npm run build && npx playwright test -c playwright.orders.config.ts` (mocked reads, no baseline updates; captures are written to `test-results/orders/`). Stories: `Customer/Order Management`. See [Task 03.7 evidence](../tasks/Phase-03/TASK_03.7_IMPLEMENTATION_EVIDENCE.md).
+
 ## Task 03.5 Checkout verification
 
 Focused unit/API/component tests verify validation, authority, idempotency, guards, drafts and Cart cache installation. `playwright.checkout.config.ts` provides explicitly intercepted UI coverage; it is not database proof. Production Checkout stories and axe checks use `playwright.cart-storybook.config.ts checkout.stories.spec.ts`. Screenshot capture waits for actual API/step readiness, and ignored local evidence lives under `apps/frontend/screenshots/checkout-visual` and `checkout-live` so Playwright output cleanup cannot erase it.

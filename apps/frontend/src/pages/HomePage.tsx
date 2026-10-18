@@ -183,9 +183,9 @@ export function HomePage() {
     <section className={styles.promoGrid} aria-label="Explore electronics">
       {deals.isPending && Array.from({ length: 2 }, (_, index) => <div key={index} className={styles.promoSkeleton} aria-hidden="true"><span /><span /><span /></div>)}
       {deals.data?.data.slice(0, 2).map((product, index) => <SectionReveal replay key={product.id}><article className={styles.promoCard}>
-        <div><p className={styles.eyebrow}>{index === 0 ? 'Limited time' : 'Featured deal'}</p><h2>{product.name}</h2>
+        {product.primaryImage && <img className={styles.promoBg} src={product.primaryImage.url} alt="" loading="lazy" />}
+        <div className={styles.promoCopy}><p className={styles.eyebrow}>{index === 0 ? 'Limited time' : 'Featured deal'}</p><h2>{product.name}</h2>
           <p>Now {formatPrice(product.price)}</p><Link to={`/products/${encodeURIComponent(product.slug)}`}>Shop now <span aria-hidden="true">→</span></Link></div>
-        {product.primaryImage && <img src={product.primaryImage.url} alt="" loading="lazy" />}
       </article></SectionReveal>)}
     </section>
     <section className={styles.section} aria-labelledby="new-arrivals-title">

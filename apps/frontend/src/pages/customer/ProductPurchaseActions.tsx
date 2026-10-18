@@ -29,7 +29,7 @@ export function ProductPurchaseActions({ product, quantity, remainingQuantity, p
         onIncrease={() => onQuantityChange(Math.min(remainingQuantity, quantity + 1))} onDecrease={() => onQuantityChange(Math.max(1, quantity - 1))} /></div>
       {unavailable || remainingQuantity === 0 ? <p role="status">{unavailable ? 'Currently unavailable.' : 'You already have the available stock in your cart.'}</p>
         : <p role="status">{remainingQuantity} more {remainingQuantity === 1 ? 'item' : 'items'} available to add.</p>}
-      <div className={styles.purchaseButtons}><Button type="button" disabled={unavailable || remainingQuantity === 0 || pending} isLoading={pending} onClick={() => void onAdd()}>Add to Cart</Button>{onBuyNow && <Button type="button" variant="outline" className={styles.buyNowButton} disabled={unavailable || pending || (product.availableQuantity ?? 0) < quantity} onClick={() => void onBuyNow()}>Buy Now</Button>}{wishlistAction}</div>
+      <div className={styles.purchaseButtons}><Button type="button" size="large" disabled={unavailable || remainingQuantity === 0 || pending} isLoading={pending} onClick={() => void onAdd()}>Add to Cart</Button>{onBuyNow && <Button type="button" size="large" variant="outline" className={styles.buyNowButton} disabled={unavailable || pending || (product.availableQuantity ?? 0) < quantity} onClick={() => void onBuyNow()}>Buy Now</Button>}{wishlistAction}</div>
       {wishlistError && <p role="alert">{wishlistError}</p>}
       {feedback && <p role="status" className={styles.cartFeedback}>{feedback}</p>}
     </div>

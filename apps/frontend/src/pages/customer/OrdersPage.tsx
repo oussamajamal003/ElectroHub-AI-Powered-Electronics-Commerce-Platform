@@ -1,114 +1,138 @@
-import { CircleAlert, Package } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { ChevronRight, Package } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { PaymentStatus, type PaymentStatusType } from '@/components/ui/PaymentStatus';
 import { ProductImage } from '@/components/ui/ProductImage';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/Pagination';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { apiClient } from '@/lib/api';
-import type { Confirmation } from '@/features/checkout/types';
+import { queryKeys } from '@/lib/query';
+import { OrderBadges } from '@/features/orders/OrderBadges';
+import { OrdersAccessGate } from '@/features/orders/OrdersAccessGate';
+import { OrdersBreadcrumb } from '@/features/orders/OrdersBreadcrumb';
+import { formatDate, formatMoney, pluralize, readPage, unitCount } from '@/features/orders/presentation';
+import { MAX_ORDERS_PAGE, ORDERS_PAGE_SIZE, type OrderSummary, type OrdersPageResponse } from '@/features/orders/types';
+import shared from '@/features/orders/Orders.module.scss';
 import styles from './OrdersPage.module.scss';
 
+const PREVIEW_LIMIT = 4;
+const crumbs = [{ label: 'Home', to: '/' }, { label: 'Account', to: '/account' }, { label: 'My Orders' }];
+
 export function OrdersPage() {
-  const { isAuthenticated, isInitializing, sessionUnavailable, retrySession } = useAuth();
-
-  if (isInitializing && sessionUnavailable) return <main className={styles.history}><h1>My Orders</h1>
-    <ErrorState title="We could not verify your session." description="Your orders are safe. Please try again."
-      action={<Button onClick={retrySession}>Retry</Button>} /></main>;
-  if (isInitializing) return <main className={styles.history}><h1>My Orders</h1><OrdersLoadingSkeleton label="Checking sign-in status" /></main>;
-  if (isAuthenticated) return <OwnedOrders />;
-
-  return <main className={styles.page}><section className={styles.card} aria-labelledby="sign-in-required">
-    <div className={styles.icon}><CircleAlert size={32} aria-hidden="true" /></div>
-    <h1 id="sign-in-required">Sign In Required</h1>
-    <p>Please sign in to access this page.</p>
-    <Button type="button" onClick={() => window.dispatchEvent(new Event('electrohub:open-auth'))}>Sign In</Button>
-  </section></main>;
+  return <OrdersAccessGate title="My Orders" loading={<OrdersLoadingSkeleton label="Checking sign-in status" />}><OwnedOrders /></OrdersAccessGate>;
 }
 
-const money = (value: string, currency: string) => new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(value));
-const orderDate = (value: string) => new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(value));
-const paymentStatus = (state: Confirmation['paymentState']): PaymentStatusType =>
-  state === 'PAID' ? 'paid' : state === 'FAILED' ? 'failed' : state === 'REFUNDED' ? 'refunded' : 'pending';
-const headline = (order: Confirmation) => order.paymentState === 'PAID' ? 'Order confirmed' : order.paymentState === 'PENDING' ? 'Finalizing your order'
-  : order.paymentState === 'REFUNDED' ? 'Payment refunded' : order.paymentState === 'FAILED' ? 'Payment failed' : 'Order received';
-
-/** Mirrors the populated order card (header, item line, footer) so loading does not reflow into the list. */
+/** Mirrors the populated card (identity, preview, metadata) so loading does not reflow into the list. */
 function OrdersLoadingSkeleton({ label = 'Loading your orders' }: { label?: string }) {
   return <div className={styles.orderList} role="status" aria-label={label}>
-    <span className={styles.visuallyHidden}>{label}…</span>
+    <span className={shared.visuallyHidden}>{label}…</span>
     {[0, 1].map(index => <div className={styles.skeletonCard} key={index} aria-hidden="true">
-      <div className={styles.orderHeader}>
-        <div className={styles.orderIdentity}><Skeleton width="4rem" height={12} /><Skeleton width="12rem" height={20} /><Skeleton width="10rem" height={14} /></div>
-        <Skeleton width="6.5rem" height={24} />
-      </div>
-      <div className={styles.orderItems}>
-        <div className={styles.orderLine}><Skeleton width={64} height={64} /><div><Skeleton width="60%" height={16} /><Skeleton width="5rem" height={14} /></div><Skeleton width="4.5rem" height={16} /></div>
-      </div>
-      <div className={styles.orderFooter}><Skeleton width="9rem" height={20} /><Skeleton width="8rem" height={44} /></div>
+      <div className={styles.cardTop}><div className={styles.identity}><Skeleton width="3.5rem" height={12} /><Skeleton width="min(22rem, 70%)" height={22} /></div>
+        <Skeleton width="13rem" height={32} /></div>
+      <div className={styles.previews}><Skeleton width={58} height={58} /></div>
+      <div className={styles.cardFooter}><Skeleton width="16rem" height={40} /></div>
     </div>)}
   </div>;
 }
 
-const ORDERS_PAGE_SIZE = 10;
-
-type OrdersPage = { data: Confirmation[]; meta: { page: number; pageSize: number; total: number; totalPages: number } };
+function OrderCard({ order, page }: { order: OrderSummary; page: number }) {
+  const preview = order.items.slice(0, PREVIEW_LIMIT); const hidden = order.items.length - preview.length;
+  const items = unitCount(order.items, order.itemCount);
+  return <article className={styles.orderCard} aria-labelledby={`order-${order.orderReference}`}>
+    <div className={styles.cardTop}>
+      <div className={styles.identity}>
+        <span className={styles.eyebrow}>Order</span>
+        {/* One link per card; its ::after makes the whole card a single click/keyboard target (no nested controls).
+            Named by the reference only, so the heading and article names stay the reference too (WCAG 2.4.4: purpose from card context). */}
+        <h2 id={`order-${order.orderReference}`}><Link className={styles.cardLink} to={`/orders/${order.orderReference}`} state={{ fromPage: page }}>
+          {order.orderReference}</Link></h2>
+      </div>
+      <OrderBadges status={order.status} paymentState={order.paymentState} />
+    </div>
+    {preview.length > 0 && <ul className={styles.previews} aria-label="Products in this order">
+      {preview.map((item, index) => <li key={`${item.productId}-${index}`}>
+        <ProductImage src={item.imageUrl ?? undefined} alt={item.productName} fallbackText="" containerClassName={styles.previewImage} />
+      </li>)}
+      {hidden > 0 && <li className={styles.more} aria-label={`and ${pluralize(hidden, 'more product')}`}>+{hidden}</li>}
+    </ul>}
+    <div className={styles.cardFooter}>
+      <dl className={styles.meta}>
+        <div><dt>Date</dt><dd><time dateTime={order.createdAt}>{formatDate(order.createdAt)}</time></dd></div>
+        <div><dt>{order.paymentState === 'PAID' ? 'Total paid' : 'Total'}</dt><dd>{formatMoney(order.total, order.currency)}</dd></div>
+        <div><dt>Items</dt><dd>{items}</dd></div>
+      </dl>
+      <ChevronRight className={styles.chevron} aria-hidden="true" />
+    </div>
+  </article>;
+}
 
 function OwnedOrders() {
   const { user, isSessionVerified } = useAuth();
-  const [page, setPage] = useState(1);
+  const userId = user?.id ?? '';
+  const [searchParams, setSearchParams] = useSearchParams();
+  const page = readPage(searchParams.get('page'));
+  const heading = useRef<HTMLHeadingElement>(null);
+  const previousPage = useRef(page);
   // Enabled only after session verification, so a pending query always means a real in-flight fetch.
-  const query = useQuery({ queryKey: ['orders', user?.id ?? '', 'list', page, ORDERS_PAGE_SIZE],
-    queryFn: ({ signal }) => apiClient<OrdersPage>(`/api/orders?page=${page}&pageSize=${ORDERS_PAGE_SIZE}`, { signal }),
-    enabled: Boolean(user && isSessionVerified), retry: false, staleTime: 10_000, placeholderData: keepPreviousData });
+  const query = useQuery({ queryKey: queryKeys.orders.list(userId, page, ORDERS_PAGE_SIZE),
+    queryFn: ({ signal }) => apiClient<OrdersPageResponse>(`/api/orders?page=${page}&pageSize=${ORDERS_PAGE_SIZE}`, { signal }),
+    enabled: Boolean(user && isSessionVerified), retry: false, staleTime: 10_000,
+    // Keep the previous page visible while the next loads, but never another account's data.
+    placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2] === userId ? previous : undefined });
+  const data = query.data;
+  const total = data?.meta?.total ?? data?.data.length;
   // Fail closed: a response without pagination metadata still renders its orders (single page) instead of crashing.
-  const totalPages = Math.min(query.data?.meta?.totalPages ?? 0, 1000);
-  const pages = Array.from({ length: Math.min(5, totalPages) }, (_, index) =>
-    Math.max(1, Math.min(page - 2, totalPages - 4)) + index);
-  // Same behavior as the Products page: every page change lands at the top of the list.
-  // Controls never turn disabled while a page loads; the previous page stays visible until the next one arrives.
-  const goToPage = (value: number) => {
-    if (value === page || value < 1 || value > totalPages) return;
+  const totalPages = Math.min(data?.meta?.totalPages ?? 0, MAX_ORDERS_PAGE);
+  const pages = Array.from({ length: Math.min(5, totalPages) }, (_, index) => Math.max(1, Math.min(page - 2, totalPages - 4)) + index);
+  const changing = query.isPlaceholderData;
+
+  useEffect(() => {
+    // Page changes land at the top; focus moves to the heading so keyboard users keep their place. Background refetches never move focus.
+    if (previousPage.current === page) return;
+    previousPage.current = page;
     const reduceMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
-    setPage(value);
+    heading.current?.focus({ preventScroll: true });
+  }, [page]);
+
+  const goToPage = (value: number) => {
+    if (value === page || value < 1 || (totalPages && value > totalPages)) return;
+    setSearchParams(value === 1 ? {} : { page: String(value) });
   };
-  return <main className={styles.history}><h1>My Orders</h1>
+
+  return <main className={shared.page}>
+    <OrdersBreadcrumb items={crumbs} />
+    <div className={styles.heading}>
+      <h1 ref={heading} tabIndex={-1}>My Orders</h1>
+      {total === undefined
+        ? query.isError ? null : <span role="status" aria-label="Order count loading"><Skeleton width="4.5rem" height={18} /></span>
+        : <span className={styles.count}>{pluralize(total, 'order')}</span>}
+    </div>
     {query.isPending && <OrdersLoadingSkeleton />}
-    {query.isError && <ErrorState title="Your orders could not be loaded." description="Your orders are safe. Please try again."
+    {query.isError && !data && <ErrorState className={styles.state} title="Your orders could not be loaded." description="Your orders are safe. Please try again."
       action={<Button onClick={() => void query.refetch()} isLoading={query.isFetching} disabled={query.isFetching}>Retry</Button>} />}
-    {query.data?.data.length === 0 && <EmptyState className={styles.empty} icon={<Package size={40} aria-hidden="true" />} title="You have no orders yet."
-      description="Orders appear here as soon as a payment is confirmed." action={<Link className={styles.primaryLink} to="/products">Explore Products</Link>} />}
-    {Boolean(query.data?.data.length) && <ul className={styles.orderList} aria-busy={query.isFetching || undefined}>{query.data!.data.map(order => <li key={order.orderReference}>
-      <article className={styles.orderCard} aria-labelledby={`order-${order.orderReference}`}>
-        <header className={styles.orderHeader}>
-          <div className={styles.orderIdentity}>
-            <span className={styles.eyebrow}>Order</span>
-            <h2 id={`order-${order.orderReference}`}>{order.orderReference}</h2>
-            <p><time dateTime={order.createdAt}>{orderDate(order.createdAt)}</time> · {headline(order)}</p>
-          </div>
-          <PaymentStatus status={paymentStatus(order.paymentState)} size="small" />
-        </header>
-        <ul className={styles.orderItems}>{order.items.map(item => <li className={styles.orderLine} key={item.productId}>
-          <ProductImage src={item.imageUrl ?? undefined} alt="" containerClassName={styles.orderImage} />
-          <div><strong>{item.productName}</strong><span>Qty: {item.quantity}</span></div>
-          <span className={styles.lineTotal}>{money(item.lineTotal, order.currency)}</span>
-        </li>)}</ul>
-        <footer className={styles.orderFooter}>
-          <p><span>{order.paymentState === 'PAID' ? 'Total paid' : 'Order total'}</span><strong>{money(order.total, order.currency)}</strong></p>
-          <Link className={styles.secondaryLink} to={`/checkout/confirmation/${order.orderReference}`} aria-label={`View order ${order.orderReference}`}>View Order</Link>
-        </footer>
-      </article>
-    </li>)}</ul>}
+    {query.isError && data && <div className={shared.notice} role="alert"><p>We could not refresh your orders. Showing the last loaded list.</p>
+      <Button size="small" variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}>Retry</Button></div>}
+    {data && total === 0 && <div className={styles.emptyArea}>
+      <EmptyState className={styles.empty} icon={<Package size={40} aria-hidden="true" />} title="You have no orders yet."
+        description="Orders appear here as soon as a payment is confirmed." action={<Link className={shared.primaryLink} to="/products">Explore Products</Link>} />
+    </div>}
+    {data && !changing && data.data.length === 0 && Boolean(total) && <div className={shared.notice} role="status">
+      <p>There are no orders on page {page}.</p>
+      <Link className={shared.outlineLink} to={totalPages > 1 ? `/orders?page=${totalPages}` : '/orders'}>Go to page {Math.max(totalPages, 1)}</Link>
+    </div>}
+    {data && data.data.length > 0 && <ul className={styles.orderList} aria-busy={changing || undefined} data-stale={changing || undefined}>
+      {data.data.map(order => <li key={order.orderReference}><OrderCard order={order} page={changing ? data.meta?.page ?? page : page} /></li>)}
+    </ul>}
     {totalPages > 1 && <Pagination aria-label="Order history pages" className={styles.pagination}><PaginationContent>
       <PaginationItem><PaginationPrevious disabled={page <= 1} onClick={() => goToPage(page - 1)} /></PaginationItem>
       {pages.map(value => <PaginationItem key={value}><PaginationLink aria-label={`Go to page ${value}`} isActive={value === page} onClick={() => goToPage(value)}>{value}</PaginationLink></PaginationItem>)}
       <PaginationItem><PaginationNext disabled={page >= totalPages} onClick={() => goToPage(page + 1)} /></PaginationItem>
     </PaginationContent></Pagination>}
+    <div className={styles.footerActions}><Link className={shared.outlineLink} to="/account">Back to Account</Link></div>
   </main>;
 }

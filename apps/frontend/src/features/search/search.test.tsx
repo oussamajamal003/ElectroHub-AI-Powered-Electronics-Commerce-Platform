@@ -144,14 +144,15 @@ describe('Search page', () => {
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 320)); });
     expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(1);
   });
-  it('applies drafted filters once, counts them and removes chips independently', async () => {
+  it('applies filters automatically, debounces prices, counts them and removes chips independently', async () => {
     page('/products?q=sony&page=2&brand=apple&availability=available', true); await screen.findByText('Apple MacBook Air');
     fireEvent.click(screen.getByRole('button', { name: 'Filters (2)' }));
+    expect(screen.queryByRole('button', { name: 'Apply filters' })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: 'Laptops' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('category=laptops');
     fireEvent.change(screen.getByRole('textbox', { name: 'Min price ($)' }), { target: { value: '50' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'Max price ($)' }), { target: { value: '1000' } });
-    expect(screen.getByTestId('location')).not.toHaveTextContent('category=');
-    fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
+    expect(screen.getByTestId('location')).not.toHaveTextContent('minPrice=');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Filters (4)' })).toBeInTheDocument());
     expect(screen.getByTestId('location')).not.toHaveTextContent('page=2');
     expect(screen.getByTestId('location')).toHaveTextContent('minPrice=50');
@@ -177,13 +178,11 @@ describe('Search page', () => {
   it('clears filters but retains query and permits filter-only discovery', async () => {
     page('/search?q=sony&brand=apple', true); await screen.findByText('Apple MacBook Air');
     fireEvent.click(screen.getByRole('button', { name: 'Filters (1)' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all filters' }));
     expect(screen.getByTestId('location')).toHaveTextContent('?q=sony');
     expect(screen.getByTestId('location')).not.toHaveTextContent('brand');
-    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    // The panel stays open after clearing; choosing a category applies it immediately.
     fireEvent.click(await screen.findByRole('button', { name: 'Laptops' }));
-    expect(screen.getByTestId('location')).not.toHaveTextContent('category=laptops');
-    fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
     expect(screen.getByTestId('location')).toHaveTextContent('category=laptops');
     fireEvent.change(screen.getByRole('combobox', { name: 'Search products' }), { target: { value: '' } });
     await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('q='));

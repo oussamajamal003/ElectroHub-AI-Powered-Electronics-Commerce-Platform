@@ -25,6 +25,7 @@ import { useWishlist } from '@/features/wishlist/context';
 import { AuthModal, AuthModalMode } from '@/features/auth/components/AuthModal';
 import { customerReturnPath, type CustomerReturnPath } from '@/features/auth/returnPath';
 import { SignOutModal } from '@/features/auth/components/SignOutModal';
+import { Toast, ToastClose, ToastProvider, ToastTitle, ToastViewport } from '@/components/ui/Toast';
 import styles from './CustomerHeader.module.scss';
 
 export interface CustomerHeaderProps {
@@ -53,6 +54,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<AuthModalMode>('login');
   const [showSignOut, setShowSignOut] = useState(false);
+  const [signedOutToast, setSignedOutToast] = useState(false);
 
   // Mobile menu
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -256,12 +258,6 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                             <span>My Orders</span>
                           </Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link to="/wishlist" className={styles.dropdownLink}>
-                            <Heart size={15} aria-hidden="true" />
-                            <span>Wishlist</span>
-                          </Link>
-                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           variant="destructive"
@@ -313,6 +309,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
       />
       <SignOutModal
         open={showSignOut}
+        onSignedOut={() => setSignedOutToast(true)}
         onOpenChange={open => {
           setShowSignOut(open);
           if (!open && mobileSignOut.current) {
@@ -321,6 +318,15 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
           }
         }}
       />
+      <ToastProvider duration={3000}>
+        {signedOutToast && (
+          <Toast open variant="success" onOpenChange={open => { if (!open) setSignedOutToast(false); }}>
+            <ToastTitle>Signed out successfully.</ToastTitle>
+            <ToastClose aria-label="Dismiss notification" />
+          </Toast>
+        )}
+        <ToastViewport />
+      </ToastProvider>
     </>
   );
 }

@@ -3,17 +3,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { FilterBar } from './FilterBar';
 
 describe('FilterBar', () => {
-  it('renders search input and apply button', () => {
-    const handleApply = vi.fn();
-    render(<FilterBar onApply={handleApply} />);
-    
+  it('renders the search input and no Apply button (filters update automatically)', () => {
+    render(<FilterBar />);
     expect(screen.getByPlaceholderText('Search products')).toBeInTheDocument();
-    
-    const applyBtn = screen.getByRole('button', { name: 'Apply' });
-    expect(applyBtn).toBeInTheDocument();
-    
-    fireEvent.click(applyBtn);
-    expect(handleApply).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /apply/i })).not.toBeInTheDocument();
   });
 
   it('renders selects when options are provided', () => {

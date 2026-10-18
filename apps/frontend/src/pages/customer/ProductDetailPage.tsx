@@ -146,11 +146,11 @@ export function ProductDetailPage() {
         <div className={styles.price}><strong>{formatPrice(product.price)}</strong>
           {product.compareAtPrice && product.discountPercent !== null && <><del>{formatPrice(product.compareAtPrice)}</del><span className={styles.discount}>-{product.discountPercent}%</span></>}
         </div>
+        {product.description && <p className={styles.intro} data-testid="product-description">{product.description}</p>}
         <ProductPurchaseActions product={product} quantity={cartQuantity} remainingQuantity={remainingQuantity} pending={cartPending} feedback={cartFeedback}
           onQuantityChange={setCartQuantity} wishlistError={wishlist?.error}
           wishlistAction={wishlist && <WishlistButton title={product.name} saved={wishlist.productIds.includes(product.id)} pending={wishlist.pending.includes(product.id)} onToggle={() => wishlist.toggle(product.id)} />}
           onAdd={() => addToCart()} onBuyNow={buyNow} />
-        {product.description && <p className={styles.intro}>{product.description}</p>}
       </section>
     </div>
 

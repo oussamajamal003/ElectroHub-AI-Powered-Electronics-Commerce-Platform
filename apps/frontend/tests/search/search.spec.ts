@@ -239,16 +239,15 @@ for (const width of [390, 768, 1440, 1920]) {
     await page.getByRole('button', { name: 'Filters', exact: true }).click();
     await page.getByRole('combobox', { name: 'Brand', exact: true }).click();
     await page.getByRole('option', { name: 'Apple', exact: true }).click();
-    await expect(page).not.toHaveURL(/brand=apple/);
-    await page.getByRole('button', { name: 'Apply filters' }).click();
+    // Filters apply immediately (no Apply button) and are persisted in the URL.
     await expect(page).toHaveURL(/brand=apple/);
+    await expect(page.getByRole('button', { name: 'Apply filters' })).toHaveCount(0);
     await page.getByRole('combobox', { name: 'Sort by' }).click();
     await page.getByRole('option', { name: 'Price: high to low' }).click();
     await expect(page).toHaveURL(/sort=price-desc/);
     await page.goBack(); await expect(page.getByRole('combobox', { name: 'Sort by' })).toHaveText('Relevance');
     await page.goForward(); await expect(page.getByRole('combobox', { name: 'Sort by' })).toHaveText('Price: high to low');
-    await page.getByRole('button', { name: /Filters/ }).click();
-    await page.getByRole('button', { name: 'Reset', exact: true }).click();
+    await page.getByRole('button', { name: 'Clear all filters', exact: true }).click();
     await expect(page).toHaveURL(/\/products\?q=macbook$/);
     await page.goto('/search?q=macbook');
     await expect(page.getByRole('button', { name: /Filters/ })).toHaveCount(0);
@@ -395,7 +394,9 @@ test('discovery controls use square surfaces and a full-width product filter pan
     expect(await page.getByRole('combobox', { name: 'Brand' }).evaluate(element => getComputedStyle(element).borderRadius)).toBe('0px');
     expect(await page.getByLabel('Min price ($)').evaluate(element => getComputedStyle(element).borderRadius)).toBe('0px');
     if (width === 1440) {
-      for (const buttonName of ['Reset', 'Apply filters']) {
+      await page.getByRole('combobox', { name: 'Availability' }).click();
+      await page.getByRole('option', { name: 'Available', exact: true }).click();
+      for (const buttonName of ['Clear all filters']) {
         const button = page.getByRole('button', { name: buttonName, exact: true });
         expect(await button.evaluate(element => getComputedStyle(element).borderRadius)).toBe('0px');
       }

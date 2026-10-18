@@ -1,29 +1,19 @@
 import { render, screen } from '@testing-library/react';
-import { PaymentStatus } from './PaymentStatus';
+import { PaymentStatus, type PaymentStatusType } from './PaymentStatus';
 import { describe, it, expect } from 'vitest';
 
 describe('PaymentStatus Component', () => {
-  it('renders pending status correctly', () => {
-    render(<PaymentStatus status="pending" />);
-    expect(screen.getByText('Pending')).toBeInTheDocument();
-    expect(screen.getByRole('status', { name: 'Payment status: Pending' })).toBeInTheDocument();
+  it.each<[PaymentStatusType, string]>([
+    ['pending', 'Pending'], ['paid', 'Paid'], ['failed', 'Failed'], ['refunded', 'Refunded'],
+    ['unprocessed', 'Not processed'], ['unknown', 'Status unavailable'],
+  ])('renders %s with the exact label and accessible context', (status, label) => {
+    const { container } = render(<PaymentStatus status={status} />);
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(container.firstElementChild).toHaveTextContent(`Payment status: ${label}`);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
-
-  it('renders paid status correctly', () => {
-    render(<PaymentStatus status="paid" />);
-    expect(screen.getByText('Paid')).toBeInTheDocument();
-    expect(screen.getByRole('status', { name: 'Payment status: Paid' })).toBeInTheDocument();
-  });
-
-  it('renders failed status correctly', () => {
-    render(<PaymentStatus status="failed" />);
-    expect(screen.getByText('Failed')).toBeInTheDocument();
-    expect(screen.getByRole('status', { name: 'Payment status: Failed' })).toBeInTheDocument();
-  });
-
-  it('renders refunded status correctly', () => {
-    render(<PaymentStatus status="refunded" />);
-    expect(screen.getByText('Refunded')).toBeInTheDocument();
-    expect(screen.getByRole('status', { name: 'Payment status: Refunded' })).toBeInTheDocument();
+  it('fails safe for an unexpected runtime value', () => {
+    render(<PaymentStatus status={'CHARGEBACK' as PaymentStatusType} />);
+    expect(screen.getByText('Status unavailable')).toBeInTheDocument();
   });
 });

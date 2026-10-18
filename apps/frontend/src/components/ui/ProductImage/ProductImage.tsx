@@ -38,8 +38,9 @@ export function ProductImage({
           {...props}
         />
       ) : (
-        <div className={styles.fallback} data-testid="product-image-fallback">
-          <ImageIcon className={styles.fallbackIcon} />
+        // An informative alt survives the fallback; decorative images (alt="") stay silent.
+        <div className={styles.fallback} data-testid="product-image-fallback" {...(alt ? { role: 'img', 'aria-label': alt } : {})}>
+          <ImageIcon className={styles.fallbackIcon} aria-hidden="true" />
           <span className={styles.fallbackText}>{fallbackText}</span>
         </div>
       )}

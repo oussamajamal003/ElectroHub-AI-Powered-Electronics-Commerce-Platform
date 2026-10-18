@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { expect, it, vi } from 'vitest';
 import { WishlistPageContent } from './WishlistPage';
@@ -73,4 +73,12 @@ it('saved heart has pressed semantics and does not navigate', () => {
 it('logout never renders guest empty state', () => {
   renderPage(wishlistFixture({ isLoggingOut: true, totalItems: 0, data: { items: [], totalItems: 0 } }));
   expect(screen.queryByText('Your wishlist is empty')).not.toBeInTheDocument();
+});
+it('adding a saved product to the Cart keeps it in the Wishlist', async () => {
+  const toggle = vi.fn(); const onAddToCart = vi.fn(async () => undefined);
+  render(<MemoryRouter><WishlistPageContent wishlist={wishlistFixture({ toggle })} onNavigate={() => undefined} onAddToCart={onAddToCart} /></MemoryRouter>);
+  fireEvent.click(screen.getByRole('button', { name: /to cart/ }));
+  await waitFor(() => expect(onAddToCart).toHaveBeenCalledWith(wishlistProduct.id));
+  expect(toggle).not.toHaveBeenCalled();
+  expect(screen.getByTestId('product-card')).toBeInTheDocument();
 });

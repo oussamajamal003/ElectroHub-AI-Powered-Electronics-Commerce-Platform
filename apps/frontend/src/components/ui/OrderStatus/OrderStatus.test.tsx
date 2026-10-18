@@ -1,29 +1,23 @@
 import { render, screen } from '@testing-library/react';
-import { OrderStatus } from './OrderStatus';
+import { OrderStatus, type OrderStatusType } from './OrderStatus';
 import { describe, it, expect } from 'vitest';
 
 describe('OrderStatus Component', () => {
-  it('renders processing status correctly', () => {
-    render(<OrderStatus status="processing" />);
-    expect(screen.getByText('Processing')).toBeInTheDocument();
-    expect(screen.getByRole('status', { name: 'Order status: Processing' })).toBeInTheDocument();
+  it.each<[OrderStatusType, string]>([
+    ['confirmed', 'Confirmed'], ['preparing', 'Preparing'], ['out_for_delivery', 'Out for Delivery'], ['delivered', 'Delivered'],
+    ['cancelled', 'Cancelled'], ['awaiting_capture', 'Finalizing your order'], ['unknown', 'Status unavailable'],
+    ['processing', 'Processing'], ['shipped', 'Shipped'],
+  ])('renders %s with the exact label and accessible context', (status, label) => {
+    const { container } = render(<OrderStatus status={status} />);
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(container.firstElementChild).toHaveTextContent(`Order status: ${label}`);
   });
-
-  it('renders shipped status correctly', () => {
-    render(<OrderStatus status="shipped" />);
-    expect(screen.getByText('Shipped')).toBeInTheDocument();
-    expect(screen.getByRole('status', { name: 'Order status: Shipped' })).toBeInTheDocument();
-  });
-
-  it('renders delivered status correctly', () => {
+  it('is not a live region, so lists of badges do not flood announcements', () => {
     render(<OrderStatus status="delivered" />);
-    expect(screen.getByText('Delivered')).toBeInTheDocument();
-    expect(screen.getByRole('status', { name: 'Order status: Delivered' })).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
-
-  it('renders cancelled status correctly', () => {
-    render(<OrderStatus status="cancelled" />);
-    expect(screen.getByText('Cancelled')).toBeInTheDocument();
-    expect(screen.getByRole('status', { name: 'Order status: Cancelled' })).toBeInTheDocument();
+  it('fails safe for an unexpected runtime value', () => {
+    render(<OrderStatus status={'RETURNED' as OrderStatusType} />);
+    expect(screen.getByText('Status unavailable')).toBeInTheDocument();
   });
 });

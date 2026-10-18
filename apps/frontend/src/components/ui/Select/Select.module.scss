@@ -171,3 +171,6 @@
   color: $color-error;
   margin: 0;
 }
+
+.leadingIcon { display: inline-flex; flex: 0 0 auto; margin-right: $spacing-2; color: $color-text-muted; }
+.value { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }

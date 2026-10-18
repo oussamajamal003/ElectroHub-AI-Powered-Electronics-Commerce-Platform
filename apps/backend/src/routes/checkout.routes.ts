@@ -61,6 +61,30 @@ const handle = (error: unknown) => error instanceof z.ZodError
  *               expectedRevision: { type: string, pattern: '^[a-f0-9]{64}$' }
  *     responses:
  *       409: { description: PAYMENT_REQUIRED; no Order, stock or Cart effects }
+ *   get:
+ *     tags: [Orders]
+ *     summary: Paginated owner-scoped Order history, newest first (createdAt DESC, id DESC)
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: query, name: page, schema: { type: integer, minimum: 1, maximum: 1000, default: 1 } }
+ *       - { in: query, name: pageSize, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+ *     responses:
+ *       200: { description: 'data: Confirmation-shaped Orders plus itemCount (sum of quantities); meta: page, pageSize, total Orders, totalPages' }
+ *       400: { description: Invalid or unknown pagination parameters }
+ * /orders/{orderReference}:
+ *   get:
+ *     tags: [Orders]
+ *     summary: Read-only owned Order Details from immutable purchase-time snapshots
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: orderReference
+ *         required: true
+ *         schema: { type: string, maxLength: 40, description: ORD- followed by the Order UUID }
+ *     responses:
+ *       200: { description: 'Order status, payment projection (UNPROCESSED|PENDING|PAID|FAILED|REFUNDED), snapshots, decimal-string totals, payment paidAt/refundedAt or null' }
+ *       400: { description: ORDER_REFERENCE_INVALID }
+ *       404: { description: ORDER_NOT_FOUND — identical for unknown and other customers' Orders }
  * /orders/{orderReference}/confirmation:
  *   get:
  *     tags: [Checkout]
@@ -107,5 +131,9 @@ router.get('/orders/attempts/:attemptId/confirmation', async (req, res, next) =>
 });
 router.get('/orders/:orderReference/confirmation', async (req, res, next) => {
   try { res.json({ data: await orders.getConfirmation(req.user!.userId, String(req.params.orderReference)) }); } catch (error) { next(handle(error)); }
+});
+// Registered after the more specific /orders/... reads; it only matches a single path segment.
+router.get('/orders/:orderReference', async (req, res, next) => {
+  try { res.json({ data: await orders.getDetails(req.user!.userId, String(req.params.orderReference)) }); } catch (error) { next(handle(error)); }
 });
 export default router;

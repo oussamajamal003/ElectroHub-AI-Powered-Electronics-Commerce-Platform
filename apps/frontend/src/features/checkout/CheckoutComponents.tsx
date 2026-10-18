@@ -217,5 +217,10 @@ export function ConfirmationContent({ order }: { order: Confirmation }) {
       <div className={`${styles.totalRow} ${styles.grandTotal}`}><strong>{paid ? 'Total Paid' : 'Order Total'}</strong><strong>{money(order.total)}</strong></div>
       {order.card && <p className={styles.subtle}>{order.card.brand} ending {order.card.last4}</p>}
       <div className={styles.orderDate}><span className={styles.eyebrow}>Estimated Delivery</span><p><strong>{date(order.estimatedDeliveryStart)}{order.estimatedDeliveryEnd !== order.estimatedDeliveryStart ? ` – ${date(order.estimatedDeliveryEnd)}` : ''}</strong></p><address>To: {order.shipping.recipient}<br />{[order.shipping.line1, order.shipping.line2, order.shipping.city, order.shipping.state, order.shipping.postalCode, order.shipping.country].filter(Boolean).join(', ')}</address><p className={styles.subtle}>Business-day estimate; holidays and delivery cutoffs may affect arrival.</p></div>
-    </section><div className={styles.recoveryActions}><Link className={styles.secondaryLink} to="/orders">View Order</Link><Link className={styles.primaryLink} to="/products">Continue Shopping</Link></div></div>;
+    </section>
+    {/* Outside the bordered card, sharing its width: the durable Order Details page, then continued shopping. Navigation only. */}
+    <div className={styles.confirmationActions}>
+      {order.orderReference && <Link className={styles.primaryLink} to={`/orders/${order.orderReference}`}>View Order Details</Link>}
+      <Link className={styles.secondaryLink} to="/products">Continue Shopping</Link>
+    </div></div>;
 }

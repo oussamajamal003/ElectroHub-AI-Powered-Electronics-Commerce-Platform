@@ -14,11 +14,11 @@
 .heroBg { position: absolute; z-index: -2; inset: 0; width: 100%; height: 100%; max-height: none; object-fit: cover; object-position: center; transition: opacity 0.8s ease-in-out; will-change: opacity; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .heroBg { transition: none; } }
 
-.heroCopy { position: relative; max-width: 42rem; h1 { font-size: clamp($font-size-3xl, 4vw, 3.75rem); line-height: $line-height-tight; margin: $spacing-2 0 $spacing-4; } p { color: $color-text-secondary; font-size: $font-size-lg; } }
+.heroCopy { position: relative; max-width: 42rem; h1 { font-size: clamp($font-size-3xl, 4vw, 3.75rem); font-weight: $font-weight-bold; line-height: 1.1; letter-spacing: -0.02em; margin: $spacing-2 0 $spacing-5; } p { color: $color-text-secondary; font-size: $font-size-lg; } }
 .hero .heroCopy p { color: $color-border; }
 .heroActions { display: flex; flex-wrap: wrap; gap: $spacing-3; align-items: center; }
-.secondaryLink { display: inline-flex; align-items: center; justify-content: center; min-height: $spacing-12; padding: $spacing-3 $spacing-6; margin-top: $spacing-4; border: 1px solid $color-border; color: $color-text-inverse; text-decoration: none; font-weight: $font-weight-semibold;
-  &:hover { background: $color-secondary-light; } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
+.secondaryLink { display: inline-flex; align-items: center; justify-content: center; min-height: $spacing-12; padding: $spacing-3 $spacing-8; margin-top: $spacing-4; border: 1px solid rgb(255 255 255 / 0.5); color: $color-text-inverse; text-decoration: none; font-size: $font-size-base; font-weight: $font-weight-semibold; transition: background-color $transition-fast, border-color $transition-fast;
+  &:hover { background: rgb(255 255 255 / 0.1); border-color: #ffffff; } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
 }
 .discoveryStrip {
   background: $color-primary;
@@ -119,15 +119,19 @@
     gap: $spacing-2;
   }
 }
-.primaryLink { display: inline-flex; align-items: center; justify-content: center; min-height: $spacing-12; padding: $spacing-3 $spacing-6; margin-top: $spacing-4; color: $color-text-inverse; background: $color-primary; text-decoration: none; font-weight: $font-weight-semibold;
-  &:hover { background: $color-primary-dark; } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
+.primaryLink { display: inline-flex; align-items: center; justify-content: center; min-height: $spacing-12; padding: $spacing-3 $spacing-8; margin-top: $spacing-4; color: $color-text-inverse; background: $color-primary; text-decoration: none; font-size: $font-size-base; font-weight: $font-weight-semibold; transition: background-color $transition-fast, box-shadow $transition-fast;
+  &:hover { background: $color-primary-dark; box-shadow: 0 10px 24px -10px rgb(37 99 235 / 0.8); } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
 }
 .section { max-width: 90rem; margin: 0 auto; padding: $spacing-12 $spacing-4;
   @include respond-to(md) { padding-inline: $spacing-8; } @include respond-to(lg) { padding-inline: $spacing-12; }
 }
 .discoveryStrip + .section { max-width: none; background: $color-surface; > * { max-width: 84rem; margin-inline: auto; } }
 .sectionHeading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: $spacing-4; margin-bottom: $spacing-8;
-  h2 { font-size: $font-size-3xl; margin: $spacing-2 0 0; } p { margin: 0; } a { color: $color-primary; text-decoration: none; font-weight: $font-weight-medium; }
+  h2 { font-size: clamp($font-size-2xl, 2.4vw, 2.25rem); font-weight: $font-weight-bold; letter-spacing: -0.015em; margin: $spacing-2 0 0; } p { margin: 0; }
+  a { display: inline-flex; align-items: center; gap: $spacing-1; color: $color-primary; text-decoration: none; font-weight: $font-weight-semibold; text-underline-offset: 4px;
+    &:hover { color: $color-primary-dark; text-decoration: underline; }
+    &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
+  }
 }
 .productGrid { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: $spacing-6;
   @include respond-to(sm) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -154,21 +158,26 @@
   @include respond-to(md) { grid-template-columns: repeat(2, minmax(0, 1fr)); padding-inline: $spacing-8; }
   @include respond-to(lg) { padding-inline: $spacing-12; }
 }
-.promoCard { position: relative; display: flex; align-items: center; justify-content: space-between; gap: $spacing-4; min-height: 15rem; padding: $spacing-6; overflow: hidden; border: 1px solid $color-border; background: linear-gradient(120deg, #f1f5ff, #e0e7ff); color: $color-text-primary; box-shadow: $shadow-sm; transition: box-shadow $transition-normal, border-color $transition-normal;
-  &:hover, &:focus-within { border-color: $color-primary; box-shadow: $shadow-md; }
-  &:nth-child(even) { background: linear-gradient(120deg, #eff6ff, #dbeafe); }
-  > div { position: relative; z-index: 1; max-width: 58%; }
-  .eyebrow { color: $color-primary-dark; margin: 0 0 $spacing-2; }
-  h2 { font-size: clamp($font-size-xl, 2vw, $font-size-3xl); line-height: $line-height-tight; margin: 0 0 $spacing-2; }
-  p:not(.eyebrow) { margin: 0 0 $spacing-4; color: $color-text-secondary; }
-  a { color: $color-primary-dark; font-weight: $font-weight-semibold; text-decoration: none; cursor: pointer; &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
-  img { width: 42%; height: 12rem; object-fit: contain; mix-blend-mode: multiply; transition: transform $transition-normal; }
-  &:hover img { transform: scale(1.025); }
+// Promo banners: the product photo is the banner's background visual; a left-weighted scrim keeps the copy legible.
+.promoCard { position: relative; display: flex; align-items: flex-end; min-height: 18rem; padding: $spacing-8 $spacing-6; overflow: hidden; isolation: isolate; border: 1px solid $color-border; background: $color-secondary; color: $color-text-inverse; box-shadow: $shadow-sm; transition: box-shadow $transition-normal, border-color $transition-normal;
+  &::before { position: absolute; z-index: -1; inset: 0; content: ''; background: linear-gradient(90deg, rgb(15 23 42 / 0.88) 0%, rgb(15 23 42 / 0.66) 45%, rgb(15 23 42 / 0.08) 100%); }
+  &:hover, &:focus-within { border-color: $color-primary; box-shadow: $shadow-lg; }
+  .eyebrow { color: #93c5fd; margin: 0 0 $spacing-2; }
+  h2 { font-size: clamp($font-size-xl, 2.2vw, 2.125rem); font-weight: $font-weight-bold; line-height: $line-height-tight; letter-spacing: -0.01em; margin: 0 0 $spacing-3; color: $color-text-inverse; }
+  p:not(.eyebrow) { margin: 0 0 $spacing-5; color: #e2e8f0; font-size: $font-size-lg; }
+  a { display: inline-flex; align-items: center; gap: $spacing-2; min-height: 2.75rem; padding: 0 $spacing-5; background: $color-background; color: $color-primary-dark; font-weight: $font-weight-semibold; text-decoration: none; cursor: pointer; transition: background-color $transition-fast, color $transition-fast;
+    &:hover { background: $color-primary; color: $color-text-inverse; }
+    &:focus-visible { outline: $focus-ring-width $focus-ring-style #ffffff; outline-offset: $focus-ring-offset; }
+  }
+  @include respond-to(lg) { min-height: 22rem; padding: $spacing-10; align-items: center; }
 }
+.promoCopy { position: relative; z-index: 1; max-width: 32rem; @include respond-to(md) { max-width: 70%; } }
+.promoBg { position: absolute; z-index: -2; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 75% center; transition: transform 600ms ease; }
+.promoCard:hover .promoBg { transform: scale(1.04); }
 .promoCard a { position: relative; z-index: 2; }
 .promoSkeleton { display: grid; align-content: center; gap: $spacing-4; min-height: 15rem; padding: $spacing-6; background: $color-surface;
   span { height: 1.25rem; width: 40%; background: $color-border; }
   span:nth-child(2) { width: 70%; height: 2rem; }
   span:last-child { width: 30%; }
 }
-@media (prefers-reduced-motion: reduce) { .promoCard, .promoCard img { transition: none; } .promoCard:hover img { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .promoCard, .promoBg, .promoCard a { transition: none; } .promoCard:hover .promoBg { transform: none; } }

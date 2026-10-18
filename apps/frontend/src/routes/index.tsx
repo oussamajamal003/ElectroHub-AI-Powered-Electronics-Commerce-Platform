@@ -43,6 +43,7 @@ const ProfilePage = lazy(() => import('../pages/customer/ProfilePage').then(modu
 const CheckoutPage = lazy(() => import('@/features/checkout/CheckoutPage').then(module => ({ default: module.CheckoutPage })));
 const ConfirmationPage = lazy(() => import('@/features/checkout/ConfirmationPage').then(module => ({ default: module.ConfirmationPage })));
 const PaymentRetryPage = lazy(() => import('@/features/checkout/PaymentRetryPage').then(module => ({ default: module.PaymentRetryPage })));
+const OrderDetailsPage = lazy(() => import('@/features/orders/OrderDetailsPage').then(module => ({ default: module.OrderDetailsPage })));
 const PaymentStatusPage = lazy(() => import('@/features/checkout/PaymentStatusPage').then(module => ({ default: module.PaymentStatusPage })));
 const route = (content: React.ReactNode) => <Suspense fallback={<ElectroHubLoader page />}>{content}</Suspense>;
 
@@ -66,6 +67,8 @@ export function AppRoutes() {
           <Route path="/cart" element={route(<CartPage />)} />
           <Route path="/wishlist" element={route(<WishlistPage />)} />
           <Route path="/orders" element={<OrdersPage />} />
+          {/* Same session boundary as /orders (sign-in card for guests); ownership is enforced by the API. */}
+          <Route path="/orders/:orderReference" element={route(<OrderDetailsPage />)} />
 
           <Route element={<ProtectedRoute requiredRole="CUSTOMER" redirectTo="/cart" requireVerifiedSession preserveReturnPath />}>
             <Route path="/account/payment-retry/:attemptId" element={route(<PaymentRetryPage />)} />
