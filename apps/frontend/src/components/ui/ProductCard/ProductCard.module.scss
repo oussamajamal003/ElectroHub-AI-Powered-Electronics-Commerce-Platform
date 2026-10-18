@@ -7,12 +7,13 @@
   border: 1px solid $color-border;
   border-radius: 0;
   overflow: hidden;
-  transition: box-shadow $transition-normal, border-color $transition-normal;
+  transition: box-shadow $transition-normal, border-color $transition-normal, transform $transition-normal;
   position: relative;
   &[data-clickable='true'] { cursor: pointer; }
   
   &:hover, &:focus-within {
-    box-shadow: $shadow-md;
+    border-color: #cbd5e1;
+    box-shadow: 0 14px 32px -18px rgb(15 23 42 / 0.35);
     
     .wishlistBtn {
       opacity: 1;
@@ -31,11 +32,16 @@
   position: relative;
   cursor: pointer;
   &[data-clickable='true'] { cursor: pointer; }
-  padding: $spacing-4;
+  margin: $spacing-3;
   aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background: $color-surface;
 }
 
-.primaryImage, .secondaryImage { position: absolute; inset: $spacing-4; transition: opacity $transition-normal; }
+.primaryImage, .secondaryImage { position: absolute; inset: $spacing-4; transition: opacity $transition-normal, transform 500ms ease; }
+@media (hover: hover) {
+  .card:hover .primaryImage, .card:hover .secondaryImage { transform: scale(1.035); }
+}
 .primaryImage { opacity: 1; }
 .secondaryImage { opacity: 0; pointer-events: none; }
 .card[data-clickable='true'] .imageArea { cursor: pointer; }
@@ -51,8 +57,8 @@
 
 .wishlistBtn {
   position: absolute;
-  bottom: $spacing-6;
-  right: $spacing-6;
+  top: $spacing-3;
+  right: $spacing-3;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -75,6 +81,8 @@
 
   &:hover {
     color: $color-error;
+    border-color: $color-error-border;
+    background-color: $color-error-background;
   }
 
   &.wishlisted {
@@ -92,31 +100,33 @@
 .content {
   display: flex;
   flex-direction: column;
-  padding: $spacing-4;
-  padding-top: 0;
+  padding: $spacing-2 $spacing-5 $spacing-5;
   flex-grow: 1;
 }
 
 .category {
   font-family: $font-family-base;
   font-size: $font-size-xs;
-  font-weight: $font-weight-medium;
-  color: $color-text-secondary;
+  font-weight: $font-weight-semibold;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $color-primary;
   margin-bottom: $spacing-1;
 }
 
 .title {
   font-family: $font-family-base;
-  font-size: $font-size-lg;
+  font-size: 1.0625rem;
   font-weight: $font-weight-semibold;
   color: $color-text-primary;
   margin: 0 0 $spacing-2 0;
   line-height: 1.4;
+  min-height: 2.8em;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  a { position: relative; z-index: 1; color: inherit; text-decoration: none; }
+  a { position: relative; z-index: 1; color: inherit; text-decoration: none; transition: color $transition-fast; &:hover { color: $color-primary; } }
   a:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
 }
 .skeletonContent { gap: $spacing-2; }
@@ -150,41 +160,50 @@
 }
 
 .priceContainer {
-  margin-bottom: $spacing-4;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  margin: auto 0 $spacing-2;
 }
 
 .price {
   font-family: $font-family-base;
   font-size: $font-size-xl;
   font-weight: $font-weight-bold;
+  letter-spacing: -0.01em;
   color: $color-text-primary;
+  font-variant-numeric: tabular-nums;
 }
 
 .addBtn {
   width: 100%;
+  min-height: 44px;
   padding: 10px $spacing-4;
   border-radius: 0;
   background-color: $color-primary;
   color: $color-text-inverse;
   border: none;
   font-family: $font-family-base;
-  font-size: $font-size-sm;
-  font-weight: $font-weight-medium;
+  font-size: 0.9375rem;
+  font-weight: $font-weight-semibold;
   cursor: pointer;
   position: relative;
   z-index: 2;
-  transition: background-color $transition-normal;
+  transition: background-color $transition-fast, box-shadow $transition-fast, transform 100ms ease;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background-color: $color-primary-dark;
+    box-shadow: 0 6px 16px -6px rgb(37 99 235 / 0.55);
   }
 
-  &:focus {
+  &:active:not(:disabled) { transform: translateY(1px); }
+
+  &:focus-visible {
     outline: $focus-ring-width $focus-ring-style $focus-ring-color;
     outline-offset: $focus-ring-offset;
   }
 
-  &:disabled { cursor: not-allowed; opacity: 0.65; }
+  &:disabled { cursor: not-allowed; background-color: $color-surface; color: $color-text-muted; border: 1px solid $color-border; }
 }
 
 .cartFeedback { display: block; margin-top: $spacing-2; color: $color-error; font-size: $font-size-xs; }
@@ -192,4 +211,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .card, .primaryImage, .secondaryImage, .wishlistBtn, .addBtn { transition: none; }
+  .card:hover .primaryImage, .card:hover .secondaryImage { transform: none; }
+  .addBtn:active:not(:disabled) { transform: none; }
 }

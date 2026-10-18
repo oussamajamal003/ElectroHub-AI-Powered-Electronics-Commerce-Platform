@@ -504,3 +504,11 @@ Search is complete when:
 ## 26. Search Principle
 
 > **Search should provide fast, predictable product discovery while keeping query validation, filtering, authorization, and data retrieval authoritative on the backend.**
+
+## Product Discovery Toolbar Refinement (All Products)
+
+- Search, Filters and Sort now share one 56px height, border, radius ($radius-md), icon weight and hover/focus treatment. Sort drops its floating label (accessible name "Sort by" kept; trigger shows icon + selected option + chevron). Filters trigger shows a sliders icon, active-filter count badge, rotating chevron, `aria-expanded`/`aria-controls`, and name "Filters (n)".
+- Filters already applied automatically (no Apply button; price and text debounced, URL-synced, page reset to 1); panel gets a short fade/slide-in that respects `prefers-reduced-motion`.
+- Shared `Select` gained optional `leadingIcon`, `triggerClassName`, `contentClassName`; `FilterSelect` gained `compact` and now shows the "All …" choice instead of the generic placeholder.
+- Verification: `vitest` 97 files / 766 tests pass; `tests/visual/discovery-toolbar.visual.spec.ts` (Playwright, 390/768/1440/1920: equal control heights, alignment, no overflow, auto-apply, sort menu selected state, Escape, URL sync, clear) 8/8 pass; screenshots in `apps/frontend/playwright-report/discovery-toolbar/`.
+- Race and reduced-motion checks added to the same spec: rapid sort changes with out-of-order delayed responses settle on the last choice; `prefers-reduced-motion: reduce` yields no panel animation and ~0s transitions (control run animates). Not verified: Storybook rendering (stories not rebuilt).

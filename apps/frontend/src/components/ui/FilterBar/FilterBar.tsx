@@ -1,7 +1,6 @@
 import { Search, X } from 'lucide-react';
 import { Input } from '../Input';
 import { Select } from '../Select';
-import { Button } from '../Button';
 import styles from './FilterBar.module.scss';
 
 export interface FilterOption {
@@ -24,7 +23,6 @@ export interface FilterBarProps {
   statusOptions?: FilterOption[];
   selectedStatus?: string;
   onStatusChange?: (value: string) => void;
-  onApply?: () => void;
   activeFilters?: ActiveFilter[];
   onClearFilter?: (key: string) => void;
   className?: string;
@@ -39,7 +37,6 @@ export function FilterBar({
   statusOptions = [],
   selectedStatus,
   onStatusChange,
-  onApply,
   activeFilters = [],
   onClearFilter,
   className = '',
@@ -83,13 +80,10 @@ export function FilterBar({
           </div>
         )}
         
-        <Button variant="primary" onClick={onApply} className={styles.applyBtn}>
-          Apply
-        </Button>
       </div>
       
       {activeFilters.length > 0 && (
-        <div className={styles.activeFiltersRow}>
+        <div className={styles.activeFiltersRow} role="group" aria-label="Active filters">
           {activeFilters.map(filter => (
             <div key={filter.key} className={styles.activeFilterChip}>
               <span className={styles.filterLabel}>{filter.label}</span>

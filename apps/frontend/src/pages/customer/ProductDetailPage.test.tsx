@@ -47,6 +47,16 @@ describe('Product details loading and review auth state', () => {
     expect(addItem).not.toHaveBeenCalled();
     expect(await screen.findByRole('heading', { name: 'Buy Now Checkout destination' })).toBeInTheDocument();
   });
+  it('places the product description between the price and the stock area', () => {
+    vi.mocked(useCart).mockReturnValue({ addItem: vi.fn() } as unknown as ReturnType<typeof useCart>);
+    vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, purchasable: true, stockStatus: 'IN_STOCK' } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
+    renderPage();
+    const description = screen.getByTestId('product-description');
+    const price = screen.getAllByText('$', { exact: false }).find(element => element.tagName === 'STRONG')!;
+    const stock = screen.getByText('In Stock');
+    expect(price.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(description.compareDocumentPosition(stock) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
   it('Add to Cart adds to persistent Cart without navigating away', async () => {
     const addItem = vi.fn().mockResolvedValue(undefined);
     vi.mocked(useCart).mockReturnValue({ addItem } as unknown as ReturnType<typeof useCart>);

@@ -12,12 +12,16 @@ export interface SelectProps extends React.ComponentPropsWithoutRef<typeof Selec
   selectSize?: 'small' | 'medium' | 'large';
   fullWidth?: boolean;
   square?: boolean;
+  /** Optional leading icon, trigger class and popup class so a toolbar can restyle the shared control without forking it. */
+  leadingIcon?: React.ReactNode;
+  triggerClassName?: string;
+  contentClassName?: string;
   'aria-label'?: string;
 }
 
 export const Select = forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger>, SelectProps>(
   (
-    { label, error, placeholder = 'Select an option...', options, selectSize = 'medium', fullWidth, square, disabled, 'aria-label': ariaLabel, ...props },
+    { label, error, placeholder = 'Select an option...', options, selectSize = 'medium', fullWidth, square, leadingIcon, triggerClassName, contentClassName, disabled, 'aria-label': ariaLabel, ...props },
     ref
   ) => {
     const isError = Boolean(error);
@@ -38,10 +42,11 @@ export const Select = forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger
           <SelectPrimitive.Trigger
             ref={ref}
             id={generatedId}
-            className={clsx(styles.trigger, styles[`size-${selectSize}`], square && styles.square, isError && styles.error)}
+            className={clsx(styles.trigger, styles[`size-${selectSize}`], square && styles.square, isError && styles.error, triggerClassName)}
             aria-label={ariaLabel}
           >
-            <SelectPrimitive.Value placeholder={placeholder} />
+            {leadingIcon && <span className={styles.leadingIcon} aria-hidden="true">{leadingIcon}</span>}
+            <span className={styles.value}><SelectPrimitive.Value placeholder={placeholder} /></span>
             <SelectPrimitive.Icon className={styles.icon}>
               <ChevronDown size={16} />
             </SelectPrimitive.Icon>
@@ -49,7 +54,7 @@ export const Select = forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger
 
           <SelectPrimitive.Portal>
             <SelectPrimitive.Content
-              className={clsx(styles.content, square && styles.square)}
+              className={clsx(styles.content, square && styles.square, contentClassName)}
               position="popper"
               sideOffset={4}
             >

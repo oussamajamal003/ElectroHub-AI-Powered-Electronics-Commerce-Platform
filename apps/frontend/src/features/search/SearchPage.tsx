@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronRight, SlidersHorizontal } from 'lucide-react';
+import { ArrowUpDown, ChevronDown, ChevronRight, SearchX, SlidersHorizontal } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
@@ -39,7 +41,9 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
   const normalizedDraft = normalizeQuery(draft);
   const [tab, setTab] = useState('text');
   const [showFilters, setShowFilters] = useState(false);
-  const [filterDraft, setFilterDraft] = useState<Pick<SearchState, 'category' | 'brand' | 'availability' | 'minPrice' | 'maxPrice'>>({});
+  // Filters apply as soon as they change; only the free-text price range keeps a short-lived draft so typing is debounced.
+  const [priceDraft, setPriceDraft] = useState<Pick<SearchState, 'minPrice' | 'maxPrice'>>({ minPrice: state.minPrice, maxPrice: state.maxPrice });
+  const priceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const filterButton = useRef<HTMLButtonElement>(null);
   const filterPanel = useRef<HTMLElement>(null);
   const categoriesQuery = useCategories(!catalog || showFilters || Boolean(state.category));
@@ -58,11 +62,20 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
     setDraft(state.q);
     setFormError('');
   }, [serialized, state.q]);
-  useEffect(() => () => { if (draftTimer.current) clearTimeout(draftTimer.current); }, []);
+  useEffect(() => { setPriceDraft({ minPrice: state.minPrice, maxPrice: state.maxPrice }); }, [state.minPrice, state.maxPrice]);
+  useEffect(() => () => {
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    if (priceTimer.current) clearTimeout(priceTimer.current);
+  }, []);
+  // Filters apply immediately, so several changes can land before the URL re-renders; later changes build on the
+  // most recent commit instead of the render-time state so they never drop an earlier filter.
+  const pending = useRef<SearchState | null>(null);
+  useEffect(() => { pending.current = null; }, [serialized]);
   // smoothTop: page-number navigation glides to the top of the results instead of jumping (see CustomerScrollRestoration).
   const commit = useCallback((next: SearchState, replace = false, smoothTop = false) => {
     try {
       const validated = parseSearch(searchParams(next));
+      pending.current = validated;
       setFormError(''); setParams(searchParams(validated), { replace, state: smoothTop ? { smoothTop: true } : undefined }); return true;
     } catch (failure) { setFormError(failure instanceof Error ? failure.message : 'Check your search values.'); return false; }
   }, [setParams]);
@@ -76,7 +89,7 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
       commit({ ...state, q: query, page: 1 }, true);
     }, 275);
   };
-  const update = (patch: Partial<SearchState>) => commit({ ...state, q: normalizedDraft, ...patch, page: 1 });
+  const update = (patch: Partial<SearchState>) => commit({ ...(pending.current ?? state), q: normalizedDraft, ...patch, page: 1 });
   const selectSuggestion = (suggestion: Suggestion) => {
     if (draftTimer.current) clearTimeout(draftTimer.current);
     draftTimer.current = null;
@@ -90,10 +103,20 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
   };
   const filterCount = Number(Boolean(state.category)) + Number(Boolean(state.brand)) + Number(Boolean(state.availability)) +
     Number(state.minPrice !== undefined || state.maxPrice !== undefined);
+  const changePrice = (patch: Partial<Pick<SearchState, 'minPrice' | 'maxPrice'>>) => {
+    const next = { ...priceDraft, ...patch };
+    setPriceDraft(next);
+    if (priceTimer.current) clearTimeout(priceTimer.current);
+    priceTimer.current = setTimeout(() => { priceTimer.current = null; update(next); }, 500);
+  };
+  const priceInvalid = Boolean(formError) && /price/i.test(formError);
+  const clearAllFilters = () => {
+    if (priceTimer.current) clearTimeout(priceTimer.current);
+    priceTimer.current = null;
+    commit(clearFilters({ ...state, q: normalizedDraft }));
+  };
   const openFilters = () => {
     if (showFilters) { setShowFilters(false); return; }
-    setFilterDraft({ category: state.category, brand: state.brand, availability: state.availability,
-      minPrice: state.minPrice, maxPrice: state.maxPrice });
     setShowFilters(true);
     requestAnimationFrame(() => filterPanel.current?.focus());
   };
@@ -123,8 +146,14 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
             <form role="search" className={styles.searchForm + (catalog ? ' ' + styles.catalogSearch : '')} onSubmit={event => { event.preventDefault(); if (draftTimer.current) clearTimeout(draftTimer.current); draftTimer.current = null; if (normalizedDraft !== state.q) commit({ ...state, q: normalizedDraft, page: 1 }, true); }}>
               <SearchField value={draft} onChange={changeDraft} onSelect={selectSuggestion} />
             </form>
-            {catalog && <Button ref={filterButton} type="button" variant="outline" aria-expanded={showFilters} aria-controls="search-filters" onClick={openFilters}><SlidersHorizontal size={18} /> Filters{filterCount ? ` (${filterCount})` : ''}</Button>}
-            <FilterSelect label="Sort by" value={state.sort ?? (state.q ? 'relevance' : 'newest')} selectSize={catalog ? 'medium' : 'large'} choices={[
+            {catalog && <button ref={filterButton} type="button" className={`${styles.filterTrigger} ${showFilters || filterCount ? styles.filterTriggerActive : ''}`}
+              aria-expanded={showFilters} aria-controls="search-filters" aria-label={filterCount ? `Filters (${filterCount})` : 'Filters'} onClick={openFilters}>
+              <SlidersHorizontal size={20} strokeWidth={1.75} aria-hidden="true" /><span>Filters</span>
+              {filterCount > 0 && <span className={styles.filterBadge} aria-hidden="true">{filterCount}</span>}
+              <ChevronDown size={18} strokeWidth={1.75} aria-hidden="true" className={`${styles.chevron} ${showFilters ? styles.chevronOpen : ''}`} />
+            </button>}
+            <FilterSelect label="Sort by" value={state.sort ?? (state.q ? 'relevance' : 'newest')} selectSize={catalog ? 'medium' : 'large'}
+              compact={catalog ? { icon: <ArrowUpDown size={20} strokeWidth={1.75} />, triggerClassName: styles.sortTrigger, contentClassName: styles.sortContent } : undefined} choices={[
               { value: 'relevance', label: 'Relevance' }, { value: 'price-asc', label: 'Price: low to high' }, { value: 'price-desc', label: 'Price: high to low' }, { value: 'newest', label: 'Newest' }, { value: 'name-asc', label: 'Name: A–Z' },
             ]} onChange={value => update({ sort: value as SearchState['sort'] })} />
           </div>
@@ -134,32 +163,32 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
             onKeyDown={event => { if (event.key === 'Escape') { setShowFilters(false); filterButton.current?.focus(); } }}>
             {(categoriesQuery.isPending || brandsQuery.isPending) && <p role="status">Loading filters…</p>}
             {metadataError && <p role="status">Filters are temporarily unavailable. You can still search by text. <Button type="button" variant="link" onClick={() => { void categoriesQuery.refetch(); void brandsQuery.refetch(); }}>Retry filters</Button></p>}
-            <FilterChipGroup label="Category" value={filterDraft.category ?? ''} choices={[{ value: '', label: 'All' }, ...filterChoices(categories, filterDraft.category)]} onChange={value => setFilterDraft(previous => ({ ...previous, category: value || undefined }))} />
+            <FilterChipGroup label="Category" value={state.category ?? ''} choices={[{ value: '', label: 'All' }, ...filterChoices(categories, state.category)]} onChange={value => update({ category: value || undefined })} />
             <div className={styles.filterRow}>
-              <FilterSelect label="Brand" value={filterDraft.brand ?? ''} choices={[{ value: '', label: 'All brands' }, ...filterChoices(brands, filterDraft.brand)]} onChange={value => setFilterDraft(previous => ({ ...previous, brand: value || undefined }))} />
-              <FilterSelect label="Availability" value={filterDraft.availability ?? ''} choices={[{ value: '', label: 'Any availability' }, { value: 'available', label: 'Available' }, { value: 'unavailable', label: 'Unavailable' }]} onChange={value => setFilterDraft(previous => ({ ...previous, availability: value === 'available' || value === 'unavailable' ? value : undefined }))} />
-              <Input label="Min price ($)" inputMode="decimal" value={filterDraft.minPrice ?? ''} onChange={event => setFilterDraft(previous => ({ ...previous, minPrice: event.target.value || undefined }))} />
-              <Input label="Max price ($)" inputMode="decimal" value={filterDraft.maxPrice ?? ''} onChange={event => setFilterDraft(previous => ({ ...previous, maxPrice: event.target.value || undefined }))} />
+              <FilterSelect label="Brand" value={state.brand ?? ''} choices={[{ value: '', label: 'All brands' }, ...filterChoices(brands, state.brand)]} onChange={value => update({ brand: value || undefined })} />
+              <FilterSelect label="Availability" value={state.availability ?? ''} choices={[{ value: '', label: 'Any availability' }, { value: 'available', label: 'Available' }, { value: 'unavailable', label: 'Unavailable' }]} onChange={value => update({ availability: value === 'available' || value === 'unavailable' ? value : undefined })} />
+              <Input label="Min price ($)" aria-invalid={priceInvalid || undefined} inputMode="decimal" value={priceDraft.minPrice ?? ''} onChange={event => changePrice({ minPrice: event.target.value || undefined })} />
+              <Input label="Max price ($)" aria-invalid={priceInvalid || undefined} inputMode="decimal" value={priceDraft.maxPrice ?? ''} onChange={event => changePrice({ maxPrice: event.target.value || undefined })} />
             </div>
-            <div className={styles.filterActions}>
-              <Button type="button" variant="secondary" onClick={() => { if (commit(clearFilters({ ...state, q: normalizedDraft }))) { setFilterDraft({}); setShowFilters(false); filterButton.current?.focus(); } }}>Reset</Button>
-              <Button type="button" onClick={() => { if (commit({ ...state, q: normalizedDraft, ...filterDraft, page: 1 })) { setShowFilters(false); filterButton.current?.focus(); } }}>Apply filters</Button>
-            </div>
+            {filterCount > 0 && <div className={styles.filterActions}>
+              <Button type="button" variant="ghost" size="small" onClick={clearAllFilters}>Clear all filters</Button>
+            </div>}
           </section>}
-          {catalog && filterCount > 0 && <div className={styles.activeFilters} aria-label="Active filters">
+          {catalog && filterCount > 0 && <div className={styles.activeFilters} role="group" aria-label="Active filters">
             {state.category && <button type="button" onClick={() => removeFilter({ category: undefined })} aria-label={`Remove category filter ${categories.find(value => value.slug === state.category)?.name ?? state.category}`}>{categories.find(value => value.slug === state.category)?.name ?? state.category} ×</button>}
             {state.brand && <button type="button" onClick={() => removeFilter({ brand: undefined })} aria-label={`Remove brand filter ${brands.find(value => value.slug === state.brand)?.name ?? state.brand}`}>{brands.find(value => value.slug === state.brand)?.name ?? state.brand} ×</button>}
             {state.availability && <button type="button" onClick={() => removeFilter({ availability: undefined })} aria-label={`Remove availability filter ${state.availability}`}>{state.availability === 'available' ? 'Available' : 'Unavailable'} ×</button>}
             {priceText && <button type="button" onClick={() => removeFilter({ minPrice: undefined, maxPrice: undefined })} aria-label={`Remove price filter ${priceText}`}>{priceText} ×</button>}
+            <button type="button" className={styles.clearAll} onClick={clearAllFilters}>Clear all</button>
           </div>}
           <section aria-label="Search results" aria-busy={loading || (active && tab === 'text' && searchQuery.isFetching) || undefined} className={styles.results}>
             <div role="status" aria-live="polite">{loading ? 'Searching products…' : results ? `${results.meta.total} ${results.meta.total === 1 ? 'result' : 'results'}${state.q ? ` for “${state.q}”` : ''}` : ''}</div>
             {loading && <div className={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`} aria-hidden="true">{Array.from({ length: getProductGridSkeletonCount(state.pageSize) }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
-            {error && <div role="alert" className={styles.empty}><h2>Search unavailable</h2><p>Search is temporarily unavailable. Please try again.</p><Button type="button" onClick={() => void searchQuery.refetch()}>Retry search</Button></div>}
+            {error && <ErrorState headingLevel={2} className={styles.stateBlock} title="Search unavailable" description="Search is temporarily unavailable. Please try again." action={<Button type="button" onClick={() => void searchQuery.refetch()}>Retry search</Button>} />}
             {results && results.data.length > 0 && <div className={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`}>{results.data.map((product, index) => catalog
               ? <StaggerItem key={product.id} replay index={index % 4}><ProductCard {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} /></StaggerItem>
               : <ProductCard key={product.id} {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} />)}</div>}
-            {results && results.data.length === 0 && <div className={styles.empty}><h2>{state.q ? `No results for “${state.q}”` : 'No products found'}</h2><p>Try adjusting your search or filters.</p>{catalog && filterCount > 0 && <Button type="button" variant="link" onClick={() => commit(clearFilters({ ...state, q: normalizedDraft }))}>Reset filters</Button>}{state.q && <Button type="button" variant="link" onClick={() => { setDraft(''); update({ q: '' }); }}>Clear query</Button>}{state.page > 1 && <Button type="button" variant="link" onClick={() => commit({ ...state, page: 1 })}>First page</Button>}</div>}
+            {results && results.data.length === 0 && <EmptyState headingLevel={2} className={styles.stateBlock} icon={<SearchX aria-hidden="true" />} title={state.q ? `No results for “${state.q}”` : 'No products found'} description="Try adjusting your search or filters." action={<>{catalog && filterCount > 0 && <Button type="button" variant="link" onClick={clearAllFilters}>Reset filters</Button>}{state.q && <Button type="button" variant="link" onClick={() => { setDraft(''); update({ q: '' }); }}>Clear query</Button>}{state.page > 1 && <Button type="button" variant="link" onClick={() => commit({ ...state, page: 1 })}>First page</Button>}</>} />}
             {totalPages > 1 && <Pagination aria-label="Search result pages"><PaginationContent>
               <PaginationItem><PaginationPrevious disabled={state.page <= 1} onClick={() => commit({ ...state, page: state.page - 1 }, false, true)} /></PaginationItem>
               {pages.map(page => <PaginationItem key={page}><PaginationLink aria-label={`Go to page ${page}`} isActive={page === state.page} onClick={() => commit({ ...state, page }, false, true)}>{page}</PaginationLink></PaginationItem>)}

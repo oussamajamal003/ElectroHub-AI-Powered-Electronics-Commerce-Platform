@@ -80,5 +80,15 @@ describe('SignOutModal', () => {
     expect(mockOnOpenChange).toHaveBeenCalledWith(false);
     expect(mockLogout).not.toHaveBeenCalled();
   });
-});
 
+  it('redirects to "/" and reports success once the session has ended', async () => {
+    const mockLogout = vi.fn().mockResolvedValue(undefined);
+    const onSignedOut = vi.fn();
+    (useAuth as any).mockReturnValue({ logout: mockLogout, finishLogoutTransition: vi.fn() });
+    window.history.pushState({}, '', '/account');
+    render(<BrowserRouter><SignOutModal open onOpenChange={vi.fn()} onSignedOut={onSignedOut} /></BrowserRouter>);
+    fireEvent.click(screen.getByRole('button', { name: /Sign Out/i }));
+    await waitFor(() => expect(onSignedOut).toHaveBeenCalledOnce());
+    expect(window.location.pathname).toBe('/');
+  });
+});

@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { CustomerHeader } from '@/components/layout/CustomerHeader/CustomerHeader';
 import { Footer } from '@/components/layout/Footer';
 import { Link } from 'react-router-dom';
+import { Zap } from 'lucide-react';
 import styles from './CustomerLayout.module.scss';
 import { CustomerScrollRestoration } from './CustomerScrollRestoration';
 import { usePaymentLock } from '@/features/checkout/PaymentLockContext';
@@ -40,20 +41,21 @@ export function CustomerLayout() {
         <Footer>
         <div className={styles.footerContent}>
           <div className={styles.footerGrid}>
-            <div className={styles.leftCol}>
-              <div className={styles.brandInfo}>
-                <Link className={styles.brand} to="/">ElectroHub</Link>
-                <p>Your destination for the<br />latest consumer electronics.</p>
-              </div>
-              <nav aria-label="Support" className={styles.navGroup}>
+            <div className={styles.brandInfo}>
+              <Link className={styles.brand} to="/">
+                <span className={styles.brandMark} aria-hidden="true"><Zap size={16} /></span>
+                <span>Electro<span className={styles.brandHub}>Hub</span></span>
+              </Link>
+              <p>Your destination for the<br />latest consumer electronics.</p>
+            </div>
+            <nav aria-label="Support" className={styles.navGroup}>
                 <h2>Support</h2>
                 <Link to="/contact">Help Center</Link>
                 <Link to="/contact">Returns & Refunds</Link>
                 <Link to="/contact">Warranty</Link>
                 <Link to="/contact">Privacy Policy</Link>
                 <Link to="/contact">Terms of Service</Link>
-              </nav>
-            </div>
+            </nav>
 
             <nav aria-label="Shop" className={styles.navGroup}>
               <h2>Shop</h2>

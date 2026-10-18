@@ -6,13 +6,16 @@ import { useAuth } from '../context/AuthContext';
 import styles from './SignOutModal.module.scss';
 import { ApiError } from '@/lib/api';
 import { Alert } from '@/components/ui/Alert';
+import { clearBuyNow } from '@/features/checkout/buyNow';
 
 interface SignOutModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Called once the session has ended, after navigation to "/" has been requested. */
+  onSignedOut?: () => void;
 }
 
-export function SignOutModal({ open, onOpenChange }: SignOutModalProps) {
+export function SignOutModal({ open, onOpenChange, onSignedOut }: SignOutModalProps) {
   const { logout, finishLogoutTransition } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -32,11 +35,14 @@ export function SignOutModal({ open, onOpenChange }: SignOutModalProps) {
     
     try {
       await logout();
+      // logout() clears the auth session and every cached query; also drop the per-tab Buy Now intent.
+      clearBuyNow();
       const logoutStartedAt = location.pathname;
       pendingLogoutRoute.current = logoutStartedAt === '/' ? null : logoutStartedAt;
       onOpenChange(false);
       navigate('/');
       if (logoutStartedAt === '/') finishLogoutTransition();
+      onSignedOut?.();
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setError(err.message);
