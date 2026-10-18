@@ -19,7 +19,7 @@ let records: Map<string, Attempt>;
 let service: PaymentService;
 const db = { user: { findFirst: vi.fn() }, paymentAttempt: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
   paymentWork: { updateMany: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
-  payment: { update: vi.fn() }, order: { update: vi.fn() }, $queryRaw: vi.fn(), $transaction: vi.fn() };
+  payment: { update: vi.fn(), findUnique: vi.fn() }, order: { update: vi.fn(), findUnique: vi.fn() }, $queryRaw: vi.fn(), $transaction: vi.fn() };
 const provider = { account: vi.fn(), create: vi.fn(), retrieve: vi.fn(), capture: vi.fn(), cancel: vi.fn(),
   refund: vi.fn(), retrieveRefund: vi.fn() } satisfies PaymentProvider;
 function intent(attempt: Attempt): ProviderIntent {

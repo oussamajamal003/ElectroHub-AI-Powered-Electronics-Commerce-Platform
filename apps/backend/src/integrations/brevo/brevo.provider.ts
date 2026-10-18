@@ -86,6 +86,9 @@ export class BrevoProvider {
       return {
         success: false,
         error: safeError,
+        failure: err instanceof BrevoRequestError
+          ? { category: err.category, httpStatus: err.statusCode, providerCode: err.providerCode, retryAfterMs: err.retryAfterMs }
+          : { category: 'provider_error' },
       };
     }
   }

@@ -8,7 +8,8 @@ import { attemptSchema, businessDate, buyNowScopeId, checkoutRequestSchema, requ
 import { isSerializationConflict } from './transaction-conflict.js';
 import { verifyAuthorization, type ProviderIntent } from './payment.domain.js';
 import { performance } from 'node:perf_hooks';
-import { logger } from '../utils/logger.js';
+import { logger, logSafely } from '../utils/logger.js';
+import { CONFIRMATION_EMAIL_TYPES, projectEmailConfirmation, type EmailConfirmationSummary } from './commerce-email.domain.js';
 
 const include = { items: { orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }] }, payment: true } satisfies Prisma.OrderInclude;
 type StoredOrder = Prisma.OrderGetPayload<{ include: typeof include }>;
@@ -76,20 +77,38 @@ export class OrderService {
   async getDetails(userId: string, reference: string) {
     const order = await this.database.order.findFirst({ where: { id: parseOrderReference(reference), userId }, include });
     if (!order) throw new AppError('Order not found.', 404, 'ORDER_NOT_FOUND');
-    return orderDetails(order);
+    return this.withEmailConfirmation(order.id, orderDetails(order));
+  }
+
+  /**
+   * Task 03.8 additive projection for the owned Confirmation/Details reads only (never the history list). Read-only: one indexed
+   * query, no event creation, no provider call. Omitted when there are no events (historical orders, enqueue disabled) or when the
+   * outbox cannot be read (e.g. a database without the 03.8 migration): the Order itself always stays readable.
+   */
+  private async withEmailConfirmation<T extends object>(orderId: string, projection: T): Promise<T & { emailConfirmation?: EmailConfirmationSummary }> {
+    try {
+      const rows = await this.database.commerceEmailOutbox.findMany({ where: { orderId, type: { in: [...CONFIRMATION_EMAIL_TYPES] } },
+        select: { type: true, dispatchState: true, deliveryState: true, attemptCount: true, createdAt: true, updatedAt: true } });
+      const summary = projectEmailConfirmation(rows);
+      return summary ? { ...projection, emailConfirmation: summary } : projection;
+    } catch (error) {
+      logSafely('error', 'Commerce email projection unavailable.', { event: 'email_projection_unavailable', orderId,
+        prismaCode: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : null });
+      return projection;
+    }
   }
 
   async getConfirmation(userId: string, reference: string) {
     const id = reference.startsWith('ORD-') ? attemptSchema.parse(reference.slice(4)).toLowerCase() : attemptSchema.parse(reference);
     const order = await this.database.order.findFirst({ where: { id, userId }, include });
     if (!order) throw new AppError('Order not found.', 404, 'ORDER_NOT_FOUND');
-    return confirmation(order);
+    return this.withEmailConfirmation(order.id, confirmation(order));
   }
 
   async getAttempt(userId: string, attempt: string) {
     const order = await this.database.order.findUnique({ where: { userId_checkoutAttemptId: { userId, checkoutAttemptId: attemptSchema.parse(attempt) } }, include });
     if (!order) throw new AppError('Order not found.', 404, 'ORDER_NOT_FOUND');
-    return confirmation(order);
+    return this.withEmailConfirmation(order.id, confirmation(order));
   }
 
   async create(_userId: string, _attempt: string, _input: unknown): Promise<never> {

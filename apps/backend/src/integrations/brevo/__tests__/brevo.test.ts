@@ -152,6 +152,8 @@ describe('Brevo Integration', () => {
       expect(result).toEqual({
         success: false,
         error: 'Brevo delivery failed',
+        // Task 03.8 additive structured metadata: an unclassified failure never claims a retry-safe category.
+        failure: { category: 'provider_error' },
       });
     });
   });

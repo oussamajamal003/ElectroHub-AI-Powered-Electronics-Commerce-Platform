@@ -166,6 +166,11 @@ router.get('/checkout/payment-capability', requireAuth, (_req, res) => {
 router.get('/checkout/payment-attempts', limiter, async (req, res, next) => {
   try { res.json({ data: await paymentService.purchases(req.user!.userId) }); } catch (error) { next(normalize(error)); }
 });
+// The list GET above is read-only; overdue recovery for the customer's own unresolved purchases is this explicit mutation (Task 03.8).
+router.post('/checkout/payment-attempts/recover-overdue', limiter, async (req, res, next) => {
+  try { empty.parse(req.body ?? {}); res.status(202).json({ data: await paymentService.recoverOverdue(req.user!.userId) }); }
+  catch (error) { next(normalize(error)); }
+});
 router.post('/checkout/payment-attempts/:attemptId/submit', limiter, async (req, res, next) => {
   try { empty.parse(req.body ?? {}); res.json({ data: await paymentService.submit(req.user!.userId, String(req.params.attemptId)) }); }
   catch (error) { next(normalize(error)); }

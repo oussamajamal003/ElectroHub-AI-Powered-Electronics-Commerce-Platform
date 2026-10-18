@@ -10,6 +10,7 @@ import { ProductImage } from '@/components/ui/ProductImage';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ApiError, apiClient } from '@/lib/api';
 import { queryKeys } from '@/lib/query';
+import { CommerceEmailNotice } from './CommerceEmailNotice';
 import { OrderBadges } from './OrderBadges';
 import { OrdersAccessGate } from './OrdersAccessGate';
 import { OrdersBreadcrumb } from './OrdersBreadcrumb';
@@ -85,6 +86,7 @@ function OwnedOrderDetails() {
     {note && <p className={styles.note}>{note}</p>}
     {query.isError && <div className={`${shared.notice} ${styles.refreshNotice}`} role="alert"><p>We could not refresh this order. Showing the last loaded details.</p>
       <Button size="small" variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}>Retry</Button></div>}
+    <CommerceEmailNotice paymentState={order.paymentState} orderStatus={order.status} emailConfirmation={order.emailConfirmation} />
     <div className={styles.layout} aria-busy={query.isFetching || undefined}>
       <div className={styles.main}>
         <section className={styles.card} aria-labelledby="order-items-heading">

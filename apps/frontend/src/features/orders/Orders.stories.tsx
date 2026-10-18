@@ -140,6 +140,9 @@ export const MissingCardMetadata: Story = { args: { path: detailPath, scenario: 
 export const DetailsLoading: Story = { args: { path: detailPath, scenario: { api: pending } } };
 export const NotFound: Story = { args: { path: detailPath, scenario: { api: () => fail(404, 'Order not found.') } } };
 export const DetailsLoadError: Story = { args: { path: detailPath, scenario: { api: unavailable } } };
+// Email confirmation notice (projection is additive; the existing fixtures are unchanged).
+export const DetailsWithEmailSent: Story = { args: { path: detailPath, scenario: { api: detailOf(variant({ emailConfirmation: { state: 'SENT', updatedAt: '2026-09-04T12:02:00.000Z' } })) } } };
+export const DetailsWithEmailUnavailable: Story = { args: { path: detailPath, scenario: { api: detailOf(variant({ emailConfirmation: { state: 'UNAVAILABLE', updatedAt: '2026-09-04T12:02:00.000Z' } })) } } };
 
 // Badges
 const orderStatuses: OrderStatusType[] = ['confirmed', 'preparing', 'out_for_delivery', 'delivered', 'cancelled', 'awaiting_capture', 'unknown'];

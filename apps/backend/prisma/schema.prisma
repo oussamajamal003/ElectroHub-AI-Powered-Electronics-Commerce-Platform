@@ -116,6 +116,7 @@ model User {
   oauthAccounts       OAuthAccount[]
   reviews             Review[]
   paymentAttempts     PaymentAttempt[]
+  commerceEmails      CommerceEmailOutbox[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -397,6 +398,7 @@ model Order {
   payment  Payment?
   delivery Delivery?
   paymentAttempt PaymentAttempt?
+  commerceEmails CommerceEmailOutbox[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -447,6 +449,7 @@ model Payment {
   refundedAt        DateTime?
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  commerceEmails CommerceEmailOutbox[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -747,4 +750,109 @@ model EmailDelivery {
   @@index([recipient])
   @@index([createdAt])
   @@map("email_deliveries")
+}
+
+// ─── Task 03.8 — Commerce email outbox ───────────────────
+// Separate from the auth EmailDelivery ledger: OTP rows have no recoverable payload and must never be
+// selected by a retrying worker. Physical CHECKs, guard trigger, RLS and grants live in migration
+// 20261018000000_commerce_email_outbox (Prisma cannot express them).
+
+enum CommerceEmailType {
+  ORDER_CONFIRMED
+  PAYMENT_CONFIRMED
+  ORDER_PREPARING
+  ORDER_OUT_FOR_DELIVERY
+  ORDER_DELIVERED
+  ORDER_CANCELLED
+  PAYMENT_REFUNDED
+}
+
+enum CommerceEmailDispatchState {
+  READY
+  LEASED
+  RETRY_WAIT
+  ACCEPTED
+  UNCERTAIN
+  FAILED
+  SUPPRESSED
+}
+
+enum CommerceEmailDeliveryState {
+  UNKNOWN
+  DELIVERED
+  BOUNCED
+  BLOCKED
+}
+
+enum CommerceEmailAttemptOutcome {
+  STARTED
+  ACCEPTED
+  REJECTED
+  UNCERTAIN
+}
+
+model CommerceEmailOutbox {
+  id                String                     @id @default(uuid()) @db.Uuid
+  eventKey          String                     @unique @db.VarChar(255)
+  type              CommerceEmailType
+  orderId           String                     @db.Uuid
+  paymentId         String?                    @db.Uuid
+  userId            String?                    @db.Uuid
+  transitionId      String?                    @db.Uuid
+  fromStatus        String?                    @db.VarChar(32)
+  toStatus          String?                    @db.VarChar(32)
+  recipient         String?                    @db.VarChar(255)
+  snapshot          Json?
+  snapshotVersion   Int                        @default(1)
+  templateVersion   String                     @db.VarChar(16)
+  occurredAt        DateTime
+  dispatchState     CommerceEmailDispatchState @default(READY)
+  deliveryState     CommerceEmailDeliveryState @default(UNKNOWN)
+  attemptCount      Int                        @default(0)
+  nextAttemptAt     DateTime                   @default(now())
+  leaseToken        String?                    @db.Uuid
+  leaseUntil        DateTime?
+  provider          String                     @default("BREVO") @db.VarChar(16)
+  providerMessageId String?                    @unique @db.VarChar(255)
+  acceptedAt        DateTime?
+  deliveredAt       DateTime?
+  failedAt          DateTime?
+  uncertainAt       DateTime?
+  lastErrorCode     String?                    @db.VarChar(64)
+  suppressionReason String?                    @db.VarChar(64)
+  payloadPurgedAt   DateTime?
+
+  order    Order                  @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  payment  Payment?               @relation(fields: [paymentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  user     User?                  @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  attempts CommerceEmailAttempt[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dispatchState, nextAttemptAt, createdAt])
+  @@index([dispatchState, leaseUntil])
+  @@index([orderId, createdAt])
+  @@index([paymentId])
+  @@index([userId])
+  @@map("commerce_email_outbox")
+}
+
+model CommerceEmailAttempt {
+  id                String                      @id @default(uuid()) @db.Uuid
+  outboxId          String                      @db.Uuid
+  attemptNumber     Int
+  leaseToken        String                      @db.Uuid
+  startedAt         DateTime
+  finishedAt        DateTime?
+  outcome           CommerceEmailAttemptOutcome @default(STARTED)
+  providerMessageId String?                     @db.VarChar(255)
+  httpStatus        Int?
+  errorCode         String?                     @db.VarChar(64)
+
+  outbox CommerceEmailOutbox @relation(fields: [outboxId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([outboxId, attemptNumber])
+  @@index([outboxId, startedAt])
+  @@map("commerce_email_attempts")
 }

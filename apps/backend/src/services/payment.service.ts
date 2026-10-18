@@ -12,6 +12,7 @@ import { stripeProvider } from './stripe.provider.js';
 import { ATTEMPT_LIFETIME_MS, SUBMITTED_ABANDON_GRACE_MS, WORK_LEASE_MS, MAX_PAYMENT_RETRIES, TERMINAL_PAYMENT_STATES,
   cents, retryDelay, customerPaymentStatus, ABANDONMENT_FAILURE_CODES, NOT_CONFIRMED_FAILURE_CODE, CANCELED_BY_CUSTOMER_FAILURE_CODE, NEVER_CONFIRMED_GRACE_MS, CONFIRMATION_SIGNAL_GRACE_MS, SUBMITTED_UNRESOLVED_WINDOW_MS, confirmationSignalEnabled, verifyBinding, type Attempt, type PaymentProvider, type ProviderIntent } from './payment.domain.js';
 import { isSerializationConflict } from './transaction-conflict.js';
+import { enqueueCancellation, enqueuePaymentSucceeded, logCreatedEvents } from './commerce-email.producer.js';
 import { logSafely } from '../utils/logger.js';
 import { paymentIsolation, type PaymentIsolationDecision } from '../payment-isolation.js';
 import { performance } from 'node:perf_hooks';
@@ -422,16 +423,8 @@ export class PaymentService {
       { state: { not: 'PAID' }, restoredAt: null },
       ...outcomeStates.map(state => ({ state, OR: [{ notificationReadState: null }, { notificationReadState: { not: state } }] })),
     ] }, include: { ...attemptInclude, work: true }, orderBy: { createdAt: 'desc' } });
-    // Recovery must not depend on one live runner: an unresolved submitted purchase seen by the customer's poll is reconciled now. process() only
-    // claims DUE work under a lease (no wake, no retry-budget reset, no blind retry), so frequent polls stay cheap and cannot duplicate effects.
-    // Ordinary reads stay provider-free while the durable runner keeps up: only work overdue by more than a runner cycle is reconciled here.
-    const overdue = Date.now() - POLL_RECONCILE_OVERDUE_MS;
-    for (const attempt of attempts.filter(item => this.mutationsAllowed() && !item.orderId && !item.cancelRequested &&
-      ['AWAITING_INPUT', 'ACTION_REQUIRED', 'PROCESSING'].includes(item.state) && item.providerIntentId &&
-      item.work?.state === 'READY' && item.work.nextRunAt.getTime() <= overdue).slice(0, 5)) {
-      void this.process(attempt.id).catch((error: unknown) => logSafely('error', 'Poll-driven reconciliation deferred to the durable runner.', {
-        event: 'payment.recovery.background_failed', attemptId: attempt.id, error }));
-    }
+    // Read-only (Task 03.8): a GET never claims work, calls the provider or finalizes a payment (finalization now also creates email
+    // events). Overdue recovery is driven by the runners and by the explicit POST recoverOverdue() below.
     return attempts.map(attempt => ({ attemptId: attempt.id, checkoutId: attempt.id,
       scope: checkoutRequestSchema.parse(attempt.request).scope ?? 'CART_CHECKOUT',
       state: attempt.state, classification: customerPaymentStatus(attempt, attempt.work), total: attempt.total.toFixed(2), currency: attempt.currency,
@@ -446,6 +439,24 @@ export class PaymentService {
       // Copy only: distinguishes "confirming with the provider" from "checking the status of this purchase"; never an outcome.
       confirmationStarted: Boolean(attempt.confirmationStartedAt),
       items: attempt.items.map(item => ({ name: item.productName, quantity: item.quantity, imageUrl: item.imageUrl })) }));
+  }
+
+  /**
+   * Recovery must not depend on one live runner: the customer's purchases view asks for overdue unresolved submitted purchases to be
+   * reconciled now. Moved out of the GET list read (Task 03.8) with unchanged semantics: process() only claims DUE work under a lease
+   * (no wake, no retry-budget reset, no blind retry), only work overdue by more than a runner cycle, at most five, owner-scoped.
+   */
+  async recoverOverdue(userId: string) {
+    this.assertMutationsAllowed();
+    const overdue = new Date(Date.now() - POLL_RECONCILE_OVERDUE_MS);
+    const due = await this.database.paymentAttempt.findMany({ where: { userId, submittedAt: { not: null }, orderId: null, cancelRequested: false,
+      state: { in: ['AWAITING_INPUT', 'ACTION_REQUIRED', 'PROCESSING'] }, providerIntentId: { not: null },
+      work: { is: { state: 'READY', nextRunAt: { lte: overdue } } } }, select: { id: true }, orderBy: { createdAt: 'desc' }, take: 5 });
+    for (const attempt of due) {
+      void this.process(attempt.id).catch((error: unknown) => logSafely('error', 'Poll-driven reconciliation deferred to the durable runner.', {
+        event: 'payment.recovery.background_failed', attemptId: attempt.id, error }));
+    }
+    return { scheduled: due.length };
   }
 
   /**
@@ -1026,13 +1037,20 @@ export class PaymentService {
   private async markPaid(attempt: Attempt, token: string, intent: ProviderIntent) {
     verifyBinding(attempt, intent);
     if (intent.status !== 'succeeded' || intent.received !== attempt.amountCents) throw new AppError('Payment is pending.', 409, 'PAYMENT_PENDING');
-    await this.fenced(attempt.id, token, async (tx, latest) => {
+    const emails = await this.fenced(attempt.id, token, async (tx, latest) => {
       if (!latest.orderId || latest.compensatedAt || latest.refundId) throw new AppError('Payment requires recovery.', 409, 'PAYMENT_RECOVERY_PENDING');
-      await tx.payment.update({ where: { orderId: latest.orderId }, data: { status: 'SUCCEEDED', paidAt: new Date(), failureReason: null,
+      // A replayed finalization keeps the first successful payment time (it is also the email events' occurredAt).
+      const prior = await tx.payment.findUnique({ where: { orderId: latest.orderId }, select: { paidAt: true, status: true } });
+      const paidAt = prior?.status === 'SUCCEEDED' && prior.paidAt ? prior.paidAt : new Date();
+      await tx.payment.update({ where: { orderId: latest.orderId }, data: { status: 'SUCCEEDED', paidAt, failureReason: null,
         cardBrand: intent.card?.brand ?? null, cardLast4: intent.card?.last4 ?? null } });
       await tx.order.update({ where: { id: latest.orderId }, data: { status: 'CONFIRMED' } });
       await tx.paymentAttempt.update({ where: { id: latest.id }, data: { state: 'PAID', providerStatus: 'succeeded', activeCartId: null, failureCode: null } });
+      // Task 03.8: both confirmation events commit atomically with this finalization (never sent here). An unexpected insert
+      // failure rolls the whole finalization back; durable recovery then re-reads the already captured intent (no new charge).
+      return enqueuePaymentSucceeded(tx, { orderId: latest.orderId, paidAt, card: intent.card });
     });
+    logCreatedEvents(emails);
     logSafely('info', 'Captured payment persisted.', { event: 'payment.outcome.persisted', attemptId: attempt.id,
       providerIntentId: intent.id, orderId: attempt.orderId, state: 'PAID', leaseId: token,
       workerInstanceId: logContext.getStore()?.workerInstanceId ?? null,
@@ -1060,8 +1078,8 @@ export class PaymentService {
   }
   private async compensate(attempt: Attempt, token: string, refunded: boolean) {
     await this.patch(attempt.id, token, { state: refunded ? 'REFUND_PENDING' : 'COMPENSATION_PENDING' });
-    await this.fenced(attempt.id, token, async (tx, latest) => {
-      if (!latest.orderId || latest.compensatedAt) return;
+    const emails = await this.fenced(attempt.id, token, async (tx, latest) => {
+      if (!latest.orderId || latest.compensatedAt) return [];
       const payment = await tx.payment.findUnique({ where: { orderId: latest.orderId } });
       if (payment?.status === 'SUCCEEDED' && !refunded) throw new AppError('Captured payment cannot be released.', 409, 'PAYMENT_RECOVERY_PENDING');
       const buyNowScope = isBuyNowRequest(latest.request);
@@ -1096,12 +1114,20 @@ export class PaymentService {
         }
         if (add < item.quantity && !buyNowScope) remainder.push({ productId: item.productId, quantity: item.quantity - add });
       }
+      const before = await tx.order.findUnique({ where: { id: latest.orderId }, select: { status: true } });
+      const cancelledAt = new Date();
       await tx.order.update({ where: { id: latest.orderId }, data: { status: 'CANCELLED' } });
       await tx.payment.update({ where: { orderId: latest.orderId }, data: { status: refunded ? 'REFUNDED' : 'FAILED',
-        refundedAt: refunded ? new Date() : null, failureReason: 'PAYMENT_COMPENSATED' } });
+        refundedAt: refunded ? cancelledAt : null, failureReason: 'PAYMENT_COMPENSATED' } });
       await tx.paymentAttempt.update({ where: { id: latest.id }, data: { state: refunded ? 'REFUNDED' : 'COMPENSATED',
-        compensatedAt: new Date(), activeCartId: null, recoveryRemainder: remainder } });
+        compensatedAt: cancelledAt, activeCartId: null, recoveryRemainder: remainder } });
+      // Task 03.8: the cancellation (and, only when this transition records a verified refund, the refund) events commit with it.
+      // compensatedAt above makes a replay return early, so a retried compensation never emits a second event.
+      if (!before) return [];
+      return enqueueCancellation(tx, { orderId: latest.orderId, fromStatus: before.status, cancelledAt, paymentConfirmed: Boolean(payment?.paidAt),
+        refund: refunded && latest.refundId && latest.refundAmountCents ? { id: latest.refundId, amountCents: latest.refundAmountCents, refundedAt: cancelledAt } : null });
     });
+    logCreatedEvents(emails);
   }
 
   async runBatch(attemptIds?: string[]) {

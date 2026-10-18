@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
 import type { CartData } from '@/features/cart/types';
+import { CommerceEmailNotice } from '@/features/orders/CommerceEmailNotice';
 import { shippingErrors, steps } from './state';
 import type { CheckoutStep, Confirmation, DeliveryMethod, DeliveryOption, OrderRequest, Shipping, Totals } from './types';
 import styles from './Checkout.module.scss';
@@ -218,6 +219,7 @@ export function ConfirmationContent({ order }: { order: Confirmation }) {
       {order.card && <p className={styles.subtle}>{order.card.brand} ending {order.card.last4}</p>}
       <div className={styles.orderDate}><span className={styles.eyebrow}>Estimated Delivery</span><p><strong>{date(order.estimatedDeliveryStart)}{order.estimatedDeliveryEnd !== order.estimatedDeliveryStart ? ` – ${date(order.estimatedDeliveryEnd)}` : ''}</strong></p><address>To: {order.shipping.recipient}<br />{[order.shipping.line1, order.shipping.line2, order.shipping.city, order.shipping.state, order.shipping.postalCode, order.shipping.country].filter(Boolean).join(', ')}</address><p className={styles.subtle}>Business-day estimate; holidays and delivery cutoffs may affect arrival.</p></div>
     </section>
+    <CommerceEmailNotice paymentState={order.paymentState} orderStatus={order.status} emailConfirmation={order.emailConfirmation} />
     {/* Outside the bordered card, sharing its width: the durable Order Details page, then continued shopping. Navigation only. */}
     <div className={styles.confirmationActions}>
       {order.orderReference && <Link className={styles.primaryLink} to={`/orders/${order.orderReference}`}>View Order Details</Link>}

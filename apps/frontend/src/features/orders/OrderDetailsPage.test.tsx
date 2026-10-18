@@ -168,3 +168,59 @@ describe('Confirmation actions', () => {
     expect(screen.queryByRole('link', { name: 'View Order' })).toBeNull();
   });
 });
+
+describe('Email confirmation notice placement', () => {
+  const updatedAt = '2026-09-04T12:02:00.000Z';
+  it('places one notice after the header and before the details grid for a PAID Order', async () => {
+    signedIn(); resolve(orderDetails({ emailConfirmation: { state: 'SENT', updatedAt } }));
+    renderDetails();
+    const title = await screen.findByRole('heading', { level: 1, name: `Order ${reference}` });
+    const notice = screen.getByRole('heading', { level: 2, name: 'Email confirmations' });
+    const header = title.closest('header');
+    const items = screen.getByRole('region', { name: 'Items (1)' });
+    expect(screen.getByText('Your order and payment confirmations have been sent. Check your inbox or spam folder.')).toBeVisible();
+    expect(screen.getAllByRole('heading', { name: 'Email confirmations' })).toHaveLength(1);
+    expect(header).not.toBeNull();
+    expect((header?.compareDocumentPosition(notice) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(notice.compareDocumentPosition(items) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('shows UNAVAILABLE calmly: no alert, and items, totals and address still render', async () => {
+    signedIn(); resolve(orderDetails({ emailConfirmation: { state: 'UNAVAILABLE', updatedAt } }));
+    renderDetails();
+    await screen.findByRole('heading', { level: 1, name: `Order ${reference}` });
+    expect(screen.getByText('Your purchase is confirmed. We couldn’t confirm email delivery. Your order details are available here.')).toBeVisible();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Items (1)' })).toHaveTextContent('Apple iPhone 15 Pro');
+    expect(screen.getByRole('region', { name: 'Order Summary' })).toHaveTextContent('Total paid$1,099.99');
+    expect(screen.getByRole('region', { name: 'Delivery Address' })).toHaveTextContent('Alex Morgan');
+  });
+
+  it('shows no email notice for an unpaid Order', async () => {
+    signedIn(); resolve(orderDetails({ paymentState: 'PENDING', payment: { paidAt: null, refundedAt: null }, emailConfirmation: { state: 'QUEUED', updatedAt } }));
+    renderDetails();
+    await screen.findByRole('heading', { level: 1, name: `Order ${reference}` });
+    expect(screen.queryByRole('heading', { name: 'Email confirmations' })).toBeNull();
+  });
+
+  it('makes no request of its own: the page issues exactly one detail read', async () => {
+    signedIn(); resolve(orderDetails({ emailConfirmation: { state: 'QUEUED', updatedAt } }));
+    renderDetails();
+    await screen.findByRole('heading', { level: 2, name: 'Email confirmations' });
+    expect(apiClient).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Confirmation email notice placement', () => {
+  it('sits between the order card and the outside actions, and UNAVAILABLE is not a payment error', () => {
+    render(<MemoryRouter><ConfirmationContent order={{ ...confirmation, paymentState: 'PAID', emailConfirmation: { state: 'UNAVAILABLE', updatedAt: '2026-10-06T12:02:00.000Z' } }} /></MemoryRouter>);
+    const card = screen.getByRole('region', { name: 'Order confirmation' });
+    const notice = screen.getByRole('heading', { level: 2, name: 'Email confirmations' });
+    const details = screen.getByRole('link', { name: 'View Order Details' });
+    expect(card).not.toContainElement(notice);
+    expect(card.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(notice.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText(/payment (failed|error)/i)).toBeNull();
+  });
+});
