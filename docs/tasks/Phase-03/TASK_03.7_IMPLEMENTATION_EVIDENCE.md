@@ -156,3 +156,32 @@ All of them render correctly.
 - `GET /api/orders` still returns full item arrays per card. This is bounded by pageSize ≤ 50 and the cart line limit. A slimmer summary DTO would need a consumer migration.
 - The pre-existing 03.6 recovery E2E failures above need their own investigation.
 - The existing `checkout.live.test.ts` `afterAll` signature is incompatible with Vitest 4.
+
+## Acceptance closure update (2026-10-18)
+
+**Baseline:** `b2cfad3`, which matches the 36 reviewed files with no drift.
+
+**Uncommitted closure changes:** 3 files.
+- `apps/frontend/src/pages/customer/OrdersPage.tsx`
+- `apps/frontend/src/pages/customer/OrdersPage.test.tsx`
+- `apps/frontend/tests/orders/orders.spec.ts`
+
+**Fix:** the card link's `aria-label` (", view order details") leaked into the `h2` and `article` accessible names. The link is now named by the order reference alone, so the heading and article are too. Regression assertions were added in both the unit test and the Playwright aria snapshot.
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| Source/diff | PASS | Closure changes are limited to the accessible name and tests. No auth, query, DTO, status, payment, or checkout changes. |
+| Functional correctness | PASS | Frontend `npx vitest run`: 97 files, 763/763 passed. |
+| Backend ownership | PASS (reused) | Mocked API contract 313/313, plus the real DEV gate 5/5 earlier on this date. No backend source changed since. |
+| Visual inspection | PASS | All 34 captures in `test-results/orders/` were opened, plus `zoom200-details-long.png`. No defects. One cosmetic note: in the shared ErrorState, the Retry button is 40px tall and the Back link is 44px. |
+| Responsive | PASS | 390/768/1440/1920 captures, with automated no-horizontal-overflow checks. |
+| Accessibility | PASS (automated + keyboard); screen reader NOT RUN | axe-core 4.13 WCAG 2 A/AA: **0 violations** across 8 states × 2 widths. At 200% zoom (720 CSS px at 2×) there is no overflow and actions stay reachable. Keyboard order on details ends at Back to Orders with a visible outline. The accessibility-tree snapshot was verified. No real screen reader was available. |
+| Regression | PASS / BASELINE | `npx playwright test -c playwright.orders.config.ts`: **37/37**. Backend `npm run test:ci` (dummy DB URLs, live flags off): 957 passed, 6 failed, 72 skipped. All 6 failures are in 3 DB-integration files (Google OAuth, account deletion, OTP concurrency), which need CI's disposable Postgres. Locally they hit a non-SSL listener ("server does not support SSL connections"). They don't touch 03.7 code. |
+| CI/acceptance | NOT RUN | No push was made in this pass, so no remote CI ran. |
+
+**Checkout E2E failures:** the 4 pre-existing `checkout.spec.ts` failures have a separate test-only fix. It changes `checkout.spec.ts` and `checkout.live.test.ts`, sits uncommitted on `fix/checkout-e2e-recovery` (worktree `.claude/worktrees/serene-edison-5a7d3e`), and changes no 03.7 or production source. It was not merged here.
+
+### External blockers
+- A real screen-reader pass (NVDA/VoiceOver) was not available in this environment.
+- The DB-integration suites need CI's disposable Postgres; there is no Docker locally.
+- The Supabase connector is unauthenticated, so PROD was neither read nor written.

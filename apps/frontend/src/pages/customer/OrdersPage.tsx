@@ -46,9 +46,10 @@ function OrderCard({ order, page }: { order: OrderSummary; page: number }) {
     <div className={styles.cardTop}>
       <div className={styles.identity}>
         <span className={styles.eyebrow}>Order</span>
-        {/* One link per card; its ::after makes the whole card a single click/keyboard target (no nested controls). */}
-        <h2 id={`order-${order.orderReference}`}><Link className={styles.cardLink} to={`/orders/${order.orderReference}`} state={{ fromPage: page }}
-          aria-label={`${order.orderReference}, view order details`}>{order.orderReference}</Link></h2>
+        {/* One link per card; its ::after makes the whole card a single click/keyboard target (no nested controls).
+            Named by the reference only, so the heading and article names stay the reference too (WCAG 2.4.4: purpose from card context). */}
+        <h2 id={`order-${order.orderReference}`}><Link className={styles.cardLink} to={`/orders/${order.orderReference}`} state={{ fromPage: page }}>
+          {order.orderReference}</Link></h2>
       </div>
       <OrderBadges status={order.status} paymentState={order.paymentState} />
     </div>

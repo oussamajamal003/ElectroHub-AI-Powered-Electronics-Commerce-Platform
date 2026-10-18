@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { manyItemsDetails, manyItemsSummary, orderDetails, orderSummary, ordersPage } from '../../src/features/orders/fixtures';
 import type { OrderDetails, OrderSummary } from '../../src/features/orders/types';
 
@@ -66,15 +67,15 @@ test.describe('E01/E02 navigation, direct entry and history context', () => {
     await expect(page.getByText('25 orders')).toBeVisible();
     await page.getByRole('button', { name: 'Go to page 2' }).click();
     await expect(page).toHaveURL(/\/orders\?page=2$/);
-    await page.getByRole('link', { name: `${target.orderReference}, view order details` }).click();
+    await page.getByRole('link', { name: `${target.orderReference}`, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/orders/${target.orderReference}$`));
     await expect(page.getByRole('heading', { level: 1, name: `Order ${target.orderReference}` })).toBeVisible();
     await page.reload();
     await expect(page.getByRole('heading', { level: 1, name: `Order ${target.orderReference}` })).toBeVisible();
     await page.goBack(); await expect(page).toHaveURL(/\/orders\?page=2$/);
-    await expect(page.getByRole('link', { name: `${target.orderReference}, view order details` })).toBeVisible();
+    await expect(page.getByRole('link', { name: `${target.orderReference}`, exact: true })).toBeVisible();
     await page.goForward(); await expect(page.getByRole('heading', { level: 1, name: `Order ${target.orderReference}` })).toBeVisible();
-    await page.goBack(); await page.getByRole('link', { name: `${target.orderReference}, view order details` }).click();
+    await page.goBack(); await page.getByRole('link', { name: `${target.orderReference}`, exact: true }).click();
     await page.getByRole('link', { name: 'Back to Orders' }).click();
     await expect(page).toHaveURL(/\/orders\?page=2$/);
   });
@@ -91,7 +92,7 @@ test.describe('E01/E02 navigation, direct entry and history context', () => {
     const order = orderSummary(0);
     await harness(page, { orders: [order], details: { [order.orderReference]: orderDetails() } });
     await page.goto('/orders');
-    const link = page.getByRole('link', { name: `${order.orderReference}, view order details` });
+    const link = page.getByRole('link', { name: `${order.orderReference}`, exact: true });
     await expect(link).toBeVisible();
     await link.focus();
     const outline = await link.evaluate(element => getComputedStyle(element, '::after').outlineStyle);
@@ -108,10 +109,10 @@ test.describe('E03/E08 pagination, races, loading and errors', () => {
     await page.getByRole('button', { name: 'Go to page 2' }).click();
     await page.getByRole('button', { name: 'Go to page 3' }).click();
     await expect(page).toHaveURL(/page=3$/);
-    await expect(page.getByRole('link', { name: `${many[20]!.orderReference}, view order details` })).toBeVisible();
+    await expect(page.getByRole('link', { name: `${many[20]!.orderReference}`, exact: true })).toBeVisible();
     await page.waitForTimeout(1700);
-    await expect(page.getByRole('link', { name: `${many[20]!.orderReference}, view order details` })).toBeVisible();
-    await expect(page.getByRole('link', { name: `${many[10]!.orderReference}, view order details` })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: `${many[20]!.orderReference}`, exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: `${many[10]!.orderReference}`, exact: true })).toHaveCount(0);
   });
   test('slow first load shows structure, never an empty state or a zero count', async ({ page }) => {
     await harness(page, { orders: [], delay: () => 2500 });
@@ -219,5 +220,82 @@ test.describe('E04/E10 responsive visual evidence (mocked reads)', () => {
       await page.goto('/orders'); await expect(page.getByRole('status', { name: 'Loading your orders' })).toBeVisible();
       await page.screenshot({ path: `${SHOTS}/history-loading-${width}.png`, fullPage: true });
     }
+  });
+});
+
+test.describe('E10 accessibility: axe, keyboard, 200% zoom, accessible names (mocked reads)', () => {
+  const axe = async (page: Page) => {
+    await page.addScriptTag({ content: readFileSync('../../node_modules/axe-core/axe.min.js', 'utf8') });
+    return page.evaluate(async () => (await Reflect.get(window, 'axe').run({ runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa'] } }))
+      .violations.map((value: { id: string; nodes: { target: string[] }[] }) => `${value.id}: ${value.nodes.map(node => node.target.join(' ')).join(', ')}`));
+  };
+  const long = { ...manyItemsDetails(), orderReference: manyItemsSummary(9).orderReference };
+  const pages: [string, string, Options][] = [
+    ['history', '/orders', { orders: many.slice(0, 3), total: 3 }],
+    ['empty', '/orders', { orders: [] }],
+    ['history-error', '/orders', { listStatus: 500 }],
+    ['details', `/orders/${orderDetails().orderReference}`, { details: { [orderDetails().orderReference]: orderDetails() } }],
+    ['details-long', `/orders/${long.orderReference}`, { details: { [long.orderReference]: long } }],
+    ['not-found', `/orders/${orderSummary(70).orderReference}`, { details: {} }],
+    ['details-error', `/orders/${orderSummary(71).orderReference}`, { details: { [orderSummary(71).orderReference]: 503 } }],
+    ['confirmation', `/checkout/confirmation/${orderDetails().orderReference}`, {}],
+  ];
+  for (const width of [390, 1440]) for (const [name, path, options] of pages) {
+    test(`axe wcag2a/aa: ${name} at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 }); await harness(page, options);
+      await page.goto(path); await expect(page.locator('main').first()).toBeVisible();
+      await expect(page.getByRole('status', { name: /Loading|Checking/ })).toHaveCount(0, { timeout: 10000 });
+      expect(await axe(page)).toEqual([]);
+    });
+  }
+  test('200% zoom (1440 CSS px at 2x = 720 CSS px): no horizontal overflow, content and actions reachable', async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 720, height: 450 }, deviceScaleFactor: 2, reducedMotion: 'reduce' });
+    const page = await context.newPage();
+    await harness(page, { orders: many.slice(0, 3), total: 3, details: { [long.orderReference]: long } });
+    for (const [path, ready] of [['/orders', page.getByText('3 orders')], [`/orders/${long.orderReference}`, page.getByRole('region', { name: 'Items (8)' })],
+      [`/checkout/confirmation/${orderDetails().orderReference}`, page.getByRole('link', { name: 'View Order Details' })]] as const) {
+      await page.goto(path); await expect(ready).toBeVisible(); await noHorizontalOverflow(page);
+    }
+    await page.goto(`/orders/${long.orderReference}`);
+    await page.getByRole('link', { name: 'Back to Orders' }).scrollIntoViewIfNeeded(); await expect(page.getByRole('link', { name: 'Back to Orders' })).toBeInViewport();
+    await page.screenshot({ path: `${SHOTS}/zoom200-details-long.png`, fullPage: true });
+    await context.close();
+  });
+  test('keyboard order on details: breadcrumb → content → Back to Orders, each with a visible focus indicator', async ({ page }) => {
+    await harness(page, { details: { [orderDetails().orderReference]: orderDetails() } });
+    await page.goto(`/orders/${orderDetails().orderReference}`);
+    await expect(page.getByRole('heading', { level: 1, name: /^Order ORD-/ })).toBeFocused();
+    const reached: string[] = [];
+    for (let step = 0; step < 6; step++) {
+      await page.keyboard.press('Tab');
+      const focus = await page.evaluate(() => { const element = document.activeElement as HTMLElement | null; if (!element) return null;
+        const style = getComputedStyle(element); return { text: element.textContent?.trim() ?? '', outline: style.outlineStyle !== 'none' && style.outlineWidth !== '0px' }; });
+      if (!focus) break; reached.push(focus.text);
+      if (focus.text === 'Back to Orders') { expect(focus.outline).toBe(true); break; }
+    }
+    expect(reached.at(-1)).toBe('Back to Orders');
+  });
+  test('accessibility tree: one named link per card and badges announced with their context', async ({ page }) => {
+    await harness(page, { orders: [orderSummary(1, { status: 'AWAITING_CAPTURE', paymentState: 'PENDING' })] });
+    await page.goto('/orders');
+    const card = page.getByRole('article').first();
+    await expect(card).toMatchAriaSnapshot(`
+      - article "ORD-00000001-0000-4000-8000-000000000001":
+        - text: Order
+        - heading "ORD-00000001-0000-4000-8000-000000000001" [level=2]:
+          - link "ORD-00000001-0000-4000-8000-000000000001"
+        - text: "Order status: Finalizing your order Payment status: Pending"
+        - list "Products in this order":
+          - listitem:
+            - img "Apple iPhone 15 Pro"
+        - term: Date
+        - definition:
+          - time: September 5, 2026
+        - term: Total
+        - definition: $1,099.99
+        - term: Items
+        - definition: "1"
+    `);
+    await expect(page.getByRole('status')).toHaveCount(0);
   });
 });

@@ -76,8 +76,11 @@ describe('My Orders history', () => {
     signedIn(); const order = manyItemsSummary(1);
     vi.mocked(apiClient).mockResolvedValue(ordersPage([order]));
     renderOrders();
-    const link = await screen.findByRole('link', { name: `${order.orderReference}, view order details` });
+    const link = await screen.findByRole('link', { name: order.orderReference });
     expect(link).toHaveAttribute('href', `/orders/${order.orderReference}`);
+    // The heading and article are named by the reference alone (no action text leaking into the headings list).
+    expect(screen.getByRole('heading', { level: 2, name: order.orderReference })).toContainElement(link);
+    expect(screen.getByRole('article', { name: order.orderReference })).toBeInTheDocument();
     const card = link.closest('article')!;
     expect(within(card).getByText('Order status:', { exact: false })).toBeInTheDocument();
     expect(card).toHaveTextContent('Order status: Preparing'); expect(card).toHaveTextContent('Payment status: Paid');
