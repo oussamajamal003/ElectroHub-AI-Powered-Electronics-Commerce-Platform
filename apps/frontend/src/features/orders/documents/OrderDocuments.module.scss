@@ -1,0 +1,90 @@
+@use "@/styles/abstracts" as *;
+
+// Task 03.9 documents: existing tokens only (zero radius, #E2E8F0 borders, white cards, Poppins, 4px rhythm).
+.panel { display: grid; gap: $spacing-4; min-width: 0; text-align: start; }
+.confirmation { width: 100%; margin-top: $spacing-6; padding: $spacing-5; border: 1px solid $color-border; background: $color-background;
+  @include respond-to(md) { padding: $spacing-6 $spacing-8; }
+}
+.details { padding: $spacing-5; border: 1px solid $color-border; background: $color-background;
+  @include respond-to(md) { padding: $spacing-8; }
+}
+.chooser { gap: $spacing-3; }
+.heading { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; color: $color-text-primary;
+  @include respond-to(md) { font-size: $font-size-xl; }
+}
+
+.list { display: grid; margin: 0; padding: 0; list-style: none; }
+.row { display: grid; grid-template-columns: 2.25rem minmax(0, 1fr); gap: $spacing-2 $spacing-3; align-items: start; padding-block: $spacing-4;
+  & + & { border-top: 1px solid $color-border; }
+  &:first-child { padding-top: 0; }
+  &:last-child { padding-bottom: 0; }
+}
+// Wide containers put actions beside the text; the narrow Order Details aside and phones keep them below.
+.confirmation .row, .chooser .row {
+  @include respond-to(md) { grid-template-columns: 2.25rem minmax(0, 1fr) auto; align-items: center; }
+}
+.icon { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; background: $color-surface; border: 1px solid $color-border; color: $color-primary;
+  svg { width: 1.125rem; height: 1.125rem; }
+}
+.unavailableRow .icon { color: $color-text-secondary; }
+.text { display: grid; gap: $spacing-1; min-width: 0; }
+.name { font-size: $font-size-base; font-weight: $font-weight-semibold; color: $color-text-primary; overflow-wrap: anywhere; }
+.description { font-size: $font-size-sm; color: $color-text-secondary; line-height: 1.5; }
+.reason { display: flex; gap: $spacing-2; align-items: flex-start; font-size: $font-size-sm; color: $color-text-primary; line-height: 1.5;
+  svg { width: 1rem; height: 1rem; flex-shrink: 0; margin-top: 0.15rem; color: $color-text-secondary; }
+}
+.rowError { font-size: $font-size-sm; color: $color-error-foreground; line-height: 1.5; }
+.skeletonText { display: grid; gap: $spacing-2; padding-top: $spacing-1; }
+
+// Full row width under the text; the two actions sit side by side only when both fit their labels, otherwise they stack.
+.actions { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: $spacing-2;
+  .action { width: 100%; }
+}
+.confirmation .actions, .chooser .actions {
+  @include respond-to(md) { grid-column: auto; display: flex; .action { width: auto; } }
+}
+// Practical 44px touch targets on the compact shared Button.
+.actions .action, .panelError .action, .chooserTrigger.chooserTrigger { min-height: 2.75rem; height: auto; gap: $spacing-2; white-space: nowrap;
+  svg { width: 1rem; height: 1rem; flex-shrink: 0; }
+}
+.panelError { display: grid; gap: $spacing-3; justify-items: start; p { margin: 0; font-size: $font-size-sm; color: $color-text-primary; } }
+.staleNote { margin: 0; font-size: $font-size-sm; color: $color-text-secondary; }
+.visuallyHidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+// My Orders: sits in the card footer, above the card link's stretched ::after overlay.
+.chooserTrigger { position: relative; z-index: 1; flex-shrink: 0; }
+.chooserDialog { max-width: 44rem; background: $color-background; padding: $spacing-5; @include respond-to(md) { padding: $spacing-6; } }
+.chooserHeader, .previewHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: $spacing-3; }
+.previewTitle { display: grid; gap: $spacing-1; min-width: 0;
+  h2 { overflow-wrap: anywhere; }
+  p { margin: 0; font-size: $font-size-sm; color: $color-text-secondary; overflow-wrap: anywhere; }
+}
+.closeButton.closeButton { width: 2.75rem; height: 2.75rem; padding: 0; flex-shrink: 0; svg { width: 1.25rem; height: 1.25rem; } }
+
+// Preview: near full-viewport so the native viewer has room; header actions always reachable.
+.previewContainer { padding: $spacing-2; @include respond-to(md) { padding: $spacing-6; } }
+.previewDialog { max-width: 64rem; height: min(92vh, 64rem); background: $color-background; padding: $spacing-4; gap: $spacing-3;
+  @include respond-to(md) { padding: $spacing-5; }
+}
+.previewActions { display: flex; align-items: center; gap: $spacing-2; flex-shrink: 0;
+  > button:first-child { min-height: 2.75rem; height: auto; gap: $spacing-2; svg { width: 1rem; height: 1rem; } }
+}
+// Phones: title and close share the first row; the preview's Download PDF spans the row beneath (both always reachable).
+@media (max-width: 30rem) {
+  .previewHeader { flex-wrap: wrap; }
+  .previewHeader .previewTitle { flex: 1 1 0; order: 1; }
+  .previewHeader .previewActions { display: contents; }
+  .previewHeader .closeButton { order: 2; }
+  .previewHeader .previewActions > button:first-child { order: 3; flex: 1 1 100%; }
+}
+.viewer { position: relative; flex: 1; min-height: 0; border: 1px solid $color-border; background: $color-surface; display: grid; }
+.frame { width: 100%; height: 100%; border: 0; background: $color-background; }
+.viewerState { display: grid; place-content: center; justify-items: center; gap: $spacing-3; padding: $spacing-6; text-align: center;
+  p { margin: 0; color: $color-text-primary; max-width: 28rem; }
+}
+.muted.muted { color: $color-text-secondary; font-size: $font-size-sm; }
+.stateIcon { width: 2rem; height: 2rem; color: $color-text-secondary; }
+.previewHint { margin: 0; font-size: $font-size-xs; color: $color-text-secondary; }
+.spinner { width: 1.75rem; height: 1.75rem; border: 2px solid $color-border; border-top-color: $color-primary; border-radius: 50%; animation: documents-spin 0.8s linear infinite; }
+@keyframes documents-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }

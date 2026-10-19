@@ -14,6 +14,7 @@ import { queryKeys } from '@/lib/query';
 import { OrderBadges } from '@/features/orders/OrderBadges';
 import { OrdersAccessGate } from '@/features/orders/OrdersAccessGate';
 import { OrdersBreadcrumb } from '@/features/orders/OrdersBreadcrumb';
+import { OrderDocumentsChooser } from '@/features/orders/documents/OrderDocumentsChooser';
 import { formatDate, formatMoney, pluralize, readPage, unitCount } from '@/features/orders/presentation';
 import { MAX_ORDERS_PAGE, ORDERS_PAGE_SIZE, type OrderSummary, type OrdersPageResponse } from '@/features/orders/types';
 import shared from '@/features/orders/Orders.module.scss';
@@ -46,8 +47,8 @@ function OrderCard({ order, page }: { order: OrderSummary; page: number }) {
     <div className={styles.cardTop}>
       <div className={styles.identity}>
         <span className={styles.eyebrow}>Order</span>
-        {/* One link per card; its ::after makes the whole card a single click/keyboard target (no nested controls).
-            Named by the reference only, so the heading and article names stay the reference too (WCAG 2.4.4: purpose from card context). */}
+        {/* The card link's ::after makes the whole card its click target (no nested controls). The Documents button in the footer is a
+            sibling stacked above that overlay. Named by the reference only, so the heading and article names stay the reference too. */}
         <h2 id={`order-${order.orderReference}`}><Link className={styles.cardLink} to={`/orders/${order.orderReference}`} state={{ fromPage: page }}>
           {order.orderReference}</Link></h2>
       </div>
@@ -65,7 +66,10 @@ function OrderCard({ order, page }: { order: OrderSummary; page: number }) {
         <div><dt>{order.paymentState === 'PAID' ? 'Total paid' : 'Total'}</dt><dd>{formatMoney(order.total, order.currency)}</dd></div>
         <div><dt>Items</dt><dd>{items}</dd></div>
       </dl>
-      <ChevronRight className={styles.chevron} aria-hidden="true" />
+      <div className={styles.footerEnd}>
+        <OrderDocumentsChooser orderReference={order.orderReference} />
+        <ChevronRight className={styles.chevron} aria-hidden="true" />
+      </div>
     </div>
   </article>;
 }

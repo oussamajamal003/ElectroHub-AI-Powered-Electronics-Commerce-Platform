@@ -3,6 +3,7 @@ import healthRoutes from './health.routes.js';
 import authRoutes from './auth.routes.js';
 import cartRoutes from './cart.routes.js';
 import checkoutRoutes from './checkout.routes.js';
+import orderDocumentRoutes from './order-document.routes.js';
 import paymentRoutes from './payment.routes.js';
 import wishlistRoutes from './wishlist.routes.js';
 import accountRoutes from './account.routes.js';
@@ -21,6 +22,8 @@ router.use(healthRoutes);
 router.use('/auth', authRoutes);
 router.use(cartRoutes);
 router.use(paymentRoutes);
+// Task 03.9: before checkoutRoutes so its own private-header, method and auth chain owns /orders/:ref/documents[/:kind].
+router.use(orderDocumentRoutes);
 router.use(checkoutRoutes);
 router.use(wishlistRoutes);
 router.use('/account', accountRoutes);

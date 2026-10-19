@@ -39,6 +39,10 @@
   dd { margin: 0; font-size: $font-size-base; font-weight: $font-weight-semibold; color: $color-text-primary; white-space: nowrap; @include respond-to(md) { font-size: $font-size-lg; } }
 }
 .chevron { width: 1.5rem; height: 1.5rem; flex-shrink: 0; color: $color-primary; }
+// Task 03.9: the Documents action and chevron move to their own right-aligned row only when the metadata needs the full width.
+.cardFooter { flex-wrap: wrap; }
+.cardFooter > .meta { flex: 1 1 15rem; }
+.footerEnd { display: flex; align-items: center; gap: $spacing-2; flex-shrink: 0; margin-left: auto; @include respond-to(md) { gap: $spacing-4; } }
 
 // The true empty state: a bounded panel centered beneath the heading, balanced within the main content area, in normal flow.
 .emptyArea { display: grid; place-items: center; min-height: clamp(18rem, 42vh, 30rem); padding-block: $spacing-4 $spacing-8; }
