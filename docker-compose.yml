@@ -23,6 +23,22 @@ services:
     depends_on:
       - ai-service
 
+  # Task 03.8: durable commerce email worker (Order/Payment confirmation emails). A SEPARATE supervised process: the API alone never sends
+  # them. Same image and database/provider environment as `backend`; inert until COMMERCE_EMAIL_DISPATCH_ENABLED=true and
+  # COMMERCE_EMAIL_SEND_MODE is set (see docs/10_Operations/COMMERCE_EMAIL_RUNBOOK.md for the activation sequence). It refuses to start
+  # when sending is not authorised for the resolved database, so `restart` only recovers crashes, never bypasses a safety gate.
+  commerce-email-worker:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    command: ['node', 'dist/bootstrap.js', '--commerce-email-worker']
+    env_file:
+      - ./apps/backend/.env
+    restart: unless-stopped
+    stop_grace_period: 30s
+    depends_on:
+      - backend
+
   ai-service:
     build:
       context: ./apps/ai-service

@@ -12,8 +12,11 @@ export interface OrderRequest { shipping: Shipping; deliveryMethod: DeliveryMeth
 export interface SubmissionAttempt { submitted?: boolean; key: string; request: OrderRequest; status: 'setup' | 'pending' | 'unknown'; paymentAttemptId?: string; intentId?: string; cartIdentity?: string }
 export interface CheckoutDraft { shipping: Shipping; deliveryMethod: DeliveryMethod; shippingComplete: boolean;
   deliveryComplete: boolean; paymentComplete: boolean; reviewReached?: boolean; attempt: SubmissionAttempt | null }
+/** Aggregate of the two initial commerce emails (order + payment). Omitted for historical orders or when email is disabled. Never includes a recipient. */
+export interface EmailConfirmationSummary { state: 'QUEUED' | 'DELAYED' | 'SENT' | 'DELIVERED' | 'PARTIAL' | 'UNAVAILABLE'; updatedAt: string }
 export interface Confirmation { orderReference: string; createdAt: string; status: string; paymentMethod: 'CARD'; paymentState: 'UNPROCESSED' | 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
   card?: { brand: string; last4: string } | null;
+  emailConfirmation?: EmailConfirmationSummary;
   shipping: Omit<Shipping, 'line2' | 'state'> & { line2: string | null; state: string | null };
   deliveryMethod: DeliveryMethod; estimatedDeliveryStart: string; estimatedDeliveryEnd: string; currency: string;
   subtotal: string; shippingCost: string; total: string;

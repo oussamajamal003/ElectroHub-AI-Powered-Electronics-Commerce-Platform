@@ -7,6 +7,7 @@ const crypto = require('node:crypto');
 const { spawn, execFileSync } = require('node:child_process');
 const safety = require('./stripe-gate-safety.cjs');
 const verifier = require('./stripe-webhook-verifier.cjs');
+const emailDev = require('./lib/commerce-email-dev.cjs');
 const backend = path.resolve(__dirname, '..');
 
 function existingPaymentProcesses() {
@@ -86,7 +87,8 @@ async function supervise(config, deps = {}) {
   const owned = new safety.OwnedProcesses();
   const spawnProcess = (...args) => owned.track((deps.spawn || spawn)(...args));
   let stopping = false;
-  const shutdown = () => { stopping = true; owned.stopAll(); };
+  let email = { started: false, reason: 'not-started', runtime: null, stop: async () => {} };
+  const shutdown = () => { stopping = true; owned.stopAll(); void email.stop(); };
   process.once('SIGINT', shutdown); process.once('SIGTERM', shutdown);
   try {
     const listener = await (deps.startListener || verifier.startListener)({
@@ -101,6 +103,18 @@ async function supervise(config, deps = {}) {
       env: { ...process.env, NODE_ENV: 'development', STRIPE_WEBHOOK_SECRET: listener.secret },
       windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
     lock.record([listener.process.pid, api.pid, worker.pid]);
+    // Task 03.8: the commerce email worker is part of the normal DEV runtime. It is supervised separately from the payment processes: a
+    // crash restarts it (bounded) and never takes payments down. It starts only when the email switches in .env.local request it.
+    const log = deps.emailLog || console.log; // human-readable lines; kept apart from the JSON readiness record
+    const emailEnv = { ...process.env, NODE_ENV: 'development' };
+    const runner = path.join(backend, 'dist/commerce-email-runner.js');
+    const runtimeReport = (deps.describeEmail || emailDev.describeEmailRuntime)(emailEnv);
+    if (runtimeReport.workerWillRun && !(deps.exists || fs.existsSync)(runner)) {
+      log(JSON.stringify({ commerceEmail: 'NOT_STARTED', reason: 'dist/commerce-email-runner.js is missing: run `npm run build` in apps/backend first.' }));
+    } else {
+      email = (deps.startEmailWorker || emailDev.startEmailWorker)({ backend, entry: { command: process.execPath, args: [runner] }, env: emailEnv, log });
+    }
+    for (const warning of runtimeReport.warnings) log(`[commerce-email] ${warning}`);
     let runnerReady = false; let buffer = '';
     worker.stdout.on('data', chunk => { buffer = (buffer + chunk.toString()).slice(-4096); if (buffer.includes('payment.runner.ready')) runnerReady = true; });
     const exited = new Promise((resolve, reject) => {
@@ -115,7 +129,9 @@ async function supervise(config, deps = {}) {
       runnerReady && await (deps.health || verifier.backendHealth)(`http://127.0.0.1:${config.port}`), Boolean, { timeoutMs: 25000, intervalMs: 250 })]);
     if (!stopping) {
       (deps.log || console.log)(JSON.stringify({ readiness: 'PASS', backendPort: config.port, runnerDatabaseReady: true,
-        listenerBoundInMemory: true, financialAcceptance: 'NOT_VERIFIED', shutdown: 'Ctrl+C stops only owned processes' }));
+        listenerBoundInMemory: true, financialAcceptance: 'NOT_VERIFIED', shutdown: 'Ctrl+C stops only owned processes',
+        commerceEmail: { producerEnabled: runtimeReport.producerEnabled, dispatchEnabled: runtimeReport.dispatchEnabled, sendMode: runtimeReport.sendMode,
+          allowlistSize: runtimeReport.allowlistSize, workerStarted: email.started, workerNote: email.started ? 'supervised, restarts on crash' : email.reason } }));
       await exited;
     }
   } finally { shutdown(); lock.release(); process.removeListener('SIGINT', shutdown); process.removeListener('SIGTERM', shutdown); }

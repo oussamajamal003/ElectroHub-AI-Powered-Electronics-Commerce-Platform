@@ -4,6 +4,7 @@ import { logger, flushLogsWithDeadline, installFatalLogging } from './utils/logg
 import { prisma } from './lib/prisma.js';
 import { inProcessRecoveryEnabled, startInProcessRecovery } from './payment-inprocess-recovery.js';
 import { paymentIsolation } from './payment-isolation.js';
+import { logCommerceEmailRuntime } from './services/commerce-email.runtime.js';
 
 const PORT = env.PORT;
 let stopRecovery: (() => Promise<void>) | null = null;
@@ -13,6 +14,7 @@ logger.info('Server starting', { operation: 'server.starting' });
   const isolation = paymentIsolation();
   logger[isolation.allowed ? 'info' : 'warn']('Payment isolation resolved', { event: 'payment.isolation.resolved', allowed: isolation.allowed,
     target: isolation.target, identity: isolation.identity, reason: isolation.reason });
+  logCommerceEmailRuntime('api');
 }
 
 /**

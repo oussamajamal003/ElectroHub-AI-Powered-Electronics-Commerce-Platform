@@ -220,15 +220,28 @@ it('projects a verified never-confirmed purchase as Processing with Cancel purch
   expect((await service.purchases(id))[0]).toMatchObject({ classification: 'DECLINED', retryAllowed: true, cancelable: false });
   expect(provider.retrieve).not.toHaveBeenCalled(); expect(db.paymentAttempt.update).not.toHaveBeenCalled();
 });
-it('a list read reconciles only work the durable runner left overdue; ordinary reads make no provider calls', async () => {
+it('Task 03.8: the list read never reconciles (even overdue work); the explicit POST reconciles only owned work the runner left overdue', async () => {
   const processing = { ...attempt, state: 'AWAITING_INPUT', failureCode: null };
   const process = vi.spyOn(service, 'process').mockResolvedValue(null);
-  db.paymentAttempt.findMany.mockResolvedValue([{ ...processing, work: { state: 'READY', lastError: null, nextRunAt: new Date(Date.now() - 5_000) } }]);
-  await service.purchases(id); expect(process).not.toHaveBeenCalled();
-  db.paymentAttempt.findMany.mockResolvedValue([{ ...processing, work: { state: 'LEASED', lastError: null, nextRunAt: new Date(0) } }]);
-  await service.purchases(id); expect(process).not.toHaveBeenCalled();
-  db.paymentAttempt.findMany.mockResolvedValue([{ ...processing, work: { state: 'READY', lastError: null, nextRunAt: new Date(Date.now() - 60_000) } }]);
-  await service.purchases(id); expect(process).toHaveBeenCalledTimes(1);
+  for (const work of [{ state: 'READY', nextRunAt: new Date(Date.now() - 5_000) }, { state: 'LEASED', nextRunAt: new Date(0) },
+    { state: 'READY', nextRunAt: new Date(Date.now() - 60_000) }]) {
+    db.paymentAttempt.findMany.mockResolvedValue([{ ...processing, work: { ...work, lastError: null } }]);
+    await service.purchases(id);
+  }
+  expect(process).not.toHaveBeenCalled(); expect(provider.retrieve).not.toHaveBeenCalled();
+  db.paymentAttempt.findMany.mockResolvedValue([{ id: attempt.id }]);
+  const before = Date.now();
+  await service.recoverOverdue(id);
+  const after = Date.now();
+  const [{ where, take }] = db.paymentAttempt.findMany.mock.lastCall as [{ where: Record<string, unknown> & { work: { is: { state: string; nextRunAt: { lte: Date } } } }; take: number }];
+  expect(where).toMatchObject({ userId: id, orderId: null, cancelRequested: false, submittedAt: { not: null } });
+  expect(where.work.is.state).toBe('READY');
+  // The service reads the clock between `before` and `after`, so the cutoff is bracketed by both rather than compared to one instant.
+  const cutoff = where.work.is.nextRunAt.lte.getTime();
+  expect(cutoff).toBeGreaterThanOrEqual(before - 30_000);
+  expect(cutoff).toBeLessThanOrEqual(after - 30_000);
+  expect(take).toBe(5);
+  expect(process).toHaveBeenCalledExactlyOnceWith(attempt.id);
 });
 it('purchase projection distinguishes retryable decline from unknown without financial effects', async () => {
   db.paymentAttempt.findMany.mockResolvedValue([{ ...attempt, state: 'DECLINED', work: { state: 'READY', lastError: null } }]);

@@ -99,4 +99,32 @@ describe('ProtectedRoute', () => {
     expect(screen.queryByText('Private Account Content')).not.toBeInTheDocument();
     expect(screen.queryByText('Home Page Content')).not.toBeInTheDocument();
   });
+
+  describe('explicit sign-out (Task 03.8)', () => {
+    const renderCheckout = () => render(
+      <MemoryRouter initialEntries={['/checkout/confirmation/ORD-1']}>
+        <Routes>
+          <Route path="/" element={<div>Home Page</div>} />
+          <Route path="/cart" element={<div>Cart Page</div>} />
+          <Route element={<ProtectedRoute requiredRole="CUSTOMER" redirectTo="/cart" requireVerifiedSession preserveReturnPath />}>
+            <Route path="/checkout/confirmation/:orderReference" element={<div>Confirmation Content</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+
+    it('goes to Home, not the checkout fallback, while the customer is signing out', () => {
+      (useAuth as any).mockReturnValue({ isAuthenticated: false, user: null, isInitializing: false, isSessionVerified: true, isLoggingOut: true });
+      renderCheckout();
+      expect(screen.getByText('Home Page')).toBeInTheDocument();
+      expect(screen.queryByText('Cart Page')).not.toBeInTheDocument();
+      expect(screen.queryByText('Confirmation Content')).not.toBeInTheDocument();
+    });
+
+    it('a guest opening the protected URL directly still follows the existing redirect', () => {
+      (useAuth as any).mockReturnValue({ isAuthenticated: false, user: null, isInitializing: false, isSessionVerified: true, isLoggingOut: false });
+      renderCheckout();
+      expect(screen.getByText('Cart Page')).toBeInTheDocument();
+    });
+  });
 });

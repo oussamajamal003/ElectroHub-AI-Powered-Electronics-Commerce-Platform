@@ -34,7 +34,7 @@ const db = { paymentAttempt: { findUnique: vi.fn(), findFirst: vi.fn(), update: 
   cart: { findUnique: vi.fn() }, product: { findMany: vi.fn() },
   cartItem: { upsert: vi.fn() },
   payment: { update: vi.fn(), findUnique: vi.fn() }, user: { findUnique: vi.fn() },
-  order: { update: vi.fn() }, $queryRaw: vi.fn(), $transaction: vi.fn() };
+  order: { update: vi.fn(), findUnique: vi.fn() }, $queryRaw: vi.fn(), $transaction: vi.fn() };
 describe('Setup diagnostics cannot replace the financial outcome', () => {
   it('preserves validation failure when the performance logger throws', async () => {
     const log = vi.spyOn(logger, 'info').mockImplementation(() => { throw new Error('logging transport unavailable'); });
@@ -167,13 +167,16 @@ describe('Stale pre-decline snapshot, canceled intents and poll-driven recovery'
     expect(attempt).toMatchObject({ state: 'CANCELED', providerStatus: 'canceled', orderId: null });
     for (const operation of [provider.create, provider.capture, provider.refund, commit]) expect(operation).not.toHaveBeenCalled();
   });
-  it('purchases() drives only due, lease-claimed reconciliation for unresolved submitted attempts and never wakes or resets work', async () => {
+  it('Task 03.8: purchases() is read-only; recoverOverdue() drives only due, lease-claimed reconciliation and never wakes or resets work', async () => {
     submittedAwaiting();
     const list = { ...db, paymentAttempt: { ...db.paymentAttempt, findMany: vi.fn().mockResolvedValue([{ ...attempt, request: {}, items: [], work: { ...work } }]) } };
     const polled = new PaymentService(list as unknown as PrismaClient, provider);
     const process = vi.spyOn(polled, 'process').mockResolvedValue(null);
     const wake = vi.spyOn(polled, 'wake');
     await polled.purchases('customer').catch(() => undefined);
+    expect(process).not.toHaveBeenCalled();
+    list.paymentAttempt.findMany.mockResolvedValue([{ id }]);
+    await expect(polled.recoverOverdue('customer')).resolves.toEqual({ scheduled: 1 });
     expect(process).toHaveBeenCalledExactlyOnceWith(id);
     expect(wake).not.toHaveBeenCalled();
   });

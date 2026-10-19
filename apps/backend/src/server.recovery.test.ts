@@ -11,7 +11,7 @@ vi.mock('./payment-inprocess-recovery.js', () => ({
   inProcessRecoveryEnabled: () => true, startInProcessRecovery: mocks.start,
 }));
 vi.mock('./utils/logger.js', () => ({
-  logger: { info: mocks.log, error: mocks.log, warn: mocks.log },
+  logger: { info: mocks.log, error: mocks.log, warn: mocks.log }, logSafely: mocks.log,
   installFatalLogging: vi.fn(), flushLogsWithDeadline: vi.fn().mockResolvedValue(true),
 }));
 

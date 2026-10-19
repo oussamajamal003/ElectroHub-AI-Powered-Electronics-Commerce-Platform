@@ -9,6 +9,7 @@ import { attemptSchema } from './services/checkout.domain.js';
 import { runRecoveryLoop } from './payment-recovery-loop.js';
 import { paymentRecoveryAttention } from './payment-recovery-attention.js';
 import { paymentIsolation } from './payment-isolation.js';
+import { logCommerceEmailRuntime } from './services/commerce-email.runtime.js';
 
 // Local disposable-fixture gates may scope a fresh runner without processing curated customer attempts.
 // This is not an HTTP capability and is forbidden in deployed production mode.
@@ -23,6 +24,7 @@ const isolation = paymentIsolation();
 logger[isolation.allowed ? 'info' : 'error']('Payment isolation resolved', { event: 'payment.isolation.resolved', allowed: isolation.allowed,
   target: isolation.target, identity: isolation.identity, reason: isolation.reason });
 if (!isolation.allowed) throw new Error(`Payment runner refused: ${isolation.reason} (${isolation.identity}).`);
+logCommerceEmailRuntime('payment-worker');
 let stopping = false;
 const shutdown = new AbortController();
 const stop = () => { stopping = true; shutdown.abort(); };
