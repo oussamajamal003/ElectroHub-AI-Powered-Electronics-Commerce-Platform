@@ -221,7 +221,8 @@ const noScenario: Scenario = {};
 function PanelSurface({ surface, orderReference }: { surface: Surface; orderReference: string }) {
   if (surface === 'chooser-dialog') return <OrderDocumentsChooser orderReference={orderReference} />;
   const variant = surface === 'details' || surface === 'chooser' ? surface : 'confirmation';
-  return <div style={{ width: 'min(100%, 28rem)', padding: '1rem' }}>
+  const maxWidth = variant === 'confirmation' ? '64rem' : '28rem';
+  return <div style={{ width: `min(100%, ${maxWidth})`, padding: '1rem' }}>
     <OrderDocumentsPanel orderReference={orderReference} variant={variant} />
   </div>;
 }

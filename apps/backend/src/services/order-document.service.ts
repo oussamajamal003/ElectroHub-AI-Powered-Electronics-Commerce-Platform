@@ -54,17 +54,38 @@ const documentSelect = {
 
 export const documentsEnabled = () => process.env.DOCUMENTS_ENABLED !== 'false';
 
+type DocumentUnavailableCause = 'FEATURE_DISABLED' | 'REQUIRED_ASSET_UNAVAILABLE' | 'RENDERER_POOL_UNAVAILABLE';
+
 let sharedPool: RenderPool | null = null;
 const defaultPool = () => (sharedPool ??= new RenderPool());
 
 const unavailable = () => new AppError('Documents are temporarily unavailable. Your order is not affected.', 503, 'DOCUMENTS_UNAVAILABLE');
+
+let lastUnavailableCause: DocumentUnavailableCause | null = null;
+let rendererPoolUnavailable = false;
+function recordUnavailableCause(cause: DocumentUnavailableCause | null) {
+  if (cause === lastUnavailableCause) return;
+  lastUnavailableCause = cause;
+  if (cause) logSafely('warn', 'Order documents unavailable.', { event: 'document_availability_changed', state: 'unavailable', reason: cause });
+  else logSafely('info', 'Order documents available.', { event: 'document_availability_changed', state: 'available' });
+}
+function recordRendererPoolState(unavailableNow: boolean) {
+  if (unavailableNow === rendererPoolUnavailable) return;
+  rendererPoolUnavailable = unavailableNow;
+  logSafely(unavailableNow ? 'warn' : 'info', unavailableNow ? 'Document renderer pool unavailable.' : 'Document renderer pool recovered.', {
+    event: 'document_renderer_pool_changed', state: unavailableNow ? 'unavailable' : 'available',
+    ...(unavailableNow ? { reason: 'RENDER_FAILED' } : {}),
+  });
+}
 
 export class OrderDocumentService {
   /** Principals with a generation in flight (one per customer per process; preview and download share the budget). */
   private readonly active = new Set<string>();
 
   constructor(private readonly database: PrismaClient = prisma, private readonly pool: () => RenderPool = defaultPool,
-    private readonly ready: () => boolean = () => documentsEnabled() && documentAssetsReady()) {}
+    private readonly ready: () => boolean = () => documentsEnabled() && documentAssetsReady(),
+    private readonly unavailableCause: () => DocumentUnavailableCause | null = () =>
+      !documentsEnabled() ? 'FEATURE_DISABLED' : !documentAssetsReady() ? 'REQUIRED_ASSET_UNAVAILABLE' : null) {}
 
   /** One SQL statement (relationJoins) gives a coherent Order + items + Payment + Attempt view under concurrent refunds. */
   private async read(userId: string, reference: string): Promise<DocumentSourceOrder> {
@@ -78,6 +99,7 @@ export class OrderDocumentService {
     const order = await this.read(userId, reference);
     const orderReference = canonicalReference(order.id);
     const enabled = this.ready();
+    recordUnavailableCause(enabled ? null : this.unavailableCause() ?? 'RENDERER_POOL_UNAVAILABLE');
     const decisions = evaluateDocuments(order, ASSET_VERSION);
     logSafely('info', 'Document metadata read.', { event: 'document_metadata_read', orderId: order.id,
       available: decisions.filter(entry => enabled && entry.available).map(entry => entry.kind) });
@@ -97,7 +119,11 @@ export class OrderDocumentService {
 
   async render(userId: string, reference: string, kind: DocumentKind, signal: AbortSignal): Promise<RenderedPdf> {
     const order = await this.read(userId, reference);
-    if (!this.ready()) throw unavailable();
+    if (!this.ready()) {
+      recordUnavailableCause(this.unavailableCause() ?? 'RENDERER_POOL_UNAVAILABLE');
+      throw unavailable();
+    }
+    recordUnavailableCause(null);
     const decision = evaluateDocuments(order, ASSET_VERSION).find(entry => entry.kind === kind)!;
     if (!decision.available) {
       // Owned but ineligible: generic message; the allowlisted reasonCode comes from a fresh metadata read.
@@ -114,6 +140,7 @@ export class OrderDocumentService {
     logSafely('info', 'Document render started.', { event: 'document_render_started', ...context, ...this.pool().stats() });
     try {
       const pdf = await this.pool().render(decision.snapshot!, decision.contentVersion!, signal);
+      recordRendererPoolState(false);
       logSafely('info', 'Document render completed.', { event: 'document_render_completed', ...context,
         durationMs: Math.round(performance.now() - started), bytes: pdf.bytes.length, pages: pdf.pageCount });
       return { bytes: pdf.bytes, byteLength: pdf.bytes.length, pageCount: pdf.pageCount, contentVersion: decision.contentVersion!,
@@ -127,6 +154,7 @@ export class OrderDocumentService {
 
   private translate(error: unknown, context: Record<string, unknown>, durationMs: number) {
     const code = error instanceof RenderError ? error.code : 'RENDER_FAILED';
+    if (error instanceof RenderError && code === 'RENDER_FAILED') recordRendererPoolState(this.pool().stats().workers === 0);
     if (code === 'CANCELLED') {
       logSafely('info', 'Document request cancelled.', { event: 'document_request_cancelled', ...context, durationMs });
       return new AppError('The document request was cancelled.', 499, 'DOCUMENT_REQUEST_CANCELLED');
@@ -137,6 +165,7 @@ export class OrderDocumentService {
         ? new AppError('This document cannot be generated from the recorded order details.', 422, 'DOCUMENT_DATA_INVALID')
         : new AppError('This document is too large to generate.', 422, 'DOCUMENT_LIMIT_EXCEEDED');
     }
+    if (code === 'ASSETS_UNAVAILABLE') recordUnavailableCause('REQUIRED_ASSET_UNAVAILABLE');
     logSafely(code === 'QUEUE_FULL' ? 'warn' : 'error', 'Document render failed.', { event: 'document_render_failed', ...context, code, durationMs,
       ...this.pool().stats() });
     if (code === 'QUEUE_FULL' || code === 'ASSETS_UNAVAILABLE') return unavailable();

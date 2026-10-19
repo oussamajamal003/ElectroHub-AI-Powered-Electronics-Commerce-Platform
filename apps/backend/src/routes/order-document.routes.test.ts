@@ -8,6 +8,7 @@ import { createOrderDocumentRouter } from './order-document.routes.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { RenderError, RenderPool, type RenderFailureCode } from '../documents/render-pool.js';
 import { OrderDocumentService } from '../services/order-document.service.js';
+import { logSafely } from '../utils/logger.js';
 import type { DocumentSourceOrder } from '../services/order-document.domain.js';
 import { ORDER_ID, USER_ID, paidOrder, withPayment } from '../services/__tests__/order-document.fixtures.js';
 import { JWT_SECRET, generateAccessToken } from '../utils/jwt.js';
@@ -68,15 +69,15 @@ afterAll(async () => {
 });
 
 type RenderResult = { bytes: Buffer; pageCount: number };
-function fakePool(impl: (...args: unknown[]) => Promise<RenderResult> = async () => ({ bytes: STUB_PDF, pageCount: 1 })) {
+function fakePool(impl: (...args: unknown[]) => Promise<RenderResult> = async () => ({ bytes: STUB_PDF, pageCount: 1 }), workers = 1) {
   const render = vi.fn(impl);
-  const pool = { render, stats: () => ({ workers: 1, busy: 0, queued: 0, timeouts: 0, maxQueue: 8 }) };
+  const pool = { render, stats: () => ({ workers, busy: 0, queued: 0, timeouts: 0, maxQueue: 8 }) };
   return { pool: pool as unknown as RenderPool, render };
 }
 
-interface AppOptions { pool?: RenderPool; ready?: () => boolean; fileLimit?: number }
-function buildApp({ pool = realPool, ready = () => true, fileLimit = 1000 }: AppOptions = {}) {
-  const service = new OrderDocumentService(db as unknown as ConstructorParameters<typeof OrderDocumentService>[0], () => pool, ready);
+interface AppOptions { pool?: RenderPool; ready?: () => boolean; unavailableCause?: () => 'FEATURE_DISABLED' | 'REQUIRED_ASSET_UNAVAILABLE' | 'RENDERER_POOL_UNAVAILABLE' | null; fileLimit?: number }
+function buildApp({ pool = realPool, ready = () => true, unavailableCause, fileLimit = 1000 }: AppOptions = {}) {
+  const service = new OrderDocumentService(db as unknown as ConstructorParameters<typeof OrderDocumentService>[0], () => pool, ready, unavailableCause);
   const app = express();
   app.use('/api', createOrderDocumentRouter({ service, fileLimit, metadataLimit: 1000 }));
   app.use(errorHandler);
@@ -216,7 +217,7 @@ describe('metadata DTO', () => {
 
   it('returns UNAVAILABLE DOCUMENTS_UNAVAILABLE entries when the feature is disabled', async () => {
     const fake = fakePool();
-    const res = await getJson(buildApp({ pool: fake.pool, ready: () => false }), metadataPath());
+    const res = await getJson(buildApp({ pool: fake.pool, ready: () => false, unavailableCause: () => 'FEATURE_DISABLED' }), metadataPath());
     expect(res.status).toBe(200);
     expect(res.body.data.documents).toHaveLength(3);
     for (const doc of res.body.data.documents) {
@@ -224,6 +225,29 @@ describe('metadata DTO', () => {
         availability: 'UNAVAILABLE', reasonCode: 'DOCUMENTS_UNAVAILABLE', filename: null, contentVersion: null, previewPath: null, downloadPath: null,
       });
     }
+    expect(fake.render).not.toHaveBeenCalled();
+    expect(logSafely).toHaveBeenCalledWith('warn', 'Order documents unavailable.', expect.objectContaining({
+      event: 'document_availability_changed', state: 'unavailable', reason: 'FEATURE_DISABLED',
+    }));
+  });
+
+  it('identifies missing required assets in a bounded diagnostic without customer or filesystem data', async () => {
+    const fake = fakePool();
+    const res = await getJson(buildApp({ pool: fake.pool, ready: () => false,
+      unavailableCause: () => 'REQUIRED_ASSET_UNAVAILABLE' }), metadataPath());
+    expect(res.status).toBe(200);
+    expect(res.body.data.documents.every((entry: { availability: string }) => entry.availability === 'UNAVAILABLE')).toBe(true);
+    expect(logSafely).toHaveBeenCalledWith('warn', 'Order documents unavailable.', expect.objectContaining({
+      event: 'document_availability_changed', state: 'unavailable', reason: 'REQUIRED_ASSET_UNAVAILABLE',
+    }));
+    const diagnostic = JSON.stringify(vi.mocked(logSafely).mock.calls);
+    expect(diagnostic).not.toContain(USER_ID);
+    expect(diagnostic).not.toMatch(/[A-Za-z]:\\|\/Users\/|\/home\//);
+    expect(fake.render).not.toHaveBeenCalled();
+    const pdfResponse = await getJson(buildApp({ pool: fake.pool, ready: () => false,
+      unavailableCause: () => 'REQUIRED_ASSET_UNAVAILABLE' }), filePath('invoice'));
+    expect(pdfResponse.status).toBe(503);
+    expect(pdfResponse.body.error.code).toBe('DOCUMENTS_UNAVAILABLE');
     expect(fake.render).not.toHaveBeenCalled();
   });
 });
@@ -393,7 +417,7 @@ describe('file download', () => {
 
   it('returns 503 DOCUMENTS_UNAVAILABLE when the feature is disabled, without rendering', async () => {
     const fake = fakePool();
-    const res = await getJson(buildApp({ pool: fake.pool, ready: () => false }), filePath('invoice'));
+    const res = await getJson(buildApp({ pool: fake.pool, ready: () => false, unavailableCause: () => 'FEATURE_DISABLED' }), filePath('invoice'));
     expect(res.status).toBe(503);
     expect(res.body.error.code).toBe('DOCUMENTS_UNAVAILABLE');
     expect(res.headers['retry-after']).toBeDefined();
@@ -420,6 +444,34 @@ describe('render failure translation', () => {
     expect(JSON.stringify(res.body)).not.toMatch(/stack|\.ts|node_modules|[A-Za-z]:\\|\/src\//);
     if (retryAfter) expect(res.headers['retry-after']).toBeDefined();
     else expect(res.headers['retry-after']).toBeUndefined();
+  });
+
+  it('reports full renderer-pool unavailability once until recovery, not a single worker failure', async () => {
+    const healthy = fakePool();
+    expect((await getPdf(buildApp({ pool: healthy.pool }), filePath('invoice'))).status).toBe(200);
+    const partialFailure = fakePool(() => Promise.reject(new RenderError('RENDER_FAILED')), 1);
+    for (let index = 0; index < 2; index++) {
+      const res = await getPdf(buildApp({ pool: partialFailure.pool }), filePath('invoice'));
+      expect(res.status).toBe(500);
+    }
+    expect(vi.mocked(logSafely).mock.calls.filter(([, , fields]) => fields?.event === 'document_renderer_pool_changed')).toHaveLength(0);
+
+    const unavailable = fakePool(() => Promise.reject(new RenderError('RENDER_FAILED')), 0);
+    for (let index = 0; index < 2; index++) {
+      const res = await getPdf(buildApp({ pool: unavailable.pool }), filePath('invoice'));
+      expect(res.status).toBe(500);
+    }
+    const recovered = fakePool();
+    expect((await getPdf(buildApp({ pool: recovered.pool }), filePath('invoice'))).status).toBe(200);
+    const transitions = vi.mocked(logSafely).mock.calls.filter(([level, _message, fields]) =>
+      level === 'warn' && fields?.event === 'document_renderer_pool_changed');
+    expect(transitions).toHaveLength(1);
+    expect(transitions[0]).toEqual(expect.arrayContaining(['warn', 'Document renderer pool unavailable.', expect.objectContaining({
+      event: 'document_renderer_pool_changed', state: 'unavailable', reason: 'RENDER_FAILED',
+    })]));
+    expect(logSafely).toHaveBeenCalledWith('info', 'Document renderer pool recovered.', expect.objectContaining({
+      event: 'document_renderer_pool_changed', state: 'available',
+    }));
   });
 
   it('maps an unexpected non-render error to 500 DOCUMENT_GENERATION_FAILED without echoing its message', async () => {
