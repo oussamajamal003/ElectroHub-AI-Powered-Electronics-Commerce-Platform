@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetEmailNoticeWindows } from './emailNoticeWindow';
 import { ApiError, apiClient } from '@/lib/api';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { ConfirmationContent } from '@/features/checkout/CheckoutComponents';
@@ -24,7 +25,7 @@ function renderDetails(state?: unknown, path = `/orders/${reference}`) {
   </Routes></MemoryRouter></QueryClientProvider>);
   return client;
 }
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => { vi.resetAllMocks(); resetEmailNoticeWindows(); });
 
 describe('status presentation', () => {
   it('maps every stored fulfillment state to its exact canonical badge and fails safe', () => {
@@ -172,7 +173,7 @@ describe('Confirmation actions', () => {
 describe('Email confirmation notice placement', () => {
   const updatedAt = '2026-09-04T12:02:00.000Z';
   it('places one notice after the header and before the details grid for a PAID Order', async () => {
-    signedIn(); resolve(orderDetails({ emailConfirmation: { state: 'SENT', updatedAt } }));
+    signedIn(); resolve(orderDetails({ createdAt: new Date().toISOString(), emailConfirmation: { state: 'SENT', updatedAt } }));
     renderDetails();
     const title = await screen.findByRole('heading', { level: 1, name: `Order ${reference}` });
     const notice = screen.getByRole('heading', { level: 2, name: 'Email confirmations' });
@@ -186,7 +187,7 @@ describe('Email confirmation notice placement', () => {
   });
 
   it('shows UNAVAILABLE calmly: no alert, and items, totals and address still render', async () => {
-    signedIn(); resolve(orderDetails({ emailConfirmation: { state: 'UNAVAILABLE', updatedAt } }));
+    signedIn(); resolve(orderDetails({ createdAt: new Date().toISOString(), emailConfirmation: { state: 'UNAVAILABLE', updatedAt } }));
     renderDetails();
     await screen.findByRole('heading', { level: 1, name: `Order ${reference}` });
     expect(screen.getByText('Your purchase is confirmed. We couldn’t confirm email delivery. Your order details are available here.')).toBeVisible();
@@ -204,7 +205,7 @@ describe('Email confirmation notice placement', () => {
   });
 
   it('makes no request of its own: the page issues exactly one detail read', async () => {
-    signedIn(); resolve(orderDetails({ emailConfirmation: { state: 'QUEUED', updatedAt } }));
+    signedIn(); resolve(orderDetails({ createdAt: new Date().toISOString(), emailConfirmation: { state: 'QUEUED', updatedAt } }));
     renderDetails();
     await screen.findByRole('heading', { level: 2, name: 'Email confirmations' });
     expect(apiClient).toHaveBeenCalledTimes(1);

@@ -71,7 +71,7 @@ function OrderCard({ order, page }: { order: OrderSummary; page: number }) {
 }
 
 function OwnedOrders() {
-  const { user, isSessionVerified } = useAuth();
+  const { user, isSessionVerified, isLoggingOut } = useAuth();
   const userId = user?.id ?? '';
   const [searchParams, setSearchParams] = useSearchParams();
   const page = readPage(searchParams.get('page'));
@@ -80,7 +80,7 @@ function OwnedOrders() {
   // Enabled only after session verification, so a pending query always means a real in-flight fetch.
   const query = useQuery({ queryKey: queryKeys.orders.list(userId, page, ORDERS_PAGE_SIZE),
     queryFn: ({ signal }) => apiClient<OrdersPageResponse>(`/api/orders?page=${page}&pageSize=${ORDERS_PAGE_SIZE}`, { signal }),
-    enabled: Boolean(user && isSessionVerified), retry: false, staleTime: 10_000,
+    enabled: Boolean(user && isSessionVerified && !isLoggingOut), retry: false, staleTime: 10_000,
     // Keep the previous page visible while the next loads, but never another account's data.
     placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2] === userId ? previous : undefined });
   const data = query.data;

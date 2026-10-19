@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ requiredRole, redirectTo = '/', requireVerifiedSession = false, preserveReturnPath = false }: ProtectedRouteProps) {
-  const { isAuthenticated, user, isInitializing, isSessionVerified } = useAuth();
+  const { isAuthenticated, user, isInitializing, isSessionVerified, isLoggingOut } = useAuth();
   const location = useLocation();
 
   if (isInitializing || (requireVerifiedSession && !isSessionVerified)) {
@@ -18,6 +18,8 @@ export function ProtectedRoute({ requiredRole, redirectTo = '/', requireVerified
   }
 
   if (!isAuthenticated || !user) {
+    // Explicit sign-out always lands on the public Home route; only a guest arriving at a protected URL follows `redirectTo` and keeps a return path.
+    if (isLoggingOut) return <Navigate to="/" replace />;
     return <Navigate to={redirectTo} replace state={preserveReturnPath ? { from: location.pathname } : undefined} />;
   }
 

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
 import type { CartData } from '@/features/cart/types';
 import { CommerceEmailNotice } from '@/features/orders/CommerceEmailNotice';
+import { TransientEmailNotice } from '@/features/orders/TransientEmailNotice';
 import { shippingErrors, steps } from './state';
 import type { CheckoutStep, Confirmation, DeliveryMethod, DeliveryOption, OrderRequest, Shipping, Totals } from './types';
 import styles from './Checkout.module.scss';
@@ -185,7 +186,8 @@ export function CheckingPayment({ unconfirmed = false, checking = false, note, o
 export function CheckoutProcessing() {
   return <section className={styles.processing} aria-labelledby="processing-heading"><ElectroHubLoader size="lg" /><h1 id="processing-heading">Processing your order…</h1><p aria-live="polite">You can continue shopping while we securely verify your payment.</p></section>;
 }
-export function ConfirmationContent({ order }: { order: Confirmation }) {
+/** `ownerId` enables the notice's 60-second lifetime; without it (stories, static previews) the notice is shown as given. */
+export function ConfirmationContent({ order, ownerId }: { order: Confirmation; ownerId?: string }) {
   const paid = order.paymentState === 'PAID';
   const delivery = { STANDARD: 'Standard Delivery', EXPRESS: 'Express Delivery', OVERNIGHT: 'Overnight Delivery' }[order.deliveryMethod];
   const date = (value: string) => new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(value));
@@ -219,7 +221,8 @@ export function ConfirmationContent({ order }: { order: Confirmation }) {
       {order.card && <p className={styles.subtle}>{order.card.brand} ending {order.card.last4}</p>}
       <div className={styles.orderDate}><span className={styles.eyebrow}>Estimated Delivery</span><p><strong>{date(order.estimatedDeliveryStart)}{order.estimatedDeliveryEnd !== order.estimatedDeliveryStart ? ` – ${date(order.estimatedDeliveryEnd)}` : ''}</strong></p><address>To: {order.shipping.recipient}<br />{[order.shipping.line1, order.shipping.line2, order.shipping.city, order.shipping.state, order.shipping.postalCode, order.shipping.country].filter(Boolean).join(', ')}</address><p className={styles.subtle}>Business-day estimate; holidays and delivery cutoffs may affect arrival.</p></div>
     </section>
-    <CommerceEmailNotice paymentState={order.paymentState} orderStatus={order.status} emailConfirmation={order.emailConfirmation} />
+    {ownerId ? <TransientEmailNotice ownerId={ownerId} order={order} />
+      : <CommerceEmailNotice paymentState={order.paymentState} orderStatus={order.status} emailConfirmation={order.emailConfirmation} />}
     {/* Outside the bordered card, sharing its width: the durable Order Details page, then continued shopping. Navigation only. */}
     <div className={styles.confirmationActions}>
       {order.orderReference && <Link className={styles.primaryLink} to={`/orders/${order.orderReference}`}>View Order Details</Link>}

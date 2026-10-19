@@ -9,7 +9,8 @@ const WIDTHS = [390, 768, 1440, 1920] as const;
 const user = { id: '22222222-2222-4222-8222-222222222222', email: 'email-notice@example.invalid', firstName: 'Riley', lastName: 'Chen', role: 'CUSTOMER' };
 const REF = orderDetails().orderReference;
 type Email = OrderDetails['emailConfirmation'];
-const paid = (emailConfirmation?: Email, over: Partial<OrderDetails> = {}) => ({ ...orderDetails(), ...(emailConfirmation ? { emailConfirmation } : {}), ...over });
+// A just-placed order: the notice only ever starts its 60-second window for a recent purchase (historical orders never show it).
+const paid = (emailConfirmation?: Email, over: Partial<OrderDetails> = {}) => ({ ...orderDetails(), createdAt: new Date().toISOString(), ...(emailConfirmation ? { emailConfirmation } : {}), ...over });
 const at = (state: NonNullable<Email>['state']) => ({ state, updatedAt: '2026-10-18T12:00:00.000Z' });
 
 async function harness(page: Page, details: () => OrderDetails | number) {
@@ -127,7 +128,7 @@ test('E18 keyboard: focus moves past the notice to View Order Details with a vis
 test.describe('E17 responsive captures (390/768/1440/1920)', () => {
   for (const width of WIDTHS) test(`confirmation and details at ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
-    await harness(page, () => ({ ...manyItemsDetails(), orderReference: REF, emailConfirmation: at('DELAYED') }));
+    await harness(page, () => ({ ...manyItemsDetails(), createdAt: new Date().toISOString(), orderReference: REF, emailConfirmation: at('DELAYED') }));
     await page.goto(`/checkout/confirmation/${REF}`);
     await expect(notice(page)).toBeVisible(); await noOverflow(page);
     const geometry = await page.evaluate(() => {
@@ -140,5 +141,60 @@ test.describe('E17 responsive captures (390/768/1440/1920)', () => {
     await page.goto(`/orders/${REF}`);
     await expect(notice(page)).toBeVisible(); await noOverflow(page);
     await shot(page, 'details-delayed', width);
+  });
+});
+
+test.describe('Transient notice: 60-second lifetime and clean logout', () => {
+  test('the notice disappears at 60 seconds with no leftover gap, survives navigation and reload, never returns, and causes no write', async ({ page }) => {
+    await page.clock.install();
+    const writes = await harness(page, () => paid(at('QUEUED')));
+    await page.goto(`/checkout/confirmation/${REF}`);
+    await expect(notice(page)).toBeVisible();
+    await page.clock.fastForward(30_000);
+    await page.getByRole('link', { name: 'View Order Details' }).click();
+    await expect(page).toHaveURL(new RegExp(`/orders/${REF}$`));
+    await expect(notice(page)).toBeVisible(); // 30 s of the window remain; navigation did not restart it
+    await page.reload();
+    await expect(notice(page)).toBeVisible();
+    await page.clock.fastForward(31_000);
+    await expect(notice(page)).toHaveCount(0);
+    const gap = await page.evaluate(() => { const header = document.querySelector('h1')!.closest('header')!; const grid = header.nextElementSibling!.getBoundingClientRect().top - header.getBoundingClientRect().bottom; return Math.round(grid); });
+    expect(gap).toBeLessThanOrEqual(48); // header is followed directly by the details grid, not an empty band
+    await page.goto(`/checkout/confirmation/${REF}`);
+    await expect(page.getByRole('heading', { name: /Order/ }).first()).toBeVisible();
+    await expect(notice(page)).toHaveCount(0);
+    await page.goto(`/orders/${REF}`);
+    await expect(notice(page)).toHaveCount(0);
+    expect(writes).toEqual([]);
+  });
+
+  test('My Orders never shows the email notice', async ({ page }) => {
+    await harness(page, () => paid(at('QUEUED')));
+    await page.goto('/orders');
+    await expect(page.getByRole('heading', { name: 'My Orders' })).toBeVisible();
+    await expect(notice(page)).toHaveCount(0);
+  });
+
+  for (const route of ['/orders', `/orders/${REF}`, `/checkout/confirmation/${REF}`]) test(`signing out from ${route.replace(REF, ':ref')} goes home without a Sign In Required flash`, async ({ page }) => {
+    await harness(page, () => paid(at('QUEUED')));
+    await page.goto(route);
+    await page.getByRole('button', { name: /Account menu for/ }).click();
+    await page.getByRole('menuitem', { name: 'Sign Out' }).click();
+    await page.evaluate(() => {
+      new MutationObserver(() => { if (document.body.innerText.includes('Sign In Required')) document.body.dataset.signInFlash = `${location.pathname} :: ${(document.querySelector('main') as HTMLElement | null)?.innerText.slice(0, 80).split(String.fromCharCode(10)).join(' ')}`; })
+        .observe(document.body, { childList: true, subtree: true, characterData: true });
+    });
+    await page.getByRole('dialog').getByRole('button', { name: 'Sign Out' }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByText('Sign In Required')).toHaveCount(0);
+    expect(await page.evaluate(() => document.body.dataset.signInFlash ?? 'none')).toBe('none');
+    await expect(notice(page)).toHaveCount(0);
+  });
+
+  test('a visitor who is not signed in and opens /orders directly is still protected', async ({ page }) => {
+    await page.route('**/api/**', route => (new URL(route.request().url()).pathname === '/api/auth/me'
+      ? route.fulfill({ status: 401, json: { error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } } }) : route.fulfill({ json: { data: [] } })));
+    await page.goto('/orders');
+    await expect(page.getByRole('heading', { name: 'Sign In Required' })).toBeVisible();
   });
 });
