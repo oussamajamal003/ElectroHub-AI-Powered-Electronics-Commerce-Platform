@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { Prisma, type OrderStatus } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler.js';
 import { deliveryMethods } from './checkout.domain.js';
-import { commerceEmailConfig } from './commerce-email.config.js';
+import { commerceEmailConfig, safeEmailImageUrl } from './commerce-email.config.js';
 import { SNAPSHOT_VERSION, TEMPLATE_VERSION, commerceEmailSnapshot, eventKeys, orderReference, usableRecipient,
   type CommerceEmailType, type SuppressionReason } from './commerce-email.domain.js';
 import { logSafely } from '../utils/logger.js';
@@ -28,7 +28,22 @@ interface EventInput {
 
 /** Producer activation switch (§13). Disabled means no event exists, and the customer projection then claims nothing. */
 export function commerceEmailEnqueueEnabled() {
-  return commerceEmailConfig().enqueueEnabled;
+  const enabled = commerceEmailConfig().enqueueEnabled;
+  if (!enabled) noteProducerDisabled();
+  return enabled;
+}
+
+let producerSkipped = 0;
+/**
+ * A disabled producer must never look like a healthy one: every successful purchase in this process creates NO email events. Logged on the
+ * first occurrence and every 50th afterwards (counts only, no order or customer data), so the condition is visible without flooding logs.
+ */
+function noteProducerDisabled() {
+  producerSkipped += 1;
+  if (producerSkipped === 1 || producerSkipped % 50 === 0) {
+    logSafely('warn', 'Commerce email producer is disabled: payment and order events create no email events in this process.', {
+      event: 'email_producer_disabled', skippedSinceStart: producerSkipped, enable: 'COMMERCE_EMAIL_ENQUEUE_ENABLED' });
+  }
 }
 
 async function insertEvent(tx: Tx, input: EventInput): Promise<CreatedCommerceEmail | null> {
@@ -71,7 +86,6 @@ export function logCreatedEvents(events: readonly (CreatedCommerceEmail | null)[
 
 const decimal = (value: Prisma.Decimal) => value.toFixed(2);
 const dateOnly = (value: Date) => value.toISOString().slice(0, 10);
-const httpsImage = (value: string | null) => value && /^https:\/\/[^\s"'<>]+$/.test(value) && value.length <= 2048 ? value : null;
 const firstName = (value: string | null | undefined) => value?.trim().slice(0, 100) || null;
 async function orderFacts(tx: Tx, orderId: string) {
   const order = await tx.order.findUnique({ where: { id: orderId }, include: {
@@ -99,12 +113,14 @@ export async function enqueuePaymentSucceeded(tx: Tx, input: { orderId: string; 
   }
   const account = order.user;
   const base = common(order, input.paidAt);
+  // Optional product images are kept only from approved asset hosts; an unsafe image is dropped, never the email.
+  const imageSources = commerceEmailConfig().imageSources;
   const card = input.card && /^[a-z_]{1,32}$/.test(input.card.brand) && /^\d{4}$/.test(input.card.last4) ? input.card : null;
   return [
     await insertEvent(tx, { key: eventKeys.orderConfirmed(order.id), type: 'ORDER_CONFIRMED', orderId: order.id, paymentId: null,
       userId: order.userId, occurredAt: input.paidAt, account, snapshot: { ...base, type: 'ORDER_CONFIRMED',
         items: order.items.map(item => ({ name: item.productName, sku: item.sku, quantity: item.quantity, unitPrice: decimal(item.unitPrice),
-          lineTotal: decimal(item.lineTotal), imageUrl: httpsImage(item.productImageUrl) })),
+          lineTotal: decimal(item.lineTotal), imageUrl: safeEmailImageUrl(item.productImageUrl, imageSources) })),
         subtotal: decimal(order.subtotal), shipping: decimal(order.shippingCost), total: decimal(order.total), currency: order.currency,
         delivery: delivery(order),
         shippingAddress: { recipient: order.shippingRecipient, line1: order.shippingLine1, line2: order.shippingLine2, city: order.shippingCity,

@@ -9,7 +9,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     fileParallelism: false,
-    include: ['src/services/__tests__/commerce-email.postgres.integration.test.ts'],
+    include: ['src/services/__tests__/commerce-email.postgres.integration.test.ts',
+      'src/services/__tests__/commerce-email.multicustomer.postgres.integration.test.ts',
+      'src/services/__tests__/commerce-email-migration-verify.postgres.integration.test.ts'],
     testTimeout: 60000,
     hookTimeout: 60000,
   },

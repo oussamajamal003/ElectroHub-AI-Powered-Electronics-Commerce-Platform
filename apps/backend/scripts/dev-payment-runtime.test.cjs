@@ -78,3 +78,40 @@ test('listener startup failure releases ownership and never starts an API', asyn
   await assert.rejects(supervise({ port: 5136 }, state.deps), /CLI unavailable/);
   assert.equal(state.processes.length, 0); assert.equal(state.lock.released, true);
 });
+
+// Task 03.8: the commerce email worker is part of the normal shared-DEV runtime, supervised separately from the payment processes.
+const emailReport = { producerEnabled: true, dispatchEnabled: true, sendMode: 'allowlist', allowlistSize: 2, workerWillRun: true, warnings: [] };
+test('commerce email worker starts with the runtime, is reported in readiness, and stops with Ctrl+C', async () => {
+  let readiness = null; let emailStops = 0; let started = null;
+  const state = dependencies((_ps, record) => { readiness = record; process.emit('SIGINT'); });
+  await supervise({ port: 5136 }, { ...state.deps, emailLog: () => {}, describeEmail: () => emailReport, exists: () => true,
+    startEmailWorker: options => { started = options; return { started: true, runtime: emailReport, stop: async () => { emailStops++; } }; } });
+  assert.equal(readiness.commerceEmail.workerStarted, true);
+  assert.equal(readiness.commerceEmail.sendMode, 'allowlist');
+  assert.equal(readiness.commerceEmail.allowlistSize, 2);
+  assert.equal(JSON.stringify(readiness).includes('@'), false); // no addresses in the readiness record
+  assert.equal(started.env.NODE_ENV, 'development');
+  assert.match(started.entry.args[0], /commerce-email-runner\.js$/);
+  assert.equal(emailStops >= 1, true);
+});
+test('email worker not configured: payments still start and the reason is reported, not hidden', async () => {
+  let readiness = null; const lines = [];
+  const state = dependencies((_ps, record) => { readiness = record; process.emit('SIGINT'); });
+  const off = { producerEnabled: false, dispatchEnabled: false, sendMode: 'disabled', allowlistSize: 0, workerWillRun: false, warnings: ['Commerce emails are OFF (test)'] };
+  await supervise({ port: 5136 }, { ...state.deps, emailLog: line => lines.push(line), describeEmail: () => off,
+    startEmailWorker: () => ({ started: false, reason: 'not-configured', runtime: off, stop: async () => {} }) });
+  assert.equal(readiness.readiness, 'PASS');
+  assert.equal(readiness.commerceEmail.workerStarted, false);
+  assert.equal(readiness.commerceEmail.workerNote, 'not-configured');
+  assert.ok(lines.some(line => line.includes('OFF')));
+});
+test('a missing build of the email runner is reported and does not start it or break payments', async () => {
+  let readiness = null; const lines = []; let started = false;
+  const state = dependencies((_ps, record) => { readiness = record; process.emit('SIGINT'); });
+  await supervise({ port: 5136 }, { ...state.deps, emailLog: line => lines.push(line), describeEmail: () => emailReport, exists: () => false,
+    startEmailWorker: () => { started = true; return { started: true, stop: async () => {} }; } });
+  assert.equal(started, false);
+  assert.equal(readiness.readiness, 'PASS');
+  assert.equal(readiness.commerceEmail.workerStarted, false);
+  assert.ok(lines.some(line => line.includes('npm run build')));
+});

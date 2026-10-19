@@ -6,7 +6,10 @@
  *   node scripts/commerce-email-migration.cjs preflight DEV|PROD     read-only: identity, ledger, checksums, pending set, OTP fingerprint
  *   node scripts/commerce-email-migration.cjs deploy DEV|PROD --confirm=<project-ref>
  *                                                                  preflight again, then `prisma migrate deploy`, then verify
- *   node scripts/commerce-email-migration.cjs verify DEV|PROD       read-only physical/ledger readback
+ *   node scripts/commerce-email-migration.cjs verify DEV|PROD       read-only: FAILS (exit 2) unless the migration is applied, finished, checksum-exact
+ *                                                                  and the physical schema (see scripts/lib/commerce-email-schema.cjs) is correct
+ *   node scripts/commerce-email-migration.cjs verify LOCAL          verify/preflight only, against a loopback disposable database named by
+ *                                                                  COMMERCE_EMAIL_VERIFY_LOCAL_URL (used by the disposable PostgreSQL tests; never deploys)
  *
  * Evidence (credential-free JSON) is written to apps/backend/.cache/commerce-email-migration/<target>-<mode>-<time>.json.
  */
@@ -16,24 +19,37 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const dotenv = require('dotenv');
 const { Pool } = require('pg');
+const { readPhysical, physicalFailures, verifyFailures } = require('./lib/commerce-email-schema.cjs');
 
 const [mode, target] = process.argv.slice(2);
-if (!['preflight', 'deploy', 'verify'].includes(mode) || !['DEV', 'PROD'].includes(target)) throw new Error('Usage: preflight|deploy|verify DEV|PROD');
+if (!['preflight', 'deploy', 'verify'].includes(mode) || !['DEV', 'PROD', 'LOCAL'].includes(target)) throw new Error('Usage: preflight|deploy|verify DEV|PROD');
+if (target === 'LOCAL' && mode === 'deploy') throw new Error('LOCAL is read-only: deploy is not available.');
 const backend = path.resolve(__dirname, '..');
 const MIGRATION = '20261018000000_commerce_email_outbox';
-const refs = { DEV: 'pzxekjybdiulzmssalfo', PROD: 'yepfgjehdstlxbpespun' };
+const refs = { DEV: 'pzxekjybdiulzmssalfo', PROD: 'yepfgjehdstlxbpespun', LOCAL: 'local-disposable' };
 const regions = { DEV: 'ap-northeast-2', PROD: 'ap-northeast-1' };
+const local = target === 'LOCAL';
 const expected = refs[target]; const other = refs[target === 'DEV' ? 'PROD' : 'DEV'];
-const variables = { ...dotenv.parse(fs.readFileSync(path.join(backend, '.env'))),
-  ...dotenv.parse(fs.readFileSync(path.join(backend, target === 'DEV' ? '.env.local' : '.env.production.local'))) };
-for (const key of ['DIRECT_URL', 'DATABASE_URL']) {
-  const value = variables[key] ?? '';
-  if (!value.includes(expected) || value.includes(other) || !value.includes(regions[target])) throw new Error(`Database target mismatch (${key}).`);
+let variables;
+if (local) {
+  // Disposable-only escape hatch: a loopback URL supplied by the test harness. It can never name a hosted database.
+  const supplied = process.env.COMMERCE_EMAIL_VERIFY_LOCAL_URL ?? '';
+  let host = '';
+  try { host = new URL(supplied).hostname; } catch { /* rejected below */ }
+  if (!['127.0.0.1', 'localhost', '[::1]'].includes(host)) throw new Error('LOCAL requires COMMERCE_EMAIL_VERIFY_LOCAL_URL on a loopback host.');
+  variables = { DIRECT_URL: supplied, DATABASE_URL: supplied };
+} else {
+  variables = { ...dotenv.parse(fs.readFileSync(path.join(backend, '.env'))),
+    ...dotenv.parse(fs.readFileSync(path.join(backend, target === 'DEV' ? '.env.local' : '.env.production.local'))) };
+  for (const key of ['DIRECT_URL', 'DATABASE_URL']) {
+    const value = variables[key] ?? '';
+    if (!value.includes(expected) || value.includes(other) || !value.includes(regions[target])) throw new Error(`Database target mismatch (${key}).`);
+  }
 }
 const direct = new URL(variables.DIRECT_URL);
-for (const parameter of ['sslmode', 'sslrootcert', 'sslcert', 'sslkey', 'pgbouncer']) direct.searchParams.delete(parameter);
-const identity = `${direct.hostname}:${direct.port || 5432}/${direct.pathname.slice(1)} ref=${expected}`;
-const pool = new Pool({ connectionString: direct.toString(), max: 1, ssl: { rejectUnauthorized: true,
+for (const parameter of ['sslmode', 'sslaccept', 'sslrootcert', 'sslcert', 'sslkey', 'pgbouncer']) direct.searchParams.delete(parameter);
+const identity = local ? `${direct.hostname}:${direct.port || 5432}/${direct.pathname.slice(1)} (disposable)` : `${direct.hostname}:${direct.port || 5432}/${direct.pathname.slice(1)} ref=${expected}`;
+const pool = new Pool({ connectionString: direct.toString(), max: 1, ssl: local ? { rejectUnauthorized: false } : { rejectUnauthorized: true,
   ...(variables.DB_SSL_CA_CERT_PATH ? { ca: fs.readFileSync(variables.DB_SSL_CA_CERT_PATH, 'utf8') } : {}) } });
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const safe = output => String(output ?? '').replace(/postgres(?:ql)?:\/\/\S+/gi, '[DATABASE URL REDACTED]');
@@ -46,7 +62,7 @@ async function snapshot() {
   // Supavisor terminates TLS: pg_stat_ssl describes the pooler-to-database hop, not this client. Gate on our own socket instead.
   const client = await pool.connect();
   const stream = client.connection && client.connection.stream;
-  const clientTls = Boolean(stream && stream.encrypted === true && stream.authorized === true);
+  const clientTls = local || Boolean(stream && stream.encrypted === true && stream.authorized === true);
   client.release();
   const server = (await pool.query(`SELECT current_database() AS db, current_user AS "user", split_part(version(), ' ', 2) AS version,
     (SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()) AS ssl,
@@ -74,22 +90,7 @@ async function snapshot() {
     (SELECT count(*)::int FROM users) AS users`)).rows[0];
   const tables = (await pool.query(`SELECT c.relname AS name, c.relrowsecurity AS rls FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public' AND c.relname IN ('commerce_email_outbox', 'commerce_email_attempts') ORDER BY 1`)).rows;
-  let physical = null;
-  if (tables.length) {
-    const constraints = (await pool.query(`SELECT conname FROM pg_constraint WHERE conrelid IN ('commerce_email_outbox'::regclass, 'commerce_email_attempts'::regclass) ORDER BY 1`)).rows.map(row => row.conname);
-    const indexes = (await pool.query(`SELECT indexname FROM pg_indexes WHERE tablename IN ('commerce_email_outbox', 'commerce_email_attempts') ORDER BY 1`)).rows.map(row => row.indexname);
-    const triggers = (await pool.query(`SELECT tgname FROM pg_trigger WHERE tgrelid IN ('commerce_email_outbox'::regclass, 'commerce_email_attempts'::regclass) AND NOT tgisinternal ORDER BY 1`)).rows.map(row => row.tgname);
-    const enums = (await pool.query(`SELECT t.typname, string_agg(e.enumlabel, ',' ORDER BY e.enumsortorder) AS labels FROM pg_type t JOIN pg_enum e ON e.enumtypid = t.oid
-      WHERE t.typname LIKE 'CommerceEmail%' GROUP BY 1 ORDER BY 1`)).rows;
-    const roles = (await pool.query(`SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated')`)).rows.map(row => row.rolname);
-    const exposure = [];
-    for (const role of roles) for (const table of ['commerce_email_outbox', 'commerce_email_attempts']) {
-      exposure.push({ role, table, privileges: (await pool.query(`SELECT has_table_privilege($1, $2, 'SELECT') OR has_table_privilege($1, $2, 'INSERT') OR
-        has_table_privilege($1, $2, 'UPDATE') OR has_table_privilege($1, $2, 'DELETE') AS any`, [role, table])).rows[0].any });
-    }
-    const rows = (await pool.query(`SELECT count(*)::int AS outbox, (SELECT count(*)::int FROM commerce_email_attempts) AS attempts FROM commerce_email_outbox`)).rows[0];
-    physical = { tables, constraints, indexes, triggers, enums, exposure, rows };
-  }
+  const physical = await readPhysical(async (sql, params) => (await pool.query(sql, params)).rows);
   const nonCommerceDrift = (() => {
     const result = spawnSync(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'diff', '--from-url', variables.DIRECT_URL,
       '--to-schema-datamodel', 'prisma/schema.prisma', '--script'], { cwd: backend, encoding: 'utf8', env: { ...process.env, ...variables }, timeout: 180000 });
@@ -108,7 +109,7 @@ function record(name, value) {
   fs.writeFileSync(file, JSON.stringify(value, null, 2), { mode: 0o600 });
   return path.relative(backend, file);
 }
-function gate(state) {
+function gate(state, strict) {
   const failures = [...state.problems];
   if (state.historicalRows !== state.repositoryMigrations - 1) failures.push(`historical-count:${state.historicalRows}/${state.repositoryMigrations - 1}`);
   if (state.ours.length > 1) failures.push('duplicate-ledger-rows-for-new-migration');
@@ -122,20 +123,24 @@ function gate(state) {
   const unexplained = (state.nonCommerceDrift.statements ?? ['drift-unavailable'])
     .filter(text => !/commerce_email|CommerceEmail/.test(text) && !allowed.some(pattern => pattern.test(text)));
   if (unexplained.length) failures.push(`unexplained-drift:${unexplained.length}`);
+  if (strict) failures.push(...verifyFailures(state, MIGRATION, newChecksum));
   return failures;
 }
 
 (async () => {
   try {
     const before = await snapshot();
-    const failures = gate(before);
+    const failures = gate(before, mode === 'verify');
     if (mode !== 'deploy') {
       const file = record(mode, before);
       console.log(JSON.stringify({ mode, identity, failures, pending: before.pending, ledgerRows: before.ledgerRows, newChecksum,
         applied: before.ours.map(row => ({ finished: Boolean(row.finished_at), rolledBack: Boolean(row.rolled_back_at), checksumMatches: row.checksum === newChecksum })),
-        otp: before.otp, counts: before.counts, physical: before.physical && { ...before.physical, constraints: before.physical.constraints.length, indexes: before.physical.indexes.length },
+        otp: before.otp, counts: before.counts, physical: before.physical && { tables: before.physical.tables, constraints: before.physical.constraints.length, indexes: before.physical.indexes.length,
+          triggers: before.physical.triggers.map(row => row.name), enums: before.physical.enums.map(row => row.name), exposure: before.physical.exposure, rows: before.physical.rows },
         drift: { statements: before.nonCommerceDrift.statementCount, commerce: before.nonCommerceDrift.commerceStatements }, evidence: file }, null, 2));
       process.exitCode = failures.length ? 2 : 0;
+      // Actionable, credential-free reason on stderr as well as in the JSON result.
+      if (failures.length) console.error(`${mode.toUpperCase()} FAILED (${failures.length}): ${failures.join('; ')}`);
       return;
     }
     const confirm = process.argv.find(arg => arg.startsWith('--confirm='))?.slice('--confirm='.length);
@@ -154,15 +159,13 @@ function gate(state) {
     if (after.historyFingerprint !== before.historyFingerprint) verification.push('historical-ledger-changed');
     if (after.otp.rows !== before.otp.rows || after.otp.fingerprint !== before.otp.fingerprint) verification.push('otp-data-changed');
     if (JSON.stringify(after.counts) !== JSON.stringify(before.counts)) verification.push('business-row-counts-changed');
-    if (!after.physical || after.physical.tables.length !== 2 || !after.physical.tables.every(table => table.rls)) verification.push('tables-or-rls-missing');
-    if (after.physical?.exposure.some(entry => entry.privileges)) verification.push('browser-role-exposure');
-    if ((after.physical?.constraints.length ?? 0) < 14 || (after.physical?.triggers.length ?? 0) !== 2) verification.push('constraints-or-triggers-missing');
+    verification.push(...physicalFailures(after.physical));
     if (after.nonCommerceDrift.commerceStatements) verification.push('commerce-schema-drift-after-deploy');
     const file = record('deploy-verify', { cliExit: result.status, cliOutput: cliOutput.slice(-2000), before: preflightFile, after, verification });
     console.log(JSON.stringify({ mode, identity, cliExit: result.status, verification, ledgerRows: after.ledgerRows, newChecksum,
       historyFingerprintUnchanged: after.historyFingerprint === before.historyFingerprint, otp: { before: before.otp, after: after.otp },
       physical: after.physical && { tables: after.physical.tables, constraints: after.physical.constraints.length, indexes: after.physical.indexes.length,
-        triggers: after.physical.triggers, enums: after.physical.enums.map(e => e.typname), exposure: after.physical.exposure, rows: after.physical.rows },
+        triggers: after.physical.triggers.map(row => row.name), enums: after.physical.enums.map(e => e.name), exposure: after.physical.exposure, rows: after.physical.rows },
       drift: { statements: after.nonCommerceDrift.statementCount, commerce: after.nonCommerceDrift.commerceStatements }, evidence: file }, null, 2));
     process.exitCode = result.status === 0 && !verification.length ? 0 : 3;
   } catch (error) {

@@ -257,8 +257,12 @@ export class CommerceEmailDispatcher {
   }
 }
 
-/** Bounded operational snapshot: counts by state, oldest due age, expired leases. Opaque numbers only. */
-export async function commerceEmailHealth(db: PrismaClient) {
+/**
+ * Bounded operational snapshot: counts by state, oldest due age, expired leases. Opaque numbers only. With an allowlist (test mode),
+ * `allowlistExcluded` counts due events the worker will deliberately never claim because their recipient is not on the list, so a
+ * customer who "got no email" can be told apart from a dead worker.
+ */
+export async function commerceEmailHealth(db: PrismaClient, allowlist: readonly string[] = []) {
   const rows = await db.$queryRaw<{ state: string; count: bigint }[]>(Prisma.sql`
     SELECT "dispatchState"::text AS "state", count(*) AS "count" FROM "commerce_email_outbox" GROUP BY "dispatchState"`);
   const [due] = await db.$queryRaw<{ oldestDueMs: number | null; expiredLeases: bigint; staleReady: bigint }[]>(Prisma.sql`
@@ -266,6 +270,15 @@ export async function commerceEmailHealth(db: PrismaClient) {
       count(*) FILTER (WHERE "dispatchState" = 'LEASED' AND "leaseUntil" <= ${DB_NOW}) AS "expiredLeases",
       count(*) FILTER (WHERE "dispatchState" IN ('READY', 'RETRY_WAIT') AND "createdAt" <= ${DB_NOW} - make_interval(secs => ${MAX_RETRY_AGE_MS / 1000}::float8)) AS "staleReady"
     FROM "commerce_email_outbox"`);
+  let allowlistExcluded: number | null = null;
+  if (allowlist.length) {
+    const [excluded] = await db.$queryRaw<{ n: bigint }[]>(Prisma.sql`
+      SELECT count(*) AS "n" FROM "commerce_email_outbox"
+      WHERE "dispatchState" IN ('READY', 'RETRY_WAIT') AND "nextAttemptAt" <= ${DB_NOW}
+        AND "createdAt" > ${DB_NOW} - make_interval(secs => ${MAX_RETRY_AGE_MS / 1000}::float8)
+        AND "recipient" IS NOT NULL AND "recipient" NOT IN (${Prisma.join(allowlist)})`);
+    allowlistExcluded = Number(excluded?.n ?? 0);
+  }
   return { byState: Object.fromEntries(rows.map(row => [row.state, Number(row.count)])), oldestDueMs: due?.oldestDueMs ?? null,
-    expiredLeases: Number(due?.expiredLeases ?? 0), staleNeedingReview: Number(due?.staleReady ?? 0), templateVersion: TEMPLATE_VERSION };
+    expiredLeases: Number(due?.expiredLeases ?? 0), staleNeedingReview: Number(due?.staleReady ?? 0), allowlistExcluded, templateVersion: TEMPLATE_VERSION };
 }

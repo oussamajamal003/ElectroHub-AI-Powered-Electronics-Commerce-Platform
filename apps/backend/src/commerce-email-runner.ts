@@ -9,6 +9,7 @@ import { CommerceEmailDispatcher, captureTransport, commerceEmailHealth, type Co
 import { BrevoClient } from './integrations/brevo/brevo.client.js';
 import { BrevoProvider } from './integrations/brevo/brevo.provider.js';
 import { renderCommerceEmail } from './emails/commerce/templates.js';
+import { logCommerceEmailRuntime } from './services/commerce-email.runtime.js';
 
 /**
  * Task 03.8 dedicated commerce email worker (`npm run email:worker`). Started only explicitly; importing services never starts it.
@@ -24,6 +25,7 @@ logSafely(permission.allowed ? 'info' : 'error', 'Commerce email worker permissi
   workerInstanceId, allowed: permission.allowed, reason: permission.reason, identity: permission.identity, sendMode: config.sendMode,
   allowlistSize: config.allowedRecipients.length, batchSize: config.batchSize, concurrency: config.concurrency });
 if (!permission.allowed) throw new Error(`Commerce email worker refused: ${permission.reason} (${permission.identity}).`);
+logCommerceEmailRuntime('email-worker');
 
 const transport: CommerceEmailTransport = config.sendMode === 'capture' ? captureTransport(config.captureDir!) : (() => {
   const provider = new BrevoProvider(new BrevoClient({ apiKey: env.BREVO_API_KEY, timeoutMs: config.providerTimeoutMs }));
@@ -45,8 +47,17 @@ async function main() {
     while (!stopping) {
       let drained = false;
       try {
-        if (!ready) { await prisma.$queryRaw`SELECT 1`; ready = true;
-          logSafely('info', 'Commerce email worker ready', { event: 'email_worker_ready', workerInstanceId, sendMode: config.sendMode }); }
+        if (!ready) {
+          // One cheap startup check (never per payment): the Task 03.8 tables must exist in THIS database. A supervisor does not restart exit code 78.
+          const [{ present }] = await prisma.$queryRaw<{ present: boolean }[]>`SELECT to_regclass('public.commerce_email_outbox') IS NOT NULL AS present`;
+          if (!present) {
+            logSafely('error', 'Commerce email worker cannot start: the commerce email schema is not migrated in this database.', {
+              event: 'email_worker_unavailable', workerInstanceId, reason: 'SCHEMA_NOT_READY', identity: permission.identity });
+            process.exitCode = 78; stopping = true; break;
+          }
+          ready = true;
+          logSafely('info', 'Commerce email worker ready', { event: 'email_worker_ready', workerInstanceId, sendMode: config.sendMode,
+            dispatchEnabled: config.dispatchEnabled, producerEnabledInThisEnvironment: config.enqueueEnabled, allowlistSize: config.allowedRecipients.length }); }
         const pass = await dispatcher.runBatch();
         failures = 0;
         drained = pass.claimed >= config.batchSize;
@@ -60,10 +71,13 @@ async function main() {
       if (ready && Date.now() >= nextHeartbeat) {
         nextHeartbeat = Date.now() + HEARTBEAT_MS;
         try {
-          const health = await commerceEmailHealth(prisma);
+          const health = await commerceEmailHealth(prisma, config.sendMode === 'allowlist' ? config.allowedRecipients : []);
           const attention = (health.byState.UNCERTAIN ?? 0) > 0 || (health.oldestDueMs ?? 0) > 5 * 60_000 || health.expiredLeases > 0 || health.staleNeedingReview > 0;
           logSafely(attention ? 'error' : 'info', 'Commerce email worker heartbeat', { event: 'email_worker_heartbeat', workerInstanceId,
-            paused: dispatcher.paused, attention, ...health });
+            paused: dispatcher.paused, attention, sendMode: config.sendMode, allowlistSize: config.allowedRecipients.length, ...health });
+          // Test-mode exclusion is deliberate, but silent exclusion looked like a stuck queue: name it (count only, never addresses).
+          if (health.allowlistExcluded) logSafely('warn', 'Commerce emails held by the allowlist', { event: 'email_allowlist_excluded', workerInstanceId,
+            excluded: health.allowlistExcluded, hint: 'recipients outside COMMERCE_EMAIL_ALLOWED_RECIPIENTS are never sent in allowlist mode' });
         } catch (error) { logSafely('error', 'Commerce email health unavailable', { event: 'email_worker_unavailable', workerInstanceId, reason: 'HEALTH_QUERY_FAILED', error }); }
       }
       if (once || stopping) break;
