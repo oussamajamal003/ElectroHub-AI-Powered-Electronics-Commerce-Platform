@@ -13,6 +13,7 @@ import { queryKeys } from '@/lib/query';
 import { TransientEmailNotice } from './TransientEmailNotice';
 import { emailConfirmationRefetchInterval } from './emailConfirmationRefresh';
 import { OrderBadges } from './OrderBadges';
+import { OrderDocumentsPanel } from './documents/OrderDocumentsPanel';
 import { OrdersAccessGate } from './OrdersAccessGate';
 import { OrdersBreadcrumb } from './OrdersBreadcrumb';
 import { cardBrand, deliveryLabel, formatDate, formatEstimate, formatMoney, statusNote } from './presentation';
@@ -125,6 +126,7 @@ function OwnedOrderDetails() {
             {order.payment?.refundedAt && <p>Refunded on <time dateTime={order.payment.refundedAt}>{formatDate(order.payment.refundedAt)}</time></p>}
           </div>}
         </section>
+        <OrderDocumentsPanel orderReference={order.orderReference} variant="details" />
         <Link className={styles.backLink} to={backTo}>Back to Orders</Link>
       </div>
     </div>

@@ -8,6 +8,7 @@ import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoa
 import type { CartData } from '@/features/cart/types';
 import { CommerceEmailNotice } from '@/features/orders/CommerceEmailNotice';
 import { TransientEmailNotice } from '@/features/orders/TransientEmailNotice';
+import { OrderDocumentsPanel } from '@/features/orders/documents/OrderDocumentsPanel';
 import { shippingErrors, steps } from './state';
 import type { CheckoutStep, Confirmation, DeliveryMethod, DeliveryOption, OrderRequest, Shipping, Totals } from './types';
 import styles from './Checkout.module.scss';
@@ -223,6 +224,9 @@ export function ConfirmationContent({ order, ownerId }: { order: Confirmation; o
     </section>
     {ownerId ? <TransientEmailNotice ownerId={ownerId} order={order} />
       : <CommerceEmailNotice paymentState={order.paymentState} orderStatus={order.status} emailConfirmation={order.emailConfirmation} />}
+    {/* Task 03.9: durable documents for the signed-in owner, after the summary/email notice and before outside-card navigation.
+        Loaded independently; never delays or replaces the purchase result. */}
+    {ownerId && order.orderReference && <OrderDocumentsPanel orderReference={order.orderReference} variant="confirmation" />}
     {/* Outside the bordered card, sharing its width: the durable Order Details page, then continued shopping. Navigation only. */}
     <div className={styles.confirmationActions}>
       {order.orderReference && <Link className={styles.primaryLink} to={`/orders/${order.orderReference}`}>View Order Details</Link>}

@@ -101,7 +101,8 @@ export function isAbortError(error: unknown): boolean {
   return typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'AbortError';
 }
 
-export async function apiClient<T = unknown>(endpoint: string, options: FetchOptions = {}): Promise<T> {
+/** Shared transport: bearer attachment, one bounded refresh on 401 and abort/connection error mapping (JSON and binary callers). */
+async function send(endpoint: string, options: FetchOptions, extra: RequestInit = {}): Promise<Response> {
   const url = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const { data, ...requestOptions } = options;
   const headers = new Headers(options.headers);
@@ -109,7 +110,7 @@ export async function apiClient<T = unknown>(endpoint: string, options: FetchOpt
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
   const privateCollection = /^\/api\/(?:cart|wishlist|auth\/me)(?:\/|\?|$)/.test(url);
   const config: RequestInit = { ...requestOptions, headers, credentials: 'include',
-    ...(privateCollection ? { cache: 'no-store' as const } : {}) };
+    ...(privateCollection ? { cache: 'no-store' as const } : {}), ...extra };
   if (data !== undefined) config.body = data instanceof FormData ? data : JSON.stringify(data);
   let response: Response;
   try {
@@ -126,5 +127,68 @@ export async function apiClient<T = unknown>(endpoint: string, options: FetchOpt
     if (error instanceof ApiError || isAbortError(error)) throw error;
     throw new ApiError(0, 'Unable to connect. Please try again.');
   }
-  return readResponse<T>(response);
+  return response;
+}
+
+export async function apiClient<T = unknown>(endpoint: string, options: FetchOptions = {}): Promise<T> {
+  return readResponse<T>(await send(endpoint, options));
+}
+
+export interface BinaryDocument { blob: Blob; byteLength: number; filename: string; contentVersion: string | null }
+export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
+const invalidDocument = (status: number) =>
+  new ApiError(status, 'The document could not be loaded. Please try again.', undefined, 'DOCUMENT_INVALID_RESPONSE');
+
+/** Server-approved names only (brand + reference + kind); anything else falls back to the caller's canonical name. */
+function documentFilename(header: string | null, fallback: string) {
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header ?? '')?.[1];
+  let candidate = /filename="([^"]+)"/i.exec(header ?? '')?.[1];
+  if (encoded) { try { candidate = decodeURIComponent(encoded); } catch { /* keep the quoted fallback */ } }
+  return candidate && /^[A-Za-z0-9._-]{1,120}\.pdf$/.test(candidate) ? candidate : fallback;
+}
+
+/**
+ * Authenticated PDF read through the same bearer/refresh transport as JSON (no token in URLs, no second token store). JSON error
+ * envelopes still become ApiError; a success must be application/pdf, non-empty, complete (Content-Length matches), start with
+ * %PDF- and stay under the streamed byte cap. Never cached by the browser.
+ */
+export async function apiBinary(endpoint: string, options: FetchOptions & { fallbackFilename: string; maxBytes?: number }): Promise<BinaryDocument> {
+  const { fallbackFilename, maxBytes = MAX_DOCUMENT_BYTES, ...requestOptions } = options;
+  const headers = new Headers(requestOptions.headers);
+  headers.set('Accept', 'application/pdf, application/json');
+  const response = await send(endpoint, { ...requestOptions, headers }, { cache: 'no-store' });
+  if (!response.ok) return readResponse<never>(response);
+  if (!(response.headers.get('content-type') ?? '').toLowerCase().startsWith('application/pdf')) throw invalidDocument(response.status);
+  const declared = response.headers.get('content-length');
+  const expected = declared === null ? null : Number(declared);
+  if (expected !== null && (!Number.isSafeInteger(expected) || expected <= 0 || expected > maxBytes)) throw invalidDocument(response.status);
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  try {
+    if (response.body) {
+      const reader = response.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        received += value.byteLength;
+        if (received > maxBytes) { await reader.cancel(); throw invalidDocument(response.status); }
+        chunks.push(value);
+      }
+    } else {
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      received = bytes.byteLength;
+      if (received > maxBytes) throw invalidDocument(response.status);
+      chunks.push(bytes);
+    }
+  } catch (error) {
+    if (error instanceof ApiError || isAbortError(error)) throw error;
+    throw new ApiError(0, 'The download was interrupted. Please try again.');
+  }
+  if (received === 0 || (expected !== null && received !== expected)) throw invalidDocument(response.status);
+  const head: number[] = [];
+  for (const chunk of chunks) { for (const byte of chunk.subarray(0, 5 - head.length)) head.push(byte); if (head.length === 5) break; }
+  if (String.fromCharCode(...head) !== '%PDF-') throw invalidDocument(response.status);
+  return { blob: new Blob(chunks as BlobPart[], { type: 'application/pdf' }), byteLength: received,
+    filename: documentFilename(response.headers.get('content-disposition'), fallbackFilename),
+    contentVersion: response.headers.get('x-document-version') };
 }

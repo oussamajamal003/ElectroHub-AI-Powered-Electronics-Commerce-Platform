@@ -25,6 +25,8 @@ COPY --from=builder /app/node_modules /app/node_modules
 COPY --from=builder /app/apps/backend/package.json ./
 COPY --from=builder /app/apps/backend/dist ./dist
 COPY --from=builder /app/apps/backend/prisma ./prisma
+# Task 03.9: packaged PDF fonts (checksum-verified at worker start; resolved relative to dist/, never fetched at runtime).
+COPY --from=builder /app/apps/backend/assets ./assets
 
 EXPOSE 5000
 CMD ["npm", "start"]

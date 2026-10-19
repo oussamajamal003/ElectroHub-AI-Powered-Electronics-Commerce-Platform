@@ -208,7 +208,10 @@ describe('Email confirmation notice placement', () => {
     signedIn(); resolve(orderDetails({ createdAt: new Date().toISOString(), emailConfirmation: { state: 'QUEUED', updatedAt } }));
     renderDetails();
     await screen.findByRole('heading', { level: 2, name: 'Email confirmations' });
-    expect(apiClient).toHaveBeenCalledTimes(1);
+    // The only other read is the Task 03.9 document metadata panel (no email-specific request).
+    const paths = vi.mocked(apiClient).mock.calls.map(([path]) => String(path));
+    expect(paths.filter(path => !path.endsWith('/documents'))).toHaveLength(1);
+    expect(paths.filter(path => path.endsWith('/documents')).length).toBeLessThanOrEqual(1);
   });
 });
 

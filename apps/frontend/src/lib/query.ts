@@ -20,7 +20,9 @@ export const queryKeys = {
     attempt: (userId: string, key: string) => ['orders', 'attempt', userId, key] as const,
     // Order Management (03.7): account-scoped, distinct from the Confirmation DTO cache.
     list: (userId: string, page: number, pageSize: number) => ['orders', 'list', userId, page, pageSize] as const,
-    detail: (userId: string, reference: string) => ['orders', 'detail', userId, reference] as const },
+    detail: (userId: string, reference: string) => ['orders', 'detail', userId, reference] as const,
+    // Task 03.9: document metadata only (never PDF bytes), owner-scoped like every private order read.
+    documents: (userId: string, reference: string) => ['orders', 'documents', userId, reference] as const },
   wishlist: { all: ['wishlist'] as const, current: (userId: string) => ['wishlist', 'current', userId] as const,
     guest: (ids: string) => ['wishlist', 'guest', ids] as const },
   cart: { all: ['cart'] as const, current: (userId: string) => ['cart', 'current', userId] as const,

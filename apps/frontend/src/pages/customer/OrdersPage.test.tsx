@@ -88,8 +88,10 @@ describe('My Orders history', () => {
     expect(within(card).getByLabelText('and 1 more product')).toHaveTextContent('+1');
     expect(card).toHaveTextContent('September 5, 2026'); expect(card).toHaveTextContent('$2,337.93'); expect(within(card).getByText('8')).toBeInTheDocument();
     expect(screen.getByText('1 order')).toBeVisible();
-    // Exactly one interactive target per card.
-    expect(within(card).getAllByRole('link')).toHaveLength(1); expect(within(card).queryByRole('button')).toBeNull();
+    // Task 03.9: one navigation link plus one sibling Documents button per card; the button is never nested in the link.
+    expect(within(card).getAllByRole('link')).toHaveLength(1);
+    const documents = within(card).getByRole('button', { name: `Documents for order ${order.orderReference}` });
+    expect(within(card).getAllByRole('button')).toEqual([documents]); expect(link).not.toContainElement(documents);
   });
   it('never labels a pending or legacy unprocessed Order as paid', async () => {
     signedIn();

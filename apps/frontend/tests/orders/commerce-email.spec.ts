@@ -48,10 +48,13 @@ test.describe('E01/E02/E04/E05 Confirmation: card → notice → actions; naviga
     await expect(notice(page)).toContainText('Your order and payment confirmations are queued. You can view your order details now.');
     const order = await page.evaluate(() => {
       const card = document.querySelector('[data-email-state]')!.previousElementSibling!;
-      const actions = document.querySelector('[data-email-state]')!.nextElementSibling!;
-      return { cardIsSection: card.tagName, actionsHaveDetails: actions.textContent?.includes('View Order Details') && actions.textContent.includes('Continue Shopping') };
+      // Task 03.9: the durable "Your documents" section follows the notice, then the outside-card actions.
+      const documents = document.querySelector('[data-email-state]')!.nextElementSibling!;
+      const actions = documents.hasAttribute('data-order-documents') ? documents.nextElementSibling! : documents;
+      return { cardIsSection: card.tagName, documentsFollowNotice: documents.hasAttribute('data-order-documents'),
+        actionsHaveDetails: actions.textContent?.includes('View Order Details') && actions.textContent.includes('Continue Shopping') };
     });
-    expect(order).toEqual({ cardIsSection: 'SECTION', actionsHaveDetails: true });
+    expect(order).toEqual({ cardIsSection: 'SECTION', documentsFollowNotice: true, actionsHaveDetails: true });
     const link = page.getByRole('link', { name: 'View Order Details' });
     await expect(link).toBeEnabled();
     await link.click();
