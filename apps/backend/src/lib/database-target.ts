@@ -9,7 +9,7 @@ export type DatabaseTarget = {
 
 const loopback = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
 
-export function describeDatabaseTarget(value: string | undefined): DatabaseTarget {
+export function describeDatabaseTarget(value: string | undefined, options: { allowLoopbackCliTlsDisable?: boolean } = {}): DatabaseTarget {
   if (!value) throw new Error('DATABASE_TARGET_MISSING');
   let url: URL;
   try { url = new URL(value); } catch { throw new Error('DATABASE_TARGET_INVALID'); }
@@ -20,16 +20,18 @@ export function describeDatabaseTarget(value: string | undefined): DatabaseTarge
   for (const name of url.searchParams.keys()) {
     if (!allowedParameters.has(name) || url.searchParams.getAll(name).length !== 1) throw new Error('DATABASE_TARGET_OPTIONS_INVALID');
   }
-  const sslmode = url.searchParams.get('sslmode');
-  if (sslmode && !['require', 'verify-ca', 'verify-full'].includes(sslmode)) throw new Error('DATABASE_TLS_REQUIRED');
-  // ElectroHub's Prisma models and migrations use public; an alternate search path is a different dataset.
-  if (url.searchParams.has('schema') && url.searchParams.get('schema') !== 'public') throw new Error('DATABASE_SCHEMA_UNAPPROVED');
   let database: string;
   let username: string;
   try { database = decodeURIComponent(url.pathname.slice(1)); username = decodeURIComponent(url.username); }
   catch { throw new Error('DATABASE_TARGET_INVALID'); }
+  const loopbackDisposable = loopback.has(url.hostname) && /^electrohub_(?:disposable|ci)[a-z0-9_]*$/.test(database);
+  const sslmode = url.searchParams.get('sslmode');
+  const cliOnlyTlsDisable = sslmode === 'disable' && options.allowLoopbackCliTlsDisable === true && loopbackDisposable;
+  if (sslmode && !['require', 'verify-ca', 'verify-full'].includes(sslmode) && !cliOnlyTlsDisable) throw new Error('DATABASE_TLS_REQUIRED');
+  // ElectroHub's Prisma models and migrations use public; an alternate search path is a different dataset.
+  if (url.searchParams.has('schema') && url.searchParams.get('schema') !== 'public') throw new Error('DATABASE_SCHEMA_UNAPPROVED');
   const port = Number(url.port || 5432);
-  if (loopback.has(url.hostname) && /^electrohub_(?:disposable|ci)[a-z0-9_]*$/.test(database)) {
+  if (loopbackDisposable) {
     return { category: 'disposable', identity: `loopback:${port}/${database}`, transport: 'local' };
   }
   if (database !== 'postgres') throw new Error('DATABASE_TARGET_UNAPPROVED');
@@ -48,8 +50,11 @@ export function resolveDatabaseTargets(environment: NodeJS.ProcessEnv): {
   runtime: DatabaseTarget; migration: DatabaseTarget; runtimeUrl: string;
 } {
   if (environment.NODE_TLS_REJECT_UNAUTHORIZED === '0') throw new Error('DATABASE_TLS_REQUIRED');
-  const application = describeDatabaseTarget(environment.DATABASE_URL);
-  const migration = describeDatabaseTarget(environment.DIRECT_URL);
+  // CI's Prisma CLI uses sslmode=disable only for its loopback disposable database. The
+  // application adapter removes URL TLS flags and independently enforces verified TLS.
+  const targetOptions = { allowLoopbackCliTlsDisable: environment.NODE_ENV === 'test' };
+  const application = describeDatabaseTarget(environment.DATABASE_URL, targetOptions);
+  const migration = describeDatabaseTarget(environment.DIRECT_URL, targetOptions);
   if (application.identity !== migration.identity) throw new Error('DATABASE_TARGET_MISMATCH');
   if (environment.NODE_ENV !== 'production' && application.category === 'production') throw new Error('DATABASE_PRODUCTION_FORBIDDEN');
   if (environment.NODE_ENV === 'production' && application.category !== 'production') throw new Error('DATABASE_PRODUCTION_TARGET_REQUIRED');

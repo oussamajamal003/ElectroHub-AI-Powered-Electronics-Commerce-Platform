@@ -41,6 +41,11 @@ describe('resolvePaymentIsolation', () => {
     expect(resolvePaymentIsolation(env({ DATABASE_URL: disposable, DIRECT_URL: disposable, npm_lifecycle_event: 'dev' })))
       .toMatchObject({ allowed: true, target: 'disposable', identity: 'loopback:55433/electrohub_disposable' });
   });
+  it('recognizes CI sslmode=disable URLs as disposable test targets without weakening runtime TLS', () => {
+    const ci = 'postgresql://postgres:secret@localhost:55432/electrohub_ci?sslmode=disable';
+    expect(resolvePaymentIsolation(env({ NODE_ENV: 'test', DATABASE_URL: ci, DIRECT_URL: ci })))
+      .toMatchObject({ allowed: true, target: 'disposable', identity: 'loopback:55432/electrohub_ci' });
+  });
   it('treats a disposable-looking name on a remote host, or one shared URL of two, as shared', () => {
     expect(resolvePaymentIsolation(env({ DATABASE_URL: 'postgresql://u:p@db.example.com:5432/electrohub_disposable' })).allowed).toBe(false);
     expect(resolvePaymentIsolation(env({ DATABASE_URL: disposable, DIRECT_URL: shared })).allowed).toBe(false);

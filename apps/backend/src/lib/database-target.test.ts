@@ -27,6 +27,14 @@ describe('logical database target and explicit runtime selection', () => {
     expect(() => resolveDatabaseTargets(env({ NODE_ENV: 'test' }))).toThrow('DATABASE_TEST_TARGET_REQUIRED');
     expect(() => resolveDatabaseTargets(env({ DATABASE_URL: local }))).toThrow('DATABASE_TARGET_MISMATCH');
   });
+  it('permits the CI CLI TLS override only for a test-mode loopback disposable pair', () => {
+    const ci = 'postgresql://postgres:private@localhost:55432/electrohub_ci?sslmode=disable';
+    expect(() => describeDatabaseTarget(ci)).toThrow('DATABASE_TLS_REQUIRED');
+    expect(resolveDatabaseTargets(env({ NODE_ENV: 'test', DATABASE_URL: ci, DIRECT_URL: ci })).runtime.category).toBe('disposable');
+    expect(() => resolveDatabaseTargets(env({ DATABASE_URL: ci, DIRECT_URL: ci }))).toThrow('DATABASE_TLS_REQUIRED');
+    const remote = direct().replace('sslmode=require', 'sslmode=disable');
+    expect(() => resolveDatabaseTargets(env({ NODE_ENV: 'test', DATABASE_URL: remote, DIRECT_URL: remote }))).toThrow('DATABASE_TLS_REQUIRED');
+  });
   it('does not confuse two different disposable databases or ports', () => {
     for (const DIRECT_URL of [local.replace('55434', '55435'), local.replace('electrohub_disposable', 'electrohub_ci')]) {
       expect(() => resolveDatabaseTargets(env({ DATABASE_URL: local, DIRECT_URL }))).toThrow('DATABASE_TARGET_MISMATCH');

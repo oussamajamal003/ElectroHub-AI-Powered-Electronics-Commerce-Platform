@@ -36,6 +36,14 @@ it('uses the explicit DIRECT_URL selection and enforces TLS independently of URL
   expect(config.connectionString).toBe('postgresql://example:example@localhost:55434/electrohub_disposable');
   expect(config.ssl.rejectUnauthorized).toBe(true); expect(config.max).toBe(5);
 });
+it('strips the CI Prisma CLI TLS override before constructing a verified-TLS runtime adapter', async () => {
+  const ci = 'postgresql://postgres:example@localhost:55432/electrohub_ci?sslmode=disable';
+  mocks.env.DATABASE_URL = ci; mocks.env.DIRECT_URL = ci;
+  await import('./prisma.js');
+  const config = mocks.adapter.mock.calls[0]?.[0] as unknown as { connectionString: string; ssl: { rejectUnauthorized: boolean } };
+  expect(config.connectionString).toBe('postgresql://postgres:example@localhost:55432/electrohub_ci');
+  expect(config.ssl.rejectUnauthorized).toBe(true);
+});
 it('budgets development API and runner below the fifteen-session limit without changing production', async () => {
   mocks.env.NODE_ENV = 'development';
   await import('./prisma.js');
