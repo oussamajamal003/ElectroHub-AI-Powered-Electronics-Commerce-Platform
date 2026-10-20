@@ -98,7 +98,7 @@ it('preserves transaction isolation, original commit/rollback and errors', async
   transactionCalls.queryRaw.mockRejectedValueOnce(failure);
   await expect(tx.queryRaw(query)).rejects.toBe(failure);
   expect(transactionCalls.queryRaw).toHaveBeenCalledTimes(1);
-  expect(transaction.commit).not.toHaveBeenCalled(); expect(transaction.rollback).not.toHaveBeenCalled();
+  expect(transactionCalls.commit).not.toHaveBeenCalled(); expect(transactionCalls.rollback).not.toHaveBeenCalled();
 });
 
 it('handles a checked-out connection error between transaction queries without duplicate idle events', async () => {

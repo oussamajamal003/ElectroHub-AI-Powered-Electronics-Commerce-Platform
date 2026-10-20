@@ -15,7 +15,7 @@ import { clearBuyNow, readBuyNow } from './buyNow';
 import type { CheckoutDraft, CheckoutQuote, CheckoutScope, CheckoutStep, PaymentOutcome, PaymentSetup, SubmissionAttempt } from './types';
 import { CheckoutProcessing, CheckoutStepper, DeliveryStep, OrderSummary, PaymentSetupPending, PaymentStep, ReviewStep, ShippingStep } from './CheckoutComponents';
 import { SavedPurchaseCheckout } from './SavedPurchaseCheckout';
-import { acknowledgePaymentOutcome, isNotifiableOutcome, synchronizePaymentOutcome, usePresentedPaymentAttempt } from './PaymentPurchases';
+import { acknowledgePaymentOutcome, announceOrderConfirmed, isNotifiableOutcome, synchronizePaymentOutcome, usePresentedPaymentAttempt } from './PaymentPurchases';
 import { StripePaymentSession, type PaymentEntryActions } from './StripePaymentSession';
 import { prefetchStripe } from './stripeClient';
 import { PaymentRecovery } from './PaymentRecovery';
@@ -64,7 +64,9 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
   const location = useLocation(); const historyEntries = useRef(new Set<string>());
   historyEntries.current.add(location.key);
   const navigate = useNavigate(); const client = useQueryClient(); const userId = user?.id ?? '';
-  const { setPaymentState, isLocked } = usePaymentLock();
+  const { setPaymentState, isLocked, paymentState } = usePaymentLock();
+  // Leaving Checkout (back button, typed URL) must never leave the site-wide navigation lock behind.
+  useEffect(() => () => setPaymentState('IDLE'), [setPaymentState]);
   const [params, setParams] = useSearchParams();
   const isBuyNow = scope === 'BUY_NOW';
   const buyNow = isBuyNow ? readBuyNow() : null;
@@ -338,6 +340,7 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
       markPaymentTiming('confirmation-navigation', { attemptId: result.attemptId });
       const orderRef = result.confirmation.orderReference;
       acknowledgePaymentOutcome(userId, result, client);
+      announceOrderConfirmed({ owner: userId, attemptId: result.attemptId, orderReference: orderRef });
       paidDraftCleared.current = true;
       clearDraft(userId, scope); forgetSubmittedPurchase(userId, scope); setSecret(null); if (isBuyNow) clearBuyNow();
       setPaymentState('IDLE');
@@ -917,7 +920,7 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
     {step === 'review' && (delivery ? <ReviewStep shipping={draft.shipping} delivery={delivery} total={delivery.totals.total} blocked={blocked || !secret || !draft.paymentComplete} onEdit={go} onBack={() => go('payment')} onPlace={() => void place()} /> : <ElectroHubLoader />)}
   </>;
   return <div className={styles.page}>
-    {pending ? <div className={styles.processingWrapper}><CheckoutProcessing /></div> : <>
+    {pending ? <div className={styles.processingWrapper}><CheckoutProcessing browserConfirming={paymentState === 'CONFIRMING_PAYMENT'} /></div> : <>
     <nav
       className={styles.breadcrumb}
       aria-label="Breadcrumb"

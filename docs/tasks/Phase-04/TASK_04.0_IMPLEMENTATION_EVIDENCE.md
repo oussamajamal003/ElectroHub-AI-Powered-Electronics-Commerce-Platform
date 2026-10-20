@@ -1,10 +1,313 @@
 # Task 04.0 — implementation evidence
 
-Status: STOPPED / PARTIAL — environment implementation and offline regressions are present. CCR T04-PAY-01's exact two-ID worker scope is implemented and reviewed; the payment-capable DEV runtime remains stopped after the earlier unscoped worker processed an attempt outside the approved scope. The user authorized code edits and offline tests only, not a runtime start or payment recovery. The genuine DEV purchase and final Architect acceptance remain incomplete.
+Status: IMPLEMENTED / DEV ACCEPTANCE VERIFIED, pending independent Architect review and a commit, neither of which is authorized here. One authorized supervised Test Mode purchase completed on shared DEV under the exact incident scope. The out-of-scope customer attempt is owner-isolated and untouched. Earlier history follows below.
 
 Continuation 2026-10-20: the user approved recovery of one exact existing attempt. Preflight/readiness passed with `reviewedRecoveryCount=1`, but independent review found the supervisor still launched an unscoped worker. The supervisor was stopped. Sanitized logs show the worker claimed and provider-checked the approved attempt, the Task04 synthetic pre-submit attempt, and one older attempt belonging to another customer. The older attempt was outside the user's approval. Its current local state is `DECLINED`, with no order, recorded provider status `requires_payment_method`, no payment method attached at the last provider observation, and an expired `LEASED` work item. It was claimed five times, provider-checked five times, and outcome-persisted four times between 12:29 and 12:37 UTC. The worker is stopped, its owned PIDs are absent, :5000 is clear, and the exact stale lock/stop marker were removed after verification. No manual financial record edits or retries were made.
 
 Continuation after incident, 2026-10-20: PAYMENT and Architect reviewed and approved CCR T04-PAY-01. The user approved its exact code-only scope and offline tests, explicitly excluding worker start and payment recovery. The runner now requires the active supervisor-issued allowlist in supervised DEV and applies the same immutable two-ID scope to batch and attention scans. The supervisor validates the reviewed attempt plus the uniquely owned Task04 fixture attempt and sends the scope only to the payment worker. Offline launcher/supervisor/runner tests, typecheck and focused lint pass. The runtime was not started. The older customer's attempt remains outside scope and still requires owner review.
+
+## FINAL VERIFICATION (2026-10-20) — current state; sections below are history
+
+**Identity:** branch `feature/DEV-Environment-Stabilization`, HEAD `b716b53` (= origin), develop `28d828c`. Nothing is staged. The local uncommitted diff is 42 tracked files plus 11 new files; `git diff --check` is clean. A secret and address scan of the diff found only the documented `sk_test_placeholder`.
+
+**Environments**
+- **MAIN DEV, PASS:** `:3000` → `:5000` → Supabase DEV `pzxekjybdiulzmssalfo`.
+  - Governed supervisor running: readiness PASS, IPC activated, verified Stripe Test account, allowlisted email worker READY.
+  - Real purchases verified: $39 Task04 (twice), plus the user's $658, $469 and others.
+  - Signed webhooks; one Order per paid attempt; My Orders and Order Details; three PDFs (verification-only Playwright plus a restricted restart probe).
+  - Emails: dispatched, Brevo `delivered` events, and `deliveryState=DELIVERED` persisted.
+- **ISOLATED QA, PASS:** `:3200` → `:5200` → PostgreSQL 17 `:55434/electrohub_disposable` with verify-full identity, capture-only email.
+  - Real-stack `order-documents` suite 8/8 on the current source.
+  - Fixed: QA and MAIN DEV shared one email-worker lock, so QA's capture worker refused to start while DEV ran. The locks are now per-environment (`commerce-email-worker.lock` / `.isolated.lock`), and each environment still allows only one worker (email dev-runtime tests 11/11).
+  - The negative target matrix is unchanged and passing (database-target and payment-isolation suites).
+- **DEV/PROD schema VERIFIED and migrations NO-OP:** reused from the ledger and physical-schema verification (20/20). Task 04.0 adds no migration and no Prisma schema change.
+
+**Payment policy**
+- **Exact-attempt scope, PASS:** 1–2 unique canonical IDs. Empty, duplicated, malformed or wider scopes are rejected at the launcher and over supervisor IPC.
+  - Batch claim and attention scan share one frozen scope; the API and email workers never receive it.
+  - Authority requires live IPC and is revoked on disconnect. Leases, fencing and idempotency are unchanged.
+- **Steady-state DEV recovery, IMPLEMENTED (owner-approved run):** `--recovery-mode=governed --governed-since=<ISO>`.
+  - The worker handles only attempts created at or after the boundary; older open work blocks startup unless it is the one accepted isolated row. There are no hardcoded IDs and no unrestricted mode.
+  - One transient batch failure is retried; authority is revoked after 3 consecutive failures.
+  - The owner-approved boundary in use is `2026-10-20T17:00:00Z`; changing it is an owner decision.
+  - The isolated attempt `df9056ac4e` remains untouched. Resolved incidents were not reopened.
+
+**Commerce email**
+- Enqueue is automatic.
+- Governed DEV starts the allowlisted worker by default and never runs live/unrestricted.
+- Delivery outcomes are reconciled one-way from Brevo events.
+- No resends: the historical rows were inspected read-only (all 6 owner sends `delivered`).
+
+**UX**
+- **Single confirmation:** exactly one "Order confirmed! 🎉" toast from one owner, covering Checkout, retry and restored paths. No customer email banners.
+- **Navigation lock:** active only while the browser must confirm with Stripe.
+- **Cancel purchase:** waits for the server-confirmed `CANCELED`, restores items and refreshes. Verified live: `e3f05198` cancelled and restored with no reload.
+
+**Orders performance**
+- DB/service level: 1565/2303 ms → 489/1726 ms (p50/p95, 30 samples).
+- HTTP: 1787/5526 ms (10 samples) → 905/1652 ms (30 samples). The handler accounts for 430/1092 ms, with exactly 2 DB operations, 0 transactions, 0 pool waits, 0 errors, `exclusive` attribution and no PII.
+- The remaining cost is remote RTT (Supabase ap-northeast-2), including the auth and role checks before the handler. A regional backend is only a proposal.
+
+**Tests (this pass)**
+- Frontend: full suite 106 files / 869 tests PASS; typecheck, lint and build PASS.
+- Backend: typecheck, lint and build PASS.
+- Node launcher, acceptance, email and isolated tests 49/49.
+- Scope, isolation, metrics and delivery suites 61/61; email dev-runtime 11/11; isolated Playwright 8/8.
+- Backend full suite reused from the last backend change: 1449 passed, 100 skipped, 3 failures confined to the seeded-admin files that `test:ci` excludes.
+- CI: hosted Development CI and Security Audit green on `b716b53`. The local changes are not pushed, so they have no hosted run.
+
+**Matrix (supersedes the table below)**
+- PASS: T04-01, 02, 03, 04, 05, 06, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24.
+- PARTIAL: T04-07. Supavisor tenant capacity is not independently provisioned; the conservative 15-session gate is enforced and counts only client backends.
+
+**Remaining gates (operational, not source defects)**
+- Commit, push and hosted CI of the local diff.
+- Independent Architect review.
+- `COMMERCE_EMAIL_ALLOWED_RECIPIENTS` set persistently in `.env.local` by the owner.
+
+## Final correction pass (2026-10-20, uncommitted on HEAD `b716b53`)
+
+Base: branch `feature/DEV-Environment-Stabilization`, HEAD `b716b5322477939ef1a6fb6abd9cd1b7d01ebc7f`, which equals origin. The tree was clean before this pass. HEAD is three commits beyond `origin/develop` `28d828c`. No commit, push, merge, deploy, runtime start, payment action or DB write was made in this pass.
+
+- **F-01 worker scope:** unchanged and preserved. The supervisor sets `PAYMENT_INPROCESS_RECOVERY=false`. Supervisor, runner, payment-isolation, in-process-recovery, database-target and prisma suites pass 59/59. Launcher and acceptance node tests pass 35/35.
+- **F-02 incident:** read-only DEV SQL found three non-`DONE` work rows; none changed after 12:37:56 UTC.
+  - Out-of-scope customer attempt (md5 prefix `df9056ac4e`, created 2026-10-14): `DECLINED`/`PAYMENT_DECLINED`, provider `requires_payment_method`, submitted, no order, 0 signed events. Work is `LEASED` with a lease that expired 12:39:55 UTC.
+  - Approved attempt: `AWAITING_INPUT`, submitted, `PAYMENT_NOT_CONFIRMED`, `READY` work, no order.
+  - Task04 attempt: `AWAITING_INPUT`, never submitted, `READY` work, no order, now past `expiresAt`.
+  - Classification: no money moved on the out-of-scope row as far as local facts show, but the row is unresolved. It is excluded from scope, and the launcher backlog gate refuses startup because of it. No provider readback was performed in this pass.
+  - Owner decision required: authorize one scoped recovery for that exact attempt, or explicitly isolate it as accepted backlog.
+- **F-03 resume:** added `--reconcile-resume`, `classifyResume`, `withResumeAuthorization`, `resumeDecision` and harness consumption.
+  - Tests cover refusal for post-submit, uncertain, paid, duplicate, contradictory and expired states, plus single-use, monotonic history (node 3 tests, Vitest 2).
+  - The Task04 attempt is now expired, so the real fixture classifies as `REFUSED_ATTEMPT_EXPIRED_NEEDS_OPERATOR`. Resume would need the expiry recovery decision first. Not run against DEV in this pass.
+- **F-04 Stripe:**
+  - A controlled harness (real Stripe.js, this account's `pk_test`, deferred Payment Element, no intent, no submit) reached hosted `ready` in 9.8 s plain and 6.3 s with the app's hidden-wrapper CSS, with the card-number field present. No CSP or headless failure.
+  - The failed run's snapshot shows the Stripe iframe mounted and the skeleton present, but **no** 25 s slow notice. The harness's fixed ~30 s poll, which also counted the slow DEV setup, expired before the app's own readiness or stall deadline. Root cause: harness timing, not the hosted frame.
+  - Fix: the harness now waits for the app's own ready/failed outcome (skeleton removed, then the `payment-element-ready` mark, bounded by the app's 90 s stall plus margin), fails fast on app alerts and reports timing marks. No app change.
+  - The real DEV card entry is **not re-verified**; it needs a runtime start.
+- **F-05 observability:** added `db-request-metrics.ts`.
+  - The adapter records every actual round trip: read, write, transaction start, commit or rollback, with duration, pool-queue flag and failure class.
+  - On the real adapter, AsyncLocalStorage attribution recorded 0 operations, because Prisma's engine calls the adapter outside the caller context. Scopes therefore observe the adapter while open and mark `exclusive` only when no other HTTP request overlapped.
+  - Service stages are timed via AsyncLocalStorage. `GET /api/orders` logs one PII-free `orders.list.timing` event.
+  - A real-PG test on the disposable DB asserts the exact sequence.
+- **Orders performance:** measured on real DEV, 30 serial samples, exclusive, synthetic fixture, service level.
+  - Before: four serial round trips (acquire+BEGIN 395, findMany 409, count 407, COMMIT 342 ms p50). Service time 1565/2303 ms p50/p95; pool queue 0; projection 0.01 ms.
+  - The batch transaction ran at READ COMMITTED, so it never made page and total consistent. The reads now run concurrently without it; owner filter, pagination and shape are unchanged.
+  - After: two reads, service time **489/1726 ms**. The tail includes the second pooled connection's cold TLS connect.
+  - The remaining cost is irreducible remote RTT (~350–480 ms per round trip; DB in ap-northeast-2), plus auth reads at HTTP level (HTTP p95 not re-sampled).
+  - A regional backend is a scoped proposal only.
+- **F-06 policy:** `--recovery-mode=incident-scoped` is the only accepted mode. `governed` fails closed until owner approval; tested.
+- **CI:** Codex's fix allows `sslmode=disable` only for `NODE_ENV=test` loopback `electrohub_disposable|ci` URLs, and the adapter still enforces verified TLS. Hosted Development CI #39444186977 and Security Audit #39444186838 on `b716b53`: **success**. This pass is not pushed, so it has no hosted CI.
+- **Final suites (this pass):**
+  - Backend full Vitest on the disposable target: 1435 passed, 100 skipped, 3 failed. All 3 failures are in `adminSeedLogin`/`auth.integration`, which need seeded admins and are excluded by `test:ci`.
+  - `logging-final-acceptance` timed out once under load and passed alone.
+  - Frontend results are in the handoff.
+
+**Owner decision 2026-10-20: isolate `df9056ac4e` as accepted out-of-scope backlog. No recovery is authorized.**
+
+The launcher now accepts exactly one `--accepted-backlog-attempt=<uuid>`. It removes that row only from the startup backlog count, and only while a read-only check matches the frozen incident record:
+- `DECLINED` / `PAYMENT_DECLINED`, provider `requires_payment_method`;
+- submitted, no order, not cancel-requested;
+- work not `DONE`, 0 signed events;
+- not in the worker scope.
+
+Any drift fails closed. The row and its lease, provider references and history are never written.
+
+Worker exclusion is proven by tests:
+- the runner passes the frozen two-ID scope to every batch and attention poll;
+- `paymentRecoveryAttention` and `runBatch` claim selection both filter `attemptId IN scope`;
+- launcher isolation tests pass (20/20 node, 5/5 Vitest).
+
+Fresh read-only state at 15:28:51 UTC: three open work rows, all unchanged since 12:37:56 UTC, with 0 signed events; the isolated row still matches. A fresh launcher `--preflight` stopped at its first gate: `DEV backend port has an existing owner`, the user-started watched API on :5000. It replaced nothing, and the DB/provider gates were not reached.
+
+Before any start, the following are required, and runtime startup is **not authorized**:
+1. a separate exact runtime authorization;
+2. stopping that API, which is the user's process;
+3. the Task04 attempt expiry. That attempt is now past `expiresAt`, and the scoped worker would release it as expired rather than allow a resume.
+
+**Real DEV acceptance (authorized 2026-10-20; exact operation):**
+
+1. **Stopped:** the user's watched API, tsx watcher PID 101492 plus child 105328. The PIDs were re-verified first; the originally named PID 103172 had been reused by an unrelated service child and was not touched.
+2. **Preflight PASS** (read-only): DEV `pzxekjybdiulzmssalfo`, 20/20 migrations, Stripe Test account verified, 0 unresolved, email off. Open work was 3 rows: 2 in scope and 1 owner-accepted isolated row.
+   - Preflight now evaluates the same reviewed-plus-fixture scope as `--start`. The gate was not relaxed; tested.
+3. **Supervised start**, `--recovery-mode=incident-scoped`:
+   - Readiness PASS, IPC activated, listener secret held in memory, email disabled.
+   - The worker released the expired, never-submitted Task04 attempt: `CANCELED`/`PAYMENT_EXPIRED`, signed cancel webhook.
+   - The approved attempt was re-checked and remains `AWAITING_INPUT` (provider `requires_payment_method`) for future recovery.
+   - **The isolated row was unchanged:** every timestamp still reads 12:37:55.
+4. **Resume reconciliation:** `PRE_SUBMIT_ATTEMPT_RELEASED` (0 orders; provider canceled, nothing received or capturable, no payment method). A single-use authorization was consumed by the run.
+5. **One purchase:**
+   - The hosted Stripe Payment Element loaded and accepted test card 4242.
+   - Place Order was clicked exactly once and "Order Confirmed!" was shown.
+   - The harness then stopped on its own check, which expected the history card's product as text when it is an image with alt text. Fixed to `getByRole('img')`.
+6. **Witness PASS:**
+   - 1 Order, 1 `PAID` attempt with work `DONE`, plus the 1 released pre-submit attempt.
+   - Provider: Test Mode `succeeded`, 3900 received; 2 signed webhooks.
+   - Commerce email: 2 rows `READY`, queued and **not sent**, because dispatch is off by design. No delivery claim.
+7. **Verification-only pass** (no checkout reachable): PASS for My Orders, Order Details, three PDFs (`%PDF-`, >10 KB, correct filenames), reload and re-authentication at 1440 and 390 px, no overflow, 0 submit requests. Screenshot inspected: Confirmed/Paid, $39.00, Visa •4242, queued email notice.
+8. **Rollback:**
+   - Stopping the supervisor PID 105152 made the IPC children (API 102704, worker 108076, Stripe listener 98708) exit on disconnect.
+   - Only the exact lock was removed, after verifying its supervisor and PIDs were all absent.
+   - The user's watched restricted API was restored.
+   - After the restart, against the restricted API: login 200; Orders shows 1 order, `CONFIRMED`/`PAID` $39.00; receipt PDF 200, 17,930 bytes; `paymentsEnabled:false`.
+   - Live `orders.list.timing`: 404 ms, 2 concurrent reads, `attribution:shared` (correctly flagged an overlapping request), no customer identifier. The payment worker is stopped.
+
+**Apple Watch purchase `51b336ee` (owner approval: code and offline tests only, 2026-10-20).**
+
+- **Origin:** the user's own $329 attempt, submitted at 15:38:41 during the supervised window. Card confirmation never reached Stripe.
+- **Read-only state at 16:09:17 UTC:** `AWAITING_INPUT`, no confirmation, no order, no events, `READY` work, expired. Stripe Test Mode `requires_payment_method`, 0 received, 0 capturable, no payment method, bound.
+- **Why it shows Processing:** this is the designed state for a submitted but unconfirmed attempt. Only a process with payment authority can resolve it, and the restricted API plus the stopped worker have none.
+- **Added `--recovery-mode=exact-attempt`:** the scope is only the reviewed attempt(s) and never involves the fixture. The supervisor IPC scope is validated as 1 to 2 exact IDs and fails closed when empty, duplicated, malformed or wider. Each reviewed attempt's provider state is verified, including 0 capturable.
+- **Tests:** launcher 21/21; supervisor, runner and attention 13/13.
+- **Elsewhere:** `bfdeb7f1` was already cancelled by the customer (`CANCELED`, provider canceled, 0 received). The isolated row is unchanged.
+- **Cart:** a worker release does not restore the cart for a submitted attempt; the customer's `/restore` action does, with provider re-verification.
+- **Runtime:** not started at the time of this entry; see the authorized execution below.
+
+**Execution (authorized):**
+
+1. **Start:** stopped the restricted API Claude had started. Exact-attempt preflight PASS (2 open rows: the Apple Watch plus the accepted isolated row). Supervised start PASS.
+2. **Worker:** within its frozen one-ID scope it set `PAYMENT_NOT_CONFIRMED` and did **not** auto-cancel. That is the existing Phase 03 design: a verified not-confirmed purchase stays customer-cancellable and is never auto-abandoned.
+3. **Customer action:** the customer used Cancel purchase with Return its items to my Cart. Result: `CANCELED`/`PAYMENT_CANCELED_BY_CUSTOMER`, Stripe Test Mode `canceled` with 0 received and 0 capturable, no order, work `DONE`, 1 signed event.
+   - `/restore` returned 200 and set `restoredAt`, re-adding the item.
+   - The customer then placed a new $658 purchase at 16:17 (`9c4e8bba6f`, `PAID`, order, work `DONE`), which consumed the cart.
+4. **Stop:** stopped the supervisor; the API, worker and listener drained. Removed only the exact lock after verification, and restored the restricted API.
+5. **Remaining open work:** only the isolated row `df9056ac4e`, unchanged since 12:37:55.
+
+**Order `ORD-9FB0FC8A…` ($658), email and PDF correction (2026-10-20):**
+
+- **PDF: no code defect reproduced.**
+  - Metadata marks invoice, receipt and summary all AVAILABLE.
+  - In-process DEV renders succeeded: invoice 19,498 B, receipt 18,141 B, summary 19,035 B, each `%PDF-`.
+  - The backend logged only a receipt file request for this order (16:18:37, 200). The invoice and summary clicks never reached it: they fell in the 16:19–16:22 window when Claude was stopping the supervisor and restarting the restricted API, so :5000 was down.
+  - Browser re-verification of this order needs the owner's session: NOT VERIFIED by Claude.
+- **Email: enqueue PASS.** `ORDER_CONFIRMED` and `PAYMENT_CONFIRMED` were created at 16:18:00.
+- **Dispatch, provider acceptance and delivery: NOT DONE.** Both rows are `READY` with 0 attempts, because shared-DEV dispatch is off by design and no email worker ran.
+  - The launcher's allowlist path refuses any sendable backlog; there are 4 `READY` rows, including 2 Task04 `.invalid` rows.
+- **Added `scripts/dev-email-exact-send.cjs` (tests 3/3):**
+  - Dry-run by default.
+  - Verifies that the order owner's address has exactly this order's 1–2 sendable rows.
+  - `--send --confirm-recipient` runs the existing worker once, with the allowlist set to that single address. The dispatcher's claim SQL cannot select other recipients' rows.
+  - Reports enqueue, dispatch, provider acceptance and delivery separately.
+  - Dry run PASS.
+- **Authorized exact send (2026-10-20):** worker exit 0. Both rows are now dispatched, with Brevo acceptance and a provider message ID: **dispatch PASS, provider acceptance PASS**.
+  - Delivery state is still `UNKNOWN`, so delivery and inbox receipt are UNVERIFIED pending the owner's confirmation.
+  - Global outbox afterwards: 2 `READY` (the untouched Task04 `.invalid` rows) and 6 `ACCEPTED`. No other backlog was replayed.
+
+**Recurring "stuck Processing" (Samsung $819 `d90223e5`, Apple Watch `51b336ee`, `bfdeb7f1`):**
+
+- **Common signature:** `/submit` returns 200, then there is no `confirmation-started` request and Stripe stays at `requires_payment_method` with no payment method. Nothing was charged.
+  - Samsung: submit at 17:29:04, with the next requests (list reads and `recover-overdue`) about 2 s later.
+  - The client skipped confirmation after a durable submit. Per its contract it never confirms from a stale or unmounted form or an unready Element.
+  - The exact client trigger (stale form instance, unready Element, or `elements.submit` error) is **NOT DEMONSTRATED**: it is only observable through the DEV payment timing marks in a real browser run, which needs a new authorized purchase.
+  - No speculative client change was made. The existing handoff suites pass: frontend checkout 19 files / 270 tests.
+- **Operational cause (fixed):** stalled purchases never reached an actionable state because every normal DEV mode lacked a worker. The restricted API cannot mutate, checkout mode has no worker, and the incident and exact-attempt modes need hardcoded IDs.
+- **Governed mode** (`--recovery-mode=governed --governed-since`):
+  - The worker scope is the attempts' creation boundary, sent over IPC; an exact ID list or a boundary are the only accepted forms.
+  - The same filter is used for the batch claim and the attention scan.
+  - Preflight blocks on older open work except the accepted isolated row.
+  - Tests: launcher 25/25 (governed arguments, preflight boundary gate, worker-only IPC, mismatch refusal); supervisor, runner and attention 20/20 (both forms, future, stale or malformed boundaries, API refusal, frozen pass-through, creation-time filter).
+  - Final backend: 1443 passed, 100 skipped, 3 failures confined to the seeded-admin files that `test:ci` excludes.
+  - Not started.
+
+**Root cause REPRODUCED (authorized governed run, built-in browser, synthetic fixture):**
+
+- **Controlled purchase** `ORD-39C62732…` ($39): PASS. Marks: `/submit` ≈10.3 s, Stripe confirm 6.1 s, reconcile +18.6 s. Order Confirmed, Paid. DB `PAID`/`DONE`, `confirmationStartedAt` set.
+- **Interrupted purchase** (`29540d71c3`): Place Order, then in-app navigation to the Cart about 1.5 s later.
+  - No `authorization-start` mark; DB shows submitted, `confirmationStartedAt` null, `requires_payment_method`, `READY`.
+  - The cart shows "Processing… Please don't pay again", the same signature as Samsung, Apple Watch and `bfdeb7f1`.
+- **Defect:** during the browser-owned window (Place Order until Stripe.js answers), `CheckoutProcessing` said "You can continue shopping", and `PaymentLockProvider` hard-coded `isLocked:false`. On DEV `/submit` takes about 10 s, so customers left, the form unmounted, and the client (correctly) never confirmed from an unmounted form.
+- **Fix:**
+  - The lock is on only while `CONFIRMING_PAYMENT` (header and footer navigation are inert, and a `beforeunload` warning covers close and reload), with a 90 s auto-release and release on Checkout unmount.
+  - The copy says "Keep this page open… You won't be charged twice".
+  - Server-owned states after Stripe answered stay fully navigable, unchanged.
+  - This **reverses** the earlier "never lock" rule for that window only. The tests were updated to the new contract: navigation lock 10/10, including lock, unload, auto-release and copy.
+  - Frontend full suite: 892 passed and 3 timing flakes in the unrelated routing and search tests (31/31 when rerun). Typecheck, lint and build PASS.
+- **Governed worker:** it touched `29540d71c3` at 18:13:24, then about 10 `connection_terminated` DB driver errors (a remote pooler drop) failed the batch and the API. The supervisor shut down fail-closed at 18:13:44, before `PAYMENT_NOT_CONFIRMED` was due (about 18:16).
+  - That attempt now needs a governed restart, then the customer's Cancel.
+  - Residual: one transient DB drop stops the whole DEV payment runtime (`batch_failed` maps to degraded). This needs a reviewed tolerance policy and was not changed.
+
+**Commerce email addendum (2026-10-20):**
+
+- **Disappearing "queued" (reproduced in source):** Order Details used `TransientEmailNotice`, whose 60-second window hid every state, including unresolved QUEUED.
+  - Fixed: only SENT/DELIVERED keep the 60 s success window. QUEUED, DELAYED, PARTIAL and UNAVAILABLE stay shown from the server projection, including after remount and re-authentication, until the projection changes.
+  - SENT copy now says "accepted by our email provider. Delivery isn't confirmed yet", and QUEUED says "haven't been sent yet".
+  - Tests: orders and checkout 369/370, with the 1 load flake passing 28/28 alone, including persistence beyond 2 minutes and on a fresh mount.
+- **Why emails stayed queued:** every DEV payment runtime ran with dispatch off and no email worker.
+  - The launcher's `--allow-email-allowlist` gate now counts only rows the allowlisted worker could claim, so other recipients' history is preserved and never blocks. Launcher 26/26.
+  - `dev-email-exact-send.cjs` sends one order's events only, with explicit recipient confirmation.
+  - `dev-email-delivery-evidence.cjs` reads Brevo events read-only (tests 4/4).
+- **$658 order evidence:**
+  - `ORDER_CONFIRMED` and `PAYMENT_CONFIRMED` are `ACCEPTED`, and Brevo events report **`delivered`** for both (2026-10-20 18:29 UTC).
+  - The persisted `deliveryState` stays `UNKNOWN` because no delivery ingestion exists.
+  - The recipient is the order account's address (`j******@gmail.com`).
+- **Governed restart: BLOCKED.** After the 18:13 pooler drop, Supavisor retains 7 idle session-mode server connections, which are actively reused by the pooler itself. The conservative 15-session gate counts them, and relaxing it needs an owner decision.
+  - The synthetic interrupted attempt `29540d71c3` stays `AWAITING_INPUT`/Processing, with nothing charged.
+
+**Email closure (owner-authorized, 2026-10-20):**
+
+- **Backlog send:** exactly the owner's 6 queued emails (3 orders) were sent once in one runner pass. All 6 are `ACCEPTED`, each with 1 attempt. The 4 Task04 `.invalid` rows are untouched.
+- **Delivery evidence:** Brevo events for iPad `ORD-2C112E01…` show `delivered` for both emails.
+- **Defect fixed:** `--allow-email-allowlist` could never start, because the session gate counted the permanent `pg_net` background worker, and the email reserve 15 against limit 15 requires 0 others. The gate now counts only `client backend` sessions (launcher 27/27).
+- **Running state:** governed mode with an email worker in allowlist mode for the owner's address. Preflight `otherSessions:0`, readiness PASS, `emailAllowlist {enabled:true, workerStarted:true, sendMode:allowlist}`.
+
+**Email reliability closure:**
+
+- **Existing sends:** the 6 owner emails (3 orders) all have Brevo `delivered` events; none bounced or deferred, and nothing was resent.
+- **Delivery tracking:** `commerce-email.delivery.ts` plus the worker sync (tests 5/5: final-outcome classification, one-way conditional update, bounded window, provider failure, events parsing).
+  - In DEV it recorded 8 rows as `DELIVERED` with `deliveredAt`. The remaining older `ACCEPTED`/`UNKNOWN` rows are processed 10 per cycle.
+- **Shutdown fix:** a single recovery batch failure no longer revokes supervised authority; revocation happens after 3 consecutive failures, malformed counts fail closed, and `server.degraded` is unchanged (supervisor 15/15).
+- **Email by default:** governed mode starts the allowlisted email worker whenever an allowlist exists, otherwise reports why email is off, and supports `--no-email` (launcher 28/28).
+- **Live run:** restarted on the new build. Email worker READY in allowlist mode, `reason: allowlist`.
+- **Final backend:** 1449 passed, 100 skipped, 3 failures confined to the seeded-admin files that `test:ci` excludes. Lint and build PASS.
+
+**Purchase confirmation UX (single notification):**
+
+- **Before:** the global `PaymentNotifications` toast covered only background outcomes. Checkout success acknowledged silently and navigated to Confirmation, while Confirmation and Order Details each rendered an email-status banner (`CommerceEmailNotice` / `TransientEmailNotice`), giving multiple notices for one purchase.
+- **After:** `PaymentNotifications` is the single owner.
+  - Checkout's verified-PAID handoff calls `announceOrderConfirmed`, deduplicated per owner and attempt; it still acknowledges, so the background path cannot re-toast.
+  - Copy: "Order confirmed! 🎉 / Your payment was successful. Your order is ready to view." with a View Order link. Background PAID toasts use the same copy, and the toast is suppressed when Checkout already announced that attempt.
+  - The customer email banners, their window and refresh modules, and the email polling on Confirmation and Order Details were removed.
+  - Backend email (producer, worker, allowlist, delivery sync) is unchanged.
+- **Tests:** orders, checkout and layouts 335/335, including no email status in any state on Order Details or Confirmation, a single detail read, and announcement dedup across repeats, owners and missing fields. Lint and build PASS.
+- **Browser QA** (real frontend, real toast via its event channel, no new purchase):
+  - Order Details at 1440 and 390 px: no email banner, Confirmed/Paid badges kept.
+  - Exactly one toast: bottom-right at 1440, full-width top at 390, no overflow.
+  - A wrong-owner announcement showed nothing.
+- **Not exercised live:** a new Stripe purchase, delayed webhook and decline. These are covered by the existing PaymentPurchases suites, updated to the new copy.
+
+**Cancel purchase UI:**
+
+- **Root cause:** `/cancel` usually returns `CANCEL_PENDING` (DEV-observed `CANCEL_PENDING` → `CANCELED`), but `CancelPurchase` acted only on an immediate `CANCELED`. It skipped the requested Cart restore, refreshed once while still pending, and closed, so the stale card stayed until reload and the items were never returned.
+- **Fix:** `awaitCancellation` polls the owner-scoped status every 1.5 s, for up to 45 s, until a terminal answer.
+  - Then it restores if requested, refreshes the cart and then purchases (invalidation cancels older in-flight reads), and closes.
+  - The card is never removed before the server confirms.
+  - A cancellation still pending at the deadline, or a restore failure, is reported truthfully in the dialog. The card stays until the dialog closes.
+- **Tests:** PaymentPurchases 58/58, including pending→confirmed→restore→removal, restore failure, and the bounded poller with failed reads. Checkout, orders and pages 424/424. Lint and build PASS.
+- **Live browser: VERIFIED** (authorized interrupted Task04 purchase `e3f05198`).
+  - The worker marked it `NOT_CONFIRMED`, and Cancel with Return items to Cart was used.
+  - In the same page, with no reload: `/cancel` 200, then `/restore` 200. The pending card disappeared, the dialog closed and the cart shows the item.
+  - DB: `CANCELED`/`PAYMENT_CANCELED_BY_CUSTOMER`, provider `canceled`, `restoredAt` set, no order, work `DONE`.
+
+**Missing toast after a successful retry:**
+
+- **Root cause:** retrying a failed payment runs in `SavedPurchaseCheckout`, and a restored submitted purchase in `RestoredPurchase`. On verified PAID both acknowledged the outcome, which suppresses the background toast, and navigated without calling `announceOrderConfirmed`, so the customer got no notification.
+- **Fix:** both now announce once through the same single owner, deduplicated per owner and attempt.
+- **Test:** decline → retry → Review → Place Order → reconcile PAID → exactly one announcement and navigation to Confirmation. Checkout and orders 339/339; typecheck and lint PASS.
+- **Live check of the cancel flow:** the navigation lock was observed in the real browser during Place Order (header `inert`, a header click blocked, "Keep this page open…" copy).
+
+Changed this pass:
+- `apps/backend/src/lib/{db-request-metrics.ts,db-request-metrics.test.ts,database-adapter.ts,database-adapter.test.ts}`
+- `apps/backend/src/middleware/requestLogger.ts`
+- `apps/backend/src/routes/{checkout.routes.ts,checkout.routes.test.ts}`
+- `apps/backend/src/services/order.service.ts`
+- `apps/backend/scripts/{task04-dev-acceptance.cjs,task04-dev-acceptance.test.cjs,dev-payment-runtime.cjs,dev-payment-runtime.test.cjs,task04-orders-diagnostic.ts}`
+- `apps/frontend/tests/task04/{global-setup.ts,dev-commerce.spec.ts}`
+- `apps/frontend/src/config/task04ResumePreflight.test.ts`
+- the runbook and this file
+
+Matrix changes from this pass:
+- T04-17/18 move to **PASS (DB/service attribution) / PARTIAL (HTTP p95, checkout UI)**.
+- T04-10/13/14/15/16/21/23 remain blocked on the owner decision above plus runtime authorization.
+- T04-08 remains PARTIAL.
 
 ## Baseline and execution plan
 
@@ -180,23 +483,23 @@ Paths are repository-relative here; MOCK means no claim of remote provider evide
 | T04-05 | PASS | Target/payment guard matrix; MOCK/DISPOSABLE | No shared destructive negative execution |
 | T04-06 | PASS | Explicit runtime source/session selection; actual session smoke | Alternative direct IPv6 endpoint not separately benchmarked |
 | T04-07 | PARTIAL | Unchanged max5, reserve10/15, actual session counts/refusal | Supavisor tenant capacity not independently reconfigured/proven |
-| T04-08 | PARTIAL | IPC supervisor readiness and owned listener/API/runner reached ready; exact two-ID scope implemented, reviewed, and tested | Runtime remains stopped; out-of-scope backlog review and separate operational authorization are required before restart |
+| T04-08 | PASS | Supervised incident-scoped runtime: readiness, IPC, scoped worker released only in-scope rows; isolated row untouched | Governed steady-state recovery is a separate owner decision |
 | T04-09 | PASS | Canonical account read, Test-only nonprod guard; read-only intent livemode=false | Genuine task charge pending |
-| T04-10 | NOT VERIFIED | Gated `tests/task04/dev-commerce.spec.ts`; core mocked/disposable regressions pass | Stripe card form did not load; confirm/decline/retry/dismiss acceptance pending |
+| T04-10 | PASS | Real hosted Payment Element loaded; one Test Mode confirm; harness waits on the app readiness signal | Decline/retry/dismiss paths are covered by regression tests, not live |
 | T04-11 | PARTIAL | Unchanged financial domain; 1244 regression tests, lifecycle tests | Skipped manual/barrier/provider scenarios not rerun as live evidence |
 | T04-12 | PASS | Capability hook tests, route regression; restricted DEV actual false | Supervised enabled path source/lifecycle tested; real task submit pending |
-| T04-13 | NOT VERIFIED | Synthetic fixture has one pre-submit attempt, one cart line, and zero orders | Genuine paid order, stock/cart completion, and restart persistence not exercised |
-| T04-14 | PARTIAL | Real DEV auth/cart/product reload; isolated Orders8/8 | Full genuine DEV checkout/history pending |
-| T04-15 | PARTIAL | Shared dispatch off; isolated supervised capture READY | No new genuine task email/capture; no delivery claim |
-| T04-16 | PARTIAL | Actual disposable PDFs/owner404/logout/read-only8/8 | New genuine DEV order PDF pending |
-| T04-17 | PARTIAL | Bounded pg benchmark + API measurements above | Checkout/UI and correlated SQL-count metrics incomplete |
-| T04-18 | PARTIAL | Negligible pool wait, large measured remote RTT, no speculative tuning | DEV order-history tail remains unresolved |
+| T04-13 | PASS | Witness: 1 Order, 1 PAID/DONE, provider succeeded 3900; persisted after restart | — |
+| T04-14 | PASS | My Orders and Order Details after reauthentication, 1440/390 px, restricted restart probe | — |
+| T04-15 | PASS (truthful) | 2 commerce emails queued READY; dispatch off by design; UI shows "queued" | No delivery claimed |
+| T04-16 | PASS | Three owner-scoped PDFs downloaded on DEV; receipt re-read after restart | Arabic exception unchanged |
+| T04-17 | PASS (DB/service) / PARTIAL | Actual adapter op counts and stage timings; live HTTP event 404 ms | HTTP p95 at n=30 and checkout UI p95 not sampled |
+| T04-18 | PASS | Orders list: 4 serial round trips reduced to 2 concurrent reads; 1565 to 489 ms p50 | Remaining cost is remote RTT; regional backend is a proposal only |
 | T04-19 | PASS | Broad regression + target/adapter/guard delta | 98 skipped gated tests explicitly excluded |
 | T04-20 | PASS | Exact launcher cluster/credential pin + negative target tests before writes | No intentional shared fixture write attempted |
-| T04-21 | PARTIAL | Actual Windows start/stop/restart, strict ports, reserved-port aliases; worker scope fix reviewed | No runtime restart under the code-only approval; backlog review and separate operational approval remain |
+| T04-21 | PASS | Exact authorized stop, supervised start, IPC drain on stop, exact lock cleanup, restricted restore | — |
 | T04-22 | PASS | Private diagnostic, safe event-only IPC, redacted logs, degraded/child-exit tests | No public detailed target diagnostic |
-| T04-23 | PASS | Actual clean stop + restricted compiled API/capability false; no data deletion | Genuine paid-order restart persistence pending under T04-13 |
-| T04-24 | PARTIAL | Specification, evidence, runbook, exact worker-scope implementation and PAYMENT/Architect review | Genuine checkout and remaining external acceptance pending |
+| T04-23 | PASS | Paid order persisted across supervisor stop and restricted restart; capability false | — |
+| T04-24 | PASS | Evidence, runbook, CCR history, owner isolation decision recorded | Architect review pending |
 
 ## 11. Remaining risks
 
@@ -232,7 +535,7 @@ MIGRATION ACTIONS: NO-OP
 PERFORMANCE: UNRESOLVED
 BROWSER QA: PARTIAL (isolated suite passed; DEV Stripe card form remained loading)
 CCR T04-PAY-01 REVIEW: PAYMENT, Architect, and user code-scope approval complete; separate runtime authorization NOT GRANTED
-READY FOR FINAL INDEPENDENT ARCHITECT ACCEPTANCE: NO — worker fix, regressions, and remaining external acceptance are incomplete
+READY FOR FINAL INDEPENDENT ARCHITECT ACCEPTANCE: YES (final correction pass; see top section). Superseded rows above are history.
 COMMIT: NO
 PUSH: NO
 MERGE: NO

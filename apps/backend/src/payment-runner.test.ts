@@ -25,7 +25,7 @@ vi.mock('./payment-isolation.js', () => ({ paymentIsolation: () => ({ allowed: t
 vi.mock('./services/commerce-email.runtime.js', () => ({ logCommerceEmailRuntime: vi.fn() }));
 vi.mock('./lib/dev-supervisor.js', async importOriginal => {
   const actual = await importOriginal<typeof import('./lib/dev-supervisor.js')>();
-  return { ...actual, devSupervisorAttemptIds: () => harness.supervisorScope };
+  return { ...actual, devSupervisorAttemptIds: () => harness.supervisorScope, devSupervisorScope: () => harness.supervisorScope };
 });
 
 const REVIEWED_ID = '11111111-1111-4111-8111-111111111111';
@@ -71,6 +71,17 @@ describe('payment runner attempt scope', () => {
     expect(Object.isFrozen(scope)).toBe(true);
     for (const [ids] of harness.runBatch.mock.calls) expect(ids).toBe(scope);
     for (const [, ids] of harness.attention.mock.calls) expect(ids).toBe(scope);
+  });
+
+  it('passes a governed creation boundary unchanged and frozen to every batch and attention poll', async () => {
+    const createdSince = new Date(Date.now() - 3600_000);
+    await importRunner({ mode: 'development', supervised: true, scope: { createdSince } as never });
+    expect(harness.runBatch).toHaveBeenCalledTimes(2);
+    const scope = harness.runBatch.mock.calls[0][0] as { createdSince: Date };
+    expect(scope).toEqual({ createdSince });
+    expect(Object.isFrozen(scope)).toBe(true);
+    for (const [value] of harness.runBatch.mock.calls) expect(value).toBe(scope);
+    for (const [, value] of harness.attention.mock.calls) expect(value).toBe(scope);
   });
 
   it('fails closed on missing, empty, malformed, duplicate, oversized, or CLI-supplied supervised scope', async () => {

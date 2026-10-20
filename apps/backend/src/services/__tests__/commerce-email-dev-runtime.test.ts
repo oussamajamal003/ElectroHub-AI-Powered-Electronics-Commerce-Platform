@@ -88,6 +88,18 @@ describe('startEmailWorker: supervised, bounded, never a second copy', () => {
     });
   });
 
+  it('keeps one worker per environment: a live MAIN DEV lock never blocks the isolated QA worker, and vice versa', () => {
+    const first = harness();
+    fs.mkdirSync(path.join(first.backend, '.cache'), { recursive: true });
+    fs.writeFileSync(path.join(first.backend, '.cache/commerce-email-worker.lock'), JSON.stringify({ supervisorPid: process.ppid }));
+    const isolated = dev.startEmailWorker({ ...first.options, lockName: 'commerce-email-worker.isolated' }); started.push(isolated);
+    expect(isolated.started).toBe(true);
+    expect(fs.existsSync(path.join(first.backend, '.cache/commerce-email-worker.isolated.lock'))).toBe(true);
+    // A second isolated worker in the same environment is still refused while the first is live.
+    expect(fs.readFileSync(path.join(first.backend, '.cache/commerce-email-worker.isolated.lock'), 'utf8')).toContain(String(process.pid));
+    expect(() => dev.startEmailWorker({ ...first.options, lockName: '../escape' })).toThrow('Invalid email worker lock name.');
+  });
+
   it('refuses a second supervised worker while another live supervisor owns the lock, and replaces a stale lock', () => {
     const first = harness();
     fs.mkdirSync(path.join(first.backend, '.cache'), { recursive: true });

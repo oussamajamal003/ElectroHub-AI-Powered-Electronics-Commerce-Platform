@@ -3,6 +3,7 @@ import pg from 'pg';
 import { performance } from 'node:perf_hooks';
 import { logSafely } from '../utils/logger.js';
 import { logContext } from '../utils/logContext.js';
+import { recordDbOperation, type DbOperationKind } from './db-request-metrics.js';
 
 const systemCodes = new Set([
   'ECONNRESET', 'ECONNREFUSED', 'ECONNABORTED', 'ETIMEDOUT', 'EPIPE', 'ENOTFOUND', 'EAI_AGAIN',
@@ -116,28 +117,36 @@ export class ObservablePrismaPg extends PrismaPg {
     });
     pool.on('acquire', client => checkedOut.add(client));
     pool.on('release', (_error, client) => checkedOut.delete(client));
-    const observe = async <T>(operation: string, action: () => Promise<T>): Promise<T> => {
+    const observe = async <T>(operation: string, kind: DbOperationKind, transactional: boolean, action: () => Promise<T>): Promise<T> => {
       const start = performance.now();
+      // Queued requests at start mean this operation had to wait for a pooled connection (only meaningful for pool checkouts).
+      const poolQueued = !transactional && pool.waitingCount > 0;
       try {
         const result = await action();
         recovered();
+        recordDbOperation({ kind, transactional, durationMs: performance.now() - start, poolQueued });
         return result;
       } catch (error) {
         report(operation, error, performance.now() - start);
+        recordDbOperation({ kind, transactional, durationMs: performance.now() - start, poolQueued, failureKind: databaseFailure(error).failureKind });
         throw error;
       }
     };
-    const instrument = (target: Queryable, phase: string) => {
+    const instrument = (target: Queryable, phase: string, transactional: boolean) => {
       const queryRaw = target.queryRaw.bind(target);
       const executeRaw = target.executeRaw.bind(target);
-      target.queryRaw = query => observe(`${phase}.read`, () => queryRaw(query));
-      target.executeRaw = query => observe(`${phase}.write`, () => executeRaw(query));
+      target.queryRaw = query => observe(`${phase}.read`, 'read', transactional, () => queryRaw(query));
+      target.executeRaw = query => observe(`${phase}.write`, 'write', transactional, () => executeRaw(query));
     };
-    instrument(adapter, 'db.driver');
+    instrument(adapter, 'db.driver', false);
     const startTransaction = adapter.startTransaction.bind(adapter);
-    adapter.startTransaction = isolationLevel => observe('db.transaction.acquire', async () => {
+    adapter.startTransaction = isolationLevel => observe('db.transaction.acquire', 'transaction_start', false, async () => {
       const transaction: Transaction = await startTransaction(isolationLevel);
-      instrument(transaction, 'db.transaction');
+      instrument(transaction, 'db.transaction', true);
+      const commit = transaction.commit.bind(transaction);
+      const rollback = transaction.rollback.bind(transaction);
+      transaction.commit = () => observe('db.transaction.commit', 'commit', true, commit);
+      transaction.rollback = () => observe('db.transaction.rollback', 'rollback', true, rollback);
       return transaction;
     });
     // Prisma owns this pool: its existing dispose() -> pool.end() remains the only shutdown owner.

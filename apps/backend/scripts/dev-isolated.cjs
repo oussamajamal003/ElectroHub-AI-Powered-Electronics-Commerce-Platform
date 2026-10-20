@@ -281,7 +281,7 @@ function startBackend() {
   // The email worker runs for as long as the backend does, restarts after crashes (bounded), and is stopped with it. Watched hot-reload of the
   // API does not restart it; restart this command after changing email settings.
   const worker = emailDev.startEmailWorker({ backend, entry: { command: process.execPath, args: ['--import', 'tsx', 'src/commerce-email-runner.ts'] },
-    env: childEnv, log: line => console.log(`dev-isolated: ${line}`) });
+    env: childEnv, lockName: 'commerce-email-worker.isolated', log: line => console.log(`dev-isolated: ${line}`) });
   console.log(worker.started ? 'dev-isolated: commerce email worker started (supervised).' : `dev-isolated: commerce email worker NOT started: ${worker.reason}`);
   const stopAll = () => { void worker.stop(); };
   process.once('SIGINT', stopAll); process.once('SIGTERM', stopAll);

@@ -1,4 +1,5 @@
-import { open, readFile, rm, mkdir } from 'node:fs/promises';
+import { open, readFile, rename, rm, mkdir, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,7 +23,23 @@ type RuntimeDiagnostic = {
   };
 };
 
-type Fixture = { email: string; password: string; userId: string; productId: string; productSlug: string };
+type Fixture = { runId: string; email: string; password: string; userId: string; productId: string; productSlug: string };
+type ResumeAuthorization = { id?: unknown; runId?: unknown; attemptId?: unknown; expiresAt?: unknown; consumedAt?: unknown };
+export type ProgressState = { stage?: unknown; runId?: unknown; resumeAuthorization?: ResumeAuthorization };
+
+/**
+ * `prepared` starts the one purchase. `journeyStarted` (interrupted before Place Order) continues only with a fresh, unconsumed,
+ * fixture-bound authorization written by `task04-dev-acceptance.cjs --reconcile-resume` after read-only DB/provider reconciliation.
+ * Any later stage, or anything unexpected, refuses: a possibly submitted payment is never repeated.
+ */
+export function resumeDecision(state: ProgressState, runId: string, now = Date.now()): 'fresh' | 'resume' {
+  if (state.stage === 'prepared' && !state.resumeAuthorization) return 'fresh';
+  const authorization = state.resumeAuthorization;
+  if (state.stage === 'journeyStarted' && state.runId === runId && authorization && authorization.consumedAt === undefined &&
+      authorization.runId === runId && typeof authorization.id === 'string' && typeof authorization.expiresAt === 'string' &&
+      (authorization.attemptId === null || typeof authorization.attemptId === 'string') && Date.parse(authorization.expiresAt) > now) return 'resume';
+  throw new Error('Task04 preflight refused: this fixture already has a purchase attempt without a valid pre-submit resume authorization; do not repeat Place Order.');
+}
 
 async function readDiagnostic(url: string, token: string): Promise<RuntimeDiagnostic> {
   let response: Response;
@@ -56,7 +73,7 @@ function mainReady(value: RuntimeDiagnostic): value is RuntimeDiagnostic & { dat
 function validFixture(value: unknown): value is Fixture {
   if (!value || typeof value !== 'object') return false;
   const fixture = value as Partial<Fixture>;
-  return typeof fixture.email === 'string' && fixture.email.length > 0 &&
+  return typeof fixture.runId === 'string' && typeof fixture.email === 'string' && fixture.email.length > 0 &&
     typeof fixture.password === 'string' && fixture.password.length > 0 &&
     typeof fixture.userId === 'string' && /^[0-9a-f-]{36}$/i.test(fixture.userId) &&
     typeof fixture.productId === 'string' && /^[0-9a-f-]{36}$/i.test(fixture.productId) &&
@@ -78,7 +95,7 @@ export async function verifyMainDevRuntime(): Promise<void> {
 }
 
 export default async function globalSetup(): Promise<() => Promise<void>> {
-  if (process.env.TASK04_DEV_PURCHASE_APPROVED !== '1') {
+  if (process.env.TASK04_DEV_PURCHASE_APPROVED !== '1' && process.env.TASK04_VERIFY_ONLY !== '1') {
     throw new Error('Task04 DEV purchase is gated. Set TASK04_DEV_PURCHASE_APPROVED=1 only for the approved synthetic fixture run.');
   }
 
@@ -92,7 +109,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
 
   try {
     let fixture: unknown;
-    let state: { stage?: unknown };
+    let state: ProgressState;
     try {
       const [fixtureText, stateText] = await Promise.all([
         readFile(fixtureFile, 'utf8'), readFile(stateFile, 'utf8'),
@@ -103,8 +120,19 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
       throw new Error('Task04 preflight refused: private fixture or progress marker is missing or malformed.');
     }
     if (!validFixture(fixture)) throw new Error('Task04 preflight refused: private synthetic fixture is malformed.');
-    if (state.stage !== 'prepared') throw new Error('Task04 preflight refused: this fixture already has a purchase attempt; do not repeat Place Order.');
+    // Verification-only runs read an already purchased fixture; the purchase test is skipped and Place Order is unreachable.
+    const verifyOnly = process.env.TASK04_VERIFY_ONLY === '1';
+    if (verifyOnly && state.stage !== 'purchased') throw new Error('Task04 preflight refused: verification-only mode requires a purchased fixture.');
+    const decision = verifyOnly ? 'fresh' : resumeDecision(state, (fixture as Fixture).runId);
     await verifyMainDevRuntime();
+    if (decision === 'resume') {
+      // Consumed under the exclusive lock before the browser starts, so one authorization permits at most one run.
+      const consumed = { ...state, resumeAuthorization: { ...state.resumeAuthorization, consumedAt: new Date().toISOString() } };
+      const temporary = path.join(acceptanceDirectory, `.fixture.state.${randomUUID()}.tmp`);
+      await writeFile(temporary, `${JSON.stringify(consumed, null, 2)}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+      await rename(temporary, stateFile);
+      process.env.TASK04_RESUME_AUTHORIZATION = String(state.resumeAuthorization!.id);
+    }
   } catch (error) {
     await lock.close();
     lock = undefined;

@@ -12,7 +12,7 @@ import { StripePaymentSession, type PaymentEntryActions } from './StripePaymentS
 import { PaymentRecovery } from './PaymentRecovery';
 import { PaymentResumeError, resumeSavedPayment, type SavedRetrySetup } from './paymentResume';
 import { CHECKOUT_RECOVERY_WINDOW_MS, canResumePaymentEntry, hasVerifiedPayment, isResolvedPayment } from './paymentPresentation';
-import { acknowledgePaymentOutcome, isNotifiableOutcome, synchronizePaymentOutcome, usePresentedPaymentAttempt } from './PaymentPurchases';
+import { acknowledgePaymentOutcome, announceOrderConfirmed, isNotifiableOutcome, synchronizePaymentOutcome, usePresentedPaymentAttempt } from './PaymentPurchases';
 import { usePaymentLock } from './PaymentLockContext';
 import { markPaymentTiming } from './paymentTiming';
 import { rememberPurchaseEntries } from './state';
@@ -38,7 +38,7 @@ type Load = { kind: 'loading' } | { kind: 'ready'; saved: SavedRetrySetup } | { 
  */
 export function SavedPurchaseCheckout({ attemptId }: { attemptId: string }) {
   const { user, isSessionVerified } = useAuth(); const userId = user?.id ?? '';
-  const navigate = useNavigate(); const location = useLocation(); const client = useQueryClient(); const { setPaymentState } = usePaymentLock();
+  const navigate = useNavigate(); const location = useLocation(); const client = useQueryClient(); const { setPaymentState, paymentState } = usePaymentLock();
   const [params, setParams] = useSearchParams();
   const requested = params.get('step') as CheckoutStep | null;
   const [load, setLoad] = useState<Load>({ kind: 'loading' }); const [epoch, setEpoch] = useState(0);
@@ -149,6 +149,8 @@ export function SavedPurchaseCheckout({ attemptId }: { attemptId: string }) {
     if (hasVerifiedPayment(result) && result.confirmation) {
       const orderRef = result.confirmation.orderReference;
       acknowledgePaymentOutcome(userId, result, client);
+      // A successful retry is a purchase like any other: the single global owner announces it once.
+      announceOrderConfirmed({ owner: userId, attemptId: result.attemptId, orderReference: orderRef });
       client.setQueryData(queryKeys.orders.confirmation(userId, orderRef), { data: result.confirmation });
       void client.invalidateQueries({ queryKey: ['payment-purchases', userId] });
       setPaymentState('IDLE');
@@ -245,7 +247,7 @@ export function SavedPurchaseCheckout({ attemptId }: { attemptId: string }) {
   </>;
   const processing = phase === 'processing';
   return <div className={styles.page}>
-    {processing ? <div className={styles.processingWrapper}><CheckoutProcessing /></div> : <>
+    {processing ? <div className={styles.processingWrapper}><CheckoutProcessing browserConfirming={paymentState === 'CONFIRMING_PAYMENT'} /></div> : <>
       <nav className={styles.breadcrumb} aria-label="Breadcrumb"><Link to="/">Home</Link><ChevronRight size={16} aria-hidden="true" /><Link to="/cart">Cart</Link><ChevronRight size={16} aria-hidden="true" /><span aria-current="page">Checkout</span></nav>
       <h1>Checkout</h1>
       <CheckoutStepper current={step} completed={steps.slice(0, steps.indexOf(step))} navigationUnlocked onSelect={go} />

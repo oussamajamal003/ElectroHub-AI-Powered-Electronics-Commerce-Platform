@@ -8,6 +8,7 @@ import { attemptSchema, businessDate, buyNowScopeId, checkoutRequestSchema, requ
 import { isSerializationConflict } from './transaction-conflict.js';
 import { verifyAuthorization, type ProviderIntent } from './payment.domain.js';
 import { performance } from 'node:perf_hooks';
+import { timeDbStage } from '../lib/db-request-metrics.js';
 import { logger, logSafely } from '../utils/logger.js';
 import { CONFIRMATION_EMAIL_TYPES, projectEmailConfirmation, type EmailConfirmationSummary } from './commerce-email.domain.js';
 
@@ -65,12 +66,16 @@ export class OrderService {
 
   async list(userId: string, { page, pageSize }: { page: number; pageSize: number }) {
     const where = { userId };
-    const [orders, total] = await this.database.$transaction([
+    // Two independent owner-scoped reads, issued concurrently. The former batch transaction ran at READ COMMITTED (a fresh
+    // snapshot per statement), so it never made page and total mutually consistent; on DEV it only added BEGIN and COMMIT
+    // round trips (measured: 4 serial remote round trips, about 1.56 s p50).
+    const [orders, total] = await timeDbStage('find_count_reads', () => Promise.all([
       this.database.order.findMany({ where, include, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * pageSize, take: pageSize }),
       this.database.order.count({ where }),
-    ]);
-    return { data: orders.map(orderSummary), meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } };
+    ]));
+    const data = await timeDbStage('response_projection', () => orders.map(orderSummary));
+    return { data, meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } };
   }
 
   /** Read-only: one owner-scoped query. Missing and other customers' Orders are the same 404. */

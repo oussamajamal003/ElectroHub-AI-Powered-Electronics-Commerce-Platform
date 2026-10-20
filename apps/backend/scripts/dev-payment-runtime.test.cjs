@@ -53,7 +53,7 @@ function fakePrisma(overrides = {}) {
     $queryRaw: async strings => strings.join('').includes('pg_stat_activity') ? [{ others: 0 }] :
       strings.join('').includes('_prisma_migrations') ? (overrides.migrations || fixtureRows()) : [{ '?column?': 1 }],
     $executeRaw: async () => 0,
-    paymentWork: { count: async () => overrides.unfinishedWork ?? 0 },
+    paymentWork: { count: async ({ where } = {}) => where?.attempt ? overrides.governedOpenWork ?? 0 : overrides.unfinishedWork ?? 0 },
     paymentAttempt: { count: async ({ where }) => where.state === 'INCIDENT' ? overrides.historicalIncidents ?? 0 : overrides.unresolvedAttempts ?? 0,
       findUnique: async () => overrides.reviewedAttempt, findMany: async () => overrides.fixtureAttempts ?? [] },
     user: { findFirst: async () => overrides.fixtureOwner === undefined ? { id: TASK04_USER_ID } : overrides.fixtureOwner },
@@ -106,17 +106,17 @@ function fakeRuntime(onReady = () => {}) {
     startEmailWorker: ({ env }) => { capturedEmailEnv = env; return { started: true, reason: 'fixture', runtime: null, stop: async () => {} }; },
     exists: () => true,
   };
-  return { deps, children, logs, lock, get emailEnv() { return capturedEmailEnv; } };
+  return { deps, children, logs, lock, protocol, get emailEnv() { return capturedEmailEnv; } };
 }
 
 test('default is preflight; shared recovery and allowlist email each require explicit opt-in', () => {
-  assert.deepEqual(argumentsFor([]), { start: false, allowEmailAllowlist: false });
+  assert.deepEqual(argumentsFor([]), { start: false, mode: 'incident-scoped', allowEmailAllowlist: false });
   assert.throws(() => argumentsFor(['--start']), /explicit/);
   assert.throws(() => argumentsFor(['--start', '--preflight', '--allow-dev-recovery']));
   assert.throws(() => argumentsFor(['--production']));
   assert.deepEqual(argumentsFor(['--start', '--allow-dev-recovery', '--allow-email-allowlist', `--reviewed-recovery-attempt=${REVIEWED_ID}`]),
-    { start: true, allowEmailAllowlist: true, reviewedRecoveryAttempt: REVIEWED_ID });
-  assert.throws(() => argumentsFor(['--start', '--allow-dev-recovery']), /one exact reviewed recovery attempt/);
+    { start: true, mode: 'incident-scoped', allowEmailAllowlist: true, reviewedRecoveryAttempt: REVIEWED_ID, reviewedRecoveryAttempts: [REVIEWED_ID] });
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-recovery']), /exact reviewed recovery attempt/);
 });
 
 test('reviewed recovery is scoped to one exact READY card-entry attempt', () => {
@@ -150,11 +150,16 @@ test('reviewed startup still blocks all other backlog and changed provider truth
   try {
     const deps = { retrieveIntent: async () => ({ livemode: false, status: 'requires_payment_method', received: 0 }), verifyBinding: () => {} };
     const options = { reviewedRecoveryAttempt: id };
-    const report = await preflight(preflightDependencies({ unfinishedWork: 1, reviewedAttempt, deps }), options);
+    // Preflight evaluates the same reviewed + Task04 fixture scope that --start would use.
+    const fixtureAttempts = [{ id: TASK04_ID, userId: TASK04_USER_ID, state: 'AWAITING_INPUT', orderId: null,
+      providerIntentId: 'pi_task04', submittedAt: null, work: { state: 'READY' } }];
+    const report = await preflight(preflightDependencies({ unfinishedWork: 2, reviewedAttempt, fixtureAttempts, deps }), options);
     assert.equal(report.reviewedRecoveryCount, 1); assert.ok(!JSON.stringify(report).includes(id));
-    await assert.rejects(preflight(preflightDependencies({ unfinishedWork: 2, reviewedAttempt, deps }), options), /backlog/);
+    assert.equal(report.workerAttemptIds, undefined);
+    await assert.rejects(preflight(preflightDependencies({ unfinishedWork: 3, reviewedAttempt, fixtureAttempts, deps }), options), /backlog/);
+    await assert.rejects(preflight(preflightDependencies({ unfinishedWork: 2, reviewedAttempt, fixtureAttempts: [], deps }), options), /exactly one attempt/);
     for (const patch of [{ livemode: true }, { status: 'succeeded' }, { received: 1 }]) {
-      await assert.rejects(preflight(preflightDependencies({ unfinishedWork: 1, reviewedAttempt,
+      await assert.rejects(preflight(preflightDependencies({ unfinishedWork: 2, reviewedAttempt, fixtureAttempts,
         deps: { ...deps, retrieveIntent: async () => ({ livemode: false, status: 'requires_payment_method', received: 0, ...patch }) } }), options), /provider state changed/);
     }
   } finally { if (prior === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = prior; }
@@ -376,4 +381,192 @@ test('bounded shutdown escalates owned children and retains the lock while a chi
     paymentBacklog: {}, stripeAccountVerified: true }, { start: true, reviewedRecoveryAttempt: REVIEWED_ID }, state.deps), /exited unexpectedly|condition timed out|Owned process did not stop/);
   assert.ok(state.children.filter(child => child.pid >= 1000).every(child => child.signals.includes('SIGKILL')));
   assert.equal(state.lock.released, undefined);
+});
+
+test('governed mode needs one past --governed-since boundary (<=30 days), no attempt IDs, and the explicit recovery opt-in', () => {
+  const since = new Date(Date.now() - 3600_000).toISOString();
+  const parsed = argumentsFor(['--start', '--allow-dev-recovery', '--recovery-mode=governed', `--governed-since=${since}`]);
+  assert.equal(parsed.mode, 'governed'); assert.equal(parsed.governedSince, since); assert.equal(parsed.reviewedRecoveryAttempt, undefined);
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-recovery', '--recovery-mode=governed']), /governed-since/);
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-recovery', `--governed-since=${since}`]), /governed-since/);
+  assert.throws(() => argumentsFor(['--start', '--recovery-mode=governed', `--governed-since=${since}`]), /allow-dev-recovery/);
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-recovery', '--recovery-mode=governed', `--governed-since=${since}`, `--reviewed-recovery-attempt=${REVIEWED_ID}`]));
+  for (const bad of [new Date(Date.now() + 60_000).toISOString(), new Date(Date.now() - 31 * 86_400_000).toISOString()]) {
+    assert.throws(() => argumentsFor(['--start', '--allow-dev-recovery', '--recovery-mode=governed', `--governed-since=${bad}`]), /within 30 days/);
+  }
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-recovery', '--recovery-mode=governed', '--governed-since=yesterday']));
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-recovery', '--recovery-mode=unbounded']));
+});
+
+test('governed preflight: only work created at/after the boundary is in scope; older open work or unresolved attempts still block', async () => {
+  const since = new Date(Date.now() - 3600_000).toISOString();
+  const prior = process.env.NODE_ENV; process.env.NODE_ENV = 'development';
+  try {
+    const options = { start: true, mode: 'governed', governedSince: since };
+    const config = await preflight(preflightDependencies({ unfinishedWork: 2, governedOpenWork: 2 }), options);
+    assert.deepEqual(config.workerAttemptIds, []);
+    assert.deepEqual(config.workerScope, { createdSince: since });
+    assert.equal(config.governedOpenWork, 2);
+    await assert.rejects(preflight(preflightDependencies({ unfinishedWork: 3, governedOpenWork: 2 }), options), /backlog/);
+    await assert.rejects(preflight(preflightDependencies({ unfinishedWork: 0, unresolvedAttempts: 1 }), options), /backlog/);
+  } finally { if (prior === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = prior; }
+});
+
+test('governed supervisor sends only the boundary to the worker, nothing to the API, and refuses a mismatched boundary', async () => {
+  const since = new Date(Date.now() - 3600_000).toISOString();
+  const config = { port: 5136, targetIdentity: 'supabase:pzxekjybdiulzmssalfo/postgres', runtimeUrlSource: 'direct', migrationCount: 20,
+    workerAttemptIds: [], workerScope: { createdSince: since },
+    paymentBacklog: { unfinishedWork: 0, unresolvedAttempts: 0, historicalIncidentAttempts: 0 }, stripeAccountVerified: true };
+  const state = fakeRuntime(record => { assert.equal(record.readiness, 'PASS'); process.emit('SIGINT'); });
+  await supervise(config, { start: true, mode: 'governed', governedSince: since }, state.deps);
+  const worker = state.children.find(child => child.spawnArgs?.includes('--payment-worker'));
+  const api = state.children.find(child => child.spawnArgs?.length === 0);
+  const workerPrepare = worker.messages.find(message => message.type === 'payment-supervisor.prepare');
+  assert.equal(workerPrepare.createdSince, since); assert.equal(Object.hasOwn(workerPrepare, 'attemptIds'), false);
+  const apiPrepare = api.messages.find(message => message.type === 'payment-supervisor.prepare');
+  assert.equal(Object.hasOwn(apiPrepare, 'createdSince'), false); assert.equal(Object.hasOwn(apiPrepare, 'attemptIds'), false);
+  for (const [badConfig, badOptions] of [
+    [{ ...config, workerScope: { createdSince: new Date().toISOString() } }, { start: true, mode: 'governed', governedSince: since }],
+    [{ ...config, workerAttemptIds: [REVIEWED_ID] }, { start: true, mode: 'governed', governedSince: since }],
+    [config, { start: true, mode: 'governed', governedSince: since, reviewedRecoveryAttempt: REVIEWED_ID }],
+  ]) await assert.rejects(supervise(badConfig, badOptions, fakeRuntime().deps), /Governed scope must match/);
+});
+
+test('one owner-accepted incident attempt is isolated from the backlog count only while it matches its frozen record and is never in worker scope', () => {
+  const { argumentsFor, assertAcceptedBacklog } = require('./dev-payment-runtime.cjs');
+  const id = '22222222-2222-4222-8222-222222222222';
+  const reviewed = '11111111-1111-4111-8111-111111111111';
+  assert.equal(argumentsFor(['--preflight', `--accepted-backlog-attempt=${id}`]).acceptedBacklogAttempt, id);
+  assert.throws(() => argumentsFor(['--preflight', `--accepted-backlog-attempt=${id}`, `--accepted-backlog-attempt=${reviewed}`]), /At most one/);
+  const frozen = { id, state: 'DECLINED', failureCode: 'PAYMENT_DECLINED', providerStatus: 'requires_payment_method', submittedAt: new Date(),
+    orderId: null, cancelRequested: false, work: { state: 'LEASED' } };
+  assert.doesNotThrow(() => assertAcceptedBacklog(frozen, id, 0, [reviewed]));
+  for (const drift of [{ state: 'PAID' }, { state: 'AUTHORIZED' }, { failureCode: null }, { providerStatus: 'requires_capture' },
+    { submittedAt: null }, { orderId: 'order' }, { cancelRequested: true }, { work: null }, { work: { state: 'DONE' } }, { id: reviewed }]) {
+    assert.throws(() => assertAcceptedBacklog({ ...frozen, ...drift }, id, 0, [reviewed]), /no longer matches/, JSON.stringify(drift));
+  }
+  assert.throws(() => assertAcceptedBacklog(frozen, id, 1, [reviewed]), /no longer matches/);
+  assert.throws(() => assertAcceptedBacklog(null, id, -1, [reviewed]), /no longer matches/);
+  assert.throws(() => assertAcceptedBacklog(frozen, id, 0, [reviewed, id]), /no longer matches/);
+});
+
+test('exact-attempt mode scopes the worker to only the explicitly reviewed attempt(s), never the fixture, and fails closed', async () => {
+  const WATCH = '51b336ee-f09a-4094-8b7e-5d4b90b9a815';
+  const OTHER = '33333333-3333-4333-8333-333333333333';
+  const parsed = argumentsFor(['--start', '--allow-dev-recovery', '--recovery-mode=exact-attempt', `--reviewed-recovery-attempt=${WATCH}`]);
+  assert.equal(parsed.mode, 'exact-attempt'); assert.deepEqual(parsed.reviewedRecoveryAttempts, [WATCH]);
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-recovery', '--recovery-mode=exact-attempt']), /exact reviewed/);
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-recovery', '--recovery-mode=exact-attempt', `--reviewed-recovery-attempt=${WATCH}`,
+    `--reviewed-recovery-attempt=${OTHER}`, `--reviewed-recovery-attempt=${REVIEWED_ID}`]));
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-recovery', `--reviewed-recovery-attempt=${WATCH}`, `--reviewed-recovery-attempt=${OTHER}`]));
+  assert.throws(() => argumentsFor(['--recovery-mode=exact-attempt', '--recovery-mode=incident-scoped']), /one recovery mode/);
+  assert.deepEqual(normalizeWorkerAttemptIds([WATCH], 'exact-attempt'), [WATCH]);
+  for (const bad of [[], [WATCH, WATCH], [WATCH, OTHER, REVIEWED_ID], ['all'], undefined]) {
+    assert.throws(() => normalizeWorkerAttemptIds(bad, 'exact-attempt'));
+  }
+  assert.throws(() => normalizeWorkerAttemptIds([WATCH]), /exactly two/);
+
+  const watch = { id: WATCH, state: 'AWAITING_INPUT', orderId: null, providerIntentId: 'pi_watch', submittedAt: new Date(), work: { state: 'READY' } };
+  const prior = process.env.NODE_ENV; process.env.NODE_ENV = 'development';
+  try {
+    const deps = { retrieveIntent: async () => ({ livemode: false, status: 'requires_payment_method', received: 0, capturable: 0 }), verifyBinding: () => {} };
+    const options = { start: true, mode: 'exact-attempt', reviewedRecoveryAttempt: WATCH, reviewedRecoveryAttempts: [WATCH] };
+    // No fixture is read in exact mode (fixtureAttempts would otherwise be required).
+    const config = await preflight(preflightDependencies({ unfinishedWork: 1, reviewedAttempt: watch, fixtureAttempts: [], deps }), options);
+    assert.deepEqual(config.workerAttemptIds, [WATCH]);
+    assert.equal(config.recoveryMode, 'exact-attempt');
+    await assert.rejects(preflight(preflightDependencies({ unfinishedWork: 2, reviewedAttempt: watch, fixtureAttempts: [], deps }), options), /backlog/);
+    for (const patch of [{ received: 1 }, { capturable: 3290 }, { status: 'requires_capture' }, { livemode: true }]) {
+      await assert.rejects(preflight(preflightDependencies({ unfinishedWork: 1, reviewedAttempt: watch, fixtureAttempts: [],
+        deps: { ...deps, retrieveIntent: async () => ({ livemode: false, status: 'requires_payment_method', received: 0, capturable: 0, ...patch }) } }), options), /provider state changed/);
+    }
+    for (const patch of [{ orderId: 'o' }, { state: 'PAID' }, { work: { state: 'LEASED' } }]) {
+      await assert.rejects(preflight(preflightDependencies({ unfinishedWork: 1, reviewedAttempt: { ...watch, ...patch }, fixtureAttempts: [], deps }), options), /changed/);
+    }
+  } finally { if (prior === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = prior; }
+});
+
+test('checkout mode: explicit opt-in, no reviewed scope, no recovery flag', () => {
+  assert.deepEqual(argumentsFor(['--start', '--allow-dev-checkout', '--recovery-mode=checkout']),
+    { start: true, mode: 'checkout', allowEmailAllowlist: false });
+  assert.throws(() => argumentsFor(['--start', '--recovery-mode=checkout']), /--allow-dev-checkout/);
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-recovery', '--recovery-mode=checkout']), /starts no recovery/);
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-checkout', '--recovery-mode=checkout', `--reviewed-recovery-attempt=${REVIEWED_ID}`]));
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-checkout', `--reviewed-recovery-attempt=${REVIEWED_ID}`]), /only valid with --recovery-mode=checkout/);
+});
+
+test('checkout mode supervises a payment-enabled API and listener only: no worker, no attempt scope, in-process recovery off', async () => {
+  const state = fakeRuntime(record => {
+    assert.equal(record.readiness, 'PASS'); assert.equal(record.recoveryMode, 'checkout'); assert.equal(record.recoveryWorker, 'not-started');
+    process.emit('SIGINT');
+  });
+  const config = { port: 5136, targetIdentity: 'supabase:pzxekjybdiulzmssalfo/postgres', runtimeUrlSource: 'direct', migrationCount: 20,
+    workerAttemptIds: [], paymentBacklog: { unfinishedWork: 0, unresolvedAttempts: 0, historicalIncidentAttempts: 0 }, stripeAccountVerified: true };
+  // Checkout mode has no runner to wait for; the fixture's runner-before-API rule applies only to recovery modes.
+  state.protocol.runnerReady = true;
+  await supervise(config, { start: true, mode: 'checkout' }, state.deps);
+  assert.equal(state.children.filter(child => child.spawnArgs?.includes('--payment-worker')).length, 0, 'no recovery worker is started');
+  const api = state.children.find(child => child.spawnArgs?.length === 0);
+  assert.ok(api.messages.some(message => message.type === 'payment-supervisor.activate'));
+  assert.equal(Object.hasOwn(api.messages.find(message => message.type === 'payment-supervisor.prepare'), 'attemptIds'), false);
+  assert.equal(api.spawnOptions.env.PAYMENT_INPROCESS_RECOVERY, 'false');
+  assert.equal(state.lock.released, true);
+  for (const bad of [{ ...config, workerAttemptIds: [REVIEWED_ID] }]) {
+    await assert.rejects(supervise(bad, { start: true, mode: 'checkout' }, fakeRuntime().deps), /accepts no attempt scope/);
+  }
+  await assert.rejects(supervise(config, { start: true, mode: 'checkout', reviewedRecoveryAttempt: REVIEWED_ID }, fakeRuntime().deps), /accepts no attempt scope/);
+});
+
+test('email allowlist backlog gate counts only rows the allowlisted worker could claim', async () => {
+  const { allowlistedRecipients } = require('./dev-payment-runtime.cjs');
+  assert.deepEqual(allowlistedRecipients({ COMMERCE_EMAIL_ALLOWED_RECIPIENTS: ' A@X.test , ,b@x.test' }), ['a@x.test', 'b@x.test']);
+  assert.deepEqual(allowlistedRecipients({}), []);
+  const prior = { ...process.env };
+  process.env.NODE_ENV = 'development'; process.env.COMMERCE_EMAIL_ALLOWED_RECIPIENTS = 'approved@x.test';
+  try {
+    let where;
+    const deps = preflightDependencies({ deps: { describeEmail: () => ({ dispatchEnabled: true, sendMode: 'allowlist', allowlistSize: 1 }) } });
+    deps.prisma.commerceEmailOutbox.count = async args => { where = args.where; return 0; };
+    const options = { mode: 'governed', governedSince: new Date(Date.now() - 3600_000).toISOString(), allowEmailAllowlist: true };
+    await preflight(deps, options);
+    assert.deepEqual(where.recipient, { in: ['approved@x.test'] });
+    deps.prisma.commerceEmailOutbox.count = async () => 1;
+    await assert.rejects(preflight(deps, options), /email backlog/);
+  } finally { for (const key of Object.keys(process.env)) if (!(key in prior)) delete process.env[key]; Object.assign(process.env, prior); }
+});
+
+test('the session reserve gate counts only client backends, never background workers', async () => {
+  const prior = process.env.NODE_ENV; process.env.NODE_ENV = 'development';
+  try {
+    const deps = preflightDependencies({});
+    const original = deps.prisma.$transaction;
+    let sql = '';
+    deps.prisma.$transaction = async (fn, opts) => original.call(deps.prisma, async tx => {
+      const raw = tx.$queryRaw;
+      tx.$queryRaw = (strings, ...values) => { const text = Array.isArray(strings) ? strings.join('?') : String(strings); if (/pg_stat_activity/.test(text)) sql = text; return raw.call(tx, strings, ...values); };
+      return fn(tx);
+    }, opts);
+    await preflight(deps, {});
+    assert.match(sql, /backend_type = 'client backend'/);
+  } finally { if (prior === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = prior; }
+});
+
+test('governed mode starts the allowlisted email worker by default, never live; empty allowlist or --no-email starts without email', () => {
+  const { applyGovernedEmailDefault } = require('./dev-payment-runtime.cjs');
+  const since = new Date(Date.now() - 3600_000).toISOString();
+  const governed = argumentsFor(['--start', '--allow-dev-recovery', '--recovery-mode=governed', `--governed-since=${since}`]);
+  const env = { COMMERCE_EMAIL_ALLOWED_RECIPIENTS: 'approved@x.test', COMMERCE_EMAIL_SEND_MODE: 'live', COMMERCE_EMAIL_LIVE_APPROVED_TARGET: 'prod' };
+  const on = applyGovernedEmailDefault(governed, env);
+  assert.equal(on.allowEmailAllowlist, true); assert.equal(on.emailDefault, 'allowlist');
+  assert.equal(env.COMMERCE_EMAIL_SEND_MODE, 'allowlist'); assert.equal(env.COMMERCE_EMAIL_DISPATCH_ENABLED, 'true'); assert.equal(env.COMMERCE_EMAIL_LIVE_APPROVED_TARGET, '');
+  const emptyEnv = {};
+  assert.deepEqual({ ...applyGovernedEmailDefault(governed, emptyEnv) }.emailDefault, 'allowlist-empty');
+  assert.equal(emptyEnv.COMMERCE_EMAIL_DISPATCH_ENABLED, undefined);
+  const optOut = argumentsFor(['--start', '--allow-dev-recovery', '--recovery-mode=governed', `--governed-since=${since}`, '--no-email']);
+  const untouched = { COMMERCE_EMAIL_ALLOWED_RECIPIENTS: 'approved@x.test' };
+  assert.equal(applyGovernedEmailDefault(optOut, untouched).allowEmailAllowlist, false);
+  assert.equal(untouched.COMMERCE_EMAIL_SEND_MODE, undefined);
+  const exact = argumentsFor(['--start', '--allow-dev-recovery', `--reviewed-recovery-attempt=${REVIEWED_ID}`]);
+  assert.equal(applyGovernedEmailDefault(exact, { COMMERCE_EMAIL_ALLOWED_RECIPIENTS: 'a@x.test' }).allowEmailAllowlist, false);
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-recovery', '--recovery-mode=governed', `--governed-since=${since}`, '--no-email', '--allow-email-allowlist']));
 });

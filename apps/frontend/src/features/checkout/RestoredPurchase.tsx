@@ -6,7 +6,7 @@ import { queryKeys } from '@/lib/query';
 import { Button } from '@/components/ui/Button';
 import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
 import { PaymentRecovery } from './PaymentRecovery';
-import { acknowledgePaymentOutcome, isNotifiableOutcome, synchronizePaymentOutcome, usePresentedPaymentAttempt, type SavedPurchase } from './PaymentPurchases';
+import { acknowledgePaymentOutcome, announceOrderConfirmed, isNotifiableOutcome, synchronizePaymentOutcome, usePresentedPaymentAttempt, type SavedPurchase } from './PaymentPurchases';
 import { CHECKOUT_RECOVERY_WINDOW_MS, hasVerifiedPayment, isResolvedPayment } from './paymentPresentation';
 import { forgetSubmittedPurchase } from './state';
 import type { CheckoutScope, PaymentOutcome } from './types';
@@ -55,6 +55,7 @@ export function RestoredPurchase({ attemptId, scope, userId, fallback }: { attem
     if (hasVerifiedPayment(outcome) && outcome.confirmation) {
       const reference = outcome.confirmation.orderReference;
       acknowledgePaymentOutcome(userId, outcome, client);
+      announceOrderConfirmed({ owner: userId, attemptId: outcome.attemptId, orderReference: reference });
       client.setQueryData(queryKeys.orders.confirmation(userId, reference), { data: outcome.confirmation });
       void client.invalidateQueries({ queryKey: ['payment-purchases', userId] });
       forgetSubmittedPurchase(userId, scope);

@@ -10,7 +10,8 @@ import { runRecoveryLoop } from './payment-recovery-loop.js';
 import { paymentRecoveryAttention } from './payment-recovery-attention.js';
 import { paymentIsolation } from './payment-isolation.js';
 import { logCommerceEmailRuntime } from './services/commerce-email.runtime.js';
-import { devSupervisorAttemptIds, requireSupervisedPaymentAttemptIds } from './lib/dev-supervisor.js';
+import { devSupervisorScope, requireSupervisedPaymentScope } from './lib/dev-supervisor.js';
+import type { PaymentWorkScope } from './services/payment.service.js';
 
 installFatalLogging();
 logger.info('Payment runner starting', { operation: 'payment.runner.starting' });
@@ -22,10 +23,10 @@ if (!isolation.allowed) throw new Error(`Payment runner refused: ${isolation.rea
 // Direct --attempt flags remain limited to disposable NODE_ENV=test fixtures.
 const requested = process.argv.filter(value => value.startsWith('--attempt=')).map(value => value.slice('--attempt='.length));
 const supervisedDev = env.NODE_ENV === 'development' && process.env.PAYMENT_DEV_SUPERVISED === '1';
-let scope: string[] | undefined;
+let scope: PaymentWorkScope | undefined;
 if (supervisedDev) {
   if (requested.length) throw new Error('Supervised DEV attempt scope must come from supervisor IPC.');
-  scope = requireSupervisedPaymentAttemptIds(devSupervisorAttemptIds(isolation.identity));
+  scope = requireSupervisedPaymentScope(devSupervisorScope(isolation.identity));
 } else {
   if (requested.length && (env.NODE_ENV !== 'test' || requested.length > 10)) {
     throw new Error('Scoped runner is restricted to bounded test fixtures.');
@@ -46,7 +47,8 @@ async function main() {
     ready: () => prisma.$queryRaw`SELECT 1`,
     batch: () => logContext.run({ requestId: randomUUID(), workerInstanceId }, () => paymentService.runBatch(scope)),
     attention: () => paymentRecoveryAttention(prisma, scope),
-    report: (level, event, fields) => logSafely(level, 'Payment recovery lifecycle', { event, workerInstanceId, scoped: Boolean(scope), ...fields }),
+    report: (level, event, fields) => logSafely(level, 'Payment recovery lifecycle', { event, workerInstanceId, scoped: Boolean(scope),
+      scopeKind: !scope ? 'none' : Array.isArray(scope) ? 'attempt-ids' : 'governed-since', ...fields }),
     stopping: () => stopping,
     wait: async ms => {
       try { await wait(ms, undefined, { signal: shutdown.signal }); }

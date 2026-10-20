@@ -40,9 +40,14 @@ function describeEmailRuntime(env) {
 
 function alive(pid) { try { process.kill(pid, 0); return true; } catch (error) { return error.code === 'EPERM'; } }
 
-/** Acquires `<backend>/.cache/commerce-email-worker.lock`; replaces a lock whose owner is gone, refuses a live one. */
-function acquireWorkerLock(backend) {
-  const file = path.join(backend, '.cache/commerce-email-worker.lock');
+/**
+ * Acquires `<backend>/.cache/<name>.lock`; replaces a lock whose owner is gone, refuses a live one. One worker per environment:
+ * MAIN DEV and isolated QA dispatch from different databases, so each has its own lock and neither blocks the other.
+ */
+const LOCK_NAME = /^commerce-email-worker(?:\.[a-z]+)?$/;
+function acquireWorkerLock(backend, name = 'commerce-email-worker') {
+  if (!LOCK_NAME.test(name)) throw new Error('Invalid email worker lock name.');
+  const file = path.join(backend, `.cache/${name}.lock`);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   if (fs.existsSync(file)) {
     let owner = null;
@@ -88,7 +93,7 @@ function startEmailWorker(options) {
   const maxRestarts = options.maxRestarts ?? 5; const windowMs = options.windowMs ?? 5 * 60_000; const backoff = options.backoffMs ?? [2000, 4000, 8000, 16000, 30000];
   const runtime = describeEmailRuntime(options.env);
   if (!runtime.workerWillRun) return { started: false, reason: 'not-configured', runtime, stop: async () => {} };
-  const lock = acquireWorkerLock(options.backend);
+  const lock = acquireWorkerLock(options.backend, options.lockName);
   if (!lock.held) return { started: false, reason: `already-running (supervisor pid ${lock.ownerPid})`, runtime, stop: async () => {} };
 
   let child = null; let stopping = false; const restarts = [];

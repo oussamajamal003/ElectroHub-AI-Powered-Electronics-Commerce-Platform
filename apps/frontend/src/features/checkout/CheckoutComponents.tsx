@@ -6,8 +6,6 @@ import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
 import type { CartData } from '@/features/cart/types';
-import { CommerceEmailNotice } from '@/features/orders/CommerceEmailNotice';
-import { TransientEmailNotice } from '@/features/orders/TransientEmailNotice';
 import { OrderDocumentsPanel } from '@/features/orders/documents/OrderDocumentsPanel';
 import { shippingErrors, steps } from './state';
 import type { CheckoutStep, Confirmation, DeliveryMethod, DeliveryOption, OrderRequest, Shipping, Totals } from './types';
@@ -184,10 +182,14 @@ export function CheckingPayment({ unconfirmed = false, checking = false, note, o
     </div>
   </section>;
 }
-export function CheckoutProcessing() {
-  return <section className={styles.processing} aria-labelledby="processing-heading"><ElectroHubLoader size="lg" /><h1 id="processing-heading">Processing your order…</h1><p aria-live="polite">You can continue shopping while we securely verify your payment.</p></section>;
+/** `browserConfirming`: Place Order is waiting on /submit or Stripe.js. Only this tab can confirm the card then, so it must stay open. */
+export function CheckoutProcessing({ browserConfirming = false }: { browserConfirming?: boolean }) {
+  return <section className={styles.processing} aria-labelledby="processing-heading"><ElectroHubLoader size="lg" /><h1 id="processing-heading">Processing your order…</h1>
+    <p aria-live="polite">{browserConfirming
+      ? 'Confirming your card with our payment provider. Keep this page open until this finishes — leaving now can interrupt your payment. You won’t be charged twice.'
+      : 'You can continue shopping while we securely verify your payment.'}</p></section>;
 }
-/** `ownerId` enables the notice's 60-second lifetime; without it (stories, static previews) the notice is shown as given. */
+/** `ownerId` (signed-in owner) enables the private documents panel. Email delivery is background work and is never shown here. */
 export function ConfirmationContent({ order, ownerId }: { order: Confirmation; ownerId?: string }) {
   const paid = order.paymentState === 'PAID';
   const delivery = { STANDARD: 'Standard Delivery', EXPRESS: 'Express Delivery', OVERNIGHT: 'Overnight Delivery' }[order.deliveryMethod];
@@ -222,8 +224,6 @@ export function ConfirmationContent({ order, ownerId }: { order: Confirmation; o
       {order.card && <p className={styles.subtle}>{order.card.brand} ending {order.card.last4}</p>}
       <div className={styles.orderDate}><span className={styles.eyebrow}>Estimated Delivery</span><p><strong>{date(order.estimatedDeliveryStart)}{order.estimatedDeliveryEnd !== order.estimatedDeliveryStart ? ` – ${date(order.estimatedDeliveryEnd)}` : ''}</strong></p><address>To: {order.shipping.recipient}<br />{[order.shipping.line1, order.shipping.line2, order.shipping.city, order.shipping.state, order.shipping.postalCode, order.shipping.country].filter(Boolean).join(', ')}</address><p className={styles.subtle}>Business-day estimate; holidays and delivery cutoffs may affect arrival.</p></div>
     </section>
-    {ownerId ? <TransientEmailNotice ownerId={ownerId} order={order} />
-      : <CommerceEmailNotice paymentState={order.paymentState} orderStatus={order.status} emailConfirmation={order.emailConfirmation} />}
     {/* Task 03.9: durable documents for the signed-in owner, after the summary/email notice and before outside-card navigation.
         Loaded independently; never delays or replaces the purchase result. */}
     {ownerId && order.orderReference && <OrderDocumentsPanel orderReference={order.orderReference} variant="confirmation" />}
