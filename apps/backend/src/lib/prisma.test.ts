@@ -1,7 +1,9 @@
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  env: { DIRECT_URL: 'postgresql://example:example@localhost:5432/direct?sslmode=require&pgbouncer=true', DATABASE_URL: 'postgresql://example:example@localhost:6543/runtime', NODE_ENV: 'test', DB_SSL_CA_CERT_PATH: undefined as string | undefined },
+  env: { DIRECT_URL: 'postgresql://example:example@localhost:55434/electrohub_disposable?sslmode=require&pgbouncer=true',
+    DATABASE_URL: 'postgresql://example:example@localhost:55434/electrohub_disposable', NODE_ENV: 'test',
+    DB_RUNTIME_URL_SOURCE: undefined as 'database' | 'direct' | undefined, DB_SSL_CA_CERT_PATH: undefined as string | undefined },
   on: vi.fn(),
   client: vi.fn(function(configuration: unknown) { void configuration; return { $disconnect: vi.fn(), $on: mocks.on }; }),
   adapter: vi.fn(function(configuration: unknown) { void configuration; return {}; }),
@@ -19,16 +21,19 @@ beforeEach(() => {
   delete shared.prisma;
   vi.resetModules(); vi.clearAllMocks();
   delete process.env.CI;
-  mocks.env.DIRECT_URL = 'postgresql://example:example@localhost:5432/direct?sslmode=require&pgbouncer=true';
+  mocks.env.DIRECT_URL = 'postgresql://example:example@localhost:55434/electrohub_disposable?sslmode=require&pgbouncer=true';
+  mocks.env.DATABASE_URL = 'postgresql://example:example@localhost:55434/electrohub_disposable';
+  mocks.env.DB_RUNTIME_URL_SOURCE = undefined;
   mocks.env.DB_SSL_CA_CERT_PATH = undefined;
   mocks.env.NODE_ENV = 'test';
 });
 afterEach(() => { delete shared.prisma; if (priorCi === undefined) delete process.env.CI; else process.env.CI = priorCi; });
 
-it('uses DIRECT_URL at runtime and enforces TLS independently of URL flags', async () => {
+it('uses the explicit DIRECT_URL selection and enforces TLS independently of URL flags', async () => {
+  mocks.env.DB_RUNTIME_URL_SOURCE = 'direct';
   await import('./prisma.js');
   const config = mocks.adapter.mock.calls[0]?.[0] as unknown as { connectionString: string; ssl: { rejectUnauthorized: boolean }; max: number };
-  expect(config.connectionString).toBe('postgresql://example:example@localhost:5432/direct');
+  expect(config.connectionString).toBe('postgresql://example:example@localhost:55434/electrohub_disposable');
   expect(config.ssl.rejectUnauthorized).toBe(true); expect(config.max).toBe(5);
 });
 it('budgets development API and runner below the fifteen-session limit without changing production', async () => {
@@ -37,14 +42,15 @@ it('budgets development API and runner below the fifteen-session limit without c
   expect(mocks.adapter).toHaveBeenCalledWith(expect.objectContaining({ max: 5 }));
   delete shared.prisma; vi.resetModules(); vi.clearAllMocks();
   mocks.env.NODE_ENV = 'production';
+  mocks.env.DIRECT_URL = mocks.env.DATABASE_URL = 'postgresql://postgres:mock@db.yepfgjehdstlxbpespun.supabase.co:5432/postgres';
   await import('./prisma.js');
   expect(mocks.adapter).toHaveBeenCalledWith(expect.objectContaining({ max: 10 }));
 });
-it('retains source fallback to DATABASE_URL if direct configuration is absent', async () => {
+it('fails closed before constructing an adapter when direct configuration is absent', async () => {
   mocks.env.DIRECT_URL = '';
-  await import('./prisma.js');
-  const config = mocks.adapter.mock.calls[0]?.[0] as unknown as { connectionString: string };
-  expect(config.connectionString).toBe(mocks.env.DATABASE_URL);
+  await expect(import('./prisma.js')).rejects.toThrow('DATABASE_TARGET_MISSING');
+  expect(mocks.adapter).not.toHaveBeenCalled();
+  expect(mocks.client).not.toHaveBeenCalled();
 });
 it('caps each CI test process at five and uses the configured trusted CA', async () => {
   process.env.CI = 'true'; mocks.env.DB_SSL_CA_CERT_PATH = 'approved-ca.pem';
@@ -88,6 +94,7 @@ it.each([
 ])('db.error keeps only the sanitized Prisma code and SQLSTATE, never the engine message', async (message, prismaCode, sqlState) => {
   await import('./prisma.js');
   const handler = mocks.on.mock.calls.find(([level]) => level === 'error')?.[1] as (event: { message: string }) => void;
+  mocks.log.mockClear();
   handler({ message });
   expect(mocks.log).toHaveBeenCalledExactlyOnceWith('error', 'Database operation failed', {
     operation: 'db.error', code: 'DATABASE_ERROR', prismaCode, sqlState, requestId: null, correlationId: null,

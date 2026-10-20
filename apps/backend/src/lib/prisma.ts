@@ -23,8 +23,14 @@ import { env } from '../config/env.js';
 import { paymentDiagnostics } from './payment-diagnostics.js';
 import { logSafely } from '../utils/logger.js';
 import { logContext } from '../utils/logContext.js';
+import { resolveDatabaseTargets } from './database-target.js';
 function createClient() {
-  const runtimeUrl = new URL(env.DIRECT_URL || env.DATABASE_URL);
+  const targets = resolveDatabaseTargets({ ...process.env, NODE_ENV: env.NODE_ENV, DATABASE_URL: env.DATABASE_URL,
+    DIRECT_URL: env.DIRECT_URL, DB_RUNTIME_URL_SOURCE: env.DB_RUNTIME_URL_SOURCE });
+  const runtimeUrl = new URL(targets.runtimeUrl);
+  logSafely('info', 'Database target configuration validated', { event: 'environment.target.configured',
+    category: targets.runtime.category, transport: targets.runtime.transport, runtimeSource: env.DB_RUNTIME_URL_SOURCE ??
+      (env.NODE_ENV === 'production' ? 'direct' : 'database'), identityVerified: false });
   const ca = env.DB_SSL_CA_CERT_PATH ? readFileSync(env.DB_SSL_CA_CERT_PATH, 'utf8') : undefined;
   const paymentSqlDiagnostics = process.env.ELECTROHUB_SQL_DIAGNOSTICS === '1';
   for (const parameter of ['sslmode', 'sslrootcert', 'sslcert', 'sslkey', 'pgbouncer']) {

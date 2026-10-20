@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import healthRoutes from './health.routes.js';
+import developmentRuntimeRoutes from './development-runtime.routes.js';
 import authRoutes from './auth.routes.js';
 import cartRoutes from './cart.routes.js';
 import checkoutRoutes from './checkout.routes.js';
@@ -19,6 +20,7 @@ import { env } from '../config/env.js';
 const router = Router();
 
 router.use(healthRoutes);
+if (env.NODE_ENV !== 'production') router.use(developmentRuntimeRoutes);
 router.use('/auth', authRoutes);
 router.use(cartRoutes);
 router.use(paymentRoutes);

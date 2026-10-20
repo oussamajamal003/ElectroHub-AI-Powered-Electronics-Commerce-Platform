@@ -24,5 +24,6 @@ export function usePaymentCapability(needed = true): boolean | undefined {
       { signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]) })).data,
     enabled: needed && Boolean(user && isSessionVerified), staleTime: 60_000, retry: 1,
   });
+  if (!user || !isSessionVerified || query.isError) return undefined;
   return typeof query.data?.paymentsEnabled === 'boolean' ? query.data.paymentsEnabled : undefined;
 }
