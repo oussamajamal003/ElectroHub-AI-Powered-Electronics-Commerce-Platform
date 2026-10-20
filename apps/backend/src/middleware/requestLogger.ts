@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { logSafely } from '../utils/logger.js';
 import { logContext } from '../utils/logContext.js';
+import { trackHttpRequest } from '../lib/db-request-metrics.js';
 
 /**
  * HTTP request logging middleware.
@@ -33,9 +34,11 @@ export function requestLogger(
 
   logSafely('info', 'HTTP request started', { operation: 'http.started', requestId: req.id, method: req.method });
   let completed = false;
+  const untrack = trackHttpRequest();
   const complete = (aborted: boolean) => {
     if (completed) return;
     completed = true;
+    untrack();
     const duration = Math.round((performance.now() - start) * 100) / 100;
 
     const failed = aborted || res.statusCode >= 400;

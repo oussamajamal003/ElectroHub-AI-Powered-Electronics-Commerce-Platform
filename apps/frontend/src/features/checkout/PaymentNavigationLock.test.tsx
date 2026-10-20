@@ -1,8 +1,9 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
+  BROWSER_CONFIRMATION_LOCK_MS,
   PaymentLockProvider,
   usePaymentLock,
 } from './PaymentLockContext';
@@ -141,8 +142,39 @@ describe('Durable payment navigation', () => {
     expect(screen.getByTestId('current-path')).toHaveTextContent('/products');
   });
 
+  // DEV reproduction (Task 04.0): leaving during CONFIRMING_PAYMENT (Place Order -> /submit -> Stripe.js) strands a submitted purchase that
+  // Stripe never saw. Only that browser-owned window locks; every server-owned state after Stripe answered stays fully navigable.
+  it('locks header and footer navigation and warns on unload only while the browser must confirm the card', () => {
+    renderShell();
+    fireEvent.click(screen.getByRole('button', { name: 'Set Confirming' }));
+    expect(screen.getByTestId('lock-state')).toHaveTextContent('LOCKED');
+    expect(screen.getByTestId('header-lock-wrapper')).toHaveAttribute('inert');
+    expect(screen.getByTestId('footer-lock-wrapper')).toHaveAttribute('inert');
+    fireEvent.click(screen.getByLabelText(/ElectroHub.*Home/i));
+    expect(screen.getByTestId('current-path').textContent).toBe('/checkout');
+    const unload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(unload);
+    expect(unload.defaultPrevented).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Set Authorized' }));
+    expect(screen.getByTestId('lock-state')).toHaveTextContent('UNLOCKED');
+    const later = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(later);
+    expect(later.defaultPrevented).toBe(false);
+  });
+
+  it('never outlives the browser confirmation window', () => {
+    vi.useFakeTimers();
+    try {
+      renderShell();
+      fireEvent.click(screen.getByRole('button', { name: 'Set Confirming' }));
+      expect(screen.getByTestId('lock-state')).toHaveTextContent('LOCKED');
+      act(() => { vi.advanceTimersByTime(BROWSER_CONFIRMATION_LOCK_MS); });
+      expect(screen.getByTestId('lock-state')).toHaveTextContent('UNLOCKED');
+      expect(screen.getByTestId('payment-state')).toHaveTextContent('IDLE');
+    } finally { vi.useRealTimers(); }
+  });
+
   const criticalStates = [
-    'CONFIRMING_PAYMENT',
     'AUTHORIZED',
     'COMMITTING_ORDER',
     'CAPTURE_PENDING',
@@ -182,7 +214,7 @@ describe('Durable payment navigation', () => {
     renderShell();
     // Engage lock
     fireEvent.click(screen.getByRole('button', { name: 'Set Confirming' }));
-    expect(screen.getByTestId('lock-state')).toHaveTextContent('UNLOCKED');
+    expect(screen.getByTestId('lock-state')).toHaveTextContent('LOCKED');
 
     // Return to IDLE (e.g. card declined or success)
     fireEvent.click(screen.getByRole('button', { name: 'Set Idle' }));
@@ -201,7 +233,7 @@ describe('Durable payment navigation', () => {
   it('preserves interactivity inside Stripe 3DS / payment elements while payment is active', () => {
     renderShell();
     fireEvent.click(screen.getByRole('button', { name: 'Set Confirming' }));
-    expect(screen.getByTestId('lock-state')).toHaveTextContent('UNLOCKED');
+    expect(screen.getByTestId('lock-state')).toHaveTextContent('LOCKED');
 
     const stripeAction = screen.getByTestId('stripe-3ds-action');
     const clickSpy = vi.fn();
@@ -209,5 +241,16 @@ describe('Durable payment navigation', () => {
 
     fireEvent.click(stripeAction);
     expect(clickSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Processing copy during Place Order', () => {
+  it('tells the customer to keep the page open while the browser confirms, and only later that they may keep shopping', async () => {
+    const { CheckoutProcessing } = await import('./CheckoutComponents');
+    const { rerender } = render(<MemoryRouter><CheckoutProcessing browserConfirming /></MemoryRouter>);
+    expect(screen.getByText(/Keep this page open until this finishes/)).toBeInTheDocument();
+    expect(screen.queryByText(/continue shopping/i)).not.toBeInTheDocument();
+    rerender(<MemoryRouter><CheckoutProcessing /></MemoryRouter>);
+    expect(screen.getByText(/You can continue shopping/)).toBeInTheDocument();
   });
 });

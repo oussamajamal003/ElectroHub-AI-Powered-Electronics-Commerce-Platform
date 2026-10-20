@@ -8,6 +8,7 @@ import { generateAccessToken } from '../utils/jwt.js';
 import { cartRevision, requestHash } from '../services/checkout.domain.js';
 import { OrderService } from '../services/order.service.js';
 import type { ProviderIntent } from '../services/payment.domain.js';
+import { logSafely } from '../utils/logger.js';
 
 const state = vi.hoisted(() => ({ userId: '11111111-1111-4111-8111-111111111111', cartId: '22222222-2222-4222-8222-222222222222',
   productId: '33333333-3333-4333-8333-333333333333', categoryId: '44444444-4444-4444-8444-444444444444', quantity: 2, stock: 5, active: true, inventory: true, role: 'CUSTOMER',
@@ -161,5 +162,24 @@ describe('Checkout API orchestration with mocked persistence (not live DB proof)
     expect(response.status).toBe(404); expect(db.order.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: '66666666-6666-4666-8666-666666666666', userId: state.userId } }));
     expect((await request(app).get(`/api/orders/attempts/${key}/confirmation`).auth(token(), { type: 'bearer' })).status).toBe(404);
     expect(db.order.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { userId_checkoutAttemptId: { userId: state.userId, checkoutAttemptId: key } } }));
+  });
+  it('emits one bounded, PII-free Orders timing event with stage timings and a safe failure class', async () => {
+    Object.assign(db.order, { findMany: vi.fn(), count: vi.fn() });
+    (db.order as unknown as { findMany: ReturnType<typeof vi.fn> }).findMany.mockResolvedValue([]);
+    (db.order as unknown as { count: ReturnType<typeof vi.fn> }).count.mockResolvedValue(0);
+    vi.mocked(logSafely).mockClear();
+    expect((await request(app).get('/api/orders?page=1&pageSize=10').auth(token(), { type: 'bearer' })).status).toBe(200);
+    const timing = vi.mocked(logSafely).mock.calls.filter(call => (call[2] as { event?: string })?.event === 'orders.list.timing');
+    expect(timing).toHaveLength(1);
+    expect(timing[0]![2]).toMatchObject({ outcome: 'ok', durationMs: expect.any(Number), attribution: expect.any(String),
+      stagesMs: { find_count_reads: expect.any(Number), response_projection: expect.any(Number) } });
+    expect(db.$transaction).not.toHaveBeenCalled();
+    expect((db.order as unknown as { findMany: ReturnType<typeof vi.fn> }).findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: state.userId }, skip: 0, take: 10 }));
+    expect((db.order as unknown as { count: ReturnType<typeof vi.fn> }).count).toHaveBeenCalledWith({ where: { userId: state.userId } });
+    expect(JSON.stringify(timing)).not.toContain(state.userId);
+    vi.mocked(logSafely).mockClear();
+    expect((await request(app).get('/api/orders?page=0').auth(token(), { type: 'bearer' })).status).toBe(400);
+    expect(vi.mocked(logSafely).mock.calls.find(call => (call[2] as { event?: string })?.event === 'orders.list.timing')?.[2])
+      .toMatchObject({ outcome: 'VALIDATION_ERROR', dbOperationCount: 0 });
   });
 });

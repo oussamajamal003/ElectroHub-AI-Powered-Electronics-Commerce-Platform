@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { StrictMode } from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/lib/api';
 import { PaymentNotifications, PendingPurchases, usePresentedPaymentAttempt, type SavedPurchase } from './PaymentPurchases';
 import { readSubmittedPurchase, rememberSubmittedPurchase } from './state';
@@ -29,8 +29,8 @@ it('recovers unread notification metadata automatically after a transient list f
   });
   show('/cart', 5 * 60_000, false, [paid]);
   await screen.findByText(/could not be updated/);
-  expect(screen.queryByText('Payment successful! Your order has been confirmed.')).not.toBeInTheDocument();
-  await waitFor(() => expect(screen.getByText('Payment successful! Your order has been confirmed.')).toBeVisible(), { timeout: 22000 });
+  expect(screen.queryByText('Order confirmed! 🎉')).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText('Order confirmed! 🎉')).toBeVisible(), { timeout: 22000 });
   expect(reads).toBeGreaterThanOrEqual(2);
 }, 25000);
 it('does not claim that no charge occurred for an authoritatively refunded purchase', async () => {
@@ -64,7 +64,7 @@ it('a failed attempt can become pending again under the same identity, then disa
   expect(screen.queryByRole('heading', { name: 'Failed payments' })).not.toBeInTheDocument();
   rows = [{ ...purchase, state: 'PAID', classification: 'SUCCEEDED', pending: false, unread: true, orderReference: 'ORD-A' }];
   await client.invalidateQueries({ queryKey: ['payment-purchases'] });
-  expect(await screen.findByText('Payment successful! Your order has been confirmed.')).toBeVisible();
+  expect(await screen.findByText('Order confirmed! 🎉')).toBeVisible();
   await waitFor(() => expect(screen.queryByRole('heading', { name: 'Pending purchases' })).not.toBeInTheDocument());
 });
 it('an already-read captured outcome still invalidates Orders independently of toast delivery', async () => {
@@ -72,7 +72,7 @@ it('an already-read captured outcome still invalidates Orders independently of t
   const { client } = show('/orders', 5 * 60_000);
   client.setQueryData(['orders', 'customer-a', 'list', 1, 10], { data: [] });
   await waitFor(() => expect(client.getQueryState(['orders', 'customer-a', 'list', 1, 10])?.isInvalidated).toBe(true));
-  expect(screen.queryByText('Payment successful! Your order has been confirmed.')).not.toBeInTheDocument();
+  expect(screen.queryByText('Order confirmed! 🎉')).not.toBeInTheDocument();
 });
 it('a new captured result withdraws an older failure notice for the same attempt', async () => {
   let rows: SavedPurchase[] = [{ ...purchase, state: 'DECLINED', classification: 'DECLINED', pending: false, unread: true }];
@@ -81,7 +81,7 @@ it('a new captured result withdraws an older failure notice for the same attempt
   await screen.findByText('Payment was not completed. Your saved purchase details are kept in your Cart history.');
   rows = [{ ...purchase, state: 'PAID', classification: 'SUCCEEDED', pending: false, unread: true, orderReference: 'ORD-A' }];
   await client.invalidateQueries({ queryKey: ['payment-purchases'] });
-  expect(await screen.findByText('Payment successful! Your order has been confirmed.')).toBeVisible();
+  expect(await screen.findByText('Order confirmed! 🎉')).toBeVisible();
   await waitFor(() => expect(screen.queryByText('Payment was not completed. Your saved purchase details are kept in your Cart history.')).not.toBeInTheDocument());
 });
 it('shows a separate informational pending purchase and no pay-again action', async () => {
@@ -99,12 +99,12 @@ it('announces A success without navigating B and persists acknowledgement across
     if (options?.method === 'POST') { expect(url).toBe('/api/checkout/payment-attempts/attempt-a/read'); expect(options.data).toEqual({ state: 'PAID' }); read = true; return undefined as never; }
     return { data: [{ ...purchase, pending: false, state: 'PAID', unread: !read, orderReference: 'ORD-A' }] } as never;
   });
-  const view = show(); expect(await screen.findByText('Payment successful! Your order has been confirmed.')).toBeVisible();
+  const view = show(); expect(await screen.findByText('Order confirmed! 🎉')).toBeVisible();
   expect(screen.getByTestId('location')).toHaveTextContent('/checkout');
   fireEvent.click(screen.getByRole('button', { name: 'Dismiss payment notification' }));
-  await waitFor(() => expect(screen.queryByText('Payment successful! Your order has been confirmed.')).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByText('Order confirmed! 🎉')).not.toBeInTheDocument());
   view.unmount(); show(); await waitFor(() => expect(apiClient).toHaveBeenCalledTimes(4));
-  expect(screen.queryByText('Payment successful! Your order has been confirmed.')).not.toBeInTheDocument();
+  expect(screen.queryByText('Order confirmed! 🎉')).not.toBeInTheDocument();
   expect(screen.getByTestId('location')).toHaveTextContent('/checkout');
 });
 it('keeps a failed acknowledgement visible and offers an error instead of silently losing it', async () => {
@@ -147,7 +147,7 @@ it('records a committed toast presentation in the customer cache before dismissa
     vi.mocked(apiClient).mockResolvedValue({ data: [{ ...purchase, pending: false, state: 'PAID', unread: true, orderReference: 'ORD-A' }] });
     // Match the application's five-minute cache retention. A gcTime=0 test
     // client immediately deletes this unobserved acknowledgement cache entry.
-    const { client } = show('/', 5 * 60_000); await screen.findByText('Payment successful! Your order has been confirmed.');
+    const { client } = show('/', 5 * 60_000); await screen.findByText('Order confirmed! 🎉');
     await waitFor(() => expect(client.getQueryData(['payment-notice-presented', 'customer-a'])).toContain('electrohub.payment-notice.customer-a.attempt-a.PAID'));
     expect(vi.mocked(apiClient).mock.calls.every(([, options]) => !options?.method)).toBe(true);
   } finally { storage.mockRestore(); }
@@ -165,7 +165,7 @@ it('StrictMode replay and repeated reads produce one terminal toast and no early
 it.each(['/', '/products', '/cart', '/checkout'].flatMap(path => ['PAID', 'DECLINED'].map(state => [path, state])))('reports A %s / %s without changing current navigation or Cart B', async (path, state) => {
   vi.mocked(apiClient).mockResolvedValue({ data: [{ ...purchase, state, unread: true, pending: state !== 'PAID', orderReference: state === 'PAID' ? 'ORD-A' : null }] });
   show(path);
-  expect(await screen.findByText(state === 'PAID' ? 'Payment successful! Your order has been confirmed.' : 'Payment was not completed. Your saved purchase details are kept in your Cart history.')).toBeVisible();
+  expect(await screen.findByText(state === 'PAID' ? 'Order confirmed! 🎉' : 'Payment was not completed. Your saved purchase details are kept in your Cart history.')).toBeVisible();
   expect(screen.getByTestId('location').textContent).toBe(path);
   expect(vi.mocked(apiClient).mock.calls.every(([url, options]) => ['/api/checkout/payment-attempts', '/api/checkout/payment-capability'].includes(String(url)) && !options?.method)).toBe(true);
   expect(screen.queryByRole('button', { name: /^(pay|try again)/i })).not.toBeInTheDocument();
@@ -349,11 +349,11 @@ it('a hidden tab neither presents nor records the notice; it appears, once, when
       : { data: [{ ...purchase, pending: false, state: 'PAID', classification: 'SUCCEEDED', unread: true, orderReference: 'ORD-A' }] } as never);
     const { client } = show();
     await waitFor(() => expect(apiClient).toHaveBeenCalled()); await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
-    expect(screen.queryByText('Payment successful! Your order has been confirmed.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Order confirmed! 🎉')).not.toBeInTheDocument();
     expect(localStorage.length).toBe(0); expect(client.getQueryData(['payment-notice-presented', 'customer-a'])).toBeUndefined();
     state.hidden = false; act(() => { document.dispatchEvent(new Event('visibilitychange')); });
-    expect(await screen.findByText('Payment successful! Your order has been confirmed.')).toBeVisible();
-    expect(screen.getAllByText('Payment successful! Your order has been confirmed.')).toHaveLength(1);
+    expect(await screen.findByText('Order confirmed! 🎉')).toBeVisible();
+    expect(screen.getAllByText('Order confirmed! 🎉')).toHaveLength(1);
   } finally { Reflect.deleteProperty(document, 'visibilityState'); }
 });
 
@@ -542,4 +542,60 @@ it('a Buy Now purchase never offers to return items to the Cart', async () => {
   await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /Cancel purchase: / })); });
   expect(await screen.findByRole('heading', { name: 'Cancel this purchase?' })).toBeInTheDocument();
   expect(screen.queryByLabelText(/Return its items to my Cart/)).not.toBeInTheDocument();
+});
+
+// Task 04.0: the cancel endpoint usually answers CANCEL_PENDING (DEV-observed), the provider cancellation lands moments later.
+describe('Cancel purchase completes without a manual refresh', () => {
+  it('waits for the server-confirmed CANCELED, then restores the items, refreshes Cart and purchases, and removes the card', async () => {
+    let rows: SavedPurchase[] = [verifiedProcessing]; let statusReads = 0;
+    vi.mocked(apiClient).mockImplementation(async (url, options) => {
+      const method = (options as { method?: string } | undefined)?.method; const path = String(url);
+      if (path.endsWith('/cancel') && method === 'POST') return { data: { attemptId: 'attempt-a', state: 'CANCEL_PENDING' } } as never;
+      if (path === '/api/checkout/payment-attempts/attempt-a') {
+        statusReads++;
+        if (statusReads >= 2) rows = [];
+        return { data: { attemptId: 'attempt-a', state: statusReads >= 2 ? 'CANCELED' : 'CANCEL_PENDING' } } as never;
+      }
+      if (path.endsWith('/restore') && method === 'POST') return { data: { attemptId: 'attempt-a', state: 'CANCELED' } } as never;
+      return { data: rows } as never;
+    });
+    show('/cart');
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /Cancel purchase: / })); });
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: 'Cancel purchase' })); });
+    // Never removed before the server confirmed the result.
+    expect(document.querySelector('[data-purchase="attempt-a"]')).not.toBeNull();
+    await waitFor(() => expect(document.querySelector('[data-purchase="attempt-a"]')).toBeNull(), { timeout: 8000 });
+    const posts = vi.mocked(apiClient).mock.calls.filter(([, options]) => (options as { method?: string } | undefined)?.method === 'POST').map(([url]) => String(url));
+    expect(posts).toEqual(['/api/checkout/payment-attempts/attempt-a/cancel', '/api/checkout/payment-attempts/attempt-a/restore']);
+    expect(screen.queryByRole('heading', { name: 'Cancel this purchase?' })).toBeNull();
+  }, 15000);
+
+  it('a restore failure after a confirmed cancellation is reported truthfully and the dialog stays open', async () => {
+    let rows: SavedPurchase[] = [verifiedProcessing];
+    vi.mocked(apiClient).mockImplementation(async (url, options) => {
+      const method = (options as { method?: string } | undefined)?.method; const path = String(url);
+      if (path.endsWith('/cancel') && method === 'POST') { rows = []; return { data: { attemptId: 'attempt-a', state: 'CANCELED' } } as never; }
+      if (path.endsWith('/restore') && method === 'POST') throw new Error('restore failed');
+      return { data: rows } as never;
+    });
+    show('/cart');
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /Cancel purchase: / })); });
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: 'Cancel purchase' })); });
+    expect(await screen.findByText(/cancelled, but its items could not be returned/)).toBeInTheDocument();
+  });
+});
+
+describe('awaitCancellation', () => {
+  it('polls the owned status until a terminal answer, tolerates failed reads, and is bounded', async () => {
+    const { awaitCancellation, CANCEL_CONFIRM_TIMEOUT_MS } = await import('./PaymentPurchases');
+    let clock = 0; const sleep = async (ms: number) => { clock += ms; };
+    const answers = [new Error('network'), { data: { state: 'CANCEL_PENDING' } }, { data: { state: 'CANCELED' } }];
+    vi.mocked(apiClient).mockImplementation(async () => { const next = answers.shift(); if (next instanceof Error) throw next; return next as never; });
+    expect(await awaitCancellation('attempt-a', 'CANCEL_PENDING', () => clock, sleep)).toBe('CANCELED');
+    expect(await awaitCancellation('attempt-a', 'CANCELED', () => clock, sleep)).toBe('CANCELED');
+    vi.mocked(apiClient).mockResolvedValue({ data: { state: 'CANCEL_PENDING' } } as never);
+    clock = 0;
+    expect(await awaitCancellation('attempt-a', 'CANCEL_PENDING', () => clock, sleep)).toBe('CANCEL_PENDING');
+    expect(clock).toBeGreaterThanOrEqual(CANCEL_CONFIRM_TIMEOUT_MS);
+  });
 });

@@ -10,8 +10,6 @@ import { ProductImage } from '@/components/ui/ProductImage';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ApiError, apiClient } from '@/lib/api';
 import { queryKeys } from '@/lib/query';
-import { TransientEmailNotice } from './TransientEmailNotice';
-import { emailConfirmationRefetchInterval } from './emailConfirmationRefresh';
 import { OrderBadges } from './OrderBadges';
 import { OrderDocumentsPanel } from './documents/OrderDocumentsPanel';
 import { OrdersAccessGate } from './OrdersAccessGate';
@@ -50,8 +48,7 @@ function OwnedOrderDetails() {
   const heading = useRef<HTMLHeadingElement>(null);
   const query = useQuery({ queryKey: queryKeys.orders.detail(user?.id ?? '', orderReference),
     queryFn: ({ signal }) => apiClient<{ data: OrderDetails }>(`/api/orders/${encodeURIComponent(orderReference)}`, { signal }),
-    enabled: Boolean(user && isSessionVerified && !isLoggingOut && orderReference), retry: false, staleTime: 10_000,
-    refetchInterval: emailConfirmationRefetchInterval(user?.id ?? '', orderReference) });
+    enabled: Boolean(user && isSessionVerified && !isLoggingOut && orderReference), retry: false, staleTime: 10_000 });
   const order = query.data?.data;
   const loaded = Boolean(order);
   useEffect(() => {
@@ -89,7 +86,6 @@ function OwnedOrderDetails() {
     {note && <p className={styles.note}>{note}</p>}
     {query.isError && <div className={`${shared.notice} ${styles.refreshNotice}`} role="alert"><p>We could not refresh this order. Showing the last loaded details.</p>
       <Button size="small" variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}>Retry</Button></div>}
-    <TransientEmailNotice ownerId={user?.id ?? ''} order={order} />
     <div className={styles.layout} aria-busy={query.isFetching || undefined}>
       <div className={styles.main}>
         <section className={styles.card} aria-labelledby="order-items-heading">

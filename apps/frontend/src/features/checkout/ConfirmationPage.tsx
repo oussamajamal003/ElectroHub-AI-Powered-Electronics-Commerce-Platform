@@ -3,7 +3,6 @@ import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { ApiError, apiClient } from '@/lib/api';
-import { emailConfirmationRefetchInterval } from '@/features/orders/emailConfirmationRefresh';
 import { catalogSignal, queryKeys } from '@/lib/query';
 import { Button } from '@/components/ui/Button';
 import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
@@ -20,7 +19,7 @@ export function ConfirmationPage() {
   const { user, isSessionVerified, isLoggingOut } = useAuth(); const { orderReference = '' } = useParams();
   const query = useQuery({ queryKey: queryKeys.orders.confirmation(user?.id ?? '', orderReference),
     queryFn: context => apiClient<{ data: Confirmation }>(`/api/orders/${encodeURIComponent(orderReference)}/confirmation`, { signal: catalogSignal(context) }),
-    enabled: isSessionVerified && Boolean(user) && !isLoggingOut, retry: false, refetchInterval: emailConfirmationRefetchInterval(user?.id ?? '', orderReference) });
+    enabled: isSessionVerified && Boolean(user) && !isLoggingOut, retry: false });
   useEffect(() => {
     if (query.data) {
       window.scrollTo({ top: 0, behavior: 'instant' });

@@ -59,6 +59,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   DIRECT_URL: z.string().url(),
   DB_SSL_CA_CERT_PATH: z.string().optional(),
+  DB_RUNTIME_URL_SOURCE: z.enum(['database', 'direct']).optional(),
   E2E_OTP_OUTBOX_DIR: z.string().optional(),
   E2E_TEST_SUPPORT_TOKEN: z.string().optional(),
   JWT_SECRET: z.string().min(32).refine((secret) => {

@@ -150,6 +150,14 @@ function assertSavedTermsCurrent(userId: string,
 type SubmitIdentity = { attemptId: string; checkoutId: string; cartIdentity: string; cartRevision: string; intentId: string | null;
   state: PaymentAttemptState; classification: 'PROCESSING'; scope: 'BUY_NOW' | 'CART_CHECKOUT'; submittedAt: string; committed: boolean;
   recoveryActive: boolean };
+export type PaymentWorkScope = readonly string[] | { readonly createdSince: Date };
+/** PaymentWork filter for a worker scope. A governed boundary selects by the attempt's immutable creation time. */
+export function paymentWorkScopeWhere(scope?: PaymentWorkScope): Prisma.PaymentWorkWhereInput {
+  if (!scope) return {};
+  if (Array.isArray(scope)) return { attemptId: { in: [...scope] } };
+  return { attempt: { createdAt: { gte: (scope as { createdSince: Date }).createdSince } } };
+}
+
 export class PaymentService {
   constructor(private readonly database: PrismaClient = prisma, private readonly provider: PaymentProvider = stripeProvider,
     private readonly inventory = new InventoryService(), private readonly isolation: () => PaymentIsolationDecision = paymentIsolation) {}
@@ -1130,10 +1138,11 @@ export class PaymentService {
     logCreatedEvents(emails);
   }
 
-  async runBatch(attemptIds?: string[]) {
+  /** `scope`: exact attempt IDs, or (governed DEV) only attempts created at/after a boundary. Undefined = unscoped (production). */
+  async runBatch(scope?: PaymentWorkScope) {
     if (!this.mutationsAllowed()) return 0;
     const now = new Date();
-    const due = await this.database.paymentWork.findMany({ where: { ...(attemptIds ? { attemptId: { in: attemptIds } } : {}), ...duePaymentWork(now) },
+    const due = await this.database.paymentWork.findMany({ where: { ...paymentWorkScopeWhere(scope), ...duePaymentWork(now) },
       orderBy: { nextRunAt: 'asc' }, take: 10, select: { attemptId: true } });
     const failures: unknown[] = [];
     for (const work of due) {

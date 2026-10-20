@@ -6,6 +6,9 @@ import { AppError } from '../middleware/errorHandler.js';
 import { CheckoutService } from '../services/checkout.service.js';
 import { OrderService } from '../services/order.service.js';
 import { orderPaginationSchema } from '../validators/order.validator.js';
+import { collectDbMetrics } from '../lib/db-request-metrics.js';
+import { logSafely } from '../utils/logger.js';
+import { performance } from 'node:perf_hooks';
 
 const router = Router(); const checkout = new CheckoutService(); const orders = new OrderService();
 router.use(['/checkout', '/orders'], requireAuth, requireRole('CUSTOMER'), (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
@@ -120,7 +123,16 @@ router.get('/checkout', async (req, res, next) => {
   } catch (error) { next(handle(error)); }
 });
 router.get('/orders', async (req, res, next) => {
-  try { res.json(await orders.list(req.user!.userId, orderPaginationSchema.parse(req.query))); } catch (error) { next(handle(error)); }
+  // One bounded, PII-free timing event per history read: actual DB round trips plus service stages, correlated by request id.
+  const started = performance.now();
+  const scoped = collectDbMetrics(async () => orders.list(req.user!.userId, orderPaginationSchema.parse(req.query)));
+  let outcome = 'ok';
+  try { res.json(await scoped.result); }
+  catch (error) { outcome = error instanceof AppError ? error.code : error instanceof z.ZodError ? 'VALIDATION_ERROR' : 'UNEXPECTED'; next(handle(error)); }
+  finally {
+    logSafely('info', 'Order history timing', { event: 'orders.list.timing', requestId: req.id, outcome,
+      durationMs: Math.round((performance.now() - started) * 100) / 100, ...scoped.metrics() });
+  }
 });
 router.post('/orders', limiter, async (req, res, next) => {
   try { await orders.create(req.user!.userId, req.get('Idempotency-Key') ?? '', req.body); }

@@ -93,3 +93,28 @@ it('a multi-second recovery lease on a saved checkout is waited out and opens ca
   expect(await screen.findByRole('heading', { name: 'Secure card entry fixture' }, { timeout: 8_000 })).toBeVisible();
   expect(reads).toBe(5); expect(calls.confirm).not.toHaveBeenCalled();
 }, 12_000);
+
+// Task 04.0: a successful retry of a failed payment is announced exactly once by the single global toast owner.
+it('a successful retry announces "Order confirmed" once and opens the confirmation', async () => {
+  const announced: unknown[] = [];
+  const listener = (event: Event) => announced.push((event as CustomEvent).detail);
+  window.addEventListener('electrohub:order-confirmed', listener);
+  try {
+    const confirmation = { orderReference: 'ORD-RETRY-0001', paymentState: 'PAID', items: [{ productName: 'Saved A', quantity: 1, imageUrl: null }] };
+    const paid = { ...setup, clientSecret: null, state: 'PAID', classification: 'SUCCEEDED', retryAllowed: false, committed: true, orderReference: 'ORD-RETRY-0001', confirmation };
+    let reconciled = false;
+    vi.mocked(apiClient).mockImplementation(async url => {
+      const path = String(url);
+      if (path.endsWith('/resume')) return { data: setup };
+      if (path.endsWith('/reconcile')) { reconciled = true; return { data: paid }; }
+      return { data: reconciled ? paid : declined };
+    });
+    show('payment');
+    expect(await screen.findByRole('heading', { name: 'Secure card entry fixture' })).toBeVisible();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Review Order' })); });
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('step=review'));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Place Order/ })); });
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/checkout/confirmation/ORD-RETRY-0001'));
+    expect(announced).toEqual([{ owner, attemptId, orderReference: 'ORD-RETRY-0001' }]);
+  } finally { window.removeEventListener('electrohub:order-confirmed', listener); }
+});

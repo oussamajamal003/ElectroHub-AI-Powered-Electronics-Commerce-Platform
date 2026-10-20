@@ -6,7 +6,7 @@ import { Link, useLocation, useMatch } from 'react-router-dom';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { ApiError, apiClient } from '@/lib/api';
 import { queryKeys } from '@/lib/query';
-import { Toast, ToastProvider, ToastViewport, ToastTitle, ToastClose } from '@/components/ui/Toast';
+import { Toast, ToastProvider, ToastViewport, ToastTitle, ToastDescription, ToastClose } from '@/components/ui/Toast';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { ProductImage } from '@/components/ui/ProductImage';
@@ -167,6 +167,23 @@ export function usePresentedPaymentAttempt(attemptId: string | null | undefined)
 /** Only these authoritative outcomes are ever notified; anything else (pending, UNKNOWN, entry states) never is. */
 export const isNotifiableOutcome = (item: Pick<SavedPurchase, 'state' | 'classification'>) =>
   item.classification === 'SUCCEEDED' || item.classification === 'DECLINED' || item.classification === 'FAILED' || !item.classification && ['PAID', 'DECLINED', 'CANCELED'].includes(item.state);
+/**
+ * Checkout's verified-paid handoff. The global PaymentNotifications toast is the single owner of the "Order confirmed" notification:
+ * Checkout only announces the authoritative PAID result once (owner + attempt), and also acknowledges it so the background
+ * observation path can never show it a second time. Refresh, polling, remounts and route changes never re-announce.
+ */
+const ORDER_CONFIRMED_EVENT = 'electrohub:order-confirmed';
+const announcedOrders = new Set<string>();
+export interface OrderConfirmedAnnouncement { owner: string; attemptId: string; orderReference: string }
+export function announceOrderConfirmed(detail: OrderConfirmedAnnouncement) {
+  const key = `${detail.owner}:${detail.attemptId}`;
+  if (!detail.owner || !detail.orderReference || announcedOrders.has(key)) return;
+  announcedOrders.add(key);
+  window.dispatchEvent(new CustomEvent<OrderConfirmedAnnouncement>(ORDER_CONFIRMED_EVENT, { detail }));
+}
+export const ORDER_CONFIRMED_TITLE = 'Order confirmed! 🎉';
+export const ORDER_CONFIRMED_TEXT = 'Your payment was successful. Your order is ready to view.';
+
 /** The customer saw this authoritative outcome in Checkout: never toast it later, here or in another browser. Once per tab (query client). */
 export function acknowledgePaymentOutcome(owner: string, outcome: NoticeIdentity, client: ReturnType<typeof useQueryClient>) {
   if (document.visibilityState === 'hidden') return;
@@ -288,22 +305,48 @@ function PurchaseCard({ item, exit = false, checking = false, onDismissed, actio
  * Cancel purchase: a rare, server-verified exception (cancelable comes only from the backend). The server re-verifies against Stripe and under
  * row locks; it never cancels a payment that may be in progress or paid. Returning items to the Cart is an explicit customer choice.
  */
+/**
+ * The cancel endpoint often answers CANCEL_PENDING: the provider cancellation completes moments later (same request's follow-up
+ * processing or the durable worker). Wait for the server's own terminal answer (bounded) before restoring or refreshing anything.
+ */
+export const CANCEL_CONFIRM_POLL_MS = 1_500;
+export const CANCEL_CONFIRM_TIMEOUT_MS = 45_000;
+export async function awaitCancellation(attemptId: string, initialState: string, now = () => Date.now(),
+  sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))): Promise<string> {
+  let state = initialState;
+  const deadline = now() + CANCEL_CONFIRM_TIMEOUT_MS;
+  while (state === 'CANCEL_PENDING' && now() < deadline) {
+    await sleep(CANCEL_CONFIRM_POLL_MS);
+    try { state = (await apiClient<{ data: { state: string } }>(`/api/checkout/payment-attempts/${attemptId}`, { signal: AbortSignal.timeout(15_000) })).data.state; }
+    catch { /* A failed status read is not a result; keep waiting within the deadline. */ }
+  }
+  return state;
+}
+
 function CancelPurchase({ item, label }: { item: SavedPurchase; label: string }) {
   const { user } = useAuth(); const client = useQueryClient();
   const [open, setOpen] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   const [returnItems, setReturnItems] = useState(item.scope !== 'BUY_NOW');
+  const refreshOnClose = useRef(false);
   const cancel = async () => {
     if (busy || !user) return;
     setBusy(true); setError('');
     try {
       const result = await apiClient<{ data: { state: string } }>(`/api/checkout/payment-attempts/${item.attemptId}/cancel`, { method: 'POST', data: {},
         signal: AbortSignal.timeout(45_000) });
+      const state = await awaitCancellation(item.attemptId, result.data.state);
+      let restoreFailed = false;
       // Items return to the Cart only once the provider cancellation is confirmed (restore() re-verifies it and is idempotent).
-      if (returnItems && item.scope !== 'BUY_NOW' && result.data.state === 'CANCELED') {
+      if (returnItems && item.scope !== 'BUY_NOW' && state === 'CANCELED') {
         await apiClient(`/api/checkout/payment-attempts/${item.attemptId}/restore`, { method: 'POST', data: {}, signal: AbortSignal.timeout(45_000) })
-          .catch(() => setError('The purchase was cancelled, but its items could not be returned to your Cart. Add them again from the store.'));
+          .catch(() => { restoreFailed = true; });
       }
-      await Promise.all([client.invalidateQueries({ queryKey: ['payment-purchases', user.id] }), client.invalidateQueries({ queryKey: queryKeys.cart.current(user.id) })]);
+      await client.invalidateQueries({ queryKey: queryKeys.cart.current(user.id) });
+      if (state === 'CANCEL_PENDING') { setError('Cancellation was requested and is still being confirmed with our payment provider. Nothing was charged. This purchase will update shortly.'); return; }
+      // The dialog lives inside this card: keep the card (and the truthful message) until the customer closes it.
+      if (restoreFailed) { refreshOnClose.current = true; setError('The purchase was cancelled, but its items could not be returned to your Cart. Add them again from the store.'); return; }
+      // Fresh server truth; invalidation cancels any older in-flight read so a stale "Processing" cannot come back.
+      await client.invalidateQueries({ queryKey: ['payment-purchases', user.id] });
       setOpen(false);
     } catch (failure) {
       setError(isPaymentsDisabledError(failure) ? PAYMENTS_UNAVAILABLE_MESSAGE
@@ -311,7 +354,12 @@ function CancelPurchase({ item, label }: { item: SavedPurchase; label: string })
           : 'The purchase could not be cancelled right now. Nothing was changed. Please try again.');
     } finally { setBusy(false); }
   };
-  return <Dialog open={open} onOpenChange={next => { if (!busy) setOpen(next); }}>
+  const changeOpen = (next: boolean) => {
+    if (busy) return;
+    setOpen(next);
+    if (!next && (refreshOnClose.current || error) && user) { refreshOnClose.current = false; void client.invalidateQueries({ queryKey: ['payment-purchases', user.id] }); }
+  };
+  return <Dialog open={open} onOpenChange={changeOpen}>
     <DialogTrigger asChild><Button size="small" variant="outline" aria-label={`Cancel purchase: ${label}`} onClick={() => setError('')}>Cancel purchase</Button></DialogTrigger>
     <DialogContent hideCloseButton onInteractOutside={event => { if (busy) event.preventDefault(); }} onEscapeKeyDown={event => { if (busy) event.preventDefault(); }}>
       <DialogTitle>Cancel this purchase?</DialogTitle>
@@ -319,7 +367,7 @@ function CancelPurchase({ item, label }: { item: SavedPurchase; label: string })
       {item.scope !== 'BUY_NOW' && <label><input type="checkbox" checked={returnItems} onChange={event => setReturnItems(event.target.checked)} disabled={busy} /> Return its items to my Cart</label>}
       {error && <Alert variant="error">{error}</Alert>}
       <div className={styles.inlineActions}>
-        <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>Keep purchase</Button>
+        <Button variant="outline" onClick={() => changeOpen(false)} disabled={busy}>Keep purchase</Button>
         <Button variant="destructive" onClick={() => void cancel()} isLoading={busy} disabled={busy}>Cancel purchase</Button>
       </div>
     </DialogContent>
@@ -345,7 +393,16 @@ export function PaymentNotifications() {
     void query.refetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
-  useEffect(() => { setUpdates([]); setError(''); delivered.current.clear(); paidSeen.current.clear(); }, [user?.id]);
+  const [confirmed, setConfirmed] = useState<OrderConfirmedAnnouncement | null>(null);
+  useEffect(() => { setUpdates([]); setError(''); setConfirmed(null); delivered.current.clear(); paidSeen.current.clear(); }, [user?.id]);
+  useEffect(() => {
+    const listener = (event: Event) => {
+      const detail = (event as CustomEvent<OrderConfirmedAnnouncement>).detail;
+      if (detail && user?.id && detail.owner === user.id) setConfirmed(detail);
+    };
+    window.addEventListener(ORDER_CONFIRMED_EVENT, listener);
+    return () => window.removeEventListener(ORDER_CONFIRMED_EVENT, listener);
+  }, [user?.id]);
   useEffect(() => {
     const succeeded = query.data?.data.filter(item => item.state === 'PAID' && resultKind(item) === 'success' && !paidSeen.current.has(item.attemptId)) ?? [];
     if (!succeeded.length) return;
@@ -418,10 +475,17 @@ export function PaymentNotifications() {
       .catch(() => setError('Payment update acknowledgement could not be saved. Your purchase remains available in Cart or Orders.'));
   };
   return createPortal(<ToastProvider duration={5000}>{error && <Toast open type="foreground" duration={5000} variant="error" onOpenChange={open => { if (!open) setError(''); }}>
-    <ToastTitle>{error}</ToastTitle><ToastClose aria-label="Dismiss acknowledgement notice" /></Toast>}{updates.filter(item => !isPresentedPayment(route, item, confirmationReference)).map(item =>
+    <ToastTitle>{error}</ToastTitle><ToastClose aria-label="Dismiss acknowledgement notice" /></Toast>}
+    {confirmed && <Toast key={`confirmed:${confirmed.attemptId}`} open duration={5000} variant="success" onOpenChange={open => { if (!open) setConfirmed(null); }}>
+      <ToastTitle>{ORDER_CONFIRMED_TITLE}</ToastTitle><ToastDescription>{ORDER_CONFIRMED_TEXT}</ToastDescription>
+      <Link to={`/orders/${confirmed.orderReference}`}>View Order</Link>
+      <ToastClose aria-label="Dismiss order confirmation" />
+    </Toast>}
+    {updates.filter(item => !isPresentedPayment(route, item, confirmationReference) && !(confirmed && item.attemptId === confirmed.attemptId)).map(item =>
     <Toast key={`${item.attemptId}:${item.state}`} open duration={5000} variant={item.state === 'PAID' ? 'success' : 'error'} onOpenChange={open => { if (!open) close(item); }}>
-      <ToastTitle>{item.state === 'PAID' ? 'Payment successful! Your order has been confirmed.' : 'Payment was not completed. Your saved purchase details are kept in your Cart history.'}</ToastTitle>
-      <Link to={item.orderReference ? `/checkout/confirmation/${item.orderReference}` : '/cart'}>{item.orderReference ? 'View Order' : 'View saved purchase'}</Link>
+      <ToastTitle>{item.state === 'PAID' ? ORDER_CONFIRMED_TITLE : 'Payment was not completed. Your saved purchase details are kept in your Cart history.'}</ToastTitle>
+      {item.state === 'PAID' && <ToastDescription>{ORDER_CONFIRMED_TEXT}</ToastDescription>}
+      <Link to={item.orderReference ? `/orders/${item.orderReference}` : '/cart'}>{item.orderReference ? 'View Order' : 'View saved purchase'}</Link>
       <ToastClose aria-label="Dismiss payment notification" />
     </Toast>)}<ToastViewport className={styles.paymentToasts} /></ToastProvider>, document.body);
 }

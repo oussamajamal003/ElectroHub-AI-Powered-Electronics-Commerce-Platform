@@ -9,7 +9,7 @@
  *   node scripts/dev-isolated.cjs start-db   start the disposable cluster
  *   node scripts/dev-isolated.cjs stop-db    stop it (data kept in apps/backend/.isolated)
  *   node scripts/dev-isolated.cjs status     show identity checks
- *   node scripts/dev-isolated.cjs backend    run the watched backend against it (PORT, default 5000) AND the commerce email worker (Task 03.8)
+ *   node scripts/dev-isolated.cjs backend    run the watched backend against it (PORT, default 5200) AND the commerce email worker (Task 03.8)
  *   node scripts/dev-isolated.cjs backend --real-email
  *                                            same, but send real Brevo emails to the approved COMMERCE_EMAIL_ALLOWED_RECIPIENTS only
  *   node scripts/dev-isolated.cjs backend --real-email --all-recipients
@@ -51,19 +51,92 @@ const run = (file, args, extraEnv = {}, options = {}) => execFileSync(file, args
 // npx is a .cmd shim on Windows, which only a shell can launch (arguments here are fixed and contain no spaces).
 const npx = (args, extraEnv) => run(process.platform === 'win32' ? 'npx.cmd' : 'npx', args, extraEnv, { stdio: 'inherit', shell: process.platform === 'win32' });
 
-// Same rule as src/payment-isolation.ts: every URL loopback AND an electrohub_disposable or electrohub_ci database.
-function assertDisposable(url) {
-  const parsed = new URL(url);
-  const name = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
-  if (!['localhost', '127.0.0.1', '::1', '[::1]'].includes(parsed.hostname) || !/^electrohub_(?:disposable|ci)[a-z0-9_]*$/.test(name)) {
-    fail(`refusing non-disposable database target ${parsed.hostname}:${parsed.port}/${name}`);
+/** Resolves the same development-file precedence as src/config/env.ts without printing any values. */
+function applicationEnvironment(source = process.env, readFile = name => {
+  const file = path.join(backend, name);
+  return fs.existsSync(file) ? dotenv.parse(fs.readFileSync(file)) : {};
+}) {
+  return { ...readFile('.env'), ...readFile('.env.local'), ...source };
+}
+function testStripeKeyError(environment) {
+  const raw = String(environment.STRIPE_SECRET_KEY ?? '');
+  const key = raw.trim();
+  if (raw !== key) return 'isolated backend requires a Stripe Test Mode secret key. Nothing was started.';
+  if (!key || /^(?:sk|rk)_test_[A-Za-z0-9]+$/.test(key)) return null;
+  return 'isolated backend requires a Stripe Test Mode secret key. Nothing was started.';
+}
+function childEnvironment(isolated, mail, extra = {}, source = process.env) {
+  const environment = { ...source, ...isolated, ...mail, ...extra };
+  // Never pass reusable payment approval or supervisor state into an isolated process. Blank values also
+  // prevent dotenv in the child from restoring a stale approval from .env or .env.local.
+  for (const name of Object.keys(environment)) {
+    if (name === 'PAYMENT_SHARED_MUTATIONS_APPROVED' ||
+      /^(?:PAYMENT|ELECTROHUB)_.*(?:SUPERVISOR|ATTESTATION|APPROVAL|APPROVED|AUTHORIZATION)(?:_|$)/i.test(name)) environment[name] = '';
   }
-  return `${parsed.hostname}:${parsed.port}/${name}`;
+  environment.PAYMENT_SHARED_MUTATIONS_APPROVED = '';
+  environment.PAYMENT_DEV_SUPERVISED = '';
+  return environment;
+}
+
+function isolatedRuntimeSecrets() {
+  const file = path.join(home, 'runtime-secrets.json');
+  if (!fs.existsSync(file)) {
+    const values = Object.fromEntries(['JWT_SECRET', 'JWT_REFRESH_SECRET', 'OTP_HASH_SECRET'].map(key => [key, crypto.randomBytes(48).toString('hex')]));
+    fs.writeFileSync(file, JSON.stringify(values), { flag: 'wx', mode: 0o600 });
+  }
+  const values = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (!['JWT_SECRET', 'JWT_REFRESH_SECRET', 'OTP_HASH_SECRET'].every(key => /^[a-f0-9]{96}$/.test(values[key] ?? ''))) {
+    fail('isolated runtime secrets are invalid; existing file retained. Nothing was started.');
+  }
+  return values;
+}
+
+// Require the exact local cluster initialized by this launcher. A loopback URL alone can still target a
+// different local PostgreSQL instance or a local tunnel, so it is not sufficient evidence of isolation.
+function disposableUrlIssue(url, expectedPassword = fs.existsSync(files.password) ? fs.readFileSync(files.password, 'utf8').trim() : '') {
+  let parsed;
+  try {
+    parsed = new URL(url);
+    const name = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
+    if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || parsed.hash) return 'database URL must use PostgreSQL without fragments';
+    for (const key of parsed.searchParams.keys()) {
+      if (key !== 'sslmode' || parsed.searchParams.getAll(key).length !== 1 || parsed.searchParams.get(key) !== 'verify-full') {
+        return 'database URL options cannot override the pinned endpoint or TLS policy';
+      }
+    }
+    if (parsed.hostname.toLowerCase() !== 'localhost' || Number(parsed.port || 5432) !== port || name !== database ||
+      decodeURIComponent(parsed.username) !== 'postgres' || !expectedPassword || decodeURIComponent(parsed.password) !== expectedPassword) {
+      return 'database target must match the launcher-owned disposable cluster';
+    }
+    return null;
+  } catch { return 'database URL is malformed'; }
+}
+function assertDisposable(url) {
+  const issue = disposableUrlIssue(url);
+  if (issue) fail(issue);
+  const parsed = new URL(url);
+  return `${parsed.hostname}:${parsed.port}/${decodeURIComponent(parsed.pathname.replace(/^\//, ''))}`;
+}
+function databaseUrlsIssue(env, expectedPassword) {
+  for (const name of ['DATABASE_URL', 'DIRECT_URL']) {
+    const issue = disposableUrlIssue(env[name], expectedPassword);
+    if (issue) return `${name}: ${issue}`;
+  }
+  const identity = url => {
+    const parsed = new URL(url);
+    return `${parsed.hostname.toLowerCase()}/${Number(parsed.port || 5432)}/${decodeURIComponent(parsed.pathname.replace(/^\//, ''))}/${decodeURIComponent(parsed.username)}`;
+  };
+  if (identity(env.DATABASE_URL) !== identity(env.DIRECT_URL)) return 'DATABASE_URL and DIRECT_URL must identify the same isolated cluster.';
+  return null;
+}
+function assertDatabaseUrls(env) {
+  const issue = databaseUrlsIssue(env);
+  if (issue) fail(issue);
 }
 function config() {
   if (!fs.existsSync(files.env)) fail('not initialised; run `node scripts/dev-isolated.cjs init` first.');
   const env = JSON.parse(fs.readFileSync(files.env, 'utf8'));
-  assertDisposable(env.DATABASE_URL); assertDisposable(env.DIRECT_URL);
+  assertDatabaseUrls(env);
   return env;
 }
 /** Proves identity over verified TLS before any use: database name, port, and SSL in use. */
@@ -107,9 +180,16 @@ function init() {
 }
 /** Idempotent `prisma migrate deploy` against the VERIFIED disposable database only (a no-op when nothing is pending). */
 function migrate(env = config()) {
-  assertDisposable(env.DATABASE_URL); assertDisposable(env.DIRECT_URL);
-  const cliUrl = `${env.DATABASE_URL}?sslmode=disable`;
-  npx(['prisma', 'migrate', 'deploy'], { DATABASE_URL: cliUrl, DIRECT_URL: cliUrl });
+  assertDatabaseUrls(env);
+  verifyIdentity(env);
+  const cliUrl = new URL(env.DATABASE_URL);
+  cliUrl.searchParams.set('sslmode', 'disable');
+  npx(['prisma', 'migrate', 'deploy'], { DATABASE_URL: cliUrl.toString(), DIRECT_URL: cliUrl.toString() });
+}
+function runVerifiedMigration(env, dependencies = {}) {
+  (dependencies.startDatabase ?? startDb)();
+  (dependencies.verify ?? verifyIdentity)(env);
+  return (dependencies.apply ?? migrate)(env);
 }
 function provision(env) {
   // Isolated fixture provisioning (NOT a shared migration rollout): the repository schema into this disposable database only.
@@ -132,8 +212,7 @@ function stopDb() { run(bin('pg_ctl'), ['-D', files.data, '-m', 'fast', 'stop'],
 function status() { const env = config(); console.log(`target: ${assertDisposable(env.DATABASE_URL)}\nidentity: ${verifyIdentity(env)}`); }
 /** Email switches from the app's own env files (never printed): only the approved-recipient list and the Brevo key's presence are needed here. */
 function emailSettings() {
-  const read = name => fs.existsSync(path.join(backend, name)) ? dotenv.parse(fs.readFileSync(path.join(backend, name))) : {};
-  const merged = { ...read('.env'), ...read('.env.local'), ...process.env };
+  const merged = applicationEnvironment();
   const allowed = String(merged.COMMERCE_EMAIL_ALLOWED_RECIPIENTS ?? '').split(',').map(item => item.trim().toLowerCase()).filter(Boolean);
   return { allowed, brevo: Boolean(merged.BREVO_API_KEY), origin: merged.COMMERCE_EMAIL_ORIGIN || merged.FRONTEND_URL || 'http://localhost:3000' };
 }
@@ -152,7 +231,21 @@ function emailEnvironment(real, allRecipients) {
     : { COMMERCE_EMAIL_ENQUEUE_ENABLED: 'true', COMMERCE_EMAIL_DISPATCH_ENABLED: 'true', COMMERCE_EMAIL_SEND_MODE: 'capture',
         COMMERCE_EMAIL_ALLOWED_RECIPIENTS: '', COMMERCE_EMAIL_CAPTURE_DIR: files.capture, COMMERCE_EMAIL_ORIGIN: settings.origin };
 }
+function isolatedBackendPort(raw = '5200') {
+  const port = Number(raw);
+  if (!/^\d+$/.test(raw) || port < 1024 || port > 65535 || [3000, 5000, 3200].includes(port)) {
+    throw new Error('use an isolated backend port (default 5200); MAIN DEV and frontend ports are reserved. Nothing was started.');
+  }
+  return String(port);
+}
 function startBackend() {
+  // Check all effective sources before starting PostgreSQL, migrations, API, or workers. Process values
+  // override .env.local, matching the application runtime's configuration precedence.
+  const runtime = applicationEnvironment();
+  const stripeError = testStripeKeyError(runtime);
+  if (stripeError) fail(stripeError);
+  let appPort;
+  try { appPort = isolatedBackendPort(process.env.PORT || '5200'); } catch (error) { fail(error.message); }
   const env = config(); startDb();
   const identity = verifyIdentity(env);
   // The producer runs inside payment finalization, so the commerce email schema must exist before the API starts. Disposable database only.
@@ -160,7 +253,7 @@ function startBackend() {
   migrate(env);
   const real = process.argv.includes('--real-email');
   const allRecipients = process.argv.includes('--all-recipients');
-  const appPort = process.env.PORT || '5000';
+  const stripeTestMode = process.argv.includes('--stripe-test-mode');
   const mail = emailEnvironment(real, allRecipients);
   if (allRecipients) {
     // Pending sendable work the live worker would pick up immediately (same 24h window as the dispatcher). Counts only, never addresses.
@@ -170,10 +263,15 @@ function startBackend() {
     if (pending > 10) fail('more than 10 pending events: refusing general sending so a backlog is never blasted. Review the queue first. Nothing was started.');
   }
   console.log(`dev-isolated: database ${assertDisposable(env.DATABASE_URL)} verified (${identity}); backend on :${appPort}.`);
-  console.log('dev-isolated: Stripe key comes from .env; the SDK accepts TEST keys only, so every checkout here creates Test Mode PaymentIntents.');
-  const childEnv = { ...process.env, ...env, ...mail, PORT: appPort, NODE_ENV: 'development', PAYMENT_CONFIRMATION_SIGNAL: 'true',
-    // Never inherit a shared-target approval; the disposable target needs none.
-    PAYMENT_SHARED_MUTATIONS_APPROVED: '', ELECTROHUB_LOG_DIR: files.logs };
+  console.log(`dev-isolated: Stripe provider ${stripeTestMode ? 'explicit Test Mode opt-in' : 'disabled (use mocks; explicit --stripe-test-mode required for provider operations)'}.`);
+  // Private per-launch diagnostic token binds the browser proxy to this actual backend instance.
+  const diagnosticToken = crypto.randomBytes(32).toString('hex');
+  fs.writeFileSync(path.join(home, 'runtime-token.txt'), diagnosticToken, { mode: 0o600 });
+  const childEnv = childEnvironment(env, mail, { PORT: appPort, FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3200',
+    ELECTROHUB_DEV_DIAGNOSTIC_TOKEN: diagnosticToken,
+    ...isolatedRuntimeSecrets(), STRIPE_SECRET_KEY: stripeTestMode ? runtime.STRIPE_SECRET_KEY : '',
+    STRIPE_WEBHOOK_SECRET: stripeTestMode ? runtime.STRIPE_WEBHOOK_SECRET : '', BREVO_API_KEY: real ? runtime.BREVO_API_KEY : '',
+    NODE_ENV: 'development', PAYMENT_CONFIRMATION_SIGNAL: 'true', ELECTROHUB_LOG_DIR: files.logs }, runtime);
   // The app loads BREVO_API_KEY from its own .env files at startup; this launcher reads the same files, so report that source (never the value).
   const report = emailDev.describeEmailRuntime({ ...childEnv, BREVO_API_KEY: childEnv.BREVO_API_KEY || (emailSettings().brevo ? 'present' : '') });
   console.log(`dev-isolated: commerce email ${allRecipients ? 'REAL Brevo, GENERAL (every eligible account; disposable database only)' : real ? 'REAL Brevo (approved recipients only: ' + report.allowlistSize + ')' : 'CAPTURE (no external email; files in ' + path.relative(backend, files.capture) + ')'}; ` +
@@ -183,7 +281,7 @@ function startBackend() {
   // The email worker runs for as long as the backend does, restarts after crashes (bounded), and is stopped with it. Watched hot-reload of the
   // API does not restart it; restart this command after changing email settings.
   const worker = emailDev.startEmailWorker({ backend, entry: { command: process.execPath, args: ['--import', 'tsx', 'src/commerce-email-runner.ts'] },
-    env: childEnv, log: line => console.log(`dev-isolated: ${line}`) });
+    env: childEnv, lockName: 'commerce-email-worker.isolated', log: line => console.log(`dev-isolated: ${line}`) });
   console.log(worker.started ? 'dev-isolated: commerce email worker started (supervised).' : `dev-isolated: commerce email worker NOT started: ${worker.reason}`);
   const stopAll = () => { void worker.stop(); };
   process.once('SIGINT', stopAll); process.once('SIGTERM', stopAll);
@@ -223,4 +321,9 @@ function restoreRecipient() {
 }
 
 const command = process.argv[2];
-({ init, 'start-db': startDb, 'stop-db': stopDb, status, backend: startBackend, migrate: () => migrate(), captured, 'use-real-recipient': useRealRecipient, 'restore-recipient': restoreRecipient }[command] ?? (() => fail(`unknown command "${command ?? ''}"`)))();
+if (require.main === module) {
+  ({ init, 'start-db': startDb, 'stop-db': stopDb, status, backend: startBackend,
+    migrate: () => runVerifiedMigration(config()), captured,
+    'use-real-recipient': useRealRecipient, 'restore-recipient': restoreRecipient }[command] ?? (() => fail(`unknown command "${command ?? ''}"`)))();
+}
+module.exports = { applicationEnvironment, testStripeKeyError, childEnvironment, disposableUrlIssue, databaseUrlsIssue, runVerifiedMigration, isolatedBackendPort };

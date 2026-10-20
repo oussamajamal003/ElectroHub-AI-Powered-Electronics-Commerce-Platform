@@ -1,0 +1,673 @@
+{
+  "task": "T04.0 / DATABASE read-only discovery",
+  "captured_at_utc": "2026-10-20 10:59 UTC",
+  "repository": {
+    "head": "28d828c1a52b92e4bac17ebb96b827cb1ad8be3b",
+    "branch": "feature/DEV-Environment-Stabilization",
+    "core_autocrlf": "true",
+    "existing_untracked": "docs/tasks/Phase-04/ (pre-existing; preserved)",
+    "changed_files": []
+  },
+  "scope": {
+    "actions": [
+      "read Supabase project metadata",
+      "read-only SQL against catalogs and aggregate state counts",
+      "read local Prisma schema/migration files and generated Prisma DMMF"
+    ],
+    "writes": 0,
+    "customer_rows_read": false,
+    "secrets_read": false,
+    "remote_mutations": false
+  },
+  "environments": [
+    {
+      "label": "DEV",
+      "id": "pzxekjybdiulzmssalfo",
+      "name": "electrohub-dev",
+      "region": "ap-northeast-2",
+      "status": "ACTIVE_HEALTHY",
+      "database_version": "17.6.1.166"
+    },
+    {
+      "label": "PROD",
+      "id": "yepfgjehdstlxbpespun",
+      "name": "electrohub",
+      "region": "ap-northeast-1",
+      "status": "ACTIVE_HEALTHY",
+      "database_version": "17.6.1.166"
+    }
+  ],
+  "migration_ledgers": {
+    "authority": "Prisma public._prisma_migrations",
+    "dev": {
+      "total": 20,
+      "finished_not_rolled_back": 20,
+      "unfinished": 0,
+      "rolled_back": 0,
+      "entries": [
+        {
+          "migration_name": "20240101000000_database_foundation",
+          "checksum": "cb2baf5e79d8127f31fa9873c5e2cfd28b159f7a375d8d4d2856dd8766b5fd17",
+          "finished_at": "2026-09-24 13:19:58.233044+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20240102000000_authentication",
+          "checksum": "0b775e100c320af6becd743f1355ea8600c1b9922efc5a0c0049d7808d9340bf",
+          "finished_at": "2026-09-24 13:19:59.552717+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20240103000000_email_otp_foundation",
+          "checksum": "e1a2b518c6d52b04211d2b078412794d2754b27016432028e87f7450f915b241",
+          "finished_at": "2026-09-24 13:20:00.891685+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20260925000000_security_events",
+          "checksum": "52563f1a2f4317209d1b354a2f60a0d93e1c3963db6f076fd06d2271b735041a",
+          "finished_at": "2026-09-25 13:09:55.017985+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "raw"
+        },
+        {
+          "migration_name": "20260925010000_pending_email_reset_authorization",
+          "checksum": "c72d439e8c2292b6aeb0e029c90be1ed25b1b9eac38e96d7afcea0a2257bdcdf",
+          "finished_at": "2026-09-25 17:24:29.835367+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 4,
+          "local_variant_match": "raw"
+        },
+        {
+          "migration_name": "20260925020000_remove_users_phone",
+          "checksum": "15de2423e054cfc803989515209340260b5786ce9a4b3b3879b05ede5b81334f",
+          "finished_at": "2026-09-26 10:37:39.8617+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "raw"
+        },
+        {
+          "migration_name": "20260926000000_google_oauth",
+          "checksum": "5eb2ce0730ec84d92be1c719ed4570feecfff454e8701097fd757e793cf13cd1",
+          "finished_at": "2026-09-26 18:22:55.839701+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20260927000000_account_deleted_security_event",
+          "checksum": "9da85d0ffb90210db707f85bb7062911d03459ea99136004a7adbed3717a926b",
+          "finished_at": "2026-09-27 09:54:57.691858+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20260928000000_product_foundation",
+          "checksum": "95c21c9dc7b71aa60cdf0161688512d5c4d0a3d6483df5383a481903b6613a12",
+          "finished_at": "2026-09-27 16:28:22.695258+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20260928000000_product_reviews",
+          "checksum": "f6e5bbc6a410f29657c5fafa30f92a92ce6340abe6e5911a91bbb04464c26c2c",
+          "finished_at": "2026-09-29 13:13:40.79476+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20261005000000_inventory_nonnegative",
+          "checksum": "51822830a2019fb583f548b3fd11eb2a6582a9c4b2e5370cc2716faae864fcb6",
+          "finished_at": "2026-10-05 14:19:41.482543+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20261006000000_checkout_core",
+          "checksum": "4b8a8afbdaeee67ba9e6f58accc9f704d03692100e9a714bd04ba966f88893ca",
+          "finished_at": "2026-10-06 10:05:13.892504+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "raw"
+        },
+        {
+          "migration_name": "20261007000000_stripe_orchestration",
+          "checksum": "8efc55f8e823583e439f92dcbea0bd2b3e125c2eefaa9372cee5d2a82753090a",
+          "finished_at": "2026-10-07 09:43:49.54424+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "raw"
+        },
+        {
+          "migration_name": "20261009000000_product_test_fixture_visibility",
+          "checksum": "007b9167866ba92aa4334a3e0490c351f751b27ccf3f0a7fc6ad5d4faec93f92",
+          "finished_at": "2026-10-09 13:14:46.859699+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20261012000000_storefront_product_visibility",
+          "checksum": "21ae532f49ebead2976d5cb3097729f6d47053053c5da0eed747c68509c8cd38",
+          "finished_at": "2026-10-12 09:20:03.847571+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20261012120000_payment_purchase_ownership",
+          "checksum": "0cf4bc6b88a2222b47e691100364b0e961b5bb20b61149dfb759b651ef177ff8",
+          "finished_at": "2026-10-12 16:20:33.963583+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "raw"
+        },
+        {
+          "migration_name": "20261013000000_refresh_token_rotation_lineage",
+          "checksum": "51495598e0e1a7e8d74b2d19f8e596fcae32a0e1afb2e626120fad7c06b2e991",
+          "finished_at": "2026-10-14 16:47:47.319429+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20261015000000_payment_attempt_dismissed_at",
+          "checksum": "e124407f979f8825cc33442a5f7a0758037144cc44aca10874d793b56fea21f3",
+          "finished_at": "2026-10-15 15:08:10.222046+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20261016000000_payment_attempt_confirmation_started",
+          "checksum": "97f32ab98dc286955adba6881d661b49434611c5ec037239d7f084781e933a05",
+          "finished_at": "2026-10-16 22:15:15.656666+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20261018000000_commerce_email_outbox",
+          "checksum": "9cf9ad9caca06fcf025ee5fbedc422ea219b2059093d27794f392224c6f5f19e",
+          "finished_at": "2026-10-18 19:38:03.791411+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        }
+      ]
+    },
+    "prod": {
+      "total": 20,
+      "finished_not_rolled_back": 20,
+      "unfinished": 0,
+      "rolled_back": 0,
+      "entries": [
+        {
+          "migration_name": "20240101000000_database_foundation",
+          "checksum": "5de060a305af86bbc70d683ebe3bea1fe35c1c6454c048cbeed07d22fe347f96",
+          "finished_at": "2026-09-15 19:21:27.541024+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "bom_crlf"
+        },
+        {
+          "migration_name": "20240102000000_authentication",
+          "checksum": "0b775e100c320af6becd743f1355ea8600c1b9922efc5a0c0049d7808d9340bf",
+          "finished_at": "2026-09-22 17:02:25.800299+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20240103000000_email_otp_foundation",
+          "checksum": "ba99562ff2a870230d15990e107b59610f0aabc08678c342bc5509d9e45ad524",
+          "finished_at": "2026-09-26 11:59:27.055307+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 0,
+          "local_variant_match": "raw"
+        },
+        {
+          "migration_name": "20260925000000_security_events",
+          "checksum": "52563f1a2f4317209d1b354a2f60a0d93e1c3963db6f076fd06d2271b735041a",
+          "finished_at": "2026-09-26 12:00:10.760752+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 0,
+          "local_variant_match": "raw"
+        },
+        {
+          "migration_name": "20260925010000_pending_email_reset_authorization",
+          "checksum": "c72d439e8c2292b6aeb0e029c90be1ed25b1b9eac38e96d7afcea0a2257bdcdf",
+          "finished_at": "2026-09-26 12:00:56.07541+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 0,
+          "local_variant_match": "raw"
+        },
+        {
+          "migration_name": "20260925020000_remove_users_phone",
+          "checksum": "15de2423e054cfc803989515209340260b5786ce9a4b3b3879b05ede5b81334f",
+          "finished_at": "2026-09-26 12:01:42.726435+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 0,
+          "local_variant_match": "raw"
+        },
+        {
+          "migration_name": "20260926000000_google_oauth",
+          "checksum": "5eb2ce0730ec84d92be1c719ed4570feecfff454e8701097fd757e793cf13cd1",
+          "finished_at": "2026-09-26 18:58:34.681745+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20260927000000_account_deleted_security_event",
+          "checksum": "9da85d0ffb90210db707f85bb7062911d03459ea99136004a7adbed3717a926b",
+          "finished_at": "2026-09-27 09:52:12.312507+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20260928000000_product_foundation",
+          "checksum": "95c21c9dc7b71aa60cdf0161688512d5c4d0a3d6483df5383a481903b6613a12",
+          "finished_at": "2026-09-27 16:54:58.545752+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20260928000000_product_reviews",
+          "checksum": "f6e5bbc6a410f29657c5fafa30f92a92ce6340abe6e5911a91bbb04464c26c2c",
+          "finished_at": "2026-09-29 14:01:14.68294+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20261005000000_inventory_nonnegative",
+          "checksum": "51822830a2019fb583f548b3fd11eb2a6582a9c4b2e5370cc2716faae864fcb6",
+          "finished_at": "2026-10-05 14:42:59.021959+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20261006000000_checkout_core",
+          "checksum": "4b8a8afbdaeee67ba9e6f58accc9f704d03692100e9a714bd04ba966f88893ca",
+          "finished_at": "2026-10-06 10:41:32.44285+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "raw"
+        },
+        {
+          "migration_name": "20261007000000_stripe_orchestration",
+          "checksum": "8efc55f8e823583e439f92dcbea0bd2b3e125c2eefaa9372cee5d2a82753090a",
+          "finished_at": "2026-10-07 19:43:09.955825+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "raw"
+        },
+        {
+          "migration_name": "20261009000000_product_test_fixture_visibility",
+          "checksum": "007b9167866ba92aa4334a3e0490c351f751b27ccf3f0a7fc6ad5d4faec93f92",
+          "finished_at": "2026-10-10 09:37:16.738531+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20261012000000_storefront_product_visibility",
+          "checksum": "21ae532f49ebead2976d5cb3097729f6d47053053c5da0eed747c68509c8cd38",
+          "finished_at": "2026-10-12 11:02:34.279358+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20261012120000_payment_purchase_ownership",
+          "checksum": "0cf4bc6b88a2222b47e691100364b0e961b5bb20b61149dfb759b651ef177ff8",
+          "finished_at": "2026-10-17 21:26:18.394631+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "raw"
+        },
+        {
+          "migration_name": "20261013000000_refresh_token_rotation_lineage",
+          "checksum": "51495598e0e1a7e8d74b2d19f8e596fcae32a0e1afb2e626120fad7c06b2e991",
+          "finished_at": "2026-10-17 21:26:20.823031+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20261015000000_payment_attempt_dismissed_at",
+          "checksum": "e124407f979f8825cc33442a5f7a0758037144cc44aca10874d793b56fea21f3",
+          "finished_at": "2026-10-17 21:26:23.373068+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20261016000000_payment_attempt_confirmation_started",
+          "checksum": "97f32ab98dc286955adba6881d661b49434611c5ec037239d7f084781e933a05",
+          "finished_at": "2026-10-17 21:26:25.680585+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        },
+        {
+          "migration_name": "20261018000000_commerce_email_outbox",
+          "checksum": "9cf9ad9caca06fcf025ee5fbedc422ea219b2059093d27794f392224c6f5f19e",
+          "finished_at": "2026-10-18 19:44:17.806188+00",
+          "rolled_back_at": null,
+          "applied_steps_count": 1,
+          "local_variant_match": "lf"
+        }
+      ]
+    },
+    "checksum_method": "SHA-256 of working-tree bytes and variants produced by normalizing line endings to LF/CRLF, optionally prefixing UTF-8 BOM. Matches below are historical formatting variants documented in docs/06_Database/MIGRATIONS.md.",
+    "unmatched": [],
+    "supabase_ledger_separate": {
+      "authority": "Supabase schema_migrations list only; never used as Prisma ledger",
+      "dev": {
+        "count": 1,
+        "entries": [
+          {
+            "version": "20260926103554",
+            "name": "20260925020000_remove_users_phone"
+          }
+        ]
+      },
+      "prod": {
+        "count": 4,
+        "entries": [
+          {
+            "version": "20260926103848",
+            "name": "20240103000000_email_otp_foundation"
+          },
+          {
+            "version": "20260926103910",
+            "name": "20260925000000_security_events"
+          },
+          {
+            "version": "20260926103928",
+            "name": "20260925010000_pending_email_reset_authorization"
+          },
+          {
+            "version": "20260926103944",
+            "name": "20260925020000_remove_users_phone"
+          }
+        ]
+      }
+    },
+    "checksum_analysis": {
+      "unmatched_entries": [],
+      "matched_entries_prod": 20,
+      "matched_entries_dev": 20,
+      "documented_exceptions": {
+        "dev_otp": "LF",
+        "dev_foundation": "LF",
+        "prod_foundation": "BOM + CRLF",
+        "prod_otp": "CRLF"
+      },
+      "local_variants_checked": [
+        "raw working-tree bytes",
+        "LF-normalized",
+        "CRLF-normalized",
+        "UTF-8 BOM + LF",
+        "UTF-8 BOM + CRLF"
+      ]
+    }
+  },
+  "schema_comparison": {
+    "source": "apps/backend/prisma/schema.prisma; generated @prisma/client DMMF used to enumerate 30 models/22 enums",
+    "physical_vs_prisma": {
+      "per_environment": {
+        "tables_expected_and_found": 30,
+        "columns_compared": 330,
+        "column_mismatches": 0,
+        "types_nullability_varchar_lengths_numeric_precision_scale": "matched",
+        "public_tables_including_prisma_ledger": 31,
+        "constraints": 91,
+        "unvalidated_constraints": 0,
+        "indexes": 127,
+        "invalid_indexes": 0,
+        "non_internal_triggers": 2
+      },
+      "note": "Column comparison summary captured from successful information_schema-vs-Prisma DMMF comparison; both environments produced zero differences."
+    },
+    "enums": {
+      "expected": 22,
+      "found_dev": 22,
+      "found_prod": 22,
+      "labels": "all sets matched Prisma; physical OrderStatus label ordering differs but membership is identical",
+      "physical_order_exception": "OrderStatus: same six labels; historical PostgreSQL enum sort order differs from Prisma declaration order."
+    },
+    "catalog": {
+      "dev": {
+        "table_count": 31,
+        "constraint_count": 91,
+        "unvalidated_constraints": 0,
+        "index_count": 127,
+        "invalid_indexes": 0,
+        "user_trigger_count": 2,
+        "constraint_digest": "406f9f9d35dc69eab7f18ed81dc91990",
+        "index_digest": "0c1989b4c9f5dc743c4bedc56877aea9",
+        "trigger_digest": "47c31f3e1abc403ce6b7dcd4aea9fa88"
+      },
+      "prod": {
+        "table_count": 31,
+        "constraint_count": 91,
+        "unvalidated_constraints": 0,
+        "index_count": 127,
+        "invalid_indexes": 0,
+        "user_trigger_count": 2,
+        "constraint_digest": "406f9f9d35dc69eab7f18ed81dc91990",
+        "index_digest": "0c1989b4c9f5dc743c4bedc56877aea9",
+        "trigger_digest": "47c31f3e1abc403ce6b7dcd4aea9fa88"
+      },
+      "dev_prod_signatures_match": true
+    },
+    "historical_default_exceptions": [
+      "email_deliveries.id DEFAULT gen_random_uuid()",
+      "otp_challenges.id DEFAULT gen_random_uuid()",
+      "password_reset_tokens.id DEFAULT gen_random_uuid()",
+      "refresh_tokens.id DEFAULT gen_random_uuid()",
+      "security_events.id DEFAULT gen_random_uuid()",
+      "email_deliveries.updatedAt DEFAULT CURRENT_TIMESTAMP",
+      "otp_challenges.updatedAt DEFAULT CURRENT_TIMESTAMP"
+    ],
+    "full_diff_reference": "docs/06_Database/MIGRATIONS.md and docs/tasks/Phase-03/TASK_03.8_IMPLEMENTATION_EVIDENCE.md: prior read-only Prisma diff found only the seven listed historical physical defaults; no other difference. Current live columns and enums were compared again here.",
+    "recommendation": "NO-OP for Task 04.0: no schema change requested, all 20 Prisma migrations already applied.",
+    "historical_defaults_readback": {
+      "prod": [
+        {
+          "table": "email_deliveries",
+          "expression": "gen_random_uuid()",
+          "column": "id"
+        },
+        {
+          "table": "otp_challenges",
+          "expression": "gen_random_uuid()",
+          "column": "id"
+        },
+        {
+          "table": "password_reset_tokens",
+          "expression": "gen_random_uuid()",
+          "column": "id"
+        },
+        {
+          "table": "refresh_tokens",
+          "expression": "gen_random_uuid()",
+          "column": "id"
+        },
+        {
+          "table": "security_events",
+          "expression": "gen_random_uuid()",
+          "column": "id"
+        },
+        {
+          "table": "email_deliveries",
+          "expression": "CURRENT_TIMESTAMP",
+          "column": "updatedAt"
+        },
+        {
+          "table": "otp_challenges",
+          "expression": "CURRENT_TIMESTAMP",
+          "column": "updatedAt"
+        }
+      ],
+      "result": "all seven documented historical defaults confirmed by information_schema in both environments",
+      "dev": [
+        {
+          "table": "email_deliveries",
+          "expression": "gen_random_uuid()",
+          "column": "id"
+        },
+        {
+          "table": "otp_challenges",
+          "expression": "gen_random_uuid()",
+          "column": "id"
+        },
+        {
+          "table": "password_reset_tokens",
+          "expression": "gen_random_uuid()",
+          "column": "id"
+        },
+        {
+          "table": "refresh_tokens",
+          "expression": "gen_random_uuid()",
+          "column": "id"
+        },
+        {
+          "table": "security_events",
+          "expression": "gen_random_uuid()",
+          "column": "id"
+        },
+        {
+          "table": "email_deliveries",
+          "expression": "CURRENT_TIMESTAMP",
+          "column": "updatedAt"
+        },
+        {
+          "table": "otp_challenges",
+          "expression": "CURRENT_TIMESTAMP",
+          "column": "updatedAt"
+        }
+      ]
+    }
+  },
+  "runtime_safety": {
+    "dev_aggregate_payment_attempts": {
+      "DECLINED": 19,
+      "PAID": 44,
+      "CANCELED": 60,
+      "INCIDENT": 1
+    },
+    "dev_payment_work": {
+      "DONE": 124
+    },
+    "dev_commerce_email_outbox": {
+      "ACCEPTED": 4
+    },
+    "prod_payment_attempts_and_outbox": "empty by aggregate state query",
+    "gate": "Do not start a payment supervisor until the single DEV INCIDENT is classified by owner.",
+    "capacity": {
+      "postgres_max_connections": 60,
+      "superuser_reserved_connections": 3,
+      "visible_management_sessions": 6,
+      "visible_active": 1,
+      "visible_lock_waits": 0,
+      "approx_database_bytes": {
+        "DEV": 17566867,
+        "PROD": 12627091
+      },
+      "backend_configured_nonproduction_pool_max": 5,
+      "global_or_Supavisor_headroom": "NOT VERIFIED; management role visibility is not authoritative for total app usage."
+    }
+  },
+  "security": {
+    "public_tables": 31,
+    "rls_disabled": 23,
+    "rls_enabled_no_policy": 8,
+    "anon_authenticated_table_privileges": "zero SELECT/INSERT/UPDATE/DELETE observed on every public table in both projects",
+    "advisor_findings": {
+      "dev": [
+        {
+          "name": "rls_enabled_no_policy",
+          "title": "RLS Enabled No Policy",
+          "level": "INFO",
+          "count": 8,
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+          "findings": [
+            "Table \\`public.commerce_email_attempts\\` has RLS enabled, but no policies exist",
+            "Table \\`public.commerce_email_outbox\\` has RLS enabled, but no policies exist",
+            "Table \\`public.oauth_accounts\\` has RLS enabled, but no policies exist",
+            "Table \\`public.payment_attempt_items\\` has RLS enabled, but no policies exist",
+            "Table \\`public.payment_attempts\\` has RLS enabled, but no policies exist",
+            "Table \\`public.payment_work\\` has RLS enabled, but no policies exist",
+            "Table \\`public.security_events\\` has RLS enabled, but no policies exist",
+            "Table \\`public.stripe_events\\` has RLS enabled, but no policies exist"
+          ]
+        },
+        {
+          "name": "function_search_path_mutable",
+          "title": "Function Search Path Mutable",
+          "level": "WARN",
+          "count": 2,
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable",
+          "findings": [
+            "Function \\`public.commerce_email_outbox_guard\\` has a role mutable search_path",
+            "Function \\`public.commerce_email_attempts_guard\\` has a role mutable search_path"
+          ]
+        }
+      ],
+      "prod": [
+        {
+          "name": "rls_enabled_no_policy",
+          "title": "RLS Enabled No Policy",
+          "level": "INFO",
+          "count": 8,
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+          "findings": [
+            "Table \\`public.commerce_email_attempts\\` has RLS enabled, but no policies exist",
+            "Table \\`public.commerce_email_outbox\\` has RLS enabled, but no policies exist",
+            "Table \\`public.oauth_accounts\\` has RLS enabled, but no policies exist",
+            "Table \\`public.payment_attempt_items\\` has RLS enabled, but no policies exist",
+            "Table \\`public.payment_attempts\\` has RLS enabled, but no policies exist",
+            "Table \\`public.payment_work\\` has RLS enabled, but no policies exist",
+            "Table \\`public.security_events\\` has RLS enabled, but no policies exist",
+            "Table \\`public.stripe_events\\` has RLS enabled, but no policies exist"
+          ]
+        },
+        {
+          "name": "function_search_path_mutable",
+          "title": "Function Search Path Mutable",
+          "level": "WARN",
+          "count": 2,
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable",
+          "findings": [
+            "Function \\`public.commerce_email_outbox_guard\\` has a role mutable search_path",
+            "Function \\`public.commerce_email_attempts_guard\\` has a role mutable search_path"
+          ]
+        }
+      ]
+    },
+    "caveat": "RLS advisory requires Data API exposure settings and role grants context; direct table ACL checks did not establish anon/authenticated access."
+  },
+  "limitations": [
+    "MCP management read-only role is not the application's direct/session pooler connection, so application TLS, host selection, and runtime pool use were not verified.",
+    "No customer rows or secrets were queried."
+  ],
+  "migration_action": "No migration, baseline, resolve, schema push, or data mutation performed."
+}
