@@ -103,7 +103,7 @@ it('reports a reachable AI service with the request id and service credential on
   expect(res.status).toBe(200);
   expect(res.body.data).toEqual({
     configured: true, reachable: true, environment: 'test', status: 'ready', modelReady: false,
-    features: ready.data.features, checkedAt: expect.any(String),
+    features: ready.data.features, metrics: expect.any(Object), checkedAt: expect.any(String),
   });
   expectNoLeak(res.body);
   expect(seen).toHaveLength(1);
@@ -117,7 +117,7 @@ it('reports a rejected credential as unreachable with only the category and code
   configure({ AI_SERVICE_URL: origin, AI_SERVICE_API_KEY: 'Wr0ngKeyWr0ngKeyWr0ngKeyWr0ngKey99', AI_SERVICE_ENVIRONMENT: 'test' });
   const res = await request(app).get('/api/admin/ai/status').set('Authorization', 'admin');
   expect(res.status).toBe(200);
-  expect(res.body.data).toEqual({ configured: true, reachable: false, environment: 'test', error: { category: 'unauthorized', code: 'AI_UNAUTHORIZED' }, checkedAt: expect.any(String) });
+  expect(res.body.data).toEqual({ configured: true, reachable: false, environment: 'test', error: { category: 'unauthorized', code: 'AI_UNAUTHORIZED' }, metrics: expect.any(Object), checkedAt: expect.any(String) });
   expect(JSON.stringify(res.body)).not.toContain('Wr0ngKey');
 });
 
@@ -130,7 +130,9 @@ it('reports an unreachable AI service as 200 reachable:false without leaking the
 
   const res = await request(app).get('/api/admin/ai/status').set('Authorization', 'admin');
   expect(res.status).toBe(200);
-  expect(res.body.data).toEqual({ configured: true, reachable: false, environment: 'test', error: { category: 'connect' }, checkedAt: expect.any(String) });
+  expect(res.body.data).toEqual({ configured: true, reachable: false, environment: 'test', error: { category: 'connect' }, metrics: expect.any(Object), checkedAt: expect.any(String) });
+  expect(res.body.data.metrics["ai.get /internal/v1/ready"].failuresByCategory.connect).toBeGreaterThanOrEqual(1);
+  expect(JSON.stringify(res.body.data.metrics)).not.toMatch(/127.0.0.1|http/);
   expectNoLeak(res.body);
   expect(JSON.stringify(res.body)).not.toContain(`:${deadOrigin.split(':').pop()}`);
 });

@@ -213,12 +213,59 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-      - name: Install dependencies
+          cache-dependency-path: apps/ai-service/requirements*.txt
+      - name: Install dependencies (pinned runtime + test + quality tooling)
         working-directory: apps/ai-service
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          pip check
+      - name: Lint (ruff)
+        working-directory: apps/ai-service
+        run: python -m ruff check .
+      - name: Format check (ruff)
+        working-directory: apps/ai-service
+        run: python -m ruff format --check .
+      - name: Typecheck (mypy strict)
+        working-directory: apps/ai-service
+        run: python -m mypy app tests
       - name: Test
         working-directory: apps/ai-service
         run: python -m pytest
+      - name: Dependency audit
+        working-directory: apps/ai-service
+        run: python -m pip_audit -r requirements-dev.txt
+
+  ai-docker:
+    name: AI Service / Docker
+    runs-on: ubuntu-latest
+    # Builds the runtime image and smoke-tests it on loopback with a throwaway key. No registry push, no secrets.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t electrohub-ai:ci apps/ai-service
+      - name: Container smoke
+        run: |
+          set -euo pipefail
+          KEY="$(openssl rand -hex 32)"
+          echo "::add-mask::$KEY"
+          if docker run --rm -e AI_ENVIRONMENT=production electrohub-ai:ci; then
+            echo "production start without a service key must fail"; exit 1
+          fi
+          docker run -d --name eh-ai -p 127.0.0.1:18000:8000 -e AI_ENVIRONMENT=production -e AI_SERVICE_API_KEY="$KEY" electrohub-ai:ci
+          for _ in $(seq 1 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' eh-ai)" = healthy ] && break; sleep 2
+          done
+          test "$(docker inspect -f '{{.State.Health.Status}}' eh-ai)" = healthy
+          test "$(docker exec eh-ai id -u)" != 0
+          code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+          B=http://127.0.0.1:18000
+          test "$(code $B/health)" = 200
+          test "$(code $B/internal/v1/ready)" = 401
+          test "$(code -H "X-ElectroHub-AI-Key: $KEY" -H 'X-ElectroHub-AI-Environment: development' $B/internal/v1/ready)" = 403
+          curl -sf -H "X-ElectroHub-AI-Key: $KEY" -H 'X-ElectroHub-AI-Environment: production' $B/internal/v1/ready | grep -q '"modelReady":false'
+          test "$(code $B/docs)" = 404
+          docker stop -t 15 eh-ai
+          test "$(docker inspect -f '{{.State.ExitCode}}' eh-ai)" = 0
+          ! docker logs eh-ai 2>&1 | grep -qF -- "$KEY"
 

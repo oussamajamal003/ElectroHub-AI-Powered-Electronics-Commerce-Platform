@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { AiServiceError, getAiServiceRuntime } from '../integrations/ai/ai.client.js';
+import { getAiServiceMetrics } from '../integrations/ai/ai.telemetry.js';
 
 const router = Router();
 
@@ -34,6 +35,7 @@ const router = Router();
  *                     status: { type: string, enum: [ready] }
  *                     modelReady: { type: boolean }
  *                     features: { type: object }
+ *                     metrics: { type: object, description: Per-operation AI upstream counters since process start }
  *                     error:
  *                       type: object
  *                       properties:
@@ -74,6 +76,7 @@ router.get('/admin/ai/status', requireAuth, requireRole('ADMIN'), async (req, re
         status: readiness.status,
         modelReady: readiness.modelReady,
         features: readiness.features,
+        metrics: getAiServiceMetrics(),
         checkedAt: new Date().toISOString(),
       },
     });
@@ -87,6 +90,7 @@ router.get('/admin/ai/status', requireAuth, requireRole('ADMIN'), async (req, re
         reachable: false,
         environment: client.environment,
         error: code ? { category, code } : { category },
+        metrics: getAiServiceMetrics(),
         checkedAt: new Date().toISOString(),
       },
     });

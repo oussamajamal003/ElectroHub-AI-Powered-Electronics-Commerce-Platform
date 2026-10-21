@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import { parseRetryAfter } from '../brevo/brevo.client.js';
+import { recordAiRequest } from './ai.telemetry.js';
 import { AiServiceConfig, AiServiceEnabledConfig, resolveAiServiceConfig } from './ai.config.js';
 import {
   AI_ERROR_CODE_PATTERN,
@@ -128,18 +129,24 @@ export class AiServiceClient {
     body?: unknown
   ): Promise<z.output<S>> {
     const startedAt = Date.now();
+    const base = {
+      operation: `ai.${method.toLowerCase()} ${path}`,
+      environment: this.config.environment,
+      requestId: opts.requestId,
+    };
     try {
-      return await this.send(method, path, schema, opts, body);
+      const result = await this.send(method, path, schema, opts, body);
+      recordAiRequest({ ...base, outcome: 'success', statusCode: 200, durationMs: Date.now() - startedAt });
+      return result;
     } catch (err: unknown) {
-      // Sanitized telemetry only: operation, outcome class and timing; never URL, key, headers or bodies.
-      const error = err as AiServiceError;
-      logger.warn('AI_SERVICE_REQUEST_FAILED', {
-        operation: `ai.${method.toLowerCase()} ${path}`,
+      const error = err instanceof AiServiceError ? err : new AiServiceError('network');
+      recordAiRequest({
+        ...base,
+        outcome: 'failure',
         category: error.category,
         statusCode: error.statusCode,
         code: error.code,
         durationMs: Date.now() - startedAt,
-        requestId: opts.requestId && REQUEST_ID_PATTERN.test(opts.requestId) ? opts.requestId : undefined,
       });
       throw err;
     }
