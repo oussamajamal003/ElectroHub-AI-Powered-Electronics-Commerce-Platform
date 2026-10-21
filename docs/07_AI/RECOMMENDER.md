@@ -22,7 +22,7 @@ Popular Products
 Similar Products
 ```
 
-Recommendations may be generated through simplified rules, behavioral data, or the FastAPI AI service.
+The required ML recommendation path uses the FastAPI service and reuses learned product embeddings from the fine-tuned EfficientNet-B0 encoder. Rules and popularity support ranking or explicit fallbacks.
 
 ---
 
@@ -39,7 +39,7 @@ Behavioral Data
  ↓
 Recommendation Logic
  ↓
-FastAPI where required
+FastAPI shared embedding retrieval / ranking
  ↓
 Product Candidates
  ↓
@@ -119,17 +119,9 @@ This provides a reliable fallback when personalized behavior is unavailable.
 
 # 7. Similar Products
 
-Similar-product recommendations may use:
+Use the current product's learned embedding to retrieve related catalog vectors with pgvector. Image search and the recommender share the same versioned product embeddings and catalog refresh lifecycle rather than training duplicate encoders.
 
-```text
-Category
-Product Attributes
-Price Range
-Tags
-Image Similarity
-```
-
-The image-search system and recommender may share product metadata where appropriate, but they remain separate features.
+Product category, attributes, price preferences, and permitted behavior may refine ranking. Visual similarity alone does not establish accessory compatibility; complementary suggestions need catalog compatibility rules or credible co-purchase evidence. Exclude the source product and duplicate product references.
 
 ---
 
@@ -155,21 +147,11 @@ This can be implemented through database aggregation without requiring a machine
 
 ---
 
-# 9. Purchase-History Recommendations
+# 9. Purchase-History and Behavior Profiles
 
-For authenticated users:
+The backend selects authorized interaction history for the current user. FastAPI can combine the corresponding compatible product embeddings into a preference profile and use it for pgvector retrieval and ranking.
 
-```text
-User Purchases
- ↓
-Purchased Categories / Products
- ↓
-Related Active Products
- ↓
-Recommendation Ranking
-```
-
-Users without sufficient history should receive a fallback recommendation mode.
+This is content-based ML personalization using learned item features, not a claim that a separate collaborative-filtering or deep recommender model has been trained. Profile weights, history windows, event quality, and evaluation are defined in task 04.4. Sparse histories use contextual embedding recommendations where possible, then explicit popularity/category fallbacks.
 
 ---
 
@@ -212,49 +194,23 @@ Behavioral data must remain separate from sensitive authentication data.
 
 # 12. Recommendation Scoring
 
-A recommendation may receive a score.
+Learned embedding similarity is the core ML signal for similar-product and profile-based recommendations. Metadata, behavior, popularity, and compatibility constraints may supplement it. Define and version the actual ranking strategy in task 04.4.
 
-Conceptually:
-
-```text
-Recommendation Score
-=
-Behavior Relevance
-+
-Category Relevance
-+
-Purchase Relevance
-+
-Popularity
-```
-
-The final scoring formula depends on the selected implementation.
-
-The project may use deterministic rules instead of a trained ML model.
+Scores are ranking measures, not calibrated purchase probabilities. Return enough result metadata to distinguish embedding-based results, co-purchase results, curated placements, and fallback results. Do not claim that all recommendation modes use trained ML.
 
 ---
 
-# 13. Simulated AI
+# 13. Real ML Requirement and Quality Limits
 
-A real machine-learning recommender is not required for the portfolio implementation.
+A real ML-oriented recommendation path is required, reusing the learned embeddings produced in task 04.2. A category/popularity-only or simulated system does not fulfill task 04.4.
 
-A rule-based system is acceptable.
-
-Example:
-
-```text
-If User Viewed Gaming Laptop
- ↓
-Recommend Gaming Accessories
-```
-
-The implementation should clearly document that this is rule-based/simulated behavior rather than claim production ML capabilities.
+Frequently Bought Together may use database co-purchase aggregation, and featured placements may remain curated. Popularity/category rules remain useful fallbacks. Evaluate recommendation relevance and coverage against an appropriate baseline using available data, and document sparse-history and visual-similarity limitations without claiming production-grade accuracy or business uplift.
 
 ---
 
 # 14. FastAPI Integration
 
-FastAPI may be used when recommendation processing requires a separate AI service.
+FastAPI provides the embedding-based recommendation computation. Its restricted vector repository retrieves candidates; the backend supplies authorized minimal context and validates the resulting references.
 
 Conceptually:
 
@@ -378,7 +334,7 @@ User Views Gaming Accessories
 Updated Recommendations
 ```
 
-This demonstrates dynamic recommendation behavior without requiring a complex ML training pipeline.
+Dynamic profiles reuse the trained image encoder and existing catalog embeddings; they do not require retraining that encoder for each user interaction.
 
 ---
 
@@ -491,7 +447,7 @@ Category Recommendations
 Frequently Bought Together
 ```
 
-Personalized recommendations must consider user-specific cache isolation.
+Cache keys and invalidation must account for model/embedding version, catalog changes, and relevant interaction changes. Personalized recommendations must consider user-specific cache isolation.
 
 Never return one user's personalized recommendations to another user.
 
@@ -606,7 +562,9 @@ The recommender is complete when:
 - Anonymous-user fallback works.
 - Personalized behavior works where required.
 - Recommendation results are backend-validated.
-- FastAPI integration works where required.
+- FastAPI embedding-based recommendations and pgvector retrieval work.
+- Shared embedding compatibility and catalog refresh are verified.
+- Relevance, coverage, baseline comparisons, and limitations are documented.
 - Rule-based fallback works.
 - Recommendation analytics work.
 - Cache behavior is safe.
@@ -622,3 +580,47 @@ The recommender is complete when:
 # 35. AI Recommendation Principle
 
 > **The recommender enhances product discovery through explainable and replaceable recommendation strategies while keeping product truth, authorization, and commerce logic inside the main backend.**
+
+
+---
+
+## Phase 04 Decision Baseline
+
+This Phase 00 document records the approved direction, not evidence that Phase 04 is implemented or validated. Task files will define detailed contracts, data preparation, model settings, database migrations, evaluation criteria, and operational procedures.
+
+- **04.1:** establish the FastAPI service architecture, internal API contracts, configuration, validation, security, readiness, and backend integration.
+- **04.2:** implement real image search using a pretrained EfficientNet-B0 CNN fine-tuned in PyTorch, learned image embeddings, and PostgreSQL pgvector retrieval. Kaggle Free GPU setup and training belong to this later task; no training environment is being provisioned by this document.
+- **04.4:** implement ML-oriented content-based recommendations by reusing those learned product embeddings, with behavior-based profiles where sufficient data exists. Rules and popularity remain supporting signals or explicit fallbacks.
+- **Local development:** use the HP Core i7 laptop with 16 GB RAM and Intel UHD graphics for application development, preprocessing, tests, and CPU inference checks. Do not assume its reported shared graphics memory provides a CUDA training GPU.
+- **Training boundary:** Kaggle is an offline training environment, not an application host, production dependency, database gateway, or customer-image processor. Free GPU availability is not guaranteed; save and export checkpoints and record reproducible training metadata.
+- **Quality boundary:** demonstrate measured performance on representative held-out data. Neither pretrained weights nor fine-tuning guarantee accurate SKU identification or production-grade recommendations.
+
+## Shared Embedding Lifecycle and Data Boundary
+
+```text
+Approved, licensed training data
+  → Offline Kaggle training / validation
+  → Reviewed, versioned EfficientNet-B0 checkpoint + preprocessing metadata
+  → FastAPI inference runtime
+
+Approved catalog images
+  → Controlled embedding ingestion
+  → Same encoder + inference preprocessing
+  → Product references + versioned embeddings in PostgreSQL pgvector
+
+Customer query image
+  → Backend validation → FastAPI validation / preprocessing / encoder
+  → Query embedding → pgvector nearest neighbors
+  → Product references + ranking scores
+  → Backend authorization / current catalog lookup → Customer results
+```
+
+The trained encoder supplies feature embeddings rather than treating classification labels as product matches. The training objective and extraction layer must be selected and evaluated in task 04.2; classification accuracy alone does not prove retrieval quality. Training augmentation is separate from deterministic inference preprocessing shared by catalog and query images.
+
+Track the encoder/checkpoint version, preprocessing version, vector dimension, normalization, similarity metric, and catalog image revision with derived embeddings. Never compare incompatible vector spaces. A changed encoder or preprocessing pipeline requires a controlled catalog re-embedding and coherent activation, with a rollback path. New, changed, and removed catalog images must trigger corresponding embedding refresh or removal; the backend still filters stale references.
+
+The backend owns schema migrations and commerce writes. FastAPI may use a dedicated least-privilege repository to read only the derived vector/product-reference data needed for retrieval. A separately authorized ingestion job writes derived embeddings; online inference does not receive general catalog-write privileges. Keep vector data private and unexposed to browser clients; if any tables are exposed through a Data API, enforce explicit grants and appropriate row-level policies. Vector SQL, extension setup, and index choices belong in reviewed migrations/repository code rather than scattered queries. Prisma remains the backend commerce ORM; pgvector-specific access may require an isolated, parameterized SQL adapter.
+
+Use approved catalog sources for ingestion rather than accepting arbitrary remote URLs. Restrict remote fetching to trusted media locations and reject private-network or unsafe destinations. Decode uploaded bytes against an image allowlist with byte, dimension, and decoded-pixel limits; do not trust filenames or MIME headers. Bound inference concurrency, result counts, timeouts, and ingestion work. Use temporary image data only as needed and clean it up on success and failure.
+
+Load only trusted model artifacts, verify their identity/integrity, and avoid executing untrusted checkpoint serialization. Keep secrets server-side, use service authentication and private networking where available, and encrypt cross-host service/database traffic. Never place database credentials, commerce records, authentication tokens, or customer search images in Kaggle notebooks/datasets. Training uses approved, minimized data only; verify dataset licensing and notebook/dataset visibility before upload.

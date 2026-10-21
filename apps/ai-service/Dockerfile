@@ -1,16 +1,29 @@
-FROM python:3.11.4-slim
+# CPU-only image for the ElectroHub AI service (no CUDA requirement).
+FROM python:3.11.13-slim
 
-WORKDIR /app
+# Inside the container the service listens on the container interface; with a non-loopback
+# bind the settings refuse to start unless AI_SERVICE_API_KEY is provided at run time.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    AI_BIND_HOST=0.0.0.0 \
+    AI_PORT=8000
 
-# Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+WORKDIR /srv/ai-service
 
-# Copy application code
-COPY . .
+COPY requirements-runtime.txt .
+# --no-deps: requirements-runtime.txt pins the complete transitive set; then verify it is consistent.
+RUN pip install --no-deps -r requirements-runtime.txt && pip check
 
-# Expose port
+RUN groupadd --system app && useradd --system --gid app --no-create-home --shell /usr/sbin/nologin app
+COPY --chown=root:root app ./app
+
+USER app
 EXPOSE 8000
 
-# Run FastAPI with uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen(f\"http://127.0.0.1:{os.environ.get('AI_PORT', '8000')}/health\", timeout=2)"]
+
+STOPSIGNAL SIGTERM
+CMD ["python", "-m", "app"]

@@ -48,6 +48,16 @@ test('isolated child clears inherited and dotenv-loaded payment approvals and su
   assert.equal(built.COMMERCE_EMAIL_SEND_MODE, 'capture');
 });
 
+test('isolated backend never inherits the MAIN DEV AI service target or credential', () => {
+  const source = { AI_SERVICE_URL: 'http://127.0.0.1:8000', AI_SERVICE_API_KEY: 'dev-ai-key', AI_SERVICE_ENVIRONMENT: 'development',
+    AI_SERVICE_TIMEOUT_MS: '9000' };
+  const built = childEnvironment(env, {}, { AI_SERVICE_URL: 'http://127.0.0.1:8000' }, source);
+  assert.deepEqual([built.AI_SERVICE_URL, built.AI_SERVICE_API_KEY, built.AI_SERVICE_ENVIRONMENT, built.AI_SERVICE_TIMEOUT_MS],
+    ['', '', 'qa', '']);
+  const qa = childEnvironment(env, {}, {}, { ...source, ISOLATED_AI_SERVICE_URL: 'http://127.0.0.1:8200', ISOLATED_AI_SERVICE_API_KEY: 'qa-ai-key' });
+  assert.deepEqual([qa.AI_SERVICE_URL, qa.AI_SERVICE_API_KEY, qa.AI_SERVICE_ENVIRONMENT], ['http://127.0.0.1:8200', 'qa-ai-key', 'qa']);
+});
+
 test('database target must be this exact loopback PostgreSQL cluster and credential', () => {
   assert.equal(disposableUrlIssue(dbUrl, pass), null);
   for (const candidate of [

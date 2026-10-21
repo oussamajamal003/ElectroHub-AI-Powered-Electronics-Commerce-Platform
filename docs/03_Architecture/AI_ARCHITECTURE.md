@@ -13,13 +13,16 @@ It supports:
 - Product recommendations.
 - Future AI/ML capabilities.
 
-Simulated or rule-based logic may be used for academic/demo purposes when explicitly documented.
+Phase 04 requires real pretrained EfficientNet-B0 fine-tuning in PyTorch, learned embeddings, pgvector retrieval, and embedding-based recommendations. Rules remain supporting signals or explicitly identified fallbacks.
 
 ## 2. Technology Stack
 
 ```text
 Python
-FastAPI
+FastAPI / Pydantic / Uvicorn
+PyTorch / torchvision / EfficientNet-B0
+Image decoding / preprocessing
+Restricted PostgreSQL pgvector repository
 ```
 
 The service is maintained inside the monorepo and communicates with the Node.js backend through defined HTTP APIs.
@@ -39,8 +42,8 @@ Model Execution
 It does not own:
 
 ```text
-Authentication
-Authorization
+Customer Authentication
+Customer Authorization
 Orders
 Payments
 Inventory
@@ -174,7 +177,7 @@ Similarity Calculation
 Ranking
 ```
 
-The exact implementation depends on the selected AI approach.
+Use the approved fine-tuned EfficientNet-B0 encoder and the same deterministic inference preprocessing for query and catalog embeddings. Retrieve nearest neighbors through pgvector; record and enforce embedding compatibility.
 
 ## 11. Product Matching
 
@@ -206,7 +209,7 @@ Product Clicks
 Purchases
 ```
 
-The architecture supports progressively more sophisticated recommendation logic.
+Recommendations reuse the learned product embeddings for content-based retrieval and behavior-derived profiles. Popularity, categories, metadata, and co-purchase evidence remain supplemental strategies or explicit fallback modes.
 
 ## 13. Recommendation Flow
 
@@ -217,7 +220,7 @@ Backend
  ↓
 Recommendation Service
  ↓
-FastAPI AI Service where applicable
+FastAPI Shared Embedding Recommender
  ↓
 Ranked Product References
  ↓
@@ -248,37 +251,21 @@ Recommendations based on previous purchases.
 
 Recommendations based on browsing and interaction signals.
 
-## 15. Simulated AI
+## 15. Offline Training and Online Inference
 
-For portfolio/academic demonstration, AI behavior may be simulated using:
+Task 04.1 establishes FastAPI architecture and safe internal contracts. Task 04.2 later sets up Kaggle Free GPU training, fine-tunes pretrained EfficientNet-B0 in PyTorch, evaluates retrieval, and exports a versioned inference artifact. Local development and CPU inference checks use the HP Core i7 / 16 GB RAM / Intel UHD laptop.
 
-```text
-Category Similarity
-Keyword Similarity
-Product Metadata Matching
-Weighted Scoring
-Deterministic Ranking
-```
+The online service loads the approved artifact and generates embeddings without training on customer requests. Kaggle does not host the application or receive customer uploads or application/database credentials. Free GPU availability and notebook persistence must not be runtime dependencies.
 
-When simulated:
+---
 
-- Documentation must state that it is simulated.
-- The UI must not falsely claim a trained ML model produced the result.
-- The interface should remain replaceable with a real model later.
+## 16. Shared Embeddings and Evaluation
 
-## 16. Real ML Extension
+Catalog embedding generation and pgvector persistence are required Phase 04 capabilities, not a future optional extension. Task 04.4 reuses these vectors for similar-product and behavior-profile recommendations without requiring a second deep model.
 
-Future implementations may use:
+Track checkpoint, preprocessing, vector dimension, normalization, distance metric, and catalog image revisions. Refresh changed products and coordinate full re-embedding when the vector space changes. Measure held-out retrieval and recommendation quality separately from classification/API correctness, compare with an appropriate baseline, and record limitations. Similarity scores are ranking metrics rather than guaranteed probabilities.
 
-```text
-Embedding Models
-Vector Similarity
-Computer Vision Models
-Recommendation Models
-Machine Learning Pipelines
-```
-
-The backend-facing contract should remain stable where practical.
+---
 
 ## 17. Product Data Ownership
 
@@ -422,8 +409,52 @@ The AI service may later move to separate infrastructure if required.
 
 ## 26. Completion Criteria
 
-The AI architecture is complete when FastAPI boundaries, backend communication, image search, recommendations, product-data ownership, security, error handling, performance, simulated-vs-real behavior, testing, Docker, and deployment are documented.
+The AI architecture is complete when FastAPI boundaries, backend communication, image search, recommendations, product-data ownership, security, error handling, performance, training/inference separation, shared embedding lifecycle, evaluation, explicit fallbacks, testing, Docker, and deployment are documented. Implementation completion additionally requires verified fine-tuning and real retrieval/recommendation evidence.
 
 ## 27. AI Principle
 
 > **Keep AI processing isolated, keep commerce data authoritative in the backend/database, and design the AI interface so implementation can evolve without destabilizing the core platform.**
+
+
+---
+
+## Phase 04 Decision Baseline
+
+This Phase 00 document records the approved direction, not evidence that Phase 04 is implemented or validated. Task files will define detailed contracts, data preparation, model settings, database migrations, evaluation criteria, and operational procedures.
+
+- **04.1:** establish the FastAPI service architecture, internal API contracts, configuration, validation, security, readiness, and backend integration.
+- **04.2:** implement real image search using a pretrained EfficientNet-B0 CNN fine-tuned in PyTorch, learned image embeddings, and PostgreSQL pgvector retrieval. Kaggle Free GPU setup and training belong to this later task; no training environment is being provisioned by this document.
+- **04.4:** implement ML-oriented content-based recommendations by reusing those learned product embeddings, with behavior-based profiles where sufficient data exists. Rules and popularity remain supporting signals or explicit fallbacks.
+- **Local development:** use the HP Core i7 laptop with 16 GB RAM and Intel UHD graphics for application development, preprocessing, tests, and CPU inference checks. Do not assume its reported shared graphics memory provides a CUDA training GPU.
+- **Training boundary:** Kaggle is an offline training environment, not an application host, production dependency, database gateway, or customer-image processor. Free GPU availability is not guaranteed; save and export checkpoints and record reproducible training metadata.
+- **Quality boundary:** demonstrate measured performance on representative held-out data. Neither pretrained weights nor fine-tuning guarantee accurate SKU identification or production-grade recommendations.
+
+## Shared Embedding Lifecycle and Data Boundary
+
+```text
+Approved, licensed training data
+  → Offline Kaggle training / validation
+  → Reviewed, versioned EfficientNet-B0 checkpoint + preprocessing metadata
+  → FastAPI inference runtime
+
+Approved catalog images
+  → Controlled embedding ingestion
+  → Same encoder + inference preprocessing
+  → Product references + versioned embeddings in PostgreSQL pgvector
+
+Customer query image
+  → Backend validation → FastAPI validation / preprocessing / encoder
+  → Query embedding → pgvector nearest neighbors
+  → Product references + ranking scores
+  → Backend authorization / current catalog lookup → Customer results
+```
+
+The trained encoder supplies feature embeddings rather than treating classification labels as product matches. The training objective and extraction layer must be selected and evaluated in task 04.2; classification accuracy alone does not prove retrieval quality. Training augmentation is separate from deterministic inference preprocessing shared by catalog and query images.
+
+Track the encoder/checkpoint version, preprocessing version, vector dimension, normalization, similarity metric, and catalog image revision with derived embeddings. Never compare incompatible vector spaces. A changed encoder or preprocessing pipeline requires a controlled catalog re-embedding and coherent activation, with a rollback path. New, changed, and removed catalog images must trigger corresponding embedding refresh or removal; the backend still filters stale references.
+
+The backend owns schema migrations and commerce writes. FastAPI may use a dedicated least-privilege repository to read only the derived vector/product-reference data needed for retrieval. A separately authorized ingestion job writes derived embeddings; online inference does not receive general catalog-write privileges. Keep vector data private and unexposed to browser clients; if any tables are exposed through a Data API, enforce explicit grants and appropriate row-level policies. Vector SQL, extension setup, and index choices belong in reviewed migrations/repository code rather than scattered queries. Prisma remains the backend commerce ORM; pgvector-specific access may require an isolated, parameterized SQL adapter.
+
+Use approved catalog sources for ingestion rather than accepting arbitrary remote URLs. Restrict remote fetching to trusted media locations and reject private-network or unsafe destinations. Decode uploaded bytes against an image allowlist with byte, dimension, and decoded-pixel limits; do not trust filenames or MIME headers. Bound inference concurrency, result counts, timeouts, and ingestion work. Use temporary image data only as needed and clean it up on success and failure.
+
+Load only trusted model artifacts, verify their identity/integrity, and avoid executing untrusted checkpoint serialization. Keep secrets server-side, use service authentication and private networking where available, and encrypt cross-host service/database traffic. Never place database credentials, commerce records, authentication tokens, or customer search images in Kaggle notebooks/datasets. Training uses approved, minimized data only; verify dataset licensing and notebook/dataset visibility before upload.

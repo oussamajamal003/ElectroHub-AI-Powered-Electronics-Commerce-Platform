@@ -46,7 +46,11 @@ The project intentionally avoids unnecessary framework and UI-library complexity
 | ORM | Prisma |
 | Database | PostgreSQL |
 | Database Hosting | Supabase |
-| AI Service | FastAPI (Python 3.11.4) |
+| AI Service | FastAPI (Python 3.11.4; dependency compatibility verified in task 04.1) |
+| Deep Learning | PyTorch + torchvision; pretrained EfficientNet-B0 fine-tuning |
+| Similarity Storage | PostgreSQL pgvector; versioned learned embeddings |
+| Offline Training | Kaggle Free GPU, set up later in task 04.2 |
+| Local AI Development | HP Core i7, 16 GB RAM, Intel UHD; CPU inference checks |
 | Authentication | JWT |
 | Real-Time Communication | Socket.IO |
 | Maps | Leaflet |
@@ -419,7 +423,7 @@ It provides:
 - Relationship handling
 - Developer tooling
 
-The backend should access PostgreSQL through Prisma rather than embedding raw database access throughout application services.
+The backend should access PostgreSQL through Prisma rather than embedding raw database access throughout application services. For pgvector-specific operations, use reviewed migrations and an isolated, parameterized vector repository where Prisma support requires it. The backend retains migration ownership; AI serving receives only restricted read access to derived vector/product-reference data, while controlled ingestion handles derived writes.
 
 ---
 
@@ -507,16 +511,18 @@ Backend
   ↓
 FastAPI AI Service
   ↓
-Image Analysis / Similarity
+EfficientNet-B0 Query Embedding
   ↓
-Matching Products
+pgvector Retrieval
+  ↓
+Product References + Scores
+  ↓
+Backend Catalog Validation
   ↓
 Frontend
 ```
 
-A simplified or simulated matching strategy is acceptable for the academic portfolio implementation if a full production-grade computer vision model is not required.
-
-The architecture must keep this logic replaceable.
+Phase 04 requires real pretrained EfficientNet-B0 fine-tuning in PyTorch, shared inference preprocessing, learned image embeddings, and pgvector nearest-neighbor retrieval. Task 04.2 defines training and held-out retrieval evaluation. This is a measured portfolio ML feature without a claim of production-grade accuracy. Keep the encoder and vector repository replaceable behind explicit contracts.
 
 ---
 
@@ -532,9 +538,7 @@ The recommendation system can use:
 - Product similarity
 - Popularity
 
-Initial recommendation logic may be deterministic or rule-based.
-
-The architecture should allow future integration of a more advanced machine-learning model without requiring a redesign of the core commerce system.
+The required recommendation path reuses the learned product embeddings for content-based similarity and behavior-derived preference profiles. A separate deep recommendation model is not required. Popularity, categories, compatibility rules, and co-purchase aggregation support ranking or explicit fallbacks. Task 04.4 defines evaluation and sparse-history handling; rules alone do not satisfy the ML scope.
 
 ---
 
@@ -923,6 +927,8 @@ Stripe Test Mode
 ```
 
 Docker is used to make the multi-service environment reproducible.
+
+Local development uses the HP Core i7 laptop with 16 GB RAM and Intel UHD graphics. Use CPU inference checks locally; reported shared graphics memory is not an assumed CUDA GPU. Task 04.1 establishes FastAPI service architecture. Kaggle Free GPU setup and offline EfficientNet-B0 training are deferred to task 04.2. Save/export checkpoints because free GPU access is not guaranteed. Kaggle does not host the application or receive database credentials, commerce data, or customer search images. Serving uses a reviewed versioned artifact and compatible catalog embeddings; do not assume a deployment GPU.
 
 ---
 
