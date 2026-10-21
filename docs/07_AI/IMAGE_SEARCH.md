@@ -157,90 +157,25 @@ The backend must not blindly trust product IDs returned by an external service.
 
 # 9. FastAPI Responsibilities
 
-FastAPI is responsible for:
+FastAPI validates and decodes the image, applies the approved inference preprocessing, runs the fine-tuned EfficientNet-B0 encoder, and retrieves candidates from compatible catalog embeddings in PostgreSQL pgvector through its restricted vector repository.
 
-```text
-Image Input
- ↓
-Image Processing
- ↓
-Feature / Similarity Processing
- ↓
-Candidate Product References
-```
-
-The service should return structured results rather than commerce-specific HTML or frontend data.
-
-Example conceptual response:
-
-```json
-{
-  "matches": [
-    {
-      "productId": "product-id",
-      "score": 0.91
-    }
-  ]
-}
-```
-
-The exact API contract is defined by the AI architecture and API guidelines.
+It returns product references, ranking scores, and model/embedding version metadata. It does not return authoritative price or inventory. The backend resolves current catalog data and authorization before showing results. The public backend endpoint and internal FastAPI endpoint are distinct trust boundaries; exact contracts are defined in task 04.1 and completed in 04.2.
 
 ---
 
-# 10. Academic / Portfolio Implementation
+# 10. Required Phase 04 Implementation
 
-The image matching system may use simulated or simplified matching logic.
+Image search uses a real pretrained EfficientNet-B0 CNN fine-tuned in PyTorch on approved electronics data. The encoder's learned features become image embeddings; nearest-neighbor retrieval uses PostgreSQL pgvector.
 
-This is explicitly acceptable for the portfolio project.
-
-Possible demonstration approaches include:
-
-```text
-Image Metadata
- ↓
-Product Category
- ↓
-Predefined Similarity Mapping
-```
-
-or:
-
-```text
-Image
- ↓
-Simplified Feature Extraction
- ↓
-Similarity Score
- ↓
-Product Candidates
-```
-
-The UI must not falsely claim that a simulated system is a production-grade computer-vision model.
+Simulated category mappings, image metadata matching, random vectors, or a pretrained model without the required fine-tuning do not satisfy this scope. The feature is a measured portfolio ML implementation; it does not promise exact model/SKU identification from arbitrary photographs.
 
 ---
 
-# 11. Real AI Extension
+# 11. Training and Catalog Embeddings
 
-The architecture should allow future replacement of the simplified matcher with a real model.
+Task 04.2 covers Kaggle Free GPU setup, data preparation, offline fine-tuning, held-out evaluation, checkpoint export, and catalog embedding generation. The HP laptop remains the local development and CPU inference environment. Kaggle is not used for online search requests.
 
-```text
-Current
-FastAPI
- ↓
-Simplified Matching
-
-Future
-FastAPI
- ↓
-Embedding Model
- ↓
-Vector Similarity
- ↓
-Product Candidates
-```
-
-The frontend and core commerce backend should not need major architectural changes.
+Catalog and query images use the same deployed encoder and inference preprocessing. Catalog embeddings are generated ahead of search requests and refreshed when product images change. A model/preprocessing change requires versioned re-embedding and coordinated activation, not a mixture of old and new vectors. Detailed training objectives, retrieval metrics, thresholds, and vector schema are deferred to task files.
 
 ---
 
@@ -575,9 +510,11 @@ Image search is complete when:
 - Camera capture works where supported.
 - Input validation works.
 - FastAPI integration works.
-- Matching products are returned.
+- Real fine-tuned encoder embeddings and pgvector retrieval return candidate products.
+- Held-out retrieval quality and known failure cases are documented.
+- Catalog embedding refresh and version compatibility are verified.
 - Backend validates AI results.
-- Similarity ranking works.
+- Similarity ranking works; thresholds are evaluated rather than forcing a match for every image.
 - No-result state works.
 - AI failure is handled gracefully.
 - Privacy controls are implemented.
@@ -593,3 +530,47 @@ Image search is complete when:
 # 31. AI Image Search Principle
 
 > **Image search is an isolated AI capability that enhances product discovery while keeping product authorization, catalog truth, and commerce logic inside the main backend.**
+
+
+---
+
+## Phase 04 Decision Baseline
+
+This Phase 00 document records the approved direction, not evidence that Phase 04 is implemented or validated. Task files will define detailed contracts, data preparation, model settings, database migrations, evaluation criteria, and operational procedures.
+
+- **04.1:** establish the FastAPI service architecture, internal API contracts, configuration, validation, security, readiness, and backend integration.
+- **04.2:** implement real image search using a pretrained EfficientNet-B0 CNN fine-tuned in PyTorch, learned image embeddings, and PostgreSQL pgvector retrieval. Kaggle Free GPU setup and training belong to this later task; no training environment is being provisioned by this document.
+- **04.4:** implement ML-oriented content-based recommendations by reusing those learned product embeddings, with behavior-based profiles where sufficient data exists. Rules and popularity remain supporting signals or explicit fallbacks.
+- **Local development:** use the HP Core i7 laptop with 16 GB RAM and Intel UHD graphics for application development, preprocessing, tests, and CPU inference checks. Do not assume its reported shared graphics memory provides a CUDA training GPU.
+- **Training boundary:** Kaggle is an offline training environment, not an application host, production dependency, database gateway, or customer-image processor. Free GPU availability is not guaranteed; save and export checkpoints and record reproducible training metadata.
+- **Quality boundary:** demonstrate measured performance on representative held-out data. Neither pretrained weights nor fine-tuning guarantee accurate SKU identification or production-grade recommendations.
+
+## Shared Embedding Lifecycle and Data Boundary
+
+```text
+Approved, licensed training data
+  → Offline Kaggle training / validation
+  → Reviewed, versioned EfficientNet-B0 checkpoint + preprocessing metadata
+  → FastAPI inference runtime
+
+Approved catalog images
+  → Controlled embedding ingestion
+  → Same encoder + inference preprocessing
+  → Product references + versioned embeddings in PostgreSQL pgvector
+
+Customer query image
+  → Backend validation → FastAPI validation / preprocessing / encoder
+  → Query embedding → pgvector nearest neighbors
+  → Product references + ranking scores
+  → Backend authorization / current catalog lookup → Customer results
+```
+
+The trained encoder supplies feature embeddings rather than treating classification labels as product matches. The training objective and extraction layer must be selected and evaluated in task 04.2; classification accuracy alone does not prove retrieval quality. Training augmentation is separate from deterministic inference preprocessing shared by catalog and query images.
+
+Track the encoder/checkpoint version, preprocessing version, vector dimension, normalization, similarity metric, and catalog image revision with derived embeddings. Never compare incompatible vector spaces. A changed encoder or preprocessing pipeline requires a controlled catalog re-embedding and coherent activation, with a rollback path. New, changed, and removed catalog images must trigger corresponding embedding refresh or removal; the backend still filters stale references.
+
+The backend owns schema migrations and commerce writes. FastAPI may use a dedicated least-privilege repository to read only the derived vector/product-reference data needed for retrieval. A separately authorized ingestion job writes derived embeddings; online inference does not receive general catalog-write privileges. Keep vector data private and unexposed to browser clients; if any tables are exposed through a Data API, enforce explicit grants and appropriate row-level policies. Vector SQL, extension setup, and index choices belong in reviewed migrations/repository code rather than scattered queries. Prisma remains the backend commerce ORM; pgvector-specific access may require an isolated, parameterized SQL adapter.
+
+Use approved catalog sources for ingestion rather than accepting arbitrary remote URLs. Restrict remote fetching to trusted media locations and reject private-network or unsafe destinations. Decode uploaded bytes against an image allowlist with byte, dimension, and decoded-pixel limits; do not trust filenames or MIME headers. Bound inference concurrency, result counts, timeouts, and ingestion work. Use temporary image data only as needed and clean it up on success and failure.
+
+Load only trusted model artifacts, verify their identity/integrity, and avoid executing untrusted checkpoint serialization. Keep secrets server-side, use service authentication and private networking where available, and encrypt cross-host service/database traffic. Never place database credentials, commerce records, authentication tokens, or customer search images in Kaggle notebooks/datasets. Training uses approved, minimized data only; verify dataset licensing and notebook/dataset visibility before upload.

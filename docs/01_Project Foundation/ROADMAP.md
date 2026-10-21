@@ -459,13 +459,18 @@ Implement the platform's major differentiating capabilities: image search, recom
 
 ### 04.1 FastAPI AI Service
 
-Establish:
+Establish the service architecture:
 
-- FastAPI application
-- Service configuration
-- API contracts
-- Error handling
-- Testing
+- FastAPI application and runtime dependency boundaries
+- Local HP development and CPU inference environment
+- Service configuration and explicit internal API contracts
+- Backend integration, service authentication, and restricted networking
+- Input/resource limits, timeouts, controlled failures, and safe logging
+- Health/readiness contracts and model artifact loading boundary
+- Restricted vector access and separately authorized ingestion boundary
+- Service tests and Docker foundation
+
+Model training and Kaggle setup are deferred to task 04.2. Task files specify the detailed contracts and acceptance evidence.
 
 ### 04.2 Search by Image
 
@@ -479,7 +484,7 @@ Implement:
 - Similar-product results
 - Product navigation
 
-A simplified or simulated matching strategy is acceptable for the portfolio implementation when a production-grade computer vision model is unnecessary.
+Task 04.2 also covers the later setup of Kaggle Free GPU, approved data preparation, pretrained EfficientNet-B0 fine-tuning in PyTorch, checkpoint export, held-out retrieval evaluation, catalog embedding ingestion, and pgvector nearest-neighbor search. Use the HP laptop for local development and CPU inference verification. Training is offline and separate from runtime services; simulated matching does not fulfill this task. Detailed model settings, schemas, quality targets, and procedures belong in the task file.
 
 ### 04.3 Cloudinary
 
@@ -510,7 +515,7 @@ Recommendation inputs may include:
 - Product similarity
 - Popularity
 
-The initial implementation may use deterministic or rule-based logic.
+Reuse task 04.2 learned embeddings for real ML-oriented content-based recommendations and behavior-derived profiles where sufficient data exists. Use popularity/category rules as supporting signals or explicit cold-start/outage fallbacks. Co-purchase aggregation can support Frequently Bought Together without a separate deep model. Task 04.4 defines relevance/coverage evaluation and compatibility constraints; rules alone do not fulfill the ML recommendation scope.
 
 ### 04.5 Delivery Tracking
 
@@ -551,7 +556,10 @@ Delivery movement may be simulated for demonstration purposes.
 
 ## Completion Criteria
 
-- Image search works end-to-end.
+- Real fine-tuning, versioned learned embeddings, and pgvector image search work end-to-end.
+- Catalog embedding refresh and coherent model/version activation are verified.
+- Embedding-based recommendations work with explicit sparse-history/outage fallbacks.
+- Held-out retrieval and recommendation evaluation is recorded with limitations.
 - Recommendations are displayed dynamically.
 - AI service is isolated from commerce logic.
 - Delivery tracking works.

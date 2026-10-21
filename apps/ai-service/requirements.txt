@@ -1,7 +1,6 @@
-fastapi==0.115.6
-uvicorn==0.34.0
-pydantic-settings==2.7.0
-
-# Testing
-pytest==8.3.4
-httpx==0.28.1
+# Runtime + test dependencies. CI (`.github/workflows/ci.yml`, job "AI Service / Test") installs this
+# file and runs `python -m pytest`, so test packages stay here. The Docker image installs only
+# requirements-runtime.txt.
+-r requirements-runtime.txt
+pytest==9.1.1
+httpx2==2.16.0

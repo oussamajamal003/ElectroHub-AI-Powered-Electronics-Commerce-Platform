@@ -83,7 +83,7 @@ const envSchema = z.object({
     );
   }, 'JWT_SECRET must be a unique, non-placeholder value of at least 32 characters'),
   JWT_REFRESH_SECRET: z.string().optional(),
-  AI_SERVICE_URL: z.string().url().optional(),
+  // AI_SERVICE_* settings are validated by src/integrations/ai/ai.config.ts so an AI misconfiguration can never block commerce startup.
   FRONTEND_URL: z.string().url().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),

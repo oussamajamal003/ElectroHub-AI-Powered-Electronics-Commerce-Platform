@@ -27,7 +27,8 @@ beforeAll(async () => {
   env.FRONTEND_URL = 'http://localhost:3000';
   env.JWT_SECRET = 'account-deletion-test-cookie-secret';
   await prisma.$connect();
-  const role = await prisma.role.findUniqueOrThrow({ where: { name: 'CUSTOMER' } });
+  // Self-contained on a fresh disposable database: do not depend on another test file having created the role.
+  const role = await prisma.role.upsert({ where: { name: 'CUSTOMER' }, create: { name: 'CUSTOMER' }, update: {} });
   const user = await prisma.user.create({
     data: {
       email: originalEmail,

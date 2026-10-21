@@ -9,9 +9,9 @@ FastAPI provides an isolated service boundary for AI-related processing.
 Primary capabilities include:
 
 - Image search processing.
-- Recommendation processing where required.
+- Embedding-based recommendation processing.
 - AI-specific preprocessing and scoring.
-- Future model integration.
+- EfficientNet-B0 inference and shared learned embeddings.
 
 FastAPI does not own core commerce business logic.
 
@@ -55,8 +55,8 @@ AI-Specific Validation
 FastAPI is not responsible for:
 
 ```text
-Authentication
-Authorization
+Customer Authentication
+Customer Authorization
 Cart
 Orders
 Payments
@@ -93,7 +93,7 @@ Pydantic
 Uvicorn
 ```
 
-Additional ML/image-processing dependencies may be added only when required by the implemented AI functionality.
+PyTorch, torchvision, and an image-decoding library support the pretrained EfficientNet-B0 encoder. A restricted PostgreSQL/pgvector repository supports embedding retrieval. Training dependencies are separated from runtime dependencies where practical.
 
 Dependencies must be documented and pinned appropriately.
 
@@ -101,18 +101,17 @@ Dependencies must be documented and pinned appropriately.
 
 # 6. API Contract
 
-AI endpoints should use structured request and response models.
+The browser calls the backend's public API. FastAPI exposes separately authenticated internal APIs; a public backend route does not imply the same route is exposed by FastAPI.
 
-Conceptually:
+Conceptual routes:
 
 ```text
-POST /api/ai/image-search
-POST /api/ai/recommendations
+Backend: POST /api/ai/image-search, POST /api/ai/recommendations
+Internal FastAPI: POST /image-search, POST /recommendations
+Operational: GET /health, GET /ready
 ```
 
-The exact routes may evolve with the backend API architecture.
-
-Requests and responses must be explicitly validated.
+Use validated request/response schemas and bounded inputs. Product IDs, ranking scores, model/embedding versions, and result mode are returned where relevant. Health reports process availability; readiness verifies the approved model and compatible embedding store are usable. Final routes, error formats, and service authentication are specified in task 04.1. Before the task 04.2 model/store is available, readiness must reflect that state without falsely reporting functional ML; isolated contract fixtures do not establish feature completion.
 
 ---
 
@@ -191,7 +190,7 @@ recommendation mode
 limit
 ```
 
-Only the minimum required information should be sent.
+Only the minimum required information should be sent. The backend derives user context from the authenticated request and selects authorized history; never trust a client-supplied userId as permission to read another user's behavior.
 
 ---
 
@@ -210,7 +209,7 @@ Conceptually:
 }
 ```
 
-The Node.js backend validates returned product references before exposing them to customers.
+The Node.js backend validates returned product references before exposing them to customers. Scores are ranking metrics, not calibrated probabilities; include model/embedding version and result-mode metadata in the final contract.
 
 ---
 
@@ -313,55 +312,19 @@ The service should process only the minimum required image data.
 
 ---
 
-# 16. Model Loading
+# 16. Model Loading and Inference
 
-If a real model is introduced, model initialization should not occur unnecessarily on every request.
+Load the reviewed, fine-tuned EfficientNet-B0 checkpoint once per serving process, use evaluation/inference mode, and reuse its encoder for embeddings. Validate the artifact and embedding compatibility before declaring readiness. Multiple workers duplicate model memory; choose worker count and concurrency using measured CPU/memory behavior.
 
-Preferred architecture:
-
-```text
-FastAPI Startup
- ↓
-Load Model
- ↓
-Keep Model Available
- ↓
-Process Requests
-```
-
-The implementation must consider memory usage and deployment limits.
+Customer requests do not train or update the model. Training is offline in task 04.2; serving is designed to support CPU inference on the HP development laptop and planned deployment host, subject to latency verification. Do not assume a production GPU is available.
 
 ---
 
-# 17. Simulated AI Mode
+# 17. Real ML and Explicit Fallbacks
 
-The portfolio version may use simplified AI logic.
+Phase 04 requires real learned embeddings from a pretrained EfficientNet-B0 CNN fine-tuned in PyTorch. Simulated mappings, random vectors, and category-only matching do not satisfy image-search completion.
 
-For example:
-
-```text
-Image
- ↓
-Extract Simple Attributes
- ↓
-Map to Product Category
- ↓
-Return Similar Products
-```
-
-or:
-
-```text
-Product Context
- ↓
-Category / Popularity Rules
- ↓
-Recommendation Candidates
-```
-
-This is acceptable for demonstration purposes.
-
-The documentation and UI must not falsely represent simulated logic as a trained production model.
+Recommendations reuse the same embeddings for content-based retrieval and behavior-derived profiles. Popularity/category rules may supplement ranking or provide clearly identified cold-start and outage fallbacks. A fallback must not be reported as a successful trained-model response.
 
 ---
 
@@ -433,7 +396,7 @@ Service Failure
 Health Endpoint
 ```
 
-Model-dependent tests should use deterministic fixtures where possible.
+Model-dependent tests should use deterministic fixtures where possible. Also verify readiness failure, incompatible embedding versions, catalog refresh, and a real checkpoint-to-pgvector retrieval path. Report held-out retrieval/recommendation quality separately from API correctness.
 
 ---
 
@@ -459,7 +422,7 @@ FastAPI must implement:
 
 - Input validation.
 - Request-size limits.
-- Service authentication where required.
+- Service-to-service authentication for internal AI endpoints.
 - Safe file handling.
 - Dependency security.
 - Secure error responses.
@@ -531,7 +494,7 @@ The FastAPI service is complete when:
 - Health check works.
 - API contracts are defined.
 - Image-search endpoint works.
-- Recommendation endpoint works where required.
+- Embedding-based recommendation endpoint works.
 - Backend integration works.
 - Request validation works.
 - AI response validation works.
@@ -541,4 +504,136 @@ The FastAPI service is complete when:
 - Docker deployment works.
 - Logging is safe.
 - Tests pass.
+- A trusted fine-tuned checkpoint and compatible catalog embeddings are integrated and evaluated.
+- ML recommendations and explicitly identified fallbacks are verified.
 - Documentation matches implementation.
+
+
+---
+
+## Phase 04 Decision Baseline
+
+This Phase 00 document records the approved direction, not evidence that Phase 04 is implemented or validated. Task files will define detailed contracts, data preparation, model settings, database migrations, evaluation criteria, and operational procedures.
+
+- **04.1:** establish the FastAPI service architecture, internal API contracts, configuration, validation, security, readiness, and backend integration.
+- **04.2:** implement real image search using a pretrained EfficientNet-B0 CNN fine-tuned in PyTorch, learned image embeddings, and PostgreSQL pgvector retrieval. Kaggle Free GPU setup and training belong to this later task; no training environment is being provisioned by this document.
+- **04.4:** implement ML-oriented content-based recommendations by reusing those learned product embeddings, with behavior-based profiles where sufficient data exists. Rules and popularity remain supporting signals or explicit fallbacks.
+- **Local development:** use the HP Core i7 laptop with 16 GB RAM and Intel UHD graphics for application development, preprocessing, tests, and CPU inference checks. Do not assume its reported shared graphics memory provides a CUDA training GPU.
+- **Training boundary:** Kaggle is an offline training environment, not an application host, production dependency, database gateway, or customer-image processor. Free GPU availability is not guaranteed; save and export checkpoints and record reproducible training metadata.
+- **Quality boundary:** demonstrate measured performance on representative held-out data. Neither pretrained weights nor fine-tuning guarantee accurate SKU identification or production-grade recommendations.
+
+## Shared Embedding Lifecycle and Data Boundary
+
+```text
+Approved, licensed training data
+  → Offline Kaggle training / validation
+  → Reviewed, versioned EfficientNet-B0 checkpoint + preprocessing metadata
+  → FastAPI inference runtime
+
+Approved catalog images
+  → Controlled embedding ingestion
+  → Same encoder + inference preprocessing
+  → Product references + versioned embeddings in PostgreSQL pgvector
+
+Customer query image
+  → Backend validation → FastAPI validation / preprocessing / encoder
+  → Query embedding → pgvector nearest neighbors
+  → Product references + ranking scores
+  → Backend authorization / current catalog lookup → Customer results
+```
+
+The trained encoder supplies feature embeddings rather than treating classification labels as product matches. The training objective and extraction layer must be selected and evaluated in task 04.2; classification accuracy alone does not prove retrieval quality. Training augmentation is separate from deterministic inference preprocessing shared by catalog and query images.
+
+Track the encoder/checkpoint version, preprocessing version, vector dimension, normalization, similarity metric, and catalog image revision with derived embeddings. Never compare incompatible vector spaces. A changed encoder or preprocessing pipeline requires a controlled catalog re-embedding and coherent activation, with a rollback path. New, changed, and removed catalog images must trigger corresponding embedding refresh or removal; the backend still filters stale references.
+
+The backend owns schema migrations and commerce writes. FastAPI may use a dedicated least-privilege repository to read only the derived vector/product-reference data needed for retrieval. A separately authorized ingestion job writes derived embeddings; online inference does not receive general catalog-write privileges. Keep vector data private and unexposed to browser clients; if any tables are exposed through a Data API, enforce explicit grants and appropriate row-level policies. Vector SQL, extension setup, and index choices belong in reviewed migrations/repository code rather than scattered queries. Prisma remains the backend commerce ORM; pgvector-specific access may require an isolated, parameterized SQL adapter.
+
+Use approved catalog sources for ingestion rather than accepting arbitrary remote URLs. Restrict remote fetching to trusted media locations and reject private-network or unsafe destinations. Decode uploaded bytes against an image allowlist with byte, dimension, and decoded-pixel limits; do not trust filenames or MIME headers. Bound inference concurrency, result counts, timeouts, and ingestion work. Use temporary image data only as needed and clean it up on success and failure.
+
+Load only trusted model artifacts, verify their identity/integrity, and avoid executing untrusted checkpoint serialization. Keep secrets server-side, use service authentication and private networking where available, and encrypt cross-host service/database traffic. Never place database credentials, commerce records, authentication tokens, or customer search images in Kaggle notebooks/datasets. Training uses approved, minimized data only; verify dataset licensing and notebook/dataset visibility before upload.
+
+---
+
+## Task 04.1 — Implemented Contract and Runbook
+
+This section records what Task 04.1 actually implemented. Where it differs from the conceptual sections above (routes in §6, variable names in §24), this section is authoritative. Evidence: `docs/tasks/Phase-04/TASK_04.1_IMPLEMENTATION_EVIDENCE.md`.
+
+### Layout (`apps/ai-service`)
+
+```text
+app/main.py                 create_app() factory, lifespan, middleware + router assembly (`app` resolved lazily)
+app/__main__.py             `python -m app` — validated bind, 1 worker, no access log
+app/core/                   config (Pydantic Settings), security, errors, logging, middleware, runtime/lifespan
+app/api/                    dependencies.py, routes/{health,readiness,image_search,recommendations}.py
+app/schemas/                camelCase wire contracts (common, image_search, recommendations)
+app/services/               image-search / recommendation orchestration (readiness gate, bounds, output validation)
+app/models/                 ModelDescriptor, encoder/ranker/loader protocols, ModelRegistry (load once, close on stop)
+app/processors/             ValidatedImage contract, InferenceExecutor (bounded, off the event loop)
+app/integrations/           EmbeddingSearchGateway protocol (pgvector in 04.2; no DB credential in 04.1)
+```
+
+### Routes
+
+| Route | Auth | 04.1 behaviour |
+| --- | --- | --- |
+| `GET /health` | none | `200 {status, service, timestamp, environment, version}` — liveness only |
+| `GET /internal/v1/ready` | service key | `200 {data:{status:"ready", modelReady:false, features:{imageSearch, recommendations}}}`; `503 AI_NOT_READY` before startup completes |
+| `GET /internal/v1/capabilities` | service key | features + `limits` (no secrets) |
+| `POST /internal/v1/recommendations` | service key | typed body validated (`422`), then `503 AI_MODEL_NOT_READY` |
+| `POST /internal/v1/image-search?topK=` | service key | body not read; `503 AI_MODEL_NOT_READY` (multipart upload arrives in 04.2) |
+| `/docs`, `/openapi.json` | none | development/test only; disabled in qa, forbidden in production |
+
+Features report `available:false, status:"NOT_READY", reason:"MODEL_NOT_CONFIGURED"` until a trained artifact is loaded (`MODEL_NOT_LOADED` if loading failed, `INDEX_NOT_READY` when the encoder has no active matching index). No route returns fabricated matches.
+
+### Service authentication and environment binding
+
+- Request headers: `X-ElectroHub-AI-Key` (per-environment secret, ≥ 32 chars) and `X-ElectroHub-AI-Environment` (`development|qa|production|test`). Never `Authorization`; customer JWTs are never forwarded.
+- Checked in ASGI middleware before routing or body parsing: missing/wrong key → `401 AI_UNAUTHORIZED`; right key, wrong environment → `403 AI_ENVIRONMENT_MISMATCH`; no key configured → `503 AI_AUTH_NOT_CONFIGURED` (fail closed).
+- Every response carries `X-ElectroHub-AI-Environment` and `X-Request-Id`; the Express client rejects a response from a different environment.
+- No CORS middleware: the browser never calls this service.
+
+### Errors
+
+`{"error": {"code": "AI_*", "message": "<safe text>", "requestId": "..."}}` (+ `details: [{loc, type}]` on 422, never input values). Codes: `AI_UNAUTHORIZED` 401, `AI_ENVIRONMENT_MISMATCH` 403, `AI_NOT_FOUND` 404, `AI_METHOD_NOT_ALLOWED` 405, `AI_PAYLOAD_TOO_LARGE` 413, `AI_VALIDATION_FAILED` 422, `AI_RATE_LIMITED` 429, `AI_INTERNAL_ERROR` 500, `AI_NOT_IMPLEMENTED` 501, `AI_MODEL_NOT_READY` / `AI_INDEX_NOT_READY` / `AI_AUTH_NOT_CONFIGURED` / `AI_NOT_READY` 503, `AI_INFERENCE_TIMEOUT` 504.
+
+### Configuration (`apps/ai-service/.env.example`)
+
+| Variable | Default | Rule |
+| --- | --- | --- |
+| `AI_ENVIRONMENT` (legacy `ENVIRONMENT`) | required | `development\|qa\|production\|test` |
+| `AI_SERVICE_API_KEY` | unset | ≥ 32 printable ASCII, non-placeholder; required in production and for any non-loopback bind |
+| `AI_BIND_HOST` / `AI_PORT` | `127.0.0.1` / `8000` | IP literal; port 1024–65535 |
+| `AI_DOCS_ENABLED` | dev/test on | cannot be true in production |
+| `AI_MAX_REQUEST_BYTES` | 1 MiB | 1 KiB–20 MiB (Content-Length and streamed bytes) |
+| `AI_MAX_TOP_K` / `AI_MAX_CANDIDATES` | 24 / 200 | 1–100 / 1–1000 |
+| `AI_INFERENCE_TIMEOUT_SECONDS` / `AI_MAX_CONCURRENT_INFERENCES` | 5 / 2 | 0.1–60 / 1–16; saturation → 429, never an unbounded queue |
+
+The process refuses to start if Stripe, Brevo, JWT/OTP, Google, Cloudinary, `DATABASE_URL`/`DIRECT_URL` or Supabase service-role values are present in its environment or `.env`.
+
+Express side (`apps/backend/src/integrations/ai/ai.config.ts`, not `src/config/env.ts`, so a bad AI setting can only disable AI): `AI_SERVICE_URL` (origin only, no credentials/query; production requires https unless loopback/single-label internal host), `AI_SERVICE_API_KEY`, `AI_SERVICE_ENVIRONMENT` (production NODE_ENV → `production`; development → `development|qa`), `AI_SERVICE_TIMEOUT_MS` (100–10000, default 2500). Responses are capped at 256 KiB, redirects are never followed, and every payload is validated with strict Zod schemas (UUIDs, unique products, finite scores in [-1, 1], contiguous ranks). Admin-only probe: `GET /api/admin/ai/status`.
+
+Isolated QA (`npm run dev:isolated --workspace=@electrohub/backend`) never inherits MAIN DEV's `AI_SERVICE_*`: the launcher blanks them, binds `AI_SERVICE_ENVIRONMENT=qa`, and only uses explicit `ISOLATED_AI_SERVICE_URL` / `ISOLATED_AI_SERVICE_API_KEY` (a separate AI instance, e.g. :8200, with its own key).
+
+### Local runbook (Windows/Git Bash shown; CPU only, no GPU)
+
+```bash
+cd apps/ai-service
+python -m venv venv
+venv/Scripts/python -m pip install -r requirements-dev.txt
+venv/Scripts/python -m pytest
+venv/Scripts/python -m ruff check . && venv/Scripts/python -m ruff format --check .
+venv/Scripts/python -m mypy app tests
+venv/Scripts/python -m pip_audit -r requirements-dev.txt
+venv/Scripts/python -m app        # reads apps/ai-service/.env; Ctrl+C stops it gracefully
+```
+
+Requirement files: `requirements-runtime.txt` (fully pinned runtime set, used by the Dockerfile), `requirements.txt` (runtime + pytest/httpx2, installed by the CI "AI Service / Test" job), `requirements-dev.txt` (+ ruff, mypy, pip-audit).
+
+Docker (non-root, CPU-only, healthcheck on `/health`, binds `0.0.0.0` inside the container so a key is mandatory):
+
+```bash
+docker build -t electrohub-ai:local apps/ai-service
+docker run --rm -p 127.0.0.1:8000:8000 -e AI_ENVIRONMENT=development -e AI_SERVICE_API_KEY=<generated> electrohub-ai:local
+```
+
+Publish the container port on loopback or a private Docker network only; Nginx must not expose `/internal/*`.

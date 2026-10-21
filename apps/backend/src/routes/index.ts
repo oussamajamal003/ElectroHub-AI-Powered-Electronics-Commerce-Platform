@@ -11,6 +11,7 @@ import accountRoutes from './account.routes.js';
 import productRoutes from './product.routes.js';
 import searchRoutes from './search.routes.js';
 import e2eSupportRoutes from './e2e-support.routes.js';
+import aiAdminRoutes from './ai-admin.routes.js';
 import { env } from '../config/env.js';
 
 /**
@@ -31,6 +32,7 @@ router.use(wishlistRoutes);
 router.use('/account', accountRoutes);
 router.use(productRoutes);
 router.use('/search', searchRoutes);
+router.use(aiAdminRoutes);
 if (env.NODE_ENV === 'test') router.use('/__e2e', e2eSupportRoutes);
 
 export default router;

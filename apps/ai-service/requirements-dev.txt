@@ -1,0 +1,5 @@
+# Local quality tooling on top of the CI/test set (never installed into the runtime image).
+-r requirements.txt
+ruff==0.17.1
+mypy==2.4.0
+pip-audit==2.10.1

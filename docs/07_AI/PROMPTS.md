@@ -1,12 +1,10 @@
 # AI Prompts
 
-## 1. Purpose
+## 1. Purpose and Current Applicability
 
-This document defines the prompt strategy for AI-assisted functionality in ElectroHub.
+Phase 04 uses a pretrained EfficientNet-B0 CNN fine-tuned in PyTorch, learned embeddings, pgvector retrieval, and embedding-based recommendations. These workflows do not use LLM prompts. No LLM provider, prompt-based classifier, or generated recommendation prose is required for the approved scope.
 
-Prompts are only required where the implemented AI workflow uses a language model or prompt-based processing.
-
-Image similarity and deterministic recommendation algorithms do not require LLM prompts.
+The remaining prompt guidance is conditional policy for a separately approved future LLM capability. Example prompts are illustrative and inactive; they do not replace the trained encoder or the real ML recommendation requirement. Training settings and preprocessing are versioned model configuration, not LLM prompts.
 
 ---
 
@@ -113,23 +111,11 @@ The backend must validate this response before using it.
 
 ---
 
-# 7. Image Search Prompts
+# 7. Image Search Does Not Require Prompts
 
-A conventional image-similarity model does not require a text prompt.
+The approved image path is deterministic inference preprocessing, the fine-tuned EfficientNet-B0 encoder, learned embeddings, and pgvector nearest-neighbor retrieval. Category guesses from a prompted language model are not a substitute for task 04.2.
 
-If an LLM-assisted image classifier is introduced, it may receive structured instructions such as:
-
-```text
-Identify the likely electronics product category in the supplied image.
-
-Return only:
-{
-  "category": "...",
-  "confidence": 0.0
-}
-```
-
-The result must be treated as a candidate signal, not authoritative catalog truth.
+Any future LLM-assisted image interpretation requires a separate scope/architecture decision and must return validated candidate signals only. It must not become catalog truth or a commerce authority.
 
 ---
 
@@ -218,46 +204,19 @@ Payment Information
 
 ---
 
-# 12. Deterministic Alternative
+# 12. Non-LLM Recommendation Architecture
 
-Where an LLM provides limited value, prefer deterministic recommendation logic.
+The approved recommender reuses learned product embeddings for content-based retrieval and authorized behavior profiles. Metadata, compatibility rules, co-purchase aggregation, and popularity may supplement ranking or provide explicit fallbacks.
 
-Examples:
-
-```text
-Category Matching
-Purchase Frequency
-Co-Purchase Frequency
-Popularity
-Product Compatibility
-```
-
-This reduces:
-
-```text
-Cost
-Latency
-Complexity
-Hallucination Risk
-```
+This requires no recommendation prompt or separate external LLM. Do not describe fallback rules as trained-model results, and do not replace the required ML path with simulated prompt responses.
 
 ---
 
-# 13. Simulated Academic Mode
+# 13. Simulation and Test Fixtures
 
-The project may simulate AI behavior for portfolio demonstration.
+Mocks may support isolated development and contract tests, but simulated matching and recommendation responses do not satisfy Phase 04 completion. Validate a real fine-tuned checkpoint, compatible persisted embeddings, retrieval, and recommendation integration before claiming the feature is complete.
 
-Example:
-
-```text
-User Behavior
- ↓
-Rule-Based Score
- ↓
-Recommendation Result
-```
-
-This should be clearly documented as simulated/rule-based functionality.
+Quality claims must follow evaluation evidence; neither prompt examples nor plausible demo outputs establish production-grade accuracy.
 
 ---
 
@@ -331,23 +290,17 @@ The external provider must be documented in the relevant architecture/ADR when i
 
 ---
 
-# 18. Definition of Done
+# 18. Conditional Definition of Done
 
-Prompt-based AI functionality is complete when:
+For the current non-LLM scope, document that no runtime prompts/provider are required and verify the actual model, preprocessing, embedding version, retrieval, recommendation, security, and fallback contracts in the companion AI documents.
 
-- Prompts are versioned.
-- Inputs are minimized.
-- Structured outputs are validated.
-- Product references are backend-validated.
-- Prompt injection risks are considered.
-- Sensitive data is excluded.
-- Fallback behavior exists.
-- Tests cover invalid and adversarial inputs.
-- Model/prompt versions are traceable.
-- Documentation matches implementation.
+If a future prompt-based capability is approved, completion requires versioned prompts, minimized inputs, schema-validated outputs, backend-validated product references, injection testing, safe logging, privacy controls, explicit fallbacks, and traceable prompt/model versions. It must not grant authority over commerce state.
 
 ---
 
 # 19. Prompt Principle
 
 > **Prompts are controlled application inputs, not trusted business logic: every AI result must be structured, validated, grounded in approved data, and ultimately controlled by the backend.**
+
+
+See `AI_ARCHITECTURE.md`, `MODEL_FLOW.md`, and `RECOMMENDER.md` for the current training, embedding lifecycle, FastAPI, data access, and operational security boundaries. Task 04.1 establishes service architecture; Kaggle Free GPU setup and training occur later in task 04.2 on approved data, with HP local development. Detailed implementation belongs in task files.

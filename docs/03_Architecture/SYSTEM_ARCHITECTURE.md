@@ -175,6 +175,9 @@ Technology:
 ```text
 Python
 FastAPI
+PyTorch / torchvision
+Fine-tuned pretrained EfficientNet-B0
+Learned embeddings / pgvector retrieval
 ```
 
 Responsibilities:
@@ -184,7 +187,7 @@ Responsibilities:
 - Recommendation processing.
 - AI-specific logic.
 
-The AI service must not own authentication, payments, orders, inventory, or customer accounts.
+The AI service must not own customer authentication, authorization, payments, orders, inventory, or customer accounts. It must authenticate internal service calls. Its database access is restricted to derived embeddings and product references; backend schema and commerce ownership remain unchanged.
 
 ---
 
@@ -203,6 +206,8 @@ Prisma ORM
 ```
 
 The database stores users, roles, products, categories, images, inventory, carts, wishlist entries, orders, payments, delivery data, recommendations, and relevant operational records.
+
+PostgreSQL also stores versioned learned product-image embeddings using pgvector. The backend owns schema migrations and commerce access through Prisma. AI retrieval uses a restricted vector repository; controlled ingestion writes derived vectors separately. Isolate pgvector-specific SQL behind a reviewed, parameterized adapter where needed.
 
 The frontend never connects directly to PostgreSQL.
 
@@ -440,45 +445,27 @@ The frontend visualizes authoritative backend delivery/location data.
 ## 17. Image Search
 
 ```text
-Customer
- ↓
-Upload / Camera
- ↓
-Frontend
- ↓
-Backend
- ↓
-FastAPI AI Service
- ↓
-Image Analysis / Similarity
- ↓
-Matching Products
- ↓
-Frontend
+Customer upload / camera → Frontend → Backend validation
+  → FastAPI validation and shared inference preprocessing
+  → Fine-tuned pretrained EfficientNet-B0 encoder (PyTorch)
+  → Query embedding → pgvector nearest-neighbor retrieval
+  → Product references + scores → Backend current catalog checks
+  → Frontend product results
 ```
 
-The project may use simulated matching logic for academic/demo purposes when explicitly documented.
+Task 04.1 establishes FastAPI architecture. Task 04.2 provides Kaggle Free GPU setup and offline fine-tuning later, plus evaluation and catalog embedding ingestion. The HP Core i7 / 16 GB RAM / Intel UHD laptop supports local development and CPU inference checks. Kaggle is separate from runtime hosting and receives no customer search uploads or application secrets.
+
+Catalog embeddings use the deployed encoder and preprocessing, are refreshed on image changes, and are re-generated coherently when the vector space changes. Real fine-tuning and pgvector retrieval are required; simulated matching does not satisfy this scope. Retrieval quality must be measured, without promising production-grade SKU recognition.
 
 ---
 
 ## 18. Recommendations
 
-Recommendation modes may include:
+Task 04.4 reuses the learned product embeddings for ML content-based recommendations. FastAPI retrieves similar products or builds profiles from backend-authorized interaction references and ranks candidates; the backend validates current product visibility, availability rules, and authoritative product data.
 
-```text
-Popular Products
-Similar Category
-Purchase History
-Behavior-Based Recommendations
-```
+Popularity/category rules, co-purchase aggregation, and curated products remain supporting modes or explicit cold-start/outage fallbacks. They must not be represented as trained ML results. Visual similarity does not guarantee accessory compatibility. Measure relevance and coverage with the available data and record limitations.
 
-The architecture must distinguish:
-
-```text
-Real ML
-Rule-Based Logic
-Simulated Academic Logic
-```
+AI unavailability must leave catalog, checkout, orders, and payments operational. Image search offers a controlled error and normal search; recommendations use an explicit fallback or hide the section.
 
 ---
 
@@ -577,7 +564,7 @@ Security-sensitive responsibilities remain server-side:
 - Email credentials.
 - External service credentials.
 
-Secrets must never be committed to Git.
+Secrets must never be committed to Git. AI calls require service authentication, restricted network access where possible, and encrypted cross-host transport. Validate decoded images as well as upload limits, bound processing resources, clean temporary data, and load only trusted versioned model artifacts. Keep training notebooks/datasets free of application credentials, commerce data, and customer search images.
 
 ---
 

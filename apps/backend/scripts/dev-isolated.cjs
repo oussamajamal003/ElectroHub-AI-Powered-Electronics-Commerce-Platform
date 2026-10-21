@@ -75,6 +75,13 @@ function childEnvironment(isolated, mail, extra = {}, source = process.env) {
   }
   environment.PAYMENT_SHARED_MUTATIONS_APPROVED = '';
   environment.PAYMENT_DEV_SUPERVISED = '';
+  // Task 04.1: never inherit the MAIN DEV AI service target or credential. Isolated QA reaches an AI service only through
+  // explicit ISOLATED_AI_SERVICE_* values (its own instance and key), bound to the 'qa' environment; otherwise AI stays
+  // disabled. Blank values also stop dotenv in the child from restoring the DEV values from .env or .env.local.
+  environment.AI_SERVICE_URL = source.ISOLATED_AI_SERVICE_URL ?? '';
+  environment.AI_SERVICE_API_KEY = source.ISOLATED_AI_SERVICE_API_KEY ?? '';
+  environment.AI_SERVICE_ENVIRONMENT = 'qa';
+  environment.AI_SERVICE_TIMEOUT_MS = source.ISOLATED_AI_SERVICE_TIMEOUT_MS ?? '';
   return environment;
 }
 

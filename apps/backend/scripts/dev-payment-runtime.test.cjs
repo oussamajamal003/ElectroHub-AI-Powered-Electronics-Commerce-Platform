@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const safety = require('./stripe-gate-safety.cjs');
 const { argumentsFor, migrationNames, migrationChecksumCandidates, verifyMigrationLedger, assertNoPaymentBacklog,
-  assertNoEmailBacklog, assertReviewedRecovery, assertTask04FixtureAttempt, normalizeWorkerAttemptIds, preflight, supervise, main } = require('./dev-payment-runtime.cjs');
+  assertNoEmailBacklog, assertReviewedRecovery, assertExpiredLeaseRecovery, assertTask04FixtureAttempt, normalizeWorkerAttemptIds, preflight, supervise, main } = require('./dev-payment-runtime.cjs');
 
 const REVIEWED_ID = '11111111-1111-4111-8111-111111111111';
 const TASK04_ID = '22222222-2222-4222-8222-222222222222';
@@ -58,6 +58,7 @@ function fakePrisma(overrides = {}) {
       findUnique: async () => overrides.reviewedAttempt, findMany: async () => overrides.fixtureAttempts ?? [] },
     user: { findFirst: async () => overrides.fixtureOwner === undefined ? { id: TASK04_USER_ID } : overrides.fixtureOwner },
     commerceEmailOutbox: { count: async () => overrides.emailBacklog ?? 0 },
+    stripeEvent: { count: async () => overrides.signedEvents ?? 0 },
   };
   return {
     ...tx,
@@ -569,4 +570,77 @@ test('governed mode starts the allowlisted email worker by default, never live; 
   const exact = argumentsFor(['--start', '--allow-dev-recovery', `--reviewed-recovery-attempt=${REVIEWED_ID}`]);
   assert.equal(applyGovernedEmailDefault(exact, { COMMERCE_EMAIL_ALLOWED_RECIPIENTS: 'a@x.test' }).allowEmailAllowlist, false);
   assert.throws(() => argumentsFor(['--start', '--allow-dev-recovery', '--recovery-mode=governed', `--governed-since=${since}`, '--no-email', '--allow-email-allowlist']));
+});
+
+test('expired-lease mode: one owner-named DECLINED attempt, frozen facts, Stripe decline, single-row scope, --no-email, idempotent', async () => {
+  const ID = '384a8c53-c4bf-4924-92e0-e2c000870a8d';
+  const OTHER = '51b336ee-f09a-4094-8b7e-5d4b90b9a815';
+  const base = ['--recovery-mode=expired-lease', `--reviewed-recovery-attempt=${ID}`, '--no-email'];
+  const parsed = argumentsFor(['--start', '--allow-dev-recovery', ...base]);
+  assert.equal(parsed.mode, 'expired-lease'); assert.deepEqual(parsed.reviewedRecoveryAttempts, [ID]); assert.equal(parsed.noEmail, true);
+  assert.equal(argumentsFor(['--preflight', ...base]).start, false);
+  for (const bad of [
+    ['--preflight', '--recovery-mode=expired-lease', '--no-email'],
+    ['--preflight', '--recovery-mode=expired-lease', `--reviewed-recovery-attempt=${ID}`],
+    ['--preflight', ...base, `--reviewed-recovery-attempt=${OTHER}`],
+    ['--preflight', ...base, `--accepted-backlog-attempt=${OTHER}`],
+    ['--start', ...base],
+    ['--preflight', ...base, '--recovery-mode=exact-attempt'],
+  ]) assert.throws(() => argumentsFor(bad));
+  assert.deepEqual(normalizeWorkerAttemptIds([ID], 'expired-lease'), [ID]);
+  assert.throws(() => normalizeWorkerAttemptIds([ID, OTHER], 'expired-lease'));
+
+  const now = Date.parse('2026-10-21T12:00:00Z');
+  const frozen = { id: ID, state: 'DECLINED', failureCode: 'PAYMENT_DECLINED', providerStatus: 'requires_payment_method', providerIntentId: 'pi_x',
+    submittedAt: new Date('2026-10-14T19:58:31Z'), orderId: null, cancelRequested: false,
+    work: { state: 'LEASED', leaseUntil: new Date('2026-10-20T12:39:55Z'), retryCount: 0, lastError: null } };
+  assert.doesNotThrow(() => assertExpiredLeaseRecovery(frozen, ID, 0, now));
+  // Every drift fails closed, including a re-run after the worker finished the row (work DONE) and the 18 DONE+DECLINED recheck shape.
+  for (const [patch, events] of [[{ state: 'AWAITING_INPUT' }], [{ failureCode: null }], [{ providerStatus: 'succeeded' }], [{ orderId: 'o' }],
+    [{ cancelRequested: true }], [{ submittedAt: null }], [{ providerIntentId: null }], [{ id: OTHER }], [{}, 1], [{ work: null }],
+    [{ work: { ...frozen.work, state: 'DONE' } }], [{ work: { ...frozen.work, state: 'READY' } }],
+    [{ work: { ...frozen.work, leaseUntil: new Date(now + 1000) } }], [{ work: { ...frozen.work, leaseUntil: null } }],
+    [{ work: { ...frozen.work, retryCount: 1 } }], [{ work: { ...frozen.work, lastError: 'PAYMENT_PROVIDER_UNKNOWN' } }]]) {
+    assert.throws(() => assertExpiredLeaseRecovery({ ...frozen, ...patch }, ID, events ?? 0, now), /frozen record/);
+  }
+  assert.throws(() => assertExpiredLeaseRecovery(null, ID, -1, now), /frozen record/);
+  // The ordinary exact-attempt gate still refuses this row.
+  assert.throws(() => assertReviewedRecovery(frozen, ID), /changed/);
+
+  const declined = { livemode: false, status: 'requires_payment_method', received: 0, capturable: 0, declined: true };
+  const deps = { retrieveIntent: async () => declined, verifyBinding: () => {} };
+  const options = { start: true, mode: 'expired-lease', noEmail: true, reviewedRecoveryAttempt: ID, reviewedRecoveryAttempts: [ID] };
+  const prior = process.env.NODE_ENV; process.env.NODE_ENV = 'development';
+  try {
+    // Only the one LEASED row is open; the DONE recheck rows are not unfinished work and are not in scope.
+    const config = await preflight(preflightDependencies({ unfinishedWork: 1, reviewedAttempt: frozen, deps }), options);
+    assert.deepEqual(config.workerAttemptIds, [ID]); assert.equal(config.recoveryMode, 'expired-lease'); assert.ok(!JSON.stringify({ ...config, workerAttemptIds: [] }).includes(ID));
+    await assert.rejects(preflight(preflightDependencies({ unfinishedWork: 2, reviewedAttempt: frozen, deps }), options), /backlog/);
+    await assert.rejects(preflight(preflightDependencies({ unfinishedWork: 1, reviewedAttempt: frozen, signedEvents: 1, deps }), options), /frozen record/);
+    await assert.rejects(preflight(preflightDependencies({ unfinishedWork: 0, reviewedAttempt: { ...frozen, work: { ...frozen.work, state: 'DONE' } }, deps }), options), /frozen record/);
+    for (const patch of [{ declined: false }, { received: 150 }, { capturable: 150 }, { status: 'succeeded' }, { status: 'requires_capture' }, { livemode: true }]) {
+      await assert.rejects(preflight(preflightDependencies({ unfinishedWork: 1, reviewedAttempt: frozen,
+        deps: { ...deps, retrieveIntent: async () => ({ ...declined, ...patch }) } }), options), /provider state changed/);
+    }
+    await assert.rejects(preflight(preflightDependencies({ unfinishedWork: 1, reviewedAttempt: frozen,
+      deps: { ...deps, verifyBinding: () => { throw new Error('binding'); } } }), options), /binding/);
+  } finally { if (prior === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = prior; }
+
+  // Supervisor: email off, exactly the one attempt over the worker IPC prepare message, nothing to the API.
+  const config = { port: 5136, targetIdentity: 'supabase:pzxekjybdiulzmssalfo/postgres', runtimeUrlSource: 'database', migrationCount: 1,
+    paymentBacklog: {}, stripeAccountVerified: true, workerAttemptIds: [ID] };
+  for (const bad of [{ ...options, noEmail: false }, { ...options, allowEmailAllowlist: true }]) {
+    const state = fakeRuntime();
+    await assert.rejects(supervise(config, bad, state.deps), /email disabled/); assert.equal(state.children.length, 0);
+  }
+  await assert.rejects(supervise({ ...config, workerAttemptIds: [ID, OTHER] }, options, fakeRuntime().deps), /email disabled|canonical attempt/);
+  await assert.rejects(supervise(config, { ...options, reviewedRecoveryAttempts: [OTHER], reviewedRecoveryAttempt: OTHER }, fakeRuntime().deps), /exact reviewed/);
+  const state = fakeRuntime((record, children) => { if (record.readiness === 'PASS') for (const child of children) child.disconnect?.(); });
+  await supervise(config, options, state.deps).catch(() => {});
+  const worker = state.children.find(child => child.spawnArgs?.includes('--payment-worker'));
+  const api = state.children.find(child => child.spawnArgs && !child.spawnArgs.includes('--payment-worker'));
+  assert.deepEqual(worker.messages.find(message => message.type === 'payment-supervisor.prepare').attemptIds, [ID]);
+  assert.equal(api.messages.find(message => message.type === 'payment-supervisor.prepare').attemptIds, undefined);
+  assert.equal(worker.spawnOptions.env.COMMERCE_EMAIL_SEND_MODE, 'disabled');
+  assert.equal(state.logs.find(log => log.readiness === 'PASS').recoveryMode, 'expired-lease');
 });
