@@ -149,7 +149,11 @@ async function readOnlySnapshot(prisma, read) {
 // construction and must be DONE or the one accepted-isolated row before start.
 // checkout: normal MAIN DEV Test Mode checkout. Supervised payment-enabled API + signed webhook listener, NO recovery worker
 // (no attempt is ever claimed or scanned) and in-process recovery off. Stalled attempts are resolved later only by an exact-attempt run.
-const RECOVERY_MODES = new Set(['--recovery-mode=incident-scoped', '--recovery-mode=exact-attempt', '--recovery-mode=checkout', '--recovery-mode=governed']);
+// expired-lease: exactly ONE owner-named DECLINED attempt whose work row is LEASED past its lease (an earlier worker died mid-pass).
+// The launcher only verifies the frozen facts and Stripe Test Mode decline; the scoped worker's existing expired-lease claim then
+// re-reads Stripe and finishes the row (DECLINED -> work DONE). No order, no email, no other row. See TASK_04.0_FOLLOWUP_EXPIRED_LEASE.md.
+const RECOVERY_MODES = new Set(['--recovery-mode=incident-scoped', '--recovery-mode=exact-attempt', '--recovery-mode=checkout', '--recovery-mode=governed',
+  '--recovery-mode=expired-lease']);
 const MAX_EXACT_ATTEMPTS = 2;
 const GOVERNED_SINCE = /^--governed-since=(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z)$/;
 const MAX_GOVERNED_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
@@ -167,13 +171,13 @@ function argumentsFor(argv) {
   const modes = argv.filter(arg => RECOVERY_MODES.has(arg));
   if (modes.length > 1) throw new Error('Choose one recovery mode.');
   const mode = modes[0] === '--recovery-mode=exact-attempt' ? 'exact-attempt' : modes[0] === '--recovery-mode=checkout' ? 'checkout'
-    : modes[0] === '--recovery-mode=governed' ? 'governed' : 'incident-scoped';
+    : modes[0] === '--recovery-mode=governed' ? 'governed' : modes[0] === '--recovery-mode=expired-lease' ? 'expired-lease' : 'incident-scoped';
   if ((mode === 'governed') !== Boolean(sinceArgs.length)) throw new Error('--recovery-mode=governed requires exactly one --governed-since=<ISO>, and only that mode accepts it.');
   argv = argv.filter(arg => !RECOVERY_MODES.has(arg));
   const reviewed = argv.filter(arg => /^--reviewed-recovery-attempt=[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(arg));
   const accepted = argv.filter(arg => /^--accepted-backlog-attempt=[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(arg));
   if (accepted.length > 1) throw new Error('At most one owner-accepted backlog attempt may be isolated.');
-  if (reviewed.length > (mode === 'exact-attempt' ? MAX_EXACT_ATTEMPTS : mode === 'checkout' || mode === 'governed' ? 0 : 1) || argv.some(arg => !['--preflight', '--start', '--allow-dev-recovery', '--allow-dev-checkout', '--allow-email-allowlist'].includes(arg) && !reviewed.includes(arg) && !accepted.includes(arg)) || new Set(argv).size !== argv.length ||
+  if (reviewed.length > (mode === 'exact-attempt' ? MAX_EXACT_ATTEMPTS : mode === 'expired-lease' ? 1 : mode === 'checkout' || mode === 'governed' ? 0 : 1) || argv.some(arg => !['--preflight', '--start', '--allow-dev-recovery', '--allow-dev-checkout', '--allow-email-allowlist'].includes(arg) && !reviewed.includes(arg) && !accepted.includes(arg)) || new Set(argv).size !== argv.length ||
     argv.includes('--start') && argv.includes('--preflight')) throw new Error('Use --preflight or --start --allow-dev-recovery.');
   const start = argv.includes('--start');
   if (mode === 'checkout') {
@@ -186,6 +190,9 @@ function argumentsFor(argv) {
     if (start && !reviewed.length && mode !== 'governed') throw new Error('Starting supervised DEV requires an exact reviewed recovery attempt.');
   }
   const reviewedIds = reviewed.map(arg => arg.split('=')[1].toLowerCase());
+  if (mode === 'expired-lease' && (reviewed.length !== 1 || !noEmail || accepted.length || argv.includes('--allow-email-allowlist'))) {
+    throw new Error('--recovery-mode=expired-lease takes exactly one --reviewed-recovery-attempt, requires --no-email, and accepts no backlog isolation.');
+  }
   if (noEmail && argv.includes('--allow-email-allowlist')) throw new Error('Choose --allow-email-allowlist or --no-email, not both.');
   return { start, mode, allowEmailAllowlist: argv.includes('--allow-email-allowlist'), ...(noEmail ? { noEmail: true } : {}),
     ...(sinceArgs.length ? { governedSince: governedSince(GOVERNED_SINCE.exec(sinceArgs[0])[1]) } : {}),
@@ -228,7 +235,8 @@ function assertTask04FixtureAttempt(attempt, userId) {
 }
 
 function normalizeWorkerAttemptIds(value, mode = 'incident-scoped') {
-  const sizeOk = Array.isArray(value) && (mode === 'exact-attempt' ? value.length >= 1 && value.length <= MAX_EXACT_ATTEMPTS : value.length === 2);
+  const sizeOk = Array.isArray(value) && (mode === 'exact-attempt' ? value.length >= 1 && value.length <= MAX_EXACT_ATTEMPTS
+    : mode === 'expired-lease' ? value.length === 1 : value.length === 2);
   if (!sizeOk || value.some(id => typeof id !== 'string' ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id)) || new Set(value).size !== value.length) {
     throw new Error('Supervised DEV requires exactly two distinct canonical attempt IDs.');
@@ -240,6 +248,21 @@ function normalizeWorkerAttemptIds(value, mode = 'incident-scoped') {
 function assertReviewedRecovery(attempt, id) {
   if (!attempt || attempt.id !== id || attempt.state !== 'AWAITING_INPUT' || attempt.orderId ||
     !attempt.providerIntentId || attempt.work?.state !== 'READY') throw new Error('Reviewed recovery attempt changed; inspect it again before startup.');
+}
+
+/**
+ * Frozen facts for expired-lease recovery (Task 04.0 follow-up): a submitted, declined Test Mode attempt with no order, no cancellation
+ * request and no signed event, whose work row is LEASED by a dead worker (lease expired, no retry, no error recorded). Anything else,
+ * including a row already finished (DONE) by an earlier run, fails closed, so a re-run after success changes nothing.
+ */
+function assertExpiredLeaseRecovery(attempt, id, signedEvents, now = Date.now()) {
+  const work = attempt?.work;
+  if (!attempt || attempt.id !== id || attempt.state !== 'DECLINED' || attempt.failureCode !== 'PAYMENT_DECLINED' ||
+    attempt.providerStatus !== 'requires_payment_method' || !attempt.providerIntentId || !attempt.submittedAt || attempt.orderId ||
+    attempt.cancelRequested || signedEvents !== 0 || !work || work.state !== 'LEASED' || !work.leaseUntil ||
+    new Date(work.leaseUntil).getTime() >= now || work.retryCount !== 0 || work.lastError !== null) {
+    throw new Error('Expired-lease recovery attempt no longer matches its frozen record; inspect it again before startup.');
+  }
 }
 
 async function preflight(deps = {}, options = {}) {
@@ -287,11 +310,16 @@ async function preflight(deps = {}, options = {}) {
       const reviewedAttempts = [];
       for (const id of options.reviewedRecoveryAttempts ?? (options.reviewedRecoveryAttempt ? [options.reviewedRecoveryAttempt] : [])) {
         const attempt = await tx.paymentAttempt.findUnique({ where: { id }, include: { work: true } });
-        assertReviewedRecovery(attempt, id);
+        if (options.mode === 'expired-lease') {
+          const signedEvents = attempt ? await tx.stripeEvent.count({ where: { attemptId: id } }) : -1;
+          assertExpiredLeaseRecovery(attempt, id, signedEvents);
+        } else assertReviewedRecovery(attempt, id);
         reviewedAttempts.push(attempt);
       }
       reviewedAttempt = reviewedAttempts[0] ?? null;
-      const exact = options.mode === 'exact-attempt';
+      const expiredLease = options.mode === 'expired-lease';
+      if (expiredLease && (reviewedAttempts.length !== 1 || options.acceptedBacklogAttempt)) throw new Error('Expired-lease recovery requires exactly one reviewed attempt.');
+      const exact = options.mode === 'exact-attempt' || expiredLease;
       const checkout = options.mode === 'checkout';
       const governed = options.mode === 'governed';
       if (governed && !options.governedSince) throw new Error('Governed DEV recovery requires --governed-since.');
@@ -308,7 +336,7 @@ async function preflight(deps = {}, options = {}) {
         taskFixtureAttempt = fixtureAttempts[0];
         assertTask04FixtureAttempt(taskFixtureAttempt, fixture.userId);
       }
-      const workerAttemptIds = exact ? (reviewedAttempts.length ? normalizeWorkerAttemptIds(reviewedAttempts.map(attempt => attempt.id), 'exact-attempt') : [])
+      const workerAttemptIds = exact ? (reviewedAttempts.length ? normalizeWorkerAttemptIds(reviewedAttempts.map(attempt => attempt.id), options.mode) : [])
         : taskFixtureAttempt ? normalizeWorkerAttemptIds([reviewedAttempt.id, taskFixtureAttempt.id]) : [];
       // Governed: open work for attempts created at/after the boundary is the worker's to resolve; only older work counts as backlog.
       const governedScopedWork = governed ? await tx.paymentWork.count({ where: { state: { not: 'DONE' },
@@ -351,7 +379,9 @@ async function preflight(deps = {}, options = {}) {
     for (const reviewedAttempt of reviewedAttempts) {
       const intent = await (deps.retrieveIntent || (id => require('../dist/services/stripe.provider.js').stripeProvider.retrieve(id)))(reviewedAttempt.providerIntentId);
       (deps.verifyBinding || require('../dist/services/payment.domain.js').verifyBinding)(reviewedAttempt, intent);
-      if (intent.livemode !== false || intent.status !== 'requires_payment_method' || intent.received !== 0 || (intent.capturable ?? 0) !== 0) {
+      // Expired-lease recovery additionally needs Stripe to still report the decline: the worker then only re-persists it.
+      if (intent.livemode !== false || intent.status !== 'requires_payment_method' || intent.received !== 0 || (intent.capturable ?? 0) !== 0 ||
+        options.mode === 'expired-lease' && intent.declined !== true) {
         throw new Error('Reviewed recovery provider state changed; inspect it again before startup.');
       }
     }
@@ -384,7 +414,10 @@ async function supervise(config, options = {}, deps = {}) {
     throw new Error('Governed scope must match the exact --governed-since from DEV preflight and carry no attempt IDs.');
   }
   const workerAttemptIds = checkoutMode || governedMode ? [] : normalizeWorkerAttemptIds(config.workerAttemptIds, options.mode);
-  const exactMatches = options.mode !== 'exact-attempt' || (Array.isArray(options.reviewedRecoveryAttempts) &&
+  if (options.mode === 'expired-lease' && (!options.noEmail || options.allowEmailAllowlist || (config.workerAttemptIds ?? []).length !== 1)) {
+    throw new Error('Expired-lease recovery supervises exactly one attempt with email disabled.');
+  }
+  const exactMatches = !['exact-attempt', 'expired-lease'].includes(options.mode) || (Array.isArray(options.reviewedRecoveryAttempts) &&
     options.reviewedRecoveryAttempts.length === workerAttemptIds.length && options.reviewedRecoveryAttempts.every((id, index) => workerAttemptIds[index] === id));
   if (!checkoutMode && !governedMode && (options.start !== true || options.reviewedRecoveryAttempt !== workerAttemptIds[0] || !exactMatches)) {
     throw new Error('Supervisor scope must match the exact reviewed attempt from DEV preflight.');
@@ -560,4 +593,4 @@ async function main(argv = process.argv.slice(2), deps = {}) {
 }
 if (require.main === module) main().then(code => { process.exitCode = code; });
 module.exports = { argumentsFor, applyGovernedEmailDefault, assertAcceptedBacklog, allowlistedRecipients, migrationNames, migrationChecksumCandidates, verifyMigrationLedger, assertNoPaymentBacklog, assertNoEmailBacklog,
-  assertReviewedRecovery, readTask04Fixture, assertTask04FixtureAttempt, normalizeWorkerAttemptIds, waitForChildExit, preflight, supervise, main };
+  assertReviewedRecovery, assertExpiredLeaseRecovery, readTask04Fixture, assertTask04FixtureAttempt, normalizeWorkerAttemptIds, waitForChildExit, preflight, supervise, main };

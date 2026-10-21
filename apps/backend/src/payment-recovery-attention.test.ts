@@ -44,3 +44,49 @@ describe('governed DEV scope selects only attempts created at/after the approved
     expect(paymentWorkScopeWhere({ createdSince })).toEqual({ attempt: { createdAt: { gte: createdSince } } });
   });
 });
+
+// Task 04.0 follow-up: an expired-lease DECLINED row is finished by the existing worker claim, scoped to the one reviewed attempt.
+describe('expired-lease recovery of one DECLINED attempt', () => {
+  const id = '384a8c53-c4bf-4924-92e0-e2c000870a8d';
+  const attempt = { id, state: 'DECLINED', failureCode: 'PAYMENT_DECLINED', providerStatus: 'requires_payment_method', providerIntentId: 'pi_declined',
+    stripeAccountId: 'acct_test', amountCents: 150, currency: 'USD', orderId: null, cancelRequested: false, submittedAt: new Date('2026-10-14T19:58:31Z'),
+    confirmationStartedAt: null, expiresAt: new Date('2026-10-14T20:28:31Z'), createdAt: new Date('2026-10-14T19:58:00Z'), refundId: null, compensatedAt: null, items: [] };
+  const intent = { id: 'pi_declined', account: 'acct_test', livemode: false, amount: 150, currency: 'usd', captureMethod: 'manual', status: 'requires_payment_method',
+    capturable: 0, received: 0, methodType: 'card', clientSecret: null, attemptId: id, declined: true, card: null, captureBefore: null };
+  const harness = (providerIntent: typeof intent) => {
+    let token = '';
+    const writes: { attempt: unknown[]; work: unknown[] } = { attempt: [], work: [] };
+    const updateMany = vi.fn(async ({ data }) => { token = data.leaseToken; return { count: 1 }; });
+    const tx = {
+      $queryRaw: vi.fn(async () => []),
+      paymentAttempt: {
+        findUnique: vi.fn(async () => ({ ...attempt, work: { state: 'LEASED', leaseToken: token, leaseUntil: new Date(Date.now() + 60_000) } })),
+        update: vi.fn(async ({ data }) => { writes.attempt.push(data); return { ...attempt, ...data }; }),
+      },
+      paymentWork: { update: vi.fn(async ({ data }) => { writes.work.push(data); return { attemptId: id, ...data }; }) },
+    };
+    const database = { paymentWork: { updateMany }, paymentAttempt: { findUnique: vi.fn(async () => attempt) },
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)) };
+    const provider = { retrieve: vi.fn(async () => providerIntent), create: vi.fn(), capture: vi.fn(), cancel: vi.fn(), refund: vi.fn(), retrieveRefund: vi.fn(), account: vi.fn() };
+    const service = new PaymentService(database as unknown as PrismaClient, provider as never, undefined, () => ({ allowed: true }) as never);
+    return { service, updateMany, writes, provider };
+  };
+
+  it('claims only through the expired-lease clause and finishes the work DONE as DECLINED, with no order, cancel or capture', async () => {
+    const { service, updateMany, writes, provider } = harness(intent);
+    await service.process(id);
+    const where = updateMany.mock.calls[0]![0].where;
+    expect(where.attemptId).toBe(id);
+    expect(where.OR).toContainEqual({ state: 'LEASED', leaseUntil: { lt: expect.any(Date) } });
+    expect(writes.attempt).toEqual([{ state: 'DECLINED', providerStatus: 'requires_payment_method', failureCode: 'PAYMENT_DECLINED' }]);
+    expect(writes.work).toHaveLength(1);
+    expect(writes.work[0]).toMatchObject({ state: 'DONE', leaseToken: null, leaseUntil: null, lastError: null, retryCount: 0 });
+    expect(provider.capture).not.toHaveBeenCalled(); expect(provider.cancel).not.toHaveBeenCalled(); expect(provider.create).not.toHaveBeenCalled();
+  });
+
+  it('never widens the batch to the DONE+DECLINED recheck rows outside the one reviewed attempt', async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    await new PaymentService({ paymentWork: { findMany } } as unknown as PrismaClient).runBatch([id]).catch(() => undefined);
+    expect(findMany.mock.calls[0]![0].where.attemptId).toEqual({ in: [id] });
+  });
+});
