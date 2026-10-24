@@ -1,5 +1,6 @@
 @use '@/styles/abstracts/variables' as *;
 @use '@/styles/abstracts/mixins' as *;
+@use '@/styles/abstracts/discovery' as *;
 
 // ─────────────────────────────────────────────────────────────
 // HEADER SHELL
@@ -310,6 +311,55 @@
     &:active {
       transform: none;
     }
+  }
+}
+
+// Discovery Console trigger — an icon button that widens into a search pill with its shortcut on wide screens.
+.searchTriggerLabel,
+.searchTriggerKey {
+  display: none;
+}
+
+@media (min-width: $breakpoint-xl) and (hover: hover) {
+  .searchTrigger {
+    width: auto;
+    gap: $spacing-2;
+    margin-right: $spacing-2;
+    padding: 0 $spacing-2 0 $spacing-3;
+    border-color: $discovery-border;
+    background: $discovery-canvas;
+    transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+
+    svg { color: $discovery-accent; }
+
+    &:hover {
+      background: $color-background;
+      border-color: $discovery-border-strong;
+      box-shadow: $discovery-shadow-floating;
+      color: $color-text-primary;
+    }
+  }
+
+  .searchTriggerLabel {
+    display: inline;
+    min-width: 6.5rem;
+    text-align: left;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-regular;
+  }
+
+  .searchTriggerKey {
+    display: inline-flex;
+    align-items: center;
+    height: 1.25rem;
+    padding: 0 0.375rem;
+    font-family: $font-family-mono;
+    font-size: 0.6875rem;
+    font-weight: $font-weight-medium;
+    color: $discovery-text-secondary;
+    background: $discovery-keyboard-hint;
+    border: 1px solid $discovery-border;
+    border-bottom-width: 2px;
   }
 }
 

@@ -1,0 +1,885 @@
+@use '@/styles/abstracts' as *;
+
+// ====================================
+// Discovery Console — command search surface
+// ====================================
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes shellIn { from { opacity: 0; transform: translate(-50%, 6px) scale(0.98); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+@keyframes sheetIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes riseIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes scan { 0%, 100% { transform: scaleX(0.15); } 50% { transform: scaleX(1); } }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: $z-modal;
+  background: $discovery-overlay;
+  backdrop-filter: blur(2px);
+  @include motion-safe { animation: overlayIn $discovery-motion-standard; }
+}
+
+// --- Shell ---
+.shell {
+  position: fixed;
+  z-index: $z-modal + 1;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: $discovery-surface;
+  font-family: $font-family-base;
+  color: $discovery-text-primary;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  outline: none;
+  @include motion-safe { animation: sheetIn $discovery-motion-standard; }
+
+  @include respond-to(sm) {
+    inset: auto;
+    top: clamp(#{$spacing-4}, 12vh, 7.5rem);
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(45rem, calc(100vw - #{$spacing-8}));
+    max-height: calc(100dvh - clamp(#{$spacing-4}, 12vh, 7.5rem) - #{$spacing-6});
+    padding: 0;
+    box-shadow: $discovery-shadow-dialog;
+    @include motion-safe { animation: shellIn $discovery-motion-standard; }
+  }
+}
+
+// --- Input row ---
+.inputRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  flex: 0 0 auto;
+  min-height: 3.5rem;
+  padding: 0 $spacing-2 0 $spacing-4;
+  border-bottom: 1px solid $discovery-border;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    background: $discovery-accent;
+    transform-origin: left;
+    @include motion-safe { transition: background-color $discovery-motion-standard; }
+  }
+
+  @include respond-to(sm) {
+    min-height: $spacing-16;
+    gap: $spacing-3;
+    padding: 0 $spacing-3 0 $spacing-5;
+  }
+}
+
+.inputRowVisual::after { background: $discovery-visual-ink; }
+
+.leadIcon {
+  flex: 0 0 auto;
+  color: $discovery-accent;
+
+  .inputRowVisual & { color: $discovery-text-secondary; }
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: none;
+  font-family: $font-family-base;
+  font-size: $font-size-base; // 16px on phones so iOS never zooms
+  line-height: 1.75rem;
+  font-weight: $font-weight-medium;
+  color: $discovery-text-primary;
+
+  &::placeholder { color: $discovery-text-muted; font-weight: $font-weight-regular; }
+  &::-webkit-search-cancel-button { display: none; }
+
+  @include respond-to(sm) { font-size: $font-size-lg; }
+}
+
+.iconAction {
+  @include flex-center;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  background: none;
+  color: $discovery-text-secondary;
+  cursor: pointer;
+  transition: background-color $transition-fast, color $transition-fast;
+
+  &:hover { background: $discovery-surface-hover; color: $discovery-text-primary; }
+  &:focus-visible { outline: 2px solid $discovery-focus-ring; outline-offset: -2px; }
+}
+
+.divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 1.5rem;
+  background: $discovery-border;
+}
+
+.modeButton {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-2;
+  flex: 0 0 auto;
+  height: 2.5rem;
+  padding: 0 $spacing-3;
+  border: 1px solid transparent;
+  background: none;
+  font-family: $font-family-base;
+  font-size: 0.8125rem;
+  font-weight: $font-weight-medium;
+  color: $discovery-visual-ink;
+  cursor: pointer;
+  transition: background-color $transition-fast, border-color $transition-fast;
+
+  &:hover { background: $discovery-visual-subtle; }
+  &:focus-visible { outline: 2px solid $discovery-focus-ring; outline-offset: -2px; }
+}
+
+.modeButtonOn {
+  background: $discovery-visual-subtle;
+  border-color: $discovery-visual-ink;
+}
+
+.modeLabel {
+  display: none;
+  @include respond-to(md) { display: inline; }
+}
+
+.close {
+  @include flex-center;
+  flex: 0 0 auto;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  border: 0;
+  background: none;
+  color: $discovery-text-secondary;
+  cursor: pointer;
+
+  &:hover { background: $discovery-surface-hover; color: $discovery-text-primary; }
+  &:focus-visible { outline: 2px solid $discovery-focus-ring; outline-offset: -2px; }
+
+  .keycap { display: none; }
+
+  @include respond-to(lg) {
+    .keycap { display: inline-flex; }
+    .closeIcon { display: none; }
+  }
+}
+
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-1;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.375rem;
+  font-family: $font-family-mono;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: $font-weight-medium;
+  color: $discovery-text-secondary;
+  background: $discovery-keyboard-hint;
+  border: 1px solid $discovery-border;
+  border-bottom-width: 2px;
+}
+
+// --- Body ---
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: $spacing-2 0 $spacing-3;
+
+  @include respond-to(sm) { max-height: min(30rem, 62dvh); }
+}
+
+.sectionLabel {
+  margin: 0;
+  padding: $spacing-3 $spacing-4 $spacing-2;
+  font-size: $font-size-xs;
+  line-height: 1rem;
+  font-weight: $font-weight-semibold;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: $discovery-text-secondary;
+
+  @include respond-to(sm) { padding-inline: $spacing-5; }
+}
+
+.inlineNote {
+  margin: 0;
+  padding: $spacing-6 $spacing-5;
+  font-size: $font-size-sm;
+  line-height: 1.25rem;
+  color: $discovery-text-secondary;
+}
+
+// --- Suggestions ---
+.suggestions { @include motion-safe { animation: riseIn $discovery-motion-standard; } }
+
+.listbox,
+.group {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.group { padding: 0 $spacing-2; }
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  min-height: 3.25rem;
+  padding: $spacing-2 $spacing-3;
+  cursor: pointer;
+  transition: background-color $discovery-motion-fast;
+
+  &[aria-selected='true'] {
+    background: $discovery-selection-background;
+
+    .title { color: $discovery-text-accent; }
+    .glyph { background: $discovery-surface; border-color: $discovery-accent; color: $discovery-accent; }
+    .enterHint { visibility: visible; }
+  }
+}
+
+.glyph {
+  @include flex-center;
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  background: $color-surface;
+  border: 1px solid $discovery-border;
+  color: $discovery-text-secondary;
+  transition: border-color $discovery-motion-fast, color $discovery-motion-fast;
+}
+
+.copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+
+.title {
+  @include text-truncate;
+  font-size: $font-size-sm;
+  line-height: 1.25rem;
+  font-weight: $font-weight-medium;
+  color: $discovery-text-primary;
+
+  mark {
+    background: none;
+    color: $discovery-text-accent;
+    font-weight: $font-weight-semibold;
+  }
+}
+
+.meta {
+  font-size: $font-size-xs;
+  line-height: 1rem;
+  color: $discovery-text-secondary;
+}
+
+.enterHint {
+  margin-left: auto;
+  visibility: hidden;
+}
+
+.skeletonList {
+  display: grid;
+  gap: $spacing-2;
+  padding: $spacing-3 $spacing-4;
+}
+
+.skeletonRow,
+.chipSkeleton {
+  display: block;
+  background: linear-gradient(90deg, $color-surface 0%, $discovery-surface-hover 50%, $color-surface 100%);
+  background-size: 200% 100%;
+  @include motion-safe { animation: shimmer 1.2s linear infinite; }
+}
+
+.skeletonRow { height: 2.75rem; }
+
+// --- Quick actions ---
+.quick { @include motion-safe { animation: riseIn $discovery-motion-standard; } }
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: $spacing-2;
+  padding: 0 $spacing-4 $spacing-2;
+
+  @include respond-to(sm) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding-inline: $spacing-5;
+  }
+}
+
+.action {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  min-width: 0;
+  padding: $spacing-3;
+  border: 1px solid $discovery-border;
+  background: $discovery-surface-raised;
+  font-family: $font-family-base;
+  cursor: pointer;
+  transition: border-color $transition-fast, background-color $transition-fast;
+
+  &:hover { border-color: $discovery-border-strong; }
+  &:focus-visible { outline: 2px solid $discovery-focus-ring; outline-offset: 2px; }
+}
+
+.actionVisual {
+  .glyph { background: $discovery-visual-subtle; border-color: transparent; color: $discovery-visual-ink; }
+  &:hover { background: $discovery-upload-hover; border-color: $discovery-visual-ink; }
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-2;
+  margin: 0;
+  padding: 0 $spacing-4;
+  list-style: none;
+
+  @include respond-to(sm) { padding-inline: $spacing-5; }
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-2;
+  height: 2.25rem;
+  padding: 0 $spacing-3;
+  border: 1px solid $discovery-border;
+  background: $discovery-surface;
+  font-family: $font-family-base;
+  font-size: 0.8125rem;
+  font-weight: $font-weight-medium;
+  color: $discovery-text-primary;
+  cursor: pointer;
+  transition: border-color $transition-fast, color $transition-fast, background-color $transition-fast;
+
+  &:hover { border-color: $discovery-accent; color: $discovery-accent; background: $discovery-accent-subtle; }
+  &:focus-visible { outline: 2px solid $discovery-focus-ring; outline-offset: 2px; }
+}
+
+.chipCount {
+  font-family: $font-family-mono;
+  font-size: 0.6875rem;
+  color: $discovery-text-secondary;
+}
+
+.chipSkeleton {
+  width: 6rem;
+  height: 2.25rem;
+}
+
+// --- Footer ---
+.footer {
+  display: flex;
+  align-items: center;
+  gap: $spacing-4;
+  flex: 0 0 auto;
+  padding: $spacing-3 $spacing-4;
+  background: $discovery-canvas;
+  border-top: 1px solid $discovery-border;
+  font-size: $font-size-xs;
+  color: $discovery-text-secondary;
+
+  @include respond-to(sm) { padding-inline: $spacing-5; }
+}
+
+.hints {
+  display: none;
+  align-items: center;
+  gap: $spacing-5;
+
+  @media (hover: hover) and (pointer: fine) and (min-width: $breakpoint-md) { display: inline-flex; }
+}
+
+.hint {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-1;
+
+  .keycap:last-of-type { margin-right: $spacing-1; }
+}
+
+.viewAll {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-1;
+  min-width: 0;
+  min-height: 2.5rem;
+  margin-left: auto;
+  padding: 0 $spacing-2;
+  border: 0;
+  background: none;
+  font-family: $font-family-base;
+  font-size: 0.8125rem;
+  font-weight: $font-weight-semibold;
+  color: $discovery-text-accent;
+  cursor: pointer;
+
+  &:hover { color: $color-primary-dark; text-decoration: underline; text-underline-offset: 3px; }
+  &:focus-visible { outline: 2px solid $discovery-focus-ring; outline-offset: 2px; }
+}
+
+.viewAllText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// --- Image mode ---
+.imageMode {
+  display: grid;
+  gap: $spacing-4;
+  padding: $spacing-3 $spacing-4 $spacing-2;
+  @include motion-safe { animation: riseIn $discovery-motion-emphasis; }
+
+  @include respond-to(sm) { padding-inline: $spacing-5; }
+}
+
+.corner {
+  position: absolute;
+  z-index: 1;
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 0 solid $discovery-visual-ink;
+  pointer-events: none;
+}
+.tl { top: 6px; left: 6px; border-top-width: 2px; border-left-width: 2px; }
+.tr { top: 6px; right: 6px; border-top-width: 2px; border-right-width: 2px; }
+.bl { bottom: 6px; left: 6px; border-bottom-width: 2px; border-left-width: 2px; }
+.br { bottom: 6px; right: 6px; border-bottom-width: 2px; border-right-width: 2px; }
+
+.drop {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: $spacing-4;
+  padding: $spacing-6 $spacing-5;
+  background: $discovery-canvas;
+  border: 1px solid $discovery-border;
+  transition: background-color $transition-fast;
+
+  @include respond-to(sm) { grid-template-columns: auto 1fr auto; }
+}
+
+.dropDragging {
+  background: $discovery-visual-subtle;
+  outline: 2px solid $discovery-upload-dragging;
+  outline-offset: -2px;
+}
+
+.dropGlyph {
+  @include flex-center;
+  width: 3rem;
+  height: 3rem;
+  background: $discovery-visual-subtle;
+  color: $discovery-visual-ink;
+}
+
+.dropCopy { min-width: 0; }
+
+.dropTitle {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.375rem;
+  font-weight: $font-weight-semibold;
+  letter-spacing: 0;
+}
+
+.dropText {
+  margin: 2px 0 0;
+  font-size: $font-size-xs;
+  line-height: 1.125rem;
+  color: $discovery-text-secondary;
+}
+
+.dropActions {
+  display: flex;
+  gap: $spacing-2;
+  grid-column: 1 / -1;
+
+  > * { flex: 1; }
+
+  @include respond-to(sm) {
+    grid-column: auto;
+    > * { flex: none; }
+  }
+}
+
+.privacyNote {
+  margin: 0;
+  font-size: $font-size-xs;
+  line-height: 1.125rem;
+  color: $discovery-text-secondary;
+}
+
+.fieldError {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-2;
+  margin: 0;
+  padding: $spacing-3;
+  background: $color-error-background;
+  border: 1px solid $color-error-border;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  color: $color-error-foreground;
+
+  svg { flex: 0 0 auto; margin-top: 2px; }
+}
+
+.preview {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  gap: $spacing-4;
+  padding: $spacing-4;
+  border: 1px solid $discovery-border;
+  background: $discovery-surface;
+
+  @include respond-to(sm) {
+    grid-template-columns: 10rem 1fr;
+    gap: $spacing-5;
+    padding: $spacing-5;
+  }
+}
+
+.photo {
+  position: relative;
+  aspect-ratio: 1;
+  background: $color-surface;
+  border: 1px solid $discovery-border;
+  overflow: hidden;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+}
+
+.scanLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: $discovery-visual-accent;
+  transform-origin: left;
+  @include motion-safe { animation: scan 1.6s ease-in-out infinite; }
+}
+
+.previewBody {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fileName {
+  @include text-truncate;
+  margin: 0;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+}
+
+.fileMeta {
+  margin: 2px 0 $spacing-4;
+  font-size: $font-size-xs;
+  color: $discovery-text-secondary;
+}
+
+.previewActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-2;
+  margin-top: auto;
+
+  > * { flex: 1 1 0; }
+  > :first-child { flex: 1 1 100%; }
+
+  @include respond-to(sm) { > *, > :first-child { flex: 0 1 auto; } }
+}
+
+.processing {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-2;
+  margin: 0 0 $spacing-4;
+  font-size: 0.8125rem;
+  font-weight: $font-weight-medium;
+  color: $discovery-visual-ink;
+}
+
+.spinner {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: $radius-full;
+  @include motion-safe { animation: spin 0.75s linear infinite; }
+}
+
+// Once results are in, the photo steps back so the matches lead.
+.previewCompact {
+  grid-template-columns: 4.5rem 1fr;
+  gap: $spacing-3;
+  padding: $spacing-3;
+
+  @include respond-to(sm) {
+    grid-template-columns: 5rem 1fr;
+    gap: $spacing-4;
+    padding: $spacing-3 $spacing-4;
+  }
+
+  .fileMeta { margin-bottom: $spacing-2; }
+  .previewActions > :first-child { flex: 0 1 auto; }
+}
+
+// --- Camera ---
+.camera { display: grid; gap: $spacing-3; }
+
+.viewfinder {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  max-height: 50dvh;
+  background: $color-secondary;
+  overflow: hidden;
+
+  .corner { border-color: $color-text-inverse; }
+}
+
+.cameraMedia {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cameraNote {
+  position: absolute;
+  inset: 0;
+  @include flex-center;
+  margin: 0;
+  font-size: $font-size-sm;
+  color: $color-text-inverse;
+}
+
+.cameraBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-3;
+}
+
+.shutter {
+  @include flex-center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border: 3px solid $discovery-visual-ink;
+  border-radius: $radius-full;
+  background: $discovery-surface;
+  color: $discovery-visual-ink;
+  cursor: pointer;
+  transition: background-color $transition-fast;
+
+  &:hover:not(:disabled) { background: $discovery-visual-subtle; }
+  &:disabled { border-color: $color-border; color: $color-text-muted; cursor: not-allowed; }
+  &:focus-visible { outline: 2px solid $discovery-focus-ring; outline-offset: 3px; }
+}
+
+// --- Visual results ---
+.visualResults { display: grid; gap: $spacing-3; }
+
+.resultsHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-3;
+}
+
+.visualChip {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-2;
+  height: 1.75rem;
+  padding: 0 $spacing-3;
+  background: $discovery-visual-subtle;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  color: $discovery-visual-ink;
+}
+
+.resultGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $spacing-3;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  @include respond-to(sm) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.resultCard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: $discovery-surface-raised;
+  border: 1px solid $discovery-border;
+  color: inherit;
+  text-decoration: none;
+  transition: box-shadow $transition-fast, border-color $transition-fast;
+
+  &:hover { box-shadow: $shadow-md; border-color: $discovery-border-strong; }
+  &:focus-visible { outline: 2px solid $discovery-focus-ring; outline-offset: 2px; }
+}
+
+.resultImage {
+  position: relative;
+  @include flex-center;
+  aspect-ratio: 4 / 3;
+  background: $color-surface;
+  border-bottom: 1px solid $discovery-border;
+  color: $discovery-text-muted;
+
+  img { width: 100%; height: 100%; object-fit: contain; padding: $spacing-2; }
+}
+
+.rank {
+  position: absolute;
+  top: $spacing-2;
+  left: $spacing-2;
+  padding: 2px 6px;
+  font-family: $font-family-mono;
+  font-size: 0.6875rem;
+  font-weight: $font-weight-medium;
+  background: $discovery-surface;
+  border: 1px solid $discovery-border;
+  color: $discovery-text-secondary;
+}
+
+.resultBody { display: grid; gap: $spacing-1; padding: $spacing-3; }
+
+.resultTitle {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.5rem;
+  font-size: $font-size-sm;
+  line-height: 1.25rem;
+  font-weight: $font-weight-medium;
+}
+
+.resultRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-1 $spacing-2;
+}
+
+.price { font-size: 0.9375rem; font-weight: $font-weight-semibold; }
+
+.stock {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+
+  &::before { content: ''; width: 6px; height: 6px; border-radius: $radius-full; background: currentColor; }
+}
+.stock-in { color: $color-success-foreground; }
+.stock-low { color: $color-warning-foreground; }
+.stock-out { color: $discovery-text-secondary; }
+
+// --- States ---
+.state {
+  display: grid;
+  justify-items: center;
+  gap: $spacing-2;
+  padding: $spacing-8 $spacing-5;
+  text-align: center;
+  background: $discovery-canvas;
+  border: 1px solid $discovery-border;
+  @include motion-safe { animation: riseIn $discovery-motion-emphasis; }
+}
+
+.stateGlyph {
+  @include flex-center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-bottom: $spacing-1;
+  background: $discovery-surface;
+  border: 1px solid $discovery-border;
+  color: $discovery-text-secondary;
+}
+
+.state-visual .stateGlyph { background: $discovery-visual-subtle; border-color: transparent; color: $discovery-visual-ink; }
+.state-error .stateGlyph { background: $color-error-background; border-color: $color-error-border; color: $color-error-foreground; }
+
+.stateTitle {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.375rem;
+  font-weight: $font-weight-semibold;
+  letter-spacing: 0;
+}
+
+.stateText {
+  max-width: 24rem;
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  color: $discovery-text-secondary;
+}
+
+.stateActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: $spacing-2;
+  margin-top: $spacing-2;
+}

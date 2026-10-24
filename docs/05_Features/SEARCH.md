@@ -34,6 +34,31 @@ Backend: `npx vitest run tests/search.test.ts src/services/__tests__/product.ser
 
 Visual references: the supplied customer `Search page.png`, `search_page.png`, `Searchpage.png`, `products-page.png`, `Footer.png` and admin `products page.png`. Preserve source filenames; exclude the floating prototype switcher. The approved Footer content/layout follows `Footer.png`; screenshots are supporting Figma Make references, not proof of inspection of live Figma Design.
 
+## Task 04.2 — Discovery Console (frontend)
+
+The global command search replaces the old Text/Image tabs on `/search`. It lives in
+`apps/frontend/src/features/search/discovery/` and uses the "ElectroHub Discovery Console" design system.
+
+- **Entry points:** the header search control (an icon, widening to a pill with its shortcut at ≥1280 px),
+  Ctrl/⌘+K anywhere in the customer layout, and the `/search` start panel. While a payment locks the shell,
+  the console cannot open. Focus returns to the element that opened it.
+- **Text:** reuses `useSearchSuggestions` (175 ms debounce, one request per settled query). Results are grouped
+  as Products, Brands and Categories using combobox/listbox/`aria-activedescendant` semantics. Products open
+  `/products/:slug`, brands and categories open `/products?brand|category=`, and Enter opens
+  `/search?q=` through the existing `searchParams` serialiser.
+- **Resting state:** real entry points plus every category with products, read from `GET /api/categories`.
+  Nothing is hardcoded, so new categories appear automatically.
+- **Image:** upload, drag-and-drop, paste or camera, with client checks (JPEG/PNG/WebP, 10 MB) for feedback
+  only. Selecting a photo never uploads it. The camera is requested only on press, video only, and every track
+  stops on capture, cancel and close.
+- **AI boundary:** the browser calls only the Express gateway, `POST /api/search/image` (multipart field `image`,
+  response `{ data: { items: ProductSummary[] } }` in relevance order). This endpoint is **owned by Task 04.2 and
+  not implemented yet**. Until a deployment sets `VITE_IMAGE_SEARCH_ENABLED=true`, the console shows an honest
+  "unavailable" state and sends nothing. 404/501/503 map to the same state. No similarity score is displayed.
+- **Tokens:** `styles/abstracts/_discovery.scss` (the `discovery-*` semantic layer). Most entries alias
+  `_variables.scss`. The new values are `#eff6ff`, `#0e7490`, `#ecfeff`, two shadows and three motion timings.
+- **Tests:** `discovery/discovery.test.tsx`, plus the updated `search.test.tsx`.
+
 ## 1. Purpose
 
 This document defines the product-search functionality for ElectroHub.

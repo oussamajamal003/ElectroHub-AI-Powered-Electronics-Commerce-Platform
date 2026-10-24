@@ -1,0 +1,47 @@
+// ====================================
+// ElectroHub — Discovery Console semantic tokens
+// ====================================
+// The search-specific layer from the "ElectroHub Discovery Console" design system.
+// Most entries alias the global foundations in _variables.scss; only the values marked
+// "new" are introduced by the search experience.
+@use 'variables' as *;
+
+// --- Surfaces ---
+$discovery-canvas: $color-surface;
+$discovery-surface: $color-background;
+$discovery-surface-raised: $color-background;
+$discovery-surface-hover: #f1f5f9; // lifted from the Button ghost hover literal
+$discovery-surface-selected: #eff6ff; // new — keyboard-active option; primary text on it is 4.8:1
+$discovery-overlay: rgba($color-secondary, 0.5);
+
+// --- Borders, focus and elevation ---
+$discovery-border: $color-border;
+$discovery-border-strong: $color-text-muted;
+$discovery-focus-ring: $color-primary;
+$discovery-shadow-dialog: 0 24px 48px -12px rgba($color-secondary, 0.28), 0 0 0 1px rgba($color-secondary, 0.06); // new
+$discovery-shadow-floating: 0 8px 20px -8px rgba($color-secondary, 0.2); // new
+
+// --- Text ---
+$discovery-text-primary: $color-text-primary;
+$discovery-text-secondary: $color-text-secondary;
+$discovery-text-muted: $color-text-muted; // placeholder and disabled only (2.6:1)
+$discovery-text-accent: $color-primary;
+
+// --- Interaction ---
+$discovery-accent: $color-primary;
+$discovery-accent-subtle: $discovery-surface-selected;
+$discovery-selection-background: $discovery-surface-selected;
+$discovery-keyboard-hint: $discovery-surface-hover;
+
+// --- Visual (image) search ---
+$discovery-visual-accent: $color-accent; // decoration only — 2.4:1 on white
+$discovery-visual-ink: #0e7490; // new — readable cyan for icons and labels (5.4:1)
+$discovery-visual-subtle: #ecfeff; // new
+$discovery-upload-hover: $discovery-visual-subtle;
+$discovery-upload-dragging: $discovery-visual-ink;
+
+// --- Motion ---
+$discovery-ease: cubic-bezier(0.2, 0, 0, 1);
+$discovery-motion-fast: 120ms $discovery-ease;
+$discovery-motion-standard: 180ms $discovery-ease;
+$discovery-motion-emphasis: 240ms $discovery-ease;
