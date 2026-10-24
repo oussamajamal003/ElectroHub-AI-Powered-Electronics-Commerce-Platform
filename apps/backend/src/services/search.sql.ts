@@ -49,3 +49,15 @@ export function searchOrder(input: SearchInput) {
   if (sort === 'relevance' && input.q) return Prisma.sql`${relevance(input.q)} ASC, p."createdAt" DESC, p."id" ASC`;
   return Prisma.sql`p."createdAt" DESC, p."id" ASC`;
 }
+/**
+ * Category mix: round-robin across categories (each category's newest product, then each one's next newest, ...),
+ * categories in name order within a round. Deterministic and data-driven, not an editorial ranking. The per-category
+ * rank is a window function, so it is computed in a subquery: Postgres cannot nest it inside the page ordinal's window.
+ */
+export function categoryMixPage(where: Prisma.Sql, pageSize: number, offset: number) {
+  return Prisma.sql`SELECT mixed."id", ROW_NUMBER() OVER (ORDER BY mixed."round", mixed."categoryName", mixed."id") AS ordinal
+    FROM (SELECT p."id", c."name" AS "categoryName",
+      ROW_NUMBER() OVER (PARTITION BY p."categoryId" ORDER BY p."createdAt" DESC, p."id" ASC) AS "round"
+      ${searchFrom} ${where}) mixed
+    ORDER BY ordinal LIMIT ${pageSize} OFFSET ${offset}`;
+}

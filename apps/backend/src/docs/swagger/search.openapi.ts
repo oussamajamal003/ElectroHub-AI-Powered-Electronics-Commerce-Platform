@@ -15,7 +15,7 @@ export const searchPaths = {
       ...['category', 'brand'].map(name => parameter(name, { type: 'string', maxLength: 120, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' })),
       parameter('availability', { type: 'string', enum: ['available', 'unavailable'] }),
       ...['minPrice', 'maxPrice'].map(name => parameter(name, { type: 'string', pattern: '^(0|[1-9][0-9]{0,9})(\\.[0-9]{1,2})?$' })),
-      parameter('sort', { type: 'string', enum: ['relevance', 'price-asc', 'price-desc', 'newest', 'name-asc'] }),
+      parameter('sort', { type: 'string', enum: ['relevance', 'price-asc', 'price-desc', 'newest', 'name-asc', 'category-mix'] }),
       parameter('page', { type: 'integer', minimum: 1, maximum: 1000, default: 1 }),
       parameter('pageSize', { type: 'integer', minimum: 1, maximum: 100, default: 20 }),
     ], responses: {

@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import type { SearchInput } from '../validators/search.validator.js';
-import { escapeLike, relevance, searchFrom, searchOrder, searchWhere } from './search.sql.js';
+import { categoryMixPage, escapeLike, relevance, searchFrom, searchOrder, searchWhere } from './search.sql.js';
 import { projectInventory } from './inventory.service.js';
 
 export interface SearchSuggestion { id: string; type: 'PRODUCT' | 'BRAND' | 'CATEGORY'; label: string; slug: string }
@@ -56,10 +56,12 @@ export class SearchService {
     const rows = await prisma.$queryRaw<ProductRow[]>(Prisma.sql`
       WITH total AS (
         SELECT COUNT(*) AS total ${searchFrom} ${where}
-      ), page AS (
+      ), page AS (${input.sort === 'category-mix'
+        ? categoryMixPage(where, input.pageSize, (input.page - 1) * input.pageSize)
+        : Prisma.sql`
         SELECT p."id", ROW_NUMBER() OVER (ORDER BY ${order}) AS ordinal
         ${searchFrom} ${where}
-        ORDER BY ${order} LIMIT ${input.pageSize} OFFSET ${(input.page - 1) * input.pageSize}
+        ORDER BY ${order} LIMIT ${input.pageSize} OFFSET ${(input.page - 1) * input.pageSize}`}
       ), rating AS (
         SELECT r."productId", COUNT(*) AS "reviewCount", ROUND(AVG(r."rating")::numeric, 1)::text AS "averageRating"
         FROM "reviews" r JOIN page ON page."id" = r."productId" GROUP BY r."productId"

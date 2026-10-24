@@ -1,4 +1,4 @@
-export type SearchSort = 'relevance' | 'price-asc' | 'price-desc' | 'newest' | 'name-asc';
+export type SearchSort = 'relevance' | 'price-asc' | 'price-desc' | 'newest' | 'name-asc' | 'category-mix';
 export interface SearchState {
   q: string; category?: string; brand?: string; availability?: 'available' | 'unavailable';
   minPrice?: string; maxPrice?: string; sort?: SearchSort; page: number; pageSize: number;
@@ -45,7 +45,7 @@ export function parseSearch(params: URLSearchParams): SearchState {
   }
   const sort = params.get('sort');
   if (sort !== null) {
-    if (!['relevance', 'price-asc', 'price-desc', 'newest', 'name-asc'].includes(sort)) throw new Error('Invalid sort.');
+    if (!['relevance', 'price-asc', 'price-desc', 'newest', 'name-asc', 'category-mix'].includes(sort)) throw new Error('Invalid sort.');
     state.sort = sort as SearchSort;
   }
   return state;

@@ -10,7 +10,7 @@ import { ProductCard, ProductCardSkeleton } from '@/components/ui/ProductCard';
 import { StaggerItem } from '@/components/motion/Motion';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/Pagination';
 import { SearchField } from '@/components/ui/SearchField/SearchField';
-import { FilterChipGroup, FilterSelect } from '@/components/ui/FilterControls/FilterControls';
+import { FilterSelect } from '@/components/ui/FilterControls/FilterControls';
 import { activeSearch, clearFilters, emptySearch, normalizeQuery, parseSearch, searchParams, type SearchState } from './searchState';
 import { productCardProps, type Suggestion } from './api';
 import { useCart } from '@/features/cart/context';
@@ -48,7 +48,11 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
   const filterPanel = useRef<HTMLElement>(null);
   const categoriesQuery = useCategories(!catalog || showFilters || Boolean(state.category));
   const brandsQuery = useBrands(!catalog || showFilters || Boolean(state.brand));
-  const searchQuery = useSearchResults(state, active && tab === 'text');
+  // The catalog's default view rotates through categories so every category is represented on page one; the default
+  // is not written to the URL, and typed queries keep relevance ordering.
+  const defaultSort: NonNullable<SearchState['sort']> = state.q ? 'relevance' : catalog ? 'category-mix' : 'newest';
+  const requestState = useMemo(() => catalog && !state.q && !state.sort ? { ...state, sort: 'category-mix' as const } : state, [catalog, state]);
+  const searchQuery = useSearchResults(requestState, active && tab === 'text');
   const categories = categoriesQuery.data ?? [];
   const brands = brandsQuery.data ?? [];
   const results = active && tab === 'text' ? searchQuery.data : undefined;
@@ -96,11 +100,20 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
     if (suggestion.type === 'PRODUCT') { setDraft(suggestion.label); commit({ ...state, q: normalizeQuery(suggestion.label), page: 1 }); }
     else commit({ ...state, [suggestion.type === 'BRAND' ? 'brand' : 'category']: suggestion.slug, page: 1 });
   };
-  const filterChoices = (data: { name: string; slug: string }[], current?: string) => {
-    const choices = data.map(value => ({ value: value.slug, label: value.name }));
+  const filterChoices = (data: { name: string; slug: string; productCount?: number }[], current?: string) => {
+    const choices = data.map(value => ({ value: value.slug, label: value.productCount === undefined ? value.name : `${value.name} (${value.productCount})` }));
     if (current && !data.some(value => value.slug === current)) choices.push({ value: current, label: current });
     return choices;
   };
+  // A category deep link titles the page with the backend's category name once Categories load.
+  const activeCategory = catalog && state.category ? categories.find(value => value.slug === state.category) : undefined;
+  const pageTitle = catalog ? activeCategory?.name ?? 'All Products' : 'Search';
+  const allProductsLink = useMemo(() => {
+    const next = new URLSearchParams(serialized);
+    next.delete('category'); next.delete('page');
+    const query = next.toString();
+    return query ? `/products?${query}` : '/products';
+  }, [serialized]);
   const filterCount = Number(Boolean(state.category)) + Number(Boolean(state.brand)) + Number(Boolean(state.availability)) +
     Number(state.minPrice !== undefined || state.maxPrice !== undefined);
   const changePrice = (patch: Partial<Pick<SearchState, 'minPrice' | 'maxPrice'>>) => {
@@ -131,11 +144,13 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
   return <>
     <div className={styles.container}>
       {wishlist?.error && <p role="alert">{wishlist.error}</p>}
-      <nav aria-label="Breadcrumb" className={styles.breadcrumb}><Link to="/">Home</Link><ChevronRight size={16} aria-hidden="true" /><span aria-current="page">{catalog ? 'All Products' : 'Search'}</span></nav>
+      <nav aria-label="Breadcrumb" className={styles.breadcrumb}><Link to="/">Home</Link><ChevronRight size={16} aria-hidden="true" />
+        {activeCategory && <><Link to={allProductsLink}>Products</Link><ChevronRight size={16} aria-hidden="true" /></>}
+        <span aria-current="page">{pageTitle}</span></nav>
       <div className={styles.titleRow}>
-        <h1 className={styles.pageTitle}>{catalog ? 'All Products' : 'Search'}</h1>
+        <h1 className={styles.pageTitle}>{pageTitle}</h1>
         {catalog && results && (
-          <span className={styles.resultCount}>{results.meta.total} products</span>
+          <span className={styles.resultCount}>{results.meta.total} {results.meta.total === 1 ? 'product' : 'products'}</span>
         )}
       </div>
       {!catalog && <p className={styles.subtitle}>Find laptops, phones, audio, and more.</p>}
@@ -152,9 +167,9 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
               {filterCount > 0 && <span className={styles.filterBadge} aria-hidden="true">{filterCount}</span>}
               <ChevronDown size={18} strokeWidth={1.75} aria-hidden="true" className={`${styles.chevron} ${showFilters ? styles.chevronOpen : ''}`} />
             </button>}
-            <FilterSelect label="Sort by" value={state.sort ?? (state.q ? 'relevance' : 'newest')} selectSize={catalog ? 'medium' : 'large'}
+            <FilterSelect label="Sort by" value={state.sort ?? defaultSort} selectSize={catalog ? 'medium' : 'large'}
               compact={catalog ? { icon: <ArrowUpDown size={20} strokeWidth={1.75} />, triggerClassName: styles.sortTrigger ?? '', contentClassName: styles.sortContent ?? '' } : undefined} choices={[
-              { value: 'relevance', label: 'Relevance' }, { value: 'price-asc', label: 'Price: low to high' }, { value: 'price-desc', label: 'Price: high to low' }, { value: 'newest', label: 'Newest' }, { value: 'name-asc', label: 'Name: A–Z' },
+              ...(catalog ? [{ value: 'category-mix', label: 'Category mix' }] : []), { value: 'relevance', label: 'Relevance' }, { value: 'price-asc', label: 'Price: low to high' }, { value: 'price-desc', label: 'Price: high to low' }, { value: 'newest', label: 'Newest' }, { value: 'name-asc', label: 'Name: A–Z' },
             ]} onChange={value => update({ sort: value as SearchState['sort'] })} />
           </div>
           {(parsed.error || formError) && <div role="alert" className={styles.error}>{parsed.error || formError}
@@ -163,8 +178,8 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
             onKeyDown={event => { if (event.key === 'Escape') { setShowFilters(false); filterButton.current?.focus(); } }}>
             {(categoriesQuery.isPending || brandsQuery.isPending) && <p role="status">Loading filters…</p>}
             {metadataError && <p role="status">Filters are temporarily unavailable. You can still search by text. <Button type="button" variant="link" onClick={() => { void categoriesQuery.refetch(); void brandsQuery.refetch(); }}>Retry filters</Button></p>}
-            <FilterChipGroup label="Category" value={state.category ?? ''} choices={[{ value: '', label: 'All' }, ...filterChoices(categories, state.category)]} onChange={value => update({ category: value || undefined })} />
             <div className={styles.filterRow}>
+              <FilterSelect label="Category" value={state.category ?? ''} choices={[{ value: '', label: 'All categories' }, ...filterChoices(categories, state.category)]} onChange={value => update({ category: value || undefined })} />
               <FilterSelect label="Brand" value={state.brand ?? ''} choices={[{ value: '', label: 'All brands' }, ...filterChoices(brands, state.brand)]} onChange={value => update({ brand: value || undefined })} />
               <FilterSelect label="Availability" value={state.availability ?? ''} choices={[{ value: '', label: 'Any availability' }, { value: 'available', label: 'Available' }, { value: 'unavailable', label: 'Unavailable' }]} onChange={value => update({ availability: value === 'available' || value === 'unavailable' ? value : undefined })} />
               <Input label="Min price ($)" aria-invalid={priceInvalid || undefined} inputMode="decimal" value={priceDraft.minPrice ?? ''} onChange={event => changePrice({ minPrice: event.target.value || undefined })} />
@@ -182,7 +197,7 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
             <button type="button" className={styles.clearAll} onClick={clearAllFilters}>Clear all</button>
           </div>}
           <section aria-label="Search results" aria-busy={loading || (active && tab === 'text' && searchQuery.isFetching) || undefined} className={styles.results}>
-            <div role="status" aria-live="polite">{loading ? 'Searching products…' : results ? `${results.meta.total} ${results.meta.total === 1 ? 'result' : 'results'}${state.q ? ` for “${state.q}”` : ''}` : ''}</div>
+            <div role="status" aria-live="polite" className={catalog ? styles.visuallyHidden : undefined}>{loading ? 'Searching products…' : results ? `${results.meta.total} ${results.meta.total === 1 ? 'result' : 'results'}${state.q ? ` for “${state.q}”` : ''}` : ''}</div>
             {loading && <div className={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`} aria-hidden="true">{Array.from({ length: getProductGridSkeletonCount(state.pageSize) }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
             {error && <ErrorState headingLevel={2} className={styles.stateBlock} title="Search unavailable" description="Search is temporarily unavailable. Please try again." action={<Button type="button" onClick={() => void searchQuery.refetch()}>Retry search</Button>} />}
             {results && results.data.length > 0 && <div className={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`}>{results.data.map((product, index) => catalog

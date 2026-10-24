@@ -10,7 +10,7 @@ export const searchSchema = paginationSchema.extend({
   category: slugSchema.max(120).optional(), brand: slugSchema.max(120).optional(),
   availability: z.enum(['available', 'unavailable']).optional(),
   minPrice: price.optional(), maxPrice: price.optional(),
-  sort: z.enum(['relevance', 'price-asc', 'price-desc', 'newest', 'name-asc']).optional(),
+  sort: z.enum(['relevance', 'price-asc', 'price-desc', 'newest', 'name-asc', 'category-mix']).optional(),
 }).strict().refine(value => value.minPrice == null || value.maxPrice == null ||
   new Prisma.Decimal(value.minPrice).lte(value.maxPrice), { message: 'Minimum price exceeds maximum price.' });
 export const suggestionsSchema = z.object({
