@@ -305,7 +305,9 @@ test('shared Footer is present on customer routes and absent from Admin login', 
     await page.goto(route);
     const footer = page.getByRole('contentinfo');
     await expect(footer).toBeVisible();
-    for (const content of ['ElectroHub', 'All Products', 'Laptops', 'Phones', 'Audio', 'Tablets', 'Accessories', 'My Account', 'Orders', 'Wishlist', 'Track Delivery', 'About Us', 'Careers', 'Press', 'Contact', 'Help Center', 'Returns & Refunds', 'Warranty', 'Privacy Policy', 'Terms of Service', '© 2026 ElectroHub. All rights reserved.']) {
+    // Shop links come from the live Category API (largest first), so only the stable largest categories are asserted.
+    await expect(footer.getByRole('link', { name: 'Smartphones' })).toHaveAttribute('href', '/products?category=smartphones');
+    for (const content of ['ElectroHub', 'All Products', 'Laptops', 'Smartphones', 'Tablets', 'My Account', 'Orders', 'Wishlist', 'Track Delivery', 'About Us', 'Careers', 'Press', 'Contact', 'Help Center', 'Returns & Refunds', 'Warranty', 'Privacy Policy', 'Terms of Service', '© 2026 ElectroHub. All rights reserved.']) {
       await expect(footer).toContainText(content);
     }
   }

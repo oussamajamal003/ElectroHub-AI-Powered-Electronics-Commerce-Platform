@@ -87,6 +87,19 @@ describe('Search services', () => {
     expect(database.$queryRaw).toHaveBeenCalledTimes(1);
     expect(database.$queryRaw.mock.calls[0][0].text).toContain('GROUP BY r."productId"');
   });
+  it('rotates the category-mix sort through categories with a bounded, parameterized page', async () => {
+    expect(searchSchema.parse({ sort: 'category-mix' }).sort).toBe('category-mix');
+    database.$queryRaw.mockResolvedValueOnce([fixture('mixed', 41n)]);
+    const result = await new SearchService().products(searchSchema.parse({ sort: 'category-mix', page: '3', pageSize: '20', brand: 'sony' }));
+    expect(result.meta).toEqual({ page: 3, pageSize: 20, total: 41, totalPages: 3 });
+    const query = database.$queryRaw.mock.calls[0][0];
+    // Newest-per-category rank first, category name second: every category appears before any repeats.
+    expect(query.text).toContain('ROW_NUMBER() OVER (PARTITION BY p."categoryId" ORDER BY p."createdAt" DESC, p."id" ASC) AS "round"');
+    expect(query.text).toContain('ROW_NUMBER() OVER (ORDER BY mixed."round", mixed."categoryName", mixed."id") AS ordinal');
+    expect(query.text).toContain('b."slug" = $');
+    expect(query.values).toContain('sony');
+    expect(query.values.slice(-2)).toEqual([20, 40]);
+  });
   it('hydrates bounded IDs in rank order with canonical exact money and nullable brand', async () => {
     database.$queryRaw.mockResolvedValueOnce([fixture('first', 21n), fixture('second', 21n)]);
     const result = await new SearchService().products(searchSchema.parse({ q: 'macbook', pageSize: '2', page: '2' }));

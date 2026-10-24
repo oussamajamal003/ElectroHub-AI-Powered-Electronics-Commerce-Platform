@@ -8,6 +8,7 @@ import styles from './CustomerLayout.module.scss';
 import { CustomerScrollRestoration } from './CustomerScrollRestoration';
 import { usePaymentLock } from '@/features/checkout/PaymentLockContext';
 import { DiscoveryProvider } from '@/features/search/discovery/DiscoveryProvider';
+import { ShopFooterLinks } from './ShopFooterLinks';
 
 export function CustomerLayout() {
   const { isLocked } = usePaymentLock();
@@ -61,12 +62,7 @@ export function CustomerLayout() {
 
             <nav aria-label="Shop" className={styles.navGroup}>
               <h2>Shop</h2>
-              <Link to="/products">All Products</Link>
-              <Link to="/products?category=laptops">Laptops</Link>
-              <Link to="/products?category=phones">Phones</Link>
-              <Link to="/products?category=audio">Audio</Link>
-              <Link to="/products?category=tablets">Tablets</Link>
-              <Link to="/products?category=accessories">Accessories</Link>
+              <ShopFooterLinks />
             </nav>
 
             <nav aria-label="Account" className={styles.navGroup}>

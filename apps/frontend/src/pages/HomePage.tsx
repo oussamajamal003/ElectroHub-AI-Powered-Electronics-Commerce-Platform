@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { AlertCircle, RotateCcw, ShieldCheck, Truck, Zap } from 'lucide-react';
+import { AlertCircle, ChevronDown, RotateCcw, ShieldCheck, Truck, Zap } from 'lucide-react';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { CategoryCard } from '@/components/ui/CategoryCard';
@@ -11,6 +11,7 @@ import { useCart } from '@/features/cart/context';
 import { useWishlist } from '@/features/wishlist/context';
 import { useCategories } from '@/features/search/queries';
 import { useDeals, useProducts } from '@/features/products/queries';
+import { orderCategoriesByCount } from '@/features/products/categoryOrder';
 import { BenefitsReveal, HeroEntrance, SectionReveal, StaggerContainer, StaggerItem } from '@/components/motion/Motion';
 import styles from './HomePage.module.scss';
 
@@ -105,6 +106,9 @@ function CategorySkeleton() {
   return <div className={styles.categorySkeleton} aria-hidden="true"><span /><span /><span /></div>;
 }
 
+/** Two balanced rows of four; the rest of the API's storefront categories are one click away. */
+const INITIAL_CATEGORY_COUNT = 8;
+
 export function HomePage() {
   const { addItem } = useCart();
   const wishlist = useWishlist();
@@ -114,6 +118,9 @@ export function HomePage() {
   const arrivals = useProducts(new URLSearchParams({ pageSize: '6' }));
   const deals = useDeals(6);
   const categories = useCategories(true);
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  const orderedCategories = useMemo(() => orderCategoriesByCount(categories.data ?? []), [categories.data]);
+  const visibleCategories = showAllCategories ? orderedCategories : orderedCategories.slice(0, INITIAL_CATEGORY_COUNT);
   const { activeSlot, slotImages } = useHeroRotation(HERO_IMAGES);
 
   useEffect(() => {
@@ -168,9 +175,18 @@ export function HomePage() {
 
     <section className={`${styles.section} ${styles.categorySection}`} aria-labelledby="categories-title">
       <SectionReveal replay className={styles.sectionHeading}><div><p className={styles.eyebrow}>Find your fit</p><h2 id="categories-title">Shop by Category</h2></div><Link to="/products">Browse all →</Link></SectionReveal>
-      {categories.isPending && <div role="status" aria-label="Loading categories" className={styles.categoryGrid}>{Array.from({ length: 6 }, (_, index) => <CategorySkeleton key={index} />)}</div>}
+      {categories.isPending && <div role="status" aria-label="Loading categories" className={styles.categoryGrid}>{Array.from({ length: INITIAL_CATEGORY_COUNT }, (_, index) => <CategorySkeleton key={index} />)}</div>}
       {categories.isError && !categories.data && <SectionError title="Unable to load categories" message="Please try again in a moment." retry={() => void categories.refetch()} />}
-      {categories.data && <StaggerContainer replay className={styles.categoryGrid}>{categories.data.slice(0, 6).map((category, index) => <StaggerItem key={category.id} index={index}><CategoryCard category={category} /></StaggerItem>)}</StaggerContainer>}
+      {categories.data && orderedCategories.length > 0 && <div id="home-category-grid">
+        <StaggerContainer replay className={styles.categoryGrid}>{visibleCategories.map((category, index) => <StaggerItem key={category.id} index={index % INITIAL_CATEGORY_COUNT} className={styles.categoryItem}><CategoryCard category={category} /></StaggerItem>)}</StaggerContainer>
+      </div>}
+      {categories.data && orderedCategories.length === 0 && <p className={styles.categoryEmpty}>No categories are available yet.</p>}
+      {orderedCategories.length > INITIAL_CATEGORY_COUNT && <div className={styles.categoryToggleRow}>
+        <Button type="button" variant="outline" size="large" className={styles.categoryToggle} aria-expanded={showAllCategories} aria-controls="home-category-grid" onClick={() => setShowAllCategories(value => !value)}>
+          {showAllCategories ? 'Show fewer categories' : `View all ${orderedCategories.length} categories`}
+          <ChevronDown size={18} aria-hidden="true" className={showAllCategories ? styles.categoryToggleOpen : undefined} />
+        </Button>
+      </div>}
     </section>
 
     <section className={styles.section} aria-labelledby="deals-title">

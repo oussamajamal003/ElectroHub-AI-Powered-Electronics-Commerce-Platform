@@ -72,3 +72,9 @@
     height: 20px;
   }
 }
+
+// Previous + five pages + next need 328px at desktop sizing; a 320px phone has 288px inside page padding.
+@media (max-width: $breakpoint-sm - 1px) {
+  .list { gap: $spacing-1; }
+  .link, .ellipsis { width: 36px; height: 36px; }
+}

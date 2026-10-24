@@ -1,0 +1,5468 @@
+{
+  "metadata": {
+    "version": 1,
+    "owner": "electrohub-catalog-expansion-v1",
+    "researchedOn": "2026-10-22",
+    "researchMethod": "Official manufacturer product pages, user manuals, technical datasheets and launch specification tables inspected through web research. Specifications are selected factual fields, not a complete compatibility guarantee. Source links do not grant image reuse rights.",
+    "pricePolicy": "All prices are deliberately illustrative USD demo values, not verified retail offers. No compare-at prices, ratings or reviews are fabricated.",
+    "inventoryPolicy": "Initialize each new SKU with 24 simulated units. Re-execution must preserve existing inventory, sold/reserved quantities and commerce relationships.",
+    "modelNumberPolicy": "modelNumber stores the verified marketed model identity; it is not an asserted regional ordering part number. Named storage capacities, camera body-only scope, input-device switch/hand configuration and smart-home regional electrical requirements are explicit.",
+    "mediaStatus": "PLANNED_ASSETS_REQUIRE_APPROVAL: deterministic local paths are the asset contract, not evidence that files exist. Additive seed must reject absent, undecodable, unreviewed or rights-unapproved media.",
+    "mediaPolicy": "Each product has primary and alternate local illustrative-image references. Illustrations are not authenticated photographs and are not approved for ML/Kaggle use by this dataset. File checksums, dimensions, provenance and rights belong in the separately reviewed media manifest.",
+    "categoryCounts": {
+      "cameras-photography": 8,
+      "speakers-audio": 12,
+      "storage-ssds": 10,
+      "computer-components": 15,
+      "networking-wifi": 8,
+      "smart-home": 10,
+      "keyboards-mice": 10,
+      "printers-scanners": 6
+    },
+    "researchNotes": [
+      "Canon manual specifications use maximum approximate effective pixels with RF/EF lenses. Camera listings are bodies without a kit lens.",
+      "JBL Clip 5 page has 15 hours in its numeric maximum field but explicitly explains 12 normal + 3 Playtime Boost hours; dataset retains that distinction. Other battery runtimes are manufacturer maxima and vary by use.",
+      "Samsung semiconductor model landing pages redirected to generic regional stores during research. Direct official per-model PDF datasheet URLs are retained instead.",
+      "AMD processor core/thread/clock/TDP values come from AMD tables; max boost is conditional. AM5 compatibility also requires supported motherboard firmware.",
+      "TP-Link and Tapo pages vary by country/hardware revision. Networking link rates are theoretical; smart cameras identify V1, smart plugs use the cited EU electrical specification, and bulbs use E27 220-240 V fittings.",
+      "Logitech retail pages dynamically hide some detailed specs; selected fields are grounded in visible product descriptions/features and official setup guides. Manufacturer descriptions contain occasional stale wording (K480 page mentions K400 Plus); that inconsistent sentence was not used.",
+      "Brother MFC-J4335DW and DS-640 were researched but excluded because the official pages mark them discontinued; final list uses MFC-J4355DW and ADS-1350W. No claim is made about local distributor availability."
+    ],
+    "supplementalSources": [
+      {
+        "scope": "JBL Go 3 technical specification",
+        "url": "https://th.jbl.com/on/demandware.static/-/Sites-masterCatalog_Harman/default/dw33fc7332/pdfs/JBL_Go3_SpecSheet_English.pdf"
+      },
+      {
+        "scope": "Logitech MX Master 3S USB-C and thumb wheel",
+        "url": "https://hub.sync.logitech.com/mx-master-3s/post/mx-master-3s---setup-guide-logIbt80SWDODOk"
+      },
+      {
+        "scope": "Logitech MX Anywhere 3S USB-C",
+        "url": "https://www.logitech.com/content/dam/logitech/en/business/pdf/mx-anywhere-3s-business-wireless-mouse-datasheet.pdf"
+      },
+      {
+        "scope": "Tapo T110 EU radio and adhesive mounting",
+        "url": "https://static.tp-link.com/upload/product-overview/2023/202303/20230324/Tapo%20T110%28EU%26US%291.0%261.8_Datasheet.pdf"
+      },
+      {
+        "scope": "AMD 9000 AM5 platform",
+        "url": "https://www.amd.com/en/partner/articles/ryzen-9000-series-processors.html"
+      }
+    ]
+  },
+  "dataset": {
+    "categories": [
+      {
+        "name": "Cameras & Photography",
+        "slug": "cameras-photography",
+        "description": "Cameras & Photography in the ElectroHub demonstration catalog. Prices and stock are simulated.",
+        "imageUrl": "/images/catalog/expansion/category-cameras-photography.webp"
+      },
+      {
+        "name": "Speakers & Audio",
+        "slug": "speakers-audio",
+        "description": "Speakers & Audio in the ElectroHub demonstration catalog. Prices and stock are simulated.",
+        "imageUrl": "/images/catalog/expansion/category-speakers-audio.webp"
+      },
+      {
+        "name": "Storage & SSDs",
+        "slug": "storage-ssds",
+        "description": "Storage & SSDs in the ElectroHub demonstration catalog. Prices and stock are simulated.",
+        "imageUrl": "/images/catalog/expansion/category-storage-ssds.webp"
+      },
+      {
+        "name": "Computer Components",
+        "slug": "computer-components",
+        "description": "Computer Components in the ElectroHub demonstration catalog. Prices and stock are simulated.",
+        "imageUrl": "/images/catalog/expansion/category-computer-components.webp"
+      },
+      {
+        "name": "Networking & Wi-Fi",
+        "slug": "networking-wifi",
+        "description": "Networking & Wi-Fi in the ElectroHub demonstration catalog. Prices and stock are simulated.",
+        "imageUrl": "/images/catalog/expansion/category-networking-wifi.webp"
+      },
+      {
+        "name": "Smart Home",
+        "slug": "smart-home",
+        "description": "Smart Home in the ElectroHub demonstration catalog. Prices and stock are simulated.",
+        "imageUrl": "/images/catalog/expansion/category-smart-home.webp"
+      },
+      {
+        "name": "Keyboards & Mice",
+        "slug": "keyboards-mice",
+        "description": "Keyboards & Mice in the ElectroHub demonstration catalog. Prices and stock are simulated.",
+        "imageUrl": "/images/catalog/expansion/category-keyboards-mice.webp"
+      },
+      {
+        "name": "Printers & Scanners",
+        "slug": "printers-scanners",
+        "description": "Printers & Scanners in the ElectroHub demonstration catalog. Prices and stock are simulated.",
+        "imageUrl": "/images/catalog/expansion/category-printers-scanners.webp"
+      }
+    ],
+    "brands": [
+      {
+        "name": "Canon",
+        "slug": "canon",
+        "description": null,
+        "logoUrl": null
+      },
+      {
+        "name": "JBL",
+        "slug": "jbl",
+        "description": null,
+        "logoUrl": null
+      },
+      {
+        "name": "Samsung",
+        "slug": "samsung",
+        "description": null,
+        "logoUrl": null
+      },
+      {
+        "name": "AMD",
+        "slug": "amd",
+        "description": null,
+        "logoUrl": null
+      },
+      {
+        "name": "TP-Link",
+        "slug": "tp-link",
+        "description": null,
+        "logoUrl": null
+      },
+      {
+        "name": "Tapo",
+        "slug": "tapo",
+        "description": null,
+        "logoUrl": null
+      },
+      {
+        "name": "Logitech",
+        "slug": "logitech",
+        "description": null,
+        "logoUrl": null
+      },
+      {
+        "name": "Brother",
+        "slug": "brother",
+        "description": null,
+        "logoUrl": null
+      }
+    ],
+    "products": [
+      {
+        "name": "Canon EOS R50",
+        "slug": "canon-eos-r50",
+        "sku": "EH-CE-001",
+        "brandSlug": "canon",
+        "categorySlug": "cameras-photography",
+        "description": "EOS R50 camera body with a 24.2 MP aps-c cmos sensor and Canon RF mount. Lens sold separately. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "EOS R50",
+        "price": "679.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://cam.start.canon/en/C011/manual/html/UG-11_Reference_0090.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/canon-eos-r50-primary.webp",
+            "altText": "Illustrative Canon EOS R50 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/canon-eos-r50-alternate.webp",
+            "altText": "Illustrative Canon EOS R50 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Camera type",
+            "value": "Mirrorless interchangeable-lens camera",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor",
+            "value": "APS-C CMOS",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Effective resolution",
+            "value": "Approx. 24.2 MP maximum with RF/EF lens",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor dimensions",
+            "value": "Approx. 22.3 x 14.9 mm",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Lens mount",
+            "value": "Canon RF",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "RAW format",
+            "value": "CR3",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Canon EOS R10",
+        "slug": "canon-eos-r10",
+        "sku": "EH-CE-002",
+        "brandSlug": "canon",
+        "categorySlug": "cameras-photography",
+        "description": "EOS R10 camera body with a 24.2 MP aps-c cmos sensor and Canon RF mount. Lens sold separately. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "EOS R10",
+        "price": "979.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://cam.start.canon/en/C006/manual/html/UG-11_Reference_0090.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/canon-eos-r10-primary.webp",
+            "altText": "Illustrative Canon EOS R10 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/canon-eos-r10-alternate.webp",
+            "altText": "Illustrative Canon EOS R10 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Camera type",
+            "value": "Mirrorless interchangeable-lens camera",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor",
+            "value": "APS-C CMOS",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Effective resolution",
+            "value": "Approx. 24.2 MP maximum with RF/EF lens",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor dimensions",
+            "value": "Approx. 22.3 x 14.9 mm",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Lens mount",
+            "value": "Canon RF",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "RAW format",
+            "value": "CR3",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Canon EOS R100",
+        "slug": "canon-eos-r100",
+        "sku": "EH-CE-003",
+        "brandSlug": "canon",
+        "categorySlug": "cameras-photography",
+        "description": "EOS R100 camera body with a 24.1 MP aps-c cmos sensor and Canon RF mount. Lens sold separately. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "EOS R100",
+        "price": "479.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://cam.start.canon/en/C015/manual/html/UG-11_Reference_0080.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/canon-eos-r100-primary.webp",
+            "altText": "Illustrative Canon EOS R100 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/canon-eos-r100-alternate.webp",
+            "altText": "Illustrative Canon EOS R100 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Camera type",
+            "value": "Mirrorless interchangeable-lens camera",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor",
+            "value": "APS-C CMOS",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Effective resolution",
+            "value": "Approx. 24.1 MP maximum with RF/EF lens",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor dimensions",
+            "value": "Approx. 22.3 x 14.9 mm",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Lens mount",
+            "value": "Canon RF",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "RAW format",
+            "value": "CR3",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Canon EOS R7",
+        "slug": "canon-eos-r7",
+        "sku": "EH-CE-004",
+        "brandSlug": "canon",
+        "categorySlug": "cameras-photography",
+        "description": "EOS R7 camera body with a 32.5 MP aps-c cmos sensor and Canon RF mount. Lens sold separately. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "EOS R7",
+        "price": "1399.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://cam.start.canon/en/C005/manual/html/UG-10_Reference_0100.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/canon-eos-r7-primary.webp",
+            "altText": "Illustrative Canon EOS R7 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/canon-eos-r7-alternate.webp",
+            "altText": "Illustrative Canon EOS R7 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Camera type",
+            "value": "Mirrorless interchangeable-lens camera",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor",
+            "value": "APS-C CMOS",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Effective resolution",
+            "value": "Approx. 32.5 MP maximum with RF/EF lens",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor dimensions",
+            "value": "Approx. 22.3 x 14.8 mm",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Lens mount",
+            "value": "Canon RF",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "RAW format",
+            "value": "CR3",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Canon EOS R8",
+        "slug": "canon-eos-r8",
+        "sku": "EH-CE-005",
+        "brandSlug": "canon",
+        "categorySlug": "cameras-photography",
+        "description": "EOS R8 camera body with a 24.2 MP full-frame cmos sensor and Canon RF mount. Lens sold separately. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "EOS R8",
+        "price": "1499.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://cam.start.canon/en/C013/manual/html/UG-10_Reference_0100.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/canon-eos-r8-primary.webp",
+            "altText": "Illustrative Canon EOS R8 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/canon-eos-r8-alternate.webp",
+            "altText": "Illustrative Canon EOS R8 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Camera type",
+            "value": "Mirrorless interchangeable-lens camera",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor",
+            "value": "Full-frame CMOS",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Effective resolution",
+            "value": "Approx. 24.2 MP maximum with RF/EF lens",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor dimensions",
+            "value": "Approx. 36.0 x 24.0 mm",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Lens mount",
+            "value": "Canon RF",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "RAW format",
+            "value": "CR3",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Canon EOS R6 Mark II",
+        "slug": "canon-eos-r6-mark-ii",
+        "sku": "EH-CE-006",
+        "brandSlug": "canon",
+        "categorySlug": "cameras-photography",
+        "description": "EOS R6 Mark II camera body with a 24.2 MP full-frame cmos sensor and Canon RF mount. Lens sold separately. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "EOS R6 Mark II",
+        "price": "2199.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://cam.start.canon/en/C012/manual/html/UG-10_Reference_0100.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/canon-eos-r6-mark-ii-primary.webp",
+            "altText": "Illustrative Canon EOS R6 Mark II product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/canon-eos-r6-mark-ii-alternate.webp",
+            "altText": "Illustrative Canon EOS R6 Mark II alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Camera type",
+            "value": "Mirrorless interchangeable-lens camera",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor",
+            "value": "Full-frame CMOS",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Effective resolution",
+            "value": "Approx. 24.2 MP maximum with RF/EF lens",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor dimensions",
+            "value": "Approx. 36.0 x 24.0 mm",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Lens mount",
+            "value": "Canon RF",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "RAW format",
+            "value": "CR3",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Canon EOS R5",
+        "slug": "canon-eos-r5",
+        "sku": "EH-CE-007",
+        "brandSlug": "canon",
+        "categorySlug": "cameras-photography",
+        "description": "EOS R5 camera body with a 45.0 MP full-frame cmos sensor and Canon RF mount. Lens sold separately. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "EOS R5",
+        "price": "2999.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://cam.start.canon/en/C003/manual/html/UG-09_Reference_0100.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/canon-eos-r5-primary.webp",
+            "altText": "Illustrative Canon EOS R5 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/canon-eos-r5-alternate.webp",
+            "altText": "Illustrative Canon EOS R5 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Camera type",
+            "value": "Mirrorless interchangeable-lens camera",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor",
+            "value": "Full-frame CMOS",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Effective resolution",
+            "value": "Approx. 45.0 MP maximum with RF/EF lens",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor dimensions",
+            "value": "Approx. 36.0 x 24.0 mm",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Lens mount",
+            "value": "Canon RF",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "RAW format",
+            "value": "CR3",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Canon EOS R3",
+        "slug": "canon-eos-r3",
+        "sku": "EH-CE-008",
+        "brandSlug": "canon",
+        "categorySlug": "cameras-photography",
+        "description": "EOS R3 camera body with a 24.1 MP full-frame stacked cmos sensor and Canon RF mount. Lens sold separately. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "EOS R3",
+        "price": "4499.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://cam.start.canon/en/C010/manual/html/UG-09_Reference_0100.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/canon-eos-r3-primary.webp",
+            "altText": "Illustrative Canon EOS R3 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/canon-eos-r3-alternate.webp",
+            "altText": "Illustrative Canon EOS R3 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Camera type",
+            "value": "Mirrorless interchangeable-lens camera",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor",
+            "value": "Full-frame stacked CMOS",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Effective resolution",
+            "value": "Approx. 24.1 MP maximum with RF/EF lens",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor dimensions",
+            "value": "Approx. 36.0 x 24.0 mm",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Lens mount",
+            "value": "Canon RF",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "RAW format",
+            "value": "CR3",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "JBL Go 3",
+        "slug": "jbl-go-3",
+        "sku": "EH-CE-009",
+        "brandSlug": "jbl",
+        "categorySlug": "speakers-audio",
+        "description": "Go 3 rechargeable Bluetooth speaker with IP67 protection and usb-c charging. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Go 3",
+        "price": "45.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://global.jbl.com/bluetooth-speakers/GO%2B3-.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/jbl-go-3-primary.webp",
+            "altText": "Illustrative JBL Go 3 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/jbl-go-3-alternate.webp",
+            "altText": "Illustrative JBL Go 3 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Brand",
+            "value": "JBL",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Model",
+            "value": "Go 3",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Bluetooth",
+            "value": "5.1",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Battery playtime",
+            "value": "Up to 5 hours; varies with use",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Ingress rating",
+            "value": "IP67",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Feature",
+            "value": "USB-C charging",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "JBL Clip 4",
+        "slug": "jbl-clip-4",
+        "sku": "EH-CE-010",
+        "brandSlug": "jbl",
+        "categorySlug": "speakers-audio",
+        "description": "Clip 4 rechargeable Bluetooth speaker with IP67 protection and integrated carabiner. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Clip 4",
+        "price": "59.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.jbl.com/JBLCLIP4BLUAM.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/jbl-clip-4-primary.webp",
+            "altText": "Illustrative JBL Clip 4 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/jbl-clip-4-alternate.webp",
+            "altText": "Illustrative JBL Clip 4 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Brand",
+            "value": "JBL",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Model",
+            "value": "Clip 4",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Bluetooth",
+            "value": "5.1",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Battery playtime",
+            "value": "Up to 10 hours; varies with use",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Ingress rating",
+            "value": "IP67",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Feature",
+            "value": "Integrated carabiner",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "JBL Flip 6",
+        "slug": "jbl-flip-6",
+        "sku": "EH-CE-011",
+        "brandSlug": "jbl",
+        "categorySlug": "speakers-audio",
+        "description": "Flip 6 rechargeable Bluetooth speaker with IP67 protection and partyboost. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Flip 6",
+        "price": "119.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.jbl.com/FLIP-6-.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/jbl-flip-6-primary.webp",
+            "altText": "Illustrative JBL Flip 6 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/jbl-flip-6-alternate.webp",
+            "altText": "Illustrative JBL Flip 6 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Brand",
+            "value": "JBL",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Model",
+            "value": "Flip 6",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Bluetooth",
+            "value": "5.1",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Battery playtime",
+            "value": "Up to 12 hours; varies with use",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Ingress rating",
+            "value": "IP67",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Feature",
+            "value": "PartyBoost",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "JBL Charge 5",
+        "slug": "jbl-charge-5",
+        "sku": "EH-CE-012",
+        "brandSlug": "jbl",
+        "categorySlug": "speakers-audio",
+        "description": "Charge 5 rechargeable Bluetooth speaker with IP67 protection and powerbank. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Charge 5",
+        "price": "159.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.jbl.com/CHARGE5-.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/jbl-charge-5-primary.webp",
+            "altText": "Illustrative JBL Charge 5 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/jbl-charge-5-alternate.webp",
+            "altText": "Illustrative JBL Charge 5 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Brand",
+            "value": "JBL",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Model",
+            "value": "Charge 5",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Bluetooth",
+            "value": "5.1",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Battery playtime",
+            "value": "Up to 20 hours; varies with use",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Ingress rating",
+            "value": "IP67",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Feature",
+            "value": "Powerbank",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "JBL Xtreme 3",
+        "slug": "jbl-xtreme-3",
+        "sku": "EH-CE-013",
+        "brandSlug": "jbl",
+        "categorySlug": "speakers-audio",
+        "description": "Xtreme 3 rechargeable Bluetooth speaker with IP67 protection and partyboost. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Xtreme 3",
+        "price": "249.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.jbl.com/XTREME-3-.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/jbl-xtreme-3-primary.webp",
+            "altText": "Illustrative JBL Xtreme 3 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/jbl-xtreme-3-alternate.webp",
+            "altText": "Illustrative JBL Xtreme 3 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Brand",
+            "value": "JBL",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Model",
+            "value": "Xtreme 3",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Bluetooth",
+            "value": "5.1",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Battery playtime",
+            "value": "Up to 15 hours; varies with use",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Ingress rating",
+            "value": "IP67",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Feature",
+            "value": "PartyBoost",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "JBL Boombox 3",
+        "slug": "jbl-boombox-3",
+        "sku": "EH-CE-014",
+        "brandSlug": "jbl",
+        "categorySlug": "speakers-audio",
+        "description": "Boombox 3 rechargeable Bluetooth speaker with IP67 protection and partyboost. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Boombox 3",
+        "price": "399.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.jbl.com/BOOMBOX-3-.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/jbl-boombox-3-primary.webp",
+            "altText": "Illustrative JBL Boombox 3 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/jbl-boombox-3-alternate.webp",
+            "altText": "Illustrative JBL Boombox 3 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Brand",
+            "value": "JBL",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Model",
+            "value": "Boombox 3",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Bluetooth",
+            "value": "5.3",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Battery playtime",
+            "value": "Up to 24 hours; varies with use",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Ingress rating",
+            "value": "IP67",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Feature",
+            "value": "PartyBoost",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "JBL Pulse 5",
+        "slug": "jbl-pulse-5",
+        "sku": "EH-CE-015",
+        "brandSlug": "jbl",
+        "categorySlug": "speakers-audio",
+        "description": "Pulse 5 rechargeable Bluetooth speaker with IP67 protection and 360-degree light show. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Pulse 5",
+        "price": "249.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://global.jbl.com/bluetooth-speakers/PULSE-5-.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/jbl-pulse-5-primary.webp",
+            "altText": "Illustrative JBL Pulse 5 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/jbl-pulse-5-alternate.webp",
+            "altText": "Illustrative JBL Pulse 5 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Brand",
+            "value": "JBL",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Model",
+            "value": "Pulse 5",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Bluetooth",
+            "value": "5.3",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Battery playtime",
+            "value": "Up to 12 hours; varies with use",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Ingress rating",
+            "value": "IP67",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Feature",
+            "value": "360-degree light show",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "JBL Go 4",
+        "slug": "jbl-go-4",
+        "sku": "EH-CE-016",
+        "brandSlug": "jbl",
+        "categorySlug": "speakers-audio",
+        "description": "Go 4 rechargeable Bluetooth speaker with IP67 protection and auracast. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Go 4",
+        "price": "49.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.jbl.com/GO-4.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/jbl-go-4-primary.webp",
+            "altText": "Illustrative JBL Go 4 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/jbl-go-4-alternate.webp",
+            "altText": "Illustrative JBL Go 4 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Brand",
+            "value": "JBL",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Model",
+            "value": "Go 4",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Bluetooth",
+            "value": "5.3",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Battery playtime",
+            "value": "Up to 7 (plus up to 2 with Playtime Boost) hours; varies with use",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Ingress rating",
+            "value": "IP67",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Feature",
+            "value": "Auracast",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "JBL Clip 5",
+        "slug": "jbl-clip-5",
+        "sku": "EH-CE-017",
+        "brandSlug": "jbl",
+        "categorySlug": "speakers-audio",
+        "description": "Clip 5 rechargeable Bluetooth speaker with IP67 protection and auracast. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Clip 5",
+        "price": "79.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.jbl.com/CLIP-5.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/jbl-clip-5-primary.webp",
+            "altText": "Illustrative JBL Clip 5 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/jbl-clip-5-alternate.webp",
+            "altText": "Illustrative JBL Clip 5 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Brand",
+            "value": "JBL",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Model",
+            "value": "Clip 5",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Bluetooth",
+            "value": "5.3",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Battery playtime",
+            "value": "Up to 12 (plus up to 3 with Playtime Boost) hours; varies with use",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Ingress rating",
+            "value": "IP67",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Feature",
+            "value": "Auracast",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "JBL Xtreme 4",
+        "slug": "jbl-xtreme-4",
+        "sku": "EH-CE-018",
+        "brandSlug": "jbl",
+        "categorySlug": "speakers-audio",
+        "description": "Xtreme 4 rechargeable Bluetooth speaker with IP67 protection and auracast. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Xtreme 4",
+        "price": "329.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.jbl.com/XTREME-4.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/jbl-xtreme-4-primary.webp",
+            "altText": "Illustrative JBL Xtreme 4 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/jbl-xtreme-4-alternate.webp",
+            "altText": "Illustrative JBL Xtreme 4 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Brand",
+            "value": "JBL",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Model",
+            "value": "Xtreme 4",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Bluetooth",
+            "value": "5.3",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Battery playtime",
+            "value": "Up to 24 (plus up to 6 with Playtime Boost) hours; varies with use",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Ingress rating",
+            "value": "IP67",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Feature",
+            "value": "Auracast",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "JBL Bar 300",
+        "slug": "jbl-bar-300",
+        "sku": "EH-CE-019",
+        "brandSlug": "jbl",
+        "categorySlug": "speakers-audio",
+        "description": "All-in-one 5.0 soundbar with Dolby Atmos, MultiBeam and HDMI eARC. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Bar 300",
+        "price": "349.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://th.jbl.com/on/demandware.static/-/Sites-masterCatalog_Harman/default/dw81ce2171/pdfs/JBL%20Bar%20300_Specsheet_EN_102022.pdf",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/jbl-bar-300-primary.webp",
+            "altText": "Illustrative JBL Bar 300 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/jbl-bar-300-alternate.webp",
+            "altText": "Illustrative JBL Bar 300 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Channels",
+            "value": "5.0",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Rated output",
+            "value": "260 W maximum total",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Surround formats",
+            "value": "Dolby Atmos and MultiBeam",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "TV interface",
+            "value": "HDMI eARC",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Network",
+            "value": "Wi-Fi",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Streaming",
+            "value": "AirPlay and Chromecast built-in",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "JBL PartyBox 110",
+        "slug": "jbl-partybox-110",
+        "sku": "EH-CE-020",
+        "brandSlug": "jbl",
+        "categorySlug": "speakers-audio",
+        "description": "Portable party speaker with 160 W audio output, integrated lighting and splash resistance. Demonstration catalog: price is illustrative USD and stock is simulated; this is not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "PartyBox 110",
+        "price": "299.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.jbl.com/PARTYBOX-110-.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/jbl-partybox-110-primary.webp",
+            "altText": "Illustrative JBL PartyBox 110 product view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/jbl-partybox-110-alternate.webp",
+            "altText": "Illustrative JBL PartyBox 110 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Product type",
+            "value": "Portable party speaker",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Output",
+            "value": "160 W",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Bluetooth",
+            "value": "5.1",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Battery playtime",
+            "value": "Up to 12 hours; varies with use",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Ingress rating",
+            "value": "IPX4",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Light show",
+            "value": "Integrated",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Samsung 990 PRO 1TB",
+        "slug": "samsung-990-pro-1tb",
+        "sku": "EH-CE-021",
+        "brandSlug": "samsung",
+        "categorySlug": "storage-ssds",
+        "description": "1 TB m.2 2280 solid-state drive using PCIe 4.0 x4 / NVMe 2.0. Quoted transfer rates are manufacturer maxima and depend on the host and workload. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "990 PRO",
+        "price": "109.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://download.semiconductor.samsung.com/resources/data-sheet/samsung_nvme_ssd_990_pro_datasheet_rev.2.0.pdf",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/samsung-990-pro-1tb-primary.webp",
+            "altText": "Illustrative Samsung 990 PRO 1TB primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/samsung-990-pro-1tb-alternate.webp",
+            "altText": "Illustrative Samsung 990 PRO 1TB alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Capacity",
+            "value": "1 TB",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Interface",
+            "value": "PCIe 4.0 x4 / NVMe 2.0",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Form factor",
+            "value": "M.2 2280",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential read",
+            "value": "Up to 7450 MB/s",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential write",
+            "value": "Up to 6900 MB/s",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Encryption",
+            "value": "AES 256-bit",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Samsung 980 PRO 1TB",
+        "slug": "samsung-980-pro-1tb",
+        "sku": "EH-CE-022",
+        "brandSlug": "samsung",
+        "categorySlug": "storage-ssds",
+        "description": "1 TB m.2 2280 solid-state drive using PCIe 4.0 x4 / NVMe 1.3c. Quoted transfer rates are manufacturer maxima and depend on the host and workload. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "980 PRO",
+        "price": "99.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://semiconductor.samsung.com/resources/data-sheet/Samsung-NVMe-SSD-980-PRO-Data-Sheet_Rev.2.1.pdf",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/samsung-980-pro-1tb-primary.webp",
+            "altText": "Illustrative Samsung 980 PRO 1TB primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/samsung-980-pro-1tb-alternate.webp",
+            "altText": "Illustrative Samsung 980 PRO 1TB alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Capacity",
+            "value": "1 TB",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Interface",
+            "value": "PCIe 4.0 x4 / NVMe 1.3c",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Form factor",
+            "value": "M.2 2280",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential read",
+            "value": "Up to 7000 MB/s",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential write",
+            "value": "Up to 5000 MB/s",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Encryption",
+            "value": "AES 256-bit",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Samsung 970 EVO Plus 1TB",
+        "slug": "samsung-970-evo-plus-1tb",
+        "sku": "EH-CE-023",
+        "brandSlug": "samsung",
+        "categorySlug": "storage-ssds",
+        "description": "1 TB m.2 2280 solid-state drive using PCIe 3.0 x4 / NVMe 1.3. Quoted transfer rates are manufacturer maxima and depend on the host and workload. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "970 EVO Plus",
+        "price": "89.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://semiconductor.samsung.com/resources/data-sheet/Samsung_NVMe_SSD_970_EVO_Plus_Data_Sheet_Rev.3.0.pdf",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/samsung-970-evo-plus-1tb-primary.webp",
+            "altText": "Illustrative Samsung 970 EVO Plus 1TB primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/samsung-970-evo-plus-1tb-alternate.webp",
+            "altText": "Illustrative Samsung 970 EVO Plus 1TB alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Capacity",
+            "value": "1 TB",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Interface",
+            "value": "PCIe 3.0 x4 / NVMe 1.3",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Form factor",
+            "value": "M.2 2280",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential read",
+            "value": "Up to 3500 MB/s",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential write",
+            "value": "Up to 3300 MB/s",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Encryption",
+            "value": "AES 256-bit",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Samsung 980 1TB",
+        "slug": "samsung-980-1tb",
+        "sku": "EH-CE-024",
+        "brandSlug": "samsung",
+        "categorySlug": "storage-ssds",
+        "description": "1 TB m.2 2280 solid-state drive using PCIe 3.0 x4 / NVMe 1.4. Quoted transfer rates are manufacturer maxima and depend on the host and workload. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "980",
+        "price": "79.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://semiconductor.samsung.com/resources/data-sheet/Samsung_NVMe_SSD_980_Data_Sheet_Rev.1.1.pdf",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/samsung-980-1tb-primary.webp",
+            "altText": "Illustrative Samsung 980 1TB primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/samsung-980-1tb-alternate.webp",
+            "altText": "Illustrative Samsung 980 1TB alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Capacity",
+            "value": "1 TB",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Interface",
+            "value": "PCIe 3.0 x4 / NVMe 1.4",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Form factor",
+            "value": "M.2 2280",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential read",
+            "value": "Up to 3500 MB/s",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential write",
+            "value": "Up to 3000 MB/s",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Encryption",
+            "value": "AES 256-bit",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Samsung 870 EVO 1TB",
+        "slug": "samsung-870-evo-1tb",
+        "sku": "EH-CE-025",
+        "brandSlug": "samsung",
+        "categorySlug": "storage-ssds",
+        "description": "1 TB 2.5-inch solid-state drive using SATA 6 Gb/s. Quoted transfer rates are manufacturer maxima and depend on the host and workload. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "870 EVO",
+        "price": "89.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://download.semiconductor.samsung.com/resources/data-sheet/Samsung_SSD_870_EVO_Data_Sheet_Rev1.1_230509.pdf",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/samsung-870-evo-1tb-primary.webp",
+            "altText": "Illustrative Samsung 870 EVO 1TB primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/samsung-870-evo-1tb-alternate.webp",
+            "altText": "Illustrative Samsung 870 EVO 1TB alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Capacity",
+            "value": "1 TB",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Interface",
+            "value": "SATA 6 Gb/s",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Form factor",
+            "value": "2.5-inch",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential read",
+            "value": "Up to 560 MB/s",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential write",
+            "value": "Up to 530 MB/s",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Encryption",
+            "value": "AES 256-bit",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Samsung 870 QVO 2TB",
+        "slug": "samsung-870-qvo-2tb",
+        "sku": "EH-CE-026",
+        "brandSlug": "samsung",
+        "categorySlug": "storage-ssds",
+        "description": "2 TB 2.5-inch solid-state drive using SATA 6 Gb/s. Quoted transfer rates are manufacturer maxima and depend on the host and workload. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "870 QVO",
+        "price": "139.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://semiconductor.samsung.com/resources/data-sheet/Samsung_SSD_870_QVO_Data_Sheet_Rev1.1.pdf",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/samsung-870-qvo-2tb-primary.webp",
+            "altText": "Illustrative Samsung 870 QVO 2TB primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/samsung-870-qvo-2tb-alternate.webp",
+            "altText": "Illustrative Samsung 870 QVO 2TB alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Capacity",
+            "value": "2 TB",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Interface",
+            "value": "SATA 6 Gb/s",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Form factor",
+            "value": "2.5-inch",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential read",
+            "value": "Up to 560 MB/s",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential write",
+            "value": "Up to 530 MB/s",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Encryption",
+            "value": "AES 256-bit",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Samsung T7 1TB",
+        "slug": "samsung-t7-1tb",
+        "sku": "EH-CE-027",
+        "brandSlug": "samsung",
+        "categorySlug": "storage-ssds",
+        "description": "1 TB portable external solid-state drive using USB 3.2 Gen 2 (10 Gbps). Quoted transfer rates are manufacturer maxima and depend on the host and workload. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "T7",
+        "price": "89.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://download.semiconductor.samsung.com/resources/data-sheet/Samsung_Portable_SSD_T7_Datasheet_Rev.2.0.pdf",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/samsung-t7-1tb-primary.webp",
+            "altText": "Illustrative Samsung T7 1TB primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/samsung-t7-1tb-alternate.webp",
+            "altText": "Illustrative Samsung T7 1TB alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Capacity",
+            "value": "1 TB",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Interface",
+            "value": "USB 3.2 Gen 2 (10 Gbps)",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Form factor",
+            "value": "Portable external",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential read",
+            "value": "Up to 1050 MB/s",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential write",
+            "value": "Up to 1000 MB/s",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Encryption",
+            "value": "AES 256-bit hardware",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Samsung T7 Shield 1TB",
+        "slug": "samsung-t7-shield-1tb",
+        "sku": "EH-CE-028",
+        "brandSlug": "samsung",
+        "categorySlug": "storage-ssds",
+        "description": "1 TB portable external solid-state drive using USB 3.2 Gen 2 (10 Gbps). Quoted transfer rates are manufacturer maxima and depend on the host and workload. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "T7 Shield",
+        "price": "109.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://download.semiconductor.samsung.com/resources/data-sheet/Samsung_Portable_SSD_T7_Shield_Datasheet_Rev.2.0.pdf",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/samsung-t7-shield-1tb-primary.webp",
+            "altText": "Illustrative Samsung T7 Shield 1TB primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/samsung-t7-shield-1tb-alternate.webp",
+            "altText": "Illustrative Samsung T7 Shield 1TB alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Capacity",
+            "value": "1 TB",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Interface",
+            "value": "USB 3.2 Gen 2 (10 Gbps)",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Form factor",
+            "value": "Portable external",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential read",
+            "value": "Up to 1050 MB/s",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential write",
+            "value": "Up to 1000 MB/s",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Encryption",
+            "value": "AES 256-bit hardware",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Samsung T9 1TB",
+        "slug": "samsung-t9-1tb",
+        "sku": "EH-CE-029",
+        "brandSlug": "samsung",
+        "categorySlug": "storage-ssds",
+        "description": "1 TB portable external solid-state drive using USB 3.2 Gen 2x2 (20 Gbps). Quoted transfer rates are manufacturer maxima and depend on the host and workload. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "T9",
+        "price": "139.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://download.semiconductor.samsung.com/resources/data-sheet/samsung_portable_ssd_t9_datasheet_rev1_0.pdf",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/samsung-t9-1tb-primary.webp",
+            "altText": "Illustrative Samsung T9 1TB primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/samsung-t9-1tb-alternate.webp",
+            "altText": "Illustrative Samsung T9 1TB alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Capacity",
+            "value": "1 TB",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Interface",
+            "value": "USB 3.2 Gen 2x2 (20 Gbps)",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Form factor",
+            "value": "Portable external",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential read",
+            "value": "Up to 2000 MB/s",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential write",
+            "value": "Up to 1950 MB/s",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Encryption",
+            "value": "AES 256-bit hardware",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Samsung T5 EVO 2TB",
+        "slug": "samsung-t5-evo-2tb",
+        "sku": "EH-CE-030",
+        "brandSlug": "samsung",
+        "categorySlug": "storage-ssds",
+        "description": "2 TB portable external solid-state drive using USB 3.2 Gen 1 (5 Gbps). Quoted transfer rates are manufacturer maxima and depend on the host and workload. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "T5 EVO",
+        "price": "149.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://download.semiconductor.samsung.com/resources/data-sheet/Samsung_Portable_SSD_T5_EVO_Datasheet_Rev1.0.pdf",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/samsung-t5-evo-2tb-primary.webp",
+            "altText": "Illustrative Samsung T5 EVO 2TB primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/samsung-t5-evo-2tb-alternate.webp",
+            "altText": "Illustrative Samsung T5 EVO 2TB alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Capacity",
+            "value": "2 TB",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Interface",
+            "value": "USB 3.2 Gen 1 (5 Gbps)",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Form factor",
+            "value": "Portable external",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential read",
+            "value": "Up to 460 MB/s",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Sequential write",
+            "value": "Up to 460 MB/s",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Encryption",
+            "value": "AES 256-bit hardware",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "AMD Ryzen 9 9950X",
+        "slug": "amd-ryzen-9-9950x",
+        "sku": "EH-CE-031",
+        "brandSlug": "amd",
+        "categorySlug": "computer-components",
+        "description": "16-core desktop processor for an AM5 motherboard. Maximum boost depends on cooling, firmware and workload. Confirm motherboard BIOS compatibility before installation. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Ryzen 9 9950X",
+        "price": "599.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.amd.com/en/products/processors/desktops/ryzen.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-9-9950x-primary.webp",
+            "altText": "Illustrative AMD Ryzen 9 9950X primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-9-9950x-alternate.webp",
+            "altText": "Illustrative AMD Ryzen 9 9950X alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "CPU cores",
+            "value": "16",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Threads",
+            "value": "32",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Base clock",
+            "value": "4.3 GHz",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum boost",
+            "value": "Up to 5.7 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Default TDP",
+            "value": "170 W",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Socket",
+            "value": "AM5",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "AMD Ryzen 9 9900X",
+        "slug": "amd-ryzen-9-9900x",
+        "sku": "EH-CE-032",
+        "brandSlug": "amd",
+        "categorySlug": "computer-components",
+        "description": "12-core desktop processor for an AM5 motherboard. Maximum boost depends on cooling, firmware and workload. Confirm motherboard BIOS compatibility before installation. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Ryzen 9 9900X",
+        "price": "449.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.amd.com/en/products/processors/desktops/ryzen.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-9-9900x-primary.webp",
+            "altText": "Illustrative AMD Ryzen 9 9900X primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-9-9900x-alternate.webp",
+            "altText": "Illustrative AMD Ryzen 9 9900X alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "CPU cores",
+            "value": "12",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Threads",
+            "value": "24",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Base clock",
+            "value": "4.4 GHz",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum boost",
+            "value": "Up to 5.6 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Default TDP",
+            "value": "120 W",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Socket",
+            "value": "AM5",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "AMD Ryzen 7 9700X",
+        "slug": "amd-ryzen-7-9700x",
+        "sku": "EH-CE-033",
+        "brandSlug": "amd",
+        "categorySlug": "computer-components",
+        "description": "8-core desktop processor for an AM5 motherboard. Maximum boost depends on cooling, firmware and workload. Confirm motherboard BIOS compatibility before installation. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Ryzen 7 9700X",
+        "price": "329.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.amd.com/en/products/processors/desktops/ryzen.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-7-9700x-primary.webp",
+            "altText": "Illustrative AMD Ryzen 7 9700X primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-7-9700x-alternate.webp",
+            "altText": "Illustrative AMD Ryzen 7 9700X alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "CPU cores",
+            "value": "8",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Threads",
+            "value": "16",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Base clock",
+            "value": "3.8 GHz",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum boost",
+            "value": "Up to 5.5 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Default TDP",
+            "value": "65 W",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Socket",
+            "value": "AM5",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "AMD Ryzen 5 9600X",
+        "slug": "amd-ryzen-5-9600x",
+        "sku": "EH-CE-034",
+        "brandSlug": "amd",
+        "categorySlug": "computer-components",
+        "description": "6-core desktop processor for an AM5 motherboard. Maximum boost depends on cooling, firmware and workload. Confirm motherboard BIOS compatibility before installation. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Ryzen 5 9600X",
+        "price": "249.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.amd.com/en/products/processors/desktops/ryzen.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-5-9600x-primary.webp",
+            "altText": "Illustrative AMD Ryzen 5 9600X primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-5-9600x-alternate.webp",
+            "altText": "Illustrative AMD Ryzen 5 9600X alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "CPU cores",
+            "value": "6",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Threads",
+            "value": "12",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Base clock",
+            "value": "3.9 GHz",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum boost",
+            "value": "Up to 5.4 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Default TDP",
+            "value": "65 W",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Socket",
+            "value": "AM5",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "AMD Ryzen 9 7950X",
+        "slug": "amd-ryzen-9-7950x",
+        "sku": "EH-CE-035",
+        "brandSlug": "amd",
+        "categorySlug": "computer-components",
+        "description": "16-core desktop processor for an AM5 motherboard. Maximum boost depends on cooling, firmware and workload. Confirm motherboard BIOS compatibility before installation. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Ryzen 9 7950X",
+        "price": "499.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.amd.com/en/partner/articles/amd-ryzen-7000-series-desktop-processors.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-9-7950x-primary.webp",
+            "altText": "Illustrative AMD Ryzen 9 7950X primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-9-7950x-alternate.webp",
+            "altText": "Illustrative AMD Ryzen 9 7950X alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "CPU cores",
+            "value": "16",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Threads",
+            "value": "32",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Base clock",
+            "value": "4.5 GHz",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum boost",
+            "value": "Up to 5.7 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Default TDP",
+            "value": "170 W",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Socket",
+            "value": "AM5",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "AMD Ryzen 9 7900X",
+        "slug": "amd-ryzen-9-7900x",
+        "sku": "EH-CE-036",
+        "brandSlug": "amd",
+        "categorySlug": "computer-components",
+        "description": "12-core desktop processor for an AM5 motherboard. Maximum boost depends on cooling, firmware and workload. Confirm motherboard BIOS compatibility before installation. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Ryzen 9 7900X",
+        "price": "349.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.amd.com/en/partner/articles/amd-ryzen-7000-series-desktop-processors.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-9-7900x-primary.webp",
+            "altText": "Illustrative AMD Ryzen 9 7900X primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-9-7900x-alternate.webp",
+            "altText": "Illustrative AMD Ryzen 9 7900X alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "CPU cores",
+            "value": "12",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Threads",
+            "value": "24",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Base clock",
+            "value": "4.7 GHz",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum boost",
+            "value": "Up to 5.6 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Default TDP",
+            "value": "170 W",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Socket",
+            "value": "AM5",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "AMD Ryzen 7 7700X",
+        "slug": "amd-ryzen-7-7700x",
+        "sku": "EH-CE-037",
+        "brandSlug": "amd",
+        "categorySlug": "computer-components",
+        "description": "8-core desktop processor for an AM5 motherboard. Maximum boost depends on cooling, firmware and workload. Confirm motherboard BIOS compatibility before installation. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Ryzen 7 7700X",
+        "price": "279.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.amd.com/en/partner/articles/amd-ryzen-7000-series-desktop-processors.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-7-7700x-primary.webp",
+            "altText": "Illustrative AMD Ryzen 7 7700X primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-7-7700x-alternate.webp",
+            "altText": "Illustrative AMD Ryzen 7 7700X alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "CPU cores",
+            "value": "8",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Threads",
+            "value": "16",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Base clock",
+            "value": "4.5 GHz",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum boost",
+            "value": "Up to 5.4 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Default TDP",
+            "value": "105 W",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Socket",
+            "value": "AM5",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "AMD Ryzen 5 7600X",
+        "slug": "amd-ryzen-5-7600x",
+        "sku": "EH-CE-038",
+        "brandSlug": "amd",
+        "categorySlug": "computer-components",
+        "description": "6-core desktop processor for an AM5 motherboard. Maximum boost depends on cooling, firmware and workload. Confirm motherboard BIOS compatibility before installation. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Ryzen 5 7600X",
+        "price": "219.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.amd.com/en/partner/articles/amd-ryzen-7000-series-desktop-processors.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-5-7600x-primary.webp",
+            "altText": "Illustrative AMD Ryzen 5 7600X primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-5-7600x-alternate.webp",
+            "altText": "Illustrative AMD Ryzen 5 7600X alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "CPU cores",
+            "value": "6",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Threads",
+            "value": "12",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Base clock",
+            "value": "4.7 GHz",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum boost",
+            "value": "Up to 5.3 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Default TDP",
+            "value": "105 W",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Socket",
+            "value": "AM5",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "AMD Ryzen 9 7950X3D",
+        "slug": "amd-ryzen-9-7950x3d",
+        "sku": "EH-CE-039",
+        "brandSlug": "amd",
+        "categorySlug": "computer-components",
+        "description": "16-core desktop processor for an AM5 motherboard. Maximum boost depends on cooling, firmware and workload. Confirm motherboard BIOS compatibility before installation. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Ryzen 9 7950X3D",
+        "price": "599.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.amd.com/en/newsroom/press-releases/2023-1-4-amd-extends-its-leadership-with-the-introduction-o.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-9-7950x3d-primary.webp",
+            "altText": "Illustrative AMD Ryzen 9 7950X3D primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-9-7950x3d-alternate.webp",
+            "altText": "Illustrative AMD Ryzen 9 7950X3D alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "CPU cores",
+            "value": "16",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Threads",
+            "value": "32",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Base clock",
+            "value": "4.2 GHz",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum boost",
+            "value": "Up to 5.7 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Default TDP",
+            "value": "120 W",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Socket",
+            "value": "AM5",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "AMD Ryzen 9 7900X3D",
+        "slug": "amd-ryzen-9-7900x3d",
+        "sku": "EH-CE-040",
+        "brandSlug": "amd",
+        "categorySlug": "computer-components",
+        "description": "12-core desktop processor for an AM5 motherboard. Maximum boost depends on cooling, firmware and workload. Confirm motherboard BIOS compatibility before installation. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Ryzen 9 7900X3D",
+        "price": "449.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.amd.com/en/newsroom/press-releases/2023-1-4-amd-extends-its-leadership-with-the-introduction-o.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-9-7900x3d-primary.webp",
+            "altText": "Illustrative AMD Ryzen 9 7900X3D primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-9-7900x3d-alternate.webp",
+            "altText": "Illustrative AMD Ryzen 9 7900X3D alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "CPU cores",
+            "value": "12",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Threads",
+            "value": "24",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Base clock",
+            "value": "4.4 GHz",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum boost",
+            "value": "Up to 5.6 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Default TDP",
+            "value": "120 W",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Socket",
+            "value": "AM5",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "AMD Ryzen 7 7800X3D",
+        "slug": "amd-ryzen-7-7800x3d",
+        "sku": "EH-CE-041",
+        "brandSlug": "amd",
+        "categorySlug": "computer-components",
+        "description": "8-core desktop processor for an AM5 motherboard. Maximum boost depends on cooling, firmware and workload. Confirm motherboard BIOS compatibility before installation. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Ryzen 7 7800X3D",
+        "price": "399.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.amd.com/content/dam/amd/en/documents/partner-hub/ryzen/amd-ryzen-7000-series-desktop-processors-quick-reference-guide.pdf",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-7-7800x3d-primary.webp",
+            "altText": "Illustrative AMD Ryzen 7 7800X3D primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-7-7800x3d-alternate.webp",
+            "altText": "Illustrative AMD Ryzen 7 7800X3D alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "CPU cores",
+            "value": "8",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Threads",
+            "value": "16",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Base clock",
+            "value": "4.2 GHz",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum boost",
+            "value": "Up to 5.0 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Default TDP",
+            "value": "120 W",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Socket",
+            "value": "AM5",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "AMD Ryzen 9 7900",
+        "slug": "amd-ryzen-9-7900",
+        "sku": "EH-CE-042",
+        "brandSlug": "amd",
+        "categorySlug": "computer-components",
+        "description": "12-core desktop processor for an AM5 motherboard. Maximum boost depends on cooling, firmware and workload. Confirm motherboard BIOS compatibility before installation. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Ryzen 9 7900",
+        "price": "329.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.amd.com/en/newsroom/press-releases/2023-1-4-amd-extends-its-leadership-with-the-introduction-o.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-9-7900-primary.webp",
+            "altText": "Illustrative AMD Ryzen 9 7900 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-9-7900-alternate.webp",
+            "altText": "Illustrative AMD Ryzen 9 7900 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "CPU cores",
+            "value": "12",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Threads",
+            "value": "24",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Base clock",
+            "value": "3.7 GHz",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum boost",
+            "value": "Up to 5.4 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Default TDP",
+            "value": "65 W",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Socket",
+            "value": "AM5",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "AMD Ryzen 7 7700",
+        "slug": "amd-ryzen-7-7700",
+        "sku": "EH-CE-043",
+        "brandSlug": "amd",
+        "categorySlug": "computer-components",
+        "description": "8-core desktop processor for an AM5 motherboard. Maximum boost depends on cooling, firmware and workload. Confirm motherboard BIOS compatibility before installation. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Ryzen 7 7700",
+        "price": "249.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.amd.com/en/newsroom/press-releases/2023-1-4-amd-extends-its-leadership-with-the-introduction-o.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-7-7700-primary.webp",
+            "altText": "Illustrative AMD Ryzen 7 7700 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-7-7700-alternate.webp",
+            "altText": "Illustrative AMD Ryzen 7 7700 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "CPU cores",
+            "value": "8",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Threads",
+            "value": "16",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Base clock",
+            "value": "3.8 GHz",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum boost",
+            "value": "Up to 5.3 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Default TDP",
+            "value": "65 W",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Socket",
+            "value": "AM5",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "AMD Ryzen 5 7600",
+        "slug": "amd-ryzen-5-7600",
+        "sku": "EH-CE-044",
+        "brandSlug": "amd",
+        "categorySlug": "computer-components",
+        "description": "6-core desktop processor for an AM5 motherboard. Maximum boost depends on cooling, firmware and workload. Confirm motherboard BIOS compatibility before installation. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Ryzen 5 7600",
+        "price": "189.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.amd.com/en/newsroom/press-releases/2023-1-4-amd-extends-its-leadership-with-the-introduction-o.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-5-7600-primary.webp",
+            "altText": "Illustrative AMD Ryzen 5 7600 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-5-7600-alternate.webp",
+            "altText": "Illustrative AMD Ryzen 5 7600 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "CPU cores",
+            "value": "6",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Threads",
+            "value": "12",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Base clock",
+            "value": "3.8 GHz",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum boost",
+            "value": "Up to 5.1 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Default TDP",
+            "value": "65 W",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Socket",
+            "value": "AM5",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "AMD Ryzen 7 8700G",
+        "slug": "amd-ryzen-7-8700g",
+        "sku": "EH-CE-045",
+        "brandSlug": "amd",
+        "categorySlug": "computer-components",
+        "description": "8-core desktop processor for an AM5 motherboard. Maximum boost depends on cooling, firmware and workload. Confirm motherboard BIOS compatibility before installation. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Ryzen 7 8700G",
+        "price": "279.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.amd.com/en/products/processors/desktops/ryzen/8000-series/amd-ryzen-7-8700g.html",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-7-8700g-primary.webp",
+            "altText": "Illustrative AMD Ryzen 7 8700G primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/amd-ryzen-7-8700g-alternate.webp",
+            "altText": "Illustrative AMD Ryzen 7 8700G alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "CPU cores",
+            "value": "8",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Threads",
+            "value": "16",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Base clock",
+            "value": "4.2 GHz",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum boost",
+            "value": "Up to 5.1 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Default TDP",
+            "value": "65 W",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Socket",
+            "value": "AM5",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "TP-Link Archer AX55",
+        "slug": "tp-link-archer-ax55",
+        "sku": "EH-CE-046",
+        "brandSlug": "tp-link",
+        "categorySlug": "networking-wifi",
+        "description": "AX3000 wireless router. Link rates are theoretical radio rates, not guaranteed internet throughput; features vary by region and hardware revision. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Archer AX55",
+        "price": "109.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tp-link.com/us/home-networking/wifi-router/archer-ax55/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tp-link-archer-ax55-primary.webp",
+            "altText": "Illustrative TP-Link Archer AX55 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tp-link-archer-ax55-alternate.webp",
+            "altText": "Illustrative TP-Link Archer AX55 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Device type",
+            "value": "Wireless router",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless standard",
+            "value": "Wi-Fi 6",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Speed class",
+            "value": "AX3000",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Radio bands",
+            "value": "2.4 / 5 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "2.4 GHz link rate",
+            "value": "Up to 574 Mbps theoretical",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "5 GHz link rate",
+            "value": "Up to 2402 Mbps theoretical",
+            "sortOrder": 5
+          },
+          {
+            "group": "Technical",
+            "name": "External antennas",
+            "value": "4",
+            "sortOrder": 6
+          }
+        ]
+      },
+      {
+        "name": "TP-Link Archer AX73",
+        "slug": "tp-link-archer-ax73",
+        "sku": "EH-CE-047",
+        "brandSlug": "tp-link",
+        "categorySlug": "networking-wifi",
+        "description": "AX5400 wireless router. Link rates are theoretical radio rates, not guaranteed internet throughput; features vary by region and hardware revision. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Archer AX73",
+        "price": "149.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tp-link.com/us/home-networking/wifi-router/archer-ax73/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tp-link-archer-ax73-primary.webp",
+            "altText": "Illustrative TP-Link Archer AX73 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tp-link-archer-ax73-alternate.webp",
+            "altText": "Illustrative TP-Link Archer AX73 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Device type",
+            "value": "Wireless router",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless standard",
+            "value": "Wi-Fi 6",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Speed class",
+            "value": "AX5400",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Radio bands",
+            "value": "2.4 / 5 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "2.4 GHz link rate",
+            "value": "Up to 574 Mbps theoretical",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "5 GHz link rate",
+            "value": "Up to 4804 Mbps theoretical",
+            "sortOrder": 5
+          },
+          {
+            "group": "Technical",
+            "name": "External antennas",
+            "value": "6",
+            "sortOrder": 6
+          }
+        ]
+      },
+      {
+        "name": "TP-Link Archer AXE75",
+        "slug": "tp-link-archer-axe75",
+        "sku": "EH-CE-048",
+        "brandSlug": "tp-link",
+        "categorySlug": "networking-wifi",
+        "description": "AXE5400 wireless router. Link rates are theoretical radio rates, not guaranteed internet throughput; features vary by region and hardware revision. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Archer AXE75",
+        "price": "179.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tp-link.com/us/home-networking/wifi-router/archer-axe75/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tp-link-archer-axe75-primary.webp",
+            "altText": "Illustrative TP-Link Archer AXE75 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tp-link-archer-axe75-alternate.webp",
+            "altText": "Illustrative TP-Link Archer AXE75 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Device type",
+            "value": "Wireless router",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless standard",
+            "value": "Wi-Fi 6E",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Speed class",
+            "value": "AXE5400",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Radio bands",
+            "value": "2.4 / 5 / 6 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "2.4 GHz link rate",
+            "value": "Up to 574 Mbps theoretical",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "5 GHz link rate",
+            "value": "Up to 2402 Mbps theoretical",
+            "sortOrder": 5
+          },
+          {
+            "group": "Technical",
+            "name": "External antennas",
+            "value": "6",
+            "sortOrder": 6
+          }
+        ]
+      },
+      {
+        "name": "TP-Link Archer AX10",
+        "slug": "tp-link-archer-ax10",
+        "sku": "EH-CE-049",
+        "brandSlug": "tp-link",
+        "categorySlug": "networking-wifi",
+        "description": "AX1500 wireless router. Link rates are theoretical radio rates, not guaranteed internet throughput; features vary by region and hardware revision. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Archer AX10",
+        "price": "69.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tp-link.com/us/home-networking/wifi-router/archer-ax10/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tp-link-archer-ax10-primary.webp",
+            "altText": "Illustrative TP-Link Archer AX10 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tp-link-archer-ax10-alternate.webp",
+            "altText": "Illustrative TP-Link Archer AX10 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Device type",
+            "value": "Wireless router",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless standard",
+            "value": "Wi-Fi 6 (5 GHz); Wi-Fi 4 (2.4 GHz)",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Speed class",
+            "value": "AX1500",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Radio bands",
+            "value": "2.4 / 5 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "2.4 GHz link rate",
+            "value": "Up to 300 Mbps theoretical",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "5 GHz link rate",
+            "value": "Up to 1201 Mbps theoretical",
+            "sortOrder": 5
+          },
+          {
+            "group": "Technical",
+            "name": "External antennas",
+            "value": "4",
+            "sortOrder": 6
+          }
+        ]
+      },
+      {
+        "name": "TP-Link Archer AX23",
+        "slug": "tp-link-archer-ax23",
+        "sku": "EH-CE-050",
+        "brandSlug": "tp-link",
+        "categorySlug": "networking-wifi",
+        "description": "AX1800 wireless router. Link rates are theoretical radio rates, not guaranteed internet throughput; features vary by region and hardware revision. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Archer AX23",
+        "price": "79.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tp-link.com/en/home-networking/wifi-router/archer-ax23/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tp-link-archer-ax23-primary.webp",
+            "altText": "Illustrative TP-Link Archer AX23 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tp-link-archer-ax23-alternate.webp",
+            "altText": "Illustrative TP-Link Archer AX23 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Device type",
+            "value": "Wireless router",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless standard",
+            "value": "Wi-Fi 6",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Speed class",
+            "value": "AX1800",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Radio bands",
+            "value": "2.4 / 5 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "2.4 GHz link rate",
+            "value": "Up to 574 Mbps theoretical",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "5 GHz link rate",
+            "value": "Up to 1201 Mbps theoretical",
+            "sortOrder": 5
+          },
+          {
+            "group": "Technical",
+            "name": "External antennas",
+            "value": "4",
+            "sortOrder": 6
+          }
+        ]
+      },
+      {
+        "name": "TP-Link Archer C6",
+        "slug": "tp-link-archer-c6",
+        "sku": "EH-CE-051",
+        "brandSlug": "tp-link",
+        "categorySlug": "networking-wifi",
+        "description": "AC1200 wireless router. Link rates are theoretical radio rates, not guaranteed internet throughput; features vary by region and hardware revision. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Archer C6",
+        "price": "49.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tp-link.com/en/home-networking/wifi-router/archer-c6/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tp-link-archer-c6-primary.webp",
+            "altText": "Illustrative TP-Link Archer C6 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tp-link-archer-c6-alternate.webp",
+            "altText": "Illustrative TP-Link Archer C6 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Device type",
+            "value": "Wireless router",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless standard",
+            "value": "Wi-Fi 5",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Speed class",
+            "value": "AC1200",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Radio bands",
+            "value": "2.4 / 5 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "2.4 GHz link rate",
+            "value": "Up to 300 Mbps theoretical",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "5 GHz link rate",
+            "value": "Up to 867 Mbps theoretical",
+            "sortOrder": 5
+          },
+          {
+            "group": "Technical",
+            "name": "External antennas",
+            "value": "4",
+            "sortOrder": 6
+          }
+        ]
+      },
+      {
+        "name": "TP-Link TL-SG105",
+        "slug": "tp-link-tl-sg105",
+        "sku": "EH-CE-052",
+        "brandSlug": "tp-link",
+        "categorySlug": "networking-wifi",
+        "description": "Five-port unmanaged gigabit desktop switch with a fanless enclosure. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "TL-SG105",
+        "price": "29.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tp-link.com/us/business-networking/soho-switch-unmanaged/tl-sg105/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tp-link-tl-sg105-primary.webp",
+            "altText": "Illustrative TP-Link TL-SG105 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tp-link-tl-sg105-alternate.webp",
+            "altText": "Illustrative TP-Link TL-SG105 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Device type",
+            "value": "Unmanaged Ethernet switch",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Ports",
+            "value": "5 x RJ45",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Port rates",
+            "value": "10 / 100 / 1000 Mbps",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Cooling",
+            "value": "Fanless",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Forwarding method",
+            "value": "Store-and-forward",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Dimensions",
+            "value": "100 x 98 x 25 mm",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "TP-Link Archer T3U",
+        "slug": "tp-link-archer-t3u",
+        "sku": "EH-CE-053",
+        "brandSlug": "tp-link",
+        "categorySlug": "networking-wifi",
+        "description": "Compact dual-band AC1300 USB adapter with an internal antenna. Requires a supported host operating system and driver. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Archer T3U",
+        "price": "24.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tp-link.com/us/home-networking/usb-adapter/archer-t3u/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tp-link-archer-t3u-primary.webp",
+            "altText": "Illustrative TP-Link Archer T3U primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tp-link-archer-t3u-alternate.webp",
+            "altText": "Illustrative TP-Link Archer T3U alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Device type",
+            "value": "USB Wi-Fi adapter",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Interface",
+            "value": "USB 3.0",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless standard",
+            "value": "IEEE 802.11ac",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Radio bands",
+            "value": "2.4 / 5 GHz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "5 GHz link rate",
+            "value": "Up to 867 Mbps theoretical",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "2.4 GHz link rate",
+            "value": "Up to 400 Mbps theoretical",
+            "sortOrder": 5
+          },
+          {
+            "group": "Technical",
+            "name": "Antenna",
+            "value": "Internal",
+            "sortOrder": 6
+          }
+        ]
+      },
+      {
+        "name": "Tapo C200 V1",
+        "slug": "tapo-c200-v1",
+        "sku": "EH-CE-054",
+        "brandSlug": "tapo",
+        "categorySlug": "smart-home",
+        "description": "C200 V1 home security camera with two-way audio and 2.4 GHz Wi-Fi. Wired power is required; this is not a battery camera. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Tapo C200",
+        "price": "39.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tapo.com/en/product/tapo-c200-security-camera/v1/1-pack/specs/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tapo-c200-v1-primary.webp",
+            "altText": "Illustrative Tapo C200 V1 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tapo-c200-v1-alternate.webp",
+            "altText": "Illustrative Tapo C200 V1 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Hardware revision",
+            "value": "V1",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Video resolution",
+            "value": "1080p",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor optical format",
+            "value": "1/2.9 inch",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Focal length",
+            "value": "4 mm",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Aperture",
+            "value": "f/2.4",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless band",
+            "value": "2.4 GHz",
+            "sortOrder": 5
+          },
+          {
+            "group": "Technical",
+            "name": "Audio",
+            "value": "Two-way audio",
+            "sortOrder": 6
+          }
+        ]
+      },
+      {
+        "name": "Tapo C210 V1",
+        "slug": "tapo-c210-v1",
+        "sku": "EH-CE-055",
+        "brandSlug": "tapo",
+        "categorySlug": "smart-home",
+        "description": "C210 V1 home security camera with two-way audio and 2.4 GHz Wi-Fi. Wired power is required; this is not a battery camera. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Tapo C210",
+        "price": "45.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tapo.com/en/product/tapo-c210-security-camera/v1/1-pack/specs/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tapo-c210-v1-primary.webp",
+            "altText": "Illustrative Tapo C210 V1 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tapo-c210-v1-alternate.webp",
+            "altText": "Illustrative Tapo C210 V1 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Hardware revision",
+            "value": "V1",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Video resolution",
+            "value": "2304 x 1296 (3 MP)",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor optical format",
+            "value": "1/2.8 inch",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Focal length",
+            "value": "3.83 mm",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Aperture",
+            "value": "f/2.4",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless band",
+            "value": "2.4 GHz",
+            "sortOrder": 5
+          },
+          {
+            "group": "Technical",
+            "name": "Audio",
+            "value": "Two-way audio",
+            "sortOrder": 6
+          }
+        ]
+      },
+      {
+        "name": "Tapo C110 V1",
+        "slug": "tapo-c110-v1",
+        "sku": "EH-CE-056",
+        "brandSlug": "tapo",
+        "categorySlug": "smart-home",
+        "description": "C110 V1 home security camera with two-way audio and 2.4 GHz Wi-Fi. Wired power is required; this is not a battery camera. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Tapo C110",
+        "price": "35.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tapo.com/en/product/tapo-c110-security-camera/v1/1-pack/specs/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tapo-c110-v1-primary.webp",
+            "altText": "Illustrative Tapo C110 V1 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tapo-c110-v1-alternate.webp",
+            "altText": "Illustrative Tapo C110 V1 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Hardware revision",
+            "value": "V1",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Video resolution",
+            "value": "2304 x 1296 (3 MP)",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor optical format",
+            "value": "1/2.8 inch",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Focal length",
+            "value": "3.3 mm",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Aperture",
+            "value": "f/2.0",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless band",
+            "value": "2.4 GHz",
+            "sortOrder": 5
+          },
+          {
+            "group": "Technical",
+            "name": "Audio",
+            "value": "Two-way audio",
+            "sortOrder": 6
+          }
+        ]
+      },
+      {
+        "name": "Tapo C310 V1",
+        "slug": "tapo-c310-v1",
+        "sku": "EH-CE-057",
+        "brandSlug": "tapo",
+        "categorySlug": "smart-home",
+        "description": "C310 V1 home security camera with two-way audio and 2.4 GHz Wi-Fi. Wired power is required; this is not a battery camera. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Tapo C310",
+        "price": "49.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tapo.com/en/product/tapo-c310-security-camera/v1/1-pack/specs/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tapo-c310-v1-primary.webp",
+            "altText": "Illustrative Tapo C310 V1 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tapo-c310-v1-alternate.webp",
+            "altText": "Illustrative Tapo C310 V1 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Hardware revision",
+            "value": "V1",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Video resolution",
+            "value": "2304 x 1296 (3 MP)",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor optical format",
+            "value": "1/2.7 inch",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Focal length",
+            "value": "3.89 mm",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Aperture",
+            "value": "f/2.2",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless band",
+            "value": "2.4 GHz",
+            "sortOrder": 5
+          },
+          {
+            "group": "Technical",
+            "name": "Audio",
+            "value": "Two-way audio",
+            "sortOrder": 6
+          }
+        ]
+      },
+      {
+        "name": "Tapo C320WS V1",
+        "slug": "tapo-c320ws-v1",
+        "sku": "EH-CE-058",
+        "brandSlug": "tapo",
+        "categorySlug": "smart-home",
+        "description": "C320WS V1 home security camera with two-way audio and 2.4 GHz Wi-Fi. Wired power is required; this is not a battery camera. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Tapo C320WS",
+        "price": "59.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tapo.com/en/product/tapo-c320ws-security-camera/v1/1-pack/specs/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tapo-c320ws-v1-primary.webp",
+            "altText": "Illustrative Tapo C320WS V1 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tapo-c320ws-v1-alternate.webp",
+            "altText": "Illustrative Tapo C320WS V1 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Hardware revision",
+            "value": "V1",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Video resolution",
+            "value": "2560 x 1440 (4 MP)",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor optical format",
+            "value": "1/3 inch",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Focal length",
+            "value": "3.18 mm",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Aperture",
+            "value": "f/1.61",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless band",
+            "value": "2.4 GHz",
+            "sortOrder": 5
+          },
+          {
+            "group": "Technical",
+            "name": "Audio",
+            "value": "Two-way audio",
+            "sortOrder": 6
+          }
+        ]
+      },
+      {
+        "name": "Tapo P100 EU V1",
+        "slug": "tapo-p100-eu-v1",
+        "sku": "EH-CE-059",
+        "brandSlug": "tapo",
+        "categorySlug": "smart-home",
+        "description": "EU 220-240 V smart socket with remote switching. Confirm plug geometry and appliance load compatibility; limits differ by region. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Tapo P100",
+        "price": "15.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tapo.com/en/product/tapo-p100-smart-plug/v1/1-pack/specs/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tapo-p100-eu-v1-primary.webp",
+            "altText": "Illustrative Tapo P100 EU V1 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tapo-p100-eu-v1-alternate.webp",
+            "altText": "Illustrative Tapo P100 EU V1 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Hardware revision",
+            "value": "V1 / EU electrical specification",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless",
+            "value": "2.4 GHz Wi-Fi",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Wi-Fi standard",
+            "value": "IEEE 802.11b/g/n",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Input",
+            "value": "220-240 V AC, 50/60 Hz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum current",
+            "value": "10 A",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum resistive load",
+            "value": "2300 W",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Tapo P110 EU V1",
+        "slug": "tapo-p110-eu-v1",
+        "sku": "EH-CE-060",
+        "brandSlug": "tapo",
+        "categorySlug": "smart-home",
+        "description": "EU 220-240 V smart socket with energy monitoring. Confirm plug geometry and appliance load compatibility; limits differ by region. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Tapo P110",
+        "price": "19.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tapo.com/en/product/tapo-p110-smart-plug/v1/1-pack/specs/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tapo-p110-eu-v1-primary.webp",
+            "altText": "Illustrative Tapo P110 EU V1 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tapo-p110-eu-v1-alternate.webp",
+            "altText": "Illustrative Tapo P110 EU V1 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Hardware revision",
+            "value": "V1 / EU electrical specification",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless",
+            "value": "2.4 GHz Wi-Fi",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Wi-Fi standard",
+            "value": "IEEE 802.11b/g/n",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Input",
+            "value": "220-240 V AC, 50/60 Hz",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum current",
+            "value": "16 A",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Maximum resistive load",
+            "value": "3680 W",
+            "sortOrder": 5
+          },
+          {
+            "group": "Technical",
+            "name": "Energy monitoring",
+            "value": "Supported",
+            "sortOrder": 6
+          }
+        ]
+      },
+      {
+        "name": "Tapo L510E E27",
+        "slug": "tapo-l510e-e27",
+        "sku": "EH-CE-061",
+        "brandSlug": "tapo",
+        "categorySlug": "smart-home",
+        "description": "Warm-white E27 Wi-Fi bulb with app dimming for an indoor 220-240 V fitting. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Tapo L510E",
+        "price": "12.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tapo.com/uk/product/tapo-l510e-smart-light-bulb/v3/1-pack/specs/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tapo-l510e-e27-primary.webp",
+            "altText": "Illustrative Tapo L510E E27 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tapo-l510e-e27-alternate.webp",
+            "altText": "Illustrative Tapo L510E E27 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Lamp base",
+            "value": "E27",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Brightness",
+            "value": "806 lumens",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Color temperature",
+            "value": "2700 K",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless",
+            "value": "2.4 GHz Wi-Fi",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Input",
+            "value": "220-240 V AC, 50/60 Hz",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Dimming",
+            "value": "App-controlled",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Tapo L530E E27",
+        "slug": "tapo-l530e-e27",
+        "sku": "EH-CE-062",
+        "brandSlug": "tapo",
+        "categorySlug": "smart-home",
+        "description": "Multicolor E27 Wi-Fi bulb with adjustable white temperature and app dimming for an indoor 220-240 V fitting. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Tapo L530E",
+        "price": "16.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tapo.com/en/product/tapo-l530e-smart-light-bulb/v3.20/specs/",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tapo-l530e-e27-primary.webp",
+            "altText": "Illustrative Tapo L530E E27 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tapo-l530e-e27-alternate.webp",
+            "altText": "Illustrative Tapo L530E E27 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Lamp base",
+            "value": "E27",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Brightness",
+            "value": "806 lumens",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Color temperature",
+            "value": "2500-6500 K",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless",
+            "value": "2.4 GHz Wi-Fi",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Input",
+            "value": "220-240 V AC, 50/60 Hz",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Color changing",
+            "value": "Supported",
+            "sortOrder": 5
+          },
+          {
+            "group": "Technical",
+            "name": "Dimming",
+            "value": "App-controlled",
+            "sortOrder": 6
+          }
+        ]
+      },
+      {
+        "name": "Tapo T110 EU",
+        "slug": "tapo-t110-eu",
+        "sku": "EH-CE-063",
+        "brandSlug": "tapo",
+        "categorySlug": "smart-home",
+        "description": "Battery-powered door/window contact sensor. Requires a compatible regional Tapo hub, sold separately. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Tapo T110",
+        "price": "19.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.tp-link.com/uk/smart-home/smart-sensor/tapo-t110/?app=tether",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/tapo-t110-eu-primary.webp",
+            "altText": "Illustrative Tapo T110 EU primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/tapo-t110-eu-alternate.webp",
+            "altText": "Illustrative Tapo T110 EU alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Device type",
+            "value": "Door/window contact sensor",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Battery",
+            "value": "CR2032",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Wireless",
+            "value": "868 MHz EU version",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Hub",
+            "value": "Compatible Tapo hub required; sold separately",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Notifications",
+            "value": "Tapo app",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Mounting",
+            "value": "Adhesive mounting",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Logitech MX Master 3S Bluetooth Edition",
+        "slug": "logitech-mx-master-3s-bluetooth-edition",
+        "sku": "EH-CE-064",
+        "brandSlug": "logitech",
+        "categorySlug": "keyboards-mice",
+        "description": "Wireless mouse with an 8000 DPI sensor, thumb wheel and MagSpeed scrolling. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "MX Master 3S",
+        "price": "99.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.logitech.com/en-us/shop/p/mx-master-3s",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/logitech-mx-master-3s-bluetooth-edition-primary.webp",
+            "altText": "Illustrative Logitech MX Master 3S Bluetooth Edition primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/logitech-mx-master-3s-bluetooth-edition-alternate.webp",
+            "altText": "Illustrative Logitech MX Master 3S Bluetooth Edition alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Connection",
+            "value": "Bluetooth",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor resolution",
+            "value": "Up to 8000 DPI",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Main buttons",
+            "value": "Quiet Clicks",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Vertical scroll",
+            "value": "MagSpeed electromagnetic",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Horizontal scroll",
+            "value": "Thumb wheel",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Charging",
+            "value": "USB-C",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Logitech MX Anywhere 3S",
+        "slug": "logitech-mx-anywhere-3s",
+        "sku": "EH-CE-065",
+        "brandSlug": "logitech",
+        "categorySlug": "keyboards-mice",
+        "description": "Compact wireless mouse with an 8000 DPI sensor and MagSpeed scroll wheel. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "MX Anywhere 3S",
+        "price": "79.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.logitech.com/en-us/shop/p/mx-anywhere-3s",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/logitech-mx-anywhere-3s-primary.webp",
+            "altText": "Illustrative Logitech MX Anywhere 3S primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/logitech-mx-anywhere-3s-alternate.webp",
+            "altText": "Illustrative Logitech MX Anywhere 3S alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Connection",
+            "value": "Bluetooth",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Sensor resolution",
+            "value": "Up to 8000 DPI",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Main buttons",
+            "value": "Quiet Clicks",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Scroll wheel",
+            "value": "MagSpeed",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Form factor",
+            "value": "Compact",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Charging",
+            "value": "USB-C",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Logitech Lift Right-Handed",
+        "slug": "logitech-lift-right-handed",
+        "sku": "EH-CE-066",
+        "brandSlug": "logitech",
+        "categorySlug": "keyboards-mice",
+        "description": "Right-handed vertical mouse with a 57-degree grip and integrated thumb rest. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Lift",
+        "price": "69.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.logitech.com/en-us/shop/p/lift-vertical-ergonomic-mouse",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/logitech-lift-right-handed-primary.webp",
+            "altText": "Illustrative Logitech Lift Right-Handed primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/logitech-lift-right-handed-alternate.webp",
+            "altText": "Illustrative Logitech Lift Right-Handed alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Form factor",
+            "value": "Vertical mouse",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Vertical angle",
+            "value": "57 degrees",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Hand size",
+            "value": "Small to medium",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Grip",
+            "value": "Textured rubber",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Thumb rest",
+            "value": "Integrated",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Handedness",
+            "value": "Right",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Logitech Signature M650",
+        "slug": "logitech-signature-m650",
+        "sku": "EH-CE-067",
+        "brandSlug": "logitech",
+        "categorySlug": "keyboards-mice",
+        "description": "Standard-size M650 mouse with SmartWheel scrolling and two wireless connection options. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "Signature M650",
+        "price": "39.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.logitech.com/en-us/shop/p/m650-signature-wireless-mouse",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/logitech-signature-m650-primary.webp",
+            "altText": "Illustrative Logitech Signature M650 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/logitech-signature-m650-alternate.webp",
+            "altText": "Illustrative Logitech Signature M650 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Form factor",
+            "value": "Small-to-medium right-handed mouse",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Scroll wheel",
+            "value": "SmartWheel",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Connection",
+            "value": "Bluetooth Low Energy or Logi Bolt",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Shape",
+            "value": "Contoured",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Grip",
+            "value": "Rubber side grips",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Software",
+            "value": "Logi Options+",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Logitech M720 Triathlon",
+        "slug": "logitech-m720-triathlon",
+        "sku": "EH-CE-068",
+        "brandSlug": "logitech",
+        "categorySlug": "keyboards-mice",
+        "description": "Full-size wireless mouse with dual-mode scrolling and a tilting scroll wheel. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "M720 Triathlon",
+        "price": "49.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.logitech.com/en-us/shop/p/m720-triathlon",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/logitech-m720-triathlon-primary.webp",
+            "altText": "Illustrative Logitech M720 Triathlon primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/logitech-m720-triathlon-alternate.webp",
+            "altText": "Illustrative Logitech M720 Triathlon alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Handedness",
+            "value": "Right",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Shape",
+            "value": "Full-size contoured",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Scroll modes",
+            "value": "Ratchet and hyper-fast",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Horizontal scroll",
+            "value": "Tilt wheel",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Connection",
+            "value": "Bluetooth or Logitech Unifying",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Controls",
+            "value": "Side buttons and thumb button",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Logitech MX Keys S",
+        "slug": "logitech-mx-keys-s",
+        "sku": "EH-CE-069",
+        "brandSlug": "logitech",
+        "categorySlug": "keyboards-mice",
+        "description": "Full-size wireless keyboard with dished keys and automatically adjusting backlighting. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "MX Keys S",
+        "price": "119.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.logitech.com/en-us/shop/p/mx-keys-s",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/logitech-mx-keys-s-primary.webp",
+            "altText": "Illustrative Logitech MX Keys S primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/logitech-mx-keys-s-alternate.webp",
+            "altText": "Illustrative Logitech MX Keys S alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Product type",
+            "value": "Wireless keyboard",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Layout",
+            "value": "Full-size with number pad",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Keycaps",
+            "value": "Spherically dished",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Backlight",
+            "value": "Smart illumination",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Programmable keys",
+            "value": "Supported through software",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Software",
+            "value": "Logi Options+",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Logitech MX Mechanical Tactile Quiet",
+        "slug": "logitech-mx-mechanical-tactile-quiet",
+        "sku": "EH-CE-070",
+        "brandSlug": "logitech",
+        "categorySlug": "keyboards-mice",
+        "description": "Full-size low-profile mechanical keyboard in the Tactile Quiet switch configuration. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "MX Mechanical",
+        "price": "159.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.logitech.com/en-us/shop/p/mx-mechanical",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/logitech-mx-mechanical-tactile-quiet-primary.webp",
+            "altText": "Illustrative Logitech MX Mechanical Tactile Quiet primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/logitech-mx-mechanical-tactile-quiet-alternate.webp",
+            "altText": "Illustrative Logitech MX Mechanical Tactile Quiet alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Product type",
+            "value": "Wireless mechanical keyboard",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Switch choice",
+            "value": "Tactile Quiet",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Profile",
+            "value": "Low-profile mechanical keys",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Layout",
+            "value": "Full-size with number pad",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Backlight",
+            "value": "Smart illumination",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Device switching",
+            "value": "Up to 3 devices",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Logitech K480",
+        "slug": "logitech-k480",
+        "sku": "EH-CE-071",
+        "brandSlug": "logitech",
+        "categorySlug": "keyboards-mice",
+        "description": "Compact Bluetooth keyboard with a device-selection dial and an integrated phone/tablet cradle. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "K480",
+        "price": "49.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.logitech.com/en-us/shop/p/k480-multi-device-wireless",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/logitech-k480-primary.webp",
+            "altText": "Illustrative Logitech K480 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/logitech-k480-alternate.webp",
+            "altText": "Illustrative Logitech K480 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Product type",
+            "value": "Compact keyboard",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Connection",
+            "value": "Bluetooth",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Paired devices",
+            "value": "Up to 3",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Switching control",
+            "value": "Device-selection dial",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Device stand",
+            "value": "Integrated phone/tablet cradle",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Keycaps",
+            "value": "Scooped",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Logitech K780",
+        "slug": "logitech-k780",
+        "sku": "EH-CE-072",
+        "brandSlug": "logitech",
+        "categorySlug": "keyboards-mice",
+        "description": "Wireless keyboard with a number pad, device cradle and Easy-Switch controls. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "K780",
+        "price": "69.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.logitech.com/en-us/shop/p/k780-multi-device-wireless-keyboard",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/logitech-k780-primary.webp",
+            "altText": "Illustrative Logitech K780 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/logitech-k780-alternate.webp",
+            "altText": "Illustrative Logitech K780 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Product type",
+            "value": "Compact wireless keyboard",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Number pad",
+            "value": "Integrated",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Device stand",
+            "value": "Integrated rubber cradle",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Paired devices",
+            "value": "Up to 3",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Device switching",
+            "value": "Easy-Switch",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Customization",
+            "value": "Logi Options+",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Logitech K120",
+        "slug": "logitech-k120",
+        "sku": "EH-CE-073",
+        "brandSlug": "logitech",
+        "categorySlug": "keyboards-mice",
+        "description": "Full-size wired USB keyboard with a number pad and adjustable tilt legs. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "K120",
+        "price": "19.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.logitech.com/en-us/shop/p/k120-usb-standard-computer",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/logitech-k120-primary.webp",
+            "altText": "Illustrative Logitech K120 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/logitech-k120-alternate.webp",
+            "altText": "Illustrative Logitech K120 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Connection",
+            "value": "Wired USB",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Layout",
+            "value": "Full-size",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Number pad",
+            "value": "Integrated",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Spill resistance",
+            "value": "Spill-resistant design",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Height adjustment",
+            "value": "Tilt legs",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Key profile",
+            "value": "Deep-profile keys",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Brother HL-L2400D",
+        "slug": "brother-hl-l2400d",
+        "sku": "EH-CE-074",
+        "brandSlug": "brother",
+        "categorySlug": "printers-scanners",
+        "description": "USB monochrome laser printer with automatic double-sided printing and a 250-sheet tray. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "HL-L2400D",
+        "price": "139.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.brother-usa.com/p/laser-printers/HLL2400D",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/brother-hl-l2400d-primary.webp",
+            "altText": "Illustrative Brother HL-L2400D primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/brother-hl-l2400d-alternate.webp",
+            "altText": "Illustrative Brother HL-L2400D alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Technology",
+            "value": "Monochrome laser",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Function",
+            "value": "Print",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Print speed",
+            "value": "Up to 32 ppm (Letter)",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Duplex printing",
+            "value": "Automatic",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Paper tray",
+            "value": "250 sheets",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Connection",
+            "value": "USB 2.0",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Brother HL-L2460DW",
+        "slug": "brother-hl-l2460dw",
+        "sku": "EH-CE-075",
+        "brandSlug": "brother",
+        "categorySlug": "printers-scanners",
+        "description": "Networked monochrome laser printer with automatic double-sided printing and a 250-sheet tray. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "HL-L2460DW",
+        "price": "179.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.brother-usa.com/p/laser-printers/HLL2460DW",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/brother-hl-l2460dw-primary.webp",
+            "altText": "Illustrative Brother HL-L2460DW primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/brother-hl-l2460dw-alternate.webp",
+            "altText": "Illustrative Brother HL-L2460DW alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Technology",
+            "value": "Monochrome laser",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Function",
+            "value": "Print",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Print speed",
+            "value": "Up to 36 ppm (Letter)",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Duplex printing",
+            "value": "Automatic",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Paper tray",
+            "value": "250 sheets",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Connection",
+            "value": "Dual-band Wi-Fi, Ethernet and USB 2.0",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Brother DCP-L2640DW",
+        "slug": "brother-dcp-l2640dw",
+        "sku": "EH-CE-076",
+        "brandSlug": "brother",
+        "categorySlug": "printers-scanners",
+        "description": "Multifunction monochrome laser printer with a document feeder and automatic double-sided printing. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "DCP-L2640DW",
+        "price": "229.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.brother-usa.com/p/laser-printers/DCPL2640DW",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/brother-dcp-l2640dw-primary.webp",
+            "altText": "Illustrative Brother DCP-L2640DW primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/brother-dcp-l2640dw-alternate.webp",
+            "altText": "Illustrative Brother DCP-L2640DW alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Technology",
+            "value": "Monochrome laser",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Functions",
+            "value": "Print, copy and scan",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Print speed",
+            "value": "Up to 36 ppm (Letter)",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Duplex printing",
+            "value": "Automatic",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Paper tray",
+            "value": "250 sheets",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Document feeder",
+            "value": "50 sheets",
+            "sortOrder": 5
+          },
+          {
+            "group": "Technical",
+            "name": "Connection",
+            "value": "Dual-band Wi-Fi, Ethernet and USB 2.0",
+            "sortOrder": 6
+          }
+        ]
+      },
+      {
+        "name": "Brother MFC-J4355DW",
+        "slug": "brother-mfc-j4355dw",
+        "sku": "EH-CE-077",
+        "brandSlug": "brother",
+        "categorySlug": "printers-scanners",
+        "description": "Color inkjet all-in-one with automatic duplex printing, a document feeder and a color display. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "MFC-J4355DW",
+        "price": "209.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.brother-usa.com/p/inkjet-printers/MFCJ4355DW",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/brother-mfc-j4355dw-primary.webp",
+            "altText": "Illustrative Brother MFC-J4355DW primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/brother-mfc-j4355dw-alternate.webp",
+            "altText": "Illustrative Brother MFC-J4355DW alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Technology",
+            "value": "Color inkjet",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Functions",
+            "value": "Print, copy, scan and fax",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Paper tray",
+            "value": "150 sheets",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Document feeder",
+            "value": "20 sheets, single-sided",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Duplex printing",
+            "value": "Automatic",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Display",
+            "value": "1.8-inch color",
+            "sortOrder": 5
+          },
+          {
+            "group": "Technical",
+            "name": "Connection",
+            "value": "Dual-band Wi-Fi and USB 2.0",
+            "sortOrder": 6
+          }
+        ]
+      },
+      {
+        "name": "Brother ADS-1300",
+        "slug": "brother-ads-1300",
+        "sku": "EH-CE-078",
+        "brandSlug": "brother",
+        "categorySlug": "printers-scanners",
+        "description": "Compact document scanner with a 20-sheet feeder and single-pass double-sided scanning. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "ADS-1300",
+        "price": "249.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.brother-usa.com/p/desktop-scanners/ADS1300",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/brother-ads-1300-primary.webp",
+            "altText": "Illustrative Brother ADS-1300 primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/brother-ads-1300-alternate.webp",
+            "altText": "Illustrative Brother ADS-1300 alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Product type",
+            "value": "Desktop document scanner",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Scan speed",
+            "value": "Up to 30 ppm",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Duplex scanning",
+            "value": "Single-pass",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Document feeder",
+            "value": "20 sheets",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Optical resolution",
+            "value": "Up to 600 x 600 dpi",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Connection",
+            "value": "USB-C connector, SuperSpeed USB 3.0",
+            "sortOrder": 5
+          }
+        ]
+      },
+      {
+        "name": "Brother ADS-1350W",
+        "slug": "brother-ads-1350w",
+        "sku": "EH-CE-079",
+        "brandSlug": "brother",
+        "categorySlug": "printers-scanners",
+        "description": "Wireless compact scanner with a 20-sheet feeder and double-sided document scanning. Demonstration catalog: illustrative USD price and simulated stock, not a verified retail offer. Images are illustrative, not authenticated model photographs.",
+        "modelNumber": "ADS-1350W",
+        "price": "289.00",
+        "compareAtPrice": null,
+        "status": "ACTIVE",
+        "quantity": 24,
+        "sourceUrl": "https://www.brother-usa.com/p/desktop-scanners/ADS1350W",
+        "images": [
+          {
+            "url": "/images/catalog/expansion/brother-ads-1350w-primary.webp",
+            "altText": "Illustrative Brother ADS-1350W primary view; not an authenticated model photograph",
+            "sortOrder": 0,
+            "isPrimary": true
+          },
+          {
+            "url": "/images/catalog/expansion/brother-ads-1350w-alternate.webp",
+            "altText": "Illustrative Brother ADS-1350W alternate view; not an authenticated model photograph",
+            "sortOrder": 1,
+            "isPrimary": false
+          }
+        ],
+        "specifications": [
+          {
+            "group": "Technical",
+            "name": "Product type",
+            "value": "Wireless desktop document scanner",
+            "sortOrder": 0
+          },
+          {
+            "group": "Technical",
+            "name": "Scan speed",
+            "value": "Up to 30 ppm",
+            "sortOrder": 1
+          },
+          {
+            "group": "Technical",
+            "name": "Duplex scanning",
+            "value": "Supported",
+            "sortOrder": 2
+          },
+          {
+            "group": "Technical",
+            "name": "Document feeder",
+            "value": "20 sheets",
+            "sortOrder": 3
+          },
+          {
+            "group": "Technical",
+            "name": "Optical resolution",
+            "value": "Up to 600 x 600 dpi",
+            "sortOrder": 4
+          },
+          {
+            "group": "Technical",
+            "name": "Connection",
+            "value": "802.11b/g/n Wi-Fi and USB 3.0",
+            "sortOrder": 5
+          }
+        ]
+      }
+    ]
+  }
+}

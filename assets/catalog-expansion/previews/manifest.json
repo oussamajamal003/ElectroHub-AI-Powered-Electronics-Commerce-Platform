@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "generatedOn": "2026-10-22",
+  "assets": [
+    {
+      "filename": "canon-eos-r50-preview.png",
+      "originalGeneratedFilename": "exec-a5e9e187-9a38-4f92-a85c-6b3dd43a8510.png",
+      "sha256": "93eb0f9ae8f33d46d82ee74f965ef373f6b0769e72d18ac5aa5cab5572e8787f",
+      "kind": "ai-generated-illustration",
+      "source": "Codex built-in imagegen; ChatGPT Plus authentication verified",
+      "usage": "Storefront illustrative preview; not authenticated model photography",
+      "mlTrainingRights": "not authorized",
+      "kaggleRedistributionRights": "not authorized"
+    },
+    {
+      "filename": "jbl-flip-6-preview.png",
+      "originalGeneratedFilename": "exec-c2597749-393e-4f97-ab91-8843b2ca69f8.png",
+      "sha256": "2bc9591290a62abca9f959b572cc22d736051b1b8c2b923c23be01b13c17352d",
+      "kind": "ai-generated-illustration",
+      "source": "Codex built-in imagegen; ChatGPT Plus authentication verified",
+      "usage": "Storefront illustrative preview; not authenticated model photography",
+      "mlTrainingRights": "not authorized",
+      "kaggleRedistributionRights": "not authorized"
+    },
+    {
+      "filename": "samsung-t7-shield-preview.png",
+      "originalGeneratedFilename": "exec-62417585-9787-448d-a054-2d25e44ac6a4.png",
+      "sha256": "a40e9dc5f80db287b44e094e9bcb0708c54b7a1530b93e5060b2bdc1366d56b9",
+      "kind": "ai-generated-illustration",
+      "source": "Codex built-in imagegen; ChatGPT Plus authentication verified",
+      "usage": "Storefront illustrative preview; not authenticated model photography",
+      "mlTrainingRights": "not authorized",
+      "kaggleRedistributionRights": "not authorized"
+    },
+    {
+      "filename": "tp-link-archer-ax55-preview.png",
+      "originalGeneratedFilename": "exec-091a2c82-a755-4ab9-a2f1-d930a5f26f4f.png",
+      "sha256": "cb111edf681f6baf82fa44affc252fc5a927373ee97dae7f5a9102f775b8967f",
+      "kind": "ai-generated-illustration",
+      "source": "Codex built-in imagegen; ChatGPT Plus authentication verified",
+      "usage": "Storefront illustrative preview; not authenticated model photography",
+      "mlTrainingRights": "not authorized",
+      "kaggleRedistributionRights": "not authorized"
+    },
+    {
+      "filename": "brother-hl-l2460dw-preview.png",
+      "originalGeneratedFilename": "exec-a7181be4-0c00-40ab-b63a-007d265d5575.png",
+      "sha256": "4ec6ee51507728a5b385ad7d100a036a5db4ac827eedb61683c8a1bb2b5d528b",
+      "kind": "ai-generated-illustration",
+      "source": "Codex built-in imagegen; ChatGPT Plus authentication verified",
+      "usage": "Storefront illustrative preview; not authenticated model photography",
+      "mlTrainingRights": "not authorized",
+      "kaggleRedistributionRights": "not authorized"
+    }
+  ]
+}
