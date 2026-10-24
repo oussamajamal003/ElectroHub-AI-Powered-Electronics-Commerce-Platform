@@ -15,7 +15,7 @@ export const searchSchema = paginationSchema.extend({
   new Prisma.Decimal(value.minPrice).lte(value.maxPrice), { message: 'Minimum price exceeds maximum price.' });
 export const suggestionsSchema = z.object({
   q: query.pipe(z.string().min(2)),
-  limit: z.string().regex(/^[1-9]\d*$/).transform(Number).pipe(z.number().int().max(10)).optional().default('8'),
+  limit: z.string().regex(/^[1-9]\d*$/).transform(Number).pipe(z.number().int().max(10)).prefault('8'),
 }).strict();
 export type SearchInput = z.infer<typeof searchSchema>;
 export const hasDiscovery = (input: SearchInput) => Boolean(input.q || input.category || input.brand ||
