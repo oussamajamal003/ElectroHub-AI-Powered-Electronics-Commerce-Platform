@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HomePage } from './HomePage';
@@ -24,7 +24,7 @@ describe('Home catalog sections', () => {
     const headings = screen.getAllByRole('heading', { level: 2 }).map(heading => heading.textContent);
     expect(headings).toEqual(['Shop by Category', 'Featured Deals', 'New Arrivals']);
     expect(screen.getByRole('region', { name: 'Shopping benefits' })).toBeInTheDocument();
-    expect(screen.getByRole('status', { name: 'Loading categories' }).children).toHaveLength(6);
+    expect(screen.getByRole('status', { name: 'Loading categories' }).children).toHaveLength(8);
     expect(screen.getByRole('status', { name: 'Loading deals' }).children).toHaveLength(6);
     expect(screen.getByRole('status', { name: 'Loading new arrivals' }).children).toHaveLength(6);
     expect(screen.queryByText(/Loading (new arrivals|categories|deals)…/)).not.toBeInTheDocument();
@@ -44,5 +44,42 @@ describe('Home catalog sections', () => {
     expect(screen.getByText('Unable to load new arrivals')).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: 'Retry' })[0]!);
     expect(retryCategories).toHaveBeenCalledOnce();
+  });
+
+  it('shows the eight largest real categories first and reveals every storefront category on request', () => {
+    const counts: Array<[string, number]> = [['Accessories', 2], ['Cameras & Photography', 8], ['Computer Components', 15], ['Gaming', 3], ['Headphones', 3],
+      ['Keyboards & Mice', 10], ['Laptops', 49], ['Monitors', 3], ['Networking & Wi-Fi', 8], ['Printers & Scanners', 6], ['Smart Home', 10],
+      ['Smartphones', 31], ['Smartwatches', 8], ['Speakers & Audio', 12], ['Storage & SSDs', 10], ['Tablets', 28]];
+    const data = counts.map(([name, productCount]) => ({ id: name, name, productCount, description: null, imageUrl: '/images/catalog/test.webp',
+      slug: name.toLowerCase().replace(/[^a-z]+/g, '-') }));
+    vi.mocked(useCategories).mockReturnValue({ data, isPending: false, isError: false } as unknown as ReturnType<typeof useCategories>);
+    vi.mocked(useDeals).mockReturnValue({ isPending: true } as ReturnType<typeof useDeals>);
+    vi.mocked(useProducts).mockReturnValue({ isPending: true } as ReturnType<typeof useProducts>);
+    renderPage();
+
+    const grid = () => document.getElementById('home-category-grid')!;
+    const names = () => within(grid()).getAllByRole('link').map(link => link.textContent?.replace(/\d+ products?$/, ''));
+    expect(names()).toEqual(['Laptops', 'Smartphones', 'Tablets', 'Computer Components', 'Speakers & Audio', 'Keyboards & Mice', 'Smart Home', 'Storage & SSDs']);
+    expect(within(grid()).getByRole('link', { name: /Laptops/ })).toHaveAttribute('href', '/products?category=laptops');
+    expect(within(grid()).getByRole('link', { name: /Laptops/ })).toHaveTextContent('49 products');
+
+    const toggle = screen.getByRole('button', { name: 'View all 16 categories' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-controls', 'home-category-grid');
+    fireEvent.click(toggle);
+    expect(names()).toHaveLength(16);
+    expect(within(grid()).getByRole('link', { name: /Cameras & Photography/ })).toHaveAttribute('href', '/products?category=cameras-photography');
+    expect(screen.getByRole('button', { name: 'Show fewer categories' })).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Show fewer categories' }));
+    expect(names()).toHaveLength(8);
+  });
+
+  it('shows an empty state and no toggle when the API has no storefront categories', () => {
+    vi.mocked(useCategories).mockReturnValue({ data: [], isPending: false, isError: false } as unknown as ReturnType<typeof useCategories>);
+    vi.mocked(useDeals).mockReturnValue({ isPending: true } as ReturnType<typeof useDeals>);
+    vi.mocked(useProducts).mockReturnValue({ isPending: true } as ReturnType<typeof useProducts>);
+    renderPage();
+    expect(screen.getByText('No categories are available yet.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /View all/ })).not.toBeInTheDocument();
   });
 });

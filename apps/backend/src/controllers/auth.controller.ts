@@ -93,7 +93,7 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
   } catch (error: unknown) {
     if (respondWithOtpDeliveryError(error, res)) return;
     if (error instanceof ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
     }
     if (error instanceof Error && error.message === 'Email already registered') {
       return res.status(409).json({ error: 'Email already registered' });
@@ -126,7 +126,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     });
   } catch (error: unknown) {
     if (error instanceof ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
     }
     if (error instanceof Error && error.message === 'Invalid credentials') {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -151,7 +151,7 @@ export const verifyEmail = async (req: Request, res: Response, next: NextFunctio
     });
   } catch (error: unknown) {
     if (error instanceof ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
     }
     if (respondWithOtpError(error, res)) return;
     next(error);
@@ -178,7 +178,7 @@ export const resendVerification = async (req: Request, res: Response, next: Next
     res.status(200).json({ message: 'If verification is pending, a code will be sent when available.', ...metadata });
   } catch (error: unknown) {
     if (error instanceof ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
     }
     if (error instanceof Error && error.message.includes('Please wait')) {
       return res.status(200).json({
@@ -202,7 +202,7 @@ export const changeVerificationEmail = async (req: Request, res: Response, next:
     if (respondWithOtpDeliveryError(error, res)) return;
     if (respondWithOtpError(error, res)) return;
     if (error instanceof ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
     }
     next(error);
   }
@@ -297,7 +297,7 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
     res.status(200).json({ user, message: 'Profile updated successfully' });
   } catch (error: unknown) {
     if (error instanceof ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
     }
     if (error instanceof Error && error.message === 'User not found or inactive') {
       return res.status(401).json({ error: 'User not found or inactive' });
@@ -318,7 +318,7 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
     res.status(200).json({ message: 'If an account exists, you may receive password reset instructions shortly.' });
   } catch (error: unknown) {
     if (error instanceof ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
     }
     next(error);
   }
@@ -334,7 +334,7 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
   } catch (error: unknown) {
     if (respondWithOtpError(error, res)) return;
     if (error instanceof ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
     }
     if (error instanceof Error && error.message === 'Invalid or expired reset token') {
       return res.status(400).json({ error: { code: 'RESET_AUTHORIZATION_INVALID', message: 'The password reset authorization is no longer valid. Request a new code.' } });
@@ -349,7 +349,7 @@ export const resendPasswordReset = async (req: Request, res: Response, next: Nex
     const result = await authService.resendPasswordReset(data.email);
     res.status(200).json(result);
   } catch (error: unknown) {
-    if (error instanceof ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+    if (error instanceof ZodError) return res.status(400).json({ error: 'Validation failed', details: error.issues });
     next(error);
   }
 };
@@ -368,7 +368,7 @@ export const verifyResetOtp = async (req: Request, res: Response, next: NextFunc
   } catch (error: unknown) {
     if (respondWithOtpError(error, res)) return;
     if (error instanceof ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
     }
     next(error);
   }
@@ -388,7 +388,7 @@ export const verifyPendingEmailChange = async (req: Request, res: Response, next
   } catch (error: unknown) {
     if (respondWithOtpError(error, res)) return;
     if (error instanceof ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
     }
     next(error);
   }
@@ -422,7 +422,7 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
     res.status(200).json({ message: 'Password changed successfully' });
   } catch (error: unknown) {
     if (error instanceof ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: error.issues });
     }
     if (error instanceof Error && error.message === 'Incorrect current password') {
       return res.status(400).json({ error: 'Incorrect current password' });

@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 
 const positiveInteger = (fallback: number, maximum: number) =>
   z.string().regex(/^[1-9]\d*$/).transform(Number)
-    .pipe(z.number().int().safe().max(maximum)).optional().default(String(fallback));
+    .pipe(z.number().int().safe().max(maximum)).prefault(String(fallback));
 
 export const paginationSchema = z.object({
   page: positiveInteger(1, 1000),
