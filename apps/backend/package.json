@@ -30,7 +30,10 @@
     "test:ci": "vitest run --exclude 'tests/adminSeedLogin.test.ts' --exclude 'tests/auth.integration.test.ts'",
     "lint": "eslint src/ --ext .ts",
     "typecheck": "tsc --noEmit",
-    "db:seed": "npx prisma db seed"
+    "db:seed": "npx prisma db seed",
+    "catalog:expansion": "tsx scripts/catalog-expansion.ts",
+    "catalog:expansion:finalize-media": "tsx scripts/catalog-expansion-finalize-media.ts",
+    "catalog:expansion:api": "tsx scripts/catalog-expansion-api-smoke.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^6.12.0",

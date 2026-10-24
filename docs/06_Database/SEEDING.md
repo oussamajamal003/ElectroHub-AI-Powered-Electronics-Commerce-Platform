@@ -1,5 +1,7 @@
 # ElectroHub Database — Task 02.5 Implementation
 
+For the 79-product/eight-category catalog expansion, use the dedicated additive workflow in [CATALOG_EXPANSION.md](CATALOG_EXPANSION.md). Its `catalog:expansion` command defaults to dry-run, requires reviewed local media, and separately gates QA and shared DEV. Do not rerun the general `db:seed` command on shared DEV for that expansion.
+
 > Task 02.5 implementation supersedes the historical 02.2 catalog details below. Current local schema has 23 application models, including Brand and ProductSpecification. Shared DEV/PROD application and live schema verification are deferred to Gemini; see [database handoff](PRODUCT_FOUNDATION_HANDOFF.md).
 
 ## Task 02.5 curated DEV seed
