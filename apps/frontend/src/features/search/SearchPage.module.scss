@@ -1,5 +1,6 @@
-﻿@use '../../styles/abstracts/variables' as *;
+@use '../../styles/abstracts/variables' as *;
 @use '../../styles/abstracts/mixins' as *;
+@use '../../styles/abstracts/discovery' as *;
 .container {
   width: 100%;
   max-width: 120rem;
@@ -39,14 +40,8 @@
 }
 .breadcrumb { display: flex; align-items: center; gap: $spacing-2; font-size: $font-size-base; a { color: $color-text-secondary; text-decoration: none; } }
 .subtitle { color: $color-text-secondary; font-size: $font-size-lg; margin: $spacing-1 0 0; }
-.tabs { width: 100%; display: flex; justify-content: flex-start; background: transparent; padding: 0; border-bottom: 1px solid $color-border; border-radius: 0; margin-top: $spacing-5; margin-bottom: $spacing-2;
-  button { padding: $spacing-4 $spacing-3; background: transparent !important; border-radius: 0; color: $color-text-secondary; font-size: $font-size-lg; box-shadow: none !important;
-    &[data-state='active'] { border-bottom: 2px solid $color-primary; color: $color-text-primary; }
-  }
-}
-.container [role='tabpanel'] { margin-top: 0; }
 .searchToolbar, .catalogToolbar { display: grid; align-items: end; gap: $spacing-3; margin-top: $spacing-2; }
-.searchToolbar { grid-template-columns: minmax(0, 36rem) minmax(11rem, 13rem); column-gap: $spacing-6; }
+.searchToolbar { grid-template-columns: minmax(0, 40rem) auto minmax(11rem, 13rem); justify-content: start; column-gap: $spacing-3; align-items: end; margin-top: $spacing-6; }
 // Unified discovery toolbar: Search | Filters | Sort share one height, border, radius, icon weight and hover/focus treatment.
 $control-height: 3.5rem;
 .catalogToolbar { margin-top: $spacing-6; grid-template-columns: minmax(0, 1fr) auto 14rem; align-items: stretch; gap: $spacing-3; }
@@ -68,7 +63,7 @@ $control-height: 3.5rem;
 .chevronOpen { transform: rotate(180deg); }
 .sortContent { min-width: max(var(--radix-select-trigger-width), 14rem); max-width: calc(100vw - #{$spacing-8}); }
 @media (max-width: $breakpoint-md - 1px) {
-  .searchToolbar { grid-template-columns: minmax(0, 1fr); }
+  .searchToolbar { grid-template-columns: auto minmax(0, 1fr); .searchForm { grid-column: 1 / -1; } }
   .catalogToolbar { grid-template-columns: auto minmax(0, 1fr); }
   .catalogToolbar .searchForm { grid-column: 1 / -1; }
 }
@@ -113,11 +108,33 @@ $control-height: 3.5rem;
 @keyframes panelIn { from { opacity: 0; transform: translateY(-6px); } }
 @keyframes shimmer { to { opacity: .55; } }
 @media (prefers-reduced-motion: reduce) { .skeletonImage { animation: none; } }
-.dropzone { margin-top: $spacing-6; border: 2px dashed $color-border; padding: $spacing-12 $spacing-4; min-height: 24rem; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: $spacing-4;
-  > svg { color: $color-text-muted; }
-  h2 { font-size: $font-size-lg; font-weight: $font-weight-medium; overflow-wrap: anywhere; max-width: 100%; margin: 0; }
-  p { margin: 0; color: $color-text-secondary; }
+// --- Search destination (Discovery Console layer) ---
+.searchHero { margin: $spacing-6 0 0; }
+.eyebrow { margin: 0 0 $spacing-2; font-size: $font-size-xs; line-height: 1rem; font-weight: $font-weight-semibold; letter-spacing: 0.06em; text-transform: uppercase; color: $discovery-text-secondary; }
+.searchHero .subtitle { max-width: 40rem; }
+.searchToolbar .searchForm input { font-size: $font-size-base; @include respond-to(sm) { font-size: $font-size-lg; } }
+.searchToolbar button[role='combobox'] { height: 3.5rem; }
+.photoTrigger { display: inline-flex; align-items: center; justify-content: center; gap: $spacing-2; height: 3.5rem; padding: 0 $spacing-5; border: 1px solid $discovery-border; background: $discovery-surface;
+  font-family: $font-family-base; font-size: $font-size-sm; font-weight: $font-weight-medium; color: $discovery-visual-ink; cursor: pointer; white-space: nowrap;
+  transition: background-color $transition-fast, border-color $transition-fast;
+  &:hover:not(:disabled) { background: $discovery-upload-hover; border-color: $discovery-visual-ink; }
+  &:focus-visible { outline: 2px solid $discovery-focus-ring; outline-offset: 2px; }
+  &:disabled { color: $discovery-text-muted; cursor: not-allowed; }
 }
-.dragging { border-color: $color-primary; background: $color-info-background; }
-.preview { max-width: 100%; max-height: 14rem; object-fit: contain; }
-.inlineActions { display: flex; flex-wrap: wrap; justify-content: center; gap: $spacing-2; }
+.startPanel { display: grid; gap: $spacing-8; margin: $spacing-8 0 $spacing-4; padding: $spacing-6; border: 1px solid $discovery-border; background: $discovery-canvas; position: relative;
+  @include respond-to(lg) { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); padding: $spacing-10; gap: $spacing-12; }
+  &::before { content: ''; position: absolute; top: -1px; left: -1px; width: 3rem; height: 2px; background: $discovery-accent; }
+}
+.startTitle { margin: 0 0 $spacing-3; font-size: $font-size-2xl; line-height: $line-height-tight; letter-spacing: -0.01em; }
+.startText { margin: 0 0 $spacing-6; max-width: 34rem; color: $discovery-text-secondary; line-height: $line-height-normal; }
+.startActions { display: grid; gap: $spacing-2; > * { width: 100%; } @include respond-to(sm) { display: flex; flex-wrap: wrap; > * { width: auto; } } }
+.startKey { display: none; @media (hover: hover) and (pointer: fine) { display: inline; } margin-left: $spacing-2; padding: 0 0.375rem; font-family: $font-family-mono; font-size: 0.6875rem; line-height: 1.125rem; border: 1px solid rgb(255 255 255 / 0.4); }
+.startCategories { min-width: 0;
+  ul { display: flex; flex-wrap: wrap; gap: $spacing-2; margin: 0; padding: 0; list-style: none; }
+  a { display: inline-flex; align-items: center; gap: $spacing-2; min-height: 2.5rem; padding: 0 $spacing-3; border: 1px solid $discovery-border; background: $discovery-surface; color: $discovery-text-primary; font-size: $font-size-sm; font-weight: $font-weight-medium; text-decoration: none;
+    transition: border-color $transition-fast, color $transition-fast, background-color $transition-fast;
+    &:hover { border-color: $discovery-accent; color: $discovery-accent; background: $discovery-accent-subtle; }
+    &:focus-visible { outline: 2px solid $discovery-focus-ring; outline-offset: 2px; }
+  }
+  span { font-family: $font-family-mono; font-size: 0.6875rem; color: $discovery-text-secondary; }
+}

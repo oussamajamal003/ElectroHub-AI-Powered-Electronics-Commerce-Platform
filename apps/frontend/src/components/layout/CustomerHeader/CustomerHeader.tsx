@@ -25,6 +25,7 @@ import { useWishlist } from '@/features/wishlist/context';
 import { AuthModal, AuthModalMode } from '@/features/auth/components/AuthModal';
 import { customerReturnPath, type CustomerReturnPath } from '@/features/auth/returnPath';
 import { SignOutModal } from '@/features/auth/components/SignOutModal';
+import { shortcutLabel, useDiscovery } from '@/features/search/discovery/context';
 import { Toast, ToastClose, ToastProvider, ToastTitle, ToastViewport } from '@/components/ui/Toast';
 import styles from './CustomerHeader.module.scss';
 
@@ -105,9 +106,12 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
     setIsMobileMenuOpen(false);
   }, []);
 
+  const discovery = useDiscovery();
   const handleSearchOpen = () => {
     setIsMobileMenuOpen(false);
-    navigate('/search');
+    // The Discovery Console is the primary search surface; without its provider (isolated renders) fall back to /search.
+    if (discovery) discovery.open();
+    else navigate('/search');
   };
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -169,11 +173,17 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
 
                   <button
                     type="button"
-                    className={styles.iconButton}
+                    className={`${styles.iconButton} ${styles.searchTrigger}`}
                     aria-label="Search"
+                    aria-haspopup="dialog"
+                    aria-expanded={discovery ? discovery.isOpen : undefined}
+                    aria-keyshortcuts="Control+K Meta+K"
+                    title={`Search (${shortcutLabel()})`}
                     onClick={handleSearchOpen}
                   >
                     <Search size={20} />
+                    <span className={styles.searchTriggerLabel} aria-hidden="true">Search</span>
+                    <span className={styles.searchTriggerKey} aria-hidden="true">{shortcutLabel()}</span>
                   </button>
 
                   <Link

@@ -7,11 +7,13 @@ import { Zap } from 'lucide-react';
 import styles from './CustomerLayout.module.scss';
 import { CustomerScrollRestoration } from './CustomerScrollRestoration';
 import { usePaymentLock } from '@/features/checkout/PaymentLockContext';
+import { DiscoveryProvider } from '@/features/search/discovery/DiscoveryProvider';
 
 export function CustomerLayout() {
   const { isLocked } = usePaymentLock();
 
   return (
+    <DiscoveryProvider disabled={isLocked}>
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <CustomerScrollRestoration />
       <div
@@ -90,5 +92,6 @@ export function CustomerLayout() {
       </Footer>
       </div>
     </div>
+    </DiscoveryProvider>
   );
 }

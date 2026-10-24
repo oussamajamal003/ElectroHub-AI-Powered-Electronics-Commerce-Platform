@@ -75,7 +75,9 @@ describe('Search page', () => {
   });
   it('renders screenshot shell without loading products initially and warms shared reference data', async () => {
     page(); await screen.findByRole('heading', { name: 'Search', level: 1 });
-    expect(screen.getByRole('tab', { name: 'Text Search' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Everything in ElectroHub, one search away' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /Laptops/ })).toHaveAttribute('href', '/products?category=laptops');
     await waitFor(() => expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/categories') || endpoint.startsWith('/api/brands')).length).toBe(2));
     expect(vi.mocked(apiClient).mock.calls.some(([endpoint]) => endpoint.startsWith('/api/search/products'))).toBe(false);
     expect(screen.queryByText(/0 results/)).not.toBeInTheDocument();
@@ -206,16 +208,11 @@ describe('Search page', () => {
     page('/search?q=no-match'); expect(await screen.findByRole('heading', { name: 'No results for “no-match”' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Clear query' })).toBeInTheDocument();
   });
-  it('implements local image selection/removal with no image API call', async () => {
-    page(); fireEvent.mouseDown(screen.getByRole('tab', { name: 'Image Search' }), { button: 0, ctrlKey: false });
-    const input = await screen.findByLabelText('Choose image');
-    fireEvent.change(input, { target: { files: [new File(['text'], 'bad.txt', { type: 'text/plain' })] } });
-    expect(screen.getByRole('alert')).toHaveTextContent('Choose an image file.');
-    fireEvent.change(input, { target: { files: [new File(['image'], 'camera.png', { type: 'image/png' })] } });
-    expect(await screen.findByText('camera.png')).toBeInTheDocument();
-    expect(screen.getByAltText('Selected image preview')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Remove image' }));
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:test-image');
+  it('routes photo search to the Discovery Console and never posts an image from the page', async () => {
+    page();
+    // Without the console provider (isolated render) the photo entry is present but inert rather than a dead end.
+    expect(await screen.findByRole('button', { name: 'Search by photo' })).toBeDisabled();
+    expect(screen.queryByLabelText('Choose image')).not.toBeInTheDocument();
     expect(vi.mocked(apiClient).mock.calls.every(([endpoint]) => !endpoint.includes('image'))).toBe(true);
   });
   it('preserves visible results during a background refetch', async () => {

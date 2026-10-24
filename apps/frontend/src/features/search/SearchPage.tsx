@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowUpDown, ChevronDown, ChevronRight, SearchX, SlidersHorizontal } from 'lucide-react';
+import { ArrowUpDown, Camera, ChevronDown, ChevronRight, ImageIcon, Search, SearchX, SlidersHorizontal } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { ProductCard, ProductCardSkeleton } from '@/components/ui/ProductCard';
 import { StaggerItem } from '@/components/motion/Motion';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/Pagination';
@@ -17,7 +16,7 @@ import { useCart } from '@/features/cart/context';
 import { useWishlist } from '@/features/wishlist/context';
 import { useBrands, useCategories, useSearchResults } from './queries';
 import { getProductGridSkeletonCount } from './skeletonCount';
-import { ImageSearchShell } from './ImageSearchShell';
+import { shortcutLabel, useDiscovery } from './discovery/context';
 import styles from './SearchPage.module.scss';
 
 export function SearchPage({ catalog = false }: { catalog?: boolean }) {
@@ -39,7 +38,7 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
   const [draft, setDraft] = useState(state.q);
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const normalizedDraft = normalizeQuery(draft);
-  const [tab, setTab] = useState('text');
+  const discovery = useDiscovery();
   const [showFilters, setShowFilters] = useState(false);
   // Filters apply as soon as they change; only the free-text price range keeps a short-lived draft so typing is debounced.
   const [priceDraft, setPriceDraft] = useState<Pick<SearchState, 'minPrice' | 'maxPrice'>>({ minPrice: state.minPrice, maxPrice: state.maxPrice });
@@ -48,12 +47,12 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
   const filterPanel = useRef<HTMLElement>(null);
   const categoriesQuery = useCategories(!catalog || showFilters || Boolean(state.category));
   const brandsQuery = useBrands(!catalog || showFilters || Boolean(state.brand));
-  const searchQuery = useSearchResults(state, active && tab === 'text');
+  const searchQuery = useSearchResults(state, active);
   const categories = categoriesQuery.data ?? [];
   const brands = brandsQuery.data ?? [];
-  const results = active && tab === 'text' ? searchQuery.data : undefined;
-  const loading = active && tab === 'text' && searchQuery.isPending;
-  const error = searchQuery.isError && active && tab === 'text';
+  const results = active ? searchQuery.data : undefined;
+  const loading = active && searchQuery.isPending;
+  const error = searchQuery.isError && active;
   const metadataError = categoriesQuery.isError || brandsQuery.isError;
   const [formError, setFormError] = useState('');
   useEffect(() => {
@@ -83,7 +82,7 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
     setDraft(value);
     if (draftTimer.current) clearTimeout(draftTimer.current);
     const query = normalizeQuery(value);
-    if (parsed.error || tab !== 'text' || query === state.q) { draftTimer.current = null; return; }
+    if (parsed.error || query === state.q) { draftTimer.current = null; return; }
     draftTimer.current = setTimeout(() => {
       draftTimer.current = null;
       commit({ ...state, q: query, page: 1 }, true);
@@ -132,16 +131,14 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
     <div className={styles.container}>
       {wishlist?.error && <p role="alert">{wishlist.error}</p>}
       <nav aria-label="Breadcrumb" className={styles.breadcrumb}><Link to="/">Home</Link><ChevronRight size={16} aria-hidden="true" /><span aria-current="page">{catalog ? 'All Products' : 'Search'}</span></nav>
-      <div className={styles.titleRow}>
-        <h1 className={styles.pageTitle}>{catalog ? 'All Products' : 'Search'}</h1>
-        {catalog && results && (
-          <span className={styles.resultCount}>{results.meta.total} products</span>
-        )}
-      </div>
-      {!catalog && <p className={styles.subtitle}>Find laptops, phones, audio, and more.</p>}
-      <Tabs value={tab} onValueChange={setTab}>
-        {!catalog && <TabsList className={styles.tabs} aria-label="Search method"><TabsTrigger value="text">Text Search</TabsTrigger><TabsTrigger value="image">Image Search</TabsTrigger></TabsList>}
-        <TabsContent value="text">
+      {catalog ? <div className={styles.titleRow}>
+        <h1 className={styles.pageTitle}>All Products</h1>
+        {results && <span className={styles.resultCount}>{results.meta.total} products</span>}
+      </div> : <header className={styles.searchHero}>
+        <p className={styles.eyebrow}>Discovery</p>
+        <h1 className={styles.pageTitle}>Search</h1>
+        <p className={styles.subtitle}>Search by name, brand or category — or find products from a photo.</p>
+      </header>}
           <div className={catalog ? styles.catalogToolbar : styles.searchToolbar}>
             <form role="search" className={styles.searchForm + (catalog ? ' ' + styles.catalogSearch : '')} onSubmit={event => { event.preventDefault(); if (draftTimer.current) clearTimeout(draftTimer.current); draftTimer.current = null; if (normalizedDraft !== state.q) commit({ ...state, q: normalizedDraft, page: 1 }, true); }}>
               <SearchField value={draft} onChange={changeDraft} onSelect={selectSuggestion} />
@@ -151,6 +148,9 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
               <SlidersHorizontal size={20} strokeWidth={1.75} aria-hidden="true" /><span>Filters</span>
               {filterCount > 0 && <span className={styles.filterBadge} aria-hidden="true">{filterCount}</span>}
               <ChevronDown size={18} strokeWidth={1.75} aria-hidden="true" className={`${styles.chevron} ${showFilters ? styles.chevronOpen : ''}`} />
+            </button>}
+            {!catalog && <button type="button" className={styles.photoTrigger} onClick={() => discovery?.open({ mode: 'image' })} disabled={!discovery}>
+              <Camera size={18} aria-hidden="true" /><span>Search by photo</span>
             </button>}
             <FilterSelect label="Sort by" value={state.sort ?? (state.q ? 'relevance' : 'newest')} selectSize={catalog ? 'medium' : 'large'}
               compact={catalog ? { icon: <ArrowUpDown size={20} strokeWidth={1.75} />, triggerClassName: styles.sortTrigger ?? '', contentClassName: styles.sortContent ?? '' } : undefined} choices={[
@@ -181,7 +181,7 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
             {priceText && <button type="button" onClick={() => removeFilter({ minPrice: undefined, maxPrice: undefined })} aria-label={`Remove price filter ${priceText}`}>{priceText} ×</button>}
             <button type="button" className={styles.clearAll} onClick={clearAllFilters}>Clear all</button>
           </div>}
-          <section aria-label="Search results" aria-busy={loading || (active && tab === 'text' && searchQuery.isFetching) || undefined} className={styles.results}>
+          <section aria-label="Search results" aria-busy={loading || (active && searchQuery.isFetching) || undefined} className={styles.results}>
             <div role="status" aria-live="polite">{loading ? 'Searching products…' : results ? `${results.meta.total} ${results.meta.total === 1 ? 'result' : 'results'}${state.q ? ` for “${state.q}”` : ''}` : ''}</div>
             {loading && <div className={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`} aria-hidden="true">{Array.from({ length: getProductGridSkeletonCount(state.pageSize) }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
             {error && <ErrorState headingLevel={2} className={styles.stateBlock} title="Search unavailable" description="Search is temporarily unavailable. Please try again." action={<Button type="button" onClick={() => void searchQuery.refetch()}>Retry search</Button>} />}
@@ -195,9 +195,32 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
               <PaginationItem><PaginationNext disabled={state.page >= totalPages} onClick={() => commit({ ...state, page: state.page + 1 }, false, true)} /></PaginationItem>
             </PaginationContent></Pagination>}
           </section>
-        </TabsContent>
-        {!catalog && <TabsContent value="image"><ImageSearchShell /></TabsContent>}
-      </Tabs>
+          {!catalog && !active && !parsed.error && <StartPanel categories={categories.filter(category => category.productCount !== 0)}
+            onOpen={options => discovery?.open(options)} available={Boolean(discovery)} />}
     </div>
   </>;
+}
+
+/** The /search resting state: launch points into the Discovery Console and the live category list. */
+function StartPanel({ categories, onOpen, available }: {
+  categories: { id: string; name: string; slug: string; productCount: number }[];
+  onOpen: (options: { mode?: 'text' | 'image'; camera?: boolean }) => void; available: boolean;
+}) {
+  return <section className={styles.startPanel} aria-labelledby="search-start-title">
+    <div className={styles.startLead}>
+      <h2 id="search-start-title" className={styles.startTitle}>Everything in ElectroHub, one search away</h2>
+      <p className={styles.startText}>Type above for instant results, open the command search for suggestions as you type, or start from a photo of the product you want.</p>
+      {available && <div className={styles.startActions}>
+        <Button type="button" onClick={() => onOpen({ mode: 'text' })}><Search size={16} aria-hidden="true" />Open command search<span className={styles.startKey} aria-hidden="true">{shortcutLabel()}</span></Button>
+        <Button type="button" variant="outline" onClick={() => onOpen({ mode: 'image' })}><ImageIcon size={16} aria-hidden="true" />Upload a photo</Button>
+        <Button type="button" variant="ghost" onClick={() => onOpen({ mode: 'image', camera: true })}><Camera size={16} aria-hidden="true" />Use camera</Button>
+      </div>}
+    </div>
+    {categories.length > 0 && <nav className={styles.startCategories} aria-label="Shop by category">
+      <p className={styles.eyebrow}>Shop by category</p>
+      <ul>{categories.map(category => <li key={category.id}>
+        <Link to={`/products?${new URLSearchParams({ category: category.slug })}`}>{category.name}<span>{category.productCount}</span></Link>
+      </li>)}</ul>
+    </nav>}
+  </section>;
 }
