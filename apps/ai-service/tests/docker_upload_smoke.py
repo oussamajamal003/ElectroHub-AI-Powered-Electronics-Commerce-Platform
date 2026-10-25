@@ -19,6 +19,7 @@ from tests.imagefactory import padded_image_bytes
 
 BASE = f"http://127.0.0.1:{os.environ['AI_PORT']}"
 KEY = os.environ["AI_SERVICE_API_KEY"]
+SHM_DIR = "/dev/shm"  # noqa: S108 - bounded Docker tmpfs used by this read-only runtime
 AUTH = {"X-ElectroHub-AI-Key": KEY, "X-ElectroHub-AI-Environment": "qa", "X-Request-Id": "docker-upload-closure"}
 
 
@@ -48,7 +49,7 @@ def multipart(data: bytes, *, name: str = "image", finish: bool = True) -> bytes
 def main() -> None:
     uid = os.stat("/proc/self").st_uid
     assert uid != 0, "the smoke must use the non-root runtime user"
-    assert tempfile.gettempdir() == "/dev/shm", "read-only runtime must use Docker's bounded shared-memory temp directory"
+    assert tempfile.gettempdir() == SHM_DIR, "read-only runtime must use Docker's bounded shared-memory temp directory"
     for protected in ("/srv/ai-service", "/srv/ai-models"):
         probe = os.path.join(protected, ".task-04.2-write-probe")
         try:
@@ -74,7 +75,7 @@ def main() -> None:
         status, ready = call("/internal/v1/ready")
         assert status == 200 and isinstance(ready, dict) and ready["data"]["features"]["imageSearch"]["available"]
         # Ignore any runtime/library startup state; compare only the upload request lifecycle.
-        shm_before = set(os.listdir("/dev/shm"))
+        shm_before = set(os.listdir(SHM_DIR))
         for fmt in ("JPEG", "PNG", "WEBP"):
             for size in (2 * 1024 * 1024, 8 * 1024 * 1024 - 1024):
                 status, result = call("/internal/v1/image-search", multipart(padded_image_bytes(fmt, size)))
@@ -99,15 +100,24 @@ def main() -> None:
             checked += 1
         assert call("/internal/v1/ready", authenticate=False)[0] == 401
         checked += 1
-        assert set(os.listdir("/dev/shm")) == shm_before, "multipart handling left temporary files behind"
+        assert set(os.listdir(SHM_DIR)) == shm_before, "multipart handling left temporary files behind"
         checked += 1
     finally:
         process.terminate()
         logs, _ = process.communicate(timeout=20)
         assert KEY not in logs and os.environ["AI_VECTOR_DATABASE_URL"] not in logs and "not-logged.bin" not in logs
         # Keep startup diagnostics useful without ever echoing configuration or request material.
+        diagnostic_markers = (
+            "configurationerror",
+            "modulenotfounderror",
+            "permissionerror",
+            "operationalerror",
+            "certificate verify failed",
+            "traceback",
+            "error:",
+        )
         for line in logs.splitlines():
-            if any(marker in line.lower() for marker in ("configurationerror", "modulenotfounderror", "permissionerror", "operationalerror", "certificate verify failed", "traceback", "error:")):
+            if any(marker in line.lower() for marker in diagnostic_markers):
                 safe = line.replace(KEY, "[redacted]").replace(os.environ["AI_VECTOR_DATABASE_URL"], "[redacted]")
                 if "not-logged.bin" not in safe and len(safe) <= 240:
                     print(json.dumps({"check": "runtime-diagnostic", "line": safe[:240]}))

@@ -319,4 +319,8 @@ AI service final evidence: full Python tests **238 passed, 1 skipped** (optional
 2. Independent Architect verification of the existing training evidence and owner-approved T42-18 exception.
 3. Review the non-Task-04.2 broad-suite/environment failures listed above; they are preserved as failures, not waived or counted as feature passes.
 
-**Recommendation: READY FOR ARCHITECT REVIEW**, with the limitations in I disclosed. Nothing is committed.
+**Recommendation: READY FOR ARCHITECT REVIEW**, with the limitations in I disclosed. The initial closure report predates the commit; see the push CI update below.
+
+### Push CI update (2026-10-25)
+
+Commit `7553e5fdb970883b571ad6230d1da5d63eb8538e` was pushed to the feature branch. Security Audit passed. Development CI passed backend tests, backend/frontend builds and typechecks, backend/frontend lint, frontend tests, and migration safety policy; AI Service / Test failed Ruff on the new Docker upload smoke, corrected in the follow-up, and AI Service / Docker failed while downloading the 191.8 MB CPU PyTorch wheel with runner `No space left on device`. Docker container smoke was skipped after build failure. This is recorded as a runner-capacity failure, not a passing Docker CI result; follow-up CI is the acceptance evidence for the lint correction.
