@@ -7,7 +7,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    TMPDIR=/dev/shm \
     AI_BIND_HOST=0.0.0.0 \
     AI_PORT=8000
 
@@ -17,6 +16,9 @@ COPY requirements-runtime.txt .
 # requirements-runtime.txt carries the CPU-only PyTorch index (--extra-index-url) and pins the complete transitive set,
 # so --no-deps installs exactly that set; pip check then verifies the set is consistent.
 RUN pip install --no-deps -r requirements-runtime.txt && pip check
+
+# Keep build-time dependency extraction on the build filesystem; use the bounded tmpfs only at runtime.
+ENV TMPDIR=/dev/shm
 
 RUN groupadd --system app && useradd --system --gid app --no-create-home --shell /usr/sbin/nologin app
 COPY --chown=root:root app ./app
