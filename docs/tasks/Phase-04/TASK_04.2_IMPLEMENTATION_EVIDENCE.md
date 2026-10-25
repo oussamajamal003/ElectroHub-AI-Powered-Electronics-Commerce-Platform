@@ -110,7 +110,7 @@ All 28 frozen queries went through Express → FastAPI → pgvector → Prisma, 
 
 ## G. Verification commands (executed)
 
-**AI service**, in short-path venv `C:\Users\ouss0\.venvs\electrohub-ai`, torch 2.13:
+**AI service**, in short-path venv `C:\Users\ouss0\.venvs\electrohub-ai`, torch 2.13 (recorded before the switch; local runs now use the repo venv `apps/ai-service/venv`):
 - `pytest`: 220 passed, 1 skipped (the DB integration test needs `AI_TEST_VECTOR_DATABASE_URL`).
 - Training tests: 7 passed.
 - `ruff`: clean. `mypy --strict`: 38 files clean. `pip check`: clean.
@@ -237,7 +237,7 @@ All 28 frozen queries went through Express → FastAPI → pgvector → Prisma, 
 1. **Exact-product accuracy is modest.** Live photo→catalog Recall@1 is 0.375 for known products and 0.0 for unseen ones, because the catalog images are AI illustrations and Commons covers only 96 of 206 SKUs. The highest-value next step is real product photography for catalog images, which belongs with Task 04.3 image management.
 2. **The backbone isn't fine-tuned in the deployed checkpoint.** It needs more independent real photos per family than Commons provides. This was reported rather than forced.
 3. **DEV latency** (p50 3.6 s) is dominated by Supabase round-trips over this connection. It's within the 8 s timeout, and PROD latency is not measured.
-4. **Windows MAX_PATH.** The torch 2.13 wheel can't install inside this repository's long path, so local runs use `C:\Users\ouss0\.venvs\electrohub-ai` (`AI_SERVICE_PYTHON`). Docker and CI on Linux are unaffected.
+4. **Windows MAX_PATH.** The torch 2.13 wheel needs Windows long-path support to install inside this repository. With it enabled, every local run uses the repo venv `apps/ai-service/venv`. Docker and CI on Linux are unaffected.
 5. **Your own DEV servers aren't configured for photo search.** To enable it on `:3000`, set these in the git-ignored env files:
    - `AI_MODEL_ARTIFACT_DIR=apps/ai-service/models/effb0-commons-v2`.
    - `AI_VECTOR_DATABASE_URL`: the reader DSN from `.ai-vector/dev.json` (or use the `ai-service-dev-readonly` launch config).

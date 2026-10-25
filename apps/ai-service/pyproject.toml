@@ -36,3 +36,9 @@ ignore_missing_imports = true
 module = "tests.*"
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
+
+[tool.pyrefly]
+# Training modules import embedding_network flat (Kaggle bundles them side by side); mirror training/tests/conftest.py.
+search-path = [".", "training/src", "app/models"]
+python-interpreter-path = "venv/Scripts/python.exe"
+project-excludes = ["venv/**", "training/.data/**"]

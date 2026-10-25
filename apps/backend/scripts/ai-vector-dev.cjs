@@ -103,7 +103,7 @@ function aiService() {
   const saved = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
   const service = path.resolve(backend, '../ai-service');
   const clean = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(AI_|KAGGLE_|DATABASE_URL|DIRECT_URL|STRIPE_|BREVO_|JWT_)/.test(name)));
-  const result = spawnSync(process.env.AI_SERVICE_PYTHON || path.join(service, 'venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python'), ['-m', 'app'], {
+  const result = spawnSync(path.join(service, 'venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python'), ['-m', 'app'], {
     cwd: service, stdio: 'inherit',
     env: { ...clean, AI_ENV_FILE: path.join(path.dirname(stateFile), 'no-ai-env-file'), AI_ENVIRONMENT: 'development',
       AI_SERVICE_API_KEY: smokeKey(), AI_BIND_HOST: '127.0.0.1', AI_PORT: String(SMOKE_AI_PORT),

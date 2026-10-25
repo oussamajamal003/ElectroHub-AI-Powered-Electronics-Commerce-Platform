@@ -113,7 +113,7 @@ function aiService() {
   const service = path.resolve(backend, '../ai-service');
   // Only what the QA instance needs: no inherited AI_*, KAGGLE_* or commerce values, and no developer .env file.
   const clean = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(AI_|KAGGLE_|DATABASE_URL|DIRECT_URL|STRIPE_|BREVO_|JWT_)/.test(name)));
-  const child = require('node:child_process').spawn(process.env.AI_SERVICE_PYTHON || path.join(service, 'venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python'), ['-m', 'app'], {
+  const child = require('node:child_process').spawn(path.join(service, 'venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python'), ['-m', 'app'], {
     cwd: service, stdio: 'inherit',
     env: { ...clean, AI_ENV_FILE: path.join(home, 'no-ai-env-file'), AI_ENVIRONMENT: 'qa', AI_SERVICE_API_KEY: qaAiKey(),
       AI_BIND_HOST: '127.0.0.1', AI_PORT: String(AI_PORT), AI_MODEL_ARTIFACT_DIR: artifact,
