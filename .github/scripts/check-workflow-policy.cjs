@@ -81,7 +81,7 @@ function checkWorkflow(name, rawText) {
       if (!text.includes('EXPECTED_PROJECT_REF: yepfgjehdstlxbpespun')) fail('PROD workflow must pin the PROD project ref');
       if (!text.includes('MIGRATION_TARGET: PROD')) fail('PROD workflow must explicitly select PROD in the migration guard');
       if (!text.includes('electrohub-prod-database')) fail('PROD workflow must use the protected PROD environment');
-      if (!text.includes('BACKUP_EVIDENCE_REFERENCE') || !text.includes('RESTORE_EVIDENCE_REFERENCE')) fail('PROD workflow must require backup and restore evidence references');
+      if (!text.includes('RISK_ACCEPTANCE_REFERENCE') || !text.includes('AUTHORIZATION_REFERENCE')) fail('PROD workflow must require release authorization and owner risk-acceptance references');
       if (/ELECTROHUB_DEV_(?:DATABASE|DIRECT)_URL/.test(text)) fail('PROD workflow must not expose DEV database secrets');
       if (!/prisma\s+migrate\s+status/.test(text)) fail('PROD workflow must run prisma migrate status after deploy');
     }

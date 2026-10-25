@@ -2,8 +2,8 @@ name: Production Database Migration
 
 # Manual-only production path. The `electrohub-prod-database` GitHub Environment must be
 # configured outside this file with required DATABASE owner + release approvers, branch
-# restrictions, and both PROD connection secrets. Reviewers must validate the backup and
-# restore evidence references before approving the job. No other workflow can use these secrets.
+# restrictions, and both PROD connection secrets. Reviewers must validate the release authorization and
+# the owner risk-acceptance reference before approving the job. No other workflow can use these secrets.
 
 on:
   workflow_dispatch:
@@ -20,12 +20,8 @@ on:
         description: 'Written Project Owner, database-owner, and release authorization record reference.'
         required: true
         type: string
-      backup_evidence_reference:
-        description: 'Reference to the verified current production backup/PITR restore point.'
-        required: true
-        type: string
-      restore_evidence_reference:
-        description: 'Reference to a successful restore drill and approved recovery procedure.'
+      risk_acceptance_reference:
+        description: 'Reference to the documented Project Owner decision accepting the recovery risk (backup/PITR and restore drill not verified or waived) for this release.'
         required: true
         type: string
 
@@ -46,8 +42,7 @@ jobs:
       APPROVED_COMMIT: ${{ inputs.approved_commit }}
       APPROVED_MIGRATIONS: ${{ inputs.approved_migrations }}
       AUTHORIZATION_REFERENCE: ${{ inputs.authorization_reference }}
-      BACKUP_EVIDENCE_REFERENCE: ${{ inputs.backup_evidence_reference }}
-      RESTORE_EVIDENCE_REFERENCE: ${{ inputs.restore_evidence_reference }}
+      RISK_ACCEPTANCE_REFERENCE: ${{ inputs.risk_acceptance_reference }}
     steps:
       - name: Verify the approved commit, exact migration allowlist, and recovery evidence references
         shell: bash
@@ -66,13 +61,13 @@ jobs:
             echo "The approved PROD migration list or order is not exact. Refusing." >&2
             exit 1
           fi
-          for reference in "$AUTHORIZATION_REFERENCE" "$BACKUP_EVIDENCE_REFERENCE" "$RESTORE_EVIDENCE_REFERENCE"; do
+          for reference in "$AUTHORIZATION_REFERENCE" "$RISK_ACCEPTANCE_REFERENCE"; do
             if [ -z "${reference//[[:space:]]/}" ]; then
-              echo "Authorization, backup, and restore evidence references are required." >&2
+              echo "Release authorization and owner risk-acceptance references are required." >&2
               exit 1
             fi
           done
-          echo "Pinned commit, ordered allowlist, and required evidence references are present. Environment reviewers must verify the referenced records."
+          echo "Pinned commit, ordered allowlist, release authorization and owner risk-acceptance references are present. Environment reviewers must verify the referenced records."
 
       - uses: actions/checkout@v4
         with:

@@ -225,6 +225,6 @@ test('the real DEV and PROD migration workflows are manual-only and own their sc
   const holders = files.filter((file) => /secrets\.ELECTROHUB_/.test(file.text)).map((file) => file.name);
   assert.deepEqual(holders, ['dev-migration.yml', 'prod-migration.yml']);
   assert.match(prod.text, /20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard/);
-  assert.match(prod.text, /BACKUP_EVIDENCE_REFERENCE/);
-  assert.match(prod.text, /RESTORE_EVIDENCE_REFERENCE/);
+  assert.match(prod.text, /RISK_ACCEPTANCE_REFERENCE/);
+  assert.match(prod.text, /AUTHORIZATION_REFERENCE/);
 });
