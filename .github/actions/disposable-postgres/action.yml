@@ -1,6 +1,6 @@
 name: Disposable PostgreSQL
 description: >
-  Starts a throwaway PostgreSQL 17 container on loopback with a per-run random password and a per-run
+  Starts a throwaway PostgreSQL 17 container (pinned pgvector 0.8.0 image, required by the Task 04.2 ai schema) on loopback with a per-run random password and a per-run
   self-signed CA, and exports DATABASE_URL, DIRECT_URL and DB_SSL_CA_CERT_PATH for later steps in the job.
   The backend runtime always requires verified TLS, so the server is TLS-enabled. This action never reads a
   repository or environment secret and can only ever point later steps at 127.0.0.1.
@@ -34,7 +34,7 @@ runs:
           -e POSTGRES_PASSWORD="$password" \
           -e POSTGRES_DB=electrohub_ci \
           -v "$dir:/certs:ro" \
-          postgres:17 \
+          pgvector/pgvector:0.8.0-pg17 \
           -c ssl=on -c ssl_cert_file=/certs/server.crt -c ssl_key_file=/certs/server.key
 
         for attempt in $(seq 1 60); do

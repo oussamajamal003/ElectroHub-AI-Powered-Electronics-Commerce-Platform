@@ -92,9 +92,7 @@ def test_loader_is_a_zero_argument_callable_for_the_registry(artifact_dir: Path)
     encoder.close()
 
 
-def test_digest_mismatch_is_refused_before_any_deserialisation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_digest_mismatch_is_refused_before_any_deserialisation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     directory = build_artifact(tmp_path)
     (directory / "descriptor.json").write_text(json.dumps(_descriptor("0" * 64)), encoding="utf-8")
 

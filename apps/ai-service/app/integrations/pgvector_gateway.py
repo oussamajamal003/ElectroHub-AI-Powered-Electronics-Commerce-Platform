@@ -31,8 +31,7 @@ POOL_MAX_SIZE: Final = 4
 CONNECT_TIMEOUT_SECONDS: Final = 5
 POOL_TIMEOUT_SECONDS: Final = 3.0
 _SESSION_OPTIONS: Final = (
-    f"-c search_path=ai,extensions -c statement_timeout={STATEMENT_TIMEOUT_MS} "
-    "-c default_transaction_read_only=on"
+    f"-c search_path=ai,extensions -c statement_timeout={STATEMENT_TIMEOUT_MS} -c default_transaction_read_only=on"
 )
 
 _ACTIVE_SQL: Final = """
