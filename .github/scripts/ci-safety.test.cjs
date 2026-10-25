@@ -73,7 +73,18 @@ test('line-ending reconciliation accepts only the two exact, content-pinned lega
     crlfSha256: 'a41f086f7f9dc2f67621622a77f3e716027285e015991db470e8ab7bed1314a8',
     lineEnding: 'CRLF',
   };
-  assert.match(plan.planMigrations([foundation], [row(foundation.name, '5de060a305af86bbc70d683ebe3bea1fe35c1c6454c048cbeed07d22fe347f96')]).problems.join(), /checksum mismatch/);
+  // Foundation: the PROD ledger value is the exact BOM+CRLF form of the Git blob and is accepted ONLY with that proof.
+  const fnd = plan.LEGACY_LINE_ENDING_CHECKSUMS[foundation.name];
+  const foundationLedger = '5de060a305af86bbc70d683ebe3bea1fe35c1c6454c048cbeed07d22fe347f96';
+  assert.equal(fnd.ledgerSha256, foundationLedger);
+  assert.deepEqual(plan.planMigrations([{ ...foundation, bomCrlfSha256: foundationLedger }], [row(foundation.name, foundationLedger)]), { pending: [], problems: [] });
+  assert.match(plan.planMigrations([foundation], [row(foundation.name, foundationLedger)]).problems.join(), /checksum mismatch/);
+  assert.match(plan.planMigrations([{ ...foundation, bomCrlfSha256: foundationLedger }], [row(foundation.name, sha(9))]).problems.join(), /checksum mismatch/);
+  assert.match(plan.planMigrations([{ ...foundation, canonicalSha256: sha(9), bomCrlfSha256: foundationLedger }], [row(foundation.name, foundationLedger)]).problems.join(), /checksum mismatch/);
+  // The real file's bytes reproduce the pinned ledger value (BOM + CRLF of the Git blob).
+  const realFoundation = plan.localMigrations(path.resolve(__dirname, '../../apps/backend/prisma/migrations')).find((m) => m.name === foundation.name);
+  assert.equal(realFoundation.canonicalSha256, fnd.canonicalSha256);
+  assert.equal(realFoundation.bomCrlfSha256, foundationLedger);
 });
 
 test('live DEV payment migration bytes reproduce the exact approved LF and CRLF hashes', () => {

@@ -34,6 +34,14 @@ const LEGACY_LINE_ENDING_CHECKSUMS = Object.freeze({
     canonicalSha256: 'a45372e2e25895345b7499e6d7d82b852e75a1a5e29b03b8b1fcf53a0f8cc310',
     crlfSha256: '0cf4bc6b88a2222b47e691100364b0e961b5bb20b61149dfb759b651ef177ff8',
   }),
+  // PROD ledger checksum reproduced exactly from the only Git blob of this file (f3934ed) as UTF-8 BOM + CRLF;
+  // the SQL text is otherwise identical. Only that single ledger value is accepted for this migration.
+  '20240101000000_database_foundation': Object.freeze({
+    canonicalSha256: 'cb2baf5e79d8127f31fa9873c5e2cfd28b159f7a375d8d4d2856dd8766b5fd17',
+    crlfSha256: 'a41f086f7f9dc2f67621622a77f3e716027285e015991db470e8ab7bed1314a8',
+    ledgerSha256: '5de060a305af86bbc70d683ebe3bea1fe35c1c6454c048cbeed07d22fe347f96',
+    bomCrlf: true,
+  }),
 });
 const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 
@@ -48,6 +56,7 @@ function migrationChecksumMetadata(raw) {
     sha256: sha256(raw),
     canonicalSha256: sha256(lfBytes),
     crlfSha256: sha256(crlfBytes),
+    bomCrlfSha256: sha256(Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), crlfBytes])),
     lineEnding: raw.equals(lfBytes) ? 'LF' : raw.equals(crlfBytes) ? 'CRLF' : 'MIXED',
   };
 }
@@ -55,7 +64,8 @@ function migrationChecksumMetadata(raw) {
 function hasVerifiedLegacyLineEndingChecksum(migration, ledgerChecksum) {
   const expected = LEGACY_LINE_ENDING_CHECKSUMS[migration.name];
   return Boolean(expected
-    && ledgerChecksum === expected.crlfSha256
+    && ledgerChecksum === (expected.bomCrlf ? expected.ledgerSha256 : expected.crlfSha256)
+    && (!expected.bomCrlf || migration.bomCrlfSha256 === expected.ledgerSha256)
     && migration.canonicalSha256 === expected.canonicalSha256
     && migration.crlfSha256 === expected.crlfSha256
     && (migration.lineEnding === 'LF' || migration.lineEnding === 'CRLF'));
