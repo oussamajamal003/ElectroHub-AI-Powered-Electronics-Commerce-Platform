@@ -11,7 +11,7 @@ from PIL import Image
 
 def _save(image: Image.Image, fmt: str, **options: object) -> bytes:
     buffer = io.BytesIO()
-    image.save(buffer, format=fmt, **options)  # type: ignore[arg-type]
+    image.save(buffer, format=fmt, **options)
     return buffer.getvalue()
 
 

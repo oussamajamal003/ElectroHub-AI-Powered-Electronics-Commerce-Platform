@@ -23,7 +23,7 @@ def ready_registry(gateway: FakeGateway | None = None) -> ModelRegistry:
     )
 
 
-def upload(data: bytes, content_type: str = "image/png", name: str = "image") -> dict[str, object]:
+def upload(data: bytes, content_type: str = "image/png", name: str = "image") -> dict[str, tuple[str, bytes, str]]:
     return {name: ("upload.bin", data, content_type)}
 
 
@@ -73,7 +73,7 @@ def test_decompression_bomb_is_413(client_factory: Factory) -> None:
     ],
     ids=["wrong-name", "extra-file"],
 )
-def test_wrong_or_extra_files_are_422(client_factory: Factory, files: dict[str, object]) -> None:
+def test_wrong_or_extra_files_are_422(client_factory: Factory, files: dict[str, tuple[str, bytes, str]]) -> None:
     client = client_factory(registry=ready_registry())
     response = client.post(URL, files=files, headers=auth_headers())
     assert response.status_code == 422
