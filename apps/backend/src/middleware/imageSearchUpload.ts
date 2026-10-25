@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import multer, { MulterError } from 'multer';
 import { AppError } from './errorHandler.js';
 import type { AiImageSearchContentType } from '../integrations/ai/ai.schemas.js';
+import { imageSearchLifecycle } from './imageSearchAdmission.js';
 
 /** Task 04.2: single-image budget for public visual search (8 MiB). Enforced while streaming, before buffering completes. */
 export const IMAGE_SEARCH_MAX_BYTES = 8 * 1024 * 1024;
@@ -51,18 +52,24 @@ function uploadError(error: unknown): AppError {
  * The sniffed image is exposed as `res.locals.sniffedImage`; raw bytes are never persisted or logged.
  */
 export function imageSearchUpload(req: Request, res: Response, next: NextFunction): void {
+  const state = imageSearchLifecycle(req);
   parser(req, res, (parseError?: unknown) => {
+    if (state?.stopped || res.writableEnded) return;
+    state?.parsed();
     if (parseError) {
+      if (state) state.outcome = parseError instanceof MulterError && parseError.code === 'LIMIT_FILE_SIZE' ? 'too_large' : 'parse_failed';
       next(uploadError(parseError));
       return;
     }
     const file = req.file;
     if (!file || file.size === 0 || file.buffer.byteLength === 0) {
+      if (state) state.outcome = 'invalid';
       next(new AppError('Choose a photo to search with.', 400, 'IMAGE_REQUIRED'));
       return;
     }
     const contentType = sniffImageType(file.buffer);
     if (!contentType) {
+      if (state) state.outcome = 'invalid';
       next(new AppError('Unsupported photo type. Use a JPEG, PNG or WebP image.', 415, 'IMAGE_SEARCH_UNSUPPORTED_TYPE'));
       return;
     }

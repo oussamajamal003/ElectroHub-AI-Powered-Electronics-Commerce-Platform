@@ -158,10 +158,28 @@ describe('Search page', () => {
     await waitFor(() => expect(screen.getByTestId('location').textContent).toBe(''));
     expect(screen.queryByText(/0 results/)).not.toBeInTheDocument();
   });
+  it('does not let an older debounced URL update replace a newer query draft', async () => {
+    vi.useFakeTimers();
+    try {
+      page();
+      const input = screen.getByRole('combobox', { name: 'Search products' });
+      await act(async () => {
+        fireEvent.change(input, { target: { value: 'mac' } });
+        await vi.advanceTimersByTimeAsync(275);
+        fireEvent.change(input, { target: { value: 'macbook' } });
+      });
+      expect(screen.getByTestId('location')).toHaveTextContent('q=mac');
+      expect(input).toHaveValue('macbook');
+      fireEvent.submit(input.closest('form')!);
+      expect(screen.getByTestId('location')).toHaveTextContent('q=macbook');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('commits Enter immediately without a duplicate debounced request', async () => {
     page(); const input = screen.getByRole('combobox', { name: 'Search products' });
     fireEvent.change(input, { target: { value: 'sony' } });
-    fireEvent.submit(input.closest('form')!);
+    fireEvent.keyDown(input, { key: 'Enter' });
     expect(screen.getByTestId('location')).toHaveTextContent('q=sony');
     await screen.findByText('Apple MacBook Air');
     fireEvent.submit(input.closest('form')!);

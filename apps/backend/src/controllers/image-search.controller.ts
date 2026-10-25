@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { AppError } from '../middleware/errorHandler.js';
 import type { SniffedImage } from '../middleware/imageSearchUpload.js';
 import { IMAGE_SEARCH_DEFAULT_LIMIT, IMAGE_SEARCH_MAX_LIMIT, ImageSearchError, imageSearchService } from '../services/image-search.service.js';
+import { imageSearchLifecycle } from '../middleware/imageSearchAdmission.js';
 
 const imageSearchQuerySchema = z.object({
   limit: z.string().regex(/^[1-9]\d{0,1}$/).transform(Number).pipe(z.number().int().min(1).max(IMAGE_SEARCH_MAX_LIMIT))
@@ -24,6 +25,8 @@ export const imageSearchController = {
   search: async (req: Request, res: Response, next: NextFunction) => {
     // A disconnected client stops the work: the AI call and the catalog query are both cancelled via this signal.
     const disconnect = new AbortController();
+    const lifecycle = imageSearchLifecycle(req);
+    const signal = lifecycle?.signal ?? disconnect.signal;
     const onClose = () => { if (!res.writableFinished) disconnect.abort(); };
     res.once('close', onClose);
     try {
@@ -38,13 +41,21 @@ export const imageSearchController = {
         contentType: sniffed.contentType,
         limit,
         requestId: req.id,
-        signal: disconnect.signal,
+        signal,
       });
-      if (disconnect.signal.aborted || res.writableEnded) return;
+      if (signal.aborted || res.writableEnded) return;
+      if (lifecycle) { lifecycle.outcome = 'completed'; lifecycle.modelVersion = body.meta.modelVersion;
+        lifecycle.embeddingVersion = body.meta.embeddingVersion; lifecycle.resultCount = body.meta.count; }
       res.setHeader('Cache-Control', 'no-store');
       res.status(200).json(body);
     } catch (error) {
-      if (disconnect.signal.aborted || res.writableEnded) return;
+      if (signal.aborted || res.writableEnded) return;
+      if (lifecycle) {
+        const outcomes = { IMAGE_SEARCH_TIMEOUT: 'inference_timeout', IMAGE_SEARCH_UNAVAILABLE: 'upstream_unavailable',
+          IMAGE_TOO_LARGE: 'too_large', IMAGE_SEARCH_UNSUPPORTED_TYPE: 'invalid', IMAGE_UNREADABLE: 'invalid', IMAGE_SEARCH_BUSY: 'busy' } as const;
+        lifecycle.outcome = error instanceof ImageSearchError && error.code in outcomes
+          ? outcomes[error.code as keyof typeof outcomes] : 'failed';
+      }
       if (error instanceof ImageSearchError && error.retryAfterSeconds !== undefined) {
         res.setHeader('Retry-After', String(error.retryAfterSeconds));
       }

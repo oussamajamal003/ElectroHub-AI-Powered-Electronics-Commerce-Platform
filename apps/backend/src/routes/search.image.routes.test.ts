@@ -179,6 +179,13 @@ describe('POST /api/search/image resolution', () => {
     expect(res.body).toEqual({ data: { items: [] }, meta: { modelVersion: 'clip-v1.0', embeddingVersion: 'emb_2026.10', count: 0 } });
     expect(database.$queryRaw).not.toHaveBeenCalled();
   });
+
+  it('keeps successful results when the diagnostics sink throws', async () => {
+    vi.mocked(logger.info).mockImplementation(() => { throw new Error('diagnostics unavailable'); });
+    const res = await request(app).post('/api/search/image').attach('image', JPEG, 'private.jpg');
+    expect(res.status).toBe(200);
+    expect(res.body.meta.count).toBe(0);
+  });
 });
 
 describe('POST /api/search/image failure envelope', () => {
@@ -210,6 +217,11 @@ describe('POST /api/search/image failure envelope', () => {
     const res = await request(app).post('/api/search/image').attach('image', JPEG, 'a.jpg');
     expect(res.status).toBe(status);
     expect(res.body.error.code).toBe(code);
+    expect(logger.warn).toHaveBeenCalledWith('IMAGE_SEARCH_LIFECYCLE', expect.objectContaining({
+      outcome: code === 'IMAGE_SEARCH_TIMEOUT' ? 'inference_timeout' : code === 'IMAGE_SEARCH_UNAVAILABLE' ? 'upstream_unavailable'
+        : code === 'IMAGE_TOO_LARGE' ? 'too_large' : ['IMAGE_SEARCH_UNSUPPORTED_TYPE', 'IMAGE_UNREADABLE'].includes(code) ? 'invalid'
+          : code === 'IMAGE_SEARCH_BUSY' ? 'busy' : 'failed',
+    }));
     expect(JSON.stringify(res.body)).not.toMatch(/AI_SERVICE|127\.0\.0\.1|stack|at /);
   });
 

@@ -3,12 +3,11 @@ from __future__ import annotations
 from typing import Annotated, Final
 
 from fastapi import APIRouter, Depends, Query, Request
-from starlette.datastructures import UploadFile  # what request.form() yields (fastapi.UploadFile is a subclass)
-from starlette.exceptions import HTTPException
-from starlette.formparsers import MultiPartException
+from starlette.datastructures import UploadFile
+from starlette.formparsers import MultiPartException, MultiPartParser
 
 from app.api.dependencies import get_image_search_service
-from app.core.errors import ImageTooLargeError, InvalidImageError, ValidationFailedError
+from app.core.errors import ImageTooLargeError, InvalidImageError, ValidationFailedError, request_id_of
 from app.schemas.common import DataEnvelope, ErrorEnvelope
 from app.schemas.image_search import HARD_MAX_TOP_K, ImageSearchResult
 from app.services.image_search_service import ImageSearchService
@@ -46,28 +45,60 @@ async def image_search(
     service.validate_top_k(top_k)
     await service.ensure_available()
     image_bytes = await _read_single_image(request, service.max_image_bytes)
-    return DataEnvelope(data=await service.search(image_bytes, top_k))
+    return DataEnvelope(data=await service.search(image_bytes, top_k, request_id=request_id_of(request)))
 
 
 async def _read_single_image(request: Request, max_bytes: int) -> bytes:
+    if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "multipart/form-data":
+        raise ValidationFailedError("The multipart body must contain exactly one image part.")
+    parser = _MemoryImageParser(request, max_bytes)
     try:
-        # Zero text fields and one file part: any extra field or file is rejected by the parser itself.
-        form = await request.form(max_files=1, max_fields=0)
-    except (MultiPartException, HTTPException) as exc:
-        # Starlette reports exceeded part limits and malformed bodies as HTTP 400; the contract is one 422 envelope.
-        raise ValidationFailedError("The multipart body must contain exactly one image part.") from exc
-    try:
-        entries = form.multi_items()
-        if len(entries) != 1 or entries[0][0] != IMAGE_FIELD:
-            raise ValidationFailedError("The multipart body must contain exactly one image part named image.")
-        part: object = entries[0][1]
+        form = await parser.parse()
+        if not parser.complete or len(form.multi_items()) != 1:
+            raise ValidationFailedError("The multipart body must contain exactly one complete image part.")
+        part = form[IMAGE_FIELD]
         if not isinstance(part, UploadFile):
             raise ValidationFailedError("The multipart body must contain exactly one image part named image.")
-        data = await part.read(max_bytes + 1)
+        data = await part.read()
+        if not data:
+            raise InvalidImageError()
+        return data
+    except MultiPartException as exc:
+        raise ValidationFailedError("The multipart body must contain exactly one image part.") from exc
     finally:
-        await form.close()
-    if len(data) > max_bytes:
-        raise ImageTooLargeError()
-    if not data:
-        raise InvalidImageError()
-    return data
+        # Includes malformed bodies, disconnects and cancellation. Every handle remains in memory and is closed here.
+        parser.close()
+
+
+class _MemoryImageParser(MultiPartParser):
+    """Use the pinned Starlette parser with a per-request, strictly memory-only file budget.
+
+    File bytes are checked in the parser callback BEFORE Starlette queues a write. The spool threshold is above
+    that enforced budget, so no accepted or rejected upload can roll over to a filesystem temporary file. This is
+    instance-local: other routes keep their ordinary parser limits and no global tempfile setting is changed.
+    """
+
+    def __init__(self, request: Request, max_bytes: int) -> None:
+        super().__init__(request.headers, request.stream(), max_files=1, max_fields=0)
+        self.spool_max_size = max_bytes + 1
+        self._max_bytes = max_bytes
+        self._received = 0
+        self.complete = False
+
+    def on_headers_finished(self) -> None:
+        super().on_headers_finished()
+        if self._current_part.file is None or self._current_part.field_name != IMAGE_FIELD:
+            raise MultiPartException("Exactly one image file is required.")
+
+    def on_part_data(self, data: bytes, start: int, end: int) -> None:
+        self._received += end - start
+        if self._received > self._max_bytes:
+            raise ImageTooLargeError()
+        super().on_part_data(data, start, end)
+
+    def on_end(self) -> None:
+        self.complete = True
+
+    def close(self) -> None:
+        for handle in self._files_to_close_on_error:
+            handle.close()

@@ -83,6 +83,8 @@ function verify() {
     ['ai_vector_ingest', 'SELECT count(*) FROM public.users', 'deny'],
     ['ai_vector_ingest', "UPDATE public.products SET name = name WHERE false", 'deny'],
     ['ai_vector_ingest', "UPDATE ai.model_versions SET status = 'ACTIVE' WHERE false", 'deny'],
+    ['ai_vector_ingest', 'UPDATE ai.product_image_embeddings SET image_sha256 = image_sha256 WHERE embedding_version = (SELECT embedding_version FROM ai.active_index)', 'deny'],
+    ['ai_vector_ingest', 'DELETE FROM ai.product_image_embeddings WHERE embedding_version = (SELECT embedding_version FROM ai.active_index)', 'deny'],
     ['ai_vector_ingest', "INSERT INTO ai.active_index (embedding_version) VALUES ('x')", 'deny'],
     ['ai_vector_ingest', 'CREATE TABLE ai.ingest_probe (id int)', 'deny'],
     ['ai_vector_ingest', 'DROP TABLE ai.product_image_embeddings', 'deny'],
@@ -90,7 +92,8 @@ function verify() {
   let failures = 0;
   for (const [role, sql, expected] of checks) {
     let outcome;
-    try { psql(role, saved[role], sql); outcome = 'allow'; } catch { outcome = 'deny'; }
+    // Every probe is rolled back even if a forbidden operation unexpectedly succeeds.
+    try { psql(role, saved[role], `BEGIN; ${sql}; ROLLBACK;`); outcome = 'allow'; } catch { outcome = 'deny'; }
     const ok = outcome === expected;
     if (!ok) failures += 1;
     console.log(`${ok ? 'PASS' : 'FAIL'}  ${role.padEnd(17)} expected ${expected.padEnd(5)} got ${outcome.padEnd(5)} ${sql}`);

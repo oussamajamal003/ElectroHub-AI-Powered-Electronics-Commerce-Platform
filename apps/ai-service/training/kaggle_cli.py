@@ -1,7 +1,7 @@
 """Runs the official Kaggle CLI with ONLY the KAGGLE_* credentials taken from a local env file.
 
 The credential values are never printed or written anywhere; the child process receives them through its environment.
-Default source is apps/ai-service/.env (owner's choice); --env-file overrides it.
+Default source is training/.data/kaggle.env (git-ignored, training-only); --env-file overrides it.
 
     python kaggle_cli.py --names                    # list which KAGGLE_* names are present (values hidden)
     python kaggle_cli.py datasets status <owner/slug>
@@ -17,7 +17,7 @@ from pathlib import Path
 
 from dotenv import dotenv_values
 
-DEFAULT_ENV = Path(__file__).resolve().parents[1] / ".env"
+DEFAULT_ENV = Path(__file__).resolve().parent / ".data" / "kaggle.env"
 
 
 def kaggle_environment(env_file: Path) -> dict[str, str]:
@@ -27,7 +27,27 @@ def kaggle_environment(env_file: Path) -> dict[str, str]:
     # The owner stores a new-style access token (KGAT_...) as KAGGLE_API_KEY; the CLI reads it as KAGGLE_API_TOKEN.
     if "KAGGLE_API_TOKEN" not in values and values.get("KAGGLE_API_KEY", "").startswith("KGAT_"):
         values["KAGGLE_API_TOKEN"] = values.pop("KAGGLE_API_KEY")
-    clean = {key: value for key, value in os.environ.items() if not key.startswith("KAGGLE_")}
+    # OS/process plumbing only: a parent shell may contain commerce or service credentials.
+    inherited = {
+        "PATH",
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "PATHEXT",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "HOME",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "LANG",
+        "LC_ALL",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "REQUESTS_CA_BUNDLE",
+    }
+    clean = {key: value for key, value in os.environ.items() if key.upper() in inherited}
     return {**clean, **values, "PYTHONIOENCODING": "utf-8"}
 
 

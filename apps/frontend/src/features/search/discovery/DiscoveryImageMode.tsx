@@ -47,14 +47,15 @@ export function DiscoveryImageMode({ startCamera, backRef, onNavigate, onSearchT
     if (invalid) { setProblem(FILE_PROBLEMS[invalid]); return; }
     request.current?.abort();
     setProblem(''); setOutcome(null); setFile(selected); setStep('ready');
+    request.current = null;
   }, []);
-  const remove = () => { request.current?.abort(); setFile(null); setOutcome(null); setProblem(''); setStep('entry'); };
+  const remove = () => { request.current?.abort(); request.current = null; setFile(null); setOutcome(null); setProblem(''); setStep('entry'); };
   const search = async () => {
     if (!file || step === 'searching') return;
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
-    setStep('searching'); setOutcome(null);
+    setStep('searching'); setOutcome(null); setProblem('');
     const result = await searchByImage(file, controller.signal);
     if (request.current !== controller) return;
     request.current = null;
@@ -84,6 +85,10 @@ export function DiscoveryImageMode({ startCamera, backRef, onNavigate, onSearchT
     return () => document.removeEventListener('paste', onPaste);
   }, [choose, step]);
   const openPicker = () => picker.current?.click();
+  // One persistent region owns image request announcements; visual error panels do not announce a second time.
+  const announcement = problem || (step === 'searching' ? 'Finding visually similar products…'
+    : step === 'done' && outcome ? outcomeAnnouncement(outcome)
+      : file ? 'Photo selected. Choose Search similar products to submit it.' : 'Choose, drop or paste a photo to search.');
   const fileInput = <input ref={picker} type="file" accept={IMAGE_ACCEPT} hidden aria-label="Choose a photo"
     onChange={event => { choose(event.target.files?.[0]); event.target.value = ''; }} />;
 
@@ -93,6 +98,7 @@ export function DiscoveryImageMode({ startCamera, backRef, onNavigate, onSearchT
   </div>;
 
   return <div className={styles.imageMode}>
+    <p role="status" aria-live="polite" aria-atomic="true" aria-label="Photo search status" className={styles.srOnly}>{announcement}</p>
     {fileInput}
     {!file ? <>
       <div className={`${styles.drop} ${dragging ? styles.dropDragging : ''}`}
@@ -111,7 +117,7 @@ export function DiscoveryImageMode({ startCamera, backRef, onNavigate, onSearchT
           <Button type="button" size="small" onClick={openPicker}><Upload size={16} aria-hidden="true" />Upload</Button>
         </div>
       </div>
-      {problem && <p role="alert" className={styles.fieldError}><AlertTriangle size={16} aria-hidden="true" />{problem}</p>}
+      {problem && <p className={styles.fieldError}><AlertTriangle size={16} aria-hidden="true" />{problem}</p>}
       <p className={styles.privacyNote}>{imageSearchEnabled() ? 'Your photo is used only for this search and isn’t saved to your account.'
         : 'Visual matching isn’t switched on yet. You can preview a photo, but nothing is uploaded.'}</p>
     </> : <>
@@ -124,19 +130,31 @@ export function DiscoveryImageMode({ startCamera, backRef, onNavigate, onSearchT
           <p className={styles.fileName} title={file.name}>{file.name}</p>
           <p className={styles.fileMeta}>{formatBytes(file.size)} · {file.type.replace('image/', '').toUpperCase()}</p>
           {step === 'searching' ? <>
-            <p className={styles.processing} role="status"><span className={styles.spinner} aria-hidden="true" />Finding visually similar products…</p>
+            <p className={styles.processing}><span className={styles.spinner} aria-hidden="true" />Finding visually similar products…</p>
             <div className={styles.previewActions}><Button type="button" size="small" variant="outline" onClick={cancel}>Cancel</Button></div>
           </> : <div className={styles.previewActions}>
             <Button type="button" onClick={() => void search()}><Search size={16} aria-hidden="true" />{outcome ? 'Search again' : 'Search similar products'}</Button>
             <Button type="button" size="small" variant="outline" onClick={openPicker}><RefreshCw size={16} aria-hidden="true" />Replace</Button>
             <Button type="button" size="small" variant="ghost" onClick={remove}><Trash2 size={16} aria-hidden="true" />Remove</Button>
           </div>}
-          {problem && <p role="alert" className={styles.fieldError}><AlertTriangle size={16} aria-hidden="true" />{problem}</p>}
+          {problem && <p className={styles.fieldError}><AlertTriangle size={16} aria-hidden="true" />{problem}</p>}
         </div>
       </div>
       {step === 'done' && outcome && <Outcome outcome={outcome} onNavigate={onNavigate} onRetry={() => void search()} onSearchText={onSearchText} onReplace={openPicker} />}
     </>}
   </div>;
+}
+
+function outcomeAnnouncement(outcome: ImageSearchOutcome): string {
+  switch (outcome.status) {
+    case 'success': return outcome.items.length ? `${outcome.items.length} visually similar ${outcome.items.length === 1 ? 'product found' : 'products found'}. Results are ordered by visual relevance.` : 'No similar products found. Try another photo or search by text.';
+    case 'unavailable': return imageSearchEnabled() ? 'Image search is unavailable right now. Search by text or browse products.' : 'Image search isn’t available yet. Your photo was not sent.';
+    case 'timeout': return 'The search took too long. Try again or search by text.';
+    case 'network': return 'You appear to be offline. Check your connection and try again.';
+    case 'invalid': return outcome.message;
+    case 'cancelled': return 'Photo search cancelled.';
+    case 'error': return 'Image search ran into a problem. Try again or search by text.';
+  }
 }
 
 function Outcome({ outcome, onNavigate, onRetry, onSearchText, onReplace }: {
@@ -180,10 +198,10 @@ function Outcome({ outcome, onNavigate, onRetry, onSearchText, onReplace }: {
       ? 'Visual matching is offline at the moment, so we couldn’t compare your photo. It wasn’t saved. Text search and the full catalog still work.'
       : 'Visual matching isn’t switched on yet, so your photo wasn’t sent anywhere. Text search and the full catalog still work.'}
     action={<><Button type="button" size="small" onClick={onSearchText}>Search by text</Button><Button type="button" size="small" variant="outline" onClick={() => onNavigate('/products')}>Browse products</Button></>} />;
-  if (outcome.status === 'network') return <DiscoveryState tone="error" icon={<WifiOff size={20} />} title="You appear to be offline"
+  if (outcome.status === 'network') return <DiscoveryState announce={false} tone="error" icon={<WifiOff size={20} />} title="You appear to be offline"
     description="Check your connection, then try the search again." action={<Button type="button" size="small" onClick={onRetry}>Try again</Button>} />;
-  if (outcome.status === 'timeout') return <DiscoveryState tone="error" icon={<AlertTriangle size={20} />} title="The search took too long"
+  if (outcome.status === 'timeout') return <DiscoveryState announce={false} tone="error" icon={<AlertTriangle size={20} />} title="The search took too long"
     description="Image search didn’t answer in time. Try again in a moment, or search by name." action={<><Button type="button" size="small" onClick={onRetry}>Try again</Button><Button type="button" size="small" variant="ghost" onClick={onSearchText}>Search by text</Button></>} />;
-  return <DiscoveryState tone="error" icon={<AlertTriangle size={20} />} title="Image search ran into a problem"
+  return <DiscoveryState announce={false} tone="error" icon={<AlertTriangle size={20} />} title="Image search ran into a problem"
     description="We couldn’t finish this search. Try again, or search by name instead." action={<><Button type="button" size="small" onClick={onRetry}>Try again</Button><Button type="button" size="small" variant="ghost" onClick={onSearchText}>Search by text</Button></>} />;
 }

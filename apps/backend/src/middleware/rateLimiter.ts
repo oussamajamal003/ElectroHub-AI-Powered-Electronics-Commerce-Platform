@@ -1,4 +1,5 @@
 import rateLimit from 'express-rate-limit';
+import { recordImageSearchLifecycle } from '../integrations/ai/image-search.telemetry.js';
 
 /**
  * Standard rate limiter for login attempts (prevent brute force).
@@ -50,6 +51,12 @@ export const IMAGE_SEARCH_RATE_LIMIT = { windowMs: 5 * 60 * 1000, limit: 20 } as
 export const imageSearchRateLimiter = rateLimit({
   windowMs: IMAGE_SEARCH_RATE_LIMIT.windowMs,
   limit: IMAGE_SEARCH_RATE_LIMIT.limit,
+  handler: (req, res) => {
+    recordImageSearchLifecycle({ outcome: 'rate_limited', requestId: req.id, durationMs: 0, statusCode: 429 });
+    res.setHeader('Connection', 'close');
+    res.once('finish', () => { if (!req.complete) req.destroy(); });
+    res.status(429).json({ error: { code: 'RATE_LIMITED', message: 'Too many photo searches. Please try again shortly.' } });
+  },
   message: { error: { code: 'RATE_LIMITED', message: 'Too many photo searches. Please try again shortly.' } },
   standardHeaders: true,
   legacyHeaders: false,

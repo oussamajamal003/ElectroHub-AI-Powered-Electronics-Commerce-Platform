@@ -59,7 +59,7 @@ export async function searchByImage(file: File, signal: AbortSignal): Promise<Im
     if (timeout.signal.aborted || isAbortError(failure)) return { status: 'timeout' };
     if (failure instanceof ApiError) {
       if ([404, 501, 503].includes(failure.status)) return { status: 'unavailable' };
-      if (failure.status === 504) return { status: 'timeout' };
+      if (failure.status === 408 || failure.status === 504) return { status: 'timeout' };
       if (failure.status === 413) return { status: 'invalid', message: `This photo is too large. Choose one under ${MAX_IMAGE_LABEL}.` };
       if (failure.status === 400 || failure.status === 415 || failure.status === 422) return { status: 'invalid', message: 'This photo couldn’t be read. Try a different JPEG, PNG or WebP image.' };
       return { status: 'error' };

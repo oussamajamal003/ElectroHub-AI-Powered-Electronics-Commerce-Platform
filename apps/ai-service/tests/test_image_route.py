@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
+from tempfile import SpooledTemporaryFile
 
+import anyio
 import pytest
 from fastapi.testclient import TestClient
+from starlette.requests import ClientDisconnect, Request
+from starlette.types import Message
 
+from app.api.routes.image_search import _MemoryImageParser, _read_single_image
+from app.core.errors import ValidationFailedError
 from app.models.registry import ModelRegistry
 from tests.conftest import QA_KEY, auth_headers, make_settings
 from tests.fakes import CountingLoader, FakeEncoder, FakeGateway, ranked
-from tests.imagefactory import animated_webp, jpeg_bytes, png_bytes, png_with_claimed_size
+from tests.imagefactory import animated_webp, jpeg_bytes, padded_image_bytes, png_bytes, png_with_claimed_size
 
 URL = "/internal/v1/image-search"
 Factory = Callable[..., TestClient]
@@ -170,3 +177,67 @@ def test_capabilities_expose_versions_once_a_model_is_loaded(client_factory: Fac
     assert image["modelVersion"] == "test-model-1"
     assert image["embeddingVersion"] == "test-emb-1"
     assert "path" not in str(image).lower()
+
+
+@pytest.mark.parametrize("fmt", ["JPEG", "PNG", "WEBP"])
+@pytest.mark.parametrize("size", [2 * 1024 * 1024, 8 * 1024 * 1024 - 1024])
+def test_large_valid_uploads_never_spool_to_disk(
+    client_factory: Factory, monkeypatch: pytest.MonkeyPatch, fmt: str, size: int
+) -> None:
+    def forbidden_rollover(self: object) -> None:
+        raise AssertionError("customer uploads must not create a disk temporary file")
+
+    monkeypatch.setattr(SpooledTemporaryFile, "rollover", forbidden_rollover)
+    data = padded_image_bytes(fmt, size)
+    assert len(data) == size
+    response = client_factory(registry=ready_registry()).post(URL, files=upload(data), headers=auth_headers())
+    assert response.status_code == 200, response.text
+
+
+def test_truncated_multipart_is_rejected(client_factory: Factory) -> None:
+    payload = b'--part\r\nContent-Disposition: form-data; name="image"; filename="x.png"\r\n\r\n' + png_bytes(64, 48)
+    response = client_factory(registry=ready_registry()).post(
+        URL, content=payload, headers={**auth_headers(), "Content-Type": "multipart/form-data; boundary=part"}
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("termination", ["complete", "malformed", "disconnect", "cancel"])
+def test_memory_handles_are_closed_on_every_parser_exit(monkeypatch: pytest.MonkeyPatch, termination: str) -> None:
+    observed: list[bool] = []
+    close = _MemoryImageParser.close
+
+    def observe_close(parser: _MemoryImageParser) -> None:
+        close(parser)
+        observed.extend(handle.closed for handle in parser._files_to_close_on_error)
+
+    monkeypatch.setattr(_MemoryImageParser, "close", observe_close)
+    data = padded_image_bytes("PNG", 2 * 1024 * 1024)
+    body = b'--part\r\nContent-Disposition: form-data; name="image"; filename="x.png"\r\n\r\n' + data
+    if termination == "complete":
+        body += b"\r\n--part--\r\n"
+    reads = 0
+
+    async def receive() -> Message:
+        nonlocal reads
+        reads += 1
+        if reads == 1:
+            return {"type": "http.request", "body": body, "more_body": termination in ("disconnect", "cancel")}
+        if termination == "cancel":
+            raise asyncio.CancelledError()
+        return {"type": "http.disconnect"}
+
+    async def run() -> None:
+        request = Request(
+            {"type": "http", "headers": [(b"content-type", b"multipart/form-data; boundary=part")]},
+            receive,
+        )
+        await _read_single_image(request, 8 * 1024 * 1024)
+
+    failure = {"malformed": ValidationFailedError, "disconnect": ClientDisconnect, "cancel": asyncio.CancelledError}
+    if termination in failure:
+        with pytest.raises(failure[termination]):
+            anyio.run(run)
+    else:
+        anyio.run(run)
+    assert observed and all(observed)

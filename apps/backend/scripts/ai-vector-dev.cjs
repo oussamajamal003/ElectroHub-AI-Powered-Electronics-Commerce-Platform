@@ -19,31 +19,28 @@ const { spawnSync } = require('node:child_process');
 const dotenv = require('dotenv');
 const { Client } = require('pg');
 
-const PROD_REF = 'yepfgjehdstlxbpespun';
+const { DEV_REF, devConnectionConfig, verifiedRoleDsn } = require('./lib/ai-vector-dev-security.cjs');
 const backend = path.resolve(__dirname, '..');
 const stateFile = path.join(backend, '.ai-vector', 'dev.json');
 const fail = message => { console.error(`ai-vector-dev: ${message}`); process.exit(1); };
 
 const env = { ...dotenv.parse(fs.readFileSync(path.join(backend, '.env'))),
   ...(fs.existsSync(path.join(backend, '.env.local')) ? dotenv.parse(fs.readFileSync(path.join(backend, '.env.local'))) : {}) };
-const admin = new URL(env.DIRECT_URL || env.DATABASE_URL);
-const ref = decodeURIComponent(admin.username).split('.')[1];
-if (!ref || ref === PROD_REF) fail('refusing: target is not an identifiable non-production Supabase project.');
-if (process.env.AI_VECTOR_DEV_APPROVED !== ref) fail(`refusing: set AI_VECTOR_DEV_APPROVED to the approved DEV project ref.`);
-
-const tls = { rejectUnauthorized: false }; // Supabase pooler certificate; the URL itself is the identity-checked target
+let connection;
+try { connection = devConnectionConfig(env, process.env.AI_VECTOR_DEV_APPROVED); }
+catch { fail('refusing: verified DEV endpoint, trusted certificate configuration and explicit DEV approval are required.'); }
+const admin = new URL(connection.connectionString);
+const ref = DEV_REF;
 async function withClient(run) {
-  const client = new Client({ connectionString: admin.toString(), ssl: tls });
+  const client = new Client(connection);
   await client.connect();
   try { return await run(client); } finally { await client.end(); }
 }
-const withTls = url => { const copy = new URL(url.toString()); copy.search = '?sslmode=require'; return copy.toString(); };
+const caPath = env.DB_SSL_CA_CERT_PATH || new URL(env.DIRECT_URL || env.DATABASE_URL).searchParams.get('sslrootcert');
+const withTls = url => verifiedRoleDsn(url, decodeURIComponent(url.username), decodeURIComponent(url.password), caPath);
 const roleDsn = (role, password) => {
-  const url = new URL(admin.toString());
-  url.username = `${role}.${ref}`;
-  url.password = password;
-  url.search = '?sslmode=require';
-  return url.toString();
+  const user = admin.hostname.endsWith('.pooler.supabase.com') ? `${role}.${ref}` : role;
+  return verifiedRoleDsn(admin, user, password, caPath);
 };
 
 async function check() {

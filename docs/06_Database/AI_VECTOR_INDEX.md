@@ -22,10 +22,10 @@ The roles are created `NOLOGIN`. An operator enables `LOGIN` and sets passwords 
 | Role | Can | Cannot |
 |---|---|---|
 | `ai_vector_reader` (FastAPI) | `SELECT` on `ai.active_index`, `ai.model_versions`, `ai.product_image_embeddings` | Read anything in `public` (users, orders, payments, products) or `ai.catalog_images`; write; run DDL |
-| `ai_vector_ingest` (offline CLI) | `SELECT ai.catalog_images`; `INSERT` versions (as `STAGING`); `UPDATE (expected_images)`; write embeddings and journal rows | Read or write commerce tables; change a version's status; write `ai.active_index`; run DDL |
+| `ai_vector_ingest` (offline CLI) | `SELECT ai.catalog_images`; `INSERT` versions (as `STAGING`); `UPDATE (expected_images)`; write embeddings and journal rows while the database guard confirms `STAGING` and eligible catalog references | Read or write commerce tables; change a version's status; write `ai.active_index`; mutate vectors for any non-STAGING version; run DDL |
 | Operator (migration owner) | Activate and roll back | — |
 
-`anon` and `authenticated` lose all rights on `ai` when those Supabase roles exist. `node apps/backend/scripts/ai-vector-qa.cjs verify` runs 19 allow/deny checks.
+`anon` and `authenticated` lose all rights on `ai` when those Supabase roles exist. Forward migration `20261025000000_ai_vector_staging_guard` installs a database trigger that checks ingestion writes under a row lock shared with activation, denies non-STAGING mutations, and preserves trusted catalog deletion cascades. `node apps/backend/scripts/ai-vector-qa.cjs verify` runs the current allow/deny role checks.
 
 ## Retrieval
 
@@ -47,10 +47,10 @@ python -m app.ingest status
 
 `stage` reads storefront-relative `/images/...` files only (path-traversal-safe, ≤ 8 MiB). It encodes them with the same verified loader the service uses. Re-running skips images whose bytes are unchanged, and it commits per batch so an interrupted run resumes. Cloudinary-driven refresh belongs to Task 04.3; until then, re-run `stage` and `activate` after catalog image changes.
 
-## Environment status (2026-10-24)
+## Environment status (verified 2026-10-25)
 
 | Environment | Migration | Index |
 |---|---|---|
-| Disposable QA (`localhost:55434/electrohub_disposable`, pgvector 0.8.0) | Applied from a clean history (21 migrations) | `effb0-commons-v2-3224d2cc9e57` ACTIVE: 412/412 images, 206/206 products. Activation and rollback demonstrated. |
-| DEV `pzxekjybdiulzmssalfo` (pgvector 0.8.2 available) | **Pending owner approval.** A read-only check shows this the only pending migration, no `ai` schema and no roles | Not ingested |
+| Disposable QA (`localhost:55434/electrohub_disposable`, pgvector 0.8.0) | Forward guard applied; 22 migrations present, with clean-history replay verified separately | `effb0-commons-v2-3224d2cc9e57` ACTIVE: 412/412 images, 206/206 products. Activation, rollback, concurrency and catalog deletion behavior verified. Docker listener binds only `127.0.0.1:55434`. |
+| DEV `pzxekjybdiulzmssalfo` (pgvector 0.8.2 available) | Original `20261024000000_ai_vector_search` is applied; forward guard migration is pending **fresh scoped owner authorization**. Verified read-only; guard is not yet installed. | Existing v2 index remains ACTIVE: 412 images, 206 products. No DEV writes were performed for closure. |
 | PROD `yepfgjehdstlxbpespun` | Not touched. The same reviewed SQL is prepared; applying it needs the protected PROD gate | — |

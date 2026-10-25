@@ -36,6 +36,32 @@ def webp_bytes(width: int, height: int) -> bytes:
     return _save(solid(width, height), "WEBP", quality=90)
 
 
+def padded_image_bytes(fmt: str, size: int) -> bytes:
+    """A valid small decoded image with legal ignored metadata, for testing the encoded-byte budget exactly."""
+    if fmt == "PNG":
+        base = png_bytes(64, 48)
+        payload = b"\0" * (size - len(base) - 12)
+        kind = b"npAD"  # ancillary, private, safe-to-copy chunk
+        chunk = struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload))
+        return base[:-12] + chunk + base[-12:]
+    if fmt == "JPEG":
+        base = jpeg_bytes(64, 48)
+        remaining = size - len(base)
+        comments = bytearray()
+        while remaining:
+            length = min(remaining, 65_537)
+            if 0 < remaining - length < 4:
+                length -= 4
+            comments.extend(b"\xff\xfe" + struct.pack(">H", length - 2) + b"\0" * (length - 4))
+            remaining -= length
+        return base[:2] + comments + base[2:]
+    if fmt == "WEBP":
+        base = webp_bytes(64, 48)
+        payload = b"\0" * (size - len(base) - 8)
+        return b"RIFF" + struct.pack("<I", size - 8) + base[8:] + b"JUNK" + struct.pack("<I", len(payload)) + payload
+    raise ValueError("unsupported test format")
+
+
 def rgba_png_transparent(width: int, height: int) -> bytes:
     image = Image.new("RGBA", (width, height), (255, 0, 0, 0))
     return _save(image, "PNG")

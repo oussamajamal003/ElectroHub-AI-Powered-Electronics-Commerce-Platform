@@ -95,7 +95,7 @@ export function DiscoveryConsole({ initialMode, initialQuery, startCamera, onClo
           </DialogPrimitive.Close>
         </form>
         <div className={styles.body}>
-          <div role="status" aria-live="polite" className={styles.srOnly}>{announce}</div>
+          {mode === 'text' && <div role="status" aria-live="polite" className={styles.srOnly}>{announce}</div>}
           {mode === 'image' ? <DiscoveryImageMode startCamera={cameraOnEnter} backRef={back} onNavigate={go} onSearchText={() => { setMode('text'); input.current?.focus(); }} />
             : !typing ? <DiscoveryQuickActions onNavigate={go} onImage={camera => { setCameraOnEnter(camera); setMode('image'); }} />
               : <div className={styles.suggestions}>

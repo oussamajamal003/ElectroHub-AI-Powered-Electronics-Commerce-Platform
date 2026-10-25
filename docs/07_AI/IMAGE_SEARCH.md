@@ -157,7 +157,7 @@ The backend must not blindly trust product IDs returned by an external service.
 
 # 9. FastAPI Responsibilities
 
-FastAPI validates and decodes the image, applies the approved inference preprocessing, runs the fine-tuned EfficientNet-B0 encoder, and retrieves candidates from compatible catalog embeddings in PostgreSQL pgvector through its restricted vector repository.
+FastAPI validates and decodes the image, applies the approved inference preprocessing, runs the deployed EfficientNet-B0 visual encoder (pretrained frozen backbone plus the owner-approved trained 256-dimensional projection), and retrieves candidates from compatible catalog embeddings in PostgreSQL pgvector through its restricted vector repository.
 
 It returns product references, ranking scores, and model/embedding version metadata. It does not return authoritative price or inventory. The backend resolves current catalog data and authorization before showing results. The public backend endpoint and internal FastAPI endpoint are distinct trust boundaries; exact contracts are defined in task 04.1 and completed in 04.2.
 
@@ -165,9 +165,9 @@ It returns product references, ranking scores, and model/embedding version metad
 
 # 10. Required Phase 04 Implementation
 
-Image search uses a real pretrained EfficientNet-B0 CNN fine-tuned in PyTorch on approved electronics data. The encoder's learned features become image embeddings; nearest-neighbor retrieval uses PostgreSQL pgvector.
+Task 04.2 delivers real learned visual similarity search. Backbone fine-tuning was attempted, but validation selected the checkpoint with the frozen pretrained EfficientNet-B0 backbone and genuinely trained 256-dimensional projection head. This is an owner-approved scope exception pending final Architect verification; the deployed backbone is not described as fine-tuned. The encoder's learned features become image embeddings; nearest-neighbor retrieval uses PostgreSQL pgvector.
 
-Simulated category mappings, image metadata matching, random vectors, or a pretrained model without the required fine-tuning do not satisfy this scope. The feature is a measured portfolio ML implementation; it does not promise exact model/SKU identification from arbitrary photographs.
+Simulated category mappings, image metadata matching, or random vectors do not satisfy this scope. The owner-approved Task 04.2 exception is specifically the measured trained-projection checkpoint described above. The feature does not promise exact model/SKU identification from arbitrary photographs.
 
 ---
 
@@ -510,7 +510,7 @@ Image search is complete when:
 - Camera capture works where supported.
 - Input validation works.
 - FastAPI integration works.
-- Real fine-tuned encoder embeddings and pgvector retrieval return candidate products.
+- The owner-approved Task 04.2 encoder (pretrained frozen EfficientNet-B0 backbone plus trained 256-D projection) and pgvector retrieval return candidate products; this scope exception is pending final Architect verification and is not described as a fine-tuned deployed backbone.
 - Held-out retrieval quality and known failure cases are documented.
 - Catalog embedding refresh and version compatibility are verified.
 - Backend validates AI results.
@@ -539,7 +539,7 @@ Image search is complete when:
 This Phase 00 document records the approved direction, not evidence that Phase 04 is implemented or validated. Task files will define detailed contracts, data preparation, model settings, database migrations, evaluation criteria, and operational procedures.
 
 - **04.1:** establish the FastAPI service architecture, internal API contracts, configuration, validation, security, readiness, and backend integration.
-- **04.2:** implement real image search using a pretrained EfficientNet-B0 CNN fine-tuned in PyTorch, learned image embeddings, and PostgreSQL pgvector retrieval. Kaggle Free GPU setup and training belong to this later task; no training environment is being provisioned by this document.
+- **04.2 baseline:** implement real image search using a pretrained EfficientNet-B0 CNN fine-tuned in PyTorch, learned image embeddings, and PostgreSQL pgvector retrieval. The current Task 04.2 checkpoint uses the separately documented owner-approved projection-only scope exception, pending final Architect verification. Kaggle Free GPU setup and training belong to this later task; no training environment is being provisioned by this document.
 - **04.4:** implement ML-oriented content-based recommendations by reusing those learned product embeddings, with behavior-based profiles where sufficient data exists. Rules and popularity remain supporting signals or explicit fallbacks.
 - **Local development:** use the HP Core i7 laptop with 16 GB RAM and Intel UHD graphics for application development, preprocessing, tests, and CPU inference checks. Do not assume its reported shared graphics memory provides a CUDA training GPU.
 - **Training boundary:** Kaggle is an offline training environment, not an application host, production dependency, database gateway, or customer-image processor. Free GPU availability is not guaranteed; save and export checkpoints and record reproducible training metadata.

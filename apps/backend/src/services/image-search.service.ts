@@ -92,7 +92,7 @@ export class ImageSearchService {
     const items = await this.catalog.productSummariesByIds(uniqueIds);
     if (input.signal?.aborted) throw CANCELLED();
 
-    logger.info('IMAGE_SEARCH_RESOLVED', {
+    try { logger.info('IMAGE_SEARCH_RESOLVED', {
       operation: 'image_search.resolve',
       candidateCount: uniqueIds.length,
       resultCount: items.length,
@@ -101,7 +101,7 @@ export class ImageSearchService {
       embeddingVersion: result.embeddingVersion,
       durationMs: Date.now() - started,
       requestId: input.requestId,
-    });
+    }); } catch { /* Logging cannot replace a successful search result. */ }
 
     return {
       data: { items },

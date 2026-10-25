@@ -175,7 +175,7 @@ function createDockerCluster() {
     'install -o postgres -m 644 /isolated/certs/server.crt /var/lib/postgresql/tls/server.crt && ' +
     `exec docker-entrypoint.sh postgres -c port=${port} -c ssl=on -c ssl_cert_file=/var/lib/postgresql/tls/server.crt ` +
     '-c ssl_key_file=/var/lib/postgresql/tls/server.key';
-  wslDocker(['run', '-d', '--name', docker.container, '-p', `${port}:${port}`, '-v', `${docker.volume}:/var/lib/postgresql/data`,
+  wslDocker(['run', '-d', '--name', docker.container, '-p', `127.0.0.1:${port}:${port}`, '-v', `${docker.volume}:/var/lib/postgresql/data`,
     '-v', `${toWslPath(home)}:/isolated:ro`, '-e', 'POSTGRES_PASSWORD_FILE=/isolated/password.txt', '-e', `POSTGRES_DB=${database}`,
     '-e', `PGPORT=${port}`, '-e', 'POSTGRES_INITDB_ARGS=--auth=scram-sha-256', '-e', 'POSTGRES_HOST_AUTH_METHOD=scram-sha-256',
     '--entrypoint', 'bash', docker.image, '-c', prepare]);
@@ -289,6 +289,18 @@ function stopDb() {
     return;
   }
   run(bin('pg_ctl'), ['-D', files.data, '-m', 'fast', 'stop'], {}, { stdio: 'inherit' }); }
+/** Recreate only this launcher's container to apply loopback publishing; never remove its data volume. */
+function rebindDocker() {
+  if (!dockerMode) fail('rebind-db requires ISOLATED_PG_DOCKER=1.');
+  const env = config();
+  const volume = wslDocker(['inspect', '-f', '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}{{end}}{{end}}', docker.container]).trim();
+  if (volume !== docker.volume) fail('container data volume does not match the launcher-owned disposable volume.');
+  stopDb();
+  wslDocker(['rm', docker.container]); // No -v: preserve the checked, launcher-owned volume and indexed catalog.
+  createDockerCluster();
+  waitForDatabase();
+  console.log(`disposable container recreated with loopback publishing; identity: ${verifyIdentity(env)}`);
+}
 function status() { const env = config(); console.log(`target: ${assertDisposable(env.DATABASE_URL)}\nidentity: ${verifyIdentity(env)}`); }
 /** Email switches from the app's own env files (never printed): only the approved-recipient list and the Brevo key's presence are needed here. */
 function emailSettings() {
@@ -402,7 +414,7 @@ function restoreRecipient() {
 
 const command = process.argv[2];
 if (require.main === module) {
-  ({ init, 'start-db': startDb, 'stop-db': stopDb, status, backend: startBackend,
+  ({ init, 'start-db': startDb, 'stop-db': stopDb, 'rebind-db': rebindDocker, status, backend: startBackend,
     migrate: () => runVerifiedMigration(config()), captured,
     'use-real-recipient': useRealRecipient, 'restore-recipient': restoreRecipient }[command] ?? (() => fail(`unknown command "${command ?? ''}"`)))();
 }

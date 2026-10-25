@@ -1,17 +1,18 @@
 # Task 04.2 — Implementation Evidence
 
-**Branch** `feature/04.2-Real-Vision-Search-Integration`. Base: `255cb9d` (= `origin/develop`, PRs #35 and #36 merged). Everything is uncommitted: **no commit, push, merge or deploy.**
+**Branch** `feature/04.2-Real-Vision-Search-Integration`. Current local HEAD and local `origin/feature/04.2-Real-Vision-Search-Integration` tracking ref: `5b62f75c5eae5b0b754360f7f228e0629baa0e6e`; `origin/develop`: `255cb9d2d898d374b597cdefb3d972747c547f6c`. Closure edits in the primary checkout are uncommitted. **No commit, push, merge or deploy.**
 
 **Worktrees:**
 - The main checkout (this task).
-- `.claude/worktrees/discovery-console`: clean, already merged.
-- `serene-edison`, `electrohub-release`: untouched.
+- `.claude/worktrees/discovery-console`: clean, separate branch.
+- `.claude/worktrees/serene-edison-5a7d3e`: has unrelated checkout E2E edits; untouched.
+- `C:\Users\ouss0\electrohub-release`: not inspected or changed because its repository has different Windows ownership.
 
 **Prepared** 2026-10-25. Every result below comes from a command or run that was actually executed. Items not verified are marked as such.
 
-## A. "Owner cannot see the Discovery Console": root cause
+## A. Historical console visibility issue (superseded by current browser QA)
 
-The owner's tab had been loaded while the main checkout was still on the catalog branch; the console then existed only in the discovery worktree. With the checkout on `develop`, `:3000/search` serves the console, and Ctrl+K opens it with live suggestions (browser-verified). No code change was needed, only a hard reload.
+The earlier stale-tab issue is historical. This closure pass tested the current feature branch and existing console in the isolated QA stack; see section L for current navigation, interaction and responsive results.
 
 ## B. What was built
 
@@ -21,7 +22,7 @@ The owner's tab had been loaded while the main checkout was still on the catalog
 | Training | `training/src/{data,losses,metrics,train,export}.py`. Supervised-contrastive loss with a P×K sampler; frozen baseline first; validation-only selection; weight-delta logging; safetensors export with a parity check. `build_kaggle.py` packages a PRIVATE dataset plus a kernel; `kaggle_cli.py` passes only `KAGGLE_*` values. |
 | Shared network | `app/models/embedding_network.py`: EfficientNet-B0 + Linear(1280→256) + L2 norm, and `preprocess_image` (`effb0-rgb-r256-c224-imagenet-v1`). Training, ingestion and serving all use it, so preprocessing cannot drift. |
 | pgvector | Migration `20261024000000_ai_vector_search` (additive `ai` schema, 2 NOLOGIN roles). `app/ingest` CLI with stage/activate/rollback/status. Docs: `docs/06_Database/AI_VECTOR_INDEX.md`. |
-| FastAPI (Haiku subagent W4, lead-fixed and reviewed) | Safetensors loader that checks SHA-256 before load; magic-byte decoder with bomb, frame and side limits; read-only pgvector gateway with an exact cosine search grouped by product; single-part multipart route; 8 MiB limit on that route only; readiness re-checked on each probe; index self-heal on the search path (throttled to 5 s); selector event loop on Windows; `AI_ENV_FILE`. |
+| FastAPI (Haiku subagent W4, lead-fixed and reviewed) | Safetensors loader that checks SHA-256 before load; magic-byte decoder with bomb, frame and side limits; read-only pgvector gateway with an exact cosine search grouped by product; bounded in-memory multipart route; 8 MiB limit on that route only; readiness re-checked on each probe; index self-heal on the search path (throttled to 5 s); selector event loop on Windows; `AI_ENV_FILE`. |
 | Express (Haiku subagent W5, lead-reviewed) | `POST /api/search/image`: multer memory storage (1 file, 0 fields, 8 MiB), magic-byte check, 20 requests per 5 minutes per IP, `AiServiceClient.imageSearch` (8 s route timeout, aborted on client disconnect), one catalog query that reuses the storefront visibility predicate and `ProductSummary` mapper, and a stable error mapping. |
 | Frontend | 8 MB budget end to end; 504 mapped to the timeout state; "colour and storage versions can look identical" note on results; honest offline copy ("It wasn't saved" rather than "not sent"); **a11y fix**: the icon-only image toggle now has a name on narrow screens; **layout fix**: preview actions no longer clip at 390 px; the stale Playwright block for the old tabs was replaced; new real-stack spec `tests/isolated/discovery-image.isolated.spec.ts`. |
 | QA infrastructure | `dev-isolated.cjs` gains `ISOLATED_PG_DOCKER=1`: pinned `pgvector/pgvector:0.8.0-pg17` in WSL Docker, the same TLS and identity checks, a WSL keep-alive, and separate state in `.isolated-docker`. Runtime diagnostic: the Docker bridge address is accepted only in that declared mode (tested). Helpers: `ai-vector-qa.cjs` (roles, verify, ai-service, backend) and `ai-vector-dev.cjs` (gated by DEV ref, refuses PROD). |
@@ -168,7 +169,7 @@ All 28 frozen queries went through Express → FastAPI → pgvector → Prisma, 
 | T42-15 | PASS | `environment.json`, `requirements-training.txt` |
 | T42-16 | PASS | `baseline.json` |
 | T42-17 | PASS | SupCon loss and P×K sampler, with tests |
-| T42-18 | **PARTIAL** | Projection weights changed in the selected checkpoint; backbone fine-tuning ran but was not selected (see D) |
+| T42-18 | **OWNER-APPROVED SCOPE EXCEPTION — PENDING FINAL ARCHITECT VERIFICATION** | Backbone fine-tuning was attempted; validation selected the pretrained frozen backbone plus trained 256-D projection. See D and L. |
 | T42-19 | PASS | Validation-only selection |
 | T42-20 | PASS | D, E |
 | T42-21 | PASS | D (family relevance) |
@@ -186,7 +187,7 @@ All 28 frozen queries went through Express → FastAPI → pgvector → Prisma, 
 | T42-28 | PASS | Clean QA migrate, pgvector 0.8.0 |
 | T42-29 | PASS | Dimension check, norm CHECK, SHA, finite checks in the gateway |
 | T42-30 | PASS | 19/19 role checks |
-| T42-31 | PASS | Same |
+| T42-31 | PASS (QA) / PENDING AUTHORIZATION (DEV) | Database staging guard tested in disposable QA; shared DEV forward migration not applied. See L. |
 | T42-32 | PASS | Re-stage skipped 412; per-batch commit |
 | T42-33 | PASS | 412/412 images, 206/206 products |
 | T42-34 | PASS | Mismatch demo |
@@ -219,18 +220,18 @@ All 28 frozen queries went through Express → FastAPI → pgvector → Prisma, 
 | T42-51 | PASS | Playwright |
 | T42-52 | PASS | `catalog-storefront` 6/6 |
 | T42-53 | PASS | Unit tests (select, preview, replace, remove, cancel; paste/drop handlers) and Playwright upload |
-| T42-54 | **PARTIAL** | Camera denial, track cleanup and the video-only request are unit-tested; real-device capture was not exercised (no camera in this environment) |
+| T42-54 | **PARTIAL** | Chromium virtual-camera capture, retake and track cleanup passed; physical-device camera was unavailable. |
 | T42-55 | PASS | Real-model results and outage, Playwright and screenshots |
-| T42-56 | **PARTIAL** | 1440/390 inspected, a11y name fixed, reduced motion used in specs; 320/768/1024/1920, 200% zoom and screen-reader runs not separately captured for the image flow in this pass |
+| T42-56 | **PARTIAL** | Image flow checked at 320/390/768/1024/1440/1920, keyboard focus/Escape and reduced motion; 200% equivalent Chromium reflow passed. Physical browser zoom and assistive screen-reader runs were not available. |
 | T42-57 | PASS | Memory storage only; no bytes in logs (telemetry tests); keys never printed |
 
 **Quality gates and handoff**
 
 | ID | Status | Evidence |
 |---|---|---|
-| T42-58 | PASS | All gates pass; Docker build and model smoke (J) |
-| T42-59 | PASS | G |
-| T42-60 | PASS | This file |
+| T42-58 | **PARTIAL** | Affected feature gates and read-only Docker model/upload smoke pass; backend full suite had five environment/non-feature failures recorded in L. |
+| T42-59 | **PARTIAL** | Historical counts in G are superseded by final closure runs and outcome in L. |
+| T42-60 | PASS | This evidence file was updated for final handoff in L. |
 
 ## I. Material limitations (actionable)
 
@@ -263,7 +264,7 @@ All 28 frozen queries went through Express → FastAPI → pgvector → Prisma, 
 
 **Defect found by this smoke:** the first build crashed at import because `safetensors.torch` imports `packaging`, which wasn't in the `--no-deps` runtime set (local environments had it from other tools). Fixed by pinning `packaging==25.0` in `requirements-runtime.txt`, then rebuilt and re-smoked.
 
-## K. Engineer self-review
+## K. Historical pre-closure engineer self-review (superseded by L)
 
 **Score: 85/100.** The pipeline is real end to end and measured:
 - A licensed, leakage-audited dataset.
@@ -277,5 +278,45 @@ Points are lost for:
 - A backbone that was not selected.
 - Incomplete viewport, zoom and camera device coverage.
 - A runtime packaging defect that only the container smoke caught (now fixed).
+
+## L. Final blocker-closure evidence (2026-10-25)
+
+This section supersedes earlier environment/status and test summaries above. The primary checkout remains at local HEAD `5b62f75c5eae5b0b754360f7f228e0629baa0e6e` with closure changes uncommitted; its local tracking ref matches. The final effective diff comprises 34 modified tracked files and 11 untracked files (including the forward migration and focused tests); `git diff --check` is clean. No commit, push, merge, deploy, PROD operation, or shared DEV write was performed. A separate checkout worktree has unrelated checkout E2E modifications and was left untouched. The release checkout was not accessed because its Windows ownership differs.
+
+### Findings and implementation
+
+| Finding | Closure and evidence |
+|---|---|
+| F-01 | **CLOSED / unchanged.** The existing GitHub workflow uses `pgvector/pgvector:0.8.0-pg17`; the last verified feature HEAD had all 12 CI/Security checks passing. No CI rebuild or new remote run was performed. |
+| F-02 | `app/api/routes/image_search.py` uses a request-scoped bounded in-memory parser; auth/readiness still precede body reads, file bytes are capped before writes, and handles close on complete/error/disconnect/cancel. The Docker runtime sets `TMPDIR=/dev/shm` (Docker-bounded tmpfs); the parser never rolls uploads to disk. Real read-only/non-root runtime smoke: JPEG/PNG/WebP at 2,097,152 and 8,387,584 bytes all returned 200; oversize, unsupported/malformed, wrong/multiple fields, missing authentication and temporary-file checks passed (**13 checks**). Python tests specifically forbid `SpooledTemporaryFile.rollover` and verify cleanup for complete, malformed, disconnect and cancellation paths. The already-built image was smoke-tested with the same `TMPDIR` runtime setting; a rebuild attempt after adding the Dockerfile default could not complete because Docker reported no space during the 191.8 MB torch download. |
+| F-03 | **CLOSED IN QA; DEV APPLY PENDING FRESH AUTHORIZATION.** New forward migration `20261025000000_ai_vector_staging_guard`; historical `20261024000000_ai_vector_search` unchanged (SHA-256 `5fc41c43d238de3b62850c1f7aa24f4fe37a619ce3267a18dac373f59632ffa7`). Fresh disposable DB replay plus staging eligibility, forbidden statuses, both activation lock interleavings, rollback and catalog cascades: **15/15**. QA role verification: **21/21**. Current QA has 22 migrations, existing v2 index preserved. Read-only Supabase DEV checks confirm the original migration is applied and the index remains 412/206 at v2; the new guard is not applied there. No DEV write was made. |
+| F-04 | `scripts/ai-vector-dev.cjs` now uses verified CA and hostname checks through `scripts/lib/ai-vector-dev-security.cjs`, retains DEV identity and PROD refusal/approval gates, and emits no credentials/DSNs. Controlled real handshakes: approved CA/hostname accepted; untrusted CA and wrong hostname rejected. No DEV mutation or privileged DEV connection was run. |
+| F-05 | Express upload admission/deadline/lifecycle in `src/middleware/imageSearchAdmission.ts`, before multipart parsing; capacity 4, 10 s upload deadline, 25 s total request deadline, separate from the 8 s AI inference timeout. Cleanup covers success, invalid/oversize, disconnect/abort, parser failure, timeout and downstream errors. Focused admission/telemetry/route tests: **48/48**. |
+| F-06 | `scripts/dev-isolated.cjs` publishes the QA port only on `127.0.0.1:55434`; actual container inspection showed that address. Loopback connection/TLS identity passed; LAN and WSL-host interface probes timed out. No DEV/PROD network exposure changed. |
+| F-07 | Existing console completed; `DiscoveryImageMode.tsx`, `DiscoveryCamera.tsx`, status ownership and `SearchPage`/`SearchField` submit race were corrected. Image-specific real-stack Playwright: **6/6**; includes all six widths (320, 390, 768, 1024, 1440, 1920), real held-out image through Express/FastAPI/pgvector/Prisma, current product prices/detail links, paste/drop, explicit submit, errors/no-results, virtual camera capture/retake/track cleanup, denial fallback, focus/Escape, reduced motion and 200%-equivalent 720×500 CSS reflow. AI outage: **1/1**, ordinary text and catalog remained available. Separate search/filter/navigation viewport checks after the submit fix: **4/4** at 390/768/1440/1920. Screenshots at 320/768/1440 and 200%-equivalent camera-denial state were opened and visually inspected; filenames are listed below. Physical camera, physical browser zoom and assistive screen-reader operation were not available. |
+| F-08 | **OWNER-APPROVED SCOPE EXCEPTION — PENDING FINAL ARCHITECT VERIFICATION.** No training, artifact, embedding-version or index changes. The deployed v2 remains pretrained frozen EfficientNet-B0 backbone + genuinely trained 256-D projection; backbone fine-tuning was attempted, but validation selected projection-only. Known photo Recall@1 improved `0.500 → 0.625`; live catalog Recall@1 remains `0.375` known / `0.000` unseen. Describe only as real learned visual similarity search, not exact-SKU recognition or a fine-tuned deployed backbone. |
+
+### Observability, credentials and tests
+
+Express emits structured allowlisted `image_search.lifecycle` outcomes with QA environment, correlation ID, safe status/outcome, bounded active-request count, upload and total duration. Actual disposable QA logs showed `admitted → parsed → completed` (200) and `upstream_unavailable` (503); no filenames, image bytes, vectors, auth, or arbitrary labels. AI phase logs carry fixed phase names (`decode`, `encode`, `inference`, `retrieval`), safe model/index versions and durations. For request `ccb9176a-da0e-48b0-a8f7-545b848f6e1b`, observed QA phase times: decode 30.10 ms, encode 120.49 ms, inference 152.20 ms, retrieval 23.42 ms. Logger failures are fail-safe-tested.
+
+Kaggle credential presence was inspected without printing its value: removed from ignored `apps/ai-service/.env`, moved to ignored training-only `training/.data/kaggle.env`; serving config rejects inherited `KAGGLE_*`, and `.dockerignore` excludes `training/`. Training credential isolation tests: **9 passed** with the training suite. No secret was added to Git.
+
+Final frontend unit suite after the search submit correction: **109 files, 907 tests passed**. Frontend build/typecheck and lint passed; build emitted only the existing >500 kB chunk advisory. Backend affected full suite did run once: **1,596 passed, 101 skipped, 5 failed**. The five were outside Task 04.2 feature tests: disposable metrics CA chain mismatch, runtime bridge assertion under the globally set QA launcher flag (that route file passed separately 15/15 with wishlist), a wishlist timeout under suite load, and two payment tests that require a test-mode credential but were intentionally given no Stripe key. Focused Task 04.2 Express tests passed 48/48. The broad inherited Search Playwright file ran 18 scenarios before the final keyboard correction: 13 passed/5 failed; the query-submit cases were corrected and the four real search viewport scenarios passed after the correction. Three other inherited cases remain non-green (stale-refetch request-count expectation, an aborted large ordinary-search response, and a 40 px control-height expectation against the rendered 56 px shared input). The image-specific suite and focused search viewport suite are green; these broader results are not represented as full-suite passes.
+
+AI service final evidence: full Python tests **238 passed, 1 skipped** (optional DB URL absent); strict mypy **56 files passed**; Ruff **58 files clean**; training tests **9 passed**. Root/backend typecheck, lint and build passed earlier in this closure. Frontend final build/typecheck, lint and unit results are recorded above.
+
+### Environment, model and visual evidence
+
+- Shared DEV: read-only verified original migration applied, index v2 412 images/206 products; forward guard **pending fresh scoped owner approval**. PROD remains read-only/unmodified. Disposable QA forward guard and local browser/API QA only.
+- Current artifact SHA-256 `3224d2cc9e57fe00212e453e761ddf169d17ba7b20341bbeb4fa57b9a9e4d744`, embedding version `effb0-commons-v2-3224d2cc9e57`; no reindex or promotion.
+- Physical 200% browser zoom and screen-reader operation are not claimed. Chromium reflow equivalent, keyboard behavior and status-region semantics were checked. No physical camera was present; capture used Chromium virtual-device facilities.
+- Inspected screenshots: `apps/frontend/playwright-report/task04-closure/discovery-results-320.png`, `discovery-results-768.png`, `discovery-results-1440.png`, and `discovery-zoom200-camera-denied.png`. AI outage screenshot: `discovery-ai-down-1440.png`.
+
+### Remaining owner/Architect gates
+
+1. Apply the reviewed forward staging-guard migration to shared DEV only after fresh scoped owner approval; QA proves the migration, but DEV intentionally remains without the guard until that gate.
+2. Independent Architect verification of the existing training evidence and owner-approved T42-18 exception.
+3. Review the non-Task-04.2 broad-suite/environment failures listed above; they are preserved as failures, not waived or counted as feature passes.
 
 **Recommendation: READY FOR ARCHITECT REVIEW**, with the limitations in I disclosed. Nothing is committed.

@@ -137,3 +137,63 @@ def test_search_recovers_once_the_index_becomes_ready_without_a_readiness_probe(
             await registry.stop()
 
     anyio.run(main)
+
+
+def test_search_phase_events_are_sanitized_and_include_separate_timings(monkeypatch: pytest.MonkeyPatch) -> None:
+    events: list[tuple[str, dict[str, object]]] = []
+
+    def capture(event: str, **fields: object) -> None:
+        events.append((event, fields))
+
+    monkeypatch.setattr("app.services.image_search_service.log_event", capture)
+    run_search(FakeEncoder(), FakeGateway(results=ranked(0.9)))
+    assert [fields["phase"] for _, fields in events] == ["decode", "encode", "inference", "retrieval"]
+    for name, fields in events:
+        assert name == "ai.search_phase"
+        assert fields["outcome"] == "completed" and fields["code"] == "OK"
+        assert fields["environment"] == "test" and fields["requestId"] == "unknown"
+        assert isinstance(fields["durationMs"], float) and fields["durationMs"] >= 0
+        assert fields["modelVersion"] == "test-model-1" and fields["indexVersion"] == "test-emb-1"
+        assert set(fields) == {
+            "operation",
+            "phase",
+            "outcome",
+            "code",
+            "durationMs",
+            "requestId",
+            "environment",
+            "modelVersion",
+            "indexVersion",
+        }
+        assert all(not isinstance(value, bytes | list) for value in fields.values())
+
+
+def test_broken_diagnostics_do_not_break_successful_inference(monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken(event: str, **fields: object) -> None:
+        raise OSError("restricted log output")
+
+    monkeypatch.setattr("app.services.image_search_service.log_event", broken)
+    result = run_search(FakeEncoder(), FakeGateway(results=ranked(0.9)))
+    assert result.matches[0].product_id == PRODUCTS[0]  # type: ignore[attr-defined]
+
+
+def test_phase_failure_logs_only_a_safe_error_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.image_search_service import _timed_phase
+
+    events: list[dict[str, object]] = []
+
+    def capture(event: str, **fields: object) -> None:
+        events.append(fields)
+
+    monkeypatch.setattr("app.services.image_search_service.log_event", capture)
+    metadata: dict[str, object] = {
+        "requestId": "safe-id",
+        "environment": "test",
+        "modelVersion": "v1",
+        "indexVersion": "v1",
+    }
+    with pytest.raises(RuntimeError, match="secret"):
+        with _timed_phase("retrieval", metadata):
+            raise RuntimeError("secret database credentials and image contents")
+    assert events[0]["code"] == "AI_PHASE_FAILED" and events[0]["outcome"] == "failed"
+    assert "secret" not in str(events)
