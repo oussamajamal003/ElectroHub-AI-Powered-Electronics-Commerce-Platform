@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 /** The only workflows allowed to deploy migrations or read shared-database secrets. */
-const MIGRATION_WORKFLOWS = new Set(['dev-migration.yml']);
+const MIGRATION_WORKFLOWS = new Set(['dev-migration.yml', 'prod-migration.yml']);
 const DISPOSABLE_ACTION = './.github/actions/disposable-postgres';
 const MUTATING_PRISMA = /\bprisma\s+(migrate\s+(deploy|resolve|reset|dev)|db\s+(push|execute))\b/;
 const SUPABASE_MUTATING = /\bsupabase\s+(db\s+(push|reset)|migration\s+up|link)\b/;
@@ -72,6 +72,19 @@ function checkWorkflow(name, rawText) {
     if (pre !== -1 && deploy !== -1 && pre > deploy) fail('the pre-check must run before migrate deploy');
     if (!text.includes('migration-plan.cjs post')) fail('must run the migration-plan post-check');
     if (/\bprisma\s+migrate\s+(resolve|reset|dev)\b|\bprisma\s+db\s+(push|execute)\b/.test(text)) fail('must not run resolve, reset, dev or db push');
+    if (name === 'dev-migration.yml') {
+      if (!text.includes('EXPECTED_PROJECT_REF: pzxekjybdiulzmssalfo')) fail('DEV workflow must pin the DEV project ref');
+      if (!text.includes('MIGRATION_TARGET: DEV')) fail('DEV workflow must explicitly select DEV in the migration guard');
+      if (/ELECTROHUB_PROD_(?:DATABASE|DIRECT)_URL/.test(text)) fail('DEV workflow must not expose PROD database secrets');
+    }
+    if (name === 'prod-migration.yml') {
+      if (!text.includes('EXPECTED_PROJECT_REF: yepfgjehdstlxbpespun')) fail('PROD workflow must pin the PROD project ref');
+      if (!text.includes('MIGRATION_TARGET: PROD')) fail('PROD workflow must explicitly select PROD in the migration guard');
+      if (!text.includes('electrohub-prod-database')) fail('PROD workflow must use the protected PROD environment');
+      if (!text.includes('BACKUP_EVIDENCE_REFERENCE') || !text.includes('RESTORE_EVIDENCE_REFERENCE')) fail('PROD workflow must require backup and restore evidence references');
+      if (/ELECTROHUB_DEV_(?:DATABASE|DIRECT)_URL/.test(text)) fail('PROD workflow must not expose DEV database secrets');
+      if (!/prisma\s+migrate\s+status/.test(text)) fail('PROD workflow must run prisma migrate status after deploy');
+    }
   } else if (on.some((trigger) => ['push', 'pull_request', 'schedule', 'workflow_run'].includes(trigger)) && /ELECTROHUB_[A-Z]*_(DATABASE|DIRECT)_URL/.test(text)) {
     fail('a push/PR/scheduled workflow references a shared database URL');
   }
