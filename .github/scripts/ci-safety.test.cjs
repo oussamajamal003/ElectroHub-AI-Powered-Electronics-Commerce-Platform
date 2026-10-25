@@ -92,8 +92,9 @@ test('live DEV payment migration bytes reproduce the exact approved LF and CRLF 
   assert.equal(payment.canonicalSha256, canonicalGit.sha256);
   assert.equal(payment.canonicalSha256, expected.canonicalSha256);
   assert.equal(payment.crlfSha256, expected.crlfSha256);
-  assert.equal(payment.sha256, expected.crlfSha256);
-  assert.equal(payment.lineEnding, 'CRLF');
+  // Checkout line endings vary by platform (Windows autocrlf = CRLF, Linux CI = LF); either must hash to a pinned value.
+  assert.ok(['LF', 'CRLF'].includes(payment.lineEnding));
+  assert.equal(payment.sha256, payment.lineEnding === 'LF' ? expected.canonicalSha256 : expected.crlfSha256);
   assert.deepEqual(
     Buffer.from(workingTreeBytes.toString('utf8').replace(/\r\n/g, '\n'), 'utf8'),
     canonicalGitBytes,
