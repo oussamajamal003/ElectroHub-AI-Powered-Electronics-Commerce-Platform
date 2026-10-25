@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import type { SearchInput } from '../validators/search.validator.js';
-import { categoryMixPage, escapeLike, relevance, searchFrom, searchOrder, searchWhere } from './search.sql.js';
+import { categoryMixPage, escapeLike, relevance, searchFrom, searchOrder, searchWhere, storefrontVisibility } from './search.sql.js';
 import { projectInventory } from './inventory.service.js';
 
 export interface SearchSuggestion { id: string; type: 'PRODUCT' | 'BRAND' | 'CATEGORY'; label: string; slug: string }
@@ -24,7 +24,27 @@ interface ProductRow {
   averageRating: string | null;
 }
 
-function mapProductRow(row: ProductRow) {
+/** Shared ProductSummary projection: the same columns, rating and primary-image joins for every product-card listing. */
+const ratingCte = Prisma.sql`SELECT r."productId", COUNT(*) AS "reviewCount", ROUND(AVG(r."rating")::numeric, 1)::text AS "averageRating"
+        FROM "reviews" r JOIN page ON page."id" = r."productId" GROUP BY r."productId"`;
+const productSummaryColumns = Prisma.sql`p."id", p."name", p."slug", p."price"::text AS price,
+        p."compareAtPrice"::text AS "compareAtPrice", p."description", i."quantity", i."lowStockAt",
+        jsonb_build_object('id', c."id", 'name', c."name", 'slug', c."slug") AS category,
+        CASE WHEN b."id" IS NULL THEN NULL ELSE jsonb_build_object('id', b."id", 'name', b."name", 'slug', b."slug") END AS brand,
+        images.images, rating."reviewCount", rating."averageRating"`;
+const productSummaryJoins = Prisma.sql`LEFT JOIN "products" p ON p."id" = page."id"
+      LEFT JOIN "categories" c ON c."id" = p."categoryId"
+      LEFT JOIN "brands" b ON b."id" = p."brandId"
+      LEFT JOIN "inventory" i ON i."productId" = p."id"
+      LEFT JOIN rating ON rating."productId" = p."id"
+      LEFT JOIN LATERAL (
+        SELECT jsonb_agg(to_jsonb(img) ORDER BY img."isPrimary" DESC, img."sortOrder", img."id") AS images
+        FROM (SELECT pi."id", pi."url", pi."altText", pi."position" AS "sortOrder", pi."isPrimary"
+          FROM "product_images" pi WHERE pi."productId" = p."id"
+          ORDER BY pi."isPrimary" DESC, pi."position", pi."id" LIMIT 2) img
+      ) images ON true`;
+
+export function mapProductRow(row: Omit<ProductRow, 'total'>) {
   if (!row.id || !row.name || !row.slug || !row.price || !row.category) return null;
   const price = new Prisma.Decimal(row.price);
   const compareAtPrice = row.compareAtPrice === null ? null : new Prisma.Decimal(row.compareAtPrice);
@@ -62,27 +82,10 @@ export class SearchService {
         SELECT p."id", ROW_NUMBER() OVER (ORDER BY ${order}) AS ordinal
         ${searchFrom} ${where}
         ORDER BY ${order} LIMIT ${input.pageSize} OFFSET ${(input.page - 1) * input.pageSize}`}
-      ), rating AS (
-        SELECT r."productId", COUNT(*) AS "reviewCount", ROUND(AVG(r."rating")::numeric, 1)::text AS "averageRating"
-        FROM "reviews" r JOIN page ON page."id" = r."productId" GROUP BY r."productId"
-      )
-      SELECT total.total, p."id", p."name", p."slug", p."price"::text AS price,
-        p."compareAtPrice"::text AS "compareAtPrice", p."description", i."quantity", i."lowStockAt",
-        jsonb_build_object('id', c."id", 'name', c."name", 'slug', c."slug") AS category,
-        CASE WHEN b."id" IS NULL THEN NULL ELSE jsonb_build_object('id', b."id", 'name', b."name", 'slug', b."slug") END AS brand,
-        images.images, rating."reviewCount", rating."averageRating"
+      ), rating AS (${ratingCte})
+      SELECT total.total, ${productSummaryColumns}
       FROM total LEFT JOIN page ON true
-      LEFT JOIN "products" p ON p."id" = page."id"
-      LEFT JOIN "categories" c ON c."id" = p."categoryId"
-      LEFT JOIN "brands" b ON b."id" = p."brandId"
-      LEFT JOIN "inventory" i ON i."productId" = p."id"
-      LEFT JOIN rating ON rating."productId" = p."id"
-      LEFT JOIN LATERAL (
-        SELECT jsonb_agg(to_jsonb(img) ORDER BY img."isPrimary" DESC, img."sortOrder", img."id") AS images
-        FROM (SELECT pi."id", pi."url", pi."altText", pi."position" AS "sortOrder", pi."isPrimary"
-          FROM "product_images" pi WHERE pi."productId" = p."id"
-          ORDER BY pi."isPrimary" DESC, pi."position", pi."id" LIMIT 2) img
-      ) images ON true
+      ${productSummaryJoins}
       ORDER BY page.ordinal`);
     if (profile) profile.combinedQuery = performance.now() - queryStart;
     const mapStart = performance.now();
@@ -90,6 +93,30 @@ export class SearchService {
     const data = rows.map(mapProductRow).filter((product): product is NonNullable<typeof product> => product !== null);
     if (profile) profile.mapping = performance.now() - mapStart;
     return { data, meta: { page: input.page, pageSize: input.pageSize, total, totalPages: Math.ceil(total / input.pageSize) } };
+  }
+
+  /**
+   * Task 04.2: resolves AI-ranked product ids in ONE bounded query that applies the same storefront visibility rule and
+   * ProductSummary mapping as /api/search/products. Returned rows follow the input order; hidden, inactive, test-fixture,
+   * deleted or unknown ids are simply absent. Prices and stock always come from the database.
+   */
+  async productSummariesByIds(orderedIds: readonly string[]) {
+    if (orderedIds.length === 0) return [];
+    const rows = await prisma.$queryRaw<Omit<ProductRow, 'total'>[]>(Prisma.sql`
+      WITH page AS (
+        SELECT p."id", ROW_NUMBER() OVER (ORDER BY array_position(${[...orderedIds]}::uuid[], p."id")) AS ordinal
+        ${searchFrom}
+        WHERE ${storefrontVisibility} AND p."id" = ANY(${[...orderedIds]}::uuid[])
+      ), rating AS (${ratingCte})
+      SELECT ${productSummaryColumns}
+      FROM page
+      ${productSummaryJoins}
+      ORDER BY page.ordinal`);
+    const position = new Map(orderedIds.map((id, index) => [id, index]));
+    return rows
+      .map(mapProductRow)
+      .filter((product): product is NonNullable<typeof product> => product !== null && position.has(product.id))
+      .sort((a, b) => (position.get(a.id) ?? 0) - (position.get(b.id) ?? 0));
   }
 
   async suggestions(query: string, limit: number): Promise<{ data: SearchSuggestion[] }> {

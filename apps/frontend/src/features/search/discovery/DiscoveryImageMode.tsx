@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button';
 import type { ProductSummary } from '@/features/products/types';
 import { DiscoveryCamera } from './DiscoveryCamera';
 import { DiscoveryState } from './DiscoveryState';
-import { IMAGE_ACCEPT, formatBytes, imageSearchEnabled, searchByImage, validateImageFile, type ImageSearchOutcome } from './imageSearch';
+import { IMAGE_ACCEPT, MAX_IMAGE_LABEL, formatBytes, imageSearchEnabled, searchByImage, validateImageFile, type ImageSearchOutcome } from './imageSearch';
 import styles from './Discovery.module.scss';
 
 type Step = 'entry' | 'camera' | 'ready' | 'searching' | 'done';
@@ -17,7 +17,7 @@ interface Props {
 
 const FILE_PROBLEMS = {
   type: 'That file isn’t a supported image. Use a JPEG, PNG or WebP photo.',
-  size: 'This photo is too large. Choose one under 10 MB.',
+  size: `This photo is too large. Choose one under ${MAX_IMAGE_LABEL}.`,
   empty: 'That file is empty. Choose another photo.',
 } as const;
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
@@ -104,7 +104,7 @@ export function DiscoveryImageMode({ startCamera, backRef, onNavigate, onSearchT
         <span className={styles.dropGlyph} aria-hidden="true"><ImageIcon size={22} /></span>
         <div className={styles.dropCopy}>
           <h3 className={styles.dropTitle}>{dragging ? 'Release to use this photo' : 'Search with a photo'}</h3>
-          <p className={styles.dropText}>{dragging ? 'Nothing is uploaded until you choose Search.' : 'Drop, paste or choose a JPEG, PNG or WebP image up to 10 MB.'}</p>
+          <p className={styles.dropText}>{dragging ? 'Nothing is uploaded until you choose Search.' : `Drop, paste or choose a JPEG, PNG or WebP image up to ${MAX_IMAGE_LABEL}.`}</p>
         </div>
         <div className={styles.dropActions}>
           <Button type="button" variant="outline" size="small" onClick={() => setStep('camera')}><Camera size={16} aria-hidden="true" />Camera</Button>
@@ -147,6 +147,7 @@ function Outcome({ outcome, onNavigate, onRetry, onSearchText, onReplace }: {
       <span className={styles.visualChip}><ImageIcon size={14} aria-hidden="true" />Visual search</span>
       <span className={styles.meta}>{outcome.items.length} {outcome.items.length === 1 ? 'product' : 'products'} · ordered by visual relevance</span>
     </div>
+    <p className={styles.meta}>These products look similar to your photo. Colour and storage versions can look identical, so check the details before you buy.</p>
     <ol className={styles.resultGrid}>
       {outcome.items.map((product, index) => {
         const href = `/products/${encodeURIComponent(product.slug)}`;
@@ -172,8 +173,12 @@ function Outcome({ outcome, onNavigate, onRetry, onSearchText, onReplace }: {
   if (outcome.status === 'success') return <DiscoveryState icon={<SearchX size={20} />} title="No similar products found"
     description="Nothing in the catalog looks close enough to this photo. Try a clearer shot, or search by name."
     action={<><Button type="button" size="small" variant="outline" onClick={onReplace}>Try another photo</Button><Button type="button" size="small" variant="ghost" onClick={onSearchText}>Search by text</Button></>} />;
-  if (outcome.status === 'unavailable') return <DiscoveryState tone="visual" icon={<Camera size={20} />} title="Image search isn’t available yet"
-    description="Visual matching is offline right now, so your photo wasn’t sent anywhere. Text search and the full catalog still work."
+  // Disabled deployment: nothing was uploaded. Enabled but offline: the photo reached our server and was discarded unsaved.
+  if (outcome.status === 'unavailable') return <DiscoveryState tone="visual" icon={<Camera size={20} />}
+    title={imageSearchEnabled() ? 'Image search is unavailable right now' : 'Image search isn’t available yet'}
+    description={imageSearchEnabled()
+      ? 'Visual matching is offline at the moment, so we couldn’t compare your photo. It wasn’t saved. Text search and the full catalog still work.'
+      : 'Visual matching isn’t switched on yet, so your photo wasn’t sent anywhere. Text search and the full catalog still work.'}
     action={<><Button type="button" size="small" onClick={onSearchText}>Search by text</Button><Button type="button" size="small" variant="outline" onClick={() => onNavigate('/products')}>Browse products</Button></>} />;
   if (outcome.status === 'network') return <DiscoveryState tone="error" icon={<WifiOff size={20} />} title="You appear to be offline"
     description="Check your connection, then try the search again." action={<Button type="button" size="small" onClick={onRetry}>Try again</Button>} />;

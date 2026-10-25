@@ -637,3 +637,28 @@ docker run --rm -p 127.0.0.1:8000:8000 -e AI_ENVIRONMENT=development -e AI_SERVI
 ```
 
 Publish the container port on loopback or a private Docker network only; Nginx must not expose `/internal/*`.
+
+## Task 04.2 — Implemented Image Search Runtime
+
+Task 04.2 replaces the 04.1 placeholder with real inference. The app factory, authentication-before-body, error envelope, bounded `InferenceExecutor` and readiness semantics are unchanged.
+
+| Piece | File | Behaviour |
+|---|---|---|
+| Network | `app/models/embedding_network.py` | EfficientNet-B0 features → GAP → Linear(1280→256) → L2 norm. It also owns `preprocess_image` (`PREPROCESS_VERSION effb0-rgb-r256-c224-imagenet-v1`), shared by training evaluation, ingestion and serving. |
+| Loader | `app/models/efficientnet_loader.py` | `descriptor.json` must contain exactly 7 identity keys. `model.safetensors` is SHA-256-verified **before** deserialisation, then loaded with `load_state_dict(strict=True)`. No pickle and no `torch.load`. |
+| Decoder | `app/processors/image.py` | Detects the type from magic bytes, never from the declared type. Accepts JPEG, PNG and WebP. Single frame only; sides 32–12,000 px; ≤ `AI_MAX_IMAGE_PIXELS`. Decompression bombs return 413. Applies EXIF orientation and flattens alpha onto white. |
+| Vector gateway | `app/integrations/pgvector_gateway.py` | Uses a read-only `ai_vector_reader` pool (`search_path=ai,extensions`, 2 s statement timeout). `is_ready` requires the active version to match the descriptor and a complete index. `nearest` runs an exact cosine search grouped by product (`MIN(distance)`, ties broken by product id) and re-checks the active version inside the same snapshot. |
+| Route | `app/api/routes/image_search.py` | Reads exactly one multipart part named `image` after auth and readiness checks, up to `AI_MAX_IMAGE_BYTES` (plus 64 KiB of framing on this route only). Decode and encode run inside one executor slot. |
+| Ingestion CLI | `app/ingest/__main__.py` | `stage`, `activate`, `rollback` and `status` (offline operator tool; see `docs/06_Database/AI_VECTOR_INDEX.md`). |
+
+Configuration added: `AI_MODEL_ARTIFACT_DIR`, `AI_VECTOR_DATABASE_URL` (read-only role; TLS required for non-loopback hosts), `AI_MAX_IMAGE_BYTES` (8 MiB), `AI_MAX_IMAGE_PIXELS` (40 M) and `AI_TORCH_THREADS` (2). `AI_ENV_FILE` points a process at another env file, and isolated QA passes a non-existent path so nothing is inherited from the developer `.env`. Commerce secrets (`DATABASE_URL`, Stripe, JWT and so on) stay forbidden.
+
+Windows note: psycopg's async driver cannot use the Proactor loop, so `python -m app` selects the selector loop on `win32`. Linux and Docker keep uvicorn's default.
+
+Runtime dependencies: CPU-only `torch==2.13.0+cpu` / `torchvision==0.28.0+cpu` from the PyTorch CPU index. 2.8.0 was replaced after `pip-audit` reported advisories fixed in ≤ 2.13.0. Also `pillow`, `numpy`, `safetensors`, `psycopg[binary]`, `psycopg-pool` and `python-multipart`, all pinned with their transitive dependencies. Training dependencies never enter the image, and `training/` is excluded from the Docker build context.
+
+Measured on the local CPU (Core i7, QA, warm, real model and pgvector):
+- Sequential: p50 278 ms, p95 324 ms.
+- Concurrency 2: p50 397 ms, no rejections.
+- Concurrency 4: the two-slot executor sheds the excess immediately with 429.
+- Private memory: about 780 MiB idle and 828 MiB after load.

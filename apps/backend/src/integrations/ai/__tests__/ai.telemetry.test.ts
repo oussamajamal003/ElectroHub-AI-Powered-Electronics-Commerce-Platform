@@ -14,6 +14,7 @@ const config: AiServiceEnabledConfig = {
   apiKey: KEY,
   environment: 'test',
   timeoutMs: 1000,
+  imageSearchTimeoutMs: 8000,
   maxResponseBytes: 256 * 1024,
 };
 

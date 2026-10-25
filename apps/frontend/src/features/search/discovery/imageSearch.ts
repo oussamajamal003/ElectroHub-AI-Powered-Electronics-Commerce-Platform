@@ -4,7 +4,9 @@ import type { ProductSummary } from '@/features/products/types';
 // Client-side checks exist for fast, friendly feedback only; the Express gateway and the AI service stay the authority.
 export const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 export const IMAGE_ACCEPT = IMAGE_TYPES.join(',');
-export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+// One effective upload budget end to end: browser, Express (IMAGE_SEARCH_MAX_BYTES) and FastAPI (AI_MAX_IMAGE_BYTES).
+export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+export const MAX_IMAGE_LABEL = '8 MB';
 export const IMAGE_SEARCH_TIMEOUT_MS = 30_000;
 
 export type ImageFileProblem = 'type' | 'size' | 'empty';
@@ -57,7 +59,8 @@ export async function searchByImage(file: File, signal: AbortSignal): Promise<Im
     if (timeout.signal.aborted || isAbortError(failure)) return { status: 'timeout' };
     if (failure instanceof ApiError) {
       if ([404, 501, 503].includes(failure.status)) return { status: 'unavailable' };
-      if (failure.status === 413) return { status: 'invalid', message: 'This photo is too large. Choose one under 10 MB.' };
+      if (failure.status === 504) return { status: 'timeout' };
+      if (failure.status === 413) return { status: 'invalid', message: `This photo is too large. Choose one under ${MAX_IMAGE_LABEL}.` };
       if (failure.status === 400 || failure.status === 415 || failure.status === 422) return { status: 'invalid', message: 'This photo couldn’t be read. Try a different JPEG, PNG or WebP image.' };
       return { status: 'error' };
     }

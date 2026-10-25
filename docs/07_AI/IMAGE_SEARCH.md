@@ -574,3 +574,21 @@ The backend owns schema migrations and commerce writes. FastAPI may use a dedica
 Use approved catalog sources for ingestion rather than accepting arbitrary remote URLs. Restrict remote fetching to trusted media locations and reject private-network or unsafe destinations. Decode uploaded bytes against an image allowlist with byte, dimension, and decoded-pixel limits; do not trust filenames or MIME headers. Bound inference concurrency, result counts, timeouts, and ingestion work. Use temporary image data only as needed and clean it up on success and failure.
 
 Load only trusted model artifacts, verify their identity/integrity, and avoid executing untrusted checkpoint serialization. Keep secrets server-side, use service authentication and private networking where available, and encrypt cross-host service/database traffic. Never place database credentials, commerce records, authentication tokens, or customer search images in Kaggle notebooks/datasets. Training uses approved, minimized data only; verify dataset licensing and notebook/dataset visibility before upload.
+
+## Task 04.2 — Implemented Public Contract
+
+`POST /api/search/image` (Express; guests allowed). It accepts one multipart part named `image` (JPEG/PNG/WebP, detected by magic bytes, ≤ 8 MiB) and an optional `limit` of 1–24 (default 12). It is rate-limited to 20 requests per 5 minutes per IP. Cookies and JWTs are never forwarded.
+
+Express sends the bytes through `AiServiceClient.imageSearch`: per-environment service key, no redirects, a capped response, an 8 s route timeout (`AI_IMAGE_SEARCH_TIMEOUT_MS`, max 15 s), and abort on client disconnect. It validates the ranked product ids, then resolves them in **one** query that uses the same storefront-visibility predicate and `ProductSummary` mapper as `/api/search/products`. Rank order is preserved, hidden or forged ids are dropped, and prices and stock always come from the database.
+
+Response: `{ data: { items: ProductSummary[] }, meta: { modelVersion, embeddingVersion, count } }`. Similarity scores are never sent to the browser.
+
+| Situation | Status / code | UI |
+|---|---|---|
+| Model or index not ready, AI unreachable or misconfigured, invalid upstream | 503 `IMAGE_SEARCH_UNAVAILABLE` | "Image search is unavailable right now" (the photo reached the server and was not saved) |
+| Inference queue full | 429 `IMAGE_SEARCH_BUSY` + `Retry-After` | Generic retry state |
+| Timeout | 504 `IMAGE_SEARCH_TIMEOUT` | "The search took too long" |
+| Too large, unsupported or unreadable | 413 / 415 / 422 | Inline photo error |
+| Feature flag off (`VITE_IMAGE_SEARCH_ENABLED`) | No request is sent | "Image search isn't available yet" (the photo was not sent) |
+
+The same 8 MiB budget applies end to end: browser `MAX_IMAGE_BYTES`, Express `IMAGE_SEARCH_MAX_BYTES`, and FastAPI `AI_MAX_IMAGE_BYTES`. Results say "These products look similar to your photo. Colour and storage versions can look identical…", because exact-SKU recognition is not claimed.

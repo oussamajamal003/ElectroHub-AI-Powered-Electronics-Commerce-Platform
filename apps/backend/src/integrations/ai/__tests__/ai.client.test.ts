@@ -51,7 +51,7 @@ let ai: Awaited<ReturnType<typeof startServer>>;
 let redirectTarget: Awaited<ReturnType<typeof startServer>>;
 
 function config(overrides: Partial<AiServiceEnabledConfig> = {}): AiServiceEnabledConfig {
-  return { status: 'enabled', baseUrl: new URL(ai.origin), apiKey: KEY, environment: ENV, timeoutMs: 1000, maxResponseBytes: AI_MAX_RESPONSE_BYTES, ...overrides };
+  return { status: 'enabled', baseUrl: new URL(ai.origin), apiKey: KEY, environment: ENV, timeoutMs: 1000, imageSearchTimeoutMs: 8000, maxResponseBytes: AI_MAX_RESPONSE_BYTES, ...overrides };
 }
 
 async function failure(promise: Promise<unknown>): Promise<AiServiceError> {

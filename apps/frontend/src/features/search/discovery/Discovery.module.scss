@@ -635,7 +635,8 @@
   gap: $spacing-2;
   margin-top: auto;
 
-  > * { flex: 1 1 0; }
+  // An auto basis lets the row wrap instead of squeezing labels below their width on narrow screens.
+  > * { flex: 1 1 auto; }
   > :first-child { flex: 1 1 100%; }
 
   @include respond-to(sm) { > *, > :first-child { flex: 0 1 auto; } }
@@ -673,7 +674,8 @@
   }
 
   .fileMeta { margin-bottom: $spacing-2; }
-  .previewActions > :first-child { flex: 0 1 auto; }
+
+  @include respond-to(sm) { .previewActions > :first-child { flex: 0 1 auto; } }
 }
 
 // --- Camera ---

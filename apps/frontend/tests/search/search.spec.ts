@@ -255,18 +255,19 @@ for (const width of [390, 768, 1440, 1920]) {
     await expect(page).toHaveURL(/q=no-such-electrohub-product/);
     await expect(page.getByRole('heading', { name: /No results for/ })).toBeVisible({ timeout: 30000 });
     await page.screenshot({ path: testInfo.outputPath(`search-empty-${width}.png`), fullPage: true });
-    await page.getByRole('tab', { name: 'Image Search' }).click();
-    await expect(page.getByRole('button', { name: 'Browse files' })).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath(`search-image-${width}.png`), fullPage: true });
+    // Photo search lives in the Discovery Console: choosing a photo only previews it locally; nothing is uploaded.
     const imageRequests: string[] = [];
-    page.on('request', request => { if (request.url().includes('/api/') && /image|upload/.test(request.url())) imageRequests.push(request.url()); });
-    const browse = page.getByRole('button', { name: 'Browse files' });
-    await browse.focus();
+    page.on('request', request => { if (request.url().includes('/api/search/image')) imageRequests.push(request.url()); });
+    await page.getByRole('button', { name: 'Search by photo' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: 'Search with a photo' })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`search-image-${width}.png`), fullPage: true });
     const fileChooser = page.waitForEvent('filechooser');
-    await browse.press('Enter');
+    await dialog.getByRole('button', { name: 'Upload' }).click();
     await (await fileChooser).setFiles({ name: 'local.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lXcAAAAASUVORK5CYII=', 'base64') });
-    await expect(page.getByRole('heading', { name: 'local.png' })).toBeVisible();
-    await page.getByRole('button', { name: 'Remove image' }).click(); expect(imageRequests).toEqual([]);
+    await expect(dialog.getByText('local.png')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Remove' }).click(); expect(imageRequests).toEqual([]);
+    await page.keyboard.press('Escape');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 }

@@ -49,7 +49,9 @@ async function main() {
   if (repeat && (!apply || target !== 'qa')) throw new Error('Repeat verification requires --target=qa --apply.');
   const fileEnvironment: NodeJS.ProcessEnv = {};
   if (target === 'qa') {
-    Object.assign(fileEnvironment, await json(path.join(root, '.isolated/env.json')));
+    // Same state folder as scripts/dev-isolated.cjs: the pgvector Docker cluster (Task 04.2) keeps its own.
+    const isolatedHome = process.env.ISOLATED_PG_DOCKER === '1' ? '.isolated-docker' : '.isolated';
+    Object.assign(fileEnvironment, await json(path.join(root, isolatedHome, 'env.json')));
   } else {
     for (const file of ['.env', '.env.local']) {
       try { Object.assign(fileEnvironment, dotenv.parse(await readFile(path.join(root, file)))); }

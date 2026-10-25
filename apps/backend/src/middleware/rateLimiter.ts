@@ -42,6 +42,19 @@ export const resendVerificationRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+/**
+ * Task 04.2: public image search is guest-allowed and CPU-expensive, so it gets a tighter per-IP budget than text search.
+ * Runs before the multipart body is read, so rejected requests never consume upload bandwidth.
+ */
+export const IMAGE_SEARCH_RATE_LIMIT = { windowMs: 5 * 60 * 1000, limit: 20 } as const;
+export const imageSearchRateLimiter = rateLimit({
+  windowMs: IMAGE_SEARCH_RATE_LIMIT.windowMs,
+  limit: IMAGE_SEARCH_RATE_LIMIT.limit,
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many photo searches. Please try again shortly.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 export const accountDeletionRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 5,

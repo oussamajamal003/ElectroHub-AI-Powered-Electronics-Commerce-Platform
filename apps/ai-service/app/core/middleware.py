@@ -10,6 +10,7 @@ import logging
 import re
 import time
 import uuid
+from collections.abc import Mapping
 
 from fastapi import HTTPException
 from starlette.datastructures import Headers
@@ -111,19 +112,30 @@ class InternalAuthMiddleware:
 
 
 class BodySizeLimitMiddleware:
-    """Rejects bodies above ``AI_MAX_REQUEST_BYTES`` from Content-Length or while streaming."""
+    """Rejects bodies above ``max_bytes`` from Content-Length or while streaming.
 
-    def __init__(self, app: ASGIApp, max_bytes: int) -> None:
+    ``route_limits`` raises the ceiling for named ``(method, path)`` pairs only (the image upload); every other
+    route keeps ``max_bytes``.
+    """
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        max_bytes: int,
+        route_limits: Mapping[tuple[str, str], int] | None = None,
+    ) -> None:
         self.app = app
         self.max_bytes = max_bytes
+        self.route_limits: dict[tuple[str, str], int] = dict(route_limits or {})
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 
+        limit = self.route_limits.get((str(scope.get("method", "")), str(scope.get("path", ""))), self.max_bytes)
         declared = Headers(scope=scope).get("content-length")
-        if declared is not None and (not declared.isdigit() or int(declared) > self.max_bytes):
+        if declared is not None and (not declared.isdigit() or int(declared) > limit):
             status = 413 if declared.isdigit() else 400
             code, message = http_error_details(status)
             response = error_response(status, code, message, _request_id(scope))
@@ -137,7 +149,7 @@ class BodySizeLimitMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
-                if received > self.max_bytes:
+                if received > limit:
                     # Raised inside body parsing; FastAPI re-raises HTTPException unchanged.
                     raise HTTPException(status_code=413)
             return message

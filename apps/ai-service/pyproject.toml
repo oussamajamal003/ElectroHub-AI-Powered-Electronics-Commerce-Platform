@@ -28,6 +28,11 @@ plugins = ["pydantic.mypy"]
 exclude = ["^venv/", "^[.]venv/"]
 
 [[tool.mypy.overrides]]
+# torchvision ships no type information; only the efficientnet_b0 constructor is used.
+module = ["torchvision", "torchvision.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
 disallow_incomplete_defs = false

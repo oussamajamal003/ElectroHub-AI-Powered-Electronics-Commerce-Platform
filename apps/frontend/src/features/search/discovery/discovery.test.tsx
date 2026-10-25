@@ -176,6 +176,21 @@ describe('Discovery Console image search', () => {
     await waitFor(() => expect(screen.getByRole('combobox')).toHaveFocus());
   });
 
+  it('says the photo was not saved (not "not sent") when an enabled service is offline', async () => {
+    vi.stubEnv('VITE_IMAGE_SEARCH_ENABLED', 'true');
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint === '/api/search/image') throw new ApiError(503, 'unavailable');
+      return { data: [], meta: { total: 0 } } as never;
+    });
+    renderConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Open photo search' }));
+    fireEvent.change(await screen.findByLabelText('Choose a photo'), { target: { files: [imageFile()] } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Search similar products' }));
+    expect(await screen.findByRole('heading', { name: 'Image search is unavailable right now' })).toBeInTheDocument();
+    expect(screen.getByText(/It wasn’t saved/)).toBeInTheDocument();
+    expect(screen.queryByText(/wasn’t sent anywhere/)).not.toBeInTheDocument();
+  });
+
   it('renders real gateway results in relevance order with no similarity scores, then opens product details', async () => {
     vi.stubEnv('VITE_IMAGE_SEARCH_ENABLED', 'true');
     vi.mocked(apiClient).mockImplementation(async (endpoint, options) => {

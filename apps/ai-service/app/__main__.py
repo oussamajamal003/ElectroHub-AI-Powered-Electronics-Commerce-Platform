@@ -7,6 +7,7 @@ memory. Uvicorn's access log is disabled because the service writes its own reda
 
 from __future__ import annotations
 
+import asyncio
 import sys
 
 import uvicorn
@@ -23,11 +24,18 @@ def main() -> int:
 
     from app.main import create_app
 
+    loop = "auto"
+    if sys.platform == "win32":
+        # psycopg's async driver (pgvector gateway) cannot run on the Proactor loop uvicorn picks on Windows; with
+        # loop="none" uvicorn uses the policy's selector loop. Linux/Docker keeps uvicorn's default.
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        loop = "none"
     uvicorn.run(
         create_app(settings),
         host=settings.AI_BIND_HOST,
         port=settings.AI_PORT,
         workers=1,
+        loop=loop,
         access_log=False,
         log_config=None,
         server_header=False,

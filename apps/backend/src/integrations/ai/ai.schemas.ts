@@ -10,6 +10,9 @@ export const AI_MAX_TOP_K = 24;
 export const AI_MAX_CANDIDATES = 200;
 export const AI_DEFAULT_LIMIT = 12;
 export const AI_ERROR_CODE_PATTERN = /^AI_[A-Z_]{1,48}$/;
+/** Task 04.2: image types the Express upload layer sniffs by magic bytes before anything reaches FastAPI. */
+export const AI_IMAGE_SEARCH_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export type AiImageSearchContentType = (typeof AI_IMAGE_SEARCH_CONTENT_TYPES)[number];
 
 const versionString = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/);
 const environment = z.enum(AI_SERVICE_ENVIRONMENTS);
