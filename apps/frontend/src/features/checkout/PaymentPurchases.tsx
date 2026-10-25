@@ -5,6 +5,7 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import { Link, useLocation, useMatch } from 'react-router-dom';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { ApiError, apiClient } from '@/lib/api';
+import { requestOverdueRecovery } from './overdueRecovery';
 import { queryKeys } from '@/lib/query';
 import { Toast, ToastProvider, ToastViewport, ToastTitle, ToastDescription, ToastClose } from '@/components/ui/Toast';
 import { Button } from '@/components/ui/Button';
@@ -99,17 +100,6 @@ export function usePaymentPurchases(observe = false) {
   return query;
 }
 const unresolved = (item: SavedPurchase) => item.pending && !['DECLINED', 'FAILED'].includes(item.classification ?? item.state);
-/**
- * The purchases list GET is read-only (Task 03.8). While unresolved purchases are visible, ask the backend (an explicit, owner-scoped POST)
- * to reconcile any that the durable runner left overdue. At most once per 30 s per account; the backend only claims due work under its lease.
- */
-const lastRecoveryRequest = new Map<string, number>();
-export function requestOverdueRecovery(userId: string, now = Date.now()) {
-  const last = lastRecoveryRequest.get(userId);
-  if (!userId || (last !== undefined && now - last < 30_000)) return;
-  lastRecoveryRequest.set(userId, now);
-  void apiClient('/api/checkout/payment-attempts/recover-overdue', { method: 'POST', data: {} }).catch(() => undefined);
-}
 const firstObserved = new Map<string, number>();
 // A late/empty list must not stop discovery of a confirmed submission. Once a
 // row exists, its backend outcome supersedes this discovery-only pointer.
