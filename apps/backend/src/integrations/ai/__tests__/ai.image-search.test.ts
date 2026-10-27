@@ -95,7 +95,7 @@ describe('AiServiceClient.imageSearch request shape', () => {
     const client = new AiServiceClient(config());
     const result = await client.imageSearch(input({ topK: 5, contentType: 'image/png', image: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x41]) }));
 
-    expect(result).toEqual({ matches: [match(P1, 0.91, 1), match(P2, 0.5, 2)], modelVersion: 'clip-v1.0', embeddingVersion: 'emb_2026.10' });
+    expect(result).toEqual({ matches: [match(P1, 0.91, 1), match(P2, 0.5, 2)], categoryHints: [], modelVersion: 'clip-v1.0', embeddingVersion: 'emb_2026.10' });
     const [request] = ai.state.requests;
     expect(request.method).toBe('POST');
     expect(request.url).toBe('/internal/v1/image-search?topK=5');
@@ -214,6 +214,35 @@ describe('aiImageSearchResultSchema tightened invariants', () => {
     expect(schema.safeParse(wrap([], { modelVersion: 'bad version with spaces' })).success).toBe(false);
     expect(schema.safeParse(wrap([], { embeddingVersion: 'x'.repeat(65) })).success).toBe(false);
     expect(schema.safeParse({ ...wrap([]), extra: true }).success).toBe(false);
+  });
+});
+
+describe('aiImageSearchResultSchema category hints (Task 04.2-Q)', () => {
+  const schema = aiImageSearchResultSchema(3);
+  const wrap = (categoryHints?: unknown) => ({
+    data: { matches: [], modelVersion: 'm1', embeddingVersion: 'e1', ...(categoryHints === undefined ? {} : { categoryHints }) },
+  });
+
+  it('defaults absent hints to an empty list so older AI services still validate', () => {
+    const parsed = schema.parse(wrap());
+    expect(parsed.data.categoryHints).toEqual([]);
+  });
+
+  it('accepts unique slugs with non-increasing probabilities', () => {
+    const parsed = schema.parse(wrap([{ category: 'keyboards-mice', probability: 0.6 }, { category: 'laptops', probability: 0.2 }]));
+    expect(parsed.data.categoryHints.map(hint => hint.category)).toEqual(['keyboards-mice', 'laptops']);
+  });
+
+  it.each<[string, unknown]>([
+    ['duplicate category', [{ category: 'laptops', probability: 0.3 }, { category: 'laptops', probability: 0.2 }]],
+    ['increasing probabilities', [{ category: 'laptops', probability: 0.1 }, { category: 'tablets', probability: 0.2 }]],
+    ['total above 1', [{ category: 'laptops', probability: 0.7 }, { category: 'tablets', probability: 0.6 }]],
+    ['probability above 1', [{ category: 'laptops', probability: 1.5 }]],
+    ['non-slug category', [{ category: 'Laptops & more', probability: 0.2 }]],
+    ['unknown field', [{ category: 'laptops', probability: 0.2, label: 'x' }]],
+    ['too many hints', Array.from({ length: 33 }, (_, i) => ({ category: `c${i}`, probability: 0 }))],
+  ])('rejects %s', (_label, hints) => {
+    expect(schema.safeParse(wrap(hints)).success).toBe(false);
   });
 });
 

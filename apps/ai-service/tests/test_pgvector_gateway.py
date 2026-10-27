@@ -10,6 +10,7 @@ from typing import Any
 
 import psycopg
 import pytest
+from psycopg_pool import AsyncConnectionPool
 from pydantic import ValidationError
 
 from app.core.config import ConfigurationError, check_vector_database_url, load_settings, settings_from_mapping
@@ -272,6 +273,16 @@ def test_session_options_pin_schema_timeout_and_read_only_mode() -> None:
     assert "search_path=ai,extensions" in options
     assert "statement_timeout=2000" in options
     assert "default_transaction_read_only=on" in options
+
+
+def test_default_pool_keeps_a_warm_connection_with_a_remote_pooler_connect_budget() -> None:
+    # Regression: with min_size=0, a 5 s connect and a 3 s pool wait, every readiness check timed out against the remote
+    # DEV pooler (5-9 s per TLS connect), so image search was permanently INDEX_NOT_READY.
+    pool = pgvector_gateway._default_pool_factory("postgresql://reader@127.0.0.1:5432/postgres")()
+    assert isinstance(pool, AsyncConnectionPool)
+    assert pool.min_size == 1
+    assert pool.timeout >= 10
+    assert pool.kwargs["connect_timeout"] >= 15
 
 
 # --- DSN and settings validation ------------------------------------------------------------------------------------

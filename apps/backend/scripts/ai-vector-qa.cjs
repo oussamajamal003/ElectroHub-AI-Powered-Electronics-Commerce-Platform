@@ -5,7 +5,7 @@
  *   node scripts/ai-vector-qa.cjs roles    enable LOGIN for ai_vector_reader / ai_vector_ingest with generated passwords (saved, 0600,
  *                                          in .isolated-docker/ai-vector-roles.json) and print the DSN *variable names* to use
  *   node scripts/ai-vector-qa.cjs verify   least-privilege checks: every forbidden statement must fail and every allowed one succeed
- *   node scripts/ai-vector-qa.cjs ai-service <artifact-dir>
+ *   node scripts/ai-vector-qa.cjs ai-service <artifact-dir> [relevance-dir]
  *                                          run a QA FastAPI on 127.0.0.1:8200 (environment `qa`, its own generated key, the READ-ONLY
  *                                          vector role, no inherited apps/ai-service/.env)
  *   node scripts/ai-vector-qa.cjs backend  run `dev-isolated.cjs backend` (:5200) wired to that QA AI service
@@ -112,6 +112,8 @@ function qaAiKey() {
 function aiService() {
   const artifact = path.resolve(process.argv[3] ?? '');
   if (!fs.existsSync(path.join(artifact, 'descriptor.json'))) fail('usage: ai-service <artifact-dir containing descriptor.json and model.safetensors>');
+  const relevance = process.argv[4] ? path.resolve(process.argv[4]) : '';
+  if (relevance && !fs.existsSync(path.join(relevance, 'relevance.json'))) fail('relevance-dir must contain relevance.json and head.safetensors');
   const saved = JSON.parse(fs.readFileSync(rolesFile, 'utf8'));
   const service = path.resolve(backend, '../ai-service');
   // Only what the QA instance needs: no inherited AI_*, KAGGLE_* or commerce values, and no developer .env file.
@@ -119,7 +121,7 @@ function aiService() {
   const child = require('node:child_process').spawn(path.join(service, 'venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python'), ['-m', 'app'], {
     cwd: service, stdio: 'inherit',
     env: { ...clean, AI_ENV_FILE: path.join(home, 'no-ai-env-file'), AI_ENVIRONMENT: 'qa', AI_SERVICE_API_KEY: qaAiKey(),
-      AI_BIND_HOST: '127.0.0.1', AI_PORT: String(AI_PORT), AI_MODEL_ARTIFACT_DIR: artifact,
+      AI_BIND_HOST: '127.0.0.1', AI_PORT: String(AI_PORT), AI_MODEL_ARTIFACT_DIR: artifact, AI_RELEVANCE_ARTIFACT_DIR: relevance,
       AI_VECTOR_DATABASE_URL: saved.dsn.AI_VECTOR_DATABASE_URL, AI_LOG_LEVEL: 'INFO' },
   });
   child.on('exit', code => process.exit(code ?? 0));

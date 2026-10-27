@@ -15,7 +15,7 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import torch
 from PIL import Image
@@ -25,6 +25,9 @@ from app.core.errors import InferenceOutputError
 from app.models.descriptor import ModelDescriptor
 from app.models.embedding_network import EMBEDDING_DIMENSION, PREPROCESS_VERSION, EmbeddingNetwork, preprocess_image
 from app.processors.image import ValidatedImage
+
+if TYPE_CHECKING:
+    from app.models.relevance import Assessment, RelevanceGate
 
 DESCRIPTOR_FILENAME: Final = "descriptor.json"
 WEIGHTS_FILENAME: Final = "model.safetensors"
@@ -50,7 +53,9 @@ class ArtifactRejectedError(RuntimeError):
     """The artifact is refused before it is used. Messages name the reason, never a value."""
 
 
-def read_descriptor(path: Path) -> ModelDescriptor:
+def read_descriptor(
+    path: Path, *, preprocess_version: str = PREPROCESS_VERSION, embedding_dimension: int = EMBEDDING_DIMENSION
+) -> ModelDescriptor:
     """Parse and validate ``descriptor.json``: exact keys, the pinned preprocessing and the pinned dimension."""
     if not path.is_file() or path.stat().st_size > MAX_DESCRIPTOR_BYTES:
         raise ArtifactRejectedError("descriptor.json is missing or too large")
@@ -62,9 +67,9 @@ def read_descriptor(path: Path) -> ModelDescriptor:
         raise ArtifactRejectedError("descriptor.json must contain exactly the documented keys")
     values: Mapping[str, Any] = raw
 
-    if values["preprocessVersion"] != PREPROCESS_VERSION:
+    if values["preprocessVersion"] != preprocess_version:
         raise ArtifactRejectedError("preprocessVersion does not match this service build")
-    if values["embeddingDimension"] != EMBEDDING_DIMENSION:
+    if values["embeddingDimension"] != embedding_dimension:
         raise ArtifactRejectedError("embeddingDimension does not match this service build")
     if values["artifactFormat"] != "safetensors":
         raise ArtifactRejectedError("only safetensors artifacts are loaded")
@@ -102,34 +107,49 @@ def _preprocess(pixels: Image.Image) -> torch.Tensor:
 class EfficientNetEncoder:
     """An ``ImageEmbeddingEncoder`` backed by the verified EfficientNet-B0 projection network."""
 
-    def __init__(self, descriptor: ModelDescriptor, network: EmbeddingNetwork) -> None:
+    def __init__(
+        self, descriptor: ModelDescriptor, network: EmbeddingNetwork, relevance: RelevanceGate | None = None
+    ) -> None:
         self._descriptor = descriptor
         self._network: EmbeddingNetwork | None = network
+        self._relevance = relevance
 
     @property
     def descriptor(self) -> ModelDescriptor:
         return self._descriptor
 
+    @property
+    def relevance(self) -> RelevanceGate | None:
+        return self._relevance
+
     def encode(self, image: ValidatedImage) -> list[float]:
+        return self.encode_assessed(image)[0]
+
+    def encode_assessed(self, image: ValidatedImage) -> tuple[list[float], Assessment | None]:
+        """The embedding plus, when a relevance gate is loaded, the gate's assessment from the same forward pass."""
         network = self._network
         if network is None:
             raise InferenceOutputError()
         batch = _preprocess(image.rgb)
         with torch.inference_mode():
-            output = network(batch)
+            features = network.backbone_features(batch)
+            output = torch.nn.functional.normalize(network.projection(features), dim=1)
+            assessment = self._relevance.assess(features) if self._relevance is not None else None
         vector = [float(value) for value in output[0].tolist()]
         norm = math.sqrt(sum(value * value for value in vector))
         if len(vector) != self._descriptor.embedding_dimension or not math.isfinite(norm):
             raise InferenceOutputError()
         if abs(norm - 1.0) > _NORM_TOLERANCE:
             raise InferenceOutputError()
-        return vector
+        return vector, assessment
 
     def close(self) -> None:
         self._network = None
 
 
-def load_efficientnet_encoder(artifact_dir: Path, *, torch_threads: int) -> EfficientNetEncoder:
+def load_efficientnet_encoder(
+    artifact_dir: Path, *, torch_threads: int, relevance_dir: Path | None = None
+) -> EfficientNetEncoder:
     descriptor = read_descriptor(artifact_dir / DESCRIPTOR_FILENAME)
     weights = artifact_dir / WEIGHTS_FILENAME
     verify_weights_digest(weights, descriptor.artifact_sha256)  # before any deserialisation
@@ -139,7 +159,12 @@ def load_efficientnet_encoder(artifact_dir: Path, *, torch_threads: int) -> Effi
     network.load_state_dict(state, strict=True)
     network.eval()
     torch.set_num_threads(torch_threads)
-    return EfficientNetEncoder(descriptor, network)
+    relevance = None
+    if relevance_dir is not None:
+        from app.models.relevance import load_relevance_gate
+
+        relevance = load_relevance_gate(relevance_dir, model_version=descriptor.model_version)
+    return EfficientNetEncoder(descriptor, network, relevance)
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +173,9 @@ class EfficientNetArtifactLoader:
 
     artifact_dir: Path
     torch_threads: int
+    relevance_dir: Path | None = None
 
     def __call__(self) -> EfficientNetEncoder:
-        return load_efficientnet_encoder(self.artifact_dir, torch_threads=self.torch_threads)
+        return load_efficientnet_encoder(
+            self.artifact_dir, torch_threads=self.torch_threads, relevance_dir=self.relevance_dir
+        )

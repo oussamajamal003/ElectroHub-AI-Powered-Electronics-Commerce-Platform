@@ -7,6 +7,68 @@ import { SearchService } from './search.service.js';
 /** Task 04.2: visual search result size. Default 12 cards, hard cap 24 (the AI topK cap). */
 export const IMAGE_SEARCH_DEFAULT_LIMIT = 12;
 export const IMAGE_SEARCH_MAX_LIMIT = 24;
+/**
+ * Task 04.2-Q: weight of the AI's query-category probability when ordering resolved products
+ * (rank by similarity + weight x P(product's category)). Chosen on the calibration split; see
+ * TASK_04.2_IMPLEMENTATION_EVIDENCE.md. Only reorders the products the AI service already accepted. Used when the
+ * AI service does not send the weight selected for its own relevance gate.
+ */
+export const IMAGE_SEARCH_CATEGORY_WEIGHT = 0.5;
+
+type ResolvedProduct = Awaited<ReturnType<SearchService['productSummariesByIds']>>[number];
+
+/**
+ * Drops products whose (database) category hint is below `ratio` x the strongest hint; order is preserved.
+ * Without hints or with a non-positive ratio every product is kept.
+ */
+export function filterByCategory(
+  items: ResolvedProduct[],
+  hints: AiImageSearchResult['categoryHints'],
+  ratio: number | null | undefined,
+): ResolvedProduct[] {
+  if (!ratio || ratio <= 0 || hints.length === 0) return items;
+  const probability = new Map(hints.map(hint => [hint.category, hint.probability]));
+  const floor = ratio * Math.max(...hints.map(hint => hint.probability));
+  return items.filter(item => (probability.get(item.category.slug) ?? 0) >= floor);
+}
+
+/**
+ * Category fallback: products of the strongest hinted (database) category among the AI's deeper candidates, within
+ * `gap` of the best of them, in AI order. Used only when the regular list is empty after the category filter.
+ */
+export function fallbackByCategory(
+  items: ResolvedProduct[],
+  candidates: AiImageSearchResult['matches'],
+  hints: AiImageSearchResult['categoryHints'],
+  gap: number,
+  limit: number,
+): ResolvedProduct[] {
+  if (hints.length === 0) return [];
+  const top = hints.reduce((best, hint) => (hint.probability > best.probability ? hint : best));
+  const score = new Map(candidates.map(match => [match.productId.toLowerCase(), match.score]));
+  const inCategory = items
+    .filter(item => item.category.slug === top.category && score.has(item.id.toLowerCase()))
+    .sort((a, b) => (score.get(b.id.toLowerCase()) ?? 0) - (score.get(a.id.toLowerCase()) ?? 0));
+  if (inCategory.length === 0) return [];
+  const floor = (score.get(inCategory[0].id.toLowerCase()) ?? 0) - gap;
+  return inCategory.filter(item => (score.get(item.id.toLowerCase()) ?? 0) >= floor).slice(0, limit);
+}
+
+/** Stable reorder by similarity + weight x hint for the product's (authoritative, database) category. */
+export function rerankByCategory(
+  items: ResolvedProduct[],
+  matches: AiImageSearchResult['matches'],
+  hints: AiImageSearchResult['categoryHints'],
+  weight = IMAGE_SEARCH_CATEGORY_WEIGHT,
+): ResolvedProduct[] {
+  if (hints.length === 0 || items.length < 2) return items;
+  const probability = new Map(hints.map(hint => [hint.category, hint.probability]));
+  const score = new Map(matches.map(match => [match.productId.toLowerCase(), match.score]));
+  return items
+    .map((item, index) => ({ item, index, value: (score.get(item.id.toLowerCase()) ?? -1) + weight * (probability.get(item.category.slug) ?? 0) }))
+    .sort((a, b) => b.value - a.value || a.index - b.index)
+    .map(entry => entry.item);
+}
 
 /** Failure with a public envelope; `retryAfterSeconds` is set only for busy responses. */
 export class ImageSearchError extends AppError {
@@ -89,7 +151,29 @@ export class ImageSearchService {
 
     // Product ids are the only AI output that reaches the response: prices, stock and visibility come from the database.
     const uniqueIds = [...new Set(result.matches.map(match => match.productId))];
-    const items = await this.catalog.productSummariesByIds(uniqueIds);
+    let items = rerankByCategory(
+      filterByCategory(await this.catalog.productSummariesByIds(uniqueIds), result.categoryHints, result.categoryMinRatio),
+      result.matches,
+      result.categoryHints,
+      result.categoryWeight ?? IMAGE_SEARCH_CATEGORY_WEIGHT,
+    );
+    let usedFallback = false;
+    if (items.length === 0 && result.fallbackMatches?.length && result.fallbackScoreGap != null) {
+      const fallbackIds = [...new Set(result.fallbackMatches.map(match => match.productId))];
+      items = rerankByCategory(
+        fallbackByCategory(
+          await this.catalog.productSummariesByIds(fallbackIds),
+          result.fallbackMatches,
+          result.categoryHints,
+          result.fallbackScoreGap,
+          input.limit,
+        ),
+        result.fallbackMatches,
+        result.categoryHints,
+        result.categoryWeight ?? IMAGE_SEARCH_CATEGORY_WEIGHT,
+      );
+      usedFallback = items.length > 0;
+    }
     if (input.signal?.aborted) throw CANCELLED();
 
     try { logger.info('IMAGE_SEARCH_RESOLVED', {
@@ -97,6 +181,8 @@ export class ImageSearchService {
       candidateCount: uniqueIds.length,
       resultCount: items.length,
       droppedCount: uniqueIds.length - items.length,
+      categoryHintCount: result.categoryHints.length,
+      categoryFallback: usedFallback,
       modelVersion: result.modelVersion,
       embeddingVersion: result.embeddingVersion,
       durationMs: Date.now() - started,

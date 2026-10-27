@@ -16,15 +16,19 @@ from app.core.logging import configure_logging
 from app.core.middleware import BodySizeLimitMiddleware, InternalAuthMiddleware, RequestContextMiddleware
 from app.core.runtime import AppRuntime, build_lifespan
 from app.integrations.pgvector_gateway import PgVectorGateway
-from app.models.efficientnet_loader import EfficientNetArtifactLoader
 from app.models.registry import ModelRegistry
+from app.models.siglip_loader import ArtifactLoader
 from app.processors.inference import InferenceExecutor
 
 
 def build_registry(settings: Settings) -> ModelRegistry:
     """Loaders and the index are wired only when configured; unset settings keep features at 503."""
     loader = (
-        EfficientNetArtifactLoader(artifact_dir=settings.AI_MODEL_ARTIFACT_DIR, torch_threads=settings.AI_TORCH_THREADS)
+        ArtifactLoader(
+            artifact_dir=settings.AI_MODEL_ARTIFACT_DIR,
+            torch_threads=settings.AI_TORCH_THREADS,
+            relevance_dir=settings.AI_RELEVANCE_ARTIFACT_DIR,
+        )
         if settings.AI_MODEL_ARTIFACT_DIR is not None
         else None
     )

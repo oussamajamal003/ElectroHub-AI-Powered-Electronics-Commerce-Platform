@@ -400,3 +400,585 @@ Configuration only; no model, schema, migration, PROD or Git change (all edited 
 - **GitHub Environment check (read-only API, 2026-10-25): NOT READY.** `electrohub-prod-database` exists and holds `ELECTROHUB_PROD_DATABASE_URL` and `ELECTROHUB_PROD_DIRECT_URL`, but it reports **no protection rules (no required reviewers, no wait timer) and no deployment-branch policy**, so reviewer approval and branch restriction are not enforced. Separately, the repository (not Environment) secrets list still contains `ELECTROHUB_DEV_DATABASE_URL`, `ELECTROHUB_DEV_DIRECT_URL`, `ELECTROHUB_PROD_DATABASE_URL`, `ELECTROHUB_PROD_DIRECT_URL`, `ELECTROHUB_PROD_NEW_PASS` and `TEMP_OLD_DIRECT_URL`, which makes PROD credentials readable by any workflow on the repository; the workflow header requires them to exist only as Environment secrets. These are owner-managed settings and were not changed.
 - **Default branch:** `prod-migration.yml` is not on `develop` (404); only the Project Owner merges. **No PROD workflow dispatch, no PROD write, no merge.** PROD remains 20/22. Status: APPLICATION APPROVED / DEV COMPLETE / PROD PENDING.
 - **CI for the workflow correction:** commit `bfdda0a693f10189bd65d627fa717a69cf09398b`: Development CI run `40225524862` SUCCESS, Security Audit run `40225524870` SUCCESS. A later docs-only commit records this line; the workflow content is identical to `bfdda0a`.
+
+### Photo-search bugfix: vector pool timeouts on the remote DEV pooler (2026-10-25)
+
+Owner report: on `localhost:3000`, Search by image showed either "Image search isn't available yet" or "Image search is unavailable right now" for camera (JPEG), SSD (JPEG) and Canon (WEBP) photos, while text search worked.
+
+- **Root cause (exact):** the FastAPI pgvector pool could never open a connection, so readiness stayed `INDEX_NOT_READY`, the AI service answered `503 AI_INDEX_NOT_READY` and the backend mapped that to `503 IMAGE_SEARCH_UNAVAILABLE` (UI "unavailable right now"). Measured from this Windows dev machine to the DEV pooler (`aws-0-ap-northeast-2`), DNS is 0.05 s but a plain TCP connect takes 0.5–2.2 s and a full TLS + Postgres startup 4.7–9.2 s. `pgvector_gateway.py` allowed `connect_timeout=5`, a 3 s pool wait and `min_size=0` (connect on demand), so every check hit `PoolTimeout` / `ConnectionTimeout`. A synchronous probe with the same reader DSN connected (active index `effb0-commons-v2-3224d2cc9e57`, 412 embeddings), which ruled out credentials, the CA path, the role and the index. The "isn't available yet" message is the `VITE_IMAGE_SEARCH_ENABLED` off state; the running Vite serves the flag as `true` (checked via `imageSearchEnabled()` in the page), so a tab loaded before the flag was set needs a reload. No CORS, proxy, port, upload or contract defect was found: requests reached the backend (`POST /api/search/image`), the backend reached FastAPI, and FastAPI loaded `models/effb0-commons-v2` (`modelReady: true`).
+- **Fix:** `apps/ai-service/app/integrations/pgvector_gateway.py`: `CONNECT_TIMEOUT_SECONDS` 5 → 15, `POOL_TIMEOUT_SECONDS` 3 → 10, new `POOL_MIN_SIZE = 1` (one warm connection reused by requests). Statement timeout (2 s), read-only session, role, query and model are unchanged. Regression test `test_default_pool_keeps_a_warm_connection_with_a_remote_pooler_connect_budget`. No model, index, schema, migration, env or PROD change. The git-ignored `.claude/launch.json` `ai-service-local` entry now sets `PYTHONUNBUFFERED=1` so FastAPI logs appear in the launcher.
+- **Real service evidence:** FastAPI log for a browser search: decode 100 ms, encode 275 ms, inference 379 ms, retrieval 2.4 s, `POST /internal/v1/image-search` 200 in 2.85 s; responses carry `meta.embeddingVersion = effb0-commons-v2-3224d2cc9e57`, `modelVersion = effb0-commons-v2`. Backend `POST /api/search/image` (curl): camera JPEG 200 in 2.6 s, SSD JPEG 200 in 3.3 s, Canon WEBP 200 in 3.4 s, 12 products each.
+- **Browser end to end (`http://localhost:3000/search`, Discovery Console, built-in browser):** test photos were Commons test-query images from the training dataset (`canon-eos-r10/139804700.jpg`, `samsung-980-pro/140843397.jpg`, and `canon-eos-r100/139581204.jpg` re-encoded to WEBP), fed to the real `Choose a photo` input. Camera JPEG → 200, #1–#4 Canon EOS R6 Mark II, R10, R7, R50 (product links `/products/<slug>`, catalog images load). Search again → second 200. Replace with SSD JPEG → previous photo and results cleared, 200; ranks 1–9 AMD Ryzen CPUs, the exact Samsung 980 PRO 1TB at #10, Samsung 970 EVO Plus and 990 PRO at #11–12. Replace with Canon WEBP → 200, #1 Canon EOS R10 (the photographed product's family). Remove → photo and results cleared. Text search: typing "samsung ssd" lists Samsung SSD suggestions; `GET /api/search/products?q=canon|laptop|macbook` 200 with 8/20/20 results.
+- **Camera:** a browser-simulated camera (`getUserMedia` replaced by a canvas stream of the Canon test photo) drove the console's real Camera → shutter → "Use this photo" flow; the captured `camera-2026-10-25-19-57-02.jpg` searched with 200 and Canon EOS bodies at #1–#4. The machine reports one physical video input; it was deliberately not opened, so physical-camera capture is NOT VERIFIED.
+- **Fallback:** with FastAPI stopped, the photo search returned 503 and the console showed "Image search is unavailable right now ... Text search and the full catalog still work" with Search by text / Browse products; text search kept returning 200. After restarting FastAPI, Search again returned results. Console errors were only the guest `/api/auth/refresh` 401, the deliberate 503, and one reset from the temporary local photo server used to feed test files.
+- **Checks:** ai-service pytest (all pass, 1 skipped as before), ruff check, `ruff format --check`, `mypy app tests`.
+- **Remaining limitation:** first-connection latency to the remote DEV pooler is still 5–9 s from this machine; the warm connection hides it for requests, but a search in the first seconds after start-up can still report unavailable or time out until the pool connects. Small flat electronics (SSD vs CPU) are confused by the model (documented Recall@1 limitation); no retraining or reindexing was done.
+
+### Task 04.2-Q: image-search relevance (calibrated no-match gate) (2026-10-26)
+
+**Root causes (measured, not assumed).**
+
+1. *Forced nearest neighbours.* `_NEAREST_SQL` always returns `topK` products by cosine distance, with no relevance floor, so every photo produced 12 products. Raw similarity cannot fix this alone. On the calibration split, out-of-catalog photos reach a top-product similarity of 0.59 at the 90th percentile, while 10% of genuine catalog photos score below 0.46.
+2. *Embedding confusion between categories.* With the frozen backbone and a projection trained on 127 Commons photos, SSD photos rank AMD CPUs first: 5 of 7 reviewed SSD photos and all 6 M.2 photos. Smartwatch, router, extender, tablet, Xbox and TV photos also land in the wrong category.
+3. *Training coverage.* The training set has 0 real laptop photos, although laptops are 49 of the 206 indexed products. It has 5 tablet photos for 28 tablet products. It has no monitor, networking, printer or smart-home photos.
+4. *Gallery domain gap.* The index holds 412 catalog illustrations (2 per product), not photographs.
+5. *Preprocessing.* Resize to 256 then centre-crop to 224 cuts off parts of wide objects. Changing it requires re-encoding the whole index under a new `preprocessVersion`, so it was left unchanged.
+
+**Independent category signal.**
+
+- The approved checkpoint's backbone is byte-identical to torchvision `EfficientNet_B0_Weights.IMAGENET1K_V1` (maximum absolute difference 0.0 over 358 tensors).
+- So the matching ImageNet classifier head is a valid, independent "what kind of object is this" signal. It is computed from features the encoder already produces.
+- Its softmax mass on 63 electronics classes (listed in `training/export_relevance_head.py`) separates the groups. At the 10th to 90th percentile, out-of-catalog photos score 0.002–0.10 and catalog photos score 0.26–0.95.
+
+**Benchmark** (`apps/ai-service/training/relevance/`).
+
+- **Gallery:** the 412 vectors of the ACTIVE DEV index `effb0-commons-v2-3224d2cc9e57`, read through the read-only role.
+- **Catalog queries:** Commons photos of catalog products from the existing manifests (validation, test_queries, unseen_sku_queries, unseen_sku_gallery). None are training images.
+- **Probe set:** 240 newly collected Commons photos (CC0, PD, CC BY or CC BY-SA) in 30 labels.
+  - It covers catalog categories, an adjacent group (Xbox, TV), and out-of-catalog objects: washing machine, refrigerator, microwave, vacuum, chair, cat, shoe, mug, bicycle, fruit, car and plant.
+  - It is for evaluation only and is not redistributed; provenance is in `probe_manifest.csv`.
+  - Every photo was reviewed visually. 67 off-topic search hits (storefronts, die shots, logos, an Apple II under "fruit") are listed in `probe_excluded.json` and left out.
+- **Splits:** calibration and test are split by family, and by image for probe categories. Out-of-catalog labels are split by class, so the test classes (washing machine, refrigerator, cat, shoe, bicycle, fruit) were never seen during calibration.
+- **Tuning:** thresholds were grid-searched on the calibration split only. The rule was at most 10% false rejection, then the lowest unknown acceptance. The thresholds were then frozen and run once on the test split.
+- **Stability:** the chosen values sit on a plateau. Varying λ from 0.2 to 0.5 or δ from 0.05 to 0.10 changes calibration category hits by at most 3.
+
+**Held-out test split, reviewed labels**
+
+Sample sizes: 142 catalog photos, 45 out-of-catalog photos, and 99 photos with an identifiable exact product.
+
+| Metric | Baseline (forced top 12) | Gate (shipped) | Gate + category rerank (measured, not shipped) |
+|---|---|---|---|
+| Unknown objects receiving any product | 45/45 (100%) | **3/45 (6.7%)** | 3/45 |
+| Catalog photos wrongly rejected | 0/142 | **1/142 (0.7%)** | 1/142 |
+| Category precision of shown results | 0.411 | **0.513** | 0.553 |
+| Category Recall@1 | 74/142 | 73/142 | 90/142 |
+| Category Recall@5 | 90/142 | 87/142 | 98/142 |
+| Exact-product Recall@1 / @5 | 14/99 / 45/99 | 14/99 / 44/99 | 15/99 / 53/99 |
+| Mean products shown (accepted queries) | 12 | 7.9 | 8.3 |
+
+On the calibration split, the gate accepts 1 of 36 out-of-catalog photos and rejects 3 of 134 catalog photos.
+
+**Per case** (reviewed probe photos from all splits, with the gate on):
+
+| Photo type | Result |
+|---|---|
+| Washing machine | 1 of 6 got products (before: 6 of 6) |
+| Refrigerator, microwave, shoe, chair | 0 got products |
+| Cat | 1 of 8 got products |
+| Canon DSLR | 8 of 8 matched cameras |
+| Keyboard | 6 of 7 matched keyboards |
+| Laptop | 2 of 2 matched laptops (only 2 usable photos) |
+| PS5 | 4 of 4 matched gaming |
+| SSD | 5 of 7 still return CPUs (**not fixed**) |
+| Tablet, smartwatch, router, extender, Xbox, TV | Still mostly the wrong category (**not fixed**) |
+
+These remaining errors come from the embedding itself, and the gate deliberately does not hide them.
+
+**Implementation.**
+
+- **No-match gate:** `app/models/relevance.py` holds the gate loader and the `select` policy.
+  - The loader checks exact keys and the SHA-256, and requires `backboneModelVersion` to equal the serving `modelVersion`.
+  - `EfficientNetEncoder.encode_assessed` returns the embedding and the electronics mass from one forward pass.
+  - `ImageSearchService` applies the gate after retrieval and logs only counts.
+  - It is configured with `AI_RELEVANCE_ARTIFACT_DIR`; when unset, behaviour is unchanged.
+- **Unchanged:** API contract, backend, database, ACTIVE index and approved checkpoint.
+- **Frontend:**
+  - The no-match state now uses the approved copy and adds a "Browse products" action.
+  - While the camera is live, a one-line framing hint appears under the viewfinder.
+- **Category reranking is not shipped.** It needs each candidate's category inside the AI service, which the read-only `ai` role cannot see. Two ways to provide it, both owner decisions:
+  - a typed contract addition: query-category hints that Express uses to rerank;
+  - category metadata in the index.
+
+**Verification.**
+
+- **ai-service:** `pytest` 248 passed and 1 skipped, including the new `tests/test_relevance_gate.py`. `ruff check .`, `ruff format --check .` and `mypy app tests` are clean.
+- **Frontend:** discovery tests pass 26/26 with `VITE_IMAGE_SEARCH_ENABLED=false`, as in CI. One existing "not enabled" test fails when the local env sets the flag to true, with or without these changes.
+- **Live stack** (AI service on :8000 with the gate, backend on :5000, DEV index), via `POST /api/search/image`, 1.7–3.2 s per request:
+  - Cat, shoe and refrigerator photos returned `200` with 0 items.
+  - The Canon photo returned 7 Canon EOS bodies.
+  - The keyboard photo returned 6 Logitech keyboards.
+  - The smartphone photo returned 12 phones.
+  - SSD, tablet and Xbox photos still returned CPUs.
+- **Browser** (`localhost:3000`):
+  - The shoe photo showed "No similar products found" with Try another photo, Search by text and Browse products.
+  - Browse products navigated to `/products`.
+  - Replacing the photo with a Canon one returned 7 Canon results, with `/products/canon-eos-r6-mark-ii` first.
+  - Ctrl+K text search for "canon" listed the Canon EOS products.
+
+**Kaggle training: justified, not performed in this task.**
+
+- **Why it's needed:** the remaining SSD/CPU, tablet, router and console errors come from the embedding, and the training data has no laptop, monitor or networking photos.
+- **What a new run needs, in order:**
+  1. A reviewed, licensed dataset expansion (owner gate).
+  2. A staging embedding version.
+  3. Re-ingestion.
+  4. Owner-approved activation.
+- **Current state:** the approved checkpoint and the ACTIVE DEV index are unchanged.
+
+**Limitations.**
+
+- **Small probe set:** 1–8 reviewed photos per label, so per-category numbers are indicative only.
+- **Unsold electronics:** the gate counts any electronics photo as in-domain, so electronics the catalog doesn't sell (Xbox, TV) still get the nearest products.
+- **Physical camera:** NOT VERIFIED. Camera captures use the same upload path, so the gate applies to them.
+- **Preprocessing:** unchanged. A padded, subject-preserving resize needs a new `preprocessVersion` and a re-encoded staging index.
+
+## Task 04.2-Q — Kaggle retraining and final benchmark (2026-10-26)
+
+Dataset `realphoto-v1` (git-ignored, licences CC0/PD/CC BY/CC BY-SA only, per-file attribution in `license_attributions.md`): train 853 photos + 412 catalog images, dev 156 (99 known / 57 unsupported), final 89 (74 known / 15 unsupported, 15/15/15/15/15/14 per bucket). Splits by source group; 0 groups cross splits; final never packaged for Kaggle.
+
+Kaggle kernel `electrohub-realphoto-train-v2` (T4), dataset `electrohub-realphoto-v2`:
+- B `effb0-realphoto-b2` (frozen backbone, SupCon + category head), best epoch 5, sha `4addfad0…`
+- C `effb0-realphoto-c2` (last 2 stages unfrozen after 3 warm-up epochs), best epoch 5, sha `b6f83c9c…`
+
+Selection on dev only: C with its learned gate, minMass 0.8, gap 0.1, rerank weight 0.
+
+| Metric | A baseline (commons-v2 + ImageNet gate) | C selected |
+|---|---|---|
+| Dev category R@1 | 38/99 | 67/99 |
+| Dev family R@1 | 1/30 | 11/30 |
+| Dev unknown accepted | 5/57 | 6/57 |
+| Dev known rejected | 17/99 | 9/99 |
+| **Final** category R@1 / R@5 | 30/74 / 35/74 | 43/74 / 48/74 |
+| **Final** precision of shown | 0.291 | 0.653 |
+| **Final** unknown accepted | 4/15 | 2/15 |
+| **Final** known rejected | 2/74 | 7/74 |
+| Final SSD→CPU / mouse↔SSD | 4 / 0 | 1 / 0 |
+| Simulated mouse camera (24 variants) top-1 mouse | 16/24 | 16/24 (5 rejected, 3 wrong) |
+| Encode p50 / p95 (CPU) | 0.049 / 0.059 s | 0.044 / 0.056 s |
+
+The final benchmark was run once per model after selection. Final has no family labels (family recall n/a). Candidate C is staged locally only; the DEV active index and deployed checkpoint are unchanged. A staging embedding version and live E2E need separate DB authorisation.
+
+### Candidate c2 on the disposable QA stack (2026-10-26, no DEV/PROD writes)
+
+- `python -m app.ingest stage` (ingest role) into `localhost:55434/electrohub_disposable`: `effb0-realphoto-c2-b6f83c9c224b`, 412/412 images, 206 products, job COMPLETED. `activate` then made it ACTIVE in QA only (previous `effb0-commons-v2-3224d2cc9e57`, restorable with `rollback`).
+- QA FastAPI :8200 ran c2 plus its learned gate (`relevance-realphoto-c2`, minMass 0.8) via `ai-vector-qa.cjs ai-service <artifact> <relevance-dir>` (new optional argument). Express :5200 and the frontend :3200 used the real chain with no interception.
+- `discovery-image.isolated.spec.ts` with `ISOLATED_MODEL_VERSION_PREFIX=effb0-realphoto-c2`: 6 passed, 1 skipped (outage). Covered: console entry, held-out photo returning visible products (`meta.modelVersion` c2), paste/drop validation, gateway states and Escape, virtual camera capture/retake/track release, camera denial, keyboard, 200% zoom and reduced motion.
+- With the AI service stopped (`ISOLATED_AI_DOWN=1`), the outage test passed: photo search reports unavailable, while text search and the catalog keep working.
+- DEV active index, the deployed checkpoint and PROD are unchanged.
+
+### Task 04.2-Q — Option A: candidate c2 staged in DEV (no activation), 2026-10-26
+
+Owner-authorised staging only. Run once with `python -m app.ingest stage --artifact-dir models/effb0-realphoto-c2 --catalog-root apps/frontend/public`, connected as the restricted `ai_vector_ingest` role (DSN assembled in memory, never printed or stored; no admin DSN in the process environment). Pre/post checks were SELECT-only through the same role.
+
+| Check | Result |
+|---|---|
+| DEV identity | Verified: project `pzxekjybdiulzmssalfo`, `current_user = ai_vector_ingest` |
+| Artifact SHA-256 | `b6f83c9c224ba1de453868b1ab89d3397de83d8089e2041eb1341d585a932005` (computed from the local file, equals the descriptor and the registered row) |
+| Candidate version | `effb0-realphoto-c2-b6f83c9c224b`, preprocess `effb0-rgb-r256-c224-imagenet-v1`, dim 256 |
+| Candidate status | STAGING |
+| Ingestion job | COMPLETED, 412 planned / 412 succeeded, source digest `55d36d92…2306b` |
+| Image coverage | 412 embeddings = 412 rows in `ai.catalog_images` |
+| Product coverage | 206 distinct products = 206 in `ai.catalog_images` |
+| ACTIVE DEV index | Unchanged: `effb0-commons-v2-3224d2cc9e57`, same `updated_at` (2026-10-24 21:43:35 UTC); its 412 embeddings have the same content fingerprint before and after (`md5 7c134103…`) |
+| Commerce tables | Not written: the CLI only reads the `ai.catalog_images` view, and the ingest role has no write grants outside `ai` |
+| PROD | Untouched |
+| Git merge / commit | NOT PERFORMED |
+| Candidate C activation | NOT PERFORMED; `localhost:3000` still serves the commons-v2 index |
+
+### Task 04.2-Q — owner screenshot acceptance cases (2026-10-26)
+
+Original owner files from the owner's Downloads folder (sizes match the screenshots), except `camera-2026-10-25-22-42-06.jpg`, which is unavailable; the mouse row uses a crop of the owner's supplied screenshot of a different camera photo (not original resolution). Photos stay in the session scratch folder (not in the repository). "Current" = DEV-equivalent `effb0-commons-v2` + ImageNet gate + Express weight 0.5, reproduced offline with the served scoring code (identical to the owner's screenshots). "c2" = real browser at `localhost:3200` → Express :5200 → FastAPI :8200 → disposable pgvector (c2 ACTIVE in QA only).
+
+| Owner photo | Expected | Current model, top results | c2 in the QA browser, top 5 | Result |
+|---|---|---|---|---|
+| `images (11).jpg` controller | gaming | Cestus 330 mouse, Tapo C210, Tapo C200 | ROG Ally, PlayStation 5, Cestus 330 (3 shown, all gaming) | Category fixed; the catalog sells no standalone controller |
+| `images (12).jpg` speaker | speakers-audio | JBL Flip 6, then 3 Tapo cameras, a monitor | JBL Charge 5, Boombox 3, Xtreme 3, Flip 6, Bar 300 | Fixed |
+| `images (9).jpg` Wi-Fi extender | networking-wifi | iPhone 16 ×2, Tapo T110, iPhone 15 ×2 | Tapo T110 (smart-home), Archer T3U, Tapo C310, Archer AX10, AXE75 | Partly: networking in top 3, but rank 1 is a sensor; no extender is stocked |
+| `images (5).jpg` laptop | laptops | MacBook Air ×2, then 3 keyboards | MacBook Air ×5 (12 shown) | Fixed |
+| `images.jpg` tablet | tablets | Apple Watch ×5 | iPad Air / iPad 10 ×5 (12 shown) | Fixed |
+| `images (8).jpg` console | gaming | Dell monitor, Apple Watch, ASUS monitor, Watch, Tapo P100 | PlayStation 5, ROG Ally, Cestus 330 | Fixed |
+| owner mouse (screenshot crop) | keyboards-mice | Tapo P110, Tapo P100 | No match ("No similar products found"), with no capture guidance | Fails: mice are stocked |
+
+Request latency through Express in QA: 245–503 ms warm, 1.3 s for the first request after start.
+
+### Manual PROD logical backup and isolated restore verification (2026-10-26)
+
+Owner-authorized (backup and restore verification only; the two pending migrations were NOT applied and PROD was not written). **This supersedes the earlier statement that no backup exists; the owner's backup waiver is no longer the only recovery posture for this release.**
+
+- **Tooling:** official Supabase CLI `2.122.0` (Windows amd64 release from `github.com/supabase/cli`, SHA-256 verified against the release `checksums.txt`; the npm package has no win32 binary) installed outside the repo at `C:\ElectroHub-Backups\tools`. The CLI's existing login was recognized (no new login). Docker/Podman is not installed (and `C:` has ~1.6 GB free), and CLI 2.122.0 needs a container for `db dump`; the CLI's own `--dry-run` scripts were therefore generated and executed with local PostgreSQL 17.11 `pg_dump`/`pg_dumpall` (read-only; one flag spelled out as `--quote-all-identifiers`). The CLI creates a temporary `cli_login_postgres` login role on PROD while generating its credentials (platform-managed, no application data touched).
+- **Identity:** project `electrohub`, ref `yepfgjehdstlxbpespun`, ap-northeast-1, Postgres 17.6, status ACTIVE_HEALTHY; connection via the CLI's session pooler login (not the transaction pooler). No connection string or password was printed or stored; the temporary scripts were deleted.
+- **Backup set:** `C:\ElectroHub-Backups\prod-pre-migration-20261026-20261026-134530\` (outside Git; not uploaded anywhere; folder permissions are the inherited defaults: BUILTIN\Users read and Authenticated Users modify on C:\ElectroHub-Backups; an attempt to restrict them to the owner did not take effect, so the owner should restrict the folder or move the backup to an encrypted location before relying on it - the files contain no customer rows but do contain the full schema).
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `prod-schema.sql` | 66,186 | `da831d5b021ee61dadd33be53ecc07d443bc4fcfc0261fde7d76d1974db397ad` |
+| `prod-data.sql` | 23,401 | `c346e0f5b285848c9dd6609aea067702c97d52a4648d4ef7f3e2b9c02680bdce` |
+| `prod-roles.sql` | 370 | `168a95a9c745af5ed4679751f90419ac9dc434240a213b03e32a06d5664c2308` |
+
+  `MANIFEST.txt` in the same folder records the hashes, CLI/pg_dump versions and method.
+- **Coverage:** schema dump has 31 `public` tables, 96 index statements, 37 foreign keys, 2 triggers and the extensions `pg_stat_statements`, `pgcrypto`, `supabase_vault`, `uuid-ossp`; the data dump has 64 of 64 COPY blocks complete (31 `public`, plus `auth`/`storage`) and includes `public._prisma_migrations` (20 rows). **No `ai` schema or `vector` extension exists on PROD yet, so none is in the backup (expected: those arrive with the pending migrations).** Standard exclusions per the CLI: Supabase-managed schemas (`auth`, `storage`, `realtime`, `vault`, `extensions`, `cron`, `graphql*`, ...) have no schema/ACL definitions in the dump; Storage objects, Auth configuration, secrets and platform settings are not covered by a logical dump. The roles file only carries role settings (anon, authenticated, authenticator statement timeouts) - role passwords/definitions of platform roles are not included.
+- **Important data finding:** PROD currently has **0 users, 0 products, 0 orders, 0 categories and 0 `auth.users`; the only populated table is `_prisma_migrations` (20 rows).** The commerce tables are empty, so the backup is small by nature and no customer data exists in it.
+- **Isolated restore:** disposable PostgreSQL 17.11 cluster on loopback port 55436 at `C:\ElectroHub-Backups\restore-pg-20261026-134530\data` (separate from PROD, shared DEV and the QA database), database `electrohub_restore_test`, stopped after verification. Order: prerequisite roles (`postgres`, `anon`, `authenticated`, `authenticator`, `service_role`, `supabase_realtime_admin`), `extensions` schema and `supabase_realtime` publication (platform prerequisites), roles file, schema, data, each with `ON_ERROR_STOP` - all exit 0. Documented adaptations: one statement (`CREATE EXTENSION supabase_vault`, platform-only, unavailable locally) was filtered from the schema; 33 `auth`/`storage` COPY blocks (all zero rows, tables in Supabase-managed schemas) were filtered from the data. A first attempt stopped on the missing `supabase_realtime` publication and was rerun from a clean database after adding that prerequisite.
+- **Restore comparison (identical read-only queries on PROD and the restored copy):** tables 31/31; columns 338/338 (column-definition hash `f34eea13...` equal); indexes 127/127 (definition hash `3e152ccc...` equal); constraints PK 31, FK 37, check 23 equal; enum types 22/22; public triggers 2/2; `_prisma_migrations` 20 finished, 0 unfinished/rolled back, last `20261018000000_commerce_email_outbox`, name+checksum hash `d72b942c...` equal; users/products/orders 0/0/0 equal; no `ai` schema and no `vector` extension on either side. No discrepancies.
+- **Historical checksum:** `20240101000000_database_foundation` ledger checksum `5de060a3...` is present in the backup exactly as on PROD and is the exact UTF-8 BOM + CRLF form of the only Git blob (see the earlier resolution). It is reconciled by the pinned checker record (13/13 safety tests pass) and is not a blocker; it still needs the DBA/owner acknowledgement already requested. No ledger or checksum was modified.
+- **Managed backup/PITR (read-only `supabase backups list`):** `walg_enabled: true`, **`pitr_enabled: false`, and no managed backups are listed.** There is therefore no verified Supabase-managed restore point or PITR window for PROD; the manual logical backup above is the only verified recovery artifact (and it does not cover Storage objects or platform configuration). Recovery procedure for these migrations: restore `prod-schema.sql` / `prod-data.sql` into a fresh Supabase project or database, or roll forward with a reviewed corrective migration; there is no automatic rollback.
+- **Not done / still blocked:** the two pending PROD migrations were not applied (PROD remains 20/22); no Git commit or push, no merge. Remaining gates are unchanged: Environment protections/reviewers, `prod-migration.yml` on `develop` (owner merge), and the production release authorization.
+
+Decision: **BACKUP VERIFIED - READY FOR ARCHITECT REVIEW** for the logical (database) backup, with the PITR/managed-backup limitation above; PROD migrations remain blocked pending Owner and Architect review.
+
+### Task 04.2-Q — owner-failure fixes and final benchmark 2 (2026-10-26)
+
+**Per-model category weight.** The relevance gate artifact may now carry `categoryRerankWeight` (default 0.5, the value chosen for the first gate). FastAPI returns it as `categoryWeight` alongside the hints (`null` without hints), and Express uses it instead of its constant when present. c2's gate carries 0, the weight selected on the dev split. In the QA browser, `images (9).jpg` (Wi-Fi extender) now ranks TP-Link Archer T3U (networking) first instead of the Tapo T110 sensor.
+
+**Capture guidance.** When a photo search returns no match, the console measures the photo locally (160 px canvas, nothing uploaded). It flags a dark photo (mean luma < 70) and a blurry photo (Laplacian variance < 300); the thresholds sit below the 5th percentile of the training photos. It always adds a fill-the-frame tip. In the QA browser the owner mouse screenshot shows "This photo looks blurry…" plus the framing tip. The model still returns no mouse for that photo; only the guidance is new.
+
+**Final benchmark 2 (locked).** `training/.data/final-benchmark-2/` (git-ignored) holds 61 visually reviewed Commons/Openverse photos (CC0/PD/CC BY/CC BY-SA): 49 catalog-category products and 12 unrelated objects. `build_final_benchmark.py` excluded any photo whose file, page or photographer appears in the earlier collection (105 excluded) or that is a near-duplicate of any earlier photo, and caps each photographer at 3. `lock.json` records the SHA-256 of every file. Each model was scored once; nothing was tuned on it.
+
+| Metric (49 known, 12 unknown) | Current DEV model (commons-v2 + ImageNet gate, weight 0.5) | c2 (learned gate 0.8, weight 0) |
+|---|---|---|
+| Category correct at rank 1 | 21/49 | **37/49** |
+| Category in top 5 | 22/49 | **40/49** |
+| Precision of shown products | 0.317 | **0.778** |
+| Known products rejected | 1/49 | 2/49 |
+| Unrelated objects accepted | **0/12** | 3/12 (2 umbrellas, 1 pair of shoes; top similarity 0.31–0.36) |
+| Encode latency p50 / p95 (CPU, offline) | 0.031 / 0.037 s | 0.033 / 0.038 s |
+
+Per class, c2 gets rank 1 right for speakers 6/6 (current 0/6), tablets 3/6 (0/6), gaming 4/7 (1/7), mice/keyboards 4/5 (2/5), laptops 5/6 (3/6), networking 4/4 (3/4), SSDs 1/2 (0/2). It is worse on CPUs (3/5 vs 5/5) and unrelated objects (9/12 vs 12/12). Family metrics do not apply: these photos have no product-family labels.
+
+Verification: ai-service `pytest` all passed, `ruff`/`ruff format`/`mypy` clean; backend vitest (image search + AI integration, 123 tests), `tsc` and eslint clean; frontend discovery tests 31/31 with `VITE_IMAGE_SEARCH_ENABLED=false` (as in CI). With the developer's git-ignored `apps/frontend/.env` enabling the flag, one existing "not enabled" test fails both with and without these changes.
+
+### Task 04.2-Q — minimum-similarity no-match floor (2026-10-26)
+
+The relevance gate artifact accepts an optional `minTopSimilarity` (default 0, off): FastAPI returns no products when even the best catalog match is less similar than the floor. It was chosen on the **dev split only** (c2, gate 0.8, gap 0.1, weight 0; 99 known, 57 unknown):
+
+| Floor | Category @1 | Precision shown | Unknown accepted | Known rejected |
+|---|---|---|---|---|
+| 0 (off) | 67/99 | 0.713 | 6/57 | 9/99 |
+| **0.36 (selected)** | 67/99 | 0.713 | 4/57 | 9/99 |
+| 0.40 | 67/99 | 0.736 | 2/57 | 12/99 |
+| 0.45 | 67/99 | 0.770 | 1/57 | 16/99 |
+
+0.36 is the highest floor that rejects no additional known product on dev. c2's gate now carries `minTopSimilarity: 0.36`.
+
+Owner cases in QA (Express :5200 → FastAPI → disposable pgvector, c2 + floor): all seven results are unchanged. The controller, speaker, extender (TP-Link Archer T3U first), laptop, tablet and console still return their categories first; the lowest of their best-match similarities is 0.646. The mouse screenshot still returns no match (it was already rejected by the 0.8 gate). Warm request latency: 473–655 ms.
+
+The locked final benchmark 2 was not re-scored, because it has already been used once. The floor's effect on independent photos (two umbrellas and a pair of shoes there had best-match similarity 0.31–0.36) needs a fresh, untouched benchmark to confirm.
+
+### PROD release gate re-check after owner authorization (2026-10-26)
+
+Observed read-only (no PROD write, no dispatch, no merge):
+
+- Environment `electrohub-prod-database`: custom branch policy, only `develop` allowed; no required reviewers (owner decision). Environment secrets: `ELECTROHUB_PROD_DATABASE_URL`, `ELECTROHUB_PROD_DIRECT_URL`. DEV Environment holds the DEV pair. Repository-level DEV/PROD database secrets: **absent**.
+- Repository secrets still present: `ELECTROHUB_PROD_NEW_PASS`, `TEMP_OLD_DIRECT_URL` (both created 2026-09-26). No workflow on the feature branch references them. Purpose is not established and they may hold a still-valid PROD credential, so they were NOT deleted; owner decision required.
+- **`prod-migration.yml` is NOT on `develop` or `main`** (contents API 404 on both; `gh workflow list` shows no PROD workflow). It cannot be dispatched until the owner merges it.
+- PROD ledger (read-only): 20/20 finished, 0 unfinished/rolled back, last `20261018000000_commerce_email_outbox`, name+checksum hash `d72b942c...` identical to the backup; 0 users/products/orders; no `ai` schema. The backup is current.
+- Backup folder `C:\ElectroHub-Backups`: inheritance removed; now only the owner account, SYSTEM and Administrators have full control. SHA-256 of all three dump files unchanged.
+
+Decision: PROD migrations NOT executed (NO-GO: workflow not on default branch; legacy secret disposition unresolved).
+
+### Task 04.2-Q — candidate D (SigLIP 2) with category filter, disposable QA only (2026-10-26)
+
+**Change.** The relevance gate artifact accepts an optional `minCategoryRatio` (default 0, off). FastAPI returns it as `categoryMinRatio` (null without hints or when 0); Express `filterByCategory` drops products whose database category hint is below that fraction of the strongest hint, then reranks as before. Internal AI→Express contract only; the public `/api/search/image` response is unchanged. Only D's gate carries a ratio; the current DEV model and C are unaffected. `evaluate_policy.py score` gained `--floor` and `--ratio` so offline scoring mirrors the served policy.
+
+**Selection on dev only (99 known / 57 unknown), before opening the benchmark.**
+
+| gap | ratio | Category @1 | Purity of shown | Known rejected | Unknown accepted | Mean shown |
+|---|---|---|---|---|---|---|
+| 0.10 | 0 (previous D) | 92 | 0.780 | 1 | 4 | 6.5 |
+| **0.15** | **0.10 (selected)** | 96 | 0.990 | 2 | 3 | 5.8 |
+| 0.20 | 0.10 | 97 | 0.983 | 2 | 3 | 6.2 |
+
+Owner photos were identical for 0.15 and 0.20 except the speaker (4 vs 6 results, all JBL speakers). 0.15 was chosen for higher purity.
+
+**QA deployment.** `siglip2-b16-p256-d1-b3900dd9fad5` staged with the `ai_vector_ingest` role into `localhost:55434/electrohub_disposable` (412/412 images, 206 products, COMPLETED) and activated there only (previous C, restorable with `rollback`). Shared DEV active index unchanged; C remains staged and inactive in DEV.
+
+**Owner photos, served (Express :5200 → FastAPI :8200 → QA pgvector).**
+
+| Photo | Current DEV model | C | D (gap 0.15, ratio 0.1) |
+|---|---|---|---|
+| Controller | Acer Predator Cestus 330, then 2 Tapo cameras | ROG Ally, PS5, Cestus 330 | PS5 (1 result) |
+| Speaker | JBL Flip 6, then Tapo cameras, LG monitor | 5 JBL speakers | JBL Bar 300, Flip 6, Go 4, Boombox 3 (no printer/switch) |
+| Wi-Fi extender | iPhones, Tapo T110 | Archer T3U, Tapo T110, Archer routers | 6 TP-Link Archer routers |
+| Laptop | MacBook Air, then keyboards | MacBook Airs | MacBook Airs (12) |
+| Tablet | Apple Watches | iPads | Galaxy Tab S9, iPad 10 (12) |
+| Console | monitors, watches | PS5, ROG Ally, Cestus 330 | PS5 (1 result) |
+| Mouse screenshot | Tapo plugs | no match | 6 Logitech mice (screenshot crop; physical-camera check still pending) |
+
+Browser (React :3200): speaker upload → "4 products · ordered by visual relevance", JBL Bar 300 / Flip 6 / Go 4 first. Warm end-to-end latency 1.85–2.06 s; first (cold) request timed out at the 5 s inference limit (encode 7.2 s).
+
+**Locked final benchmark 2, scored once for D (lock: 62/62 hashes match).**
+
+| Metric (49 known, 12 unknown) | Current | C | D |
+|---|---|---|---|
+| Category @1 | 21/49 | 37/49 | **41/49** |
+| Category in top 5 | 22/49 | 40/49 | 41/49 |
+| Purity of shown | 0.317 | 0.778 | **0.998** |
+| Known rejected | 1/49 | 2/49 | **8/49** |
+| Unknown accepted | 0/12 | 3/12 | 1/12 |
+| Encode p50 / p95 (offline) | 0.031 / 0.037 s | 0.033 / 0.038 s | 1.33 / 1.97 s (measured while QA staging shared the CPU) |
+
+Per class D: gaming 7/7, speakers 6/6, laptops 6/6, mice 5/5, CPUs 5/5, networking 4/4, cameras 2/2, SSDs 2/2, smartphones 3/6, tablets 1/6, unknown 11/12. Of the 8 rejections, 7 are phones/tablets: 5 have best catalog similarity 0.02–0.11 (below the 0.12 floor), 2 lost every candidate to the category filter. Family metrics do not apply (no family labels).
+
+**Gate result.** Category @1 84% (≥80% met), unknown acceptance better than C (met), known rejection 16% (≤5% **not met**), phone/tablet regressions vs C, CPU latency ~50× C. Not recommended for DEV promotion yet.
+
+### Task 04.2-Q — candidate D: phone/tablet rejection correction, new dev data, benchmark 3 (2026-10-26)
+
+**Root causes of the 8 known rejections on benchmark 2** (diagnosis only; benchmark 2 was not used for selection). All 8 were phones/tablets (3 phones, 5 tablets), not 7 as first reported. Six fell below the 0.12 similarity floor (best catalog similarity 0.02–0.11, with the category head at 0.39–0.99 for the right class), one tablet failed the electronics-mass gate (0.067), and one phone lost every candidate to the category filter (its 12 nearest products were laptops). Scores are consistent across offline, FastAPI and Express. The centered PCA 768→256 projection lowers phone/tablet similarity more than other classes (train 5th percentile 0.074 vs 0.163); in raw 768-d they are equal. The old dev split had only 13 easy phone/tablet photos, so it could not detect this.
+
+**New data (Wikimedia Commons; Openverse unreachable from this network).** `training/.data/realphoto-v3` (git-ignored): 1,011 candidates collected (CC0/PD/CC BY/CC BY-SA only, provenance per file), visually reviewed. The collector now also accepts `thumb.wikimedia.org` (Commons' current thumbnail host) and has a `--sources` option. `training/data/build_benchmark3.py` excludes any photo whose hash, page, Commons page or photographer appears in earlier collections, or within dHash Hamming 6 of any earlier dataset/gallery/benchmark/owner photo (105 excluded: 73 photographer reuse, 23 same file/page, 9 near-duplicates), then assigns whole photographer groups to the benchmark first and the rest to dev.
+
+- New dev photos: 53 phones, 25 tablets (`realphoto-v3/dev/dev.csv`).
+- **Final benchmark 3 (locked):** 114 photos — 83 stocked (15 phones, 16 tablets, every catalog category except computer-components: the only 2 CPU photos came from already-used photographers), 15 unstocked electronics (e-readers, projectors, calculators, radios, drone, GPS, DVD players, photo frames), 16 unrelated objects. `benchmark.csv` SHA-256 `b0fcdc5b47158dcf0177b34bc7f2fafa8474afa3bb26c6ecd7b1485038d280a8`; `lock.json` SHA-256 `db3263afed42af630b5bc87526022e5b264553a1e37a951036f8469cf24881e2` (115 files). Only 2 photos carry a defensible catalog family (older JBL Flip models → JBL Flip 6); the other photographed models are not sold, so family relevance is measurable on 2 photos only.
+
+**Selection on dev only (177 known incl. 78 new phone/tablet photos, 57 unknown).**
+
+| Space / policy | Cat @1 | Purity | Known rejected | Unknown accepted | New P/T rejected |
+|---|---|---|---|---|---|
+| PCA-256, floor 0.12 (previous D) | 150 | 0.934 | 17 (9.6%) | 3 | 15/78 |
+| PCA-256, no floor | 155 | 0.931 | 11 (6.2%) | 5 | 9/78 |
+| **PCA-256, floor 0.12 + fallback 0.9 (selected)** | **163** | **0.934** | **3 (1.7%)** | **3** | **1/78** |
+| uncentered-256 + fallback 0.9 | 162 | 0.916 | 5 (2.8%) | 4–5 | 2/78 |
+| raw 768 + fallback 0.9 | 163–164 | 0.917 | 0–1 | 4–6 | 0–1/78 |
+
+Raw 768 is not clearly better on purity or family relevance and would need a `vector(768)` index (schema change, not authorized), so the 256-d contract and the existing QA index are kept. Fallback depth 48 matches unlimited depth on dev (12: 11 rejected; 24: 6).
+
+**Change (D only; default off).** The relevance artifact accepts `categoryFallbackConfidence`. When the gate accepts a photo and its strongest category hint reaches it, FastAPI also returns `fallbackMatches` (48 nearest, no gap cut) and `fallbackScoreGap`; Express uses them only if the regular list is empty after its category filter, keeping products of the strongest hinted database category within the gap. Internal AI→Express fields only; public response unchanged. D's relevance now carries `categoryFallbackConfidence: 0.9` (embedding version unchanged, `siglip2-b16-p256-d1-b3900dd9fad5`). Also: SigLIP warm-up forward pass before readiness; loader integrity tests; evaluator mirrors floor, filter and fallback.
+
+**Live QA (React/Express → FastAPI → disposable pgvector, D active in QA only).** New dev photos through Express: phones 50/53 right category first, 0 rejected; tablets 17/25, 1 rejected (matches offline). Owner regressions unchanged: speaker → 4 JBL speakers (no printer/switch); extender → 6 TP-Link routers; laptop → MacBook Airs; tablet → Galaxy Tab S9/iPad 10; mouse screenshot crop → 6 Logitech mice (physical-camera photo still unavailable); controller and console → PS5 (1 result each).
+
+**Idle machine (i7-1355U, load 11%, game closed).** Init (verify + load + warm-up) 1.25 s; first encode 236 ms; warm encode p50 228 / p95 253 ms at 2 threads (4 threads slower: 328 ms); process +720 MiB, peak 1.19 GB. Express end-to-end on 78 photos: p50 263 ms, p95 295 ms. FastAPI concurrency: 1 → p50 0.25 s; 2 → 0.54 s; ≥4 → requests beyond the 2 inference slots get 429 with Retry-After (existing design; no timeouts). After a service restart the first request took 5.4 s, of which 350 ms was decode/encode/retrieval; the rest was the first pgvector connection (startup `PoolTimeout` against the WSL Docker QA database), not the model.
+
+**Browser QA (in-app browser, :3200).** Paste → 12 iPhone 16 results; keyboard Enter on the focused search button; drag-and-drop → 8 iPads (456 ms); Replace (file input) → honest "No similar products found" with framing tip for the one dev tablet still rejected; Remove → empty state; camera: permission is denied in this browser, the "Camera access is blocked" state with Upload/Back works, **capture and retake not verified**; buttons show the 2563EB focus ring; AI outage (service stopped) → "Image search is unavailable right now" with text search and browse; text search, category listing and product page (price, Add to Cart) work during the outage.
+
+**Final benchmark 3 — scored once (dev-selected settings; current and C scored for comparison only).**
+
+| Metric | Current DEV | C | D |
+|---|---|---|---|
+| Category @1 (83 known) | 29 (35%) | 47 (57%) | **77 (92.8%)** |
+| Category in top 3 | 35 | 52 | **77 (92.8%)** |
+| Purity of shown products | 0.304 | 0.614 | **0.913** |
+| Known rejected | 3 (3.6%) | 6 (7.2%) | **2 (2.4%)** |
+| Unrelated objects accepted | 6/16 | 7/16 | **4/16** |
+| Unstocked electronics accepted | 14/15 | 11/15 | 14/15 |
+| Unknown total accepted | 20/31 | 18/31 | 18/31 |
+| Family in top 5 | 1/2 | 1/2 | 2/2 |
+| Phones @1 / rejected | 10/15 / 0 | 7/15 / 1 | 12/15 / 2 |
+| Tablets @1 / rejected | 2/16 / 0 | 8/16 / 2 | 15/16 / 0 |
+| Encode p50 (offline tool) | 0.041 s | 0.039 s | 0.384 s |
+
+D per class: every class 100% except networking 4/6 (ZyXEL switch → components; mesh puck → speakers), phones 12/15 (2 low-similarity rejections, Motorola Milestone slider → smart-home), tablets 15/16 (Surface Pro with keyboard → laptops). Unstocked electronics: D shows products for 14/15 (e-readers/photo frame → tablets, projectors → monitors, radios/projector → speakers, DVD/calculator → networking, drone/GPS → smart-home).
+
+### Task 04.2-Q — open-set negative-family expansion and Benchmark 4 (2026-10-27)
+
+Owner-authorized single round. Disposable QA only; shared DEV index, Candidate C (staged, inactive), PROD, migrations and Git untouched.
+
+**Benchmark 4 protection.** `benchmark.csv` SHA-256 `f58bc94df17fb4c9793759893613aed1b4cfedd617d91d5909af33d0f3fb4734` checked before development and again (with every file hash in `lock.json`) immediately before the single evaluation. No benchmark photo, label or score was opened during development; near-duplicate checks used the raw collection folders, not the benchmark folder. The evaluation script writes a run marker and refuses a second run.
+
+**New negative families (dev only).** 16 families, each first checked against the catalog API snapshot (no product name/spec matches; standalone fax machines and pen displays excluded as ambiguous with the stocked MFP printer and tablets/monitors): label printer, voice recorder, electronic dictionary, barcode scanner, card terminal, pager, remote control, medical meters, guitar pedal, audio mixer, UPS, typewriter, NAS, graphics (pen) tablet, webcam, digital scale. Oscilloscopes/multimeters and media players were not collected: they overlap Benchmark 4's reserved unseen families. Document scanners are stocked; GPS, photo frames and satellite receivers were already dev families. Collection `training/.data/realphoto-v5` (git-ignored): 1,450 Wikimedia Commons / Openverse candidates (CC0, PD, CC BY, CC BY-SA only, provenance per file), 559 kept after visual review (`review_keep.py` records each decision and the exclusion reasons), then 236 excluded (217 photographer/source group already used, 17 near-duplicates within dHash 6, 2 same file/page), leaving **278 dev photos from 209 source groups** (≤4 per group).
+
+**Family-disjoint validation** (`openset_fd.py`, session scratch): 31 unsupported families split into 6 folds by family; for each fold the classifier, calibration and threshold never saw those families; known/unrelated rows folded by source group. Same 193 stocked dev photos, 362 unstocked (84 round-4 + 278 new), 155 unrelated.
+
+| Detector | Stocked Top-1 | Rejected | Unstocked accepted (held-out families) | of which round-4 families | Unrelated |
+|---|---|---|---|---|---|
+| 1 D, no family gate | 92.2% | 1.6% | 73% | 71/84 (85%) | 6/155 |
+| 2 Text support ≥0.005 | 91.2% | 3.1% | 39% | — | 2/155 |
+| 3 Classifier, old negatives ≥0.3 | 90.2% | 4.1% | 32% | — | 3/155 |
+| 4 Text ≥0.003 & classifier (old) ≥0.2 | 90.2% | 4.7% | 28% | 38/84 (45%) | 2/155 |
+| 5a Classifier, expanded negatives ≥0.3 | 89.1% | 6.2% | 21% | — | 2/155 |
+| **5c Combined unit, expanded negatives ≥0.25 (selected)** | **91.7%** | **4.1%** | **15%** | **17/84 (20%)** | **2/155** |
+
+Hypotheses: (H1) more negative families help the linear classifier (3→5a: 32%→21%); (H2) text support, head confidence and best catalog similarity are complementary to the raw embedding (5a→5c: 21%→15% with lower rejection). Phone/tablet dev3: Top-1 67/78 in both D and the selected gate (5 vs 1 rejected). Threshold 0.25 and 0.3 give identical stocked results on the folds; 0.25 was chosen because 0.3 rejected the owner mouse screenshot (family evidence 0.276) that D answered with Logitech mice.
+
+**Selected design (D-specific, versioned).** `models/relevance-siglip2-d2` (git-ignored artifact): D's unchanged head plus `family_gate.safetensors` (SHA-256 `e7535c230366e9dd17d199b9d609fd64047f7cfe0121bdf9ae3877cacef09fdc`, 141 KB; 45 supported-family prompt embeddings + one logistic unit over 771 inputs) and `relevance.json` with new optional keys `familyGateSha256` and `minFamilyEvidence: 0.25` (version `siglip2-b16-p256-d1-family-gate-v1`). Built by `training/build_family_gate.py` (578 positives, 751 negatives; two builds gave the same SHA-256). Below the threshold the service returns no products **and no category fallback**; the fallback otherwise works as before. `relevance-siglip2-d1`, C and EfficientNet artifacts load and behave exactly as before (keys absent ⇒ gate off). Public API shape unchanged; the log event gains `familySupported`. Served code vs development code: 0 decision mismatches on 710 dev rows.
+
+**Cost (CPU, 8 threads idle machine; Steam idle, no game running).** Gate per query p50 0.37 ms / p95 0.87 ms vs 0.13 / 0.44 ms for D's head alone (+0.24 ms median); peak Python allocation of the gate step ~62 KB; artifact +141 KB; cold load 1.0 s (unchanged); full encode p50 ~0.30–0.32 s.
+
+**Tests.** ai-service `pytest` all pass (new family-gate tests: off without keys, evidence threshold, fails closed without evidence, refuses bad hash/threshold/shapes/missing file); `ruff check`, `ruff format --check` on changed files, `mypy --strict app` clean. Backend `vitest src/integrations/ai`: 116/116.
+
+**Live QA (React :3200 → Express :5200 → FastAPI → disposable pgvector, D + d2 gate in QA only).** Owner photos: controller/console → PlayStation 5; JBL speaker → 4 JBL; laptop → MacBook Airs; Wi-Fi extender → TP-Link Archer; tablet → Galaxy Tab S9; mouse screenshot → 6 Logitech mice (screenshot crop, not a camera verification). Browser (in-app pane, real UI, file supplied by script): typewriter → "No similar products found" with capture tips; electronic dictionary → no match; mouse screenshot → 6 Logitech products. Both unstocked browser photos are development photos (UI smoke only, not a generalization claim). Live phone/tablet dev set (78): phones Top-1 50/53 (1 rejected), tablets 17/25 (4 rejected; D: 50/53 and 17/25 with 0 and 1 rejected), end-to-end p50 0.27 s / p95 0.31 s. **Physical-camera capture/retake: NOT VERIFIED** (needs the owner's real device with camera permission).
+
+**Benchmark 4 (single run, after selection).**
+
+| Population | D (reference) | Selected D2 | Gate |
+|---|---|---|---|
+| Stocked Top-1 / Top-3 | 66/69 (95.7%) / 66 | 59/69 (85.5%) / 59 | ≥80% ✔ (prefer ≥90% ✘) |
+| Stocked rejected | 3/69 (4.3%) | **10/69 (14.5%)** | ≤5% **✘ FAIL** |
+| Correct-category share of shown products | 0.986 | 0.992 | — |
+| Unstocked electronics accepted | 82/115 (71%) | **21/115 (18.3%)** | ≤20% ✔ |
+| — of which unseen families | 45/62 (73%) | 16/62 (26%) | — |
+| Unrelated accepted | 0/40 | 0/40 | no worse ✔ |
+
+New stocked rejections: 3 smartphones, 3 printers, 1 smartwatch (plus D's 3). Remaining unstocked acceptances concentrate on fitness trackers (8/8, wrist bands close to the stocked smartwatch family), USB flash drives (5/6, close to portable SSDs) and hard disks (2/3). Development folds predicted 4.1% stocked rejection; the benchmark shows 14.5%, so the dev known set (193 photos, 16 from round 4) under-represents the stocked appearance variety the gate must accept. No tuning on Benchmark 4 was done after the run.
+
+**Recommendation: REQUEST FURTHER QUALITY CHANGES.** The detector substantially fixes misleading results for unsupported devices (71% → 18% accepted) without unrelated-object regressions, but it rejects too many genuine stocked photos (phones, printers) to replace D. Per the stopping rule no further collection or training was started. Architect options: accept a higher no-match rate for stocked photos, or fund a stocked-photo expansion (positives) before another gate round with a new locked benchmark.
+
+## Task 04.2-Q — Candidate D3 targeted correction and Benchmark 5 (2026-10-27)
+
+Scope: one bounded round authorised by the Architect decision "Candidate D2 rejected for promotion". Disposable QA only;
+Candidate C stays STAGING in shared DEV; no shared DEV index change, no PROD write, no migration, no commit.
+
+### Diagnosis of D2 false rejections (development data only)
+- Positive coverage was the main gap: before this round the development set held 3 printer, 1 smartwatch and 3 smart-home
+  stocked photos, and training positives held 9 printer and 13 monitor/headphone photos.
+- Out-of-fold ablation on the existing folds: raw embedding only rejected 3.6% stocked / accepted 22% unstocked; the three
+  scalar inputs only 5.2% / 22%; raw + text 2.6% / 18%; all inputs (D2) 4.1% / 15%. No single input explains the rejections.
+- The development folds did not reproduce Benchmark 4's 14.5% stocked rejection (D2 recipe: 4.4% on development), so the
+  development distribution remains easier than the independent benchmarks.
+
+### Data (realphoto-v6)
+- Licensed Commons/Openverse photos (CC0, PD, CC BY, CC BY-SA only), reviewed by eye on numbered contact sheets
+  (`review_keep.py`): 1,208 stocked photos kept across all 15 catalog categories, 10 reserved unseen families
+  (VR headset, power bank, robot vacuum, electric shaver, alarm clock, hearing aid, sewing machine, car stereo,
+  metal detector, electric toothbrush), 11 unstocked families, 150 unrelated objects.
+- `build_benchmark4.py` (now with `--bench-prefix/--dev-prefix`) excluded 762 photos already used (same file or page),
+  654 from already-used source groups and 5 near-duplicates. Result: development `dev6` 155 photos (148 stocked),
+  locked Benchmark 5 with 201 photos, manifest SHA-256 `de1e87ed5763f44d9076dbc39fba422d2ee6dc6f0349f0400133ac324e671fa1`.
+- Limitation: the exclusion left thin development coverage for smart-home (1), tablets (4), smartwatches (6), and the
+  benchmark has only 3 speaker and 3 CPU photos.
+
+### Candidate comparison (common family/source-disjoint development folds, 341 stocked, 369 unstocked, 155 unrelated)
+| Candidate | Top-1 | Stocked rejected | Unstocked accepted | Unrelated accepted |
+|---|---|---|---|---|
+| D | 93.5% | 1.2% | 74% | 6/155 |
+| D2 recipe, 0.25 | 91.8% | 4.4% | 16% | 2/155 |
+| Category-balanced, 0.30 | 91.8% | 4.1% | 20% | 2/155 |
+| Balanced + stocked rescue, 0.25 | 92.7% | 2.9% | 30% | 2/155 |
+| **D3: D2 recipe + new positives, 0.35** | **92.1%** | **3.8%** | **18%** | **2/155** |
+
+Rescue rule rejected (re-admits typewriters and other unsupported families). Weight decay 1e-2 changed nothing.
+
+### D3 artifact
+- `models/relevance-siglip2-d3/` (git-ignored), version `siglip2-b16-p256-d1-family-gate-v2`, threshold 0.35,
+  family_gate SHA-256 `be4e874667e7ab86742805788b7055d427eba8018dead5543b4755fdf7ba952a`; a clean rebuild reproduced the same
+  hash. D and D2 artifacts unchanged (D2 gate still `e7535c23…`).
+- pytest all pass, mypy --strict clean, ruff clean on changed app/training files. Served-vs-numpy parity: 1 boundary
+  mismatch in 865 rows. Gate p50 0.36 ms (D2 0.42 ms), peak ~62 KB, cold start 1.0 s, encode ~0.32 s.
+
+### Live QA (disposable stack :3200 → :5200 → QA AI service with D3)
+- Development phones/tablets: phones Top-1 50/53, 1 rejected; tablets Top-1 17/25, 3 rejected (D2 4, D 1). End-to-end
+  p50 0.32 s, p95 0.47 s.
+- Owner photos preserved: controller → PlayStation 5; router, tablet, laptop, soundbar, mouse screenshot unchanged;
+  typewriter and dictionary → no match.
+- Browser: paste, submit, Replace (typewriter → no-match guidance), Remove, Escape verified. AI outage: photo search 503
+  `IMAGE_SEARCH_UNAVAILABLE` in 0.05 s while suggestions, text search and categories returned 200.
+- Not verified: drag/drop (synthetic drop not accepted by the drop zone), the automated isolated Playwright suite (its runtime
+  preflight requires the authenticated diagnostic token), physical camera capture.
+
+### Benchmark 5 (single run, D3 selected on development data)
+| Population | D | D2 | D3 |
+|---|---|---|---|
+| Stocked Top-1 | 97/103 (94.2%) | 94/103 (91.3%) | 93/103 (90.3%) |
+| Stocked rejected | 3/103 (2.9%) | 6/103 (5.8%) | **7/103 (6.8%) — fails ≤5%** |
+| Unstocked electronics accepted | 32/64 (50%) | 7/64 (10.9%) | 10/64 (15.6%) |
+| Unseen families accepted | 27/53 | 5/53 | 8/53 (15.1%) |
+| Unrelated accepted | 2/34 | 0/34 | 0/34 |
+
+D3 rejections: networking 2, monitors 2 (also rejected by D), smartphone 1 (also by D), laptop 1, keyboard 1. No printer,
+smartwatch or tablet was rejected. D3 still accepts 6/9 VR headsets.
+Outcome: D3 meets Top-1 and both unstocked gates but fails the stocked-rejection gate. Per the stopping rule no further
+collection or tuning was started.
+
+### Task 04.2-Q — Truthful uncertainty UX and real-browser QA (2026-10-27)
+
+Architect decision after Benchmark 5: model iterations stop; D3 stays in disposable QA; Candidate C stays STAGING and inactive in shared DEV (no activation, no migration, no PROD, no commit).
+
+**Metric integrity.** D3 fails the ≤5% stocked-rejection gate on Benchmark 5 (7/103 = 6.8%; D 3/103, D2 6/103). A rejected stocked photo remains a false rejection even though the no-match state offers manual search or browsing. Those actions are not counted as matches.
+
+**Changes (frontend only, no API contract change).**
+- `apps/frontend/src/features/search/discovery/DiscoveryImageMode.tsx`: the no-match description no longer asserts that nothing in the catalog is close. It says no confident match was found and that this does not always mean the product is not sold. The existing title, announcement and three actions (Try another photo, Search by text, Browse products) are unchanged; no nearest neighbours are shown.
+- `apps/frontend/src/features/search/discovery/discovery.test.tsx`: the "not enabled" test now sets `VITE_IMAGE_SEARCH_ENABLED=false` explicitly; it previously passed only when the local `.env` left the flag off.
+
+**Automated suite.** The earlier preflight failure was environmental: the Docker QA launcher writes its token to `apps/backend/.isolated-docker/runtime-token.txt` (not `.isolated/`), a `tsx watch` reload left the QA backend on :5200 with a stale token (EADDRINUSE), and the ad-hoc frontend on :3200 listened on `::1` only. Restarted with the documented method (`npm run dev -- --host 127.0.0.1 --strictPort` with `E2E_FRONTEND_PORT=3200`, `E2E_API_PROXY_TARGET`) and `ISOLATED_RUNTIME_TOKEN_FILE`; no authentication or security control was weakened. `discovery-image.isolated.spec.ts`: 6 passed / 1 skipped with the AI service up (`ISOLATED_MODEL_VERSION_PREFIX=siglip2`), and 6 passed / 1 skipped (live-model test) with `ISOLATED_AI_DOWN=1` and the service stopped. Vitest `src/features/search`: 65 passed; `tsc` and ESLint clean.
+
+**Real-browser drag-and-drop.** Chromium `Input.dispatchDragEvent` with real file paths onto the drop zone (not a synthetic DOM event): preview appeared and the search ran for all five files.
+
+| File | Result |
+|---|---|
+| Owner tablet photo | 12 products, top 3 Samsung Galaxy Tab S9 / S9 / iPad 10 |
+| Dev phone photo | 12 products, top 3 iPhone 16 / iPhone 16 / Galaxy S24 |
+| Owner typewriter (unsupported) | No similar products found; 3 recovery actions |
+| Benchmark 5 stocked photos D3 rejected (2 files, UI behaviour only, not scoring) | No similar products found; 3 recovery actions |
+
+Text search "iPhone 16" returned suggestions and the search page, and a product card opened its product page. Camera capture/retake uses the virtual device only; the physical camera is NOT VERIFIED and needs the owner on a permission-enabled device. The screenshot crop of the owner's mouse photo is not the original camera file.
+
+### Task 04.2-Q — Runtime trace and MAIN DEV vs D3 QA comparison (2026-10-27)
+
+Measured with identical files through `POST /api/search/image`, once via `localhost:3000` and once via `127.0.0.1:3200`. No activation, pointer change, migration, PROD write or commit.
+
+| Chain | Frontend | Backend | AI service | Model version returned | Embedding version returned |
+|---|---|---|---|---|---|
+| MAIN DEV | :3000, image search enabled | :5000 | :8000 (stopping :8000 made :3000 photo search return 503, so the link is verified) | `effb0-commons-v2` | `effb0-commons-v2-3224d2cc9e57` |
+| D3 QA | :3200, image search enabled | :5200 | :8200 with the D3 gate (`relevance-siglip2-d3`) | `siglip2-b16-p256-d1` | `siglip2-b16-p256-d1-b3900dd9fad5` |
+
+Conclusion: both chains are wired as intended. :3000 runs the original ACTIVE model with no relevance gate, so owner results there are unchanged by D3 by design. Candidate C and D3 are not active in shared DEV.
+
+### Task 04.2-Q — D3 shared-DEV staging: PREPARED, NOT EXECUTED (2026-10-27)
+
+No shared DEV write was made. Read-only verification only.
+
+- Artifact `models/siglip2-b16-p256-d1`: descriptor embeddingVersion `siglip2-b16-p256-d1-b3900dd9fad5`, artifactSha256 `b3900dd9…243a` (manifest hash over `weights.json`-listed files, verified by the loader at service start), preprocess `siglip2-rgb-r224-bilinear-norm05-v1`, dimension 256.
+- Gate `models/relevance-siglip2-d3`: `head.safetensors` `db8acc3a…6587`, `family_gate.safetensors` `be4e8746…952a`, version `siglip2-b16-p256-d1-family-gate-v2`, minFamilyEvidence 0.35. Files hash to the values recorded in `relevance.json`.
+- Catalog baseline: shared DEV (:5000) and QA (:5200) both list 206 visible products with identical slugs, but only 79 of 206 product UUIDs match. The QA D3 index is therefore NOT transferable; D3 must be ingested against shared DEV's own `ai.catalog_images`.
+- Staging mechanism (existing, no migration): `python -m app.ingest stage --artifact-dir models/siglip2-b16-p256-d1 --catalog-root apps/frontend/public` with `AI_VECTOR_INGEST_DATABASE_URL` (role `ai_vector_ingest`); registers a separate STAGING version, upserts idempotently, never touches other versions' rows.
+- Activation/rollback (admin role, second owner decision): `activate --embedding-version <v>` refuses unless stored = expected = eligible, flips `ai.active_index` in one locked transaction and records `previous_version`; `rollback` restores it.
+- Coherence: the gateway requires the ACTIVE row to equal the loaded descriptor. If the pointer flips before the :8000 service is restarted on D3 (or vice versa), photo search returns 503 until they agree; it never serves mixed versions.
+
+### Task 04.2-Q — Candidate D3 STAGED in shared DEV (2026-10-27, owner-authorised, staging only)
+
+Executed by the owner in their own terminal through the repository operator tool `apps/backend/scripts/ai-vector-dev.cjs exec --` (approval flag `AI_VECTOR_DEV_APPROVED=pzxekjybdiulzmssalfo`) running a process-scoped helper kept outside the repository. The helper deleted the injected admin and reader DSNs before any Python ran; only `AI_VECTOR_INGEST_DATABASE_URL` was used, and it was cleared when the run ended. The redacted `report.txt` contains no connection string or password. An earlier attempt failed at connect time (relative `sslrootcert`) before any write; the helper now uses an ASCII-path copy of the public Supabase CA.
+
+| Item | Verified result |
+|---|---|
+| DEV project / role | `pzxekjybdiulzmssalfo`; `current_user = ai_vector_ingest`; PROD ref absent from the connection |
+| Role check (`ai-vector-dev.cjs check`, read-only) | both AI roles LOGIN; `anon`/`authenticated` no `ai` usage; reader cannot read `users`; ingest cannot update `products`; pgvector 0.8.2 |
+| Staging guard | trigger `embeddings_staging_only` present and enabled on `ai.product_image_embeddings` |
+| Eligible catalog (DEV authoritative, `ai.catalog_images`) | 412 images / 206 products; every source file readable (0 unreadable); equals the ACTIVE version's expected 412 |
+| Artifact contract | `siglip2-b16-p256-d1-b3900dd9fad5`, dim 256, preprocess `siglip2-rgb-r224-bilinear-norm05-v1`; gate `head`/`family_gate` checksums match `relevance.json` |
+| D3 job | stage exit 0; `COMPLETED`; planned 412, succeeded 412, skipped 0, failed 0; source digest `55d36d92…2306b` |
+| D3 staged version | `siglip2-b16-p256-d1-b3900dd9fad5` status **STAGING**, expected 412, 412 vectors, 206 products, all 256-d, metadata equals descriptor, 0 of 412 stored image checksums differ from the files |
+| ACTIVE | still `effb0-commons-v2-3224d2cc9e57` (ACTIVE, 412/206); content fingerprint before and after identical (412 rows, md5 prefix `68e70c54c26b`) |
+| Candidate C | `effb0-realphoto-c2-b6f83c9c224b` still STAGING (412/206); fingerprint identical before and after (md5 prefix `9855d785a536`) |
+| `localhost:3000` | a real request still returns `effb0-commons-v2` / `effb0-commons-v2-3224d2cc9e57` |
+| Not performed | activation, `ai.active_index` change, `:8000` switch, migration, PROD access, Git operations, training |
+
+Remaining blockers for activation: owner acceptance of D3's 6.8% (7/103) stocked rejection against the 5% requirement; a second explicit DEV activation authorization.
+
+Proposed, NOT executed, DEV activation: (1) admin role runs `python -m app.ingest activate --embedding-version siglip2-b16-p256-d1-b3900dd9fad5` (refuses unless stored = expected = eligible = 412; one locked transaction; records `previous_version`); (2) immediately restart the `:8000` service with `AI_MODEL_ARTIFACT_DIR=models/siglip2-b16-p256-d1` and `AI_RELEVANCE_ARTIFACT_DIR=models/relevance-siglip2-d3`; (3) re-run the owner-photo comparison on `:3000`. Between (1) and (2) photo search returns 503 because the service's identity no longer matches the ACTIVE row (fail closed, never mixed). Rollback: `python -m app.ingest rollback` (restores `effb0-commons-v2-3224d2cc9e57`), then restart `:8000` with the original model and no D3 gate.
+
+### Task 04.2-Q — Candidate D3 ACTIVATED in shared DEV (2026-10-27, owner-authorised, DEV only)
+
+Owner decision: reversible DEV-only activation with explicit acceptance of the measured 6.8% (7/103) stocked rejection against the original ≤5% limit. This is a documented DEV exception, not a pass of the gate, and not a PROD authorisation.
+
+Executed by the owner through `apps/backend/scripts/ai-vector-dev.cjs exec --` running a helper kept outside the repository (admin and ingest credentials injected by the repository tool for that process only; stripped from the restarted service's environment; cleared afterwards; report redacted).
+
+| Check | Verified result |
+|---|---|
+| Preflight (before any change) | connections DEV and not PROD; ACTIVE `effb0-commons-v2-3224d2cc9e57`; Candidate C STAGING 412/206; D3 STAGING 412 vectors / 206 products, 256-d, checksums and source files match; staging guard enabled; no RUNNING ingestion job; a real `:5000` request still returned the original model |
+| Activation | `python -m app.ingest activate --embedding-version siglip2-b16-p256-d1-b3900dd9fad5` as the admin role: `{"active": D3, "previous": "effb0-commons-v2-3224d2cc9e57", "vectors": 412}` |
+| Version states after | D3 ACTIVE; `effb0-commons-v2-3224d2cc9e57` RETIRED (its 412 vectors retained; rollback target); Candidate C STAGING 412/206 |
+| Service | only `:8000` restarted, with `AI_MODEL_ARTIFACT_DIR=models/siglip2-b16-p256-d1` and `AI_RELEVANCE_ARTIFACT_DIR=models/relevance-siglip2-d3` supplied as process environment; `apps/ai-service/.env` unchanged. The gateway requires the ACTIVE row to equal the loaded descriptor, so a mismatched pair returns 503 and never mixed results |
+| Real request through `localhost:3000` | model `siglip2-b16-p256-d1`, embedding `siglip2-b16-p256-d1-b3900dd9fad5` on every one of 14 requests; every returned product id exists in the DEV catalogue (0 unknown) |
+| Rollback | not needed; not performed |
+| PROD, migrations, Candidate C, Git | untouched |
+
+Owner photographs through `localhost:3000` (identical files; real browser screenshots in the session scratch folder): controller → PlayStation 5 only (1); Xbox console → PlayStation 5 only (1; a different brand, not an exact match); speaker → JBL Bar 300, Flip 6, Go 4, Boombox 3 (right category, brand-specific); laptop → MacBook Air ×5; Wi-Fi extender → TP-Link Archer routers ×6 (routers are not the same product type as an extender); Samsung tablet → Galaxy Tab S9 ×2 then iPad 10; mouse screenshot → Logitech M720, Lift, MX Anywhere 3S, M650, MX Master 3S; phones → iPhone 16 / Galaxy S24; iPad and tablets → iPad Air / iPad 10; one tablet photo → no match (known false rejection); typewriter and dictionary → no match with the three recovery actions. Text search ("iPhone 16": results and suggestions) and browsing (products, categories) work, and a result opens its product page.
+
+Limitations kept: 7/103 stocked rejection (6.8%) above the 5% gate; wrong-brand/near-category answers listed above; physical-camera QA NOT done (one virtual-camera pass only). Operational caveat: if `:8000` is restarted without those two environment overrides it loads the old model from `.env`, the identity check fails and photo search returns 503 until `.env` (or the launcher) is updated; that configuration change is not yet authorised. Rollback: `python -m app.ingest rollback` as the admin role (restores `effb0-commons-v2-3224d2cc9e57`), then restart `:8000` without the overrides.
+
+## D3 configuration persisted for the :8000 service
+
+`apps/ai-service/.env` now sets only `AI_MODEL_ARTIFACT_DIR=models/siglip2-b16-p256-d1` and `AI_RELEVANCE_ARTIFACT_DIR=models/relevance-siglip2-d3` (owner-run script; a full backup was kept outside the repo; no other line or secret changed or printed). After a normal restart of :8000 (no environment overrides) the service logged `ai.model_loaded siglip2-b16-p256-d1`, `ai.ready` and `ai.search_relevance` with `relevanceVersion siglip2-b16-p256-d1-family-gate-v2`, and a real request through :5000 returned `siglip2-b16-p256-d1` / `siglip2-b16-p256-d1-b3900dd9fad5`. Shared DEV ACTIVE stays `siglip2-b16-p256-d1-b3900dd9fad5`; Candidate C stays STAGING. Rollback is two steps in this order: restore the `.env` backup, then `activate-d3.ps1 -Mode rollback` (admin).
+
+## Camera preview bug (black viewfinder) — fix and evidence
+
+**Code findings (`DiscoveryCamera.tsx`, before the fix).** `getUserMedia` is called on mount with `facingMode: {ideal:'environment'}` on every device, so a desktop browser could pick a camera other than the user's webcam (IR/virtual). The status became `live` as soon as the stream resolved, whether or not a frame ever arrived; `play()` rejections were swallowed; a live stream that sent no frames left a black preview with an enabled shutter that silently did nothing. Only `denied`/`unsupported`/`failed` had copy, `NotReadableError` was mapped to a generic message, and only `failed` offered a retry. The actual cause on the owner's device (privacy shutter, wrong/virtual camera, another app) is **not established**; it needs the physical check below.
+
+**Fix.** Request only a width hint on desktop and the rear camera only on touch devices (`pointer: coarse`); on `OverconstrainedError` retry with plain video. `live` is set only once the video reports a decoded frame (`loadeddata`/`playing`/`resize` with `videoWidth > 0`); after 8 s with no frame the stream is stopped and "The camera sent no picture" is shown. Specific titles for blocked, no camera, in use (`NotReadableError`/`AbortError`), no picture and failed, each with the browser error name, **Retry camera** and **Upload a photo**; no automatic re-prompting (retry is user-initiated). A track `ended` event stops to an error. **Switch camera** appears when more than one video input exists. Tracks still stop on capture, cancel, switch, failure and unmount.
+
+**Verification actually run.** `vitest src/features/search/discovery`: 34 passed (3 new: busy + Retry camera, desktop constraints + over-constrained fallback, no-frame timeout). `tsc --noEmit` clean; `eslint src/features/search/discovery` clean. Isolated real-browser Playwright (Chromium fake device): virtual camera capture/retake/track end, and camera denial with keyboard, Escape, focus restoration and 200% reflow, both pass. The full isolated suite also reported 2 failures unrelated to the camera: the catalog-storefront home test, and the held-out-photo test that expects the QA service model prefix `effb0-commons-` while :8200 serves D3 (set `ISOLATED_MODEL_VERSION_PREFIX`); not investigated further here.
+
+**Not verified.** Physical camera on the owner's device: PENDING. Brave/Windows physical check: open `localhost:3000`, Ctrl+K, Search by image, Camera. Expect a live picture, or a specific message after 8 s; use Switch camera if shown, and close other apps using the camera. Capture, Retake and Use this photo then go through the existing D3 flow.
+
+## Camera closure (Architect review)
+
+**Device blocker — physical-camera QA: BLOCKED.** The owner's Windows Camera app shows the same black picture and a "Your camera might be covered" banner (privacy shutter, keyboard camera key or camera switch), so no app receives pixels from this device. This is not an ElectroHub defect and nothing in the frontend can fix it. Physical-camera QA is not claimed as passed; it needs a working device. Software behaviour is covered by the virtual-camera tests below, which are not evidence of hardware compatibility.
+
+**Camera changes (final).** `DiscoveryCamera.tsx`: live only after a decoded frame from an unmuted track (a muted track is not live; `unmute` can still make it live); 8 s no-picture timeout; specific messages (blocked, none, in use, no picture, failed) with browser error name, Retry camera and Upload; desktop requests no rear-facing constraint (rear only on `pointer: coarse`), over-constrained fallback to plain video; Switch camera when several cameras exist; tracks stop on capture, cancel, switch, failure and unmount. `Discovery.module.scss`: viewfinder `max-height` 38dvh so the camera controls are not clipped.
+
+**Automated QA run.** Vitest `src/features/search/discovery`: 35 passed, including the new regression for a muted track (shutter stays disabled, no live preview, "The camera sent no picture" with Retry camera and Upload, track stopped). `tsc --noEmit` and eslint clean. Isolated real-browser Playwright `discovery-image`: 6 passed, 1 skipped (AI-outage variant needs `ISOLATED_AI_DOWN=1`), covering virtual camera capture/retake/track end, camera denial with keyboard, Escape, focus and 200% reflow, and the D3 photo-search contract.
+
+**Test triage.**
+- Photo-search test: the hardcoded `effb0-commons-` default was an outdated assertion (the QA service now serves D3). It now asserts the contract: a well-formed `modelVersion` and an `embeddingVersion` that starts with it; `ISOLATED_MODEL_VERSION_PREFIX` still pins a specific model when set. Results, product visibility and counts assertions are unchanged.
+- Catalog-storefront Home test: **not a regression of this task.** It fails identically with the camera files stashed (`#home-category-grid` content not found in the responsive loop after earlier steps), no Home/storefront file is modified in this change, and the grid renders at 320/390/768/1024/1920 on a fresh load. Left out of scope.
+
+D3 persisted configuration (above) is unchanged. ACTIVE index, Candidate C, PROD, schema and data untouched; nothing committed.

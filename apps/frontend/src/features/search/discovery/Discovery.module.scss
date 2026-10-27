@@ -684,7 +684,7 @@
 .viewfinder {
   position: relative;
   aspect-ratio: 4 / 3;
-  max-height: 50dvh;
+  max-height: 38dvh;
   background: $color-secondary;
   overflow: hidden;
 
@@ -884,4 +884,30 @@
   justify-content: center;
   gap: $spacing-2;
   margin-top: $spacing-2;
+}
+
+.stateCompact {
+  padding: $spacing-5 $spacing-4;
+  gap: $spacing-2;
+
+  .stateGlyph {
+    width: 2.5rem;
+    height: 2.5rem;
+    margin-bottom: 0;
+    border-radius: 50%;
+  }
+
+  .stateActions {
+    margin-top: $spacing-1;
+  }
+}
+
+.captureTips {
+  max-width: 24rem;
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  color: $discovery-text-secondary;
+  text-align: left;
 }

@@ -28,8 +28,11 @@ from app.schemas.image_search import HARD_MAX_TOP_K
 APPLICATION_NAME: Final = "electrohub-ai-service"
 STATEMENT_TIMEOUT_MS: Final = 2000
 POOL_MAX_SIZE: Final = 4
-CONNECT_TIMEOUT_SECONDS: Final = 5
-POOL_TIMEOUT_SECONDS: Final = 3.0
+# A TLS session to a remote pooler costs several round trips (5-9 s measured from a Windows dev machine to the DEV
+# region), so connects get a generous budget and one connection is kept warm for requests to reuse.
+CONNECT_TIMEOUT_SECONDS: Final = 15
+POOL_MIN_SIZE: Final = 1
+POOL_TIMEOUT_SECONDS: Final = 10.0
 _SESSION_OPTIONS: Final = (
     f"-c search_path=ai,extensions -c statement_timeout={STATEMENT_TIMEOUT_MS} -c default_transaction_read_only=on"
 )
@@ -85,7 +88,7 @@ def _default_pool_factory(dsn: str) -> PoolFactory:
     def build() -> _Pool:
         return AsyncConnectionPool(
             conninfo=dsn,
-            min_size=0,
+            min_size=POOL_MIN_SIZE,
             max_size=POOL_MAX_SIZE,
             timeout=POOL_TIMEOUT_SECONDS,
             open=False,

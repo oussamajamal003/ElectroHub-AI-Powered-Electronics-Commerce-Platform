@@ -125,6 +125,9 @@ class Settings(BaseSettings):
     AI_TORCH_THREADS: int = Field(default=2, ge=1, le=16)
     # Directory holding model.safetensors and descriptor.json, mounted read-only. Unset = no encoder (503).
     AI_MODEL_ARTIFACT_DIR: Path | None = None
+    # Directory holding relevance.json and head.safetensors (calibrated no-match gate). Unset = every search returns
+    # the nearest topK products, as before Task 04.2-Q.
+    AI_RELEVANCE_ARTIFACT_DIR: Path | None = None
     # Least-privilege, read-only connection to the ai schema (ai_vector_reader). Unset = no index (503).
     AI_VECTOR_DATABASE_URL: SecretStr | None = None
 
@@ -133,7 +136,7 @@ class Settings(BaseSettings):
     def _blank_key_is_absent(cls, value: object) -> object:
         return None if isinstance(value, str) and value == "" else value
 
-    @field_validator("AI_MODEL_ARTIFACT_DIR", "AI_VECTOR_DATABASE_URL", mode="before")
+    @field_validator("AI_MODEL_ARTIFACT_DIR", "AI_RELEVANCE_ARTIFACT_DIR", "AI_VECTOR_DATABASE_URL", mode="before")
     @classmethod
     def _blank_optional_is_absent(cls, value: object) -> object:
         return None if isinstance(value, str) and value.strip() == "" else value

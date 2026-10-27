@@ -165,6 +165,7 @@ describe('Discovery Console image search', () => {
   });
 
   it('reports image search as unavailable without sending the photo while the endpoint is not enabled', async () => {
+    vi.stubEnv('VITE_IMAGE_SEARCH_ENABLED', 'false');
     renderConsole();
     fireEvent.click(screen.getByRole('button', { name: 'Open photo search' }));
     expect(await screen.findByText(/Visual matching isn’t switched on yet/)).toBeInTheDocument();
@@ -196,13 +197,18 @@ describe('Discovery Console image search', () => {
     expect(await screen.findByAltText('Selected photo')).toBeInTheDocument();
     expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint === '/api/search/image')).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'Search similar products' }));
-    await waitFor(() => expect(screen.getByRole('status', { name: 'Photo search status' })).toHaveTextContent('No similar products found'));
+    await waitFor(() => expect(screen.getByRole('status', { name: 'Photo search status' })).toHaveTextContent("We couldn't find a close match"));
+    expect(screen.getByRole('heading', { name: "We couldn't find a close match" })).toBeInTheDocument();
+    expect(screen.getByText('Try another photo or search by product name. You can also explore our catalog.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try another photo' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Search by text' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Browse products' })).toBeInTheDocument();
     expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint === '/api/search/image')).toHaveLength(1);
   });
 
   it.each([
     { status: 200, items: [product('one', 'One')], message: '1 visually similar product found' },
-    { status: 200, items: [], message: 'No similar products found' },
+    { status: 200, items: [], message: "We couldn't find a close match" },
     { status: 503, items: [], message: 'Image search is unavailable right now' },
     { status: 504, items: [], message: 'The search took too long' },
     { status: 408, items: [], message: 'The search took too long' },
@@ -323,6 +329,63 @@ describe('Discovery Console camera', () => {
     expect(screen.getByRole('button', { name: 'Upload a photo' })).toBeInTheDocument();
   });
 
+  it('names a busy camera, offers Retry camera and does not reprompt on its own', async () => {
+    stubCamera(() => Promise.reject(new DOMException('in use', 'NotReadableError')));
+    renderConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Open camera' }));
+    expect(await screen.findByRole('heading', { name: 'The camera is in use' })).toBeInTheDocument();
+    expect(screen.getAllByText(/NotReadableError/).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Upload a photo' })).toBeInTheDocument();
+    expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry camera' }));
+    await waitFor(() => expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledTimes(2));
+  });
+
+  it('does not require a rear camera on desktop and falls back from an over-constrained request', async () => {
+    const calls: unknown[] = [];
+    stubCamera(((constraints: unknown) => { calls.push(constraints); return calls.length === 1 ? Promise.reject(new DOMException('x', 'OverconstrainedError')) : Promise.reject(new DOMException('gone', 'NotFoundError')); }) as never);
+    renderConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Open camera' }));
+    expect(await screen.findByRole('heading', { name: 'No camera available' })).toBeInTheDocument();
+    expect(JSON.stringify(calls[0])).not.toContain('facingMode');
+    expect(calls[1]).toEqual({ video: true, audio: false });
+  });
+
+  it('reports a stream that never delivers a frame instead of leaving a black preview', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const stop = vi.fn();
+    stubCamera(() => Promise.resolve({ getTracks: () => [{ stop }] } as unknown as MediaStream));
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    renderConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Open camera' }));
+    await screen.findByLabelText('Live camera preview');
+    await act(async () => { await vi.advanceTimersByTimeAsync(8100); });
+    expect(await screen.findByRole('heading', { name: 'The camera sent no picture' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry camera' })).toBeInTheDocument();
+    expect(stop).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('does not report a live preview for a muted track and shows the no-picture recovery state', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const stop = vi.fn();
+    const track = Object.assign(new EventTarget(), { stop, muted: true });
+    stubCamera(() => Promise.resolve({ getTracks: () => [track], getVideoTracks: () => [track] } as unknown as MediaStream));
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(HTMLVideoElement.prototype, 'videoWidth', 'get').mockReturnValue(640);
+    renderConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Open camera' }));
+    await screen.findByLabelText('Live camera preview');
+    fireEvent.loadedData(screen.getByLabelText('Live camera preview'));
+    expect(screen.getByRole('button', { name: 'Take photo' })).toBeDisabled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(8100); });
+    expect(await screen.findByRole('heading', { name: 'The camera sent no picture' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry camera' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Upload a photo' })).toBeInTheDocument();
+    expect(stop).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it('requests video only after the press and stops every track when the console closes', async () => {
     const stop = vi.fn();
     stubCamera(() => Promise.resolve({ getTracks: () => [{ stop }] } as unknown as MediaStream));
@@ -360,6 +423,26 @@ describe('Discovery Console camera', () => {
     expect(await screen.findByAltText('Selected photo')).toBeInTheDocument();
     expect(stop).toHaveBeenCalledTimes(2);
     expect(vi.mocked(apiClient).mock.calls.some(([endpoint]) => endpoint === '/api/search/image')).toBe(false);
+  });
+
+  it('advises a retake for a very dark capture but still allows using it', async () => {
+    stubCamera(() => Promise.resolve({ getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream));
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(HTMLVideoElement.prototype, 'videoWidth', 'get').mockReturnValue(640);
+    vi.spyOn(HTMLVideoElement.prototype, 'videoHeight', 'get').mockReturnValue(480);
+    const dark = new Uint8ClampedArray(32 * 24 * 4).fill(20);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+      { drawImage: vi.fn(), getImageData: () => ({ data: dark }) } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(callback => callback(new Blob(['capture'], { type: 'image/jpeg' })));
+    renderConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Open camera' }));
+    const shutter = await screen.findByRole('button', { name: 'Take photo' });
+    await waitFor(() => expect(shutter).toBeEnabled());
+    fireEvent.click(shutter);
+    expect(await screen.findByText('This photo looks dark. For better matches, retake it in brighter light.')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Camera status' })).toHaveTextContent('It looks dark');
+    fireEvent.click(screen.getByRole('button', { name: 'Use this photo' }));
+    expect(await screen.findByAltText('Selected photo')).toBeInTheDocument();
   });
 
   it('does not create a retained image URL if canvas encoding finishes after closing the camera', async () => {

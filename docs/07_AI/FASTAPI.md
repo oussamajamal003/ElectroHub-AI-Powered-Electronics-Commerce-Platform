@@ -653,6 +653,13 @@ Task 04.2 replaces the 04.1 placeholder with real inference. The app factory, au
 
 Configuration added: `AI_MODEL_ARTIFACT_DIR`, `AI_VECTOR_DATABASE_URL` (read-only role; TLS required for non-loopback hosts), `AI_MAX_IMAGE_BYTES` (8 MiB), `AI_MAX_IMAGE_PIXELS` (40 M) and `AI_TORCH_THREADS` (2). `AI_ENV_FILE` points a process at another env file, and isolated QA passes a non-existent path so nothing is inherited from the developer `.env`. Commerce secrets (`DATABASE_URL`, Stripe, JWT and so on) stay forbidden.
 
+Task 04.2-Q adds `AI_RELEVANCE_ARTIFACT_DIR`, a directory holding `relevance.json` and `head.safetensors`. The loader verifies the SHA-256 and refuses an artifact calibrated for a different `modelVersion`. When the setting is present, `app/models/relevance.py` runs the pretrained ImageNet head on the backbone features the encoder already computes:
+
+- If the photo's softmax mass on electronics classes is below `minElectronicsMass` (0.08), the search returns `matches: []`.
+- Otherwise, only products whose similarity is within `maxScoreGap` (0.10) of the best match are kept.
+
+The wire contract is unchanged; `matches` can now hold anywhere from 0 to topK items. Calibration and evidence are in `docs/tasks/Phase-04/TASK_04.2_IMPLEMENTATION_EVIDENCE.md`.
+
 Windows note: psycopg's async driver cannot use the Proactor loop, so `python -m app` selects the selector loop on `win32`. Linux and Docker keep uvicorn's default.
 
 Runtime dependencies: CPU-only `torch==2.13.0+cpu` / `torchvision==0.28.0+cpu` from the PyTorch CPU index. 2.8.0 was replaced after `pip-audit` reported advisories fixed in ≤ 2.13.0. Also `pillow`, `numpy`, `safetensors`, `psycopg[binary]`, `psycopg-pool` and `python-multipart`, all pinned with their transitive dependencies. Training dependencies never enter the image, and `training/` is excluded from the Docker build context.

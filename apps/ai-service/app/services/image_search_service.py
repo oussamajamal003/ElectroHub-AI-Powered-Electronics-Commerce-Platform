@@ -20,11 +20,14 @@ from app.core.errors import (
 )
 from app.core.logging import log_event
 from app.integrations.vector_gateway import EmbeddingSearchGateway
+from app.models.efficientnet_loader import EfficientNetEncoder
 from app.models.interfaces import ImageEmbeddingEncoder
 from app.models.registry import ModelRegistry
+from app.models.relevance import FALLBACK_DEPTH, Assessment
+from app.models.siglip_loader import SiglipEncoder
 from app.processors.image import decode_image
 from app.processors.inference import InferenceExecutor
-from app.schemas.image_search import ImageSearchResult
+from app.schemas.image_search import CategoryHint, ImageSearchResult
 
 
 class ImageSearchService:
@@ -64,25 +67,59 @@ class ImageSearchService:
             "indexVersion": descriptor.embedding_version,
         }
 
-        def decode_and_encode() -> list[float]:
+        def decode_and_encode() -> tuple[list[float], Assessment | None]:
             with _timed_phase("decode", metadata):
                 image = decode_image(image_bytes, max_pixels=max_pixels)
             with _timed_phase("encode", metadata):
-                return list(encoder.encode(image))
+                if isinstance(encoder, EfficientNetEncoder | SiglipEncoder):
+                    return encoder.encode_assessed(image)
+                return list(encoder.encode(image)), None
 
         with _timed_phase("inference", metadata):
-            vector = await self._executor.run(decode_and_encode)
+            vector, assessment = await self._executor.run(decode_and_encode)
         if len(vector) != descriptor.embedding_dimension or not all(math.isfinite(v) for v in vector):
             raise InferenceOutputError()
 
         top_k = min(top_k, self._settings.AI_MAX_TOP_K)
+        gate = encoder.relevance if isinstance(encoder, EfficientNetEncoder | SiglipEncoder) else None
+        use_fallback = gate is not None and assessment is not None and gate.fallback(assessment)
+        depth = max(top_k, FALLBACK_DEPTH) if use_fallback else top_k
         with _timed_phase("retrieval", metadata):
-            matches = list(await gateway.nearest(vector, top_k=top_k, descriptor=descriptor))
-        if len(matches) > top_k:
+            nearest = list(await gateway.nearest(vector, top_k=depth, descriptor=descriptor))
+        if len(nearest) > depth:
             raise InferenceOutputError()
+        matches = nearest[:top_k]
+        fallback_matches = nearest if use_fallback else None
+        hints: list[CategoryHint] = []
+        category_weight: float | None = None
+        category_min_ratio: float | None = None
+        family_supported = True
+        if gate is not None and assessment is not None:
+            family_supported = gate.family_supported(assessment, nearest[0].score if nearest else None)
+            if not family_supported:
+                matches, fallback_matches = [], None
+            matches = gate.select(matches, assessment.electronics_mass)
+            if matches or fallback_matches:
+                hints = [CategoryHint(category=slug, probability=p) for slug, p in assessment.category_hints]
+                category_weight = gate.category_weight if hints else None
+                category_min_ratio = gate.min_category_ratio if hints and gate.min_category_ratio > 0 else None
+            log_event(
+                "ai.search_relevance",
+                requestId=metadata["requestId"],
+                relevanceVersion=gate.version,
+                accepted=len(matches),
+                rejectedQuery=not matches,
+                fallbackOffered=fallback_matches is not None,
+                familySupported=family_supported,
+            )
         try:
             return ImageSearchResult(
                 matches=matches,
+                category_hints=hints,
+                category_weight=category_weight,
+                category_min_ratio=category_min_ratio,
+                fallback_matches=fallback_matches,
+                fallback_score_gap=gate.max_score_gap if gate is not None and fallback_matches is not None else None,
                 model_version=descriptor.model_version,
                 embedding_version=descriptor.embedding_version,
             )

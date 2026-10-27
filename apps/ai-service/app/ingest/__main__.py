@@ -27,7 +27,7 @@ from typing import Any
 import psycopg
 
 from app.core.errors import AIServiceError
-from app.models.efficientnet_loader import load_efficientnet_encoder
+from app.models.siglip_loader import load_encoder
 from app.processors.image import decode_image
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
@@ -65,7 +65,7 @@ def vector_literal(values: list[float]) -> str:
 
 
 def stage(args: argparse.Namespace) -> None:
-    encoder = load_efficientnet_encoder(args.artifact_dir, torch_threads=args.threads)
+    encoder = load_encoder(args.artifact_dir, torch_threads=args.threads)
     descriptor = encoder.descriptor
     root: Path = args.catalog_root
     with connect("AI_VECTOR_INGEST_DATABASE_URL") as conn:

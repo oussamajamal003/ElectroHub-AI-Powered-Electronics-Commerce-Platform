@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import type { ProductSummary } from '@/features/products/types';
 import { DiscoveryCamera } from './DiscoveryCamera';
 import { DiscoveryState } from './DiscoveryState';
+import { assessPhoto, type PhotoIssue } from './photoQuality';
 import { IMAGE_ACCEPT, MAX_IMAGE_LABEL, formatBytes, imageSearchEnabled, searchByImage, validateImageFile, type ImageSearchOutcome } from './imageSearch';
 import styles from './Discovery.module.scss';
 
@@ -34,6 +35,7 @@ export function DiscoveryImageMode({ startCamera, backRef, onNavigate, onSearchT
   const [problem, setProblem] = useState('');
   const [dragging, setDragging] = useState(false);
   const [outcome, setOutcome] = useState<ImageSearchOutcome | null>(null);
+  const [issues, setIssues] = useState<PhotoIssue[]>([]);
   useEffect(() => {
     if (!file) { setPreview(null); return; }
     const url = URL.createObjectURL(file);
@@ -55,13 +57,16 @@ export function DiscoveryImageMode({ startCamera, backRef, onNavigate, onSearchT
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
-    setStep('searching'); setOutcome(null); setProblem('');
+    setStep('searching'); setOutcome(null); setProblem(''); setIssues([]);
     const result = await searchByImage(file, controller.signal);
+    if (request.current !== controller) return;
+    // Only a no-match is checked for capture problems; the photo is measured locally and never re-sent.
+    const found = result.status === 'success' && !result.items.length ? await assessPhoto(file) : [];
     if (request.current !== controller) return;
     request.current = null;
     if (result.status === 'cancelled') { setStep('ready'); return; }
     if (result.status === 'invalid') { setProblem(result.message); setStep('ready'); return; }
-    setOutcome(result); setStep('done');
+    setIssues(found); setOutcome(result); setStep('done');
   };
   const cancel = () => { request.current?.abort(); request.current = null; setStep('ready'); };
   // Escape steps back out of nested views before it closes the console.
@@ -140,14 +145,14 @@ export function DiscoveryImageMode({ startCamera, backRef, onNavigate, onSearchT
           {problem && <p className={styles.fieldError}><AlertTriangle size={16} aria-hidden="true" />{problem}</p>}
         </div>
       </div>
-      {step === 'done' && outcome && <Outcome outcome={outcome} onNavigate={onNavigate} onRetry={() => void search()} onSearchText={onSearchText} onReplace={openPicker} />}
+      {step === 'done' && outcome && <Outcome outcome={outcome} issues={issues} onNavigate={onNavigate} onRetry={() => void search()} onSearchText={onSearchText} onReplace={openPicker} />}
     </>}
   </div>;
 }
 
 function outcomeAnnouncement(outcome: ImageSearchOutcome): string {
   switch (outcome.status) {
-    case 'success': return outcome.items.length ? `${outcome.items.length} visually similar ${outcome.items.length === 1 ? 'product found' : 'products found'}. Results are ordered by visual relevance.` : 'No similar products found. Try another photo or search by text.';
+    case 'success': return outcome.items.length ? `${outcome.items.length} visually similar ${outcome.items.length === 1 ? 'product found' : 'products found'}. Results are ordered by visual relevance.` : "We couldn't find a close match. Try another photo or search by product name. You can also explore our catalog.";
     case 'unavailable': return imageSearchEnabled() ? 'Image search is unavailable right now. Search by text or browse products.' : 'Image search isn’t available yet. Your photo was not sent.';
     case 'timeout': return 'The search took too long. Try again or search by text.';
     case 'network': return 'You appear to be offline. Check your connection and try again.';
@@ -157,8 +162,13 @@ function outcomeAnnouncement(outcome: ImageSearchOutcome): string {
   }
 }
 
-function Outcome({ outcome, onNavigate, onRetry, onSearchText, onReplace }: {
-  outcome: ImageSearchOutcome; onNavigate: (href: string) => void; onRetry: () => void; onSearchText: () => void; onReplace: () => void;
+const CAPTURE_TIPS: Record<PhotoIssue, string> = {
+  dark: 'This photo looks dark. Add more light or move closer to a window.',
+  blurry: 'This photo looks blurry. Hold the camera steady and let it focus before you capture.',
+};
+
+function Outcome({ outcome, issues, onNavigate, onRetry, onSearchText, onReplace }: {
+  outcome: ImageSearchOutcome; issues: PhotoIssue[]; onNavigate: (href: string) => void; onRetry: () => void; onSearchText: () => void; onReplace: () => void;
 }) {
   if (outcome.status === 'success' && outcome.items.length) return <section className={styles.visualResults} aria-label="Visually similar products">
     <div className={styles.resultsHead}>
@@ -188,9 +198,12 @@ function Outcome({ outcome, onNavigate, onRetry, onSearchText, onReplace }: {
       })}
     </ol>
   </section>;
-  if (outcome.status === 'success') return <DiscoveryState icon={<SearchX size={20} />} title="No similar products found"
-    description="Nothing in the catalog looks close enough to this photo. Try a clearer shot, or search by name."
-    action={<><Button type="button" size="small" variant="outline" onClick={onReplace}>Try another photo</Button><Button type="button" size="small" variant="ghost" onClick={onSearchText}>Search by text</Button></>} />;
+  if (outcome.status === 'success') return <DiscoveryState compact tone="visual" icon={<SearchX size={20} />} title="We couldn't find a close match"
+    description="Try another photo or search by product name. You can also explore our catalog."
+    details={issues.length > 0 && <ul className={styles.captureTips} aria-label="Tips for a better photo">
+      {issues.map(issue => <li key={issue}>{CAPTURE_TIPS[issue]}</li>)}
+    </ul>}
+    action={<><Button type="button" size="small" onClick={onReplace}>Try another photo</Button><Button type="button" size="small" variant="outline" onClick={onSearchText}>Search by text</Button><Button type="button" size="small" variant="ghost" onClick={() => onNavigate('/products')}>Browse products</Button></>} />;
   // Disabled deployment: nothing was uploaded. Enabled but offline: the photo reached our server and was discarded unsaved.
   if (outcome.status === 'unavailable') return <DiscoveryState tone="visual" icon={<Camera size={20} />}
     title={imageSearchEnabled() ? 'Image search is unavailable right now' : 'Image search isn’t available yet'}

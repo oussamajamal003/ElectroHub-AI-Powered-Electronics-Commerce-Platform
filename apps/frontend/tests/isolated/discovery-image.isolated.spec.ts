@@ -16,6 +16,9 @@ const base = process.env.ISOLATED_BASE_URL ?? 'http://127.0.0.1:3200';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dataset = path.resolve(here, '../../../ai-service/training/.data/electrohub-commons-vision-v1');
 const aiDown = process.env.ISOLATED_AI_DOWN === '1';
+// The QA service's configured model is not hardcoded: the contract is that every answer names its model and an embedding version
+// built from it. Set ISOLATED_MODEL_VERSION_PREFIX to also pin a specific model (e.g. a staged candidate).
+const modelPrefix = process.env.ISOLATED_MODEL_VERSION_PREFIX;
 const shot = (name: string) => `playwright-report/task04-closure/discovery-${name}.png`;
 
 type QueryPhoto = { file: string; family: string };
@@ -93,9 +96,11 @@ test('a held-out Commons photo returns real, visible catalog products through th
     await dialog.getByRole('button', { name: 'Search similar products' }).click();
     const answer = await response;
     expect(answer.status()).toBe(200);
-    const body = await answer.json() as { data: { items: { slug: string; name: string; price: string }[] }; meta: { modelVersion: string } };
+    const body = await answer.json() as { data: { items: { slug: string; name: string; price: string }[] }; meta: { modelVersion: string; embeddingVersion: string } };
     expect(body.data.items.length).toBeGreaterThan(0);
-    expect(body.meta.modelVersion).toMatch(/^effb0-commons-/);
+    expect(body.meta.modelVersion).toMatch(/^[a-z0-9][a-z0-9.-]+$/);
+    expect(body.meta.embeddingVersion.startsWith(`${body.meta.modelVersion}-`)).toBe(true);
+    if (modelPrefix) expect(body.meta.modelVersion.startsWith(modelPrefix)).toBe(true);
     const results = dialog.getByRole('region', { name: 'Visually similar products' });
     await expect(results).toBeVisible();
     await expect(results.getByRole('link')).toHaveCount(body.data.items.length);
@@ -160,7 +165,7 @@ test('paste/drop validate photos, preserve explicit submission and release previ
 test('controlled gateway states announce completion once and Escape cancels a pending photo search', async ({ page }) => {
   // Real rendered UI, deliberately controlled network failures. The separate held-out test proves actual ML results.
   const responses = [
-    { status: 200, announcement: 'No similar products found' },
+    { status: 200, announcement: "We couldn't find a close match" },
     { status: 503, announcement: 'Image search is unavailable right now' },
     { status: 504, announcement: 'The search took too long' },
     { status: 408, announcement: 'The search took too long' },
