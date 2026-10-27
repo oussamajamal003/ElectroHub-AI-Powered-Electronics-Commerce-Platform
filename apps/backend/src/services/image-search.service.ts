@@ -23,10 +23,10 @@ type ResolvedProduct = Awaited<ReturnType<SearchService['productSummariesByIds']
  */
 export function filterByCategory(
   items: ResolvedProduct[],
-  hints: AiImageSearchResult['categoryHints'],
+  hints: AiImageSearchResult['categoryHints'] | null | undefined,
   ratio: number | null | undefined,
 ): ResolvedProduct[] {
-  if (!ratio || ratio <= 0 || hints.length === 0) return items;
+  if (!ratio || ratio <= 0 || !hints || hints.length === 0) return items;
   const probability = new Map(hints.map(hint => [hint.category, hint.probability]));
   const floor = ratio * Math.max(...hints.map(hint => hint.probability));
   return items.filter(item => (probability.get(item.category.slug) ?? 0) >= floor);
@@ -39,11 +39,11 @@ export function filterByCategory(
 export function fallbackByCategory(
   items: ResolvedProduct[],
   candidates: AiImageSearchResult['matches'],
-  hints: AiImageSearchResult['categoryHints'],
+  hints: AiImageSearchResult['categoryHints'] | null | undefined,
   gap: number,
   limit: number,
 ): ResolvedProduct[] {
-  if (hints.length === 0) return [];
+  if (!hints || hints.length === 0) return [];
   const top = hints.reduce((best, hint) => (hint.probability > best.probability ? hint : best));
   const score = new Map(candidates.map(match => [match.productId.toLowerCase(), match.score]));
   const inCategory = items
@@ -58,10 +58,10 @@ export function fallbackByCategory(
 export function rerankByCategory(
   items: ResolvedProduct[],
   matches: AiImageSearchResult['matches'],
-  hints: AiImageSearchResult['categoryHints'],
+  hints: AiImageSearchResult['categoryHints'] | null | undefined,
   weight = IMAGE_SEARCH_CATEGORY_WEIGHT,
 ): ResolvedProduct[] {
-  if (hints.length === 0 || items.length < 2) return items;
+  if (!hints || hints.length === 0 || items.length < 2) return items;
   const probability = new Map(hints.map(hint => [hint.category, hint.probability]));
   const score = new Map(matches.map(match => [match.productId.toLowerCase(), match.score]));
   return items
@@ -181,7 +181,7 @@ export class ImageSearchService {
       candidateCount: uniqueIds.length,
       resultCount: items.length,
       droppedCount: uniqueIds.length - items.length,
-      categoryHintCount: result.categoryHints.length,
+      categoryHintCount: result.categoryHints?.length ?? 0,
       categoryFallback: usedFallback,
       modelVersion: result.modelVersion,
       embeddingVersion: result.embeddingVersion,

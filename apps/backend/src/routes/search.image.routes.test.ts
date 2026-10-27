@@ -47,6 +47,7 @@ const row = (id: string, overrides: Record<string, unknown> = {}) => ({
 });
 const aiResult = (productIds: string[]) => ({
   matches: productIds.map((productId, index) => ({ productId, score: 0.9 - index * 0.1, rank: index + 1 })),
+  categoryHints: [],
   modelVersion: 'clip-v1.0', embeddingVersion: 'emb_2026.10',
 });
 
