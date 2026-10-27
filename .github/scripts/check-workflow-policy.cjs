@@ -37,6 +37,35 @@ function triggers(text) {
   return names;
 }
 
+function getPushBranches(text) {
+  const lines = text.split(/\r?\n/);
+  const pushIdx = lines.findIndex((l) => /^ {2}push:/.test(l));
+  if (pushIdx === -1) return null;
+  const branches = [];
+  let inBranches = false;
+  for (let i = pushIdx + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^ {2}[A-Za-z_]+:/.test(line) || /^\S/.test(line)) break;
+    const inlineMatch = /^ {4}branches:\s*\[([^\]]+)\]/.exec(line);
+    if (inlineMatch) {
+      return inlineMatch[1].split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+    }
+    if (/^ {4}branches:/.test(line)) {
+      inBranches = true;
+      continue;
+    }
+    if (inBranches) {
+      const itemMatch = /^ {6}-\s*(\S+)/.exec(line);
+      if (itemMatch) {
+        branches.push(itemMatch[1].replace(/^['"]|['"]$/g, ''));
+      } else if (!/^\s*$/.test(line)) {
+        break;
+      }
+    }
+  }
+  return branches;
+}
+
 function checkWorkflow(name, rawText) {
   const text = stripComments(rawText);
   const problems = [];
@@ -61,7 +90,24 @@ function checkWorkflow(name, rawText) {
   }
 
   if (isMigrationWorkflow) {
-    if (on.length !== 1 || on[0] !== 'workflow_dispatch') fail(`must be triggered by workflow_dispatch only (found: ${on.join(', ') || 'none'})`);
+    if (name === 'dev-migration.yml') {
+      if (on.length !== 1 || on[0] !== 'workflow_dispatch') {
+        fail(`DEV workflow must be triggered by workflow_dispatch only (found: ${on.join(', ') || 'none'})`);
+      }
+    } else if (name === 'prod-migration.yml') {
+      const allowedTriggers = new Set(['push', 'workflow_dispatch']);
+      const hasDisallowed = on.some((t) => !allowedTriggers.has(t));
+      if (hasDisallowed || !on.includes('workflow_dispatch')) {
+        fail(`PROD workflow trigger must be push and/or workflow_dispatch (found: ${on.join(', ') || 'none'})`);
+      }
+      if (on.includes('push')) {
+        const branches = getPushBranches(text);
+        if (!branches || branches.length !== 1 || branches[0] !== 'develop') {
+          fail(`PROD workflow push trigger must strictly target the develop branch only (found: ${branches ? branches.join(', ') : 'none'})`);
+        }
+      }
+    }
+
     if (!/^\s+environment:\s*\S+/m.test(text)) fail('deployment job must declare a protected GitHub Environment');
     if (!/^concurrency:/m.test(text) && !/^\s+concurrency:/m.test(text)) fail('must declare a concurrency group');
     if (!/cancel-in-progress:\s*false/.test(text)) fail('concurrency must not cancel an in-progress migration');
@@ -72,6 +118,8 @@ function checkWorkflow(name, rawText) {
     if (pre !== -1 && deploy !== -1 && pre > deploy) fail('the pre-check must run before migrate deploy');
     if (!text.includes('migration-plan.cjs post')) fail('must run the migration-plan post-check');
     if (/\bprisma\s+migrate\s+(resolve|reset|dev)\b|\bprisma\s+db\s+(push|execute)\b/.test(text)) fail('must not run resolve, reset, dev or db push');
+    if (!/permissions:\s*\r?\n\s+contents:\s*read/.test(text)) fail('must enforce least-privilege permissions (contents: read)');
+
     if (name === 'dev-migration.yml') {
       if (!text.includes('EXPECTED_PROJECT_REF: pzxekjybdiulzmssalfo')) fail('DEV workflow must pin the DEV project ref');
       if (!text.includes('MIGRATION_TARGET: DEV')) fail('DEV workflow must explicitly select DEV in the migration guard');
@@ -81,7 +129,9 @@ function checkWorkflow(name, rawText) {
       if (!text.includes('EXPECTED_PROJECT_REF: yepfgjehdstlxbpespun')) fail('PROD workflow must pin the PROD project ref');
       if (!text.includes('MIGRATION_TARGET: PROD')) fail('PROD workflow must explicitly select PROD in the migration guard');
       if (!text.includes('electrohub-prod-database')) fail('PROD workflow must use the protected PROD environment');
-      if (!text.includes('RISK_ACCEPTANCE_REFERENCE') || !text.includes('AUTHORIZATION_REFERENCE')) fail('PROD workflow must require release authorization and owner risk-acceptance references');
+      if (!text.includes('20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard')) {
+        fail('PROD workflow must pin the reviewed migration allowlist (20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard)');
+      }
       if (/ELECTROHUB_DEV_(?:DATABASE|DIRECT)_URL/.test(text)) fail('PROD workflow must not expose DEV database secrets');
       if (!/prisma\s+migrate\s+status/.test(text)) fail('PROD workflow must run prisma migrate status after deploy');
     }
@@ -102,7 +152,7 @@ function loadWorkflows(dir) {
     .map((name) => ({ name, text: fs.readFileSync(path.join(dir, name), 'utf8') }));
 }
 
-module.exports = { checkWorkflow, checkWorkflows, loadWorkflows, triggers, MIGRATION_WORKFLOWS };
+module.exports = { checkWorkflow, checkWorkflows, loadWorkflows, triggers, getPushBranches, MIGRATION_WORKFLOWS };
 
 if (require.main === module) {
   const dir = path.resolve(__dirname, '../workflows');

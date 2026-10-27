@@ -143,6 +143,42 @@ function planMigrations(local, ledger) {
   return { pending, problems };
 }
 
+const DESTRUCTIVE_SQL_PATTERNS = [
+  { pattern: /\bDROP\s+(?:TABLE|COLUMN|SCHEMA|DATABASE|TYPE|EXTENSION|ROLE)\b/i, desc: 'DROP statement' },
+  { pattern: /\bALTER\s+TABLE\s+[^;]+\bDROP\s+(?:COLUMN\s+)?/i, desc: 'ALTER TABLE ... DROP' },
+  { pattern: /\bTRUNCATE(?:\s+TABLE)?\b/i, desc: 'TRUNCATE statement' },
+  { pattern: /\bDELETE\s+FROM\b/i, desc: 'DELETE FROM statement' },
+];
+
+function stripSqlCommentsAndLiterals(sql) {
+  let clean = sql.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  clean = clean.replace(/--.*$/gm, ' ');
+  clean = clean.replace(/'(?:''|[^'])*'/g, "''");
+  return clean;
+}
+
+function checkDestructiveSql(migrationName, rawSql) {
+  const clean = stripSqlCommentsAndLiterals(rawSql);
+  const issues = [];
+  for (const { pattern, desc } of DESTRUCTIVE_SQL_PATTERNS) {
+    if (pattern.test(clean)) {
+      issues.push(`destructive SQL detected in ${migrationName}: contains ${desc}`);
+    }
+  }
+  return issues;
+}
+
+function setActionOutput(name, value) {
+  const outputPath = process.env.GITHUB_OUTPUT;
+  if (outputPath) {
+    try {
+      fs.appendFileSync(outputPath, `${name}=${value}\n`, 'utf8');
+    } catch {
+      // Silently ignore if not writable (e.g. offline testing)
+    }
+  }
+}
+
 /** Exact, ordered equality between the pending set and the approved list. */
 function compareApproved(pending, approved) {
   const problems = [];
@@ -207,7 +243,8 @@ async function main(mode) {
   assertTarget(urls, expectedRef, target);
   console.log(`Target verified: approved ${target} project ${expectedRef} (both URLs).`);
 
-  const local = localMigrations(process.env.MIGRATIONS_DIR || path.join(root, 'apps/backend/prisma/migrations'));
+  const migrationsDir = process.env.MIGRATIONS_DIR || path.join(root, 'apps/backend/prisma/migrations');
+  const local = localMigrations(migrationsDir);
   const { version, ledger } = await readLedger(root, urls.DIRECT_URL);
   const { pending, problems } = planMigrations(local, ledger);
   console.log(`PostgreSQL ${version}; ledger rows: ${ledger.length}; local migrations: ${local.length}; pending: ${pending.join(', ') || 'none'}`);
@@ -219,7 +256,30 @@ async function main(mode) {
   if (reconciled.length) console.log(`Verified line-ending-only legacy checksums: ${reconciled.join(', ')}`);
 
   if (mode === 'pre') {
-    problems.push(...compareApproved(pending, approved));
+    if (pending.length === 0) {
+      console.log('Database is up to date. Zero migrations pending (no-op).');
+      setActionOutput('has_pending', 'false');
+      setActionOutput('pending_count', '0');
+      setActionOutput('pending_migrations', '');
+    } else {
+      setActionOutput('has_pending', 'true');
+      setActionOutput('pending_count', String(pending.length));
+      setActionOutput('pending_migrations', pending.join(','));
+
+      const appliedNames = new Set(ledger.filter((row) => row.finished && !row.rolledBack).map((row) => row.name));
+      const unappliedApproved = approved.filter((name) => !appliedNames.has(name));
+      const expectedApproved = unappliedApproved.length > 0 ? unappliedApproved : approved;
+
+      problems.push(...compareApproved(pending, expectedApproved));
+
+      for (const name of pending) {
+        const sqlPath = path.join(migrationsDir, name, 'migration.sql');
+        if (fs.existsSync(sqlPath)) {
+          const rawSql = fs.readFileSync(sqlPath, 'utf8');
+          problems.push(...checkDestructiveSql(name, rawSql));
+        }
+      }
+    }
   } else if (mode === 'post') {
     if (pending.length) problems.push(`migrations still pending after deploy: ${pending.join(', ')}`);
     for (const name of approved) {
@@ -239,9 +299,10 @@ async function main(mode) {
 }
 
 module.exports = {
-  DEV_REF, PROD_REF, PROJECT_REFS, LEGACY_LINE_ENDING_CHECKSUMS, parseTarget, assertTarget,
-  migrationChecksumMetadata, hasVerifiedLegacyLineEndingChecksum, localMigrations, planMigrations,
-  compareApproved, parseApproved,
+  DEV_REF, PROD_REF, PROJECT_REFS, LEGACY_LINE_ENDING_CHECKSUMS, DESTRUCTIVE_SQL_PATTERNS,
+  parseTarget, assertTarget, migrationChecksumMetadata, hasVerifiedLegacyLineEndingChecksum,
+  localMigrations, planMigrations, compareApproved, parseApproved, checkDestructiveSql,
+  stripSqlCommentsAndLiterals, setActionOutput,
 };
 
 if (require.main === module) {

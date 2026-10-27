@@ -214,17 +214,85 @@ test('every real workflow in this repository satisfies the policy', () => {
   assert.deepEqual(policy.checkWorkflows(files), []);
 });
 
-test('the real DEV and PROD migration workflows are manual-only and own their scoped secrets', () => {
+test('the real DEV workflow is manual-only and PROD automates develop with scoped secrets', () => {
   const files = policy.loadWorkflows(path.resolve(__dirname, '../workflows'));
   const dev = files.find((file) => file.name === 'dev-migration.yml');
   const prod = files.find((file) => file.name === 'prod-migration.yml');
   assert.ok(dev);
   assert.ok(prod);
   assert.deepEqual(policy.triggers(dev.text), ['workflow_dispatch']);
-  assert.deepEqual(policy.triggers(prod.text), ['workflow_dispatch']);
+  assert.deepEqual(policy.triggers(prod.text), ['push', 'workflow_dispatch']);
+  assert.deepEqual(policy.getPushBranches(prod.text), ['develop']);
   const holders = files.filter((file) => /secrets\.ELECTROHUB_/.test(file.text)).map((file) => file.name);
   assert.deepEqual(holders, ['dev-migration.yml', 'prod-migration.yml']);
   assert.match(prod.text, /20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard/);
-  assert.match(prod.text, /RISK_ACCEPTANCE_REFERENCE/);
-  assert.match(prod.text, /AUTHORIZATION_REFERENCE/);
+  assert.match(prod.text, /EXPECTED_PROJECT_REF: yepfgjehdstlxbpespun/);
+  assert.match(prod.text, /MIGRATION_TARGET: PROD/);
+  assert.match(prod.text, /environment: electrohub-prod-database/);
+  assert.match(prod.text, /concurrency:\s*\r?\n\s+group: db-migration-electrohub-prod/);
+});
+
+test('policy rejects PROD workflow on feature branches, main, or pull requests', () => {
+  const base = fs.readFileSync(path.resolve(__dirname, '../workflows/prod-migration.yml'), 'utf8');
+
+  // Push to main rejected
+  const pushMain = base.replace(/branches:\s*\r?\n\s+-\s+develop/, 'branches:\n      - main');
+  assert.match(policy.checkWorkflow('prod-migration.yml', pushMain).join(), /strictly target the develop branch only/);
+
+  // Push to feature branch wildcard rejected
+  const pushFeature = base.replace(/branches:\s*\r?\n\s+-\s+develop/, "branches:\n      - 'feature/**'");
+  assert.match(policy.checkWorkflow('prod-migration.yml', pushFeature).join(), /strictly target the develop branch only/);
+
+  // Push to multiple branches rejected
+  const pushMulti = base.replace(/branches:\s*\r?\n\s+-\s+develop/, 'branches:\n      - develop\n      - main');
+  assert.match(policy.checkWorkflow('prod-migration.yml', pushMulti).join(), /strictly target the develop branch only/);
+
+  // Pull request trigger rejected
+  const withPR = base.replace(/on:\s*\r?\n\s+push:/, 'on:\n  pull_request:\n    branches:\n      - develop\n  push:');
+  assert.match(policy.checkWorkflow('prod-migration.yml', withPR).join(), /trigger must be push and\/or workflow_dispatch/);
+});
+
+test('policy rejects DEV workflow if push trigger is introduced', () => {
+  const devBase = fs.readFileSync(path.resolve(__dirname, '../workflows/dev-migration.yml'), 'utf8');
+  const devWithPush = devBase.replace(/on:\s*\r?\n\s+workflow_dispatch:/, 'on:\n  push:\n    branches: [develop]\n  workflow_dispatch:');
+  assert.match(policy.checkWorkflow('dev-migration.yml', devWithPush).join(), /DEV workflow must be triggered by workflow_dispatch only/);
+});
+
+test('checkDestructiveSql flags destructive statements and permits safe additive DDL/DML', () => {
+  assert.ok(plan.checkDestructiveSql('m', 'DROP TABLE products;').length > 0);
+  assert.ok(plan.checkDestructiveSql('m', 'DROP COLUMN price;').length > 0);
+  assert.ok(plan.checkDestructiveSql('m', 'ALTER TABLE users DROP COLUMN email;').length > 0);
+  assert.ok(plan.checkDestructiveSql('m', 'DROP SCHEMA public;').length > 0);
+  assert.ok(plan.checkDestructiveSql('m', 'DROP DATABASE electrohub;').length > 0);
+  assert.ok(plan.checkDestructiveSql('m', 'DROP TYPE status_enum;').length > 0);
+  assert.ok(plan.checkDestructiveSql('m', 'DROP EXTENSION vector;').length > 0);
+  assert.ok(plan.checkDestructiveSql('m', 'TRUNCATE TABLE audit_log;').length > 0);
+  assert.ok(plan.checkDestructiveSql('m', 'TRUNCATE audit_log;').length > 0);
+  assert.ok(plan.checkDestructiveSql('m', 'DELETE FROM users WHERE active = false;').length > 0);
+
+  // Safe additive statements
+  assert.deepEqual(plan.checkDestructiveSql('m', 'CREATE TABLE products (id int);'), []);
+  assert.deepEqual(plan.checkDestructiveSql('m', 'CREATE SCHEMA IF NOT EXISTS ai;'), []);
+  assert.deepEqual(plan.checkDestructiveSql('m', 'CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;'), []);
+  assert.deepEqual(plan.checkDestructiveSql('m', 'GRANT SELECT, INSERT, UPDATE, DELETE ON ai.table TO role;'), []);
+  assert.deepEqual(plan.checkDestructiveSql('m', 'ALTER TABLE child ADD CONSTRAINT fk FOREIGN KEY (p) REFERENCES parent(id) ON DELETE CASCADE;'), []);
+  assert.deepEqual(plan.checkDestructiveSql('m', '-- Comment with DROP TABLE should not trigger\nCREATE INDEX idx ON tbl(col);'), []);
+});
+
+test('stripSqlCommentsAndLiterals removes SQL comments and string literals without affecting keywords', () => {
+  const sql = "-- Single line\n/* Multi\nline */\nSELECT 'DROP TABLE inside string' AS val FROM table;";
+  const stripped = plan.stripSqlCommentsAndLiterals(sql);
+  assert.equal(stripped.includes('inside string'), false);
+  assert.equal(plan.checkDestructiveSql('m', sql).length, 0);
+});
+
+test('planMigrations detects an already up-to-date database with 0 pending migrations', () => {
+  const local = [{ name: '20260101000000_a', sha256: sha(1) }, { name: '20260102000000_b', sha256: sha(2) }];
+  const ledger = [
+    { name: '20260101000000_a', checksum: sha(1), finished: true, rolledBack: false },
+    { name: '20260102000000_b', checksum: sha(2), finished: true, rolledBack: false },
+  ];
+  const result = plan.planMigrations(local, ledger);
+  assert.deepEqual(result.pending, []);
+  assert.deepEqual(result.problems, []);
 });
