@@ -48,13 +48,15 @@ The global command search replaces the old Text/Image tabs on `/search`. It live
   `/search?q=` through the existing `searchParams` serialiser.
 - **Resting state:** real entry points plus every category with products, read from `GET /api/categories`.
   Nothing is hardcoded, so new categories appear automatically.
-- **Image:** upload, drag-and-drop, paste or camera, with client checks (JPEG/PNG/WebP, 10 MB) for feedback
+- **Image:** upload, drag-and-drop, paste or camera, with client checks (JPEG/PNG/WebP, 8 MB, matching the server budget) for feedback
   only. Selecting a photo never uploads it. The camera is requested only on press, video only, and every track
   stops on capture, cancel and close.
 - **AI boundary:** the browser calls only the Express gateway, `POST /api/search/image` (multipart field `image`,
-  response `{ data: { items: ProductSummary[] } }` in relevance order). This endpoint is **owned by Task 04.2 and
-  not implemented yet**. Until a deployment sets `VITE_IMAGE_SEARCH_ENABLED=true`, the console shows an honest
-  "unavailable" state and sends nothing. 404/501/503 map to the same state. No similarity score is displayed.
+  response `{ data: { items: ProductSummary[] }, meta }` in relevance order). **Implemented in Task 04.2**: a real
+  EfficientNet-B0 embedding model with pgvector retrieval and catalog-authoritative results (see
+  `docs/07_AI/IMAGE_SEARCH.md`). Until a deployment sets `VITE_IMAGE_SEARCH_ENABLED=true`, the console shows "isn't
+  available yet" and sends nothing. When enabled, 404/501/503 show "unavailable right now", 504 shows a timeout, and
+  413/415/422 show an inline photo error. No similarity score is displayed.
 - **Tokens:** `styles/abstracts/_discovery.scss` (the `discovery-*` semantic layer). Most entries alias
   `_variables.scss`. The new values are `#eff6ff`, `#0e7490`, `#ecfeff`, two shadows and three motion timings.
 - **Tests:** `discovery/discovery.test.tsx`, plus the updated `search.test.tsx`.

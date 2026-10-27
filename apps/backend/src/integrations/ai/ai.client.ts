@@ -6,12 +6,17 @@ import { recordAiRequest } from './ai.telemetry.js';
 import { AiServiceConfig, AiServiceEnabledConfig, resolveAiServiceConfig } from './ai.config.js';
 import {
   AI_ERROR_CODE_PATTERN,
+  AI_IMAGE_SEARCH_CONTENT_TYPES,
+  AI_MAX_TOP_K,
   AiCapabilities,
+  AiImageSearchContentType,
+  AiImageSearchResult,
   AiReadiness,
   AiRecommendationRequestInput,
   AiRecommendationResult,
   aiCapabilitiesSchema,
   aiErrorEnvelopeSchema,
+  aiImageSearchResultSchema,
   aiReadySchema,
   aiRecommendationRequestSchema,
   aiRecommendationResultSchema,
@@ -34,6 +39,28 @@ export type AiServiceErrorCategory =
 export interface AiRequestOptions {
   requestId?: string;
   signal?: AbortSignal;
+}
+
+export interface ImageSearchInput extends AiRequestOptions {
+  /** Bytes already validated by the Express upload layer (magic bytes); never logged or stored. */
+  image: Buffer;
+  contentType: AiImageSearchContentType;
+  topK: number;
+}
+
+const IMAGE_SEARCH_EXTENSIONS: Record<AiImageSearchContentType, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
+type RequestBody = { kind: 'json'; value: unknown } | { kind: 'multipart'; form: FormData };
+
+interface RequestOverrides {
+  /** Telemetry operation name; defaults to the HTTP method and path. */
+  operation?: string;
+  /** Route-specific timeout; defaults to the general AI_SERVICE_TIMEOUT_MS. */
+  timeoutMs?: number;
 }
 
 const SAFE_MESSAGES: Record<AiServiceErrorCategory, string> = {
@@ -116,9 +143,37 @@ export class AiServiceClient {
     const parsed = aiRecommendationRequestSchema.safeParse(input);
     if (!parsed.success) throw new AiServiceError('rejected', { code: 'AI_VALIDATION_FAILED' });
     const request = parsed.data;
-    const result = (await this.request('POST', '/internal/v1/recommendations', aiRecommendationResultSchema(request.limit), opts, request)).data;
+    const result = (await this.request('POST', '/internal/v1/recommendations', aiRecommendationResultSchema(request.limit), opts, { kind: 'json', value: request })).data;
     if (result.mode !== request.mode) throw new AiServiceError('invalid_response');
     return result;
+  }
+
+  /**
+   * POST /internal/v1/image-search as one bounded multipart `image` part. Only the sniffed bytes and a generic filename
+   * leave Express: no browser cookies, JWT, client filename or client Content-Type are forwarded.
+   */
+  async imageSearch(input: ImageSearchInput): Promise<AiImageSearchResult> {
+    if (!Number.isInteger(input.topK) || input.topK < 1 || input.topK > AI_MAX_TOP_K) {
+      throw new AiServiceError('rejected', { code: 'AI_VALIDATION_FAILED' });
+    }
+    if (!(AI_IMAGE_SEARCH_CONTENT_TYPES as readonly string[]).includes(input.contentType) || input.image.byteLength === 0) {
+      throw new AiServiceError('rejected', { code: 'AI_VALIDATION_FAILED' });
+    }
+    const form = new FormData();
+    form.append(
+      'image',
+      new Blob([new Uint8Array(input.image)], { type: input.contentType }),
+      `query.${IMAGE_SEARCH_EXTENSIONS[input.contentType]}`
+    );
+    const result = await this.request(
+      'POST',
+      `/internal/v1/image-search?topK=${input.topK}`,
+      aiImageSearchResultSchema(input.topK),
+      { requestId: input.requestId, signal: input.signal },
+      { kind: 'multipart', form },
+      { operation: 'imageSearch', timeoutMs: this.config.imageSearchTimeoutMs }
+    );
+    return result.data;
   }
 
   private async request<S extends z.ZodTypeAny>(
@@ -126,16 +181,17 @@ export class AiServiceClient {
     path: string,
     schema: S,
     opts: AiRequestOptions,
-    body?: unknown
+    body?: RequestBody,
+    overrides: RequestOverrides = {}
   ): Promise<z.output<S>> {
     const startedAt = Date.now();
     const base = {
-      operation: `ai.${method.toLowerCase()} ${path}`,
+      operation: overrides.operation ?? `ai.${method.toLowerCase()} ${path}`,
       environment: this.config.environment,
       requestId: opts.requestId,
     };
     try {
-      const result = await this.send(method, path, schema, opts, body);
+      const result = await this.send(method, path, schema, opts, body, overrides.timeoutMs ?? this.config.timeoutMs);
       recordAiRequest({ ...base, outcome: 'success', statusCode: 200, durationMs: Date.now() - startedAt });
       return result;
     } catch (err: unknown) {
@@ -157,13 +213,14 @@ export class AiServiceClient {
     path: string,
     schema: S,
     opts: AiRequestOptions,
-    body?: unknown
+    body: RequestBody | undefined,
+    timeoutMs: number
   ): Promise<z.output<S>> {
     if (opts.signal?.aborted) throw new AiServiceError('aborted');
 
     const timeout = new AbortController();
     let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; timeout.abort(); }, this.config.timeoutMs);
+    const timer = setTimeout(() => { timedOut = true; timeout.abort(); }, timeoutMs);
     const signal = opts.signal ? AbortSignal.any([timeout.signal, opts.signal]) : timeout.signal;
 
     const headers: Record<string, string> = {
@@ -173,13 +230,14 @@ export class AiServiceClient {
       'x-electrohub-ai-environment': this.config.environment,
     };
     if (opts.requestId && REQUEST_ID_PATTERN.test(opts.requestId)) headers['x-request-id'] = opts.requestId;
-    if (body !== undefined) headers['content-type'] = 'application/json';
+    // multipart: fetch derives the Content-Type (with boundary) from the FormData itself.
+    if (body?.kind === 'json') headers['content-type'] = 'application/json';
 
     try {
       const response = await this.fetchImpl(new URL(path, this.config.baseUrl), {
         method,
         headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body: body === undefined ? undefined : body.kind === 'json' ? JSON.stringify(body.value) : body.form,
         redirect: 'manual',
         credentials: 'omit',
         signal,

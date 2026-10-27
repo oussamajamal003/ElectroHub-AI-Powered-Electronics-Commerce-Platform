@@ -15,8 +15,29 @@ from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import BodySizeLimitMiddleware, InternalAuthMiddleware, RequestContextMiddleware
 from app.core.runtime import AppRuntime, build_lifespan
+from app.integrations.pgvector_gateway import PgVectorGateway
 from app.models.registry import ModelRegistry
+from app.models.siglip_loader import ArtifactLoader
 from app.processors.inference import InferenceExecutor
+
+
+def build_registry(settings: Settings) -> ModelRegistry:
+    """Loaders and the index are wired only when configured; unset settings keep features at 503."""
+    loader = (
+        ArtifactLoader(
+            artifact_dir=settings.AI_MODEL_ARTIFACT_DIR,
+            torch_threads=settings.AI_TORCH_THREADS,
+            relevance_dir=settings.AI_RELEVANCE_ARTIFACT_DIR,
+        )
+        if settings.AI_MODEL_ARTIFACT_DIR is not None
+        else None
+    )
+    gateway = (
+        PgVectorGateway(dsn=settings.AI_VECTOR_DATABASE_URL.get_secret_value())
+        if settings.AI_VECTOR_DATABASE_URL is not None
+        else None
+    )
+    return ModelRegistry(image_encoder_loader=loader, vector_gateway=gateway)
 
 
 def create_app(settings: Settings | None = None, registry: ModelRegistry | None = None) -> FastAPI:
@@ -25,8 +46,7 @@ def create_app(settings: Settings | None = None, registry: ModelRegistry | None 
 
     runtime = AppRuntime(
         settings=settings,
-        # 04.1 ships no loaders: features stay NOT_READY until 04.2/04.4 provide trained artifacts.
-        registry=registry or ModelRegistry(),
+        registry=registry or build_registry(settings),
         executor=InferenceExecutor(
             max_concurrency=settings.AI_MAX_CONCURRENT_INFERENCES,
             timeout_seconds=settings.AI_INFERENCE_TIMEOUT_SECONDS,
@@ -56,7 +76,12 @@ def create_app(settings: Settings | None = None, registry: ModelRegistry | None 
     app.include_router(internal)
 
     # Added innermost first: the request-context layer wraps everything, including auth rejections.
-    app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.AI_MAX_REQUEST_BYTES)
+    image_limit = settings.AI_MAX_IMAGE_BYTES + image_search.MULTIPART_OVERHEAD_BYTES
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        max_bytes=settings.AI_MAX_REQUEST_BYTES,
+        route_limits={("POST", image_search.IMAGE_SEARCH_PATH): image_limit},
+    )
     app.add_middleware(InternalAuthMiddleware, settings=settings)
     app.add_middleware(RequestContextMiddleware, settings=settings)
     return app

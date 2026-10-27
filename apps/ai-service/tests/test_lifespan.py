@@ -90,14 +90,14 @@ def test_encoder_without_an_active_index_is_not_ready(gateway: FakeGateway | Non
         assert response.json()["error"]["code"] == "AI_INDEX_NOT_READY"
 
 
-def test_image_search_route_never_fabricates_results_before_upload_support(
+def test_image_search_route_requires_one_image_part_when_ready(
     client_factory: Callable[..., TestClient],
 ) -> None:
     registry = ModelRegistry(image_encoder_loader=CountingLoader(FakeEncoder()), vector_gateway=FakeGateway())
     client = client_factory(registry=registry)
     response = client.post("/internal/v1/image-search", headers=auth_headers())
-    assert response.status_code == 501
-    assert response.json()["error"]["code"] == "AI_NOT_IMPLEMENTED"
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "AI_VALIDATION_FAILED"
 
 
 @pytest.mark.parametrize(

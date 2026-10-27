@@ -150,9 +150,9 @@ describe('Discovery Console image search', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open photo search' }));
     const picker = await screen.findByLabelText('Choose a photo');
     fireEvent.change(picker, { target: { files: [imageFile('notes.txt', 'text/plain')] } });
-    expect(screen.getByRole('alert')).toHaveTextContent('isn’t a supported image');
+    expect(screen.getByRole('status', { name: 'Photo search status' })).toHaveTextContent('isn’t a supported image');
     fireEvent.change(picker, { target: { files: [imageFile('huge.jpg', 'image/jpeg', MAX_IMAGE_BYTES + 1)] } });
-    expect(screen.getByRole('alert')).toHaveTextContent('too large');
+    expect(screen.getByRole('status', { name: 'Photo search status' })).toHaveTextContent('too large');
     fireEvent.change(picker, { target: { files: [imageFile()] } });
     expect(await screen.findByAltText('Selected photo')).toHaveAttribute('src', 'blob:preview');
     expect(screen.getByText('headphones.png')).toBeInTheDocument();
@@ -165,6 +165,7 @@ describe('Discovery Console image search', () => {
   });
 
   it('reports image search as unavailable without sending the photo while the endpoint is not enabled', async () => {
+    vi.stubEnv('VITE_IMAGE_SEARCH_ENABLED', 'false');
     renderConsole();
     fireEvent.click(screen.getByRole('button', { name: 'Open photo search' }));
     expect(await screen.findByText(/Visual matching isn’t switched on yet/)).toBeInTheDocument();
@@ -174,6 +175,80 @@ describe('Discovery Console image search', () => {
     expect(vi.mocked(apiClient).mock.calls.some(([endpoint]) => endpoint.includes('image'))).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Search by text' }));
     await waitFor(() => expect(screen.getByRole('combobox')).toHaveFocus());
+  });
+
+  it.each(['drop', 'paste'] as const)('%s validates input and only submits the selected photo on explicit search', async method => {
+    vi.stubEnv('VITE_IMAGE_SEARCH_ENABLED', 'true');
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint === '/api/search/image') return { data: { items: [] } } as never;
+      return { data: [], meta: { total: 0 } } as never;
+    });
+    renderConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Open photo search' }));
+    const deliver = (file: File) => {
+      if (method === 'paste') fireEvent.paste(document, { clipboardData: { files: [file] } });
+      else fireEvent.drop(screen.getByRole('heading', { name: 'Search with a photo' }).parentElement!.parentElement!, { dataTransfer: { files: [file] } });
+    };
+    deliver(imageFile('bad.gif', 'image/gif'));
+    expect(screen.getByRole('status', { name: 'Photo search status' })).toHaveTextContent('isn’t a supported image');
+    deliver(imageFile('empty.png', 'image/png', 0));
+    expect(screen.getByRole('status', { name: 'Photo search status' })).toHaveTextContent('empty');
+    deliver(imageFile());
+    expect(await screen.findByAltText('Selected photo')).toBeInTheDocument();
+    expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint === '/api/search/image')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Search similar products' }));
+    await waitFor(() => expect(screen.getByRole('status', { name: 'Photo search status' })).toHaveTextContent("We couldn't find a close match"));
+    expect(screen.getByRole('heading', { name: "We couldn't find a close match" })).toBeInTheDocument();
+    expect(screen.getByText('Try another photo or search by product name. You can also explore our catalog.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try another photo' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Search by text' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Browse products' })).toBeInTheDocument();
+    expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint === '/api/search/image')).toHaveLength(1);
+  });
+
+  it.each([
+    { status: 200, items: [product('one', 'One')], message: '1 visually similar product found' },
+    { status: 200, items: [], message: "We couldn't find a close match" },
+    { status: 503, items: [], message: 'Image search is unavailable right now' },
+    { status: 504, items: [], message: 'The search took too long' },
+    { status: 408, items: [], message: 'The search took too long' },
+    { status: 500, items: [], message: 'Image search ran into a problem' },
+    { status: 422, items: [], message: 'This photo couldn’t be read' },
+  ])('announces $status/$message through one persistent region without duplicate alerts', async ({ status, items, message }) => {
+    vi.stubEnv('VITE_IMAGE_SEARCH_ENABLED', 'true');
+    let finish: (() => void) | undefined;
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint !== '/api/search/image') return { data: [], meta: { total: 0 } } as never;
+      await new Promise<void>(resolve => { finish = resolve; });
+      if (status !== 200) throw new ApiError(status, 'controlled response');
+      return { data: { items } } as never;
+    });
+    renderConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Open photo search' }));
+    const region = screen.getByRole('status', { name: 'Photo search status' });
+    fireEvent.change(screen.getByLabelText('Choose a photo'), { target: { files: [imageFile()] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search similar products' }));
+    expect(region).toHaveTextContent('Finding visually similar products');
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    await act(async () => finish?.());
+    await waitFor(() => expect(region).toHaveTextContent(message));
+    expect(screen.getByRole('status', { name: 'Photo search status' })).toBe(region);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('says the photo was not saved (not "not sent") when an enabled service is offline', async () => {
+    vi.stubEnv('VITE_IMAGE_SEARCH_ENABLED', 'true');
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint === '/api/search/image') throw new ApiError(503, 'unavailable');
+      return { data: [], meta: { total: 0 } } as never;
+    });
+    renderConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Open photo search' }));
+    fireEvent.change(await screen.findByLabelText('Choose a photo'), { target: { files: [imageFile()] } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Search similar products' }));
+    expect(await screen.findByRole('heading', { name: 'Image search is unavailable right now' })).toBeInTheDocument();
+    expect(screen.getByText(/It wasn’t saved/)).toBeInTheDocument();
+    expect(screen.queryByText(/wasn’t sent anywhere/)).not.toBeInTheDocument();
   });
 
   it('renders real gateway results in relevance order with no similarity scores, then opens product details', async () => {
@@ -214,7 +289,7 @@ describe('Discovery Console image search', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open photo search' }));
     fireEvent.change(await screen.findByLabelText('Choose a photo'), { target: { files: [imageFile()] } });
     fireEvent.click(await screen.findByRole('button', { name: 'Search similar products' }));
-    expect(await screen.findByText('Finding visually similar products…')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Photo search status' })).toHaveTextContent('Finding visually similar products…');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(seenSignal?.aborted).toBe(true));
     expect(await screen.findByRole('button', { name: 'Search similar products' })).toBeInTheDocument();
@@ -237,7 +312,7 @@ describe('Discovery Console image search', () => {
 
 describe('Discovery Console camera', () => {
   const originalMediaDevices = navigator.mediaDevices;
-  afterEach(() => { Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: originalMediaDevices }); });
+  afterEach(() => { vi.restoreAllMocks(); Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: originalMediaDevices }); });
   const stubCamera = (getUserMedia: () => Promise<MediaStream>) => {
     Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: vi.fn(getUserMedia) } });
@@ -248,8 +323,67 @@ describe('Discovery Console camera', () => {
     renderConsole();
     fireEvent.click(screen.getByRole('button', { name: 'Open camera' }));
     expect(await screen.findByRole('heading', { name: 'Camera access is blocked' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Camera status' })).toHaveTextContent('Camera access is blocked');
+    expect(screen.getAllByRole('status')).toHaveLength(1);
     expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledWith(expect.objectContaining({ audio: false }));
     expect(screen.getByRole('button', { name: 'Upload a photo' })).toBeInTheDocument();
+  });
+
+  it('names a busy camera, offers Retry camera and does not reprompt on its own', async () => {
+    stubCamera(() => Promise.reject(new DOMException('in use', 'NotReadableError')));
+    renderConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Open camera' }));
+    expect(await screen.findByRole('heading', { name: 'The camera is in use' })).toBeInTheDocument();
+    expect(screen.getAllByText(/NotReadableError/).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Upload a photo' })).toBeInTheDocument();
+    expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry camera' }));
+    await waitFor(() => expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledTimes(2));
+  });
+
+  it('does not require a rear camera on desktop and falls back from an over-constrained request', async () => {
+    const calls: unknown[] = [];
+    stubCamera(((constraints: unknown) => { calls.push(constraints); return calls.length === 1 ? Promise.reject(new DOMException('x', 'OverconstrainedError')) : Promise.reject(new DOMException('gone', 'NotFoundError')); }) as never);
+    renderConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Open camera' }));
+    expect(await screen.findByRole('heading', { name: 'No camera available' })).toBeInTheDocument();
+    expect(JSON.stringify(calls[0])).not.toContain('facingMode');
+    expect(calls[1]).toEqual({ video: true, audio: false });
+  });
+
+  it('reports a stream that never delivers a frame instead of leaving a black preview', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const stop = vi.fn();
+    stubCamera(() => Promise.resolve({ getTracks: () => [{ stop }] } as unknown as MediaStream));
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    renderConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Open camera' }));
+    await screen.findByLabelText('Live camera preview');
+    await act(async () => { await vi.advanceTimersByTimeAsync(8100); });
+    expect(await screen.findByRole('heading', { name: 'The camera sent no picture' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry camera' })).toBeInTheDocument();
+    expect(stop).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('does not report a live preview for a muted track and shows the no-picture recovery state', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const stop = vi.fn();
+    const track = Object.assign(new EventTarget(), { stop, muted: true });
+    stubCamera(() => Promise.resolve({ getTracks: () => [track], getVideoTracks: () => [track] } as unknown as MediaStream));
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(HTMLVideoElement.prototype, 'videoWidth', 'get').mockReturnValue(640);
+    renderConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Open camera' }));
+    await screen.findByLabelText('Live camera preview');
+    fireEvent.loadedData(screen.getByLabelText('Live camera preview'));
+    expect(screen.getByRole('button', { name: 'Take photo' })).toBeDisabled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(8100); });
+    expect(await screen.findByRole('heading', { name: 'The camera sent no picture' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry camera' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Upload a photo' })).toBeInTheDocument();
+    expect(stop).toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
   it('requests video only after the press and stops every track when the console closes', async () => {
@@ -264,5 +398,71 @@ describe('Discovery Console camera', () => {
     await act(async () => { fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' }); });
     expect(await screen.findByRole('heading', { name: 'Search with a photo' })).toBeInTheDocument();
     expect(stop).toHaveBeenCalled();
+  });
+
+  it('captures, stops the camera, retakes and selects a photo without uploading', async () => {
+    const stop = vi.fn();
+    stubCamera(() => Promise.resolve({ getTracks: () => [{ stop }] } as unknown as MediaStream));
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(HTMLVideoElement.prototype, 'videoWidth', 'get').mockReturnValue(640);
+    vi.spyOn(HTMLVideoElement.prototype, 'videoHeight', 'get').mockReturnValue(480);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(callback => callback(new Blob(['capture'], { type: 'image/jpeg' })));
+    renderConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Open camera' }));
+    const shutter = await screen.findByRole('button', { name: 'Take photo' });
+    await waitFor(() => expect(shutter).toBeEnabled());
+    fireEvent.click(shutter);
+    expect(await screen.findByAltText('Captured photo')).toBeInTheDocument();
+    expect(stop).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Retake' }));
+    await waitFor(() => expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledTimes(2));
+    expect(URL.revokeObjectURL).toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Take photo' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Use this photo' }));
+    expect(await screen.findByAltText('Selected photo')).toBeInTheDocument();
+    expect(stop).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(apiClient).mock.calls.some(([endpoint]) => endpoint === '/api/search/image')).toBe(false);
+  });
+
+  it('advises a retake for a very dark capture but still allows using it', async () => {
+    stubCamera(() => Promise.resolve({ getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream));
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(HTMLVideoElement.prototype, 'videoWidth', 'get').mockReturnValue(640);
+    vi.spyOn(HTMLVideoElement.prototype, 'videoHeight', 'get').mockReturnValue(480);
+    const dark = new Uint8ClampedArray(32 * 24 * 4).fill(20);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+      { drawImage: vi.fn(), getImageData: () => ({ data: dark }) } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(callback => callback(new Blob(['capture'], { type: 'image/jpeg' })));
+    renderConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Open camera' }));
+    const shutter = await screen.findByRole('button', { name: 'Take photo' });
+    await waitFor(() => expect(shutter).toBeEnabled());
+    fireEvent.click(shutter);
+    expect(await screen.findByText('This photo looks dark. For better matches, retake it in brighter light.')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Camera status' })).toHaveTextContent('It looks dark');
+    fireEvent.click(screen.getByRole('button', { name: 'Use this photo' }));
+    expect(await screen.findByAltText('Selected photo')).toBeInTheDocument();
+  });
+
+  it('does not create a retained image URL if canvas encoding finishes after closing the camera', async () => {
+    const stop = vi.fn();
+    stubCamera(() => Promise.resolve({ getTracks: () => [{ stop }] } as unknown as MediaStream));
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(HTMLVideoElement.prototype, 'videoWidth', 'get').mockReturnValue(640);
+    vi.spyOn(HTMLVideoElement.prototype, 'videoHeight', 'get').mockReturnValue(480);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
+    let encoded: BlobCallback | undefined;
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(callback => { encoded = callback; });
+    renderConsole();
+    fireEvent.click(screen.getByRole('button', { name: 'Open camera' }));
+    const shutter = await screen.findByRole('button', { name: 'Take photo' });
+    await waitFor(() => expect(shutter).toBeEnabled());
+    fireEvent.click(shutter);
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+    await act(async () => encoded?.(new Blob(['late'], { type: 'image/jpeg' })));
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    expect(screen.queryByAltText('Captured photo')).not.toBeInTheDocument();
   });
 });

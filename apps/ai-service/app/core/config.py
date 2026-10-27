@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import parse_qs, urlsplit
 
 from dotenv import dotenv_values
 from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
@@ -24,7 +25,9 @@ SERVICE_VERSION = "0.2.0"
 API_VERSION = "v1"
 
 SERVICE_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_ENV_FILE = SERVICE_ROOT / ".env"
+# AI_ENV_FILE points a process at another env file (an isolated QA instance passes a non-existent path so nothing
+# from the developer's .env is inherited); unset keeps apps/ai-service/.env.
+DEFAULT_ENV_FILE = Path(os.environ["AI_ENV_FILE"]) if os.environ.get("AI_ENV_FILE") else SERVICE_ROOT / ".env"
 
 Environment = Literal["development", "qa", "production", "test"]
 
@@ -58,6 +61,36 @@ class ConfigurationError(RuntimeError):
     """Raised when the runtime configuration is unsafe. Messages name settings, never values."""
 
 
+_TLS_MODES = frozenset({"require", "verify-ca", "verify-full"})
+
+
+def check_vector_database_url(url: str) -> None:
+    """Refuse malformed or plaintext vector-store URLs. Messages never include the URL."""
+    try:
+        parts = urlsplit(url)
+        _ = parts.port  # raises ValueError on a malformed port
+    except ValueError as exc:
+        raise ValueError("AI_VECTOR_DATABASE_URL must be a valid postgresql:// URL") from exc
+    if parts.scheme not in ("postgresql", "postgres"):
+        raise ValueError("AI_VECTOR_DATABASE_URL must use the postgresql:// scheme")
+    host = parts.hostname
+    if not host or not parts.path.strip("/"):
+        raise ValueError("AI_VECTOR_DATABASE_URL must name a host and a database")
+    loopback = host == "localhost" or _is_loopback_ip(host)
+    sslmode = parse_qs(parts.query).get("sslmode", [""])[-1]
+    if loopback:
+        return
+    if sslmode not in _TLS_MODES:
+        raise ValueError("AI_VECTOR_DATABASE_URL must set sslmode=require, verify-ca or verify-full for a remote host")
+
+
+def _is_loopback_ip(host: str) -> bool:
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=DEFAULT_ENV_FILE,
@@ -85,10 +118,35 @@ class Settings(BaseSettings):
     AI_INFERENCE_TIMEOUT_SECONDS: float = Field(default=5.0, ge=0.1, le=60.0)
     AI_MAX_CONCURRENT_INFERENCES: int = Field(default=2, ge=1, le=16)
 
+    # Image search (Task 04.2). The multipart route allows AI_MAX_IMAGE_BYTES plus a fixed overhead; every
+    # other route keeps AI_MAX_REQUEST_BYTES.
+    AI_MAX_IMAGE_BYTES: int = Field(default=8_388_608, ge=65_536, le=16 * 1_048_576)
+    AI_MAX_IMAGE_PIXELS: int = Field(default=40_000_000, ge=1_000_000, le=89_000_000)
+    AI_TORCH_THREADS: int = Field(default=2, ge=1, le=16)
+    # Directory holding model.safetensors and descriptor.json, mounted read-only. Unset = no encoder (503).
+    AI_MODEL_ARTIFACT_DIR: Path | None = None
+    # Directory holding relevance.json and head.safetensors (calibrated no-match gate). Unset = every search returns
+    # the nearest topK products, as before Task 04.2-Q.
+    AI_RELEVANCE_ARTIFACT_DIR: Path | None = None
+    # Least-privilege, read-only connection to the ai schema (ai_vector_reader). Unset = no index (503).
+    AI_VECTOR_DATABASE_URL: SecretStr | None = None
+
     @field_validator("AI_SERVICE_API_KEY", mode="before")
     @classmethod
     def _blank_key_is_absent(cls, value: object) -> object:
         return None if isinstance(value, str) and value == "" else value
+
+    @field_validator("AI_MODEL_ARTIFACT_DIR", "AI_RELEVANCE_ARTIFACT_DIR", "AI_VECTOR_DATABASE_URL", mode="before")
+    @classmethod
+    def _blank_optional_is_absent(cls, value: object) -> object:
+        return None if isinstance(value, str) and value.strip() == "" else value
+
+    @field_validator("AI_VECTOR_DATABASE_URL")
+    @classmethod
+    def _vector_dsn_is_safe(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None:
+            check_vector_database_url(value.get_secret_value())
+        return value
 
     @field_validator("AI_SERVICE_API_KEY")
     @classmethod
@@ -166,8 +224,12 @@ def settings_from_mapping(values: Mapping[str, object]) -> Settings:
 
 
 def forbidden_secrets_present(environ: Mapping[str, str | None]) -> list[str]:
-    """Names of commerce secrets with a non-empty value in ``environ`` (never the values)."""
-    return sorted(name for name in FORBIDDEN_COMMERCE_SECRETS if (environ.get(name) or "").strip())
+    """Names of commerce/training-only settings with a non-empty value (never the values)."""
+    return sorted(
+        name
+        for name, value in environ.items()
+        if (name in FORBIDDEN_COMMERCE_SECRETS or name.startswith("KAGGLE_")) and (value or "").strip()
+    )
 
 
 def load_settings(
@@ -179,7 +241,9 @@ def load_settings(
     file_values = dotenv_values(env_file) if env_file is not None and env_file.is_file() else {}
     present = forbidden_secrets_present({**file_values, **source})
     if present:
-        raise ConfigurationError("The AI service must not receive commerce credentials: " + ", ".join(present))
+        raise ConfigurationError(
+            "The AI service must not receive commerce credentials or training settings: " + ", ".join(present)
+        )
     try:
         if environ is None:
             return Settings(_env_file=env_file)

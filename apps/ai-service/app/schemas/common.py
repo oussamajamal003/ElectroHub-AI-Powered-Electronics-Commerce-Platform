@@ -85,6 +85,17 @@ class Limits(ContractModel):
     max_concurrent_inferences: int
 
 
+class ImageSearchCapabilities(ContractModel):
+    """Public upload contract and active-version identity. No paths, credentials or index internals."""
+
+    accepted_content_types: list[str]
+    max_image_bytes: int
+    max_image_pixels: int
+    max_top_k: int
+    model_version: VersionStr | None
+    embedding_version: VersionStr | None
+
+
 class Capabilities(ContractModel):
     service: str
     environment: str
@@ -92,6 +103,7 @@ class Capabilities(ContractModel):
     service_version: str
     features: Features
     limits: Limits
+    image_search: ImageSearchCapabilities
 
 
 class Health(BaseModel):

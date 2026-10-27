@@ -13,6 +13,8 @@ __pycache__/
 .coverage
 htmlcov/
 tests/
+# Offline training code, its environments and the licensed Commons dataset never enter the serving image context.
+training/
 requirements-dev.txt
 *.ipynb
 .ipynb_checkpoints/

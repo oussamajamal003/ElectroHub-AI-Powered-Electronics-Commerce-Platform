@@ -4,6 +4,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const fs = require('node:fs');
+const { execFileSync } = require('node:child_process');
 const plan = require('./migration-plan.cjs');
 const policy = require('./check-workflow-policy.cjs');
 
@@ -24,12 +26,14 @@ test('parseTarget recognises pooled and direct Supabase endpoints and rejects ev
 
 test('assertTarget accepts DEV and refuses PROD, mismatches, localhost and pgbouncer DIRECT_URL', () => {
   assert.doesNotThrow(() => plan.assertTarget({ DATABASE_URL: pooled(DEV, '?pgbouncer=true'), DIRECT_URL: pooled(DEV) }, DEV));
-  assert.throws(() => plan.assertTarget({ DATABASE_URL: pooled(PROD), DIRECT_URL: pooled(PROD) }, DEV), /production|different/);
-  assert.throws(() => plan.assertTarget({ DATABASE_URL: pooled(DEV), DIRECT_URL: pooled(PROD) }, DEV), /production/);
+  assert.doesNotThrow(() => plan.assertTarget({ DATABASE_URL: pooled(PROD), DIRECT_URL: direct(PROD) }, PROD, 'PROD'));
+  assert.throws(() => plan.assertTarget({ DATABASE_URL: pooled(PROD), DIRECT_URL: pooled(PROD) }, DEV), /other protected project|different/);
+  assert.throws(() => plan.assertTarget({ DATABASE_URL: pooled(DEV), DIRECT_URL: pooled(PROD) }, DEV), /other protected project/);
   assert.throws(() => plan.assertTarget({ DATABASE_URL: pooled(DEV), DIRECT_URL: 'postgresql://u:p@localhost/x' }, DEV), /recognised/);
   assert.throws(() => plan.assertTarget({ DATABASE_URL: pooled(DEV), DIRECT_URL: undefined }, DEV), /not set/);
   assert.throws(() => plan.assertTarget({ DATABASE_URL: pooled(DEV), DIRECT_URL: pooled(DEV, '?pgbouncer=true') }, DEV), /pgbouncer/);
-  assert.throws(() => plan.assertTarget({ DATABASE_URL: pooled(PROD), DIRECT_URL: pooled(PROD) }, PROD), /restricted to the DEV project/);
+  assert.throws(() => plan.assertTarget({ DATABASE_URL: pooled(PROD), DIRECT_URL: pooled(PROD) }, PROD), /approved DEV project/);
+  assert.throws(() => plan.assertTarget({ DATABASE_URL: pooled(DEV), DIRECT_URL: pooled(DEV) }, DEV, 'PROD'), /approved PROD project/);
 });
 
 test('planMigrations detects pending, modified, missing, failed, rolled-back and out-of-order migrations', () => {
@@ -43,6 +47,69 @@ test('planMigrations detects pending, modified, missing, failed, rolled-back and
   assert.match(plan.planMigrations(local, [row(local[0].name, sha(1), { rolledBack: true })]).problems.join(), /rolled back/);
   // b is applied, a is not: a would be applied out of order
   assert.match(plan.planMigrations(local, [row(local[1].name, sha(2))]).problems.join(), /sorts before already-applied/);
+});
+
+test('line-ending reconciliation accepts only the two exact, content-pinned legacy CRLF checksums', () => {
+  const name = '20261012120000_payment_purchase_ownership';
+  const legacy = plan.LEGACY_LINE_ENDING_CHECKSUMS[name];
+  const row = (migrationName, checksum) => ({ name: migrationName, checksum, finished: true, rolledBack: false });
+  const canonicalLf = {
+    name,
+    sha256: legacy.canonicalSha256,
+    canonicalSha256: legacy.canonicalSha256,
+    crlfSha256: legacy.crlfSha256,
+    lineEnding: 'LF',
+  };
+
+  assert.deepEqual(plan.planMigrations([canonicalLf], [row(name, legacy.crlfSha256)]), { pending: [], problems: [] });
+  assert.match(plan.planMigrations([{ ...canonicalLf, canonicalSha256: sha(9) }], [row(name, legacy.crlfSha256)]).problems.join(), /checksum mismatch/);
+  assert.match(plan.planMigrations([canonicalLf], [row(name, sha(9))]).problems.join(), /checksum mismatch/);
+  assert.match(plan.planMigrations([{ ...canonicalLf, name: '20260101000000_unrelated' }], [row('20260101000000_unrelated', legacy.crlfSha256)]).problems.join(), /checksum mismatch/);
+
+  const foundation = {
+    name: '20240101000000_database_foundation',
+    sha256: 'a41f086f7f9dc2f67621622a77f3e716027285e015991db470e8ab7bed1314a8',
+    canonicalSha256: 'cb2baf5e79d8127f31fa9873c5e2cfd28b159f7a375d8d4d2856dd8766b5fd17',
+    crlfSha256: 'a41f086f7f9dc2f67621622a77f3e716027285e015991db470e8ab7bed1314a8',
+    lineEnding: 'CRLF',
+  };
+  // Foundation: the PROD ledger value is the exact BOM+CRLF form of the Git blob and is accepted ONLY with that proof.
+  const fnd = plan.LEGACY_LINE_ENDING_CHECKSUMS[foundation.name];
+  const foundationLedger = '5de060a305af86bbc70d683ebe3bea1fe35c1c6454c048cbeed07d22fe347f96';
+  assert.equal(fnd.ledgerSha256, foundationLedger);
+  assert.deepEqual(plan.planMigrations([{ ...foundation, bomCrlfSha256: foundationLedger }], [row(foundation.name, foundationLedger)]), { pending: [], problems: [] });
+  assert.match(plan.planMigrations([foundation], [row(foundation.name, foundationLedger)]).problems.join(), /checksum mismatch/);
+  assert.match(plan.planMigrations([{ ...foundation, bomCrlfSha256: foundationLedger }], [row(foundation.name, sha(9))]).problems.join(), /checksum mismatch/);
+  assert.match(plan.planMigrations([{ ...foundation, canonicalSha256: sha(9), bomCrlfSha256: foundationLedger }], [row(foundation.name, foundationLedger)]).problems.join(), /checksum mismatch/);
+  // The real file's bytes reproduce the pinned ledger value (BOM + CRLF of the Git blob).
+  const realFoundation = plan.localMigrations(path.resolve(__dirname, '../../apps/backend/prisma/migrations')).find((m) => m.name === foundation.name);
+  assert.equal(realFoundation.canonicalSha256, fnd.canonicalSha256);
+  assert.equal(realFoundation.bomCrlfSha256, foundationLedger);
+});
+
+test('live DEV payment migration bytes reproduce the exact approved LF and CRLF hashes', () => {
+  const repoRoot = path.resolve(__dirname, '../..');
+  const migrationPath = 'apps/backend/prisma/migrations/20261012120000_payment_purchase_ownership/migration.sql';
+  const migrations = plan.localMigrations(path.join(repoRoot, 'apps/backend/prisma/migrations'));
+  const payment = migrations.find((migration) => migration.name === '20261012120000_payment_purchase_ownership');
+  const expected = plan.LEGACY_LINE_ENDING_CHECKSUMS['20261012120000_payment_purchase_ownership'];
+  const canonicalGitBytes = execFileSync('git', ['cat-file', 'blob', `HEAD:${migrationPath}`], { cwd: repoRoot });
+  const canonicalGit = plan.migrationChecksumMetadata(canonicalGitBytes);
+  const workingTreeBytes = fs.readFileSync(path.join(repoRoot, migrationPath));
+
+  assert.ok(payment);
+  assert.equal(canonicalGit.sha256, expected.canonicalSha256);
+  assert.equal(canonicalGit.crlfSha256, expected.crlfSha256);
+  assert.equal(payment.canonicalSha256, canonicalGit.sha256);
+  assert.equal(payment.canonicalSha256, expected.canonicalSha256);
+  assert.equal(payment.crlfSha256, expected.crlfSha256);
+  // Checkout line endings vary by platform (Windows autocrlf = CRLF, Linux CI = LF); either must hash to a pinned value.
+  assert.ok(['LF', 'CRLF'].includes(payment.lineEnding));
+  assert.equal(payment.sha256, payment.lineEnding === 'LF' ? expected.canonicalSha256 : expected.crlfSha256);
+  assert.deepEqual(
+    Buffer.from(workingTreeBytes.toString('utf8').replace(/\r\n/g, '\n'), 'utf8'),
+    canonicalGitBytes,
+  );
 });
 
 test('compareApproved requires the exact ordered pending set', () => {
@@ -147,10 +214,17 @@ test('every real workflow in this repository satisfies the policy', () => {
   assert.deepEqual(policy.checkWorkflows(files), []);
 });
 
-test('the real dev-migration workflow is manual-only and the only file naming shared-database secrets', () => {
+test('the real DEV and PROD migration workflows are manual-only and own their scoped secrets', () => {
   const files = policy.loadWorkflows(path.resolve(__dirname, '../workflows'));
   const dev = files.find((file) => file.name === 'dev-migration.yml');
+  const prod = files.find((file) => file.name === 'prod-migration.yml');
+  assert.ok(dev);
+  assert.ok(prod);
   assert.deepEqual(policy.triggers(dev.text), ['workflow_dispatch']);
+  assert.deepEqual(policy.triggers(prod.text), ['workflow_dispatch']);
   const holders = files.filter((file) => /secrets\.ELECTROHUB_/.test(file.text)).map((file) => file.name);
-  assert.deepEqual(holders, ['dev-migration.yml']);
+  assert.deepEqual(holders, ['dev-migration.yml', 'prod-migration.yml']);
+  assert.match(prod.text, /20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard/);
+  assert.match(prod.text, /RISK_ACCEPTANCE_REFERENCE/);
+  assert.match(prod.text, /AUTHORIZATION_REFERENCE/);
 });

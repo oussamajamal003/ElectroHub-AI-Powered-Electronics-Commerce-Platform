@@ -1,0 +1,110 @@
+name: Production Database Migration
+
+# Manual-only production path. The `electrohub-prod-database` GitHub Environment must be
+# configured outside this file with required DATABASE owner + release approvers, branch
+# restrictions, and both PROD connection secrets. Reviewers must validate the release authorization and
+# the owner risk-acceptance reference before approving the job. No other workflow can use these secrets.
+
+on:
+  workflow_dispatch:
+    inputs:
+      approved_commit:
+        description: 'Full 40-character SHA of the reviewed commit; must equal this workflow run commit.'
+        required: true
+        type: string
+      approved_migrations:
+        description: 'Exact ordered migration list: 20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard'
+        required: true
+        type: string
+      authorization_reference:
+        description: 'Written Project Owner, database-owner, and release authorization record reference.'
+        required: true
+        type: string
+      risk_acceptance_reference:
+        description: 'Reference to the documented Project Owner decision accepting the recovery risk (backup/PITR and restore drill not verified or waived) for this release.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: Deploy approved Prisma migrations to PROD
+    runs-on: ubuntu-latest
+    environment: electrohub-prod-database
+    concurrency:
+      group: db-migration-electrohub-prod
+      cancel-in-progress: false
+    env:
+      MIGRATION_TARGET: PROD
+      EXPECTED_PROJECT_REF: yepfgjehdstlxbpespun
+      APPROVED_COMMIT: ${{ inputs.approved_commit }}
+      APPROVED_MIGRATIONS: ${{ inputs.approved_migrations }}
+      AUTHORIZATION_REFERENCE: ${{ inputs.authorization_reference }}
+      RISK_ACCEPTANCE_REFERENCE: ${{ inputs.risk_acceptance_reference }}
+    steps:
+      - name: Verify the approved commit, exact migration allowlist, and recovery evidence references
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$APPROVED_COMMIT" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "approved_commit must be a full 40-character lowercase SHA." >&2
+            exit 1
+          fi
+          if [ "$APPROVED_COMMIT" != "$GITHUB_SHA" ]; then
+            echo "This run is at a different commit than the approved one. Refusing." >&2
+            exit 1
+          fi
+          expected='20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard'
+          if [ "$APPROVED_MIGRATIONS" != "$expected" ]; then
+            echo "The approved PROD migration list or order is not exact. Refusing." >&2
+            exit 1
+          fi
+          for reference in "$AUTHORIZATION_REFERENCE" "$RISK_ACCEPTANCE_REFERENCE"; do
+            if [ -z "${reference//[[:space:]]/}" ]; then
+              echo "Release authorization and owner risk-acceptance references are required." >&2
+              exit 1
+            fi
+          done
+          echo "Pinned commit, ordered allowlist, release authorization and owner risk-acceptance references are present. Environment reviewers must verify the referenced records."
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.approved_commit }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.11.0'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Prisma version
+        run: npm exec --workspace=@electrohub/backend -- prisma --version
+
+      - name: Pre-check (read-only) - target, checksums, ledger, and exact approved pending set
+        env:
+          DATABASE_URL: ${{ secrets.ELECTROHUB_PROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.ELECTROHUB_PROD_DIRECT_URL }}
+        run: node .github/scripts/migration-plan.cjs pre
+
+      - name: Deploy approved Prisma migrations
+        env:
+          DATABASE_URL: ${{ secrets.ELECTROHUB_PROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.ELECTROHUB_PROD_DIRECT_URL }}
+        run: npm exec --workspace=@electrohub/backend -- prisma migrate deploy
+
+      - name: Verify Prisma migration status
+        env:
+          DATABASE_URL: ${{ secrets.ELECTROHUB_PROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.ELECTROHUB_PROD_DIRECT_URL }}
+        run: npm exec --workspace=@electrohub/backend -- prisma migrate status
+
+      - name: Post-check (read-only) - nothing pending and approved entries finished
+        env:
+          DATABASE_URL: ${{ secrets.ELECTROHUB_PROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.ELECTROHUB_PROD_DIRECT_URL }}
+        run: node .github/scripts/migration-plan.cjs post

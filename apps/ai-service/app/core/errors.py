@@ -48,6 +48,24 @@ class ValidationFailedError(AIServiceError):
     message = "The request is invalid."
 
 
+class UnsupportedMediaTypeError(AIServiceError):
+    status_code = 415
+    code = "AI_UNSUPPORTED_MEDIA_TYPE"
+    message = "Unsupported image type. Upload a single still JPEG, PNG or WebP image."
+
+
+class InvalidImageError(AIServiceError):
+    status_code = 422
+    code = "AI_INVALID_IMAGE"
+    message = "The image could not be decoded or does not meet the minimum dimensions."
+
+
+class ImageTooLargeError(AIServiceError):
+    status_code = 413
+    code = "AI_IMAGE_TOO_LARGE"
+    message = "The image exceeds the accepted file size or dimensions."
+
+
 class RateLimitedError(AIServiceError):
     status_code = 429
     code = "AI_RATE_LIMITED"

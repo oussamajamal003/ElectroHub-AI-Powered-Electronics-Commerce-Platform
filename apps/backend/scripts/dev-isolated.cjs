@@ -5,6 +5,9 @@
  * runs one, and fails closed unless every database URL is a verified disposable loopback target.
  *
  *   PG_BIN=<dir containing initdb, pg_ctl, createdb, psql> (PostgreSQL 17)
+ *   ISOLATED_PG_DOCKER=1  (Task 04.2) run the disposable cluster as the pinned pgvector image in WSL Docker instead of the Windows
+ *                         binaries (visual search needs the pgvector extension). State lives in apps/backend/.isolated-docker; PG_BIN is
+ *                         then only used for the psql client. Same port, verified TLS, scram and identity checks.
  *   node scripts/dev-isolated.cjs init       create cluster (TLS, scram, loopback), database, schema (migrate deploy), fixtures
  *   node scripts/dev-isolated.cjs start-db   start the disposable cluster
  *   node scripts/dev-isolated.cjs stop-db    stop it (data kept in apps/backend/.isolated)
@@ -33,7 +36,11 @@ const dotenv = require('dotenv');
 const emailDev = require('./lib/commerce-email-dev.cjs');
 
 const backend = path.resolve(__dirname, '..');
-const home = path.join(backend, '.isolated');
+const dockerMode = process.env.ISOLATED_PG_DOCKER === '1';
+const home = path.join(backend, dockerMode ? '.isolated-docker' : '.isolated');
+// Pinned image (pgvector 0.8.0 on PostgreSQL 17) and WSL distribution for the Docker mode.
+const docker = { image: 'pgvector/pgvector:0.8.0-pg17', container: 'electrohub-isolated-pgvector',
+  volume: 'electrohub-isolated-pgvector-data', distro: process.env.ISOLATED_WSL_DISTRO || 'Ubuntu' };
 const port = Number(process.env.ISOLATED_PG_PORT || 55434);
 const database = 'electrohub_disposable';
 const files = { data: path.join(home, 'data'), certs: path.join(home, 'certs'), password: path.join(home, 'password.txt'),
@@ -82,6 +89,7 @@ function childEnvironment(isolated, mail, extra = {}, source = process.env) {
   environment.AI_SERVICE_API_KEY = source.ISOLATED_AI_SERVICE_API_KEY ?? '';
   environment.AI_SERVICE_ENVIRONMENT = 'qa';
   environment.AI_SERVICE_TIMEOUT_MS = source.ISOLATED_AI_SERVICE_TIMEOUT_MS ?? '';
+  environment.AI_IMAGE_SEARCH_TIMEOUT_MS = source.ISOLATED_AI_IMAGE_SEARCH_TIMEOUT_MS ?? '';
   return environment;
 }
 
@@ -156,6 +164,49 @@ function verifyIdentity(env) {
   return out;
 }
 
+/** Runs a docker command inside WSL as root (the daemon socket is root-owned there). Arguments never contain secrets. */
+function wslDocker(args, options = {}) { return run('wsl', ['-d', docker.distro, '-u', 'root', '--', 'docker', ...args], {}, options); }
+function toWslPath(windowsPath) { return run('wsl', ['-d', docker.distro, '--', 'wslpath', '-a', windowsPath.replace(/\\/g, '/')]).trim(); }
+function createDockerCluster() {
+  // PostgreSQL requires a postgres-owned 0600 key, which a Windows bind mount cannot express, so the entrypoint copies the launcher's
+  // certificate and key into the container, then starts PostgreSQL with TLS on the launcher port (the identity check reads that port).
+  const prepare = 'install -d -o postgres -m 700 /var/lib/postgresql/tls && ' +
+    'install -o postgres -m 600 /isolated/certs/server.key /var/lib/postgresql/tls/server.key && ' +
+    'install -o postgres -m 644 /isolated/certs/server.crt /var/lib/postgresql/tls/server.crt && ' +
+    `exec docker-entrypoint.sh postgres -c port=${port} -c ssl=on -c ssl_cert_file=/var/lib/postgresql/tls/server.crt ` +
+    '-c ssl_key_file=/var/lib/postgresql/tls/server.key';
+  wslDocker(['run', '-d', '--name', docker.container, '-p', `127.0.0.1:${port}:${port}`, '-v', `${docker.volume}:/var/lib/postgresql/data`,
+    '-v', `${toWslPath(home)}:/isolated:ro`, '-e', 'POSTGRES_PASSWORD_FILE=/isolated/password.txt', '-e', `POSTGRES_DB=${database}`,
+    '-e', `PGPORT=${port}`, '-e', 'POSTGRES_INITDB_ARGS=--auth=scram-sha-256', '-e', 'POSTGRES_HOST_AUTH_METHOD=scram-sha-256',
+    '--entrypoint', 'bash', docker.image, '-c', prepare]);
+}
+/**
+ * WSL stops an idle distribution (and with it the container) once no wsl.exe session is attached, so a detached `docker logs -f`
+ * keeps one session open for as long as the container runs and doubles as the server log.
+ */
+function keepDockerAlive() {
+  const pidFile = path.join(home, 'keepalive.pid');
+  if (fs.existsSync(pidFile)) {
+    try { process.kill(Number(fs.readFileSync(pidFile, 'utf8')), 0); return; } catch { /* stale */ }
+  }
+  const log = fs.openSync(files.pglog, 'a');
+  const child = spawn('wsl', ['-d', docker.distro, '-u', 'root', '--', 'docker', 'logs', '-f', '--since', '1s', docker.container],
+    { detached: true, stdio: ['ignore', log, log], windowsHide: true });
+  child.unref();
+  fs.writeFileSync(pidFile, String(child.pid));
+}
+function waitForDatabase() {
+  keepDockerAlive();
+  const password = fs.readFileSync(files.password, 'utf8').trim();
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    try {
+      run(bin('psql'), ['-h', 'localhost', '-p', String(port), '-U', 'postgres', '-d', database, '-At', '-c', 'select 1'], { PGPASSWORD: password, PGSSLMODE: 'require' });
+      return;
+    } catch { execFileSync(process.execPath, ['-e', 'setTimeout(() => {}, 1000)']); }
+  }
+  fail('the disposable pgvector container did not accept connections within 60 seconds.');
+}
+
 function init() {
   // An interrupted init (cluster and env.json created, schema/fixtures not yet) resumes at provisioning instead of refusing.
   if (fs.existsSync(files.data) && fs.existsSync(files.env) && !fs.existsSync(files.credentials)) {
@@ -171,6 +222,11 @@ function init() {
   openssl('req', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=localhost', '-keyout', 'server.key', '-out', 'server.csr');
   fs.writeFileSync(path.join(files.certs, 'san.cnf'), 'subjectAltName=DNS:localhost,IP:127.0.0.1\n');
   openssl('x509', '-req', '-in', 'server.csr', '-CA', 'ca.crt', '-CAkey', 'ca.key', '-CAcreateserial', '-days', '365', '-out', 'server.crt', '-extfile', 'san.cnf');
+  if (dockerMode) {
+    fs.mkdirSync(files.data, { recursive: true }); // marker: this launcher owns the container and its volume
+    createDockerCluster();
+    waitForDatabase();
+  } else {
   run(bin('initdb'), ['-D', files.data, '-U', 'postgres', '--auth=scram-sha-256', `--pwfile=${files.password}`, '-E', 'UTF8']);
   // Relative to the data directory: PostgreSQL on Windows cannot open absolute paths containing non-ASCII characters (the repository name has
   // an em dash), and relative paths keep the cluster relocatable.
@@ -178,6 +234,7 @@ function init() {
     `ssl_cert_file = '../certs/server.crt'\nssl_key_file = '../certs/server.key'\n`);
   startDb();
   run(bin('createdb'), ['-h', '127.0.0.1', '-p', String(port), '-U', 'postgres', database], { PGPASSWORD: password });
+  }
   const url = `postgresql://postgres:${password}@localhost:${port}/${database}`;
   const env = { DATABASE_URL: url, DIRECT_URL: url, DB_SSL_CA_CERT_PATH: path.join(files.certs, 'ca.crt') };
   assertDisposable(url);
@@ -210,12 +267,40 @@ function provision(env) {
   console.log(`\nReady. Test sign-in credentials: ${files.credentials}\nNext: node scripts/dev-isolated.cjs backend`);
 }
 function startDb() {
+  if (dockerMode) {
+    let state = 'missing';
+    try { state = wslDocker(['inspect', '-f', '{{.State.Running}}', docker.container]).trim(); } catch { /* no container */ }
+    if (state === 'missing') fail('no disposable pgvector container; run `ISOLATED_PG_DOCKER=1 node scripts/dev-isolated.cjs init` first.');
+    if (state !== 'true') wslDocker(['start', docker.container]);
+    waitForDatabase();
+    console.log(`disposable PostgreSQL (pgvector container) running on localhost:${port}`);
+    return;
+  }
   try { run(bin('pg_ctl'), ['-D', files.data, 'status']); console.log('disposable PostgreSQL already running'); return; } catch { /* not running */ }
   // Output detached: on Windows the server inherits pg_ctl's stdout, so a piped stdout would never close and this would wait forever.
   run(bin('pg_ctl'), ['-D', files.data, '-l', files.pglog, '-w', 'start'], {}, { stdio: 'ignore' });
   console.log(`disposable PostgreSQL started on 127.0.0.1:${port}`);
 }
-function stopDb() { run(bin('pg_ctl'), ['-D', files.data, '-m', 'fast', 'stop'], {}, { stdio: 'inherit' }); }
+function stopDb() {
+  if (dockerMode) {
+    wslDocker(['stop', docker.container], { stdio: 'inherit' });
+    const pidFile = path.join(home, 'keepalive.pid');
+    if (fs.existsSync(pidFile)) { try { process.kill(Number(fs.readFileSync(pidFile, 'utf8'))); } catch { /* already gone */ } fs.unlinkSync(pidFile); }
+    return;
+  }
+  run(bin('pg_ctl'), ['-D', files.data, '-m', 'fast', 'stop'], {}, { stdio: 'inherit' }); }
+/** Recreate only this launcher's container to apply loopback publishing; never remove its data volume. */
+function rebindDocker() {
+  if (!dockerMode) fail('rebind-db requires ISOLATED_PG_DOCKER=1.');
+  const env = config();
+  const volume = wslDocker(['inspect', '-f', '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}{{end}}{{end}}', docker.container]).trim();
+  if (volume !== docker.volume) fail('container data volume does not match the launcher-owned disposable volume.');
+  stopDb();
+  wslDocker(['rm', docker.container]); // No -v: preserve the checked, launcher-owned volume and indexed catalog.
+  createDockerCluster();
+  waitForDatabase();
+  console.log(`disposable container recreated with loopback publishing; identity: ${verifyIdentity(env)}`);
+}
 function status() { const env = config(); console.log(`target: ${assertDisposable(env.DATABASE_URL)}\nidentity: ${verifyIdentity(env)}`); }
 /** Email switches from the app's own env files (never printed): only the approved-recipient list and the Brevo key's presence are needed here. */
 function emailSettings() {
@@ -329,7 +414,7 @@ function restoreRecipient() {
 
 const command = process.argv[2];
 if (require.main === module) {
-  ({ init, 'start-db': startDb, 'stop-db': stopDb, status, backend: startBackend,
+  ({ init, 'start-db': startDb, 'stop-db': stopDb, 'rebind-db': rebindDocker, status, backend: startBackend,
     migrate: () => runVerifiedMigration(config()), captured,
     'use-real-recipient': useRealRecipient, 'restore-recipient': restoreRecipient }[command] ?? (() => fail(`unknown command "${command ?? ''}"`)))();
 }

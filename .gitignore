@@ -92,6 +92,8 @@ cookies.txt
 
 # Isolated local payment development (disposable PostgreSQL, generated test credentials)
 apps/backend/.isolated/
+apps/backend/.isolated-docker/
+apps/backend/.ai-vector/
 
 # Local backend cache (test and tooling artifacts, never committed)
 apps/backend/.cache/
@@ -101,3 +103,6 @@ apps/backend/.cache/
 apps/frontend/diag.txt
 docs/tasks/Phase-03/AUTH_REFRESH_LINEAGE_REVIEW.patch
 docs/tasks/Phase-03/CI_MIGRATION_SAFETY_REVIEW.patch
+
+# Task 04.2 trained model artifacts (safetensors + descriptor); distributed out of band, mounted read-only.
+apps/ai-service/models/

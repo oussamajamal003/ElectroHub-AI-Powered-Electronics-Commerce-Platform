@@ -36,7 +36,10 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
   const state = parsed.state;
   const active = !parsed.error && (catalog || activeSearch(state));
   const [draft, setDraft] = useState(state.q);
+  const draftValue = useRef(state.q);
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftRevision = useRef(0);
+  const pendingDraftSync = useRef<{ query: string; revision: number } | null>(null);
   const normalizedDraft = normalizeQuery(draft);
   const discovery = useDiscovery();
   const [showFilters, setShowFilters] = useState(false);
@@ -62,6 +65,15 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
   useEffect(() => {
     if (draftTimer.current) clearTimeout(draftTimer.current);
     draftTimer.current = null;
+    const pendingSync = pendingDraftSync.current;
+    pendingDraftSync.current = null;
+    // A debounced URL replacement can settle after the shopper has already started
+    // another query. Do not let that older navigation overwrite the newer draft.
+    if (pendingSync?.query === state.q && draftRevision.current > pendingSync.revision) {
+      setFormError('');
+      return;
+    }
+    draftValue.current = state.q;
     setDraft(state.q);
     setFormError('');
   }, [serialized, state.q]);
@@ -83,12 +95,15 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
     } catch (failure) { setFormError(failure instanceof Error ? failure.message : 'Check your search values.'); return false; }
   }, [setParams]);
   const changeDraft = (value: string) => {
+    draftValue.current = value;
+    const revision = ++draftRevision.current;
     setDraft(value);
     if (draftTimer.current) clearTimeout(draftTimer.current);
     const query = normalizeQuery(value);
     if (parsed.error || query === state.q) { draftTimer.current = null; return; }
     draftTimer.current = setTimeout(() => {
       draftTimer.current = null;
+      pendingDraftSync.current = { query, revision };
       commit({ ...state, q: query, page: 1 }, true);
     }, 275);
   };
@@ -96,8 +111,16 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
   const selectSuggestion = (suggestion: Suggestion) => {
     if (draftTimer.current) clearTimeout(draftTimer.current);
     draftTimer.current = null;
-    if (suggestion.type === 'PRODUCT') { setDraft(suggestion.label); commit({ ...state, q: normalizeQuery(suggestion.label), page: 1 }); }
+    if (suggestion.type === 'PRODUCT') { draftValue.current = suggestion.label; setDraft(suggestion.label); commit({ ...state, q: normalizeQuery(suggestion.label), page: 1 }); }
     else commit({ ...state, [suggestion.type === 'BRAND' ? 'brand' : 'category']: suggestion.slug, page: 1 });
+  };
+  const submitDraft = (currentDraft?: string) => {
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    draftTimer.current = null;
+    const submittedQuery = normalizeQuery(currentDraft ?? draftValue.current);
+    // Enter is an explicit commit. The parsed URL can lag a just-settled debounce in the same event turn,
+    // so always synchronize from the current input; the query cache avoids duplicate data work.
+    commit({ ...state, q: submittedQuery, page: 1 }, true);
   };
   const filterChoices = (data: { name: string; slug: string; productCount?: number }[], current?: string) => {
     const choices = data.map(value => ({ value: value.slug, label: value.productCount === undefined ? value.name : `${value.name} (${value.productCount})` }));
@@ -155,8 +178,8 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
         <p className={styles.subtitle}>Search by name, brand or category — or find products from a photo.</p>
       </header>}
           <div className={catalog ? styles.catalogToolbar : styles.searchToolbar}>
-            <form role="search" className={styles.searchForm + (catalog ? ' ' + styles.catalogSearch : '')} onSubmit={event => { event.preventDefault(); if (draftTimer.current) clearTimeout(draftTimer.current); draftTimer.current = null; if (normalizedDraft !== state.q) commit({ ...state, q: normalizedDraft, page: 1 }, true); }}>
-              <SearchField value={draft} onChange={changeDraft} onSelect={selectSuggestion} />
+            <form role="search" className={styles.searchForm + (catalog ? ' ' + styles.catalogSearch : '')} onSubmit={event => { event.preventDefault(); submitDraft(); }}>
+              <SearchField value={draft} onChange={changeDraft} onSelect={selectSuggestion} onSubmit={submitDraft} />
             </form>
             {catalog && <button ref={filterButton} type="button" className={`${styles.filterTrigger} ${showFilters || filterCount ? styles.filterTriggerActive : ''}`}
               aria-expanded={showFilters} aria-controls="search-filters" aria-label={filterCount ? `Filters (${filterCount})` : 'Filters'} onClick={openFilters}>
@@ -203,7 +226,7 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
             {results && results.data.length > 0 && <div className={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`}>{results.data.map((product, index) => catalog
               ? <StaggerItem key={product.id} replay index={index % 4}><ProductCard {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} /></StaggerItem>
               : <ProductCard key={product.id} {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} />)}</div>}
-            {results && results.data.length === 0 && <EmptyState headingLevel={2} className={styles.stateBlock} icon={<SearchX aria-hidden="true" />} title={state.q ? `No results for “${state.q}”` : 'No products found'} description="Try adjusting your search or filters." action={<>{catalog && filterCount > 0 && <Button type="button" variant="link" onClick={clearAllFilters}>Reset filters</Button>}{state.q && <Button type="button" variant="link" onClick={() => { setDraft(''); update({ q: '' }); }}>Clear query</Button>}{state.page > 1 && <Button type="button" variant="link" onClick={() => commit({ ...state, page: 1 })}>First page</Button>}</>} />}
+            {results && results.data.length === 0 && <EmptyState headingLevel={2} className={styles.stateBlock} icon={<SearchX aria-hidden="true" />} title={state.q ? `No results for “${state.q}”` : 'No products found'} description="Try adjusting your search or filters." action={<>{catalog && filterCount > 0 && <Button type="button" variant="link" onClick={clearAllFilters}>Reset filters</Button>}{state.q && <Button type="button" variant="link" onClick={() => { draftValue.current = ''; setDraft(''); update({ q: '' }); }}>Clear query</Button>}{state.page > 1 && <Button type="button" variant="link" onClick={() => commit({ ...state, page: 1 })}>First page</Button>}</>} />}
             {totalPages > 1 && <Pagination aria-label="Search result pages"><PaginationContent>
               <PaginationItem><PaginationPrevious disabled={state.page <= 1} onClick={() => commit({ ...state, page: state.page - 1 }, false, true)} /></PaginationItem>
               {pages.map(page => <PaginationItem key={page}><PaginationLink aria-label={`Go to page ${page}`} isActive={page === state.page} onClick={() => commit({ ...state, page }, false, true)}>{page}</PaginationLink></PaginationItem>)}

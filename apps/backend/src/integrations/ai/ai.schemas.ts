@@ -7,9 +7,14 @@ import { AI_SERVICE_ENVIRONMENTS } from './ai.config.js';
  */
 
 export const AI_MAX_TOP_K = 24;
+/** Upper bound on the AI's category-fallback candidate list (the service sends at most 48). */
+export const AI_FALLBACK_MAX = 64;
 export const AI_MAX_CANDIDATES = 200;
 export const AI_DEFAULT_LIMIT = 12;
 export const AI_ERROR_CODE_PATTERN = /^AI_[A-Z_]{1,48}$/;
+/** Task 04.2: image types the Express upload layer sniffs by magic bytes before anything reaches FastAPI. */
+export const AI_IMAGE_SEARCH_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export type AiImageSearchContentType = (typeof AI_IMAGE_SEARCH_CONTENT_TYPES)[number];
 
 const versionString = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/);
 const environment = z.enum(AI_SERVICE_ENVIRONMENTS);
@@ -133,10 +138,39 @@ export function aiRecommendationResultSchema(cap: number = AI_MAX_TOP_K) {
   }).strict();
 }
 
+export const AI_MAX_CATEGORY_HINTS = 32;
+
+/** Advisory query-category probabilities (Task 04.2-Q): unique slugs, probabilities descending, total <= 1. */
+export const categoryHintsSchema = z.array(z.object({
+  category: z.string().max(64).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  probability: z.number().finite().min(0).max(1),
+}).strict()).max(AI_MAX_CATEGORY_HINTS).superRefine((hints, ctx) => {
+  const seen = new Set<string>();
+  let total = 0;
+  hints.forEach((hint, index) => {
+    if (seen.has(hint.category)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'duplicate category', path: [index, 'category'] });
+    seen.add(hint.category);
+    if (index > 0 && hint.probability > hints[index - 1].probability) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'probabilities must be non-increasing', path: [index, 'probability'] });
+    }
+    total += hint.probability;
+  });
+  if (total > 1 + 1e-6) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'probabilities must not exceed 1 in total' });
+});
+
 export function aiImageSearchResultSchema(cap: number = AI_MAX_TOP_K) {
   return z.object({
     data: z.object({
       matches: rankedItemsSchema(cap),
+      // Optional so an AI service without a relevance gate (pre-04.2-Q) still validates.
+      categoryHints: categoryHintsSchema.default([]),
+      // Rerank weight selected for the AI's relevance gate; absent or null means the Express default.
+      categoryWeight: z.number().finite().min(0).max(2).nullable().optional(),
+      // Drop products whose category hint is below this fraction of the strongest hint; absent or null keeps all.
+      categoryMinRatio: z.number().finite().min(0).max(1).nullable().optional(),
+      // Category fallback (only when the AI's gate offers it): deeper candidates without the score-gap cut.
+      fallbackMatches: rankedItemsSchema(AI_FALLBACK_MAX).nullable().optional(),
+      fallbackScoreGap: z.number().finite().min(0).max(1).nullable().optional(),
       modelVersion: versionString,
       embeddingVersion: versionString,
     }).strict(),

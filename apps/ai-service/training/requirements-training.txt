@@ -1,0 +1,16 @@
+# Offline training/evaluation only (never installed in the serving image).
+#
+# Kaggle GPU runs (Task 04.2, runs 1 and 2) used the notebook image's preinstalled stack, recorded per run in
+# environment.json: Python 3.13.15, torch 2.11.0+cu128, torchvision 0.26.0+cu128, CUDA 12.8, 2x Tesla T4 (one used).
+# The kernel installs nothing extra; safetensors, numpy and Pillow come from the Kaggle image.
+#
+# Local dataset tooling and the training unit tests (CPU) use these pins:
+pillow==11.3.0
+imagehash==4.3.2
+numpy==2.2.6
+safetensors==0.6.2
+pytest==8.4.2
+# torch/torchvision for local tests: same CPU builds as the service (see ../requirements-runtime.txt).
+#
+# Kaggle CLI (dataset upload, kernel push/output), kept in its own environment (.kaggle-venv):
+#   kaggle==2.2.5  kagglesdk==0.1.38  python-dotenv==1.1.1

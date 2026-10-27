@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/lib/api';
-import { requestOverdueRecovery } from './PaymentPurchases';
+import { requestOverdueRecovery } from './overdueRecovery';
 
-vi.mock('@/lib/api', async original => ({ ...await original<typeof import('@/lib/api')>(), apiClient: vi.fn() }));
+vi.mock('@/lib/api', () => ({ apiClient: vi.fn() }));
 
 describe('Task 03.8: overdue recovery is an explicit, throttled POST (the purchases GET is read-only)', () => {
   beforeEach(() => { vi.mocked(apiClient).mockReset().mockResolvedValue({}); });

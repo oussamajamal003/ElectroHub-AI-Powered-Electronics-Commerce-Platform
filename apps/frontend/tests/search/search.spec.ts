@@ -8,19 +8,27 @@ test('Task 02.7 reuses Category and Brand cache from Home through Products and S
     if (pathname === '/api/brands') counts.brands++;
   });
   await page.goto('/');
-  const categoriesResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/categories');
-  const brandsResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/brands');
   await page.getByRole('link', { name: 'Products', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'All Products' })).toBeVisible();
-  await Promise.all([categoriesResponse, brandsResponse]);
+  // Products loads filter metadata lazily. Warm the shared queries before measuring reuse rather than
+  // waiting for requests that a fresh cache correctly avoids on navigation.
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Brand', exact: true }).click();
+  await expect(page.getByRole('option', { name: 'Apple', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect.poll(() => counts.categories).toBeGreaterThan(0);
   await expect.poll(() => counts.brands).toBeGreaterThan(0);
   await expect(page.getByTestId('product-card').first()).toBeVisible({ timeout: 30000 });
   const initial = { ...counts };
-  expect(initial).toEqual({ categories: 2, brands: 2 });
 
   await page.getByRole('button', { name: 'Search', exact: true }).click();
-  await expect(page).toHaveURL(/\/search$/);
+  const consoleDialog = page.getByRole('dialog', { name: 'Search ElectroHub' });
+  await expect(consoleDialog).toBeVisible();
+  await expect(page).toHaveURL(/\/products$/);
+  // Opening the console and its category chips reuse the catalog cache; full text results retain /search.
+  await consoleDialog.getByRole('combobox', { name: 'Search products' }).fill('macbook');
+  await consoleDialog.getByRole('button', { name: 'View all results for “macbook”', exact: true }).click();
+  await expect(page).toHaveURL(/\/search\?q=macbook$/);
   await expect.poll(() => counts.categories).toBe(initial.categories);
   await expect.poll(() => counts.brands).toBe(initial.brands);
   const afterSearch = { ...counts };
@@ -203,11 +211,16 @@ for (const width of [390, 768, 1440, 1920]) {
   test(`real Search UI, keyboard, filters, history, local image and visual QA at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto('/');
-    await expect(page.getByRole('contentinfo')).toBeVisible();
+    await expect(page.getByRole('contentinfo')).toBeVisible({ timeout: 30_000 });
     const searchButton = page.getByRole('button', { name: 'Search', exact: true });
     await searchButton.focus(); await searchButton.press('Enter');
-    await expect(page).toHaveURL(/\/search$/);
-    await expect(page.getByRole('link', { name: 'Cart', exact: true })).toBeVisible();
+    const consoleDialog = page.getByRole('dialog', { name: 'Search ElectroHub' });
+    await expect(consoleDialog).toBeVisible();
+    await expect(consoleDialog.getByRole('combobox', { name: 'Search products' })).toBeFocused();
+    await consoleDialog.getByRole('combobox', { name: 'Search products' }).fill('macbook');
+    await consoleDialog.getByRole('button', { name: 'View all results for “macbook”' }).click();
+    await expect(page).toHaveURL(/\/search\?q=macbook$/);
+    await expect(page.getByRole('banner').getByRole('link', { name: /^Cart(?:, \d+ items?)?$/ })).toHaveAttribute('href', '/cart');
     const query = page.getByRole('combobox', { name: 'Search products' });
     await expect(query).toBeVisible();
     const sort = page.getByRole('combobox', { name: 'Sort by' });
@@ -220,7 +233,10 @@ for (const width of [390, 768, 1440, 1920]) {
     await expect(page.getByRole('option').first()).toBeVisible({ timeout: 30000 });
     await query.press('ArrowDown'); await expect(query).toHaveAttribute('aria-activedescendant', /.+/);
     await query.press('Escape'); await expect(page.getByRole('listbox')).toHaveCount(0);
+    // Finish the first debounced URL transition before starting the next sequential navigation assertion.
+    await expect(page).toHaveURL(/q=mac$/);
     await query.fill('macbook');
+    await query.press('Enter');
     await expect(page).toHaveURL(/q=macbook/);
     await expect(page.getByTestId('product-card').first()).toBeVisible({ timeout: 30000 });
     await expect(page.getByRole('button', { name: /Filters/ })).toHaveCount(0);
@@ -255,18 +271,19 @@ for (const width of [390, 768, 1440, 1920]) {
     await expect(page).toHaveURL(/q=no-such-electrohub-product/);
     await expect(page.getByRole('heading', { name: /No results for/ })).toBeVisible({ timeout: 30000 });
     await page.screenshot({ path: testInfo.outputPath(`search-empty-${width}.png`), fullPage: true });
-    await page.getByRole('tab', { name: 'Image Search' }).click();
-    await expect(page.getByRole('button', { name: 'Browse files' })).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath(`search-image-${width}.png`), fullPage: true });
+    // Photo search lives in the Discovery Console: choosing a photo only previews it locally; nothing is uploaded.
     const imageRequests: string[] = [];
-    page.on('request', request => { if (request.url().includes('/api/') && /image|upload/.test(request.url())) imageRequests.push(request.url()); });
-    const browse = page.getByRole('button', { name: 'Browse files' });
-    await browse.focus();
+    page.on('request', request => { if (request.url().includes('/api/search/image')) imageRequests.push(request.url()); });
+    await page.getByRole('button', { name: 'Search by photo' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: 'Search with a photo' })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`search-image-${width}.png`), fullPage: true });
     const fileChooser = page.waitForEvent('filechooser');
-    await browse.press('Enter');
+    await dialog.getByRole('button', { name: 'Upload' }).click();
     await (await fileChooser).setFiles({ name: 'local.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lXcAAAAASUVORK5CYII=', 'base64') });
-    await expect(page.getByRole('heading', { name: 'local.png' })).toBeVisible();
-    await page.getByRole('button', { name: 'Remove image' }).click(); expect(imageRequests).toEqual([]);
+    await expect(dialog.getByText('local.png')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Remove' }).click(); expect(imageRequests).toEqual([]);
+    await page.keyboard.press('Escape');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 }

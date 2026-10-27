@@ -7,9 +7,9 @@ import { normalizeQuery } from '@/features/search/searchState';
 import styles from './SearchField.module.scss';
 
 interface Props {
-  value: string; onChange: (value: string) => void; onSelect: (suggestion: Suggestion) => void;
+  value: string; onChange: (value: string) => void; onSelect: (suggestion: Suggestion) => void; onSubmit?: (value: string) => void;
 }
-export function SearchField({ value, onChange, onSelect }: Props) {
+export function SearchField({ value, onChange, onSelect, onSubmit }: Props) {
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -48,7 +48,7 @@ export function SearchField({ value, onChange, onSelect }: Props) {
         if (event.key === 'Enter') {
           const selected = suggestions[active];
           if (expanded && active >= 0 && selected) { event.preventDefault(); select(selected); }
-          else { setOpen(false); setFocused(false); }
+          else { setOpen(false); setFocused(false); event.preventDefault(); if (onSubmit) onSubmit(input.current?.value ?? value); else input.current?.form?.requestSubmit(); }
         }
       }}
       endAdornment={value ? <button type="button" aria-label="Clear search input" className={styles.clear}

@@ -7,10 +7,10 @@ const fields = [Prisma.sql`p."name"`, Prisma.sql`p."sku"`, Prisma.sql`p."modelNu
   Prisma.sql`p."description"`, Prisma.sql`b."name"`, Prisma.sql`c."name"`];
 export const searchFrom = Prisma.sql`FROM "products" p JOIN "categories" c ON c."id" = p."categoryId"
   LEFT JOIN "brands" b ON b."id" = p."brandId" LEFT JOIN "inventory" i ON i."productId" = p."id"`;
+/** Single storefront visibility rule shared by product search and image-search resolution (requires searchFrom aliases). */
+export const storefrontVisibility = Prisma.sql`p."status" = 'ACTIVE' AND p."isTestFixture" = false AND p."storefrontVisible" = true AND c."isActive" = true`;
 export function searchWhere(input: SearchInput) {
-  const clauses = [
-    Prisma.sql`p."status" = 'ACTIVE' AND p."isTestFixture" = false AND p."storefrontVisible" = true AND c."isActive" = true`,
-  ];
+  const clauses = [storefrontVisibility];
   for (const token of input.q.split(' ').filter(Boolean)) {
     const specificationMatch = token.length < 3
       ? Prisma.sql`EXISTS (SELECT 1 FROM "product_specifications" ps WHERE ps."productId" = p."id" AND (ps."group" ~* ${`(^|[^[:alpha:]])${escapeRegex(token)}([^[:alpha:]]|$)`} OR ps."name" ~* ${`(^|[^[:alpha:]])${escapeRegex(token)}([^[:alpha:]]|$)`} OR ps."value" ~* ${`(^|[^[:alpha:]])${escapeRegex(token)}([^[:alpha:]]|$)`}))`

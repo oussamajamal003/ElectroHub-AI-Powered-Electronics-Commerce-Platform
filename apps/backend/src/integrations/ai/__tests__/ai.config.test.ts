@@ -88,3 +88,15 @@ describe('resolveAiServiceConfig', () => {
     expect(resolveAiServiceConfig(hostile, 'development')).toEqual({ status: 'disabled', reason: 'MISCONFIGURED', issues: [] });
   });
 });
+
+describe('image search timeout (Task 04.2)', () => {
+  const base = { AI_SERVICE_URL: 'http://localhost:8000', AI_SERVICE_API_KEY: KEY, AI_SERVICE_ENVIRONMENT: 'development' };
+  it('defaults to 8000 ms and accepts the 15000 ms maximum', () => {
+    expect(resolveAiServiceConfig(base, 'development')).toMatchObject({ status: 'enabled', imageSearchTimeoutMs: 8000 });
+    expect(resolveAiServiceConfig({ ...base, AI_IMAGE_SEARCH_TIMEOUT_MS: '15000' }, 'development')).toMatchObject({ status: 'enabled', imageSearchTimeoutMs: 15000 });
+  });
+  it.each([['14999999'], ['15001'], ['99'], ['abc']])('rejects out-of-range or malformed value %s as a misconfiguration', (value) => {
+    const result = resolveAiServiceConfig({ ...base, AI_IMAGE_SEARCH_TIMEOUT_MS: value }, 'development');
+    expect(result).toMatchObject({ status: 'disabled', reason: 'MISCONFIGURED', issues: ['AI_IMAGE_SEARCH_TIMEOUT_MS'] });
+  });
+});

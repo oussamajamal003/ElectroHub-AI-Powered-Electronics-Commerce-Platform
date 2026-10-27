@@ -84,7 +84,9 @@ export function DiscoveryConsole({ initialMode, initialQuery, startCamera, onClo
           {query && <button type="button" className={styles.iconAction} aria-label="Clear search"
             onClick={() => { setQuery(''); input.current?.focus(); }}><X size={16} aria-hidden="true" /></button>}
           <span className={styles.divider} aria-hidden="true" />
+          {/* Named explicitly: on narrow screens the visible label is hidden and only the icon remains. */}
           <button type="button" className={`${styles.modeButton} ${mode === 'image' ? styles.modeButtonOn : ''}`} aria-pressed={mode === 'image'}
+            aria-label="Search by image"
             onClick={() => { setCameraOnEnter(false); setMode(current => current === 'image' ? 'text' : 'image'); }}>
             <Camera size={16} aria-hidden="true" /><span className={styles.modeLabel}>Search by image</span>
           </button>
@@ -93,7 +95,7 @@ export function DiscoveryConsole({ initialMode, initialQuery, startCamera, onClo
           </DialogPrimitive.Close>
         </form>
         <div className={styles.body}>
-          <div role="status" aria-live="polite" className={styles.srOnly}>{announce}</div>
+          {mode === 'text' && <div role="status" aria-live="polite" className={styles.srOnly}>{announce}</div>}
           {mode === 'image' ? <DiscoveryImageMode startCamera={cameraOnEnter} backRef={back} onNavigate={go} onSearchText={() => { setMode('text'); input.current?.focus(); }} />
             : !typing ? <DiscoveryQuickActions onNavigate={go} onImage={camera => { setCameraOnEnter(camera); setMode('image'); }} />
               : <div className={styles.suggestions}>

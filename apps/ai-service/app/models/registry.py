@@ -1,10 +1,11 @@
 """Owns model artifacts for the life of the process: load once at startup, close on shutdown,
-and report readiness truthfully. Task 04.1 configures no loaders, so every feature reports
-``NOT_READY / MODEL_NOT_CONFIGURED``."""
+and report readiness truthfully. A feature without a configured loader reports
+``NOT_READY / MODEL_NOT_CONFIGURED``; the index is re-validated on every readiness probe."""
 
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 
 import anyio.to_thread
@@ -37,6 +38,7 @@ class ModelRegistry:
         }
         self._gateway = vector_gateway
         self._index_ready = False
+        self._last_index_check = float("-inf")
 
     async def start(self) -> None:
         for feature, slot in self._slots.items():
@@ -58,13 +60,29 @@ class ModelRegistry:
                 slot.load_failed = True
                 log_event("ai.model_load_failed", level=logging.ERROR, feature=feature, exception=type(exc).__name__)
 
+        await self.refresh_index()
+
+    async def refresh_index_if_stale(self, min_interval_seconds: float = 5.0) -> None:
+        """Self-healing for the search path: when the index was last seen not ready, re-check at most once per interval,
+        so a transient failure or a rollback recovers without waiting for an external readiness probe."""
+        if self._index_ready or time.monotonic() - self._last_index_check < min_interval_seconds:
+            return
+        await self.refresh_index()
+
+    async def refresh_index(self) -> None:
+        """Re-validate the active index against the loaded encoder. Called at startup and by every readiness probe,
+        so a version switch or an emptied index is reported on the next probe instead of never."""
+        self._last_index_check = time.monotonic()
         encoder = self.image_encoder
-        if encoder is not None and self._gateway is not None:
-            try:
-                self._index_ready = await self._gateway.is_ready(encoder.descriptor)
-            except Exception as exc:
-                log_event("ai.index_check_failed", level=logging.ERROR, exception=type(exc).__name__)
-                self._index_ready = False
+        gateway = self._gateway
+        if encoder is None or gateway is None:
+            self._index_ready = False
+            return
+        try:
+            self._index_ready = bool(await gateway.is_ready(encoder.descriptor))
+        except Exception as exc:
+            log_event("ai.index_check_failed", level=logging.ERROR, exception=type(exc).__name__)
+            self._index_ready = False
 
     async def stop(self) -> None:
         for feature, slot in self._slots.items():

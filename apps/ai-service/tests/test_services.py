@@ -10,9 +10,8 @@ import uuid
 import anyio
 import pytest
 
-from app.core.errors import InferenceOutputError, ModelNotReadyError, ValidationFailedError
+from app.core.errors import IndexNotReadyError, InferenceOutputError, ModelNotReadyError, ValidationFailedError
 from app.models.registry import ModelRegistry
-from app.processors.image import ValidatedImage
 from app.processors.inference import InferenceExecutor
 from app.schemas.common import RankedProduct
 from app.schemas.recommendations import RecommendationRequest
@@ -20,8 +19,9 @@ from app.services.image_search_service import ImageSearchService
 from app.services.recommendation_service import RecommendationService
 from tests.conftest import make_settings
 from tests.fakes import PRODUCTS, CountingLoader, FakeEncoder, FakeGateway, FakeRanker, ranked
+from tests.imagefactory import png_bytes
 
-IMAGE = ValidatedImage(content_type="image/png", width=8, height=8, data=b"\x89PNG-test-bytes")
+IMAGE = png_bytes(64, 48)
 
 
 def image_service(encoder: FakeEncoder, gateway: FakeGateway) -> tuple[ImageSearchService, ModelRegistry]:
@@ -111,3 +111,89 @@ def test_ranker_returning_more_than_limit_is_rejected() -> None:
     request = RecommendationRequest(mode="POPULAR_PRODUCTS", limit=1)
     with pytest.raises(InferenceOutputError):
         run_recommend(FakeRanker(items=ranked(0.7, 0.2)), request)
+
+
+def test_search_recovers_once_the_index_becomes_ready_without_a_readiness_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    encoder, gateway = FakeEncoder(), FakeGateway(ready=False, results=ranked(0.9))
+    service, registry = image_service(encoder, gateway)
+    clock = [1000.0]
+    monkeypatch.setattr("app.models.registry.time.monotonic", lambda: clock[0])
+
+    async def main() -> None:
+        await registry.start()  # index not ready at startup (e.g. a transient database failure or a rollback)
+        try:
+            with pytest.raises(IndexNotReadyError):
+                await service.search(IMAGE, 1)
+            gateway.ready = True
+            clock[0] += 1.0  # still inside the throttle window: no extra database check yet
+            with pytest.raises(IndexNotReadyError):
+                await service.search(IMAGE, 1)
+            clock[0] += 5.0  # throttle elapsed: the search path re-validates the index itself
+            result = await service.search(IMAGE, 1)
+            assert [m.product_id for m in result.matches] == PRODUCTS[:1]
+        finally:
+            await registry.stop()
+
+    anyio.run(main)
+
+
+def test_search_phase_events_are_sanitized_and_include_separate_timings(monkeypatch: pytest.MonkeyPatch) -> None:
+    events: list[tuple[str, dict[str, object]]] = []
+
+    def capture(event: str, **fields: object) -> None:
+        events.append((event, fields))
+
+    monkeypatch.setattr("app.services.image_search_service.log_event", capture)
+    run_search(FakeEncoder(), FakeGateway(results=ranked(0.9)))
+    assert [fields["phase"] for _, fields in events] == ["decode", "encode", "inference", "retrieval"]
+    for name, fields in events:
+        assert name == "ai.search_phase"
+        assert fields["outcome"] == "completed" and fields["code"] == "OK"
+        assert fields["environment"] == "test" and fields["requestId"] == "unknown"
+        assert isinstance(fields["durationMs"], float) and fields["durationMs"] >= 0
+        assert fields["modelVersion"] == "test-model-1" and fields["indexVersion"] == "test-emb-1"
+        assert set(fields) == {
+            "operation",
+            "phase",
+            "outcome",
+            "code",
+            "durationMs",
+            "requestId",
+            "environment",
+            "modelVersion",
+            "indexVersion",
+        }
+        assert all(not isinstance(value, bytes | list) for value in fields.values())
+
+
+def test_broken_diagnostics_do_not_break_successful_inference(monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken(event: str, **fields: object) -> None:
+        raise OSError("restricted log output")
+
+    monkeypatch.setattr("app.services.image_search_service.log_event", broken)
+    result = run_search(FakeEncoder(), FakeGateway(results=ranked(0.9)))
+    assert result.matches[0].product_id == PRODUCTS[0]  # type: ignore[attr-defined]
+
+
+def test_phase_failure_logs_only_a_safe_error_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.image_search_service import _timed_phase
+
+    events: list[dict[str, object]] = []
+
+    def capture(event: str, **fields: object) -> None:
+        events.append(fields)
+
+    monkeypatch.setattr("app.services.image_search_service.log_event", capture)
+    metadata: dict[str, object] = {
+        "requestId": "safe-id",
+        "environment": "test",
+        "modelVersion": "v1",
+        "indexVersion": "v1",
+    }
+    with pytest.raises(RuntimeError, match="secret"):
+        with _timed_phase("retrieval", metadata):
+            raise RuntimeError("secret database credentials and image contents")
+    assert events[0]["code"] == "AI_PHASE_FAILED" and events[0]["outcome"] == "failed"
+    assert "secret" not in str(events)

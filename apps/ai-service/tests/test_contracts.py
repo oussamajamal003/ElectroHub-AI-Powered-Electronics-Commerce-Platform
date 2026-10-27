@@ -45,6 +45,14 @@ def test_capabilities_publish_limits_without_secrets(client_factory: Callable[..
         "inferenceTimeoutMs": 1500,
         "maxConcurrentInferences": 2,
     }
+    assert body["imageSearch"] == {
+        "acceptedContentTypes": ["image/jpeg", "image/png", "image/webp"],
+        "maxImageBytes": 8_388_608,
+        "maxImagePixels": 40_000_000,
+        "maxTopK": 10,
+        "modelVersion": None,
+        "embeddingVersion": None,
+    }
 
 
 def valid_recommendation(**overrides: Any) -> dict[str, Any]:

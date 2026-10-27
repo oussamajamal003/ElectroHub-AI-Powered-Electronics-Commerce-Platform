@@ -9,8 +9,8 @@ name: Dev Database Migration
 #     reviewers (DATABASE owner + Architect) approve each run, and the DEV database secrets must be defined
 #     ONLY as secrets of that Environment (never repository-level secrets).
 #   * Before any write, `migration-plan.cjs pre` proves: the URLs target the approved DEV project and never
-#     production; the Prisma ledger has no failed/rolled-back row; applied migrations are byte-identical to
-#     this checkout; and the pending set equals the approved list exactly.
+#     production; the Prisma ledger has no failed/rolled-back row; applied migrations match canonical SQL or
+#     one exact content-pinned LF/CRLF compatibility record; and pending migrations equal the approved list.
 #   * The run must be at the approved commit, and runs for one target never overlap or cancel each other.
 #   * This workflow never runs `migrate resolve`, `migrate reset`, `migrate dev` or `db push`.
 #   * A separate, equally gated workflow is required for PROD; none exists yet.
@@ -43,6 +43,7 @@ jobs:
       group: db-migration-electrohub-dev
       cancel-in-progress: false
     env:
+      MIGRATION_TARGET: DEV
       EXPECTED_PROJECT_REF: pzxekjybdiulzmssalfo
       APPROVED_COMMIT: ${{ inputs.approved_commit }}
       APPROVED_MIGRATIONS: ${{ inputs.approved_migrations }}
@@ -92,6 +93,12 @@ jobs:
           DATABASE_URL: ${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}
           DIRECT_URL: ${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}
         run: npm exec --workspace=@electrohub/backend -- prisma migrate deploy
+
+      - name: Verify Prisma migration status
+        env:
+          DATABASE_URL: ${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}
+        run: npm exec --workspace=@electrohub/backend -- prisma migrate status
 
       - name: Post-check (read-only) - nothing pending, approved set recorded as finished
         env:

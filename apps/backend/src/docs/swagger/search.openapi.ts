@@ -27,6 +27,19 @@ export const searchPaths = {
       } } } }, '400': error, '429': error, '500': error,
     },
   } },
+  '/search/image': { post: {
+    tags: ['Search'], summary: 'Search products by photo (guest allowed)',
+    description: 'Multipart upload of exactly one JPEG, PNG or WebP photo in the image field (max 8 MiB, no other fields). The type is decided by magic bytes. The AI service ranks product ids; products are then loaded from the catalog with the same visibility rules as /search/products, with database prices and stock. Rate limit: 20 per 5 minutes per IP. Returns 503 IMAGE_SEARCH_UNAVAILABLE when visual search is not configured.',
+    parameters: [parameter('limit', { type: 'integer', minimum: 1, maximum: 24, default: 12 })],
+    requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['image'], properties: { image: { type: 'string', format: 'binary' } } } } } },
+    responses: {
+      '200': { description: 'Ranked product summaries in relevance order (AI rank preserved).', content: { 'application/json': { schema: { type: 'object', required: ['data', 'meta'], properties: {
+        data: { type: 'object', required: ['items'], properties: { items: { type: 'array', items: { $ref: '#/components/schemas/ProductSummary' } } } },
+        meta: { type: 'object', required: ['modelVersion', 'embeddingVersion', 'count'], properties: { modelVersion: { type: 'string' }, embeddingVersion: { type: 'string' }, count: { type: 'integer', minimum: 0 } } },
+      } } } } },
+      '400': error, '413': error, '415': error, '422': error, '429': error, '503': error, '504': error, '500': error,
+    },
+  } },
   '/search/suggestions': { get: {
     tags: ['Search'], summary: 'Suggest products, brands and active categories', description: 'Product exact/prefix/contains precedes brand and category; deterministic label/ID ties. Rate limit: 240 per minute per IP.',
     parameters: [parameter('q', { type: 'string', minLength: 2, maxLength: 120 }, true), parameter('limit', { type: 'integer', minimum: 1, maximum: 10, default: 8 })],

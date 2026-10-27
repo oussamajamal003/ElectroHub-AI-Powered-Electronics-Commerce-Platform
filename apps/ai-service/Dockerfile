@@ -13,11 +13,21 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /srv/ai-service
 
 COPY requirements-runtime.txt .
-# --no-deps: requirements-runtime.txt pins the complete transitive set; then verify it is consistent.
+# requirements-runtime.txt carries the CPU-only PyTorch index (--extra-index-url) and pins the complete transitive set,
+# so --no-deps installs exactly that set; pip check then verifies the set is consistent.
 RUN pip install --no-deps -r requirements-runtime.txt && pip check
+
+# Keep build-time dependency extraction on the build filesystem; use the bounded tmpfs only at runtime.
+ENV TMPDIR=/dev/shm
 
 RUN groupadd --system app && useradd --system --gid app --no-create-home --shell /usr/sbin/nologin app
 COPY --chown=root:root app ./app
+
+# Model artifacts are never baked into the image. Mount an artifact directory read-only at runtime and point
+# AI_MODEL_ARTIFACT_DIR at it, e.g.:
+#   docker run -v /srv/electrohub/ai-models:/srv/ai-models:ro -e AI_MODEL_ARTIFACT_DIR=/srv/ai-models ...
+# The mount point is root-owned, so the unprivileged service user can read it but never write to it.
+RUN mkdir -p /srv/ai-models && chmod 0755 /srv/ai-models
 
 USER app
 EXPOSE 8000

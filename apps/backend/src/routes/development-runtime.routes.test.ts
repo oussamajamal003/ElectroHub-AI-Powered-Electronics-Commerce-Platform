@@ -46,3 +46,17 @@ it.each([
   expect(response.status).toBe(503);
   expect(response.body).toEqual({ error: { code: 'DEVELOPMENT_RUNTIME_NOT_READY' } });
 });
+it('accepts the Docker bridge server address only for the launcher-declared pgvector container', async () => {
+  const bridge = { database: 'electrohub_disposable', port: 55434, address: '172.17.0.2', tls: true };
+  db.$queryRaw.mockResolvedValue([bridge]);
+  expect((await request(app).get('/api/internal/development-runtime').auth(token, { type: 'bearer' })).status).toBe(503);
+  process.env.ISOLATED_PG_DOCKER = '1';
+  const response = await request(app).get('/api/internal/development-runtime').auth(token, { type: 'bearer' });
+  expect(response.status).toBe(200);
+  expect(response.body.data.mode).toBe('ISOLATED_QA');
+});
+it.each(['10.0.0.1', '192.168.1.20', '172.32.0.1', '8.8.8.8'])('keeps refusing non-bridge address %s in Docker mode', async address => {
+  process.env.ISOLATED_PG_DOCKER = '1';
+  db.$queryRaw.mockResolvedValue([{ database: 'electrohub_disposable', port: 55434, address, tls: true }]);
+  expect((await request(app).get('/api/internal/development-runtime').auth(token, { type: 'bearer' })).status).toBe(503);
+});

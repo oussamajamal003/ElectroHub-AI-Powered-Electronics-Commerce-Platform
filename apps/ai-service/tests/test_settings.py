@@ -130,3 +130,16 @@ def test_load_settings_reports_names_not_values() -> None:
 
 def test_settings_repr_never_prints_the_key() -> None:
     assert TEST_KEY not in repr(make_settings())
+
+
+@pytest.mark.parametrize("name", ["KAGGLE_API_TOKEN", "KAGGLE_USERNAME", "KAGGLE_KEY", "KAGGLE_CONFIG_DIR"])
+def test_serving_refuses_all_training_only_kaggle_settings(name: str, tmp_path: Path) -> None:
+    value = "private-training-value"
+    with pytest.raises(ConfigurationError) as process_error:
+        load_settings({"AI_ENVIRONMENT": "qa", name: value}, env_file=None)
+    assert name in str(process_error.value) and value not in str(process_error.value)
+    env_file = tmp_path / ".env"
+    env_file.write_text(f"AI_ENVIRONMENT=qa\n{name}={value}\n", encoding="utf-8")
+    with pytest.raises(ConfigurationError) as file_error:
+        load_settings({}, env_file=env_file)
+    assert name in str(file_error.value) and value not in str(file_error.value)

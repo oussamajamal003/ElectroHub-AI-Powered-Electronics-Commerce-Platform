@@ -12,6 +12,9 @@ export type AiServiceEnvironment = (typeof AI_SERVICE_ENVIRONMENTS)[number];
 export const AI_DEFAULT_TIMEOUT_MS = 2500;
 export const AI_MIN_TIMEOUT_MS = 100;
 export const AI_MAX_TIMEOUT_MS = 10_000;
+/** Task 04.2: route-specific budget for public image search (upload + CPU inference); other operations keep the default. */
+export const AI_DEFAULT_IMAGE_SEARCH_TIMEOUT_MS = 8000;
+export const AI_MAX_IMAGE_SEARCH_TIMEOUT_MS = 15_000;
 /** Express-side response cap (contract: 256 KiB). */
 export const AI_MAX_RESPONSE_BYTES = 256 * 1024;
 export const AI_MIN_API_KEY_LENGTH = 32;
@@ -20,7 +23,8 @@ export type AiServiceIssue =
   | 'AI_SERVICE_URL'
   | 'AI_SERVICE_API_KEY'
   | 'AI_SERVICE_ENVIRONMENT'
-  | 'AI_SERVICE_TIMEOUT_MS';
+  | 'AI_SERVICE_TIMEOUT_MS'
+  | 'AI_IMAGE_SEARCH_TIMEOUT_MS';
 
 export interface AiServiceEnabledConfig {
   status: 'enabled';
@@ -28,6 +32,7 @@ export interface AiServiceEnabledConfig {
   apiKey: string;
   environment: AiServiceEnvironment;
   timeoutMs: number;
+  imageSearchTimeoutMs: number;
   maxResponseBytes: number;
 }
 
@@ -98,6 +103,14 @@ function parseTimeout(raw: string | undefined): number | undefined {
   return parsed >= AI_MIN_TIMEOUT_MS && parsed <= AI_MAX_TIMEOUT_MS ? parsed : undefined;
 }
 
+function parseImageSearchTimeout(raw: string | undefined): number | undefined {
+  if (!present(raw)) return AI_DEFAULT_IMAGE_SEARCH_TIMEOUT_MS;
+  const value = raw.trim();
+  if (!/^\d{1,6}$/.test(value)) return undefined;
+  const parsed = Number(value);
+  return parsed >= AI_MIN_TIMEOUT_MS && parsed <= AI_MAX_IMAGE_SEARCH_TIMEOUT_MS ? parsed : undefined;
+}
+
 function resolveEnvironment(raw: string | undefined, nodeEnv: string): AiServiceEnvironment | undefined {
   const allowed = ALLOWED_ENVIRONMENTS_BY_NODE_ENV[nodeEnv] ?? ALLOWED_ENVIRONMENTS_BY_NODE_ENV.development;
   if (!present(raw)) {
@@ -128,10 +141,15 @@ export function resolveAiServiceConfig(source: NodeJS.ProcessEnv, nodeEnv: strin
     const timeoutMs = parseTimeout(source.AI_SERVICE_TIMEOUT_MS);
     if (timeoutMs === undefined) issues.push('AI_SERVICE_TIMEOUT_MS');
 
-    if (issues.length > 0 || !baseUrl || !environment || timeoutMs === undefined || typeof apiKey !== 'string') {
+    const imageSearchTimeoutMs = parseImageSearchTimeout(source.AI_IMAGE_SEARCH_TIMEOUT_MS);
+    if (imageSearchTimeoutMs === undefined) issues.push('AI_IMAGE_SEARCH_TIMEOUT_MS');
+
+    if (issues.length > 0 || !baseUrl || !environment || timeoutMs === undefined || imageSearchTimeoutMs === undefined || typeof apiKey !== 'string') {
       return { status: 'disabled', reason: 'MISCONFIGURED', issues };
     }
-    return { status: 'enabled', baseUrl, apiKey, environment, timeoutMs, maxResponseBytes: AI_MAX_RESPONSE_BYTES };
+    return {
+      status: 'enabled', baseUrl, apiKey, environment, timeoutMs, imageSearchTimeoutMs, maxResponseBytes: AI_MAX_RESPONSE_BYTES,
+    };
   } catch {
     // Defensive: a resolver bug must never block startup.
     return { status: 'disabled', reason: 'MISCONFIGURED', issues: [] };

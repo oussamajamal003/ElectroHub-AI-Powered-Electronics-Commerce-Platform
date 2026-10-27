@@ -508,3 +508,40 @@ The backend owns schema migrations and commerce writes. FastAPI may use a dedica
 Use approved catalog sources for ingestion rather than accepting arbitrary remote URLs. Restrict remote fetching to trusted media locations and reject private-network or unsafe destinations. Decode uploaded bytes against an image allowlist with byte, dimension, and decoded-pixel limits; do not trust filenames or MIME headers. Bound inference concurrency, result counts, timeouts, and ingestion work. Use temporary image data only as needed and clean it up on success and failure.
 
 Load only trusted model artifacts, verify their identity/integrity, and avoid executing untrusted checkpoint serialization. Keep secrets server-side, use service authentication and private networking where available, and encrypt cross-host service/database traffic. Never place database credentials, commerce records, authentication tokens, or customer search images in Kaggle notebooks/datasets. Training uses approved, minimized data only; verify dataset licensing and notebook/dataset visibility before upload.
+
+## Task 04.2 — Implemented Model Flow and Measured Results
+
+**Data.** All photos come from Wikimedia Commons, and each file's licence is verified: 22 PD/CC0, 65 CC BY and 94 CC BY-SA. 4,276 candidates were found for the catalog's 102 appearance families; 921 passed the licence and model-name checks, and 201 were accepted after visual identity review. The 166 AI-generated storefront illustrations are never used for training or held-out evaluation.
+
+Identical-looking SKUs share an appearance family: colour and storage variants, plus every AM5 Ryzen CPU under one visual label. Photos are grouped into 63 creator families and 108 capture groups, using same creator and day, identical bytes, and perceptual hash ≤ 8 across all families. Splits are assigned per creator inside each family, so a family's train, validation and test-query photos always come from different creators. An automated audit fails the build on any capture-group, creator or query/gallery leak.
+
+| Protocol | Families | Images |
+|---|---|---|
+| Known-product (≥ 3 independent creators) | 15 (57 SKUs) | 127 train, 20 validation queries, 16 frozen test queries |
+| Unseen-product (2 creators, never trained) | 8 (35 SKUs) | 12 queries; gallery = second creator + all known images as distractors |
+| No usable Commons photos | 77 (110 SKUs) | Index-only (storefront illustrations) |
+
+**Training.** Code is in `apps/ai-service/training/src`: a private Kaggle dataset and kernel, run on a Tesla T4 with CUDA 12.8 and torch 2.11.
+- **Model and loss:** supervised contrastive loss (τ 0.1) over family labels, with a P×K sampler (16 families × 4 images).
+- **Optimisation:** projection warm-up, then the last EfficientNet stages unfrozen, AdamW plus cosine schedule, AMP, gradient clipping at 1.0.
+- **Selection:** checkpoint chosen by validation Recall@1 (with mAP as tie-break); the test set is read only after training.
+- **Runs:** run 1 (warm-up 2, 3 stages, backbone lr 1e-4). Run 2 was one bounded correction (warm-up 3, 2 stages, lr 2e-5, ImageNet BatchNorm statistics frozen, patience counted after unfreezing).
+- **Outcome:** in both runs validation selected a projection-only checkpoint. Run 2 changed 2 of 311 tensors over 420 optimizer steps. Backbone fine-tuning did train, but never beat it on validation with 127 photos. The deployed encoder is ImageNet EfficientNet-B0 plus a learned 256-d metric projection.
+
+| Held-out (photo → photo) | Recall@1 | Recall@5 | Recall@10 | mAP | MRR |
+|---|---|---|---|---|---|
+| Known, frozen ImageNet baseline (1280-d) | 0.500 | 0.938 | 1.000 | 0.445 | 0.657 |
+| Known, run 2 (deployed) | **0.625** | 0.875 | 1.000 | **0.672** | 0.749 |
+| Unseen, baseline | 0.583 | 0.833 | 0.917 | 0.591 | 0.672 |
+| Unseen, run 2 | 0.583 | 0.917 | 1.000 | 0.523 | 0.698 |
+
+**Live catalog retrieval.** Every frozen query goes through Express → FastAPI → pgvector → Prisma against the real 206-product index, whose gallery is the storefront illustrations. QA and DEV give identical results.
+
+| | Queries | Recall@1 | Recall@5 | Recall@10 |
+|---|---|---|---|---|
+| Known products | 16 | 0.375 | 0.812 | 1.000 |
+| Unseen products | 12 | 0.000 | 0.333 | 0.333 |
+
+The gap between photo→photo and photo→illustration retrieval is the domain gap between real photographs and generated catalog renders. Small samples (16 and 12 queries) mean wide uncertainty. These numbers support "visually similar suggestions", not reliable exact-SKU recognition.
+
+**Artifact.** `model.safetensors` (SHA-256 `3224d2cc…`) plus `descriptor.json`: `effb0-commons-v2`, embedding version `effb0-commons-v2-3224d2cc9e57`, preprocess `effb0-rgb-r256-c224-imagenet-v1`, 256 dimensions. The export parity error is 0.0. CPU serving under torch 2.13 matches the torch 2.8 index vectors to ≤ 1.3×10⁻⁷ (40 images).
