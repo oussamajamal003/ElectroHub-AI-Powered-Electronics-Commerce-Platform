@@ -14,6 +14,7 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:visual": "playwright test -c playwright.config.ts --update-snapshots",
+    "test:visual:admin-media-live-dev": "playwright test -c playwright.admin-media-live-dev.config.ts",
     "test:e2e": "playwright test -c playwright.auth.config.ts"
   },
   "dependencies": {

@@ -271,7 +271,7 @@ JWT Secrets
 Database Passwords
 Stripe Secrets
 Brevo API Keys
-Cloudinary Secrets
+Supabase Storage Credentials
 Private Keys
 ```
 
@@ -379,13 +379,14 @@ Uploaded files must not automatically become executable content.
 
 ---
 
-## 23. Cloudinary Security
+## 23. Supabase Storage Security
 
-Cloudinary credentials must remain server-side where required.
+Supabase Storage credentials and service-role keys must remain server-side:
 
-Uploaded media should use controlled upload policies.
-
-Do not expose private credentials through frontend code.
+- Uploads must be authenticated and restricted to administrators (`requireRole('ADMIN')`).
+- Strict server-side validation on file upload: allowed MIME types (`image/jpeg`, `image/png`, `image/webp`), size limits (e.g. 5 MB), and image dimension checks.
+- Bucket access policies must enforce public read for storefront product media, but restrict write/delete mutations exclusively to authenticated backend services.
+- Never allow direct client uploads using unauthenticated or frontend service-role tokens.
 
 ---
 
@@ -495,7 +496,7 @@ Refresh Tokens
 API Keys
 Stripe Secrets
 Brevo Credentials
-Cloudinary Secrets
+Supabase Storage Credentials
 Card Data
 CVV
 ```

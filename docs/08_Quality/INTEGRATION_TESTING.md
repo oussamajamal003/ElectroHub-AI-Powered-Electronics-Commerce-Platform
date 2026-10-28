@@ -18,7 +18,7 @@ Backend + Prisma
 Backend + FastAPI
 Backend + Stripe Test Mode
 Backend + Brevo
-Backend + Cloudinary
+Backend + Supabase Storage
 Backend + Socket.IO
 Authentication + Database
 Checkout + Orders
@@ -198,23 +198,27 @@ Download / Response
 
 Verify unauthorized users cannot generate or download another customer's documents.
 
-## 10. Cloudinary Integration
+## 10. Supabase Storage Integration
 
-Where Cloudinary is used for product media:
+Where Supabase Storage is used for product media:
 
 ```text
-Upload
+React Admin Upload (JWT + ADMIN role)
  ↓
-Cloudinary
+Express Backend Validation & Authorization
  ↓
-Returned Asset Reference
+Supabase Storage (`product-media` bucket)
  ↓
-Database
+Canonical Storage Reference & Public CDN URL
  ↓
-Product
+Database (`ProductImage` + `MediaOutbox`)
+ ↓
+FastAPI AI Service (Background Embedding Invalidation & Synchronization)
+ ↓
+Storefront Customer Delivery
 ```
 
-Test upload failure and invalid asset responses.
+Test upload failure, invalid MIME/size, missing admin permissions, partial storage write failures, and storage service downtime.
 
 ## 11. FastAPI Integration
 
@@ -304,7 +308,7 @@ Test:
 Database Failure
 Stripe Failure
 Brevo Failure
-Cloudinary Failure
+Supabase Storage Failure
 FastAPI Failure
 Socket Failure
 PDF Generation Failure
@@ -322,7 +326,7 @@ Avoid dependence on:
 Production Database
 Production Stripe
 Production Brevo
-Production Cloudinary
+Production Supabase Storage
 Production Secrets
 ```
 

@@ -1,0 +1,37 @@
+@use '@/styles/abstracts' as *;
+.page { width: min(100%, 1280px); margin: 0 auto; display: grid; gap: $spacing-5; color: $color-text-primary; }
+.back { display: inline-flex; align-items: center; gap: $spacing-2; width: fit-content; color: $color-text-secondary; text-decoration: none; font-size: $font-size-sm; &:hover { color: $color-primary; } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
+.header { display: flex; justify-content: space-between; align-items: end; gap: $spacing-4; h1 { font-size: clamp(1.6rem, 4vw, 2.25rem); margin: 0 0 $spacing-2; overflow-wrap: anywhere; } p:not(.eyebrow) { margin: 0; color: $color-text-secondary; } > button { flex: 0 0 auto; } }
+.eyebrow { margin: 0 0 $spacing-2; color: $color-primary; font-size: $font-size-xs; font-weight: $font-weight-semibold; letter-spacing: .08em; }
+.hiddenInput { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
+.progress { display: flex; align-items: center; gap: $spacing-3; padding: $spacing-3 $spacing-4; border: 1px solid $color-border; border-radius: $radius-md; background: $color-surface; color: $color-text-secondary; img { width: 44px; height: 44px; object-fit: contain; margin-left: auto; } }
+.staging { display: grid; gap: $spacing-4; padding: $spacing-4; border: 1px solid $color-primary; border-radius: $radius-lg; background: $color-surface; }
+.stagingHeader { display: flex; justify-content: space-between; align-items: center; gap: $spacing-4; h2 { margin: 0 0 $spacing-1; font-size: $font-size-lg; } p { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; } }
+.stagingGrid { display: flex; flex-wrap: wrap; gap: $spacing-3; }
+.stagedPhoto { display: grid; gap: $spacing-1; width: min(100%, 180px); img { width: 100%; height: 112px; border-radius: $radius-md; border: 1px solid $color-border; background: $color-background; object-fit: contain; } small { color: $color-text-muted; } }
+.fileName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: $font-size-sm; }
+.beforeAfter { display: flex; align-items: center; gap: $spacing-2; width: min(calc(100vw - 3rem), 420px); > svg { flex: 0 0 auto; color: $color-text-muted; } > div { min-width: 0; flex: 1; display: grid; gap: $spacing-1; img { height: 96px; } span { color: $color-text-secondary; font-size: $font-size-xs; } } }
+.spinner { width: 18px; height: 18px; border: 2px solid $color-border; border-top-color: $color-primary; border-radius: 50%; animation: spin .8s linear infinite; flex: 0 0 auto; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.state { padding: $spacing-8; text-align: center; color: $color-text-secondary; }
+.empty { display: grid; justify-items: center; text-align: center; padding: clamp(2rem, 8vw, 5rem) $spacing-4; border: 1px dashed $color-border; border-radius: $radius-lg; background: $color-surface; span { color: $color-primary; background: rgba($color-primary, .08); border-radius: 50%; width: 52px; height: 52px; display: grid; place-items: center; } h2 { margin: $spacing-4 0 $spacing-2; font-size: $font-size-lg; } p { max-width: 34rem; margin: 0 0 $spacing-5; color: $color-text-secondary; } }
+.dropZone { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: $spacing-2; min-height: 84px; padding: $spacing-4; border: 1px dashed $color-border; border-radius: $radius-lg; background: $color-surface; color: $color-text-secondary; text-align: center; transition: border-color .15s, background-color .15s; svg { color: $color-primary; } button { border: 0; padding: 0; background: transparent; color: $color-primary; text-decoration: underline; cursor: pointer; font: inherit; &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } } small { flex-basis: 100%; color: $color-text-muted; } }
+.dropActive { border-color: $color-primary; background: rgba($color-primary, .05); }
+.dropDisabled { color: $color-text-muted; border-style: solid; background: $color-background; }
+.imageCount { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; }
+.busyStatus { margin: 0; color: $color-primary; font-size: $font-size-sm; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); gap: $spacing-4; margin: 0; padding: 0; list-style: none; }
+.card { min-width: 0; overflow: hidden; border: 1px solid $color-border; border-radius: $radius-lg; background: $color-surface; }
+.preview { position: relative; height: 220px; padding: $spacing-3; background: $color-background; :global([data-testid='product-image-container']) { height: 100%; } :global(img) { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; } }
+.badges { position: absolute; left: $spacing-3; top: $spacing-3; display: flex; gap: $spacing-2; }
+.published, .primary { border-radius: 999px; padding: 4px 9px; font-size: 11px; font-weight: $font-weight-semibold; background: $color-surface; box-shadow: $shadow-sm; }
+.published { color: $color-success; }.primary { color: $color-primary; }
+.cardBody { display: grid; gap: $spacing-3; padding: $spacing-4; }
+.indexState { display: flex; align-items: center; gap: $spacing-2; margin: 0; color: $color-text-secondary; font-size: $font-size-sm; }
+.stateDot { width: 8px; height: 8px; border-radius: 50%; background: $color-warning; flex: 0 0 auto; }
+.indexState[data-state='INDEXED'] .stateDot { background: $color-success; }.indexState[data-state='FAILED'] .stateDot { background: $color-error; }
+.errorCode { margin: -$spacing-2 0 0; color: $color-error; font-size: $font-size-xs; overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; gap: $spacing-2; align-items: center; }
+.dialogActions { display: flex; justify-content: flex-end; gap: $spacing-3; margin-top: $spacing-2; }
+@media (max-width: 640px) { .header { align-items: start; flex-direction: column; } .header > button { width: 100%; } .preview { height: 190px; } .stagingHeader { align-items: stretch; flex-direction: column; } .stagingHeader .dialogActions { flex-wrap: wrap; } .stagingHeader .dialogActions > button { flex: 1; } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } .dropZone { transition: none; } }

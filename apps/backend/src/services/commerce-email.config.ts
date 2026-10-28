@@ -17,7 +17,8 @@ const schema = z.object({
   COMMERCE_EMAIL_CAPTURE_DIR: z.string().optional(),
   COMMERCE_EMAIL_IMAGE_HOSTS: z.string().default('').transform(value => value.split(',').map(item => item.trim().toLowerCase()).filter(Boolean))
     .pipe(z.array(z.string().regex(/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/, 'hostname')).max(10)),
-  CLOUDINARY_URL: z.string().optional(),
+  SUPABASE_URL: z.string().optional(),
+  SUPABASE_PROJECT_REF: z.string().optional(),
   COMMERCE_EMAIL_BATCH_SIZE: bounded(10, 1, 50),
   COMMERCE_EMAIL_CONCURRENCY: bounded(2, 1, 5),
   COMMERCE_EMAIL_POLL_MS: bounded(5_000, 1_000, 60_000),
@@ -27,9 +28,7 @@ const schema = z.object({
 });
 
 /** Where product images in customer emails may come from. Derived only from real configuration; never guessed from fixtures. */
-export interface ImageSources { hosts: string[]; cloudinaryCloud: string | null; allowLoopbackHttp: boolean }
-/** Cloudinary delivery host used with the configured cloud (CLOUDINARY_URL=cloudinary://key:secret@<cloud>). The secret is never read out. */
-export const CLOUDINARY_DELIVERY_HOST = 'res.cloudinary.com';
+export interface ImageSources { hosts: string[]; allowLoopbackHttp: boolean }
 
 export interface CommerceEmailConfig {
   enqueueEnabled: boolean; dispatchEnabled: boolean; sendMode: 'disabled' | 'capture' | 'allowlist' | 'live';
@@ -51,17 +50,21 @@ export function trustedOrigin(value: string | undefined, nodeEnv: string): strin
   return null;
 }
 
-function imageSources(explicit: string[], cloudinaryUrl: string | undefined, origin: string | null, nodeEnv: string): ImageSources {
-  const cloud = /^cloudinary:\/\/[^:@/\s]+:[^@/\s]+@([a-z0-9][a-z0-9_-]{0,62})$/i.exec(cloudinaryUrl?.trim() ?? '')?.[1]?.toLowerCase() ?? null;
+function imageSources(explicit: string[], origin: string | null, nodeEnv: string,
+  storageUrl?: string, storageProject?: string): ImageSources {
   const hosts = new Set(explicit);
-  if (cloud) hosts.add(CLOUDINARY_DELIVERY_HOST);
   if (origin) hosts.add(new URL(origin).hostname);
-  return { hosts: [...hosts], cloudinaryCloud: cloud, allowLoopbackHttp: nodeEnv !== 'production' };
+  const storageOrigin = trustedOrigin(storageUrl, nodeEnv);
+  const expectedProject = nodeEnv === 'production' ? 'yepfgjehdstlxbpespun' : 'pzxekjybdiulzmssalfo';
+  if (storageOrigin && storageProject === expectedProject && storageOrigin === `https://${expectedProject}.supabase.co`) {
+    hosts.add(`${expectedProject}.supabase.co`);
+  }
+  return { hosts: [...hosts], allowLoopbackHttp: nodeEnv !== 'production' };
 }
 
 /**
  * The only image URLs a customer email may reference: absolute, credential-free, on an approved host, HTTPS (plain http only for a
- * loopback host outside production). Cloudinary URLs must also sit under the configured cloud. Anything else is dropped to null:
+ * loopback host outside production). Anything else is dropped to null:
  * the image is optional and the email still renders in full without it.
  */
 export function safeEmailImageUrl(value: string | null | undefined, sources: ImageSources): string | null {
@@ -74,8 +77,6 @@ export function safeEmailImageUrl(value: string | null | undefined, sources: Ima
   if (parsed.protocol === 'http:' ? !(loopback && sources.allowLoopbackHttp) : parsed.protocol !== 'https:') return null;
   if (!sources.hosts.includes(host)) return null;
   if (parsed.port && !loopback) return null;
-  // With a configured cloud, Cloudinary URLs must belong to it (the shared delivery host serves every customer's cloud).
-  if (host === CLOUDINARY_DELIVERY_HOST && sources.cloudinaryCloud && !parsed.pathname.toLowerCase().startsWith(`/${sources.cloudinaryCloud}/`)) return null;
   return parsed.href;
 }
 
@@ -88,7 +89,9 @@ export function commerceEmailConfig(source: NodeJS.ProcessEnv = process.env): Co
     sendMode: value.COMMERCE_EMAIL_SEND_MODE, allowedRecipients: value.COMMERCE_EMAIL_ALLOWED_RECIPIENTS,
     origin: trustedOrigin(value.COMMERCE_EMAIL_ORIGIN ?? value.FRONTEND_URL, value.NODE_ENV),
     captureDir: value.COMMERCE_EMAIL_CAPTURE_DIR ?? null,
-    imageSources: imageSources(value.COMMERCE_EMAIL_IMAGE_HOSTS, value.CLOUDINARY_URL, trustedOrigin(value.COMMERCE_EMAIL_ORIGIN ?? value.FRONTEND_URL, value.NODE_ENV), value.NODE_ENV),
+    imageSources: imageSources(value.COMMERCE_EMAIL_IMAGE_HOSTS,
+      trustedOrigin(value.COMMERCE_EMAIL_ORIGIN ?? value.FRONTEND_URL, value.NODE_ENV), value.NODE_ENV,
+      value.SUPABASE_URL, value.SUPABASE_PROJECT_REF),
     batchSize: value.COMMERCE_EMAIL_BATCH_SIZE, concurrency: value.COMMERCE_EMAIL_CONCURRENCY, pollMs: value.COMMERCE_EMAIL_POLL_MS,
     providerTimeoutMs: value.COMMERCE_EMAIL_PROVIDER_TIMEOUT_MS, leaseMs: value.COMMERCE_EMAIL_LEASE_MS,
   };

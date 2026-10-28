@@ -23,7 +23,7 @@ function run(input) {
     DATABASE_URL: database, DIRECT_URL: database, JWT_SECRET: crypto.randomBytes(32).toString('hex'), OTP_HASH_SECRET: 'offline-logging-only',
     DB_SSL_CA_CERT_PATH: '', STRIPE_SECRET_KEY: '', STRIPE_WEBHOOK_SECRET: '', GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '',
     GOOGLE_REDIRECT_URI: 'http://127.0.0.1:1/offline', BREVO_API_KEY: '', BREVO_SENDER_EMAIL: 'logging@electrohub-test.invalid',
-    CLOUDINARY_URL: '', SUPABASE_ACCESS_TOKEN: '', E2E_TEST_SUPPORT_TOKEN: '', CHECKOUT_LIVE_DEV: 'false', STRIPE_LIVE_DEV: 'false' };
+    SUPABASE_ACCESS_TOKEN: '', E2E_TEST_SUPPORT_TOKEN: '', CHECKOUT_LIVE_DEV: 'false', STRIPE_LIVE_DEV: 'false' };
   try {
     const executable = path.join(path.dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
     const result = spawnSync(process.execPath, [executable, 'run', '--config', 'vitest.logging.config.mts', ...args], {

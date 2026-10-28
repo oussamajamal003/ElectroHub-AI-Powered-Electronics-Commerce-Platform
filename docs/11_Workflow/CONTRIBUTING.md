@@ -164,7 +164,7 @@ External integrations include:
 Supabase
 Stripe
 Brevo
-Cloudinary
+Supabase Storage
 DigitalOcean
 ```
 

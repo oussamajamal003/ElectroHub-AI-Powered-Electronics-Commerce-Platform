@@ -54,8 +54,7 @@ External integrations:
 ```text
 Stripe
 Brevo
-Cloudinary
-Supabase
+Supabase (PostgreSQL + Storage)
 ```
 
 ---
@@ -118,9 +117,9 @@ Payment Confirmation
 
 ---
 
-## Cloudinary
+## Supabase Storage
 
-Responsible for application media storage where configured.
+Responsible for catalog product media storage (`product-media` bucket) with DEV/PROD environment isolation.
 
 ---
 
@@ -224,7 +223,8 @@ JWT_REFRESH_SECRET
 STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET
 BREVO_API_KEY
-CLOUDINARY_URL
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
 AI_SERVICE_URL
 ```
 

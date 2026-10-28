@@ -203,7 +203,7 @@ Product data should be realistic enough for UI demonstrations but must not use c
 
 # 8. Product Images
 
-Seed products may reference approved Cloudinary/media assets.
+Seed products may reference approved Supabase Storage / media assets.
 
 The seed script should store image references rather than downloading and storing binary image data in PostgreSQL.
 

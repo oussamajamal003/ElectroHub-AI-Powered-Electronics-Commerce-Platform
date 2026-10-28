@@ -12,7 +12,7 @@ The worker never touches Payments, Orders, Carts or PaymentWork, and never sends
 | `COMMERCE_EMAIL_SEND_MODE` | `disabled`, `capture` (disposable/test DB only; writes files), `allowlist` (claims only listed recipients), `live`. |
 | `COMMERCE_EMAIL_LIVE_APPROVED_TARGET` | Required for `live` on a shared DB; must equal the worker's logged `identity` (`host:port/database`). |
 
-| `COMMERCE_EMAIL_IMAGE_HOSTS` | Optional extra hostnames whose product images may appear in emails. Always accepted: the `COMMERCE_EMAIL_ORIGIN` host and, when `CLOUDINARY_URL` is set, `res.cloudinary.com` under that cloud only. Any other image is omitted from the email; the email is still sent. |
+| `COMMERCE_EMAIL_IMAGE_HOSTS` | Optional extra hostnames whose product images may appear in emails. Always accepted: the `COMMERCE_EMAIL_ORIGIN` host and the configured Supabase Storage domain (`*.supabase.co` public storage endpoint). Any other image is omitted from the email; the email is still sent. |
 
 Deployment: `docker-compose.yml` defines a supervised `commerce-email-worker` service (`node dist/bootstrap.js --commerce-email-worker`, `restart: unless-stopped`). It is inert and refuses to start until dispatch and a send mode are configured for the resolved database.
 

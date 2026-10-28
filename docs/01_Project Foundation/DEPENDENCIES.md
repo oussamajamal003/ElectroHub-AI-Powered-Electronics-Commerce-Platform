@@ -491,16 +491,16 @@ Generated documents must not expose sensitive payment information such as:
 
 # 17. Image Storage Dependencies
 
-## Cloudinary
+## Supabase Storage
 
-Cloudinary is used for:
+Supabase Storage is used for:
 
-- Product image storage
-- Image delivery
-- Image transformations
-- Image optimization where applicable
+- Authoritative product image storage (`@supabase/supabase-js`)
+- High-performance storefront image delivery via CDN
+- Admin-controlled asset replacement, deletion, and primary designation
+- Coordinated event logging for AI catalog embedding synchronization
 
-Large product image files must not be committed to Git.
+Large product image files must not be committed to Git or stored in relational table columns.
 
 ---
 
@@ -784,7 +784,7 @@ AI Service
 
 External Services
 ├── Supabase PostgreSQL
-├── Cloudinary
+├── Supabase Storage
 ├── OpenStreetMap
 └── Stripe
 

@@ -143,8 +143,8 @@ Expected stack:
 **Email**
 - Brevo
 
-**Images**
-- Cloudinary
+**Images / Media Storage**
+- Supabase Storage
 
 **Infrastructure**
 - Docker

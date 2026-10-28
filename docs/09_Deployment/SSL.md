@@ -198,7 +198,7 @@ HTTPS must be used when communicating with external services such as:
 Supabase
 Stripe
 Brevo
-Cloudinary
+Supabase Storage
 FastAPI
 ```
 

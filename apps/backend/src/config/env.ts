@@ -93,7 +93,6 @@ const envSchema = z.object({
   BREVO_API_KEY: z.string().optional(),
   BREVO_SENDER_EMAIL: z.string().email().optional(),
   BREVO_SENDER_NAME: z.string().optional().default('ElectroHub'),
-  CLOUDINARY_URL: z.string().optional(),
   OTP_HASH_SECRET: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.NODE_ENV === 'production') {

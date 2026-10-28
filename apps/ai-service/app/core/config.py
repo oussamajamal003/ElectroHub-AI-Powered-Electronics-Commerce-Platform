@@ -30,6 +30,7 @@ SERVICE_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ENV_FILE = Path(os.environ["AI_ENV_FILE"]) if os.environ.get("AI_ENV_FILE") else SERVICE_ROOT / ".env"
 
 Environment = Literal["development", "qa", "production", "test"]
+ProcessRole = Literal["api", "media_worker"]
 
 MIN_API_KEY_LENGTH = 32
 _PLACEHOLDER_KEY = re.compile(
@@ -48,10 +49,10 @@ FORBIDDEN_COMMERCE_SECRETS = frozenset(
         "JWT_REFRESH_SECRET",
         "OTP_HASH_SECRET",
         "GOOGLE_CLIENT_SECRET",
-        "CLOUDINARY_URL",
         "DATABASE_URL",
         "DIRECT_URL",
         "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_SECRET_KEY",
         "PAYMENT_SHARED_MUTATIONS_APPROVED",
     }
 )
@@ -105,6 +106,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "ElectroHub AI Service"
     # ENVIRONMENT is the pre-04.1 name; AI_ENVIRONMENT wins when both are present.
     AI_ENVIRONMENT: Environment = Field(validation_alias=AliasChoices("AI_ENVIRONMENT", "ENVIRONMENT"))
+    AI_PROCESS_ROLE: ProcessRole = "api"
     AI_SERVICE_API_KEY: SecretStr | None = None
 
     AI_BIND_HOST: str = "127.0.0.1"
@@ -130,13 +132,24 @@ class Settings(BaseSettings):
     AI_RELEVANCE_ARTIFACT_DIR: Path | None = None
     # Least-privilege, read-only connection to the ai schema (ai_vector_reader). Unset = no index (503).
     AI_VECTOR_DATABASE_URL: SecretStr | None = None
+    # Separate, narrowly privileged catalog-media sync worker. Never used by the online API process.
+    AI_MEDIA_WORKER_DATABASE_URL: SecretStr | None = None
+    # Public Supabase project URL used only to construct immutable canonical object URLs from trusted DB keys.
+    AI_MEDIA_STORAGE_BASE_URL: str | None = None
 
     @field_validator("AI_SERVICE_API_KEY", mode="before")
     @classmethod
     def _blank_key_is_absent(cls, value: object) -> object:
         return None if isinstance(value, str) and value == "" else value
 
-    @field_validator("AI_MODEL_ARTIFACT_DIR", "AI_RELEVANCE_ARTIFACT_DIR", "AI_VECTOR_DATABASE_URL", mode="before")
+    @field_validator(
+        "AI_MODEL_ARTIFACT_DIR",
+        "AI_RELEVANCE_ARTIFACT_DIR",
+        "AI_VECTOR_DATABASE_URL",
+        "AI_MEDIA_WORKER_DATABASE_URL",
+        "AI_MEDIA_STORAGE_BASE_URL",
+        mode="before",
+    )
     @classmethod
     def _blank_optional_is_absent(cls, value: object) -> object:
         return None if isinstance(value, str) and value.strip() == "" else value
@@ -147,6 +160,37 @@ class Settings(BaseSettings):
         if value is not None:
             check_vector_database_url(value.get_secret_value())
         return value
+
+    @field_validator("AI_MEDIA_WORKER_DATABASE_URL")
+    @classmethod
+    def _media_worker_database_url_is_safe(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None:
+            check_vector_database_url(value.get_secret_value())
+        return value
+
+    @field_validator("AI_MEDIA_STORAGE_BASE_URL")
+    @classmethod
+    def _media_storage_base_url_is_safe(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        parts = urlsplit(value)
+        if (
+            parts.scheme not in {"https", "http"}
+            or not parts.hostname
+            or parts.username is not None
+            or parts.password is not None
+            or parts.query
+            or parts.fragment
+            or (parts.scheme != "https" and parts.hostname not in {"localhost", "127.0.0.1", "::1"})
+            or parts.path not in {"", "/"}
+        ):
+            raise ValueError("AI_MEDIA_STORAGE_BASE_URL must be a public HTTPS origin or local HTTP origin")
+        if parts.scheme == "https" and parts.hostname not in {
+            "pzxekjybdiulzmssalfo.supabase.co",
+            "yepfgjehdstlxbpespun.supabase.co",
+        }:
+            raise ValueError("AI_MEDIA_STORAGE_BASE_URL must match an approved Supabase project origin")
+        return value.rstrip("/")
 
     @field_validator("AI_SERVICE_API_KEY")
     @classmethod
@@ -179,13 +223,22 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _environment_rules(self) -> Settings:
-        if self.AI_ENVIRONMENT == "production":
+        if self.AI_ENVIRONMENT == "production" and self.AI_PROCESS_ROLE == "api":
             if self.AI_SERVICE_API_KEY is None:
                 raise ValueError("AI_SERVICE_API_KEY is required in production")
             if self.AI_DOCS_ENABLED:
                 raise ValueError("AI_DOCS_ENABLED cannot be enabled in production")
-        if not self.binds_loopback and self.AI_SERVICE_API_KEY is None:
+        if self.AI_PROCESS_ROLE == "api" and not self.binds_loopback and self.AI_SERVICE_API_KEY is None:
             raise ValueError("a non-loopback AI_BIND_HOST requires AI_SERVICE_API_KEY")
+        if self.AI_PROCESS_ROLE == "api" and (
+            self.AI_MEDIA_WORKER_DATABASE_URL is not None or self.AI_MEDIA_STORAGE_BASE_URL is not None
+        ):
+            raise ValueError("AI media-worker settings are allowed only in the media-worker process")
+        if self.AI_PROCESS_ROLE == "media_worker":
+            if self.AI_MEDIA_WORKER_DATABASE_URL is None or self.AI_MODEL_ARTIFACT_DIR is None:
+                raise ValueError("media-worker role requires AI_MEDIA_WORKER_DATABASE_URL and AI_MODEL_ARTIFACT_DIR")
+            if self.AI_SERVICE_API_KEY is not None or self.AI_VECTOR_DATABASE_URL is not None:
+                raise ValueError("media-worker role must not receive API or read-only search credentials")
         return self
 
     @property

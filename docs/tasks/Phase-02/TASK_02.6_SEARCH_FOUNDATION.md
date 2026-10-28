@@ -99,7 +99,7 @@ Approved sequence:
         ↓
 04.2 Search by Image
         ↓
-04.3 Cloudinary
+04.3 Product Media Storage & AI Embedding Synchronization
         ↓
 05.2 Admin Product Management
 ```
@@ -407,15 +407,15 @@ Do NOT implement:
 - AI image-search API;
 - image-search persistence.
 
-## 9.2 Cloudinary — Phase 04.3
+## 9.2 Supabase Storage — Phase 04.3
 
 Do NOT implement:
 
-- Cloudinary SDK;
+- Supabase Storage SDK;
 - image upload pipeline;
 - signed uploads;
 - production media storage;
-- Cloudinary transformations.
+- Supabase Storage delivery and transformations.
 
 ## 9.3 Full Product Catalog — Phase 03.1
 
@@ -1682,7 +1682,7 @@ Out of scope:
 - FastAPI;
 - AI processing;
 - matching;
-- Cloudinary;
+- Supabase Storage;
 - backend image-search endpoint;
 - similarity results.
 
@@ -2726,7 +2726,7 @@ Legitimate boundaries include:
 
 - Image Search is UI shell only.
 - No FastAPI image matching.
-- No Cloudinary upload.
+- No Supabase Storage upload.
 - Customer `/products` catalog discovery reuses this Search foundation.
 - No full Admin Products integration.
 - No React Query/cache architecture.
@@ -2939,7 +2939,7 @@ If application-level relevance scoring is used, candidate selection must remain 
 [ ] NO backend image upload
 [ ] NO FastAPI
 [ ] NO similarity matching
-[ ] NO Cloudinary
+[ ] NO Supabase Storage
 ```
 
 ---
@@ -3123,7 +3123,7 @@ Before merge, independently review:
 - customer `/products` uses SearchService for catalog discovery?
 - no Admin Product integration?
 - no React Query?
-- no image AI/Cloudinary?
+- no image AI/Supabase Storage?
 
 ---
 
@@ -3230,7 +3230,7 @@ Any Critical/High security issue, duplicate Search/Product architecture, unsafe 
 ## 04.3 owns
 
 ```text
-⏭ Cloudinary
+⏭ Supabase Storage
 ⏭ Production image upload/storage
 ⏭ Transformations
 ```
@@ -3275,7 +3275,7 @@ Search
 + React Query
 + Admin Products
 + image AI
-+ Cloudinary
++ Supabase Storage
 + analytics
 + recommendations
 ```
@@ -3425,7 +3425,7 @@ LOCAL SELECTED STATE: PASS/FAIL/NOT REQUIRED
 REMOVE/REPLACE: PASS/FAIL/NOT REQUIRED
 BACKEND UPLOAD: NOT IMPLEMENTED
 FASTAPI: NOT IMPLEMENTED
-CLOUDINARY: NOT IMPLEMENTED
+SUPABASE_STORAGE: NOT IMPLEMENTED
 SIMILARITY SEARCH: NOT IMPLEMENTED
 
 ## Responsive

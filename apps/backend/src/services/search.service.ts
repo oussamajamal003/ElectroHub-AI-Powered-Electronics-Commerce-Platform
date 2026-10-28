@@ -40,7 +40,7 @@ const productSummaryJoins = Prisma.sql`LEFT JOIN "products" p ON p."id" = page."
       LEFT JOIN LATERAL (
         SELECT jsonb_agg(to_jsonb(img) ORDER BY img."isPrimary" DESC, img."sortOrder", img."id") AS images
         FROM (SELECT pi."id", pi."url", pi."altText", pi."position" AS "sortOrder", pi."isPrimary"
-          FROM "product_images" pi WHERE pi."productId" = p."id"
+          FROM "product_images" pi WHERE pi."productId" = p."id" AND pi."mediaState" = 'PUBLISHED'
           ORDER BY pi."isPrimary" DESC, pi."position", pi."id" LIMIT 2) img
       ) images ON true`;
 

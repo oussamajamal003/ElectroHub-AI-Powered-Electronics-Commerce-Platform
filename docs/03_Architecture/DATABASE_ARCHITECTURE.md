@@ -217,23 +217,25 @@ The relationship should support efficient category-based filtering and product d
 
 ---
 
-## 10. Media Data
+## 10. Media Data & Outbox
 
-Product images are stored through Cloudinary.
+Product images are stored through Supabase Storage.
 
-The database stores relevant metadata/references rather than large image binaries where possible.
+The database stores metadata and canonical storage references rather than raw image binaries.
 
 Conceptually:
 
 ```text
 Product
    ↓
-ProductImage
+ProductImage (url, storagePath, altText, sortOrder, isPrimary)
    ↓
-Cloudinary URL / Public Reference
+Supabase Storage Reference / Public CDN Endpoint
+   ↓
+MediaOutbox / Sync Event ──► AI pgvector embeddings
 ```
 
-Media ownership and administrative operations remain controlled by the backend.
+Media ownership and administrative operations remain controlled by the backend. Adding, replacing, or deleting a `ProductImage` writes a durable synchronization entry to guarantee catalog vector embeddings reflect current product media.
 
 ---
 

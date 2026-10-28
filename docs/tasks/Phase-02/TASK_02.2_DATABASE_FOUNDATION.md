@@ -183,7 +183,7 @@ The following must remain local/secret:
 - JWT secrets
 - Stripe credentials
 - Brevo credentials
-- Cloudinary credentials
+- Supabase Storage credentials
 - any other production credentials
 
 ---

@@ -31,7 +31,7 @@ Infrastructure services are configured separately where appropriate.
           │                │
           │                ├──── Stripe
           │                ├──── Brevo
-          │                ├──── Cloudinary
+          │                ├──── Supabase Storage
           │                └──── Socket.IO
           │
           └────────────── HTTP/API ─────────┘
@@ -152,7 +152,8 @@ JWT_REFRESH_SECRET
 STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET
 BREVO_API_KEY
-CLOUDINARY_URL
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
 AI_SERVICE_URL
 ```
 

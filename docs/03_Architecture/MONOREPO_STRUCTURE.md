@@ -464,7 +464,7 @@ Backend
    ├── FastAPI → AI
    ├── Stripe
    ├── Brevo
-   └── Cloudinary
+   └── Supabase Storage
 ```
 
 The frontend communicates with the backend rather than directly accessing protected infrastructure.

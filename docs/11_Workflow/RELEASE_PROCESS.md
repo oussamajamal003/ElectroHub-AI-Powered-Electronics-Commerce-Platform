@@ -129,7 +129,7 @@ Environment Variables
 Database
 Stripe Test Mode
 Brevo
-Cloudinary
+Supabase Storage
 AI Service
 Nginx
 SSL

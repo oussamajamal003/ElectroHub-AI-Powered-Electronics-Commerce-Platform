@@ -9,9 +9,9 @@ import { commerceEmailSnapshot } from '../commerce-email.domain.js';
 import { renderCommerceEmail } from '../../emails/commerce/templates.js';
 import { assertTrustedOrigin } from '../../emails/commerce/escape.js';
 
-const production: ImageSources = { hosts: ['res.cloudinary.com', 'shop.example.test'], cloudinaryCloud: 'demo-cloud', allowLoopbackHttp: false };
-const development: ImageSources = { hosts: ['res.cloudinary.com', 'localhost'], cloudinaryCloud: 'demo-cloud', allowLoopbackHttp: true };
-const approved = 'https://res.cloudinary.com/demo-cloud/image/upload/v1/phone.jpg';
+const production: ImageSources = { hosts: ['yepfgjehdstlxbpespun.supabase.co', 'shop.example.test'], allowLoopbackHttp: false };
+const development: ImageSources = { hosts: ['pzxekjybdiulzmssalfo.supabase.co', 'localhost'], allowLoopbackHttp: true };
+const approved = 'https://yepfgjehdstlxbpespun.supabase.co/storage/v1/object/public/product-media/products/p/i/r/phone.webp';
 
 describe('safeEmailImageUrl: approved asset origins only', () => {
   it('accepts a real approved HTTPS image and keeps it unchanged', () => {
@@ -19,12 +19,12 @@ describe('safeEmailImageUrl: approved asset origins only', () => {
     expect(safeEmailImageUrl('https://shop.example.test/products/phone.jpg', production)).toBe('https://shop.example.test/products/phone.jpg');
   });
   it('rejects an unapproved HTTPS host, including lookalikes and subdomains', () => {
-    for (const value of ['https://evil.example/phone.jpg', 'https://res.cloudinary.com.evil.example/demo-cloud/a.jpg',
-      'https://evil.res.cloudinary.com/demo-cloud/a.jpg', 'https://shop.example.test.evil.example/a.jpg']) expect(safeEmailImageUrl(value, production)).toBeNull();
+    for (const value of ['https://evil.example/phone.jpg', 'https://yepfgjehdstlxbpespun.supabase.co.evil.example/a.jpg',
+      'https://evil.yepfgjehdstlxbpespun.supabase.co/a.jpg', 'https://shop.example.test.evil.example/a.jpg']) expect(safeEmailImageUrl(value, production)).toBeNull();
   });
-  it("rejects another customer's Cloudinary cloud on the shared delivery host", () => {
-    expect(safeEmailImageUrl('https://res.cloudinary.com/someone-else/image/upload/a.jpg', production)).toBeNull();
-    expect(safeEmailImageUrl('https://res.cloudinary.com/demo-cloudx/image/upload/a.jpg', production)).toBeNull();
+  it('rejects unapproved project hosts on the shared storage platform', () => {
+    expect(safeEmailImageUrl('https://otherproject.supabase.co/storage/v1/object/public/product-media/a.webp', production)).toBeNull();
+    expect(safeEmailImageUrl('https://yepfgjehdstlxbpespunx.supabase.co/storage/v1/object/public/product-media/a.webp', production)).toBeNull();
   });
   it('rejects plain http in deployed environments and dangerous or unsupported schemes', () => {
     for (const value of ['http://shop.example.test/a.jpg', 'javascript:alert(1)', 'data:image/png;base64,AAAA', 'file:///etc/passwd',
@@ -37,9 +37,9 @@ describe('safeEmailImageUrl: approved asset origins only', () => {
     expect(safeEmailImageUrl('http://127.0.0.1/a.jpg', development)).toBeNull(); // loopback but not an approved host
   });
   it('rejects credentials, odd ports on deployed hosts, malformed and oversized values, and markup/quote characters', () => {
-    for (const value of ['https://user:pass@res.cloudinary.com/demo-cloud/a.jpg', 'https://user@res.cloudinary.com/demo-cloud/a.jpg',
-      'https://res.cloudinary.com:8443/demo-cloud/a.jpg', 'https://', 'not a url', '', `${approved}"onerror="x`, `${approved}'`, `${approved}<`, `${approved} x`,
-      `${approved}\\x`, `https://res.cloudinary.com/demo-cloud/${'a'.repeat(2100)}.jpg`]) expect(safeEmailImageUrl(value, production)).toBeNull();
+    for (const value of ['https://user:pass@yepfgjehdstlxbpespun.supabase.co/a.jpg', 'https://user@yepfgjehdstlxbpespun.supabase.co/a.jpg',
+      'https://yepfgjehdstlxbpespun.supabase.co:8443/a.jpg', 'https://', 'not a url', '', `${approved}"onerror="x`, `${approved}'`, `${approved}<`, `${approved} x`,
+      `${approved}\\x`, `https://yepfgjehdstlxbpespun.supabase.co/${'a'.repeat(2100)}.jpg`]) expect(safeEmailImageUrl(value, production)).toBeNull();
     expect(safeEmailImageUrl(null, production)).toBeNull();
     expect(safeEmailImageUrl(undefined, production)).toBeNull();
   });
@@ -48,14 +48,23 @@ describe('safeEmailImageUrl: approved asset origins only', () => {
 describe('approved sources come from real configuration only', () => {
   const base = { NODE_ENV: 'production', COMMERCE_EMAIL_ORIGIN: 'https://shop.example.test' };
   it('defaults to the trusted origin host and nothing else', () => {
-    expect(commerceEmailConfig({ ...base }).imageSources).toEqual({ hosts: ['shop.example.test'], cloudinaryCloud: null, allowLoopbackHttp: false });
+    expect(commerceEmailConfig({ ...base }).imageSources).toEqual({ hosts: ['shop.example.test'], allowLoopbackHttp: false });
   });
-  it('adds the Cloudinary delivery host only when a cloud is configured, without exposing the key or secret', () => {
-    const sources = commerceEmailConfig({ ...base, CLOUDINARY_URL: 'cloudinary://111:topsecret@Demo-Cloud' }).imageSources;
-    expect(sources.hosts).toContain('res.cloudinary.com');
-    expect(sources.cloudinaryCloud).toBe('demo-cloud');
-    expect(JSON.stringify(sources)).not.toMatch(/topsecret|111/);
-    expect(commerceEmailConfig({ ...base, CLOUDINARY_URL: 'garbage' }).imageSources.hosts).not.toContain('res.cloudinary.com');
+  it('preserves configured Supabase purchase snapshot images without accepting a different project', () => {
+    const ref = 'yepfgjehdstlxbpespun';
+    const sources = commerceEmailConfig({ ...base, SUPABASE_URL: `https://${ref}.supabase.co`, SUPABASE_PROJECT_REF: ref }).imageSources;
+    const snapshot = `https://${ref}.supabase.co/storage/v1/object/public/product-media/products/p/i/r/original.webp`;
+    expect(safeEmailImageUrl(snapshot, sources)).toBe(snapshot);
+    expect(safeEmailImageUrl(snapshot, commerceEmailConfig({ ...base,
+      SUPABASE_URL: 'https://pzxekjybdiulzmssalfo.supabase.co', SUPABASE_PROJECT_REF: ref }).imageSources)).toBeNull();
+    expect(JSON.stringify(sources)).not.toMatch(/service_role|sb_secret_/);
+  });
+  it('adds the configured development Supabase storage host without accepting mismatched project refs', () => {
+    const devRef = 'pzxekjybdiulzmssalfo';
+    const devBase = { NODE_ENV: 'development', COMMERCE_EMAIL_ORIGIN: 'http://localhost:5173' };
+    const sources = commerceEmailConfig({ ...devBase, SUPABASE_URL: `https://${devRef}.supabase.co`, SUPABASE_PROJECT_REF: devRef }).imageSources;
+    expect(sources.hosts).toContain(`${devRef}.supabase.co`);
+    expect(commerceEmailConfig({ ...devBase, SUPABASE_URL: 'garbage', SUPABASE_PROJECT_REF: devRef }).imageSources.hosts).not.toContain(`${devRef}.supabase.co`);
   });
   it('accepts an explicit operator list of hostnames and rejects malformed entries', () => {
     expect(commerceEmailConfig({ ...base, COMMERCE_EMAIL_IMAGE_HOSTS: 'Cdn.Example.test, img.example.test' }).imageSources.hosts)
@@ -105,7 +114,8 @@ describe('enqueuePaymentSucceeded: an unsafe optional image never invalidates th
   it('keeps approved images, drops the rest, and still creates a dispatchable, renderable order confirmation', async () => {
     vi.stubEnv('COMMERCE_EMAIL_ENQUEUE_ENABLED', 'true');
     vi.stubEnv('COMMERCE_EMAIL_ORIGIN', 'https://shop.example.test');
-    vi.stubEnv('CLOUDINARY_URL', 'cloudinary://111:topsecret@demo-cloud');
+    vi.stubEnv('SUPABASE_URL', 'https://yepfgjehdstlxbpespun.supabase.co');
+    vi.stubEnv('SUPABASE_PROJECT_REF', 'yepfgjehdstlxbpespun');
     vi.stubEnv('NODE_ENV', 'production');
     const { tx, queries } = transaction([approved, 'https://evil.example/pixel.gif', 'http://shop.example.test/a.jpg', 'javascript:alert(1)', null, '/products/a.jpg']);
     const created = await enqueuePaymentSucceeded(tx as never, { orderId, paidAt: new Date('2026-10-20T00:00:00Z'), card: null });

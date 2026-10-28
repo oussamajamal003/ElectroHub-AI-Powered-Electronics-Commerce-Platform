@@ -121,6 +121,36 @@ def test_load_settings_ignores_empty_commerce_variables() -> None:
     assert settings.AI_ENVIRONMENT == "qa"
 
 
+def test_media_worker_credential_is_refused_by_api_role() -> None:
+    with pytest.raises(ConfigurationError, match="media-worker settings"):
+        load_settings(
+            {
+                "AI_ENVIRONMENT": "test",
+                "AI_SERVICE_API_KEY": TEST_KEY,
+                "AI_MEDIA_WORKER_DATABASE_URL": "postgresql://u:p@localhost:5432/electrohub",
+            },
+            env_file=None,
+        )
+
+
+def test_media_worker_role_requires_its_own_database_and_artifact() -> None:
+    with pytest.raises(ConfigurationError, match="media-worker role requires"):
+        load_settings({"AI_ENVIRONMENT": "test", "AI_PROCESS_ROLE": "media_worker"}, env_file=None)
+
+
+def test_media_storage_origin_rejects_unapproved_hosts_and_paths() -> None:
+    with pytest.raises(ValidationError, match="approved Supabase project origin"):
+        settings_from_mapping(
+            {
+                "AI_ENVIRONMENT": "test",
+                "AI_PROCESS_ROLE": "media_worker",
+                "AI_MEDIA_WORKER_DATABASE_URL": "postgresql://u:p@localhost:5432/electrohub",
+                "AI_MODEL_ARTIFACT_DIR": "C:/models",
+                "AI_MEDIA_STORAGE_BASE_URL": "https://attacker.example",
+            }
+        )
+
+
 def test_load_settings_reports_names_not_values() -> None:
     with pytest.raises(ConfigurationError) as exc:
         load_settings({"AI_ENVIRONMENT": "production", "AI_SERVICE_API_KEY": "tooshort-secret-value"}, env_file=None)

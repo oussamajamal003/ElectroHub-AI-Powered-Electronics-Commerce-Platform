@@ -234,6 +234,18 @@ model ProductImage {
   altText   String? @db.VarChar(255)
   sortOrder Int     @default(0) @map("position")
   isPrimary Boolean @default(false)
+  storageProvider String @default("LEGACY_LOCAL") @db.VarChar(32)
+  storageBucket String? @db.VarChar(100)
+  storagePath String? @unique @db.VarChar(512)
+  sourceRevision String? @db.Uuid
+  sourceSha256 String? @db.Char(64)
+  sourceMimeType String? @db.VarChar(64)
+  width Int?
+  height Int?
+  byteSize Int?
+  mediaState String @default("PUBLISHED") @db.VarChar(16)
+  retiredAt DateTime?
+  mediaEvents CatalogMediaEvent[]
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
@@ -243,6 +255,32 @@ model ProductImage {
   @@index([productId])
   @@index([productId, sortOrder], map: "product_images_productId_position_idx")
   @@map("product_images")
+}
+
+// Durable media synchronization journal. Image rows are retained as tombstones.
+model CatalogMediaEvent {
+  id String @id @default(uuid()) @db.Uuid
+  idempotencyKey String @unique @db.VarChar(160)
+  requestSha256 String @db.Char(64)
+  productId String @db.Uuid
+  productImageId String @db.Uuid
+  image ProductImage @relation(fields: [productImageId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "catalog_media_events_image_fkey")
+  operation String @db.VarChar(24)
+  sourceRevision String? @db.Uuid
+  sourceSha256 String? @db.Char(64)
+  state String @default("READY") @db.VarChar(24)
+  attemptCount Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  claimedUntil DateTime?
+  leaseToken String? @db.Uuid
+  lastErrorCode String? @db.VarChar(80)
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([state, nextAttemptAt])
+  @@index([productImageId, createdAt])
+  @@map("catalog_media_events")
 }
 
 model Brand {

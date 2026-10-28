@@ -226,7 +226,7 @@ model ProductImage {
 }
 ```
 
-Cloudinary stores media; PostgreSQL stores references/metadata.
+Supabase Storage ('product-media' bucket) stores media; PostgreSQL stores references/metadata.
 
 ---
 

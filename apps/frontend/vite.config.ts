@@ -13,6 +13,8 @@ export default defineConfig(({ command }) => {
         '@': path.resolve(__dirname, './src'),
       },
     },
+    // Keep generated Storybook output in this package from being scanned as a second app entry.
+    optimizeDeps: { entries: ['index.html'] },
     test: {
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],

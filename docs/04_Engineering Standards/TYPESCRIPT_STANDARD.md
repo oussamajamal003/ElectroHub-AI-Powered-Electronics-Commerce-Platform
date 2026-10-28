@@ -461,7 +461,7 @@ This is especially important for:
 ```text
 Stripe
 Brevo
-Cloudinary
+Supabase Storage
 FastAPI
 ```
 

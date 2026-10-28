@@ -389,7 +389,7 @@ Images should:
 - Preserve intended aspect ratios.
 - Avoid unnecessary layout shifts.
 - Use appropriate object-fit behavior.
-- Follow Cloudinary optimization where applicable.
+- Follow Supabase Storage / CDN image delivery optimization where applicable.
 
 Do not use enormous source images when smaller optimized assets are sufficient.
 

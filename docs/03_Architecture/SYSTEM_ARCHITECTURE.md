@@ -16,7 +16,7 @@ ElectroHub is a full-stack electronics and technology e-commerce platform built 
 - PDF generation
 - Socket.IO real-time communication
 - Leaflet + OpenStreetMap delivery maps
-- Cloudinary media storage
+- Supabase Storage media storage
 - Docker-based services
 - GitHub Actions CI/CD
 - DigitalOcean production deployment
@@ -86,7 +86,7 @@ Supabase PostgreSQL
 
 Backend ── Socket.IO ──► Customer
 Frontend ── Leaflet + OpenStreetMap ──► Delivery Map
-Backend ── Cloudinary ──► Product Media
+Backend ── Supabase Storage ──► Product Media
 ```
 
 ---
@@ -469,23 +469,27 @@ AI unavailability must leave catalog, checkout, orders, and payments operational
 
 ---
 
-## 19. Media Storage
+## 19. Media Storage & AI Embedding Synchronization
 
-Cloudinary stores product media.
+Supabase Storage stores product media.
 
 ```text
-Admin
+Admin Console (React)
  ↓
-Backend
+Express Backend (`requireRole('ADMIN')`)
+ ↓ (MIME & size validation)
+Supabase Storage (`product-media` bucket)
  ↓
-Cloudinary
+Image URL & Metadata (`ProductImage`)
  ↓
-Image URL / Metadata
+PostgreSQL Outbox Entry (`MediaOutbox`)
  ↓
-Database
+FastAPI AI Service (Background Embedding Regeneration)
+ ↓
+Storefront Display (Customer Product Views)
 ```
 
-The database stores relevant media metadata/references rather than unnecessary binary image data.
+The database stores relevant media metadata/references rather than raw binary image data. The durable outbox ensures that adding, replacing, reordering, or removing product images reliably synchronizes with catalog vector embeddings.
 
 ---
 
@@ -541,7 +545,7 @@ External integrations should be isolated behind backend abstractions:
 ```text
 PaymentService → Stripe
 EmailService → Brevo
-MediaService → Cloudinary
+MediaService → Supabase Storage
 PdfService → PDF Generator
 AiService → FastAPI
 ```
@@ -644,7 +648,7 @@ Backend → Business rules
 PostgreSQL → Persistent application state
 Stripe → Payment-provider state
 Backend / Socket.IO → Delivery events
-Cloudinary → Media assets
+Supabase Storage → Media assets
 FastAPI → AI processing
 ```
 

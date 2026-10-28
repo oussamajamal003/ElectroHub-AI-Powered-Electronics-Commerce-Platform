@@ -608,7 +608,7 @@ Features report `available:false, status:"NOT_READY", reason:"MODEL_NOT_CONFIGUR
 | `AI_MAX_TOP_K` / `AI_MAX_CANDIDATES` | 24 / 200 | 1–100 / 1–1000 |
 | `AI_INFERENCE_TIMEOUT_SECONDS` / `AI_MAX_CONCURRENT_INFERENCES` | 5 / 2 | 0.1–60 / 1–16; saturation → 429, never an unbounded queue |
 
-The process refuses to start if Stripe, Brevo, JWT/OTP, Google, Cloudinary, `DATABASE_URL`/`DIRECT_URL` or Supabase service-role values are present in its environment or `.env`.
+The process refuses to start if Stripe, Brevo, JWT/OTP, Google, administrative storage credentials, `DATABASE_URL`/`DIRECT_URL` or Supabase service-role values are present in its environment or `.env`.
 
 Express side (`apps/backend/src/integrations/ai/ai.config.ts`, not `src/config/env.ts`, so a bad AI setting can only disable AI): `AI_SERVICE_URL` (origin only, no credentials/query; production requires https unless loopback/single-label internal host), `AI_SERVICE_API_KEY`, `AI_SERVICE_ENVIRONMENT` (production NODE_ENV → `production`; development → `development|qa`), `AI_SERVICE_TIMEOUT_MS` (100–10000, default 2500). Responses are capped at 256 KiB, redirects are never followed, and every payload is validated with strict Zod schemas (UUIDs, unique products, finite scores in [-1, 1], contiguous ranks). Admin-only probe: `GET /api/admin/ai/status`.
 

@@ -170,7 +170,6 @@ jobs:
           STRIPE_SECRET_KEY=sk_test_placeholder
           STRIPE_WEBHOOK_SECRET=whsec_test_placeholder
           BREVO_API_KEY=test-brevo-api-key
-          CLOUDINARY_URL=cloudinary://test-key:test-secret@test-cloud
           EOF
           node -e "require('fs').appendFileSync('apps/backend/.env.test.local', 'JWT_SECRET=' + require('crypto').randomBytes(32).toString('base64') + '\n')"
       - name: Generate Prisma Client

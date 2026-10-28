@@ -1,0 +1,22 @@
+{
+  "target": "pzxekjybdiulzmssalfo",
+  "productId": "58ce061a-926e-47a6-b79b-79c322762b03",
+  "realAdminAuthentication": true,
+  "source": "actual DEV Supabase Storage",
+  "search": "actual PgVectorGateway under existing restricted DEV reader",
+  "imageId": "c75f1c87-1a7f-4651-be47-aa658ad6803b",
+  "result": "PASS",
+  "embeddingVersion": "siglip2-b16-p256-d1-b3900dd9fad5",
+  "revisionA": "875b4760-5f9c-4ac9-86d9-31a5d1b9c68c",
+  "revisionB": "79bc9750-0904-492c-8cd9-cdc0e4e2d851",
+  "sha256A": "6b4e310e327551147dc866a7d71f7d5aa1c58c922f40e8abdec6837bc33ee0e6",
+  "sha256B": "8f1fc6cacedef7b93a1bf35c56ed85ebfd57a4be9b939c53f936edaffa93d705",
+  "idempotentReplay": true,
+  "immediateStaleExclusion": true,
+  "actualWorkerBPublication": true,
+  "actualReaderBSearch": true,
+  "apiIndexState": "INDEXED",
+  "staleWriteStatus": 409,
+  "retirementImmediateExclusion": true,
+  "activeAndBaseCountsUnchanged": true
+}

@@ -45,7 +45,7 @@ Email:
 Brevo
 
 Media:
-Cloudinary
+Supabase Storage
 
 Maps:
 Leaflet + OpenStreetMap

@@ -204,7 +204,7 @@ Do not implement:
 - refresh tokens
 - recommendations
 - AI business logic
-- Cloudinary workflows
+- Supabase Storage workflows
 - email workflows
 - Socket.IO business events
 - domain database models
@@ -867,7 +867,7 @@ Do not implement business integrations for:
 
 - Stripe
 - Brevo
-- Cloudinary
+- Supabase Storage
 - AI
 - Socket.IO business events
 
@@ -970,7 +970,7 @@ Tests must not depend on production:
 - database
 - Stripe
 - Brevo
-- Cloudinary
+- Supabase Storage
 - AI services
 
 unless an explicit integration environment exists.

@@ -129,7 +129,7 @@ Do **not** implement these future roadmap tasks:
 - Inventory mutation/purchase-reservation architecture that belongs to 03.4;
 - inventory decrement on Add to Cart;
 - stock reservation;
-- Cloudinary;
+- Supabase Storage;
 - AI recommendations;
 - frequently bought together;
 - admin cart management;
@@ -423,7 +423,7 @@ Likely relevant current documentation includes:
 - branching
 - code review
 
-Do not spend task time reading Stripe, Delivery, AI, Cloudinary, PDF, Email, Admin analytics, or other future domains unless a real dependency discovered in the code requires it.
+Do not spend task time reading Stripe, Delivery, AI, Supabase Storage, PDF, Email, Admin analytics, or other future domains unless a real dependency discovered in the code requires it.
 
 Final handoff must list docs read and docs updated.
 

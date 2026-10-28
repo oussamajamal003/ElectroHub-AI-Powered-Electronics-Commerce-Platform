@@ -354,13 +354,15 @@ Image contents must not be stored in analytics unnecessarily.
 
 ---
 
-# 21. Cloudinary
+# 21. Supabase Storage & Media Boundaries
 
-Cloudinary is intended for product media.
+Supabase Storage (the `product-media` bucket) is dedicated to catalog product media.
 
-Customer search images should not automatically be stored in Cloudinary.
+Customer search query images (captured via camera or uploaded) are ephemeral and must never be stored in Supabase Storage or persistent product media.
 
-Product catalog images and customer search inputs are separate data categories.
+Product catalog images and customer search inputs are strictly separate data categories:
+- Catalog media: Uploaded by authenticated administrators via Express, stored in Supabase Storage, tracked in `ProductImage`, and durably indexed via transactional outbox into `ai.product_image_embeddings`.
+- Search query images: Processed in-memory in FastAPI for feature extraction and similarity search against pgvector, then immediately discarded.
 
 ---
 

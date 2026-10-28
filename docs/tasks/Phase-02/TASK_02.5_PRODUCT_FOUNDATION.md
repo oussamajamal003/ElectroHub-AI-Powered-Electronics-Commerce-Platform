@@ -11,7 +11,7 @@
 
 # 0. Task Authority
 
-TASK 02.5 establishes the **product-domain foundation** required by later catalog, search, cart, wishlist, inventory, recommendation, Cloudinary, and admin-product-management work.
+TASK 02.5 establishes the **product-domain foundation** required by later catalog, search, cart, wishlist, inventory, recommendation, Supabase Storage, and admin-product-management work.
 
 This task is **not** the full storefront and is **not** the final admin product-management experience.
 
@@ -70,7 +70,7 @@ Future ownership remains:
         ↓
 03.4 Full Inventory
         ↓
-04.3 Cloudinary
+04.3 Product Media Storage & AI Embedding Synchronization
         ↓
 05.2 Admin Product Management
 ```
@@ -198,14 +198,14 @@ Do **not** implement in TASK 02.5 unless a direct compatibility requirement forc
 - Stock adjustment history
 - Warehouse support
 
-## Cloudinary — Phase 04.3
+## Supabase Storage — Phase 04.3
 
-- Cloudinary SDK integration
+- Supabase Storage SDK integration
 - Product-image uploads
-- Image transformations
+- Image transformations and delivery
 - Production media pipeline
 - Signed upload flows
-- Image deletion from Cloudinary
+- Image deletion from Supabase Storage
 
 ## AI / Recommendations — Phase 04
 
@@ -1556,7 +1556,7 @@ TASK 02.5 distinguishes:
 04.3 owns:
 
 ```text
-3 (Cloudinary)
+3 (Supabase Storage)
 ```
 
 Do not collapse these concerns.
@@ -1604,7 +1604,7 @@ DEV seed may store deterministic local URLs such as:
 
 This is preferred over fragile hotlinks.
 
-Later Cloudinary migration can replace URL values without redesigning ProductImage.
+Later Supabase Storage migration can replace URL values without redesigning ProductImage.
 
 Do not hard-code full localhost URLs into database rows.
 
@@ -1699,7 +1699,7 @@ Monitors
 Accessories
 ```
 
-No Cloudinary integration in this task.
+No Supabase Storage integration in this task.
 
 ---
 
@@ -2357,7 +2357,7 @@ Do not create duplicates if equivalent docs already exist.
 Expected legitimate limitations after 02.5 may include:
 
 - demo/reference prices are not live retailer prices
-- DEV media is local/licensed/generated rather than Cloudinary-managed
+- DEV media is local/licensed/generated rather than Supabase Storage-managed
 - no customer catalog UI yet
 - no advanced search/filter/sort yet
 - no full inventory operations yet
@@ -2696,7 +2696,7 @@ Any critical migration defect, duplicate product-domain model, unsafe pricing re
 ## 04.3 owns
 
 ```text
-⏭ Cloudinary uploads
+⏭ Supabase Storage uploads
 ⏭ Production image storage
 ⏭ Image delivery/transformation pipeline
 ```
@@ -2735,7 +2735,7 @@ CUSTOMER CATALOG
 FULL INVENTORY
         ↓
 04.3
-CLOUDINARY
+PRODUCT MEDIA STORAGE & AI EMBEDDING SYNCHRONIZATION
         ↓
 05.2
 ADMIN PRODUCT MANAGEMENT
@@ -2749,7 +2749,7 @@ Product
 + full storefront
 + advanced search
 + full inventory
-+ Cloudinary
++ Supabase Storage
 + admin management
 + recommendations
 + analytics

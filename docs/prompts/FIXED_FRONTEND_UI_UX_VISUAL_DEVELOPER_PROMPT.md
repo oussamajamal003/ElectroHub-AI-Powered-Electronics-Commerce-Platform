@@ -1710,7 +1710,7 @@ refresh tokens
 DB credentials
 Stripe secrets
 Brevo keys
-Cloudinary private credentials
+Supabase service role credentials
 passwords
 OTP values
 sensitive customer data

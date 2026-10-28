@@ -37,7 +37,7 @@ External services:
 Supabase PostgreSQL
 Stripe Test Mode
 Brevo
-Cloudinary
+Supabase Storage
 ```
 
 ---
@@ -64,7 +64,7 @@ Cloudinary
 External integrations:
     Stripe
     Brevo
-    Cloudinary
+    Supabase Storage
 ```
 
 Nginx is the public entry point.
@@ -191,11 +191,11 @@ Documents must be access-controlled so customers can only retrieve documents bel
 
 ---
 
-# 9. Media
+# 9. Media & Storage
 
-Cloudinary is used for application media where configured.
+Supabase Storage ('product-media' bucket) is used for catalog application media.
 
-Production credentials must be stored as protected environment variables.
+Production credentials (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) must be stored as protected environment variables. Isolated buckets are maintained per environment (DEV vs PROD).
 
 ---
 
@@ -210,7 +210,8 @@ JWT_REFRESH_SECRET
 STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET
 BREVO_API_KEY
-CLOUDINARY_URL
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
 AI_SERVICE_URL
 ```
 

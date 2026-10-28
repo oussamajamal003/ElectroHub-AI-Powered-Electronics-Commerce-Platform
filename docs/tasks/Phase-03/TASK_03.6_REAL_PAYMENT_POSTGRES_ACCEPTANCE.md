@@ -44,7 +44,7 @@ three source fixes. A–S (K–S), DEV/PROD migration parity and release authori
 Integrated stack (category F/E): backend `:5100` (+ second instance `:5101` for cross-instance tests) and a separate durable worker, both from a
 fresh `dist` build; Vite frontend `:5180` proxying `/api` → `:5100`; `stripe listen` forwarding to `:5100/api/webhooks/stripe`. Explicit
 `DATABASE_URL/DIRECT_URL` (process env wins over env files — verified in `src/config/env.ts`), fresh random JWT/OTP secrets, Brevo/Google/
-Cloudinary blanked, logs isolated via `ELECTROHUB_LOG_DIR`.
+storage credentials blanked, logs isolated via `ELECTROHUB_LOG_DIR`.
 
 ## 3. Stripe Test Mode validation (`stripe-identity.json`)
 

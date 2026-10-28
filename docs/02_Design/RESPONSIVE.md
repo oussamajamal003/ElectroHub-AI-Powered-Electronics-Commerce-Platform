@@ -715,7 +715,7 @@ Prefer:
 - Appropriate object-fit behavior.
 - Lazy loading for below-the-fold content.
 - Constrained previews.
-- Optimized Cloudinary assets.
+- Optimized Supabase Storage assets.
 - Avoidance of unnecessarily large mobile downloads.
 
 Do not load desktop-sized assets when a smaller asset is sufficient.

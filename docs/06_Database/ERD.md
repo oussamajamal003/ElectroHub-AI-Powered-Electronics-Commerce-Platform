@@ -194,7 +194,7 @@ Product 1 ─── N OrderItem
 
 ### ProductImage
 
-Stores product-image references and metadata. Cloudinary may store the actual media.
+Stores product-image references and metadata. Supabase Storage stores the actual media in the 'product-media' bucket.
 
 ```text
 id

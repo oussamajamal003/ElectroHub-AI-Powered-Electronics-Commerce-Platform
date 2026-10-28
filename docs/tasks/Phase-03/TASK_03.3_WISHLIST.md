@@ -156,7 +156,7 @@ Do **not** implement:
 - Wishlist email notifications;
 - AI recommendations;
 - frequently bought together;
-- Cloudinary work;
+- Supabase Storage work;
 - admin Wishlist management;
 - new Reviews API;
 - new rating calculation system;
@@ -711,7 +711,7 @@ Do not spend task time reading:
 - Stripe;
 - Delivery;
 - AI;
-- Cloudinary;
+- Supabase Storage;
 - PDF;
 - Email;
 - Admin analytics;

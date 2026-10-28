@@ -150,7 +150,7 @@ Do NOT implement:
 - Real Stripe payments
 - Real Brevo workflows
 - PDF generation
-- Cloudinary workflows
+- Supabase Storage workflows
 - Production deployment
 - DigitalOcean production setup
 - Production SSL
@@ -246,7 +246,7 @@ FastAPI
 External:
 Stripe Test Mode
 Brevo
-Cloudinary
+Supabase Storage
 Leaflet / OpenStreetMap
 
 Infrastructure:
@@ -510,7 +510,7 @@ OTP values
 Stripe secrets
 Brevo API keys
 Database credentials
-Cloudinary private credentials
+Supabase Storage credentials
 Sensitive customer data
 ```
 
@@ -571,8 +571,8 @@ DATABASE_PASSWORD
 JWT_SECRET
 STRIPE_SECRET_KEY
 BREVO_API_KEY
-CLOUDINARY_SECRET
 SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_ACCESS_TOKEN
 ```
 
 or equivalent credentials.

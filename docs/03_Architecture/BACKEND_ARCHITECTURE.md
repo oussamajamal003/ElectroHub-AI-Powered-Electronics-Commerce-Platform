@@ -17,7 +17,7 @@ Supabase PostgreSQL
 Socket.IO
 Stripe Test Mode
 Brevo
-Cloudinary
+Supabase Storage
 ```
 
 The backend communicates with the separate FastAPI AI service through defined APIs.
@@ -332,21 +332,23 @@ Behavior-Based Recommendations
 
 The architecture must distinguish real ML from rule-based or simulated behavior.
 
-## 19. Cloudinary
+## 19. Product Media Management & Supabase Storage
+
+Product media is managed through Supabase Storage with server-side authorization:
 
 ```text
-Admin
- ↓
-Backend
- ↓
-Cloudinary
- ↓
-Image URL / Metadata
- ↓
-Database
+React Admin Console
+ ↓ (File Upload / Mutation)
+Express Backend (`requireRole('ADMIN')`)
+ ↓ (MIME Validation, Payload Cap, Dimension Verification)
+Supabase Storage (`product-media` bucket)
+ ↓ (Canonical Storage Path & Public CDN URL)
+PostgreSQL via Prisma (`ProductImage` + Transactional Outbox)
+ ↓ (Durable Synchronization Event)
+FastAPI AI Service (Background Embedding Invalidation & Regeneration)
 ```
 
-Authorization must be enforced for administrative media operations.
+Authorization is strictly enforced for administrative media operations. Customer query photos are processed in-memory and are never written to product media storage.
 
 ## 20. Error and External-Service Handling
 
@@ -365,7 +367,7 @@ Database
 Internal
 ```
 
-External integrations include Stripe, Brevo, Cloudinary, and FastAPI.
+External integrations include Stripe, Brevo, Supabase Storage, and FastAPI.
 
 Handle timeouts, provider failures, invalid responses, and retryable failures appropriately.
 
@@ -413,7 +415,7 @@ JWT_SECRET
 JWT_REFRESH_SECRET
 STRIPE_SECRET_KEY
 BREVO_API_KEY
-CLOUDINARY credentials
+SUPABASE_SERVICE_ROLE_KEY
 AI_SERVICE_URL
 ```
 
@@ -449,7 +451,7 @@ Consider:
 
 ## 26. Completion Criteria
 
-The backend architecture is complete when request flow, layers, authentication, database access, payments, email, PDF generation, orders, inventory, delivery, AI, Cloudinary, errors, security, transactions, and testing are documented.
+The backend architecture is complete when request flow, layers, authentication, database access, payments, email, PDF generation, orders, inventory, delivery, AI, Supabase Storage, errors, security, transactions, and testing are documented.
 
 ## 27. Backend Foundation (TASK 02.1)
 

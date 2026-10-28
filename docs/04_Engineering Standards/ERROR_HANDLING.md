@@ -360,9 +360,9 @@ External services include:
 ```text
 Stripe
 Brevo
-Cloudinary
+Supabase Storage
 FastAPI
-Supabase
+Supabase PostgreSQL
 ```
 
 External failures should be:
@@ -601,7 +601,7 @@ JWT secrets
 API keys
 Stripe secrets
 Brevo credentials
-Cloudinary secrets
+Supabase Storage credentials
 Internal file paths
 Raw SQL
 ```

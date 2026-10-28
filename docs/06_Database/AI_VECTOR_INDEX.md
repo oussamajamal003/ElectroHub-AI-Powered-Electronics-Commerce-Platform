@@ -45,7 +45,7 @@ python -m app.ingest rollback                                 # back to previous
 python -m app.ingest status
 ```
 
-`stage` reads storefront-relative `/images/...` files only (path-traversal-safe, ≤ 8 MiB). It encodes them with the same verified loader the service uses. Re-running skips images whose bytes are unchanged, and it commits per batch so an interrupted run resumes. Cloudinary-driven refresh belongs to Task 04.3; until then, re-run `stage` and `activate` after catalog image changes.
+`stage` reads storefront-relative `/images/...` files only (path-traversal-safe, ≤ 8 MiB). It encodes them with the same verified loader the service uses. Re-running skips images whose bytes are unchanged, and it commits per batch so an interrupted run resumes. Supabase Storage-driven refresh belongs to Task 04.3 (Product Image Storage & AI Embedding Synchronization); until then, re-run `stage` and `activate` after catalog image changes.
 
 ## Environment status (verified 2026-10-25)
 

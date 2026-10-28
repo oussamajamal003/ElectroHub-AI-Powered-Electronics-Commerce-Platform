@@ -101,7 +101,7 @@ OFFLINE 04.2: curated licensed product imagery -> Kaggle Free NVIDIA GPU
 6. **Model output is advisory:** an embedding score is not a calibrated probability; FastAPI cannot invent SKUs, prices, stock or user entitlements. Express post-validates product references and product eligibility.
 7. **AI degradation never blocks commerce:** if FastAPI times out, crashes, has no model or returns malformed data, catalog/text search, auth, cart, checkout, Stripe Test Mode, Orders, email, PDFs and tracking continue.
 8. **Maintain existing protected financial safeguards.** No change to payment isolation, Stripe supervised runtime/worker scope, account reconciliation, Brevo dispatch, PDF guards or Supabase connection governance is needed just to implement 04.1.
-9. **No undocumented delivery claims:** a service skeleton/green API unit test does not prove trained retrieval, recommendations, Cloudinary, live tracking, production load or deployment readiness.
+9. **No undocumented delivery claims:** a service skeleton/green API unit test does not prove trained retrieval, recommendations, Supabase Storage, live tracking, production load or deployment readiness.
 
 ### Visual/UI invariants
 
@@ -173,7 +173,7 @@ Order of authority: explicit Task 04.1 requirements and safety gates -> current 
 | --- | --- | --- | --- |
 | **04.1 FastAPI AI Service** | Python app configuration, layered routers/schemas/dependencies/services, private auth, lifecycle, health/readiness, errors, logs, bounded Express client, testing, Docker | Ready-to-implement typed model/inference and vector-access contracts | ML artifact, live images, customer search UI |
 | **04.2 Real DL Search by Image + Command Search** | Kaggle Free setup, licensed dataset, train/validate/test, fine-tune pretrained EfficientNet-B0 using PyTorch, embeddings, pgvector migrations/backfill/index, live inference, upload/camera, **complete command-search UX redesign**, relevance metrics | Verified 04.1 app, contracts, private transport, model-version/readiness interfaces | Real retrieval quality and usability are assessed in 04.2 |
-| **04.3 Cloudinary** | Safe product-media upload/storage/delivery, transformations, asset lifecycle and embedding refresh triggers | Stable image identity and a future reindex request contract | Cloudinary API keys/media uploads in 04.1 |
+| **04.3 Supabase Storage** | Safe product-media upload/storage/delivery, transformations, asset lifecycle and embedding refresh triggers | Stable image identity and a future reindex request contract | Supabase Storage API keys/media uploads in 04.1 |
 | **04.4 ML Product Recommendations** | Reuse learned embeddings; content/user-context recommendation, behavior-derived profiles if data sufficient, ranking evaluation, model/version tracking, backfills/aggregates, all supported widgets and cold-start/outage fallbacks | Versioned typed recommendation request/result schema and limits | Personalized training and historic behavior tables in 04.1 |
 | **04.5 Delivery Tracking** | Backend-authoritative shipment status, location/ETA/timeline, permissions and persistence | AI service must remain unrelated to delivery authority | Shipment mutation/UI/ETA engine in 04.1 |
 | **04.6 Leaflet + OSM** | Client maps, markers, route presentation, accessibility, provider constraints | No AI coupling required | Map components/tiles in 04.1 |
@@ -204,7 +204,7 @@ Order of authority: explicit Task 04.1 requirements and safety gates -> current 
 - Kaggle Free account/notebook/GPU initialization, CUDA tooling, actual PyTorch training, dataset acquisition and model weight/artifact download.
 - Vision model embedding generation, inference on real catalog photos, vector table creation/backfill/index activation, AI product-result UI or a fake matching substitute.
 - Browser camera UX, drag-drop redesign, command-search implementation, image result gallery, image-search analytics at production scale.
-- Cloudinary provider/API integration or live media changes.
+- Supabase Storage provider/API integration or live media changes.
 - Personalized/co-purchase recommendations, material ML feature processing or actual ranking-model training.
 - New user-behavior/recommendation/AI event persistence and Prisma migrations unless strictly necessary for 04.1 (unlikely).
 - Delivery status/ETA/maps/Socket.IO changes.
@@ -406,7 +406,7 @@ Example *internal* application error:
 
 ### 6.4 Financial/external safety
 
-Do not give the AI process Stripe, Brevo, JWT-refresh, Supabase service-role or payment supervisor secrets. Do not touch Task 04.0's isolated older payment backlog. Real Brevo/Cloudinary/Kaggle/external image-provider calls require appropriate scope/privacy and account authorization before execution.
+Do not give the AI process Stripe, Brevo, JWT-refresh, Supabase service-role or payment supervisor secrets. Do not touch Task 04.0's isolated older payment backlog. Real Brevo/Supabase Storage/Kaggle/external image-provider calls require appropriate scope/privacy and account authorization before execution.
 
 ---
 
@@ -618,7 +618,7 @@ Never log: uploaded raw images, API keys, full request bodies with personal data
 
 ### 13.2 04.3 — product image lifecycle
 
-**Deliverables:** Cloudinary product media upload with admin-only authorization; signed/transformation-safe asset identity, storage/update/delete lifecycle, rate/payload limits, URLs and fallback images; reliable image metadata update; queue/batch re-embedding of changed images with idempotency; no upload of customer query photos without a separately approved policy. Image deletion/update invalidates versioned embeddings without accidentally showing stale/unlisted products.
+**Deliverables:** Supabase Storage product media upload with admin-only authorization; signed/transformation-safe asset identity, storage/update/delete lifecycle, rate/payload limits, URLs and fallback images; reliable image metadata update; queue/batch re-embedding of changed images with idempotency; no upload of customer query photos without a separately approved policy. Image deletion/update invalidates versioned embeddings without accidentally showing stale/unlisted products.
 
 ### 13.3 04.4 — real ML recommendations
 
@@ -657,7 +657,7 @@ Never log: uploaded raw images, API keys, full request bodies with personal data
 | **SECURITY / OBSERVABILITY** | Internal secrets, scrubbed logging, bounded requests, environment identity | Protected shared middleware and secret configuration |
 | **INTEGRATION** | Repo inspection, branch ownership, task registry, QA, evidence, independent review handoff | Authorizes integration only after review |
 
-Use CCR for protected cross-workstream edits; approval to change source never implies permission to run against shared DEV/PROD or configure Kaggle, Cloudinary or external credentials. With safe scope confirmed, parallelize isolated Python vs Express adapter tests only when there is a real benefit, and serialize final integration.
+Use CCR for protected cross-workstream edits; approval to change source never implies permission to run against shared DEV/PROD or configure Kaggle, Supabase Storage or external credentials. With safe scope confirmed, parallelize isolated Python vs Express adapter tests only when there is a real benefit, and serialize final integration.
 
 ---
 
@@ -716,7 +716,7 @@ This is the **Task 04.1 acceptance matrix**, not a claim that 04.2–04.7 are co
 
 Stop and report before action when: approved `develop` base unavailable; local worktree has conflicting unowned edits; protected ownership/CCR unresolved; any service config points QA to DEV/PROD; credentials appear in tracked/console output; an AI task proposes payment or customer-data mutations; migration execution is requested without approval; an endpoint can reach private resources via arbitrary input; planned model serving requires paid external GPU; Kaggle/free GPU inaccessible during later training; or a future task would silently replace real ML with simulated matching.
 
-A blocker for **04.1** is a genuine failure of **04.1's runtime, security, API, integration, isolation or tests**, not the expected lack of trained image-search weights, a vector index, command-search UI, Cloudinary, personalized recommendations or realtime maps.
+A blocker for **04.1** is a genuine failure of **04.1's runtime, security, API, integration, isolation or tests**, not the expected lack of trained image-search weights, a vector index, command-search UI, Supabase Storage, personalized recommendations or realtime maps.
 
 Rollback of 04.1 source changes must preserve existing text search, existing FastAPI health contract where consumers rely on it, commerce payment state and all data. No financial or Prisma migration rollback action is appropriate because 04.1 should not modify them.
 
@@ -735,7 +735,7 @@ Produce a single concise **`TASK 04.1 — IMPLEMENTATION EVIDENCE / ARCHITECT HA
 7. OpenAPI/typed contracts, model interface/lifecycle design and honest absence of trained model in 04.1.
 8. Python and related Node tests: commands, counts, skipped/failures and sources of evidence; builds/lint/type checks; CI results only if run and authorized.
 9. Browser/UX nonregression, with a prominent 04.2 command-search handoff requirement.
-10. No Kaggle setup, no real training, no pgvector migrations, no live Cloudinary/Stripe/Brevo writes in 04.1; or list any separately authorized exception accurately.
+10. No Kaggle setup, no real training, no pgvector migrations, no live Supabase Storage/Stripe/Brevo writes in 04.1; or list any separately authorized exception accurately.
 11. Material unresolved defects, documented optional improvements and exact operational approvals needed later.
 12. Engineer self-review score /100 and a recommendation; **do not impersonate independent Principal Architect approval**.
 

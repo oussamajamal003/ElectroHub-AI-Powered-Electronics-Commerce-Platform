@@ -1,0 +1,9 @@
+{
+  "result": "PASS",
+  "target": "DEV",
+  "ownedProductRemoved": "58ce061a-926e-47a6-b79b-79c322762b03",
+  "ownedImageRowsRemoved": 3,
+  "ownedObjectsRemoved": 6,
+  "temporaryWorkerRoleRemoved": true,
+  "existingCatalogAndBaseVectorsDeleted": false
+}

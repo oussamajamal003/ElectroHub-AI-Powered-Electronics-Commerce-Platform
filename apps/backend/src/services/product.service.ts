@@ -22,6 +22,7 @@ const baseSelect = {
 export const productSummarySelect = {
   ...baseSelect, description: true,
   images: {
+    where: { mediaState: 'PUBLISHED' },
     take: 2,
     orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }],
     select: imageSelect,
@@ -30,6 +31,7 @@ export const productSummarySelect = {
 const detailSelect = {
   ...baseSelect, description: true, sku: true, modelNumber: true,
   images: {
+    where: { mediaState: 'PUBLISHED' },
     orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }],
     select: imageSelect,
   },

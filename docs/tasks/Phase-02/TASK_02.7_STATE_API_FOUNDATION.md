@@ -152,7 +152,7 @@ TASK 02.7 must NOT implement:
 - inventory concurrency;
 - AI image search;
 - recommendations;
-- Cloudinary;
+- Supabase Storage;
 - WebSockets;
 - offline-first synchronization;
 - service worker caching;
@@ -1779,7 +1779,7 @@ The central client must not log:
 - Authorization secrets;
 - cookies;
 - database URLs;
-- Brevo/Stripe/Cloudinary secrets.
+- Brevo/Stripe/Supabase Storage secrets.
 
 ---
 

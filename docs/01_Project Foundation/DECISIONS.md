@@ -537,28 +537,24 @@ The project must respect applicable OpenStreetMap attribution and usage requirem
 
 ---
 
-# 17. ADR-015 — Cloudinary for Product Images
+# 17. ADR-015 — Supabase Storage for Product Images
 
-**Status:** Accepted
+**Status:** Accepted (Supersedes previous external third-party media storage planning)
 
 ## Decision
 
-Cloudinary will be used for product image storage and delivery.
+Supabase Storage will be used for product image storage, lifecycle management, and storefront delivery.
 
 ## Reasoning
 
-Product images are external media and should not be stored directly in the Git repository or unnecessarily inside PostgreSQL.
-
-Cloudinary provides:
-
-- Image storage.
-- Image delivery.
-- Transformations.
-- Optimization capabilities.
+- Consolidates infrastructure onto the existing Supabase ecosystem (PostgreSQL + Auth + Storage).
+- Avoids third-party CDN vendor proliferation and duplicate account overhead.
+- Direct alignment with Supabase project reference isolation (`pzxekjybdiulzmssalfo` DEV / `yepfgjehdstlxbpespun` PROD).
+- Enables reliable transactional synchronization: admin uploads go through Express validation to Supabase Storage, metadata is recorded in Prisma `ProductImage`, and a durable transactional outbox triggers AI embedding generation in FastAPI/pgvector without serving stale or deleted image vectors.
 
 ## Consequences
 
-Cloudinary credentials must remain in environment variables.
+Supabase Storage keys and bucket policies must remain server-controlled. Product image uploads require administrator authorization (`requireRole('ADMIN')`).
 
 ---
 
@@ -747,8 +743,8 @@ Relevant services include:
 ```text
 Stripe
 Brevo
-Cloudinary
-Supabase
+Supabase Storage
+Supabase PostgreSQL
 OpenStreetMap
 ```
 
