@@ -556,8 +556,9 @@ def test_idle_and_processing_heartbeats_are_independent_of_event_claims() -> Non
 @pytest.mark.parametrize("signum", [2, 15])
 def test_sigint_and_sigterm_request_graceful_shutdown(signum: int) -> None:
     import threading
+    from typing import cast
 
-    from app.media_sync import _handle_worker_signal
+    from app.media_sync import MediaSyncWorker, _handle_worker_signal
 
     called: list[bool] = []
 
@@ -566,7 +567,7 @@ def test_sigint_and_sigterm_request_graceful_shutdown(signum: int) -> None:
             called.append(True)
 
     stop_event = threading.Event()
-    _handle_worker_signal(signum, stop_event, FakeWorker())
+    _handle_worker_signal(signum, stop_event, cast(MediaSyncWorker, FakeWorker()))
     assert stop_event.is_set()
     assert called == [True]
 
