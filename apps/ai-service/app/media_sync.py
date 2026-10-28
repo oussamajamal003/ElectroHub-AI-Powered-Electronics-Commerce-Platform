@@ -213,9 +213,7 @@ def _fetch_public_source(url: str) -> bytes:
         headers={"Accept": "image/jpeg,image/png,image/webp", "User-Agent": "ElectroHubMediaSync/1"},
     )
     try:
-        with build_opener(_NoRedirect).open(
-            request, timeout=SOURCE_TIMEOUT_SECONDS
-        ) as response:
+        with build_opener(_NoRedirect).open(request, timeout=SOURCE_TIMEOUT_SECONDS) as response:
             declared = response.headers.get("Content-Length")
             if declared is not None and int(declared) > MAX_SOURCE_BYTES:
                 raise MediaSyncError("SOURCE_TOO_LARGE")

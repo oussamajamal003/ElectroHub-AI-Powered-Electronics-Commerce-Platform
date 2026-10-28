@@ -159,7 +159,7 @@ def test_worker_claim_and_publish_sql_are_leased_and_source_guarded() -> None:
     assert "FOR UPDATE SKIP LOCKED" in _CLAIM_SQL
     assert "state IN ('READY', 'RETRY_WAIT', 'CLAIMED')" in _CLAIM_SQL
     assert "claimedUntil" in _CLAIM_SQL and "leaseToken" in _CLAIM_SQL
-    assert "attemptCount\" >= %s" in _EXHAUSTED_LEASE_SQL
+    assert 'attemptCount" >= %s' in _EXHAUSTED_LEASE_SQL
     assert "LIMIT 100" in _EXHAUSTED_LEASE_SQL
     assert "FOR UPDATE SKIP LOCKED" in _EXHAUSTED_LEASE_SQL
     assert "'LEASE_EXHAUSTED'" in _EXHAUSTED_LEASE_SQL
@@ -253,7 +253,7 @@ def test_reconciliation_sql_is_idempotent_and_requeues_only_recoverable_terminal
     assert "ai.enqueue_missing_media_events(p_limit INTEGER DEFAULT 100)" in migration
     assert "p_limit > 100" in migration
     assert "'reconcile:' || candidate.embedding_version" in migration
-    assert "ON CONFLICT (\"idempotencyKey\") DO UPDATE" in migration
+    assert 'ON CONFLICT ("idempotencyKey") DO UPDATE' in migration
     assert "state IN ('SUPERSEDED', 'COMPLETED')" in migration
     assert "state IN ('READY', 'CLAIMED', 'RETRY_WAIT', 'PERMANENT_FAILURE')" in migration
     assert "operation" in migration and "'RECONCILE'" in migration
