@@ -45,15 +45,64 @@ JOIN ai.model_versions AS m ON m.embedding_version = a.embedding_version
 WHERE a.singleton
 """
 
-_INDEXED_COUNT_SQL: Final = """
+_COVERAGE_SQL: Final = """
+SELECT count(*) AS eligible,
+       count(*) FILTER (WHERE covered.product_image_id IS NOT NULL) AS indexed
+FROM ai.catalog_media_sources AS source
+LEFT JOIN LATERAL (
+    SELECT base.product_image_id
+    FROM ai.product_image_embeddings AS base
+    WHERE source.eligible
+      AND source.source_revision IS NULL
+      AND base.embedding_version = %s
+      AND base.product_image_id = source.product_image_id
+      AND base.product_id = source.product_id
+    UNION ALL
+    SELECT overlay.product_image_id
+    FROM ai.media_image_embeddings AS overlay
+    WHERE source.eligible
+      AND source.source_revision IS NOT NULL
+      AND overlay.embedding_version = %s
+      AND overlay.product_image_id = source.product_image_id
+      AND overlay.product_id = source.product_id
+      AND overlay.source_revision = source.source_revision
+      AND overlay.source_sha256 = source.source_sha256
+    LIMIT 1
+) AS covered ON TRUE
+WHERE source.eligible
+"""
+
+_BASE_COUNT_SQL: Final = """
 SELECT count(*) FROM ai.product_image_embeddings WHERE embedding_version = %s
 """
 
 _NEAREST_SQL: Final = """
-SELECT product_id, MIN(embedding <=> %s::vector) AS d
-FROM ai.product_image_embeddings
-WHERE embedding_version = %s
-GROUP BY product_id
+WITH eligible_vectors AS (
+    SELECT base.product_id, base.embedding
+    FROM ai.product_image_embeddings AS base
+    JOIN ai.catalog_media_sources AS source
+      ON source.product_image_id = base.product_image_id
+     AND source.product_id = base.product_id
+    WHERE base.embedding_version = %s
+      AND source.eligible
+      AND source.source_revision IS NULL
+    UNION ALL
+    SELECT overlay.product_id, overlay.embedding
+    FROM ai.media_image_embeddings AS overlay
+    JOIN ai.catalog_media_sources AS source
+      ON source.product_image_id = overlay.product_image_id
+     AND source.product_id = overlay.product_id
+    WHERE overlay.embedding_version = %s
+      AND source.eligible
+      AND source.source_revision IS NOT NULL
+      AND overlay.source_revision = source.source_revision
+      AND overlay.source_sha256 = source.source_sha256
+), product_distances AS (
+    SELECT product_id, MIN(embedding <=> %s::vector) AS d
+    FROM eligible_vectors
+    GROUP BY product_id
+)
+SELECT product_id, d FROM product_distances
 ORDER BY d ASC, product_id ASC
 LIMIT %s
 """
@@ -111,6 +160,7 @@ class PgVectorGateway:
         self._pool: _Pool | None = None
         self._open_lock = asyncio.Lock()
         self._opened = False
+        self._last_coverage: tuple[str, int, int] | None = None
 
     def __repr__(self) -> str:
         return "PgVectorGateway(<redacted>)"
@@ -142,8 +192,30 @@ class PgVectorGateway:
                 expected = active[7]
                 if expected is None or int(expected) <= 0:
                     return False
-                count_row = await _fetch_one(conn, _INDEXED_COUNT_SQL, (descriptor.embedding_version,))
-                return count_row is not None and int(count_row[0]) == int(expected)
+                base_count = await _fetch_one(conn, _BASE_COUNT_SQL, (descriptor.embedding_version,))
+                if base_count is None or int(base_count[0]) != int(expected):
+                    return False
+                # Coverage is intentionally separate from model readiness. Newly published images are excluded
+                # until the overlay worker catches up; they must not make the whole search endpoint unavailable.
+                coverage = await _fetch_one(
+                    conn,
+                    _COVERAGE_SQL,
+                    (descriptor.embedding_version, descriptor.embedding_version),
+                )
+                if coverage is not None:
+                    eligible, indexed = int(coverage[0]), int(coverage[1])
+                    snapshot = (descriptor.embedding_version, eligible, indexed)
+                    if snapshot != self._last_coverage:
+                        log_event(
+                            "ai.media_index_coverage",
+                            level=logging.INFO if eligible == indexed else logging.WARNING,
+                            activeVersion=descriptor.embedding_version,
+                            eligibleCount=eligible,
+                            indexedCount=indexed,
+                            pendingCount=max(0, eligible - indexed),
+                        )
+                        self._last_coverage = snapshot
+                return True
         except (psycopg.Error, TimeoutError) as exc:
             log_event("ai.index_unavailable", level=logging.WARNING, exception=type(exc).__name__)
             return False
@@ -167,7 +239,10 @@ class PgVectorGateway:
                 active = await _fetch_one(conn, _ACTIVE_SQL)
                 if active is None or not _identity_matches(active, descriptor):
                     raise IndexNotReadyError()
-                cursor = await conn.execute(_NEAREST_SQL, (literal, descriptor.embedding_version, top_k))
+                cursor = await conn.execute(
+                    _NEAREST_SQL,
+                    (descriptor.embedding_version, descriptor.embedding_version, literal, top_k),
+                )
                 rows = await cursor.fetchall()
         except (psycopg.Error, TimeoutError) as exc:
             log_event("ai.index_query_failed", level=logging.ERROR, exception=type(exc).__name__)
@@ -185,6 +260,7 @@ class PgVectorGateway:
     async def close(self) -> None:
         pool, self._pool = self._pool, None
         self._opened = False
+        self._last_coverage = None
         if pool is not None:
             await pool.close()
 

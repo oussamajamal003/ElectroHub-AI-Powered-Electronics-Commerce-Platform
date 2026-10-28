@@ -12,8 +12,11 @@ export type AiServiceEnvironment = (typeof AI_SERVICE_ENVIRONMENTS)[number];
 export const AI_DEFAULT_TIMEOUT_MS = 2500;
 export const AI_MIN_TIMEOUT_MS = 100;
 export const AI_MAX_TIMEOUT_MS = 10_000;
-/** Task 04.2: route-specific budget for public image search (upload + CPU inference); other operations keep the default. */
-export const AI_DEFAULT_IMAGE_SEARCH_TIMEOUT_MS = 8000;
+/**
+ * Bounded route-specific budget for public image search (upload, inference, and vector retrieval).
+ * A real DEV search completed in 14.2 s, so the old 8 s default aborted valid indexed searches.
+ */
+export const AI_DEFAULT_IMAGE_SEARCH_TIMEOUT_MS = 15_000;
 export const AI_MAX_IMAGE_SEARCH_TIMEOUT_MS = 15_000;
 /** Express-side response cap (contract: 256 KiB). */
 export const AI_MAX_RESPONSE_BYTES = 256 * 1024;

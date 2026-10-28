@@ -186,7 +186,7 @@ Important integrations include:
 Supabase PostgreSQL
 Stripe Test Mode
 Brevo
-Cloudinary
+Supabase Storage
 FastAPI
 Socket.IO
 ```

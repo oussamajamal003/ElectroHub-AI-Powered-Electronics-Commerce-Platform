@@ -45,6 +45,8 @@ const ConfirmationPage = lazy(() => import('@/features/checkout/ConfirmationPage
 const PaymentRetryPage = lazy(() => import('@/features/checkout/PaymentRetryPage').then(module => ({ default: module.PaymentRetryPage })));
 const OrderDetailsPage = lazy(() => import('@/features/orders/OrderDetailsPage').then(module => ({ default: module.OrderDetailsPage })));
 const PaymentStatusPage = lazy(() => import('@/features/checkout/PaymentStatusPage').then(module => ({ default: module.PaymentStatusPage })));
+const AdminProductsPage = lazy(() => import('@/pages/admin/AdminProductsPage').then(module => ({ default: module.AdminProductsPage })));
+const AdminProductMediaPage = lazy(() => import('@/pages/admin/AdminProductMediaPage').then(module => ({ default: module.AdminProductMediaPage })));
 const route = (content: React.ReactNode) => <Suspense fallback={<ElectroHubLoader page />}>{content}</Suspense>;
 
 export function AppRoutes() {
@@ -91,7 +93,8 @@ export function AppRoutes() {
         <Route element={<ProtectedRoute requiredRole="ADMIN" redirectTo="/admin/login" />}>
           <Route element={<AdminLayout />}>
             <Route path="/admin" element={<div>Admin Dashboard</div>} />
-            {/* Add more admin routes here later */}
+            <Route path="/admin/products" element={route(<AdminProductsPage />)} />
+            <Route path="/admin/products/:productId/media" element={route(<AdminProductMediaPage />)} />
           </Route>
         </Route>
 

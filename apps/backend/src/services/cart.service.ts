@@ -20,7 +20,7 @@ const productSelect = {
   id: true, slug: true, name: true, sku: true, categoryId: true, price: true, status: true, isTestFixture: true,
   category: { select: { name: true, isActive: true } },
   inventory: { select: { quantity: true, lowStockAt: true } },
-  images: { take: 1, orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }], select: { url: true, altText: true } },
+  images: { where: { mediaState: 'PUBLISHED' }, take: 1, orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }], select: { url: true, altText: true } },
 } satisfies Prisma.ProductSelect;
 
 type CartProduct = Prisma.ProductGetPayload<{ select: typeof productSelect }>;

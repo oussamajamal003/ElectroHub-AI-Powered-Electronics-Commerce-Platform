@@ -75,7 +75,7 @@ JWT
 Socket.IO
 Stripe
 Brevo Integration
-Cloudinary Integration
+Supabase Storage Integration
 PDF Generation
 ```
 

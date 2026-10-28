@@ -58,7 +58,7 @@ The project intentionally avoids unnecessary framework and UI-library complexity
 | Payments | Stripe |
 | Email Service | Brevo |
 | PDF Generation | PDF generation library |
-| Image Storage | Cloudinary |
+| Image Storage | Supabase Storage |
 | Containers | Docker |
 | CI/CD | GitHub Actions |
 | Production Cloud | DigitalOcean |
@@ -671,21 +671,18 @@ PDF generation must not expose sensitive payment information such as full card n
 
 ---
 
-# 20. Image Management
+# 20. Image Management & Storage
 
-## 20.1 Cloudinary
+## 20.1 Supabase Storage
 
-Cloudinary is used for product image storage and delivery.
+Supabase Storage is the official product image storage and delivery provider for ElectroHub.
 
-Responsibilities include:
-
-- Product image storage
-- Image URLs
-- Image transformations
-- Image delivery
-- Image optimization where applicable
-
-The application should avoid storing large binary image files directly inside the Git repository or PostgreSQL database.
+Architecture:
+- **Upload Flow:** React Admin Console → Express backend (authentication via `requireRole('ADMIN')`, MIME/size validation via Multer, image dimensions check) → Supabase Storage (authenticated server-side client).
+- **Persistence:** Metadata stored in PostgreSQL via Prisma `ProductImage` (`url`, `storagePath`, `altText`, `sortOrder`, `isPrimary`).
+- **AI Embedding Synchronization:** Durable transactional outbox pattern triggers asynchronous background processing by the FastAPI AI service to update `ai.product_image_embeddings` in pgvector without mutating immutable ACTIVE models.
+- **Environment Isolation:** DEV project (`pzxekjybdiulzmssalfo`) and PROD project (`yepfgjehdstlxbpespun`) maintain strictly isolated buckets (`product-media`).
+- **Delivery:** High-performance public CDN delivery directly to the storefront; avoids storing large binary media files in Git or relational table rows.
 
 ---
 
@@ -719,7 +716,7 @@ Docker Compose is used to orchestrate the local multi-service environment.
 
 The development environment should make it possible to run the required application services together.
 
-External managed services such as Supabase, Cloudinary, and Stripe remain external dependencies.
+External managed services such as Supabase (PostgreSQL & Storage) and Stripe remain external dependencies.
 
 ---
 
@@ -921,7 +918,7 @@ Database
 Supabase PostgreSQL
 
 Supporting Services
-Cloudinary
+Supabase Storage
 Brevo
 Stripe Test Mode
 ```
@@ -955,7 +952,7 @@ External managed services:
 
 ```text
 Supabase PostgreSQL
-Cloudinary
+Supabase Storage
 Brevo
 Stripe
 OpenStreetMap

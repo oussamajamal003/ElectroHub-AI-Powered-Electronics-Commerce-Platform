@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AI_DEFAULT_TIMEOUT_MS, AI_MAX_RESPONSE_BYTES, resolveAiServiceConfig } from '../ai.config.js';
+import { AI_DEFAULT_IMAGE_SEARCH_TIMEOUT_MS, AI_DEFAULT_TIMEOUT_MS, AI_MAX_IMAGE_SEARCH_TIMEOUT_MS, AI_MAX_RESPONSE_BYTES, resolveAiServiceConfig } from '../ai.config.js';
 
 const KEY = 'k7Qp2Zr9Xw4Lm8Nv3Bt6Hy1Jd5Fs0Gc_AiSvc';
 const base = { AI_SERVICE_URL: 'http://127.0.0.1:8000', AI_SERVICE_API_KEY: KEY, AI_SERVICE_ENVIRONMENT: 'development' };
@@ -91,9 +91,11 @@ describe('resolveAiServiceConfig', () => {
 
 describe('image search timeout (Task 04.2)', () => {
   const base = { AI_SERVICE_URL: 'http://localhost:8000', AI_SERVICE_API_KEY: KEY, AI_SERVICE_ENVIRONMENT: 'development' };
-  it('defaults to 8000 ms and accepts the 15000 ms maximum', () => {
-    expect(resolveAiServiceConfig(base, 'development')).toMatchObject({ status: 'enabled', imageSearchTimeoutMs: 8000 });
-    expect(resolveAiServiceConfig({ ...base, AI_IMAGE_SEARCH_TIMEOUT_MS: '15000' }, 'development')).toMatchObject({ status: 'enabled', imageSearchTimeoutMs: 15000 });
+  it('uses a bounded 15000 ms default and accepts the configured maximum', () => {
+    expect(AI_DEFAULT_IMAGE_SEARCH_TIMEOUT_MS).toBe(15_000);
+    expect(resolveAiServiceConfig(base, 'development')).toMatchObject({ status: 'enabled', imageSearchTimeoutMs: AI_DEFAULT_IMAGE_SEARCH_TIMEOUT_MS });
+    expect(resolveAiServiceConfig({ ...base, AI_IMAGE_SEARCH_TIMEOUT_MS: String(AI_MAX_IMAGE_SEARCH_TIMEOUT_MS) }, 'development'))
+      .toMatchObject({ status: 'enabled', imageSearchTimeoutMs: AI_MAX_IMAGE_SEARCH_TIMEOUT_MS });
   });
   it.each([['14999999'], ['15001'], ['99'], ['abc']])('rejects out-of-range or malformed value %s as a misconfiguration', (value) => {
     const result = resolveAiServiceConfig({ ...base, AI_IMAGE_SEARCH_TIMEOUT_MS: value }, 'development');

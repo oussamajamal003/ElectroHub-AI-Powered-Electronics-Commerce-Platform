@@ -1201,7 +1201,7 @@ Product images
 → Application content
 ```
 
-Optimize product/media assets appropriately and use Cloudinary for production image management.
+Optimize product/media assets appropriately and use Supabase Storage for production image management.
 
 Do not duplicate visual source-of-truth information across many unrelated asset folders.
 

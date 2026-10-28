@@ -248,7 +248,7 @@ Gallery Image
 Additional Product Image
 ```
 
-Product image references may point to Cloudinary-hosted assets.
+Product image references point to Supabase Storage hosted assets in the 'product-media' bucket.
 
 ---
 
@@ -709,7 +709,7 @@ Stripe
 Brevo
  └── Transactional Email
 
-Cloudinary
+Supabase Storage
  └── Product Media
 
 FastAPI

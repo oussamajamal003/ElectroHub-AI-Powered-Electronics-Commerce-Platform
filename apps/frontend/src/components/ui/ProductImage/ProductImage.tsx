@@ -10,38 +10,35 @@ export interface ProductImageProps extends React.ImgHTMLAttributes<HTMLImageElem
 export function ProductImage({
   src,
   alt,
-  fallbackText = 'Image unavailable',
+  fallbackText,
   containerClassName = '',
   className = '',
   ...props
 }: ProductImageProps) {
-  const [hasError, setHasError] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  const handleError = () => {
-    setHasError(true);
-  };
-
-  const handleLoad = () => {
-    setIsLoaded(true);
-  };
+  const [failedSource, setFailedSource] = useState<string | null>(null);
+  const [loadedSource, setLoadedSource] = useState<string | null>(null);
+  const hasError = failedSource === src;
+  const isLoaded = loadedSource === src;
+  const description = typeof alt === 'string' ? alt.trim() : '';
+  const unavailableText = fallbackText ?? (description ? `Photo unavailable: ${description}` : 'Photo unavailable');
 
   return (
     <div className={`${styles.container} ${containerClassName}`} data-testid="product-image-container">
       {!hasError && src ? (
         <img
+          key={src}
           src={src}
-          alt={alt}
+          alt={description ? alt : ''}
           className={`${styles.image} ${isLoaded ? styles.loaded : ''} ${className}`}
-          onError={handleError}
-          onLoad={handleLoad}
+          onError={() => setFailedSource(src)}
+          onLoad={() => setLoadedSource(src)}
           {...props}
         />
       ) : (
         // An informative alt survives the fallback; decorative images (alt="") stay silent.
-        <div className={styles.fallback} data-testid="product-image-fallback" {...(alt ? { role: 'img', 'aria-label': alt } : {})}>
+        <div className={styles.fallback} data-testid="product-image-fallback" {...(description ? { role: 'img', 'aria-label': description } : {})}>
           <ImageIcon className={styles.fallbackIcon} aria-hidden="true" />
-          <span className={styles.fallbackText}>{fallbackText}</span>
+          <span className={styles.fallbackText}>{unavailableText}</span>
         </div>
       )}
       {!isLoaded && !hasError && src && (

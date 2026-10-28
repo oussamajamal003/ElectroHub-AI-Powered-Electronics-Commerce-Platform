@@ -1085,7 +1085,7 @@ Refresh Tokens
 Database Credentials
 Stripe Secrets
 Brevo API Keys
-Cloudinary Private Credentials
+Supabase Service Role Credentials
 Other Secrets
 ```
 

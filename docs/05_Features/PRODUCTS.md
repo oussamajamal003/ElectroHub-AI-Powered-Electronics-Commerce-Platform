@@ -96,27 +96,31 @@ Where applicable, the page may also expose related products.
 
 ---
 
-## 5. Product Images
+## 5. Product Images & AI Embedding Synchronization
 
-Product images are managed through Cloudinary where appropriate.
+Product images are managed through Supabase Storage with durable AI embedding synchronization.
 
 Flow:
 
 ```text
-Admin
+React Admin Console
+ ↓ (Multipart form upload + JWT)
+Express Backend API (Admin auth + Multer validation)
  ↓
-Product Image Upload
+Supabase Storage ('product-media' bucket)
  ↓
-Cloudinary
+Prisma Database Transaction
+ ├── ProductImage record (url, storagePath, sortOrder, isPrimary)
+ └── MediaOutbox record (status: PENDING)
  ↓
-Image URL / Metadata
+FastAPI AI Service Worker
  ↓
-Product Record
+ai.product_image_embeddings (pgvector)
  ↓
-Frontend
+Customer Frontend Delivery (Supabase Storage CDN)
 ```
 
-Images should be optimized for the required display sizes.
+Images must be validated for MIME type (image/jpeg, image/png, image/webp) and size (<= 5MB) on upload. Multiple images per product are supported with explicit primary designation and display ordering. Embedding versioning guarantees that search embeddings accurately match current catalog media.
 
 ---
 

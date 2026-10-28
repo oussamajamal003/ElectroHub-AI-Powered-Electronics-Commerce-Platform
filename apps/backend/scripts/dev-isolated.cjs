@@ -90,6 +90,10 @@ function childEnvironment(isolated, mail, extra = {}, source = process.env) {
   environment.AI_SERVICE_ENVIRONMENT = 'qa';
   environment.AI_SERVICE_TIMEOUT_MS = source.ISOLATED_AI_SERVICE_TIMEOUT_MS ?? '';
   environment.AI_IMAGE_SEARCH_TIMEOUT_MS = source.ISOLATED_AI_IMAGE_SEARCH_TIMEOUT_MS ?? '';
+  // Catalog media must never inherit a shared project's write credential during isolated QA.
+  for (const name of ['SUPABASE_URL', 'SUPABASE_SECRET_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_PROJECT_REF', 'PRODUCT_MEDIA_BUCKET']) {
+    environment[name] = source[`ISOLATED_${name}`] ?? '';
+  }
   return environment;
 }
 

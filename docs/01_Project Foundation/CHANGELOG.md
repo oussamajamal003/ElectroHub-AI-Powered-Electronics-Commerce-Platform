@@ -136,7 +136,7 @@ Approved the primary technology stack:
 
 - Stripe
 - Brevo
-- Cloudinary
+- Supabase Storage
 - OpenStreetMap
 
 **Infrastructure**
@@ -295,7 +295,7 @@ Planned advanced capabilities include:
 - Image upload
 - Device camera capture
 - Similar-product matching
-- Cloudinary integration
+- Supabase Storage integration
 - AI product recommendations
 - Personalized recommendations
 - Similar products
@@ -414,7 +414,7 @@ Planned production configuration includes:
 - Database connectivity
 - Brevo
 - Stripe
-- Cloudinary
+- Supabase Storage
 - FastAPI
 - Socket.IO
 

@@ -56,7 +56,7 @@ The diagrams are conceptual representations. Detailed implementation behavior re
                     │                                       │
                     ▼                             ┌─────────┼─────────┐
           ┌──────────────────┐                     ▼         ▼         ▼
-          │ Supabase         │                  Stripe     Brevo   Cloudinary
+          │ Supabase         │                  Stripe     Brevo   Supabase Storage
           │ PostgreSQL       │
           └──────────────────┘
 ```
@@ -448,24 +448,22 @@ Behavior-Based
 
 ---
 
-# 17. Cloudinary Media Flow
+# 17. Product Media & Embedding Synchronization Flow
 
 ```text
-Admin
- ↓
-Product Management
- ↓
-Backend
- ↓
-Cloudinary
- ↓
-Image URL / Metadata
- ↓
-PostgreSQL
- ↓
-Product API
- ↓
-Frontend
+Admin Console (React)
+ ↓ (Authorized Upload / Reorder / Delete)
+Backend (Express + requireRole('ADMIN'))
+ ↓ (Validation, Multipart / Memory Parsing)
+Supabase Storage (`product-media` bucket)
+ ↓ (Storage Path & Public CDN URL)
+PostgreSQL / Prisma (`ProductImage` + `MediaOutbox`)
+ ↓ (Transactional Outbox Event)
+FastAPI AI Service
+ ↓ (Vector Invalidation / Ingestion)
+pgvector (`ai.product_image_embeddings`)
+ ↓ (Visual Search Ready)
+Storefront (Customer Discovery)
 ```
 
 ---
@@ -558,7 +556,7 @@ The AI service does not own commerce state.
       PostgreSQL      Test Mode        Email
                           │
                           ▼
-                      Cloudinary
+                  Supabase Storage
 ```
 
 ---
@@ -649,7 +647,7 @@ Sensitive operations remain behind the backend.
        ┌───────────────┼────────────────┐
        │               │                │
        ▼               ▼                ▼
-     Stripe           Brevo         Cloudinary
+     Stripe           Brevo         Supabase Storage
     Payments          Email            Media
        │
        └─────────────────────────────────┐

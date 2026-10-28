@@ -214,7 +214,7 @@ JWT secrets
 Database credentials
 Stripe secrets
 Brevo credentials
-Cloudinary credentials
+Supabase Storage credentials
 ```
 
 Never commit production secrets.
@@ -246,7 +246,7 @@ Examples:
 ```text
 Stripe
 Brevo
-Cloudinary
+Supabase Storage
 FastAPI
 ```
 

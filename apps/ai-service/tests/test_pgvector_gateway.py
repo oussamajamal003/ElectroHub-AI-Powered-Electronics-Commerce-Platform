@@ -48,9 +48,17 @@ class FakeCursor:
 class FakeDatabase:
     """Answers the gateway's three statement shapes and records every (sql, params) it was asked to run."""
 
-    def __init__(self, *, active: tuple[Any, ...] | None = ACTIVE_ROW, indexed: int = 3, nearest: Sequence[Any] = ()):
+    def __init__(
+        self,
+        *,
+        active: tuple[Any, ...] | None = ACTIVE_ROW,
+        indexed: int = 3,
+        base_indexed: int = 3,
+        nearest: Sequence[Any] = (),
+    ):
         self.active = active
         self.indexed = indexed
+        self.base_indexed = base_indexed
         self.nearest_rows = list(nearest)
         self.executed: list[tuple[str, Sequence[object] | None]] = []
         self.opened = 0
@@ -68,6 +76,10 @@ class FakeDatabase:
             if self._active_reads > 1 and self.active_changes_after_first_read is not None:
                 return FakeCursor([self.active_changes_after_first_read])
             return FakeCursor([] if self.active is None else [self.active])
+        if "FROM ai.catalog_media_sources" in query:
+            return FakeCursor([(3, self.indexed)])
+        if "SELECT count(*) FROM ai.product_image_embeddings" in query:
+            return FakeCursor([(self.base_indexed,)])
         if "count(*)" in query:
             return FakeCursor([(self.indexed,)])
         if "GROUP BY product_id" in query:
@@ -107,7 +119,13 @@ def gateway_for(db: FakeDatabase) -> PgVectorGateway:
 
 
 def run(coro: Any) -> Any:
-    return asyncio.run(coro)
+    # Psycopg's asyncio driver needs a selector loop on Windows; the Proactor loop can hang while
+    # creating its self-pipe in restricted development environments.
+    loop = asyncio.SelectorEventLoop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 def ranked_rows(*distances: float) -> list[tuple[uuid.UUID, float]]:
@@ -117,7 +135,7 @@ def ranked_rows(*distances: float) -> list[tuple[uuid.UUID, float]]:
 # --- readiness -----------------------------------------------------------------------------------------------------
 
 
-def test_ready_only_when_active_identity_matches_and_every_expected_image_is_indexed() -> None:
+def test_ready_when_active_identity_is_compatible_even_if_media_overlay_is_pending() -> None:
     db = FakeDatabase(active=ACTIVE_ROW, indexed=3)
     assert run(gateway_for(db).is_ready(DESCRIPTOR)) is True
 
@@ -134,11 +152,11 @@ def test_ready_only_when_active_identity_matches_and_every_expected_image_is_ind
         {"expected": None},
         {"expected": 0},
         {"embedding_version": "other-emb"},
-        {"indexed": 2},
+        {"base_indexed": 2},
         {"active": None},
     ],
 )
-def test_any_identity_or_coverage_mismatch_is_not_ready(change: dict[str, Any]) -> None:
+def test_any_active_identity_or_base_snapshot_mismatch_is_not_ready(change: dict[str, Any]) -> None:
     fields = {
         "embedding_version": DESCRIPTOR.embedding_version,
         "model_version": DESCRIPTOR.model_version,
@@ -150,6 +168,7 @@ def test_any_identity_or_coverage_mismatch_is_not_ready(change: dict[str, Any]) 
         "expected": 3,
     }
     indexed = change.pop("indexed", 3)
+    base_indexed = change.pop("base_indexed", 3)
     active_override = change.pop("active", "unset")
     fields.update(change)
     active: tuple[Any, ...] | None = (
@@ -166,7 +185,7 @@ def test_any_identity_or_coverage_mismatch_is_not_ready(change: dict[str, Any]) 
             fields["expected"],
         )
     )
-    db = FakeDatabase(active=active, indexed=indexed)
+    db = FakeDatabase(active=active, indexed=indexed, base_indexed=base_indexed)
     assert run(gateway_for(db).is_ready(DESCRIPTOR)) is False
 
 
@@ -205,8 +224,18 @@ def test_nearest_query_is_parameterised_and_never_interpolates_values() -> None:
     query, params = next((q, p) for q, p in db.executed if "GROUP BY product_id" in q)
     assert "%s::vector" in query and "embedding_version = %s" in query and "LIMIT %s" in query
     assert DESCRIPTOR.embedding_version not in query and "0.5" not in query
-    assert params == ("[0.5,0.5,0.5,0.5]", DESCRIPTOR.embedding_version, 7)
+    assert params == (DESCRIPTOR.embedding_version, DESCRIPTOR.embedding_version, "[0.5,0.5,0.5,0.5]", 7)
     assert "ORDER BY d ASC, product_id ASC" in query
+    assert "source.source_revision IS NULL" in query
+    assert "overlay.source_revision = source.source_revision" in query
+    assert "overlay.source_sha256 = source.source_sha256" in query
+    assert "source.eligible" in query
+
+
+def test_readiness_keeps_search_available_while_revision_overlay_is_pending() -> None:
+    db = FakeDatabase(active=ACTIVE_ROW, indexed=0)
+    assert run(gateway_for(db).is_ready(DESCRIPTOR)) is True
+    assert any("ai.catalog_media_sources" in query and "ai.media_image_embeddings" in query for query, _ in db.executed)
 
 
 def test_active_version_change_inside_the_transaction_is_an_index_miss() -> None:

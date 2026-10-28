@@ -207,7 +207,7 @@ Supporting infrastructure includes:
 
 ```
 Supabase PostgreSQL
-Cloudinary
+Supabase Storage
 Stripe
 Socket.IO
 Leaflet / OpenStreetMap
@@ -635,13 +635,14 @@ Prisma remains the application's database access layer.
 
 ---
 
-## Cloudinary
+## Supabase Storage
 
 Used for:
 
-- Product images 
-- Image asset storage 
-- Image delivery/optimization 
+- Authoritative product media storage
+- High-performance storefront image delivery
+- Administrative image upload, replacement, and reordering
+- Synchronization with AI catalog embeddings via transactional outbox
 
 ---
 
@@ -672,8 +673,7 @@ During development:
 
 - Local development 
 - Docker 
-- Supabase 
-- Cloudinary 
+- Supabase (PostgreSQL & Storage)
 - Stripe Test Mode 
 - GitHub Actions 
 

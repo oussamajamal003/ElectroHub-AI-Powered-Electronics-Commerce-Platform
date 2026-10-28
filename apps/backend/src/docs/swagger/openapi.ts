@@ -1,6 +1,7 @@
 import { schemas } from './schemas/index.js';
 import { productPaths, productSchemas } from './product.openapi.js';
 import { searchPaths, searchSchemas } from './search.openapi.js';
+import { productMediaPaths } from './product-media.openapi.js';
 
 /**
  * OpenAPI 3.0.0 Specification Definition.
@@ -49,5 +50,5 @@ export const openapiDefinition = {
     },
     schemas: { ...schemas, ...productSchemas, ...searchSchemas },
   },
-  paths: { ...productPaths, ...searchPaths },
+  paths: { ...productPaths, ...searchPaths, ...productMediaPaths },
 };

@@ -1,0 +1,14 @@
+@use '@/styles/abstracts' as *;
+.page { width: min(100%, 1120px); margin: 0 auto; display: grid; gap: $spacing-6; }
+.header { display: flex; align-items: end; justify-content: space-between; gap: $spacing-4; h1 { margin: 0 0 $spacing-2; font-size: clamp(1.6rem, 4vw, 2.25rem); color: $color-text-primary; } p { margin: 0; color: $color-text-secondary; } }
+.eyebrow { color: $color-primary !important; font-size: $font-size-xs; font-weight: $font-weight-semibold; letter-spacing: .08em; margin-bottom: $spacing-2 !important; }
+.count { color: $color-text-secondary; font-size: $font-size-sm; white-space: nowrap; }
+.list { list-style: none; margin: 0; padding: 0; border: 1px solid $color-border; border-radius: $radius-lg; background: $color-surface; overflow: hidden; li { display: flex; align-items: center; gap: $spacing-4; padding: $spacing-4; border-bottom: 1px solid $color-border; &:last-child { border-bottom: 0; } } }
+.productIcon { width: 44px; height: 44px; display: grid; place-items: center; color: $color-primary; background: rgba($color-primary, .08); border-radius: $radius-md; flex: 0 0 auto; }
+.productInfo { display: grid; gap: $spacing-1; min-width: 0; flex: 1; strong { color: $color-text-primary; overflow-wrap: anywhere; } span { color: $color-text-secondary; font-size: $font-size-sm; } }
+.state { padding: $spacing-8; text-align: center; color: $color-text-secondary; background: $color-surface; border: 1px dashed $color-border; border-radius: $radius-lg; }
+.loading { display: grid; place-items: center; min-height: 50vh; }
+.updateStatus { margin: -$spacing-4 0 0; color: $color-text-secondary; font-size: $font-size-sm; }
+.pagination { display: flex; align-items: center; justify-content: center; gap: $spacing-4; color: $color-text-secondary; font-size: $font-size-sm; }
+.manageLink { display: inline-flex; align-items: center; gap: $spacing-2; padding: $spacing-2 $spacing-3; border: 1px solid $color-border; border-radius: $radius-md; color: $color-text-primary; text-decoration: none; font-size: $font-size-sm; &:hover { color: $color-primary; border-color: $color-primary; } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
+@media (max-width: 600px) { .header { align-items: start; } .list li { align-items: start; flex-wrap: wrap; } .list li > a { margin-left: 60px; } }

@@ -68,3 +68,11 @@
   object-fit: cover;
   pointer-events: none; /* Prevent image dragging issues */
 }
+
+.thumbnailBtn > .thumbnailImageFrame {
+  border-radius: $radius-md;
+}
+
+.thumbnailBtn > .thumbnailImageFrame img {
+  object-fit: cover;
+}

@@ -8,7 +8,7 @@
 **Authoritative base:** **the locally verified approved integration state**, normally current `develop`; do not assume remote and local worktrees match  
 **Location for repository copy:** `docs/tasks/Phase-04/TASK_04.2_REAL_VISION_IMAGE_SEARCH_DISCOVERY_CONSOLE.md`  
 **Scope:** All task-owned offline data preparation, licensed-image acquisition, Kaggle GPU training and evaluation, secured artifact handoff, FastAPI CPU inference, versioned pgvector index and ingestion, Express public API/product resolution, existing Discovery Console completion, customer image-upload/camera UX, full results/navigation and end-to-end verification.  
-**Exclusions:** Complete Cloudinary image-management automation (04.3), real personalized recommendation training/deployment (04.4), delivery tracking/maps/Socket.IO (04.5–04.7), payment/auth rewrites, production deployment, and fabricated AI matching.  
+**Exclusions:** Complete Supabase Storage product image-management automation (04.3), real personalized recommendation training/deployment (04.4), delivery tracking/maps/Socket.IO (04.5–04.7), payment/auth rewrites, production deployment, and fabricated AI matching.  
 **Planning window:** Target **about five focused working days for 04.2** if the legal images and free GPU are available. The overall Phase 04 target is **14 days**, with a potential **2–3-day extension** if credible implementation/quality blockers warrant it. This is a risk-management target, not grounds to fake results, skip QA or bypass rights/production authorization.
 
 > **Required outcome:** A customer opens ElectroHub's global Discovery Console, uploads or photographs an electronic device, and receives real, ranked, catalog-authorized products from a **fine-tuned EfficientNet-B0 PyTorch embedding encoder** and **PostgreSQL pgvector** retrieval. The system is measurable on truly held-out photographs, version-consistent, safe against hostile uploads, accessible on desktop/mobile, operational on CPU, and does not degrade core commerce when AI fails.
@@ -54,7 +54,7 @@ These are binding design and verification constraints, placed here to prevent re
 | U42-12 | AI missing/slow/crashed/malformed must not stop conventional text search, products, cart, checkout, orders, Stripe/Brevo/PDF or the Express process. | AI-down smoke/regression |
 | U42-13 | A usable model and compatible **complete active** index are both required for `READY`; missing or stale index reports a truthful failure mode. | Readiness tests |
 | U42-14 | Actual deployed CPU inference fits measured memory/concurrency/timeout limits, or the service refuses readiness with accurate cause. | Benchmarks + load/failure smoke |
-| U42-15 | `04.2` finishes the retrieval pipeline; do not misreport `04.3` Cloudinary or `04.4` recommendation work as done. | Scope/diff review |
+| U42-15 | `04.2` finishes the retrieval pipeline; do not misreport `04.3` Supabase Storage or `04.4` recommendation work as done. | Scope/diff review |
 
 ---
 
@@ -175,7 +175,7 @@ OUTAGE: 503/unavailable image search -> honest retry/text fallback
 ### 2.2 Cross-task contracts
 
 - **04.2 owns:** real vision search, dataset/training/model/promotion, versioned vector search, catalog ingestion bootstrap and command-search completion.
-- **04.3 owns:** Cloudinary image hosting, admin upload lifecycle and automated embedding refresh/invalidation. Design a documented idempotent refresh interface in 04.2; do not preempt 04.3.
+- **04.3 owns:** Supabase Storage product image hosting, admin upload lifecycle and automated embedding refresh/invalidation. Design a documented idempotent refresh interface in 04.2; do not preempt 04.3.
 - **04.4 owns:** actual ML recommendations and behavioral personalization; it may reuse the stable visual encoder and embedding version. Do not turn `POST /internal/v1/recommendations` into fake image-search results.
 - **04.5–04.7:** delivery status/Leaflet/Socket.IO remain outside scope. Protect their route/secret separation.
 
@@ -413,7 +413,7 @@ Implement a deterministic CLI/job that:
 7. Validates nearest-neighbor queries and representative model-correct photos against actual product IDs. Verifies declared coverage of all *eligible* products (target 206, but report real count), not a fabricated guarantee.
 8. Activates atomically only if measured completeness, metadata hashes, model artifact and vector descriptor all match.
 9. Provides rollback/invalidation; archive/retire old version only after controlled observation window.
-10. Exposes a manual safe reindex for catalog changes to serve until 04.3 adds Cloudinary-driven auto-refresh.
+10. Exposes a manual safe reindex for catalog changes to serve until 04.3 adds Supabase Storage-driven auto-refresh.
 
 An image gallery with identical generated illustrations for many SKUs will **not** guarantee exact product retrieval. Record that limitation, rank by appearance family if justified and avoid false SKU precision. **No fake embeddings, random vectors or hardcoded label-to-product mapping in active data.**
 
@@ -455,7 +455,7 @@ Implement verified `ImageEmbeddingEncoder` loader for exported artifact, real im
 - Enforce decoded pixel count/dimensions, decoder warnings, EXIF orientation, Unicode filenames discarded, unsupported animated/multiframe images, malformed/truncated files and decompression bombs. Explicitly refuse or deterministically normalize alpha, color space and orientation as training expects.
 - No arbitrary user-supplied image URLs, fetch-from-URL, filesystem paths, zip extraction, redirects, external conversion programs, shell execution or serialized Python code.
 - Bound memory/CPU/concurrency; use `InferenceExecutor` or appropriate limited worker thread instead of blocking event loop; distinguish queue saturation (429/503) and actual inference timeout (504/controlled code).
-- Never store customer-uploaded raw bytes permanently, on Cloudinary, Kaggle, model training, DB telemetry, logs or disk by default. If a bounded temp path is unavoidable, use safe permissions, lifetime and immediate cleanup; prefer in-memory bounded processing.
+- Never store customer-uploaded raw bytes permanently, on Supabase Storage, Kaggle, model training, DB telemetry, logs or disk by default. If a bounded temp path is unavoidable, use safe permissions, lifetime and immediate cleanup; prefer in-memory bounded processing.
 - Do not leak weights/filesystem paths, SQL, stack traces, image bytes, embeddings, service keys or secret addresses in logs/errors; controlled correlation IDs only.
 - Validate vector norm, dimension and finiteness; reject invalid index data or shape mismatch before scoring.
 
@@ -825,7 +825,7 @@ The Architect reads this task prompt, implementation summary, changed files and 
 
 **Stop for handoff only when:** the real notebook has run; training rights gate is recorded; leakage-safe dataset and trained retrieval checkpoint exist; model/index version and full actual query pipeline work; upload/camera and command UI are demonstrated in the browser; DEV/QA isolation is proven; security/cancellation/performance/AI-down tests are credible; QA/CI is performed as authorized; no unresolved material defect remains; evidence is current. Do not continue speculative audits after these are met.
 
-**Explicitly NOT DONE by this task:** Kaggle account onboarding (already done), unrequested product-seed replay, Cloudinary production automation, 04.4 recommendation model, delivery maps/Socket.IO, production rollout, PR merge or Git commit/push without separate approval.
+**Explicitly NOT DONE by this task:** Kaggle account onboarding (already done), unrequested product-seed replay, Supabase Storage production automation, 04.4 recommendation model, delivery maps/Socket.IO, production rollout, PR merge or Git commit/push without separate approval.
 
 ---
 

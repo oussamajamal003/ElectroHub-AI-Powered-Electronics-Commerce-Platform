@@ -137,15 +137,17 @@ The API key must remain server-side.
 
 ---
 
-# 9. Cloudinary Variables
+# 9. Supabase Storage Variables
 
 Example:
 
 ```text
-CLOUDINARY_URL
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_STORAGE_BUCKET_PRODUCT_MEDIA
 ```
 
-Cloudinary credentials must never be exposed to the public frontend unless the specific architecture explicitly requires a safe public configuration.
+Supabase Storage service-role credentials must remain server-side and never be exposed to the public frontend. Buckets are isolated by environment (`product-media` with distinct DEV project `pzxekjybdiulzmssalfo` vs PROD project `yepfgjehdstlxbpespun`).
 
 ---
 
@@ -172,7 +174,7 @@ Database Passwords
 JWT Secrets
 Stripe Secret Keys
 Brevo API Keys
-Cloudinary Private Credentials
+Supabase Service Role Credentials
 ```
 
 into frontend-exposed variables.
@@ -287,7 +289,9 @@ JWT_REFRESH_SECRET
 STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET
 BREVO_API_KEY
-CLOUDINARY_URL
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_STORAGE_BUCKET_PRODUCT_MEDIA
 AI_SERVICE_URL
 ```
 

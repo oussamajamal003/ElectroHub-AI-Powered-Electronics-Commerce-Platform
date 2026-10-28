@@ -535,7 +535,7 @@ Database credentials
 JWT signing secrets
 Stripe secret keys
 Brevo API keys
-Cloudinary private credentials
+Supabase service role / administrative storage secrets
 ```
 
 Public/client-safe configuration must be clearly distinguished from server-only secrets.

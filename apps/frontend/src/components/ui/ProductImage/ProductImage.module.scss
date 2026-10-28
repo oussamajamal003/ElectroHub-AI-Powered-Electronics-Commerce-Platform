@@ -47,6 +47,9 @@
   font-family: $font-family-base;
   font-size: $font-size-sm;
   text-align: center;
+  max-width: 100%;
+  padding: 0 $spacing-2;
+  overflow-wrap: anywhere;
 }
 
 .loadingSkeleton {

@@ -354,13 +354,15 @@ Image contents must not be stored in analytics unnecessarily.
 
 ---
 
-# 21. Cloudinary
+# 21. Supabase Storage & Media Boundaries
 
-Cloudinary is intended for product media.
+Supabase Storage (the `product-media` bucket) is dedicated to catalog product media.
 
-Customer search images should not automatically be stored in Cloudinary.
+Customer search query images (captured via camera or uploaded) are ephemeral and must never be stored in Supabase Storage or persistent product media.
 
-Product catalog images and customer search inputs are separate data categories.
+Product catalog images and customer search inputs are strictly separate data categories:
+- Catalog media: Uploaded by authenticated administrators via Express, stored in Supabase Storage, tracked in `ProductImage`, and durably indexed via transactional outbox into `ai.product_image_embeddings`.
+- Search query images: Processed in-memory in FastAPI for feature extraction and similarity search against pgvector, then immediately discarded.
 
 ---
 
@@ -579,7 +581,7 @@ Load only trusted model artifacts, verify their identity/integrity, and avoid ex
 
 `POST /api/search/image` (Express; guests allowed). It accepts one multipart part named `image` (JPEG/PNG/WebP, detected by magic bytes, ≤ 8 MiB) and an optional `limit` of 1–24 (default 12). It is rate-limited to 20 requests per 5 minutes per IP. Cookies and JWTs are never forwarded.
 
-Express sends the bytes through `AiServiceClient.imageSearch`: per-environment service key, no redirects, a capped response, an 8 s route timeout (`AI_IMAGE_SEARCH_TIMEOUT_MS`, max 15 s), and abort on client disconnect. It validates the ranked product ids, then resolves them in **one** query that uses the same storefront-visibility predicate and `ProductSummary` mapper as `/api/search/products`. Rank order is preserved, hidden or forged ids are dropped, and prices and stock always come from the database.
+Express sends the bytes through `AiServiceClient.imageSearch`: per-environment service key, no redirects, a capped response, a 15 s bounded route timeout by default (`AI_IMAGE_SEARCH_TIMEOUT_MS`, max 15 s), and abort on client disconnect. The budget covers upload, inference, and vector retrieval; it was raised after a real DEV search completed in about 14.2 s but exceeded the former 8 s default. It validates the ranked product ids, then resolves them in **one** query that uses the same storefront-visibility predicate and `ProductSummary` mapper as `/api/search/products`. Rank order is preserved, hidden or forged ids are dropped, and prices and stock always come from the database.
 
 Response: `{ data: { items: ProductSummary[] }, meta: { modelVersion, embeddingVersion, count } }`. Similarity scores are never sent to the browser.
 

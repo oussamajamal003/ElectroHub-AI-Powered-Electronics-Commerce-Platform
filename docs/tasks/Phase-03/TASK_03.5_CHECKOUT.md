@@ -3042,7 +3042,7 @@ Likely relevant:
 - accessibility;
 - Definition of Done.
 
-Do not spend task time reading AI, Cloudinary, Email, PDF, Delivery Tracking, Admin analytics, or unrelated features unless a direct dependency is discovered.
+Do not spend task time reading AI, Supabase Storage, Email, PDF, Delivery Tracking, Admin analytics, or unrelated features unless a direct dependency is discovered.
 
 ---
 

@@ -196,7 +196,8 @@ JWT_REFRESH_SECRET
 STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET
 BREVO_API_KEY
-CLOUDINARY_URL
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
 DIGITALOCEAN_SSH_KEY
 ```
 
@@ -239,7 +240,7 @@ Examples:
 Test Database
 Stripe Test Mode
 Controlled Brevo Test Configuration
-Controlled Cloudinary Configuration
+Controlled Supabase Storage Bucket Configuration
 FastAPI Test Service
 ```
 

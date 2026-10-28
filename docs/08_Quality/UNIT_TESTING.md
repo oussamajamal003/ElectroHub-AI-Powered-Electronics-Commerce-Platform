@@ -95,7 +95,7 @@ A unit test should not require:
 Supabase
 Stripe
 Brevo
-Cloudinary
+Supabase Storage
 FastAPI Network Service
 DigitalOcean
 ```
@@ -327,7 +327,7 @@ Mocks may be used for:
 ```text
 Stripe Client
 Brevo Client
-Cloudinary Client
+Supabase Storage Client
 FastAPI Client
 Repository
 Clock

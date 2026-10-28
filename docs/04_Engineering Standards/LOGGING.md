@@ -455,9 +455,9 @@ External integrations include:
 ```text
 Stripe
 Brevo
-Cloudinary
+Supabase Storage
 FastAPI
-Supabase
+Supabase PostgreSQL
 ```
 
 Log:
@@ -507,7 +507,7 @@ Refresh tokens
 API keys
 Stripe secrets
 Brevo credentials
-Cloudinary secrets
+Supabase Storage credentials
 Database passwords
 Card data
 CVV

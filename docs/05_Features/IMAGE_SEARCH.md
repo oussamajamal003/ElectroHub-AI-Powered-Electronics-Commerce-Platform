@@ -318,13 +318,13 @@ Uploaded images should not be retained longer than required unless the product r
 
 ---
 
-## 17. Cloudinary
+## 17. Media Storage & Search Query Privacy
 
-Cloudinary may be used for product images and controlled media storage.
+Supabase Storage is used for catalog product images and controlled media storage under the `product-media` bucket.
 
-Product images follow the normal catalog media architecture.
+Product images follow the normal catalog media architecture, where upload and embedding synchronization (Task 04.3) maintains vector index parity in pgvector (`ai.product_image_embeddings`).
 
-User search images should not automatically become permanent product assets.
+User search query images (captured via camera or uploaded) are strictly ephemeral: they are processed in-memory for vector embedding generation and similarity search against pgvector. User search images are never written to Supabase Storage or retained in persistent product media.
 
 ---
 

@@ -94,6 +94,9 @@ cookies.txt
 apps/backend/.isolated/
 apps/backend/.isolated-docker/
 apps/backend/.ai-vector/
+apps/backend/.product-media/
+.vitest-tmp/
+apps/ai-service/.pytest-tmp-ai/
 
 # Local backend cache (test and tooling artifacts, never committed)
 apps/backend/.cache/

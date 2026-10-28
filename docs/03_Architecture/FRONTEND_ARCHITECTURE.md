@@ -38,6 +38,7 @@ TanStack Table
 Socket.IO Client
 Leaflet
 OpenStreetMap
+Supabase Storage (Product Media Delivery)
 ```
 
 Not used:
@@ -698,7 +699,46 @@ Tables should support appropriate:
 
 ---
 
-## 28. Styling Architecture
+## 28. Product Image Uploads & Media Delivery Architecture
+
+Product image management integrates an administrator editing surface with server-authorized storage and durable AI synchronization:
+
+```text
+React Admin Media Gallery / Uploader
+ │ (Drag-and-drop / file input + client validation)
+ │ multipart/form-data with admin JWT credentials
+ ▼
+Express API (`requireRole('ADMIN')`)
+ │ MIME & payload verification, bounds check
+ ▼
+Supabase Storage (`product-media` bucket)
+ │ Canonical storage path & public CDN URL
+ ▼
+Prisma Transaction (`ProductImage` + `MediaOutbox`)
+ │ Atomic metadata & durable event write
+ ▼
+FastAPI AI Service Worker
+ │ Background pgvector embedding invalidation & re-indexing
+ ▼
+Storefront UI Delivery (Customer Catalog, Cards, Details)
+```
+
+### 28.1 React Admin Media Uploads
+- **Upload Flow:** The admin media editor in `apps/frontend/src/features/admin/products/` allows administrators to select or drag-and-drop real product photographs.
+- **Client-Side Validation:** Pre-validates files before upload (MIME types: `image/jpeg`, `image/png`, `image/webp`; max file size ≤ 8 MiB; aspect ratio sanity check).
+- **Direct Upload Restriction:** The browser NEVER uploads directly to Supabase Storage and never receives Supabase service-role credentials. All mutations flow through Express (`/api/admin/products/:id/images`).
+- **Management Capabilities:** Supports multi-file uploads, thumbnail previews, primary image designation (`isPrimary`), display ordering (`sortOrder`), alt text editing, and image removal.
+- **State & Invalidation:** Managed via TanStack Query (`useMutation`); invalidates `['admin', 'products', id]` and public product queries on success.
+
+### 28.2 Storefront Media Delivery
+- **Public CDN Endpoints:** Storefront components (`ProductCard`, `ProductGallery`, `CartItem`, `WishlistItem`) consume public CDN URLs delivered from Supabase Storage (`https://<project-ref>.supabase.co/storage/v1/object/public/product-media/...`).
+- **Backward Compatibility:** Catalog image rendering components gracefully handle both new Supabase Storage canonical URLs and legacy relative paths (`/images/products/...`).
+- **Fallback & Loading States:** Previews provide skeleton loading indicators, smooth transition upon load, and explicit broken-image fallbacks without layout shifts.
+- **Separation from Customer Search Photos:** Customer search photos (Discovery Console camera captures / file uploads) are strictly transient and processed in-memory. They are never rendered or stored as catalog product media.
+
+---
+
+## 29. Styling Architecture
 
 The frontend uses:
 
@@ -726,7 +766,7 @@ Component-specific styles should normally use CSS Modules.
 
 ---
 
-## 29. UI Primitives and Icons
+## 30. UI Primitives and Icons
 
 Radix UI provides behavior/accessibility primitives where appropriate.
 
@@ -736,7 +776,7 @@ Lucide React is the approved icon library.
 
 ---
 
-## 30. Motion
+## 31. Motion
 
 Framer Motion is used for meaningful animation:
 
@@ -750,7 +790,7 @@ The frontend must respect `prefers-reduced-motion`.
 
 ---
 
-## 31. Loading, Empty, and Error States
+## 32. Loading, Empty, and Error States
 
 Loading should exist at the correct level:
 
@@ -778,7 +818,7 @@ Error states should distinguish validation, authentication, authorization, netwo
 
 ---
 
-## 32. Accessibility
+## 33. Accessibility
 
 The frontend must support:
 
@@ -796,7 +836,7 @@ Accessibility should be implemented in reusable components.
 
 ---
 
-## 33. Responsive Architecture
+## 34. Responsive Architecture
 
 Responsive behavior uses:
 
@@ -820,7 +860,7 @@ Follow `docs/02_Design/RESPONSIVE.md`.
 
 ---
 
-## 34. Performance
+## 35. Performance
 
 Frontend performance should consider:
 
@@ -837,7 +877,7 @@ Large feature areas may be lazy-loaded when beneficial.
 
 ---
 
-## 35. Security
+## 36. Security
 
 Frontend security includes:
 
@@ -852,7 +892,7 @@ The frontend is never the security boundary.
 
 ---
 
-## 36. Testing Architecture
+## 37. Testing Architecture
 
 Testing should cover:
 
@@ -872,7 +912,7 @@ Important reusable components should have focused component tests.
 
 ---
 
-## 37. Completion Criteria
+## 38. Completion Criteria
 
 The frontend architecture is complete when:
 
@@ -891,10 +931,11 @@ The frontend architecture is complete when:
 - Image search is defined.
 - Checkout/payment flows are defined.
 - Admin architecture is defined.
+- Media upload and Supabase Storage delivery are defined.
 - Testing strategy is defined.
 
 ---
 
-## 38. Frontend Principle
+## 39. Frontend Principle
 
 > **Keep pages compositional, features isolated, server state centralized, and reusable UI independent from business logic.**

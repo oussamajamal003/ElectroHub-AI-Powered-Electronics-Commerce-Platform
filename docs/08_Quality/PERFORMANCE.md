@@ -157,7 +157,7 @@ Performance should account for:
 ```text
 Stripe
 Brevo
-Cloudinary
+Supabase Storage
 FastAPI
 ```
 

@@ -201,7 +201,7 @@ Stores product-image references and metadata.
 |---|---|---|---|
 | id | UUID/String | PK | Image identifier |
 | product_id | UUID/String | FK | Related product |
-| url | String | NOT NULL | Cloudinary/media URL |
+| url | String | NOT NULL | Supabase Storage public CDN URL |
 | alt_text | String | NULLABLE | Accessibility text |
 | metadata | JSON | NULLABLE | Image metadata |
 | created_at | DateTime | NOT NULL | Creation timestamp |

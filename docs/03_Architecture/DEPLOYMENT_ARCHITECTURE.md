@@ -56,7 +56,7 @@ Docker Containers
         ├── Supabase PostgreSQL
         ├── Stripe
         ├── Brevo
-        └── Cloudinary
+        └── Supabase Storage
 ```
 
 Supabase PostgreSQL remains externally managed rather than running as a database container on the VPS.
@@ -308,7 +308,7 @@ The backend communicates with:
 Supabase PostgreSQL
 Stripe
 Brevo
-Cloudinary
+Supabase Storage
 ```
 
 External credentials are supplied through environment variables or deployment secrets.
@@ -335,7 +335,7 @@ Each environment may use different:
 - API keys.
 - Stripe configuration.
 - Brevo configuration.
-- Cloudinary configuration.
+- Supabase Storage configuration.
 - AI service URLs.
 
 Production secrets must never be committed.
@@ -354,7 +354,7 @@ JWT_SECRET
 JWT_REFRESH_SECRET
 STRIPE_SECRET_KEY
 BREVO_API_KEY
-CLOUDINARY credentials
+SUPABASE_SERVICE_ROLE_KEY
 AI_SERVICE_URL
 ```
 
@@ -495,7 +495,7 @@ JWT secrets
 Database credentials
 Stripe keys
 Brevo API key
-Cloudinary credentials
+Supabase Storage credentials
 Deployment credentials
 ```
 

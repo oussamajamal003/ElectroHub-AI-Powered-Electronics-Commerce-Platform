@@ -166,7 +166,7 @@ Commit
 External Notification
 ```
 
-Do not hold a database transaction open while waiting for Brevo, Stripe, Cloudinary, or FastAPI unless there is a specific architectural reason.
+Do not hold a database transaction open while waiting for Brevo, Stripe, Supabase Storage, or FastAPI unless there is a specific architectural reason.
 
 ---
 
@@ -205,7 +205,7 @@ Search-by-image should also enforce file-size and processing limits.
 
 ## 13. Image Performance
 
-Product images are served through Cloudinary where appropriate.
+Product images are served through Supabase Storage CDN where appropriate.
 
 Images should be:
 
@@ -282,7 +282,7 @@ External integrations include:
 ```text
 Stripe
 Brevo
-Cloudinary
+Supabase Storage
 FastAPI
 ```
 
@@ -449,7 +449,7 @@ Browser
 React Query
 Backend
 Database
-CDN / Cloudinary
+CDN / Supabase Storage
 ```
 
 Cached data must not become a source of incorrect authoritative business state.

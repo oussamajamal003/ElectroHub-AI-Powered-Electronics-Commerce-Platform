@@ -277,7 +277,7 @@ For 03.1, likely relevant documentation includes current versions of documents c
 - Branching
 - Code review
 
-Do not spend implementation time reading Stripe, Delivery, Socket.IO, AI image search, Cloudinary, Admin analytics, or other future-feature documentation unless an actual dependency discovered in the current code requires it.
+Do not spend implementation time reading Stripe, Delivery, Socket.IO, AI image search, Supabase Storage, Admin analytics, or other future-feature documentation unless an actual dependency discovered in the current code requires it.
 
 Document in the implementation handoff which docs were read and which docs were updated.
 
@@ -982,9 +982,9 @@ Support:
 - no thumbnail overflow;
 - graceful missing secondary images.
 
-Do not implement Cloudinary in 03.1.
+Do not implement Supabase Storage in 03.1.
 
-Cloudinary belongs to the later approved task.
+Supabase Storage belongs to the later approved task.
 
 Use the current approved ProductImage/media strategy and keep the implementation compatible with a future storage-provider change.
 
@@ -1510,7 +1510,7 @@ Coverage should include:
 
 Use the current approved media strategy.
 
-Do not prematurely introduce Cloudinary.
+Do not prematurely introduce Supabase Storage.
 
 Do not create fragile/unapproved hotlinks purely for visual appearance if current media conventions provide a safer option.
 
@@ -2693,7 +2693,7 @@ Unless already implemented and merely reused, do **not** implement these future 
 - transactional order emails — 03.8;
 - PDF order/payment documents — 03.9;
 - Image Search backend — 04.2;
-- Cloudinary — 04.3;
+- Supabase Storage — 04.3;
 - AI recommendations — 04.4;
 - delivery tracking — 04.5+;
 - Admin Product CRUD — Phase 05;
@@ -2911,7 +2911,7 @@ TASK 03.1 is **not ready for approval** if any of these remain:
 - PROD seeded;
 - destructive migration;
 - unreviewed schema drift;
-- Cloudinary implemented early without approval;
+- Supabase Storage implemented early without approval;
 - AI recommendations introduced in same-category section;
 - Cart/Wishlist/Checkout business logic reimplemented out of scope;
 - Critical/High security issue;

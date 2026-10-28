@@ -26,7 +26,7 @@ Supabase PostgreSQL
 DigitalOcean VPS
 Docker
 GitHub
-Cloudinary
+Supabase Storage
 ```
 
 The responsibilities are separated.
@@ -174,7 +174,7 @@ JWT_REFRESH_SECRET
 STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET
 BREVO_API_KEY
-CLOUDINARY_URL
+SUPABASE_SERVICE_ROLE_KEY
 AI_SERVICE_URL
 ```
 
@@ -184,11 +184,11 @@ Secrets must not be stored in public repositories.
 
 # 10. Media Recovery
 
-Cloudinary is used for application media where configured.
+Supabase Storage (`product-media` bucket) is used for application product media.
 
-Media recovery depends on the Cloudinary account and configured retention/backup capabilities.
+Media recovery depends on the Supabase project configuration, bucket retention, and backup capabilities.
 
-The application database should retain the required references to media assets.
+The PostgreSQL application database retains authoritative canonical references (`ProductImage` records with `url` and `storagePath`) and durable synchronization logs.
 
 ---
 

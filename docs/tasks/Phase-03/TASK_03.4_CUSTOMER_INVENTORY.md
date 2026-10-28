@@ -1808,7 +1808,7 @@ Likely relevant:
 - branching;
 - code review.
 
-Do not spend task time reading Stripe, Orders, Delivery, AI, PDFs, Email, Cloudinary, or analytics unless a direct dependency is discovered.
+Do not spend task time reading Stripe, Orders, Delivery, AI, PDFs, Email, Supabase Storage, or analytics unless a direct dependency is discovered.
 
 ---
 

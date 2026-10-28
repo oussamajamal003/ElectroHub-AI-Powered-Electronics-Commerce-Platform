@@ -34,6 +34,37 @@ MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_IMAGE_PIXELS = 40_000_000
 BATCH = 32
 
+_SNAPSHOT_COUNTS_SQL = """
+SELECT count(*) AS eligible,
+       count(e.product_image_id) AS matched,
+       count(*) FILTER (
+           WHERE source.source_revision IS NOT NULL
+             AND e.image_sha256 IS DISTINCT FROM source.source_sha256
+       ) AS digest_mismatch
+FROM ai.catalog_media_sources AS source
+LEFT JOIN ai.product_image_embeddings AS e
+  ON e.embedding_version = %s
+ AND e.product_image_id = source.product_image_id
+ AND e.product_id = source.product_id
+WHERE source.eligible
+"""
+
+_SNAPSHOT_STALE_SQL = """
+SELECT count(*)
+FROM ai.product_image_embeddings AS e
+LEFT JOIN ai.catalog_media_sources AS source
+  ON source.product_image_id = e.product_image_id
+ AND source.product_id = e.product_id
+ AND source.eligible
+WHERE e.embedding_version = %s
+  AND source.product_image_id IS NULL
+"""
+
+_SNAPSHOT_STORED_SQL = """
+SELECT count(*) FROM ai.product_image_embeddings WHERE embedding_version = %s
+"""
+_LOCK_CATALOG_SNAPSHOT_SQL = "LOCK TABLE public.products, public.categories, public.product_images IN SHARE MODE"
+
 
 def one(row: Any) -> Any:
     """fetchone() for aggregate queries that always return exactly one row."""
@@ -168,8 +199,38 @@ def stage(args: argparse.Namespace) -> None:
         )
 
 
+def verify_current_snapshot(conn: Any, embedding_version: str, expected_images: int | None) -> tuple[int, int]:
+    """Refuse activation unless every currently eligible image is represented by a current compatible base vector.
+
+    Legacy sources have no authoritative source digest; their existing staged vector remains compatible. Revisioned
+    media must match its canonical SHA-256. Extra hidden/retired vectors are rejected so a same-count ID swap cannot
+    pass the activation gate.
+    """
+    counts = one(conn.execute(_SNAPSHOT_COUNTS_SQL, (embedding_version,)).fetchone())
+    eligible, matched, digest_mismatch = (int(value) for value in counts)
+    stored = int(one(conn.execute(_SNAPSHOT_STORED_SQL, (embedding_version,)).fetchone())[0])
+    stale = int(one(conn.execute(_SNAPSHOT_STALE_SQL, (embedding_version,)).fetchone())[0])
+    if (
+        expected_images is None
+        or stored != expected_images
+        or eligible != expected_images
+        or matched != eligible
+        or digest_mismatch != 0
+        or stale != 0
+    ):
+        raise SystemExit(
+            "refusing to activate: snapshot is not source-current "
+            f"(stored={stored}, expected={expected_images}, eligible={eligible}, matched={matched}, "
+            f"digest_mismatch={digest_mismatch}, stale={stale})"
+        )
+    return stored, eligible
+
+
 def activate(args: argparse.Namespace) -> None:
     with connect("AI_VECTOR_ADMIN_DATABASE_URL") as conn, conn.transaction():
+        # Freeze the eligibility inputs from freshness verification through pointer commit. Backend media writes
+        # take ROW EXCLUSIVE locks and therefore cannot slip a replacement/retirement between the checks and switch.
+        conn.execute(_LOCK_CATALOG_SNAPSHOT_SQL)
         conn.execute("LOCK TABLE ai.active_index IN EXCLUSIVE MODE")
         version = conn.execute(
             "SELECT status, expected_images FROM ai.model_versions WHERE embedding_version = %s FOR UPDATE",
@@ -177,17 +238,7 @@ def activate(args: argparse.Namespace) -> None:
         ).fetchone()
         if version is None:
             raise SystemExit("unknown embedding version")
-        stored, eligible = one(
-            conn.execute(
-                "SELECT (SELECT count(*) FROM ai.product_image_embeddings WHERE embedding_version = %s), "
-                "(SELECT count(*) FROM ai.catalog_images)",
-                (args.embedding_version,),
-            ).fetchone()
-        )
-        if version[1] is None or stored != version[1] or stored != eligible:
-            raise SystemExit(
-                f"refusing to activate: {stored} vectors stored, {version[1]} expected, {eligible} eligible"
-            )
+        stored, _eligible = verify_current_snapshot(conn, args.embedding_version, version[1])
         current = conn.execute("SELECT embedding_version FROM ai.active_index").fetchone()
         if version[0] == "STAGING":
             conn.execute(

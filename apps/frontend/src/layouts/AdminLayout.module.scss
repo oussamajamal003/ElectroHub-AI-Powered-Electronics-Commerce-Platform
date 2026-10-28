@@ -1,0 +1,13 @@
+@use '@/styles/abstracts' as *;
+.shell { display: flex; min-height: 100vh; background: $color-background; }
+.sidebar { flex: 0 0 260px; width: 260px; background: $color-surface; border-right: 1px solid $color-border; padding: $spacing-6; }
+.brand { font-family: $font-family-heading; font-size: $font-size-lg; margin: 0 0 $spacing-8; color: $color-text-primary; }
+.nav { display: flex; flex-direction: column; gap: $spacing-4; a, div { color: $color-text-secondary; text-decoration: none; } a { border-radius: $radius-md; padding: $spacing-2 $spacing-3; &:hover { color: $color-primary; background: rgba($color-primary, .06); } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } } }
+.main { flex: 1; min-width: 0; padding: $spacing-8; }
+@media (max-width: 767px) {
+  .shell { flex-direction: column; }
+  .sidebar { flex: 0 0 auto; width: auto; padding: $spacing-3 $spacing-4; border-right: 0; border-bottom: 1px solid $color-border; }
+  .brand { margin: 0 0 $spacing-2; font-size: $font-size-base; }
+  .nav { flex-direction: row; gap: $spacing-2; overflow-x: auto; a, div { flex: 0 0 auto; } }
+  .main { padding: $spacing-5 $spacing-4; }
+}

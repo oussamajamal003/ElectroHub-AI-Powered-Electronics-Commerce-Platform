@@ -15,7 +15,7 @@ The roadmap is organized into phases so that:
 - Every milestone can be verified with evidence.
 
 The roadmap is intentionally structured around the project's approved architecture and technology stack.
-
+ 
 ---
 
 # 2. Project Phases
@@ -486,14 +486,15 @@ Implement:
 
 Task 04.2 also covers the later setup of Kaggle Free GPU, approved data preparation, pretrained EfficientNet-B0 fine-tuning in PyTorch, checkpoint export, held-out retrieval evaluation, catalog embedding ingestion, and pgvector nearest-neighbor search. Use the HP laptop for local development and CPU inference verification. Training is offline and separate from runtime services; simulated matching does not fulfill this task. Detailed model settings, schemas, quality targets, and procedures belong in the task file.
 
-### 04.3 Cloudinary
+### 04.3 Product Image Storage & AI Embedding Synchronization
 
 Integrate:
 
-- Product image uploads
-- Image storage
-- Image delivery
-- Image transformations where appropriate
+- Authorized admin product image uploads (React admin console → Express validation and authorization)
+- Object storage lifecycle via Supabase Storage (`product-media` bucket with isolated DEV/PROD configurations)
+- Prisma `ProductImage` metadata persistence and backward-compatible storefront delivery
+- Durable AI embedding synchronization (transactional outbox pattern triggering FastAPI re-indexing)
+- Source-revision-aware catalog synchronization with pgvector without mutating immutable ACTIVE models
 
 ### 04.4 AI Recommendations
 
@@ -803,7 +804,7 @@ Complete:
 - Database connectivity
 - Brevo configuration
 - Stripe configuration
-- Cloudinary configuration
+- Supabase Storage configuration
 - AI service configuration
 - Socket.IO configuration
 
@@ -902,7 +903,7 @@ Never commit:
 - Stripe secrets
 - Brevo credentials
 - Database credentials
-- Cloudinary credentials
+- Supabase service-role credentials and storage keys
 - SSL private keys
 
 ---
@@ -1022,7 +1023,7 @@ Customer
 External Services:
 Stripe
 Brevo
-Cloudinary
+Supabase Storage
 OpenStreetMap
 ```
 

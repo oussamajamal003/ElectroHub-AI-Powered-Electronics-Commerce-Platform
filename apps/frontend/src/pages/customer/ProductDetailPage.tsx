@@ -137,7 +137,7 @@ export function ProductDetailPage() {
     {productQuery.isError && <div role="status"><p>Current availability could not be refreshed. The last confirmed product is still visible.</p><Button type="button" variant="ghost" onClick={() => void productQuery.refetch()}>Retry availability</Button></div>}
     <nav className={styles.breadcrumb} aria-label="Breadcrumb"><Link to="/">Home</Link><ChevronRight size={16} aria-hidden="true" /><Link to="/products">Products</Link><ChevronRight size={16} aria-hidden="true" /><Link to={`/products?category=${encodeURIComponent(product.category.slug)}`}>{product.category.name}</Link><ChevronRight size={16} aria-hidden="true" /><span aria-current="page">{product.name}</span></nav>
     <div className={styles.productTop}>
-      <ProductGallery className={styles.gallery} images={product.images.map(image => ({ id: image.id, src: image.url, alt: image.altText ?? product.name }))} />
+      <ProductGallery productName={product.name} className={styles.gallery} images={product.images.map(image => ({ id: image.id, src: image.url, alt: image.altText?.trim() || product.name }))} />
       <section className={styles.summary} aria-labelledby="product-title">
         <p className={styles.category}>{product.category.name}{product.brand ? ` · ${product.brand.name}` : ''}</p>
         <h1 id="product-title">{product.name}</h1>

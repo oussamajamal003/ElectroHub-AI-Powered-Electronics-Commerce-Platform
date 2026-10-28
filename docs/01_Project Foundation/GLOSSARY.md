@@ -865,7 +865,7 @@ Examples include:
 - JWT secrets
 - Stripe keys
 - Brevo credentials
-- Cloudinary credentials
+- Supabase Storage credentials
 
 ---
 
