@@ -12,6 +12,8 @@ describe('ProductImage', () => {
     // Simulate image load
     fireEvent.load(img);
     expect(img.className).toContain('loaded');
+    expect(img).toHaveAttribute('alt', 'Test image');
+    expect(screen.queryByText('Test image')).not.toBeInTheDocument();
   });
 
   it('renders fallback when image fails to load', () => {
@@ -21,7 +23,8 @@ describe('ProductImage', () => {
     fireEvent.error(img);
     
     expect(screen.getByTestId('product-image-fallback')).toBeInTheDocument();
-    expect(screen.getByText('Image unavailable')).toBeInTheDocument();
+    expect(screen.getByText('Photo unavailable: Broken image')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Broken image' })).toBeInTheDocument();
   });
 
   it('renders custom fallback text', () => {
@@ -31,5 +34,18 @@ describe('ProductImage', () => {
     fireEvent.error(img);
     
     expect(screen.getByText('No photo')).toBeInTheDocument();
+  });
+
+  it('retries a replacement source after the previous image failed', () => {
+    const { rerender } = render(<ProductImage src="missing.webp" alt="Product photo" />);
+    fireEvent.error(screen.getByAltText('Product photo'));
+    expect(screen.getByTestId('product-image-fallback')).toBeInTheDocument();
+
+    rerender(<ProductImage src="replacement.webp" alt="Product photo" />);
+
+    const replacement = screen.getByAltText('Product photo');
+    expect(screen.queryByTestId('product-image-fallback')).not.toBeInTheDocument();
+    fireEvent.load(replacement);
+    expect(replacement.className).toContain('loaded');
   });
 });

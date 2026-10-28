@@ -35,7 +35,10 @@ export const mediaAction = (action: Action) => async (req: Request, res: Respons
 };
 export const listMediaProducts = mediaAction(async (req, res) => {
   const q = parse(z.string().trim().max(100), req.query.q ?? '');
-  res.json({ data: await service.products(q) });
+  const page = parse(z.coerce.number().int().min(1).max(1_000_000), req.query.page ?? '1');
+  const pageSize = parse(z.coerce.number().int().min(1).max(50), req.query.pageSize ?? '30');
+  const result = await service.products(q, page, pageSize);
+  res.json(result);
 });
 export const listProductMedia = mediaAction(async (req, res) => {
   res.json({ data: await service.list(parse(uuid, req.params.productId)) });

@@ -34,10 +34,14 @@ export class ProductMediaService {
   constructor(private readonly db = prisma,
     private readonly storage: () => Pick<SupabaseProductMediaStorage, 'uploadImmutable'> = defaultStorage) {}
 
-  async products(q: string) {
-    return this.db.product.findMany({ where: { isTestFixture: false,
-      OR: [{ name: { contains: q, mode: 'insensitive' } }, { sku: { contains: q, mode: 'insensitive' } }] },
-      orderBy: [{ name: 'asc' }, { id: 'asc' }], take: 30, select: { id: true, name: true, slug: true } });
+  async products(q: string, page = 1, pageSize = 30) {
+    const where = { isTestFixture: false,
+      OR: [{ name: { contains: q, mode: 'insensitive' as const } }, { sku: { contains: q, mode: 'insensitive' as const } }] };
+    const total = await this.db.product.count({ where });
+    const skip = (page - 1) * pageSize;
+    const data = skip >= total ? [] : await this.db.product.findMany({ where,
+      orderBy: [{ name: 'asc' }, { id: 'asc' }], skip, take: pageSize, select: { id: true, name: true, slug: true } });
+    return { data, meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } };
   }
   async product(productId: string) {
     const product = await this.db.product.findUnique({ where: { id: productId }, select: { id: true, name: true, slug: true } });

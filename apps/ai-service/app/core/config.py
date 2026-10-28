@@ -14,7 +14,7 @@ from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, parse_qsl, urlsplit
 
 from dotenv import dotenv_values
 from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
@@ -53,9 +53,30 @@ FORBIDDEN_COMMERCE_SECRETS = frozenset(
         "DIRECT_URL",
         "SUPABASE_SERVICE_ROLE_KEY",
         "SUPABASE_SECRET_KEY",
+        "SUPABASE_ACCESS_TOKEN",
+        "SUPABASE_DB_PASSWORD",
+        "E2E_TEST_SUPPORT_TOKEN",
+        "AI_VECTOR_INGEST_DATABASE_URL",
+        "AI_VECTOR_ADMIN_DATABASE_URL",
+        "CLOUDINARY_URL",
         "PAYMENT_SHARED_MUTATIONS_APPROVED",
     }
 )
+
+FORBIDDEN_MEDIA_WORKER_SECRETS = frozenset(
+    {
+        "AI_VECTOR_DATABASE_URL",
+        "AI_SERVICE_API_KEY",
+    }
+)
+
+MEDIA_PROJECT_REFS = {
+    "development": "pzxekjybdiulzmssalfo",
+    "production": "yepfgjehdstlxbpespun",
+}
+_POOLER_HOST = re.compile(r"^aws-\d+-[a-z0-9]+(?:-[a-z0-9]+)*\.pooler\.supabase\.com$")
+_QA_MEDIA_DATABASE = re.compile(r"^electrohub_disposable_media_[a-z0-9]+$")
+_QA_MEDIA_ROLE = re.compile(r"^media_qa_worker_[a-f0-9]{12}$")
 
 
 class ConfigurationError(RuntimeError):
@@ -83,6 +104,91 @@ def check_vector_database_url(url: str) -> None:
         return
     if sslmode not in _TLS_MODES:
         raise ValueError("AI_VECTOR_DATABASE_URL must set sslmode=require, verify-ca or verify-full for a remote host")
+
+
+def _media_worker_database_identity(url: str) -> tuple[str | None, bool]:
+    """Return the exact Supabase project ref, or a local-disposable marker, from a worker DSN.
+
+    Direct database hosts bind the project ref in the hostname. Shared Supavisor hosts are
+    cluster-wide, so the exact ref must be bound by the documented ``role.project-ref`` user.
+    Ambiguous host/user combinations are rejected instead of inferred from substrings.
+    """
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+        query_pairs = parse_qsl(parts.query, keep_blank_values=True)
+    except ValueError as exc:
+        raise ValueError("AI_MEDIA_WORKER_DATABASE_URL must be a valid PostgreSQL URL") from exc
+    host = (parts.hostname or "").lower()
+    user = parts.username or ""
+    database = parts.path.lstrip("/")
+    query_keys = [name for name, _ in query_pairs]
+    ssl_modes = [value for name, value in query_pairs if name == "sslmode"]
+    if (
+        parts.scheme not in {"postgres", "postgresql"}
+        or not host
+        or not user
+        or parts.password is None
+        or not database
+        or parts.fragment
+        or len(query_keys) != len(set(query_keys))
+        or any(name in {"host", "hostaddr", "port", "dbname", "user", "service"} for name in query_keys)
+    ):
+        raise ValueError("AI_MEDIA_WORKER_DATABASE_URL must identify a PostgreSQL host, role and database")
+    if len(ssl_modes) != 1 or ssl_modes[0] not in _TLS_MODES:
+        raise ValueError("AI_MEDIA_WORKER_DATABASE_URL must require TLS")
+
+    loopback = host in {"localhost", "127.0.0.1", "::1"}
+    if loopback:
+        if port != 55434 or not _QA_MEDIA_DATABASE.fullmatch(database) or not _QA_MEDIA_ROLE.fullmatch(user):
+            raise ValueError(
+                "AI_MEDIA_WORKER_DATABASE_URL must use the approved disposable QA database and worker role"
+            )
+        return None, True
+
+    direct_match = re.fullmatch(r"db\.(pzxekjybdiulzmssalfo|yepfgjehdstlxbpespun)\.supabase\.co", host)
+    if direct_match:
+        project_ref = direct_match.group(1)
+        if port != 5432 or user != "ai_media_worker_runtime" or database != "postgres":
+            raise ValueError(
+                "AI_MEDIA_WORKER_DATABASE_URL must use the restricted media-worker role on the Supabase database"
+            )
+        return project_ref, False
+
+    if _POOLER_HOST.fullmatch(host):
+        pooler_user = re.fullmatch(r"ai_media_worker_runtime\.(pzxekjybdiulzmssalfo|yepfgjehdstlxbpespun)", user)
+        if pooler_user is None or port not in {5432, 6543} or database != "postgres":
+            raise ValueError(
+                "AI_MEDIA_WORKER_DATABASE_URL must use the restricted role and project-bound Supabase pooler identity"
+            )
+        return pooler_user.group(1), False
+
+    raise ValueError("AI_MEDIA_WORKER_DATABASE_URL host is not an approved Supabase project or disposable QA target")
+
+
+def _validate_media_worker_target(environment: Environment, database_url: str, storage_url: str | None) -> None:
+    project_ref, is_disposable = _media_worker_database_identity(database_url)
+    if environment in MEDIA_PROJECT_REFS:
+        expected_ref = MEDIA_PROJECT_REFS[environment]
+        if is_disposable or project_ref != expected_ref:
+            raise ValueError(f"AI media worker database must belong to the {environment} Supabase project")
+        if storage_url is None:
+            raise ValueError("AI_MEDIA_STORAGE_BASE_URL is required for hosted media-worker processing")
+        storage_host = (urlsplit(storage_url).hostname or "").lower()
+        if storage_host != f"{expected_ref}.supabase.co" or urlsplit(storage_url).scheme != "https":
+            raise ValueError(f"AI_MEDIA_STORAGE_BASE_URL must belong to the {environment} Supabase project")
+        return
+
+    # QA/test workers are permitted only against the launcher-owned disposable PostgreSQL
+    # instance and a loopback media fixture. They cannot use either shared hosted project.
+    if environment in {"qa", "test"}:
+        if not is_disposable or storage_url is None:
+            raise ValueError("QA media workers require the approved disposable database and local media source")
+        source = urlsplit(storage_url)
+        if source.scheme != "http" or source.hostname not in {"localhost", "127.0.0.1", "::1"} or source.port is None:
+            raise ValueError("QA media workers require a loopback HTTP media source with an explicit port")
+        return
+    raise ValueError("AI media worker environment is not authorized")
 
 
 def _is_loopback_ip(host: str) -> bool:
@@ -173,23 +279,29 @@ class Settings(BaseSettings):
     def _media_storage_base_url_is_safe(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        parts = urlsplit(value)
+        try:
+            parts = urlsplit(value)
+            port = parts.port
+        except ValueError as exc:
+            raise ValueError("AI_MEDIA_STORAGE_BASE_URL must be a valid origin") from exc
+        host = (parts.hostname or "").lower()
         if (
-            parts.scheme not in {"https", "http"}
-            or not parts.hostname
+            not host
             or parts.username is not None
             or parts.password is not None
             or parts.query
             or parts.fragment
-            or (parts.scheme != "https" and parts.hostname not in {"localhost", "127.0.0.1", "::1"})
             or parts.path not in {"", "/"}
         ):
             raise ValueError("AI_MEDIA_STORAGE_BASE_URL must be a public HTTPS origin or local HTTP origin")
-        if parts.scheme == "https" and parts.hostname not in {
-            "pzxekjybdiulzmssalfo.supabase.co",
-            "yepfgjehdstlxbpespun.supabase.co",
-        }:
+        if parts.scheme == "https" and host not in {f"{ref}.supabase.co" for ref in MEDIA_PROJECT_REFS.values()}:
             raise ValueError("AI_MEDIA_STORAGE_BASE_URL must match an approved Supabase project origin")
+        if parts.scheme == "https" and port not in {None, 443}:
+            raise ValueError("AI_MEDIA_STORAGE_BASE_URL must use the standard HTTPS port")
+        if parts.scheme == "http" and (host not in {"localhost", "127.0.0.1", "::1"} or port is None):
+            raise ValueError("AI_MEDIA_STORAGE_BASE_URL must use loopback HTTP with an explicit port")
+        if parts.scheme not in {"https", "http"}:
+            raise ValueError("AI_MEDIA_STORAGE_BASE_URL must use HTTPS or loopback HTTP")
         return value.rstrip("/")
 
     @field_validator("AI_SERVICE_API_KEY")
@@ -235,10 +347,22 @@ class Settings(BaseSettings):
         ):
             raise ValueError("AI media-worker settings are allowed only in the media-worker process")
         if self.AI_PROCESS_ROLE == "media_worker":
-            if self.AI_MEDIA_WORKER_DATABASE_URL is None or self.AI_MODEL_ARTIFACT_DIR is None:
-                raise ValueError("media-worker role requires AI_MEDIA_WORKER_DATABASE_URL and AI_MODEL_ARTIFACT_DIR")
+            if (
+                self.AI_MEDIA_WORKER_DATABASE_URL is None
+                or self.AI_MODEL_ARTIFACT_DIR is None
+                or self.AI_MEDIA_STORAGE_BASE_URL is None
+            ):
+                raise ValueError(
+                    "media-worker role requires AI_MEDIA_WORKER_DATABASE_URL, AI_MODEL_ARTIFACT_DIR and "
+                    "AI_MEDIA_STORAGE_BASE_URL"
+                )
             if self.AI_SERVICE_API_KEY is not None or self.AI_VECTOR_DATABASE_URL is not None:
                 raise ValueError("media-worker role must not receive API or read-only search credentials")
+            _validate_media_worker_target(
+                self.AI_ENVIRONMENT,
+                self.AI_MEDIA_WORKER_DATABASE_URL.get_secret_value(),
+                self.AI_MEDIA_STORAGE_BASE_URL,
+            )
         return self
 
     @property
@@ -276,12 +400,15 @@ def settings_from_mapping(values: Mapping[str, object]) -> Settings:
     return _ExplicitSettings(**dict(values))  # type: ignore[arg-type]
 
 
-def forbidden_secrets_present(environ: Mapping[str, str | None]) -> list[str]:
+def forbidden_secrets_present(environ: Mapping[str, str | None], *, process_role: str = "api") -> list[str]:
     """Names of commerce/training-only settings with a non-empty value (never the values)."""
+    forbidden = FORBIDDEN_COMMERCE_SECRETS
+    if process_role == "media_worker":
+        forbidden = forbidden | FORBIDDEN_MEDIA_WORKER_SECRETS
     return sorted(
         name
         for name, value in environ.items()
-        if (name in FORBIDDEN_COMMERCE_SECRETS or name.startswith("KAGGLE_")) and (value or "").strip()
+        if (name in forbidden or name.startswith("KAGGLE_")) and (value or "").strip()
     )
 
 
@@ -292,7 +419,12 @@ def load_settings(
     """Build settings for a real process, refusing commerce secrets in its environment."""
     source = os.environ if environ is None else environ
     file_values = dotenv_values(env_file) if env_file is not None and env_file.is_file() else {}
-    present = forbidden_secrets_present({**file_values, **source})
+    merged = {**file_values, **source}
+    process_role = str(merged.get("AI_PROCESS_ROLE", "api"))
+    present = sorted(
+        set(forbidden_secrets_present(file_values, process_role=process_role))
+        | set(forbidden_secrets_present(source, process_role=process_role))
+    )
     if present:
         raise ConfigurationError(
             "The AI service must not receive commerce credentials or training settings: " + ", ".join(present)

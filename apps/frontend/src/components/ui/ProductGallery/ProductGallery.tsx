@@ -10,6 +10,7 @@ export interface GalleryImage {
 
 export interface ProductGalleryProps {
   images: GalleryImage[];
+  productName?: string;
   selectedIndex?: number;
   onSelectImage?: (index: number) => void;
   className?: string;
@@ -17,6 +18,7 @@ export interface ProductGalleryProps {
 
 export function ProductGallery({
   images,
+  productName,
   selectedIndex,
   onSelectImage,
   className = '',
@@ -56,20 +58,21 @@ export function ProductGallery({
     return (
       <div className={`${styles.gallery} ${className}`} data-testid="product-gallery">
         <div className={styles.mainImage}>
-          <ProductImage src="" alt="No image available" />
+          <ProductImage src="" alt={productName?.trim() || 'Product image'} fallbackText="No product photos available" />
         </div>
       </div>
     );
   }
 
   const mainImage = images[activeIndex] || images[0];
+  const mainImageAlt = mainImage!.alt.trim() || productName?.trim() || 'Product image';
 
   return (
     <div className={`${styles.gallery} ${className}`} data-testid="product-gallery">
       <div id={`${galleryId}-image`} role="tabpanel" aria-label="Selected product image" aria-labelledby={images.length > 1 ? `${galleryId}-thumb-${activeIndex}` : undefined} className={styles.mainImage}>
         <ProductImage 
           src={mainImage!.src} 
-          alt={mainImage!.alt} 
+          alt={mainImageAlt}
           key={mainImage!.id} // Re-render image when active changes
         />
       </div>
@@ -82,6 +85,7 @@ export function ProductGallery({
         >
           {images.map((image, index) => {
             const isActive = index === activeIndex;
+            const imageAlt = image.alt.trim() || 'Product image';
             return (
               <button
                 key={image.id}
@@ -89,17 +93,21 @@ export function ProductGallery({
                 id={`${galleryId}-thumb-${index}`}
                 role="tab"
                 aria-selected={isActive}
-                aria-label={`View ${image.alt}`}
+          aria-label={productName?.trim()
+            ? `View ${productName.trim()} — image ${index + 1}`
+            : `View image ${index + 1} — ${imageAlt}`}
                 aria-controls={`${galleryId}-image`}
                 tabIndex={isActive ? 0 : -1}
                 className={`${styles.thumbnailBtn} ${isActive ? styles.active : ''}`}
                 onClick={() => handleSelect(index)}
                 onKeyDown={(e) => handleKeyDown(e, index)}
               >
-                <img 
-                  src={image.src} 
-                  alt="" 
-                  className={styles.thumbnailImage} 
+                <ProductImage
+                  src={image.src}
+                  alt=""
+                  fallbackText="No photo"
+                  className={styles.thumbnailImage}
+                  containerClassName={styles.thumbnailImageFrame}
                   loading="lazy"
                 />
               </button>

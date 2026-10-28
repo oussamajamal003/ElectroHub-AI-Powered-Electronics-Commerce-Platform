@@ -11,8 +11,10 @@ import hashlib
 import argparse
 import faulthandler
 import json
+import os
 import re
 import secrets
+import subprocess
 import sys
 import threading
 import time
@@ -20,13 +22,14 @@ from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlencode, urlsplit
+from urllib.request import urlopen
 from uuid import UUID, uuid4
 
 import numpy as np
 import psycopg
 from psycopg import sql
-from psycopg.conninfo import make_conninfo
+from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 BACKEND = Path(__file__).resolve().parents[1]
 PROJECT = BACKEND.parent.parent
@@ -215,7 +218,15 @@ def process_expected(worker: Any, event_id: UUID, label: str) -> bool:
     claimed = worker.claim()
     need(claimed is not None and claimed.event_id == event_id,
          f"worker claimed an unexpected event before {label}")
-    return worker.process(claimed)
+    if worker._ready:
+        worker._set_state("PROCESSING", current_event_id=event_id)
+        worker._write_heartbeat()
+    try:
+        return worker.process(claimed)
+    finally:
+        if worker._ready:
+            worker._set_state("READY")
+            worker._write_heartbeat()
 
 
 def defer_retry(dsn: str, event_id: UUID) -> None:
@@ -277,6 +288,146 @@ def denied(dsn: str, statement: str, label: str) -> None:
     raise QaFailure(f"privilege probe unexpectedly succeeded: {label}")
 
 
+def ensure_public_policy_roles(dsn: str) -> list[str]:
+    """Create missing NOLOGIN Supabase API-role fixtures and prove they cannot reach worker health."""
+    created: list[str] = []
+    with psycopg.connect(dsn) as conn:
+        for role in ("anon", "authenticated"):
+            exists = conn.execute("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=%s)", (role,)).fetchone()[0]
+            if not exists:
+                conn.execute(sql.SQL("CREATE ROLE {} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS")
+                             .format(sql.Identifier(role)))
+                created.append(role)
+        conn.commit()
+        rls, public_acl, worker_policy = conn.execute(
+            "SELECT heartbeat.relrowsecurity, "
+            "NOT EXISTS (SELECT 1 FROM aclexplode(COALESCE(heartbeat.relacl,acldefault('r',heartbeat.relowner))) acl "
+            "  WHERE acl.grantee=0 AND acl.privilege_type IN ('SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER')), "
+            "EXISTS (SELECT 1 FROM pg_policies policy WHERE policy.schemaname='ai' "
+            "  AND policy.tablename='media_worker_heartbeats' AND policy.cmd='ALL' "
+            "  AND policy.roles @> ARRAY['ai_media_worker']::name[]) "
+            "FROM pg_class heartbeat JOIN pg_namespace schema ON schema.oid=heartbeat.relnamespace "
+            "WHERE schema.nspname='ai' AND heartbeat.relname='media_worker_heartbeats'"
+        ).fetchone()
+        need(rls is True and public_acl is True and worker_policy is True,
+             "worker heartbeat RLS, PUBLIC revoke, or restricted worker policy is incorrect")
+        for role in ("anon", "authenticated"):
+            flags = conn.execute(
+                "SELECT has_table_privilege(%s,'ai.media_worker_heartbeats','SELECT'), "
+                "has_table_privilege(%s,'ai.media_worker_heartbeats','INSERT'), "
+                "has_table_privilege(%s,'ai.media_worker_heartbeats','UPDATE'), "
+                "has_table_privilege(%s,'ai.media_worker_heartbeats','DELETE')",
+                (role, role, role, role),
+            ).fetchone()
+            need(not any(flags), f"{role} unexpectedly has worker heartbeat table privileges")
+    return created
+
+
+def run_worker_module_once(worker_dsn: str, admin_dsn_value: str, ca: Path, storage_url: str,
+                           event_id: UUID, model_version: str) -> dict[str, Any]:
+    """Run the production module entrypoint against one owned event and record its live heartbeat states."""
+    parameters = conninfo_to_dict(worker_dsn)
+    worker_url = (
+        f"postgresql://{quote(parameters['user'], safe='')}:{quote(parameters['password'], safe='')}"
+        f"@127.0.0.1:55434/{quote(parameters['dbname'], safe='')}?"
+        + urlencode({"sslmode": "verify-full", "sslrootcert": str(ca)})
+    )
+    ai_service = PROJECT / "apps/ai-service"
+    env_file = BACKEND / ".isolated-docker" / "media-worker-env-does-not-exist"
+    child_env = {
+        "AI_ENV_FILE": str(env_file),
+        "AI_ENVIRONMENT": "qa",
+        "AI_PROCESS_ROLE": "media_worker",
+        "AI_MEDIA_WORKER_DATABASE_URL": worker_url,
+        "AI_MODEL_ARTIFACT_DIR": str(ARTIFACT),
+        "AI_MEDIA_STORAGE_BASE_URL": storage_url,
+        "AI_MEDIA_LEGACY_CATALOG_ROOT": str(PROJECT / "apps/frontend/public"),
+        "AI_TORCH_THREADS": "1",
+        "AI_LOG_LEVEL": "INFO",
+        "PATH": os.environ.get("PATH", ""),
+        "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
+        "WINDIR": os.environ.get("WINDIR", ""),
+        "USERPROFILE": os.environ.get("USERPROFILE", ""),
+        "HOME": os.environ.get("HOME", ""),
+        "TEMP": os.environ.get("TEMP", ""),
+        "TMP": os.environ.get("TMP", ""),
+        "PYTHONPATH": str(ai_service),
+        "PYTHONUTF8": "1",
+    }
+    with psycopg.connect(admin_dsn_value) as conn:
+        prior_ids = [row[0] for row in conn.execute("SELECT worker_id FROM ai.media_worker_heartbeats").fetchall()]
+    process = subprocess.Popen(
+        [sys.executable, "-m", "app.media_sync", "--once"],
+        cwd=ai_service,
+        env=child_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    observed: dict[UUID, set[str]] = {}
+    processing_workers: set[UUID] = set()
+    deadline = time.monotonic() + 180
+    try:
+        with psycopg.connect(admin_dsn_value) as observer:
+            while process.poll() is None and time.monotonic() < deadline:
+                rows = observer.execute(
+                    "SELECT worker_id,state,current_event_id FROM ai.media_worker_heartbeats "
+                    "WHERE NOT (worker_id = ANY(%s::uuid[]))",
+                    (prior_ids,),
+                ).fetchall()
+                for worker_id, state, current_event in rows:
+                    observed.setdefault(worker_id, set()).add(state)
+                    if state == "PROCESSING" and current_event == event_id:
+                        processing_workers.add(worker_id)
+                time.sleep(0.05)
+    except psycopg.Error as exc:
+        if process.poll() is None:
+            process.kill()
+        output, _ = process.communicate(timeout=5)
+        raise QaFailure(f"actual worker heartbeat observer failed ({exc.sqlstate or type(exc).__name__})") from exc
+    if process.poll() is None:
+        process.kill()
+        output, _ = process.communicate(timeout=5)
+        raise QaFailure("actual worker module exceeded the 180-second disposable run bound")
+    output, _ = process.communicate(timeout=5)
+    with psycopg.connect(admin_dsn_value) as conn:
+        rows = conn.execute(
+            "SELECT worker_id,state,current_event_id,active_model_version,processed_success_count::text "
+            "FROM ai.media_worker_heartbeats WHERE NOT (worker_id = ANY(%s::uuid[]))",
+            (prior_ids,),
+        ).fetchall()
+        event_state = conn.execute(
+            'SELECT state FROM public.catalog_media_events WHERE id=%s', (event_id,)
+        ).fetchone()
+    for worker_id, state, current_event, _active_model, _success_count in rows:
+        observed.setdefault(worker_id, set()).add(state)
+        if state == "PROCESSING" and current_event == event_id:
+            processing_workers.add(worker_id)
+    safe_events = []
+    for line in output.splitlines():
+        if any(name in line for name in ("ai.media_worker_", "ai.media_event_", "Traceback", "Error", "ERROR")):
+            safe_line = re.sub(r"(?i)(postgres(?:ql)?://)[^@\s]+@", r"\1<redacted>@", line)
+            safe_line = re.sub(r"(?i)(password\s*[=:]\s*)[^\s,;]+", r"\1<redacted>", safe_line)
+            safe_events.append(safe_line[:300])
+    need(process.returncode == 0, f"actual worker module exited with code {process.returncode}: "
+         + " | ".join(safe_events[-4:]))
+    need(len(rows) == 1, "actual worker module did not persist exactly one new heartbeat identity")
+    worker_id, final_state, current_event, active_model, success_count = rows[0]
+    states = observed.get(worker_id, set())
+    required_states = {"STARTING", "READY", "PROCESSING", "STOPPED"}
+    need(required_states.issubset(states), "actual worker module missed lifecycle states: "
+         + ",".join(sorted(required_states - states)))
+    need(worker_id in processing_workers, "actual worker module processing heartbeat was not observed")
+    need(final_state == "STOPPED" and current_event is None, "actual worker module did not exit with a clean STOPPED heartbeat")
+    need(active_model == model_version and int(success_count) >= 1, "actual worker module model or success evidence mismatched")
+    need(event_state is not None and event_state[0] == "COMPLETED", "actual worker module did not complete its owned event")
+    need("ai.media_worker_ready" in output and "ai.media_event_completed" in output,
+         "actual worker module omitted expected ready/completion events")
+    return {"entrypoint": "python -m app.media_sync --once", "exitCode": process.returncode,
+            "states": sorted(states), "processingHeartbeatObserved": True,
+            "eventState": event_state[0], "activeModelMatched": True, "finalState": final_state}
+
+
 def run(direct_sql_reader: bool = False) -> dict[str, Any]:
     import asyncio
     import selectors
@@ -324,6 +475,9 @@ def run(direct_sql_reader: bool = False) -> dict[str, Any]:
     worker: Any = None
     roles: list[str] = []
     fixture = False
+    observer_stop = threading.Event()
+    heartbeat_observer: threading.Thread | None = None
+    worker_shutdown_error: str | None = None
     evidence: dict[str, Any] = {
         "database": database, "tls": "verify-full", "embeddingVersion": version,
         "modelVersion": descriptor.model_version, "preprocessVersion": descriptor.preprocess_version,
@@ -337,6 +491,15 @@ def run(direct_sql_reader: bool = False) -> dict[str, Any]:
         threading.Thread(target=server.serve_forever, daemon=True, name="media-qa-object-server").start()
         base_url = f"http://127.0.0.1:{server.server_address[1]}"
         url_a, url_b = base_url + path_a, base_url + path_b
+        progress("verify-loopback-source-fixtures")
+        for url, expected_digest in ((url_a, a.digest), (url_b, b.digest)):
+            try:
+                with urlopen(url, timeout=10) as response:
+                    payload = response.read(MAX_BYTES + 1)
+            except Exception as exc:
+                raise QaFailure(f"loopback source fixture failed ({type(exc).__name__})") from exc
+            need(len(payload) <= MAX_BYTES and hashlib.sha256(payload).hexdigest() == expected_digest,
+                 "loopback source fixture response did not match its expected digest")
         progress("create-isolated-fixture-and-active-d3-pointer")
         with psycopg.connect(dsn) as conn:
             need(conn.execute("SELECT count(*) FROM ai.model_versions WHERE embedding_version=%s", (version,)).fetchone()[0] == 0,
@@ -368,6 +531,7 @@ def run(direct_sql_reader: bool = False) -> dict[str, Any]:
         reader_dsn = worker_dsn = None
         with psycopg.connect(dsn) as conn:
             reader_dsn, worker_dsn, roles = role_dsns(dsn, conn, suffix, ca)
+        roles.extend(ensure_public_policy_roles(dsn))
         assert reader_dsn and worker_dsn
         with psycopg.connect(reader_dsn) as conn:
             need(conn.execute("SELECT current_user").fetchone()[0] == roles[0], "reader LOGIN identity mismatch")
@@ -375,11 +539,30 @@ def run(direct_sql_reader: bool = False) -> dict[str, Any]:
             need(conn.execute("SELECT current_user").fetchone()[0] == roles[1], "worker LOGIN identity mismatch")
         denied(reader_dsn, "SELECT id FROM public.users LIMIT 0", "reader cannot read users")
         denied(reader_dsn, "UPDATE ai.active_index SET embedding_version=embedding_version WHERE singleton", "reader cannot switch index")
+        denied(reader_dsn, "INSERT INTO ai.media_worker_heartbeats (worker_id,environment,state) "
+               "VALUES ('00000000-0000-0000-0000-000000000001','qa','READY')",
+               "read-only search role cannot write worker heartbeats")
+        denied(reader_dsn, "UPDATE ai.media_worker_heartbeats SET state='FAILED'",
+               "read-only search role cannot update worker heartbeats")
         denied(worker_dsn, "SELECT id FROM public.users LIMIT 0", "worker cannot read users")
         denied(worker_dsn, f"UPDATE ai.product_image_embeddings SET image_sha256=image_sha256 WHERE embedding_version='{version}'",
                "worker cannot rewrite base snapshot")
+        denied(worker_dsn, "UPDATE ai.media_image_embeddings SET source_sha256=source_sha256",
+               "worker cannot directly write incremental overlays")
+        denied(worker_dsn, "UPDATE ai.active_index SET embedding_version=embedding_version WHERE singleton",
+               "worker cannot switch the active model pointer")
+        denied(worker_dsn, "UPDATE ai.model_versions SET status=status",
+               "worker cannot change model registration state")
+        denied(worker_dsn, "DELETE FROM public.catalog_media_events",
+               "worker cannot delete queue events")
         evidence["leastPrivilege"] = {"readerPublicUsers": "DENIED", "readerActivePointerWrite": "DENIED",
-                                      "workerPublicUsers": "DENIED", "workerBaseWrite": "DENIED"}
+                                      "readerHeartbeatInsert": "DENIED", "readerHeartbeatUpdate": "DENIED",
+                                      "workerPublicUsers": "DENIED", "workerBaseWrite": "DENIED",
+                                      "workerDirectOverlayWrite": "DENIED", "workerPointerWrite": "DENIED",
+                                      "workerModelRegistrationWrite": "DENIED", "workerQueueDelete": "DENIED"}
+        evidence["heartbeatSecurity"] = {"rls": "ENABLED", "publicAcl": "REVOKED",
+                                         "anon": "DENIED", "authenticatedCustomer": "DENIED",
+                                         "readOnlySearch": "DENIED", "workerPolicy": "SCOPED"}
 
         from app.integrations.pgvector_gateway import _ACTIVE_SQL, _COVERAGE_SQL, _identity_matches
         try:
@@ -409,9 +592,66 @@ def run(direct_sql_reader: bool = False) -> dict[str, Any]:
         evidence["readerCoverage"] = {"eligible": int(coverage[0]), "indexed": int(coverage[1])}
         rank(reader, va, product, True, "legacy A baseline")
         evidence["baseline"] = "legacy source A ranked first via " + reader.mode
-        from app.media_sync import MediaSyncWorker
+        from app.media_sync import MediaSyncWorker, _READINESS_SQL
+        readiness_names = (
+            "worker-role-membership", "nonprivileged-login", "only-worker-role-membership",
+            "ai-schema-no-create", "extensions-schema-no-create", "public-schema-no-create",
+            "table-grants-match-worker-contract", "no-application-sequence-grants",
+            "no-unapproved-security-definer-execution", "ai-schema-usage", "extensions-schema-usage",
+            "public-schema-usage", "source-view-select", "active-pointer-select", "model-registry-select",
+            "queue-select", "queue-state-update", "queue-attempt-update", "queue-next-attempt-update",
+            "queue-claim-update", "queue-token-update", "queue-error-update", "queue-completed-update",
+            "queue-updated-at-update", "heartbeat-select", "heartbeat-insert", "heartbeat-update",
+            "heartbeat-delete", "reconcile-function-execute", "publish-function-execute",
+        )
+        with psycopg.connect(worker_dsn) as conn:
+            readiness_row = conn.execute(_READINESS_SQL).fetchone()
+        need(readiness_row is not None and len(readiness_row) == len(readiness_names),
+             "worker readiness query returned an unexpected shape")
+        readiness_failures = [name for name, ok in zip(readiness_names, readiness_row) if not bool(ok)]
+        need(not readiness_failures, "worker database privilege contract failed: " + ",".join(readiness_failures))
         worker = MediaSyncWorker(dsn=worker_dsn, encoder=encoder, storage_base_url=base_url,
-                                 catalog_root=PROJECT / "apps/frontend/public")
+                                 catalog_root=PROJECT / "apps/frontend/public", environment="qa",
+                                 heartbeat_interval_seconds=0.5)
+        progress("worker-startup-role-artifact-and-storage-readiness")
+        worker.startup()
+        worker_id = worker._worker_id
+        with psycopg.connect(dsn) as conn:
+            first_idle_heartbeat = conn.execute(
+                "SELECT state,heartbeat_at FROM ai.media_worker_heartbeats WHERE worker_id=%s", (worker_id,)
+            ).fetchone()
+        need(first_idle_heartbeat is not None and first_idle_heartbeat[0] == "READY",
+             "worker did not persist READY after database privilege and active-artifact checks")
+        time.sleep(1.1)
+        with psycopg.connect(dsn) as conn:
+            later_idle_heartbeat = conn.execute(
+                "SELECT state,heartbeat_at FROM ai.media_worker_heartbeats WHERE worker_id=%s", (worker_id,)
+            ).fetchone()
+        need(later_idle_heartbeat is not None and later_idle_heartbeat[0] == "READY"
+             and later_idle_heartbeat[1] > first_idle_heartbeat[1],
+             "worker heartbeat did not refresh while idle")
+        evidence["workerReadiness"] = {"state": "READY", "activeArtifact": "MATCHED",
+                                       "idleHeartbeatAdvanced": True}
+        processing_seen = threading.Event()
+
+        def observe_processing_heartbeat() -> None:
+            try:
+                with psycopg.connect(dsn) as observer:
+                    while not observer_stop.is_set():
+                        row = observer.execute(
+                            "SELECT worker_id,state,current_event_id FROM ai.media_worker_heartbeats "
+                            "WHERE environment='qa' AND state='PROCESSING' AND current_event_id=%s",
+                            (event_a,),
+                        ).fetchone()
+                        if row is not None:
+                            processing_seen.set()
+                        observer_stop.wait(0.02)
+            except Exception:
+                return
+
+        heartbeat_observer = threading.Thread(target=observe_processing_heartbeat,
+                                              name="media-qa-heartbeat-observer", daemon=True)
+        heartbeat_observer.start()
 
         # Publish first canonical A revision through the actual worker.
         with psycopg.connect(dsn) as conn:
@@ -422,8 +662,12 @@ def run(direct_sql_reader: bool = False) -> dict[str, Any]:
             conn.commit()
         progress("worker-publish-a")
         a_started = time.perf_counter()
-        a_processed = process_expected(worker, event_a, "A publication")
+        worker_process_evidence = run_worker_module_once(worker_dsn, dsn, ca, base_url, event_a, version)
+        a_processed = worker_process_evidence["eventState"] == "COMPLETED"
         a_elapsed = time.perf_counter() - a_started
+        observer_stop.set()
+        heartbeat_observer.join(timeout=3)
+        need(processing_seen.is_set(), "operator could not observe the PROCESSING heartbeat for event A")
         with psycopg.connect(dsn) as conn:
             state, error_code, attempts = conn.execute(
                 'SELECT state,"lastErrorCode","attemptCount" FROM public.catalog_media_events WHERE id=%s',
@@ -469,6 +713,9 @@ def run(direct_sql_reader: bool = False) -> dict[str, Any]:
         evidence["workerPublication"] = {"eventState": b_state, "revision": overlay_b[0], "digest": overlay_b[1],
                                          "BSearchable": True, "formerAQueryUsesCurrentB": True, "activeVersionUnchanged": active,
                                          "baseRowsUnchanged": base_after}
+        evidence["workerHeartbeat"] = {"idle": "REFRESHED", "processing": "OBSERVED",
+                                       "processingEvent": str(event_a)}
+        evidence["workerProcess"] = worker_process_evidence
 
         # Digest mismatch: bytes at the trusted immutable key change, but source identity still claims B.
         progress("digest-lease-and-model-failure-guards")
@@ -514,7 +761,12 @@ def run(direct_sql_reader: bool = False) -> dict[str, Any]:
         wrong_worker = MediaSyncWorker(dsn=worker_dsn,
             encoder=SimpleNamespace(descriptor=wrong, encode=encoder.encode), storage_base_url=base_url,
             catalog_root=PROJECT / "apps/frontend/public")
-        process_expected(wrong_worker, wrong_model, "wrong-model guard")
+        # The production claim path requires READY. Claim with the valid worker, then pass that
+        # lease to the deliberately mismatched fixture to exercise process()'s model guard.
+        wrong_claim = worker.claim()
+        need(wrong_claim is not None and wrong_claim.event_id == wrong_model,
+             "worker claimed an unexpected event before wrong-model guard")
+        wrong_worker.process(wrong_claim)
         with psycopg.connect(dsn) as conn:
             wrong_result = conn.execute('SELECT state,"lastErrorCode" FROM public.catalog_media_events WHERE id=%s', (wrong_model,)).fetchone()
             after_wrong = conn.execute("SELECT source_revision::text,source_sha256 FROM ai.media_image_embeddings WHERE embedding_version=%s AND product_image_id=%s", (version, image_id)).fetchone()
@@ -541,6 +793,9 @@ def run(direct_sql_reader: bool = False) -> dict[str, Any]:
         evidence["result"] = "PASS"
         return evidence
     finally:
+        observer_stop.set()
+        if heartbeat_observer is not None:
+            heartbeat_observer.join(timeout=3)
         if gateway is not None and loop is not None:
             try:
                 loop.run_until_complete(gateway.close())
@@ -553,9 +808,20 @@ def run(direct_sql_reader: bool = False) -> dict[str, Any]:
                 pass
         if worker is not None:
             try:
+                if worker._ready:
+                    worker.shutdown()
+                    with psycopg.connect(dsn) as conn:
+                        stopped = conn.execute(
+                            "SELECT state,current_event_id FROM ai.media_worker_heartbeats WHERE worker_id=%s",
+                            (worker._worker_id,),
+                        ).fetchone()
+                    if stopped is None or stopped != ("STOPPED", None):
+                        raise QaFailure("worker did not persist a clean STOPPED heartbeat")
+                    evidence["workerShutdown"] = {"state": stopped[0], "currentEvent": stopped[1], "clean": True}
                 worker._encoder.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                evidence["workerShutdown"] = {"state": "NOT_VERIFIED", "clean": False}
+                worker_shutdown_error = type(exc).__name__
         if server is not None:
             try:
                 server.shutdown()
@@ -578,6 +844,8 @@ def run(direct_sql_reader: bool = False) -> dict[str, Any]:
                 evidence["roleCleanup"] = "INCOMPLETE; isolated disposable DB reset required"
         if cleanup_error:
             raise cleanup_error
+        if worker_shutdown_error:
+            raise QaFailure(f"worker shutdown or encoder cleanup failed ({worker_shutdown_error})")
 
 
 def cleanup(dsn: str, product: UUID, category: UUID, image_id: UUID, version: str) -> None:

@@ -38,6 +38,36 @@ describe('Product details loading and review auth state', () => {
     vi.mocked(useSearchResults).mockReturnValue({ data: { data: [], meta: { page: 1, pageSize: 5, total: 0, totalPages: 0 } }, isPending: false, isError: false } as unknown as ReturnType<typeof useSearchResults>);
   });
 
+  it.each([null, '', '   '])('uses the product name as image alt text when alt text is %s', altText => {
+    vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, images: [{ ...product.images[0]!, altText }] } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
+    renderPage();
+    expect(screen.getByAltText('Test Tablet')).toBeInTheDocument();
+  });
+
+  it('keeps descriptive alt on a loaded customer photo and names thumbnails by product and position', () => {
+    vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, images: [
+      { ...product.images[0]!, altText: 'Tablet front edge and display' },
+      { ...product.images[0]!, id: 'image-2', url: '/images/tablet-back.jpg', altText: 'Tablet rear cover' },
+    ] } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
+    renderPage();
+
+    const image = screen.getByAltText('Tablet front edge and display');
+    fireEvent.load(image);
+    expect(image).toHaveAttribute('alt', 'Tablet front edge and display');
+    expect(screen.queryByText('Tablet front edge and display')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'View Test Tablet — image 1' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'View Test Tablet — image 2' })).toBeInTheDocument();
+  });
+
+  it('shows the described product fallback when the customer photo fails', () => {
+    vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, images: [{ ...product.images[0]!, altText: null }] } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
+    renderPage();
+
+    fireEvent.error(screen.getByAltText('Test Tablet'));
+    expect(screen.getByRole('img', { name: 'Test Tablet' })).toBeInTheDocument();
+    expect(screen.getByText('Photo unavailable: Test Tablet')).toBeInTheDocument();
+  });
+
   it('Buy Now does not mutate the persistent Cart and navigates to Buy Now checkout with selected quantity', async () => {
     const addItem = vi.fn();
     vi.mocked(useCart).mockReturnValue({ addItem, data: { items: [{ productId: 'other', quantity: 2 }] } } as unknown as ReturnType<typeof useCart>);

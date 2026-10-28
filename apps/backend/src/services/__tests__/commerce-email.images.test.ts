@@ -9,13 +9,15 @@ import { commerceEmailSnapshot } from '../commerce-email.domain.js';
 import { renderCommerceEmail } from '../../emails/commerce/templates.js';
 import { assertTrustedOrigin } from '../../emails/commerce/escape.js';
 
-const production: ImageSources = { hosts: ['yepfgjehdstlxbpespun.supabase.co', 'shop.example.test'], allowLoopbackHttp: false };
-const development: ImageSources = { hosts: ['pzxekjybdiulzmssalfo.supabase.co', 'localhost'], allowLoopbackHttp: true };
+const production: ImageSources = { hosts: ['yepfgjehdstlxbpespun.supabase.co', 'shop.example.test', 'res.cloudinary.com'], cloudinaryCloud: 'demo-cloud', allowLoopbackHttp: false };
+const development: ImageSources = { hosts: ['pzxekjybdiulzmssalfo.supabase.co', 'localhost'], cloudinaryCloud: null, allowLoopbackHttp: true };
 const approved = 'https://yepfgjehdstlxbpespun.supabase.co/storage/v1/object/public/product-media/products/p/i/r/phone.webp';
+const historicalCloudinary = 'https://res.cloudinary.com/demo-cloud/image/upload/v1710000000/products/phone.webp';
 
 describe('safeEmailImageUrl: approved asset origins only', () => {
   it('accepts a real approved HTTPS image and keeps it unchanged', () => {
     expect(safeEmailImageUrl(approved, production)).toBe(approved);
+    expect(safeEmailImageUrl(historicalCloudinary, production)).toBe(historicalCloudinary);
     expect(safeEmailImageUrl('https://shop.example.test/products/phone.jpg', production)).toBe('https://shop.example.test/products/phone.jpg');
   });
   it('rejects an unapproved HTTPS host, including lookalikes and subdomains', () => {
@@ -25,6 +27,16 @@ describe('safeEmailImageUrl: approved asset origins only', () => {
   it('rejects unapproved project hosts on the shared storage platform', () => {
     expect(safeEmailImageUrl('https://otherproject.supabase.co/storage/v1/object/public/product-media/a.webp', production)).toBeNull();
     expect(safeEmailImageUrl('https://yepfgjehdstlxbpespunx.supabase.co/storage/v1/object/public/product-media/a.webp', production)).toBeNull();
+  });
+  it('rejects wrong Cloudinary clouds, non-image resources, lookalike hosts, and unconfigured delivery hosts', () => {
+    for (const value of [
+      'https://res.cloudinary.com/another-cloud/image/upload/products/phone.webp',
+      'https://res.cloudinary.com/demo-cloudx/image/upload/products/phone.webp',
+      'https://res.cloudinary.com/demo-cloud/video/upload/products/phone.webp',
+      'https://res.cloudinary.com/demo-cloud/raw/upload/products/phone.webp',
+      'https://res.cloudinary.com.evil.example/demo-cloud/image/upload/products/phone.webp',
+    ]) expect(safeEmailImageUrl(value, production)).toBeNull();
+    expect(safeEmailImageUrl(historicalCloudinary, { hosts: ['res.cloudinary.com'], cloudinaryCloud: null, allowLoopbackHttp: false })).toBeNull();
   });
   it('rejects plain http in deployed environments and dangerous or unsupported schemes', () => {
     for (const value of ['http://shop.example.test/a.jpg', 'javascript:alert(1)', 'data:image/png;base64,AAAA', 'file:///etc/passwd',
@@ -48,7 +60,14 @@ describe('safeEmailImageUrl: approved asset origins only', () => {
 describe('approved sources come from real configuration only', () => {
   const base = { NODE_ENV: 'production', COMMERCE_EMAIL_ORIGIN: 'https://shop.example.test' };
   it('defaults to the trusted origin host and nothing else', () => {
-    expect(commerceEmailConfig({ ...base }).imageSources).toEqual({ hosts: ['shop.example.test'], allowLoopbackHttp: false });
+    expect(commerceEmailConfig({ ...base }).imageSources).toEqual({ hosts: ['shop.example.test'], cloudinaryCloud: null, allowLoopbackHttp: false });
+  });
+  it('restores the prior configured-cloud rule without exposing Cloudinary credentials', () => {
+    const sources = commerceEmailConfig({ ...base, CLOUDINARY_URL: 'cloudinary://111:topsecret@Demo-Cloud' }).imageSources;
+    expect(sources.hosts).toContain('res.cloudinary.com');
+    expect(sources.cloudinaryCloud).toBe('demo-cloud');
+    expect(JSON.stringify(sources)).not.toMatch(/topsecret|111/);
+    expect(commerceEmailConfig({ ...base, CLOUDINARY_URL: 'malformed' }).imageSources.hosts).not.toContain('res.cloudinary.com');
   });
   it('preserves configured Supabase purchase snapshot images without accepting a different project', () => {
     const ref = 'yepfgjehdstlxbpespun';
@@ -116,16 +135,18 @@ describe('enqueuePaymentSucceeded: an unsafe optional image never invalidates th
     vi.stubEnv('COMMERCE_EMAIL_ORIGIN', 'https://shop.example.test');
     vi.stubEnv('SUPABASE_URL', 'https://yepfgjehdstlxbpespun.supabase.co');
     vi.stubEnv('SUPABASE_PROJECT_REF', 'yepfgjehdstlxbpespun');
+    vi.stubEnv('CLOUDINARY_URL', 'cloudinary://111:topsecret@demo-cloud');
     vi.stubEnv('NODE_ENV', 'production');
-    const { tx, queries } = transaction([approved, 'https://evil.example/pixel.gif', 'http://shop.example.test/a.jpg', 'javascript:alert(1)', null, '/products/a.jpg']);
+    const { tx, queries } = transaction([approved, historicalCloudinary, 'https://evil.example/pixel.gif', 'http://shop.example.test/a.jpg', 'javascript:alert(1)', null, '/products/a.jpg']);
     const created = await enqueuePaymentSucceeded(tx as never, { orderId, paidAt: new Date('2026-10-20T00:00:00Z'), card: null });
     expect(created.map(event => event?.suppressed)).toEqual([false, false]); // READY, not SUPPRESSED
     const [order] = snapshotsOf(queries);
-    expect(order.items.map((entry: { imageUrl: string | null }) => entry.imageUrl)).toEqual([approved, null, null, null, null, null]);
+    expect(order.items.map((entry: { imageUrl: string | null }) => entry.imageUrl)).toEqual([approved, historicalCloudinary, null, null, null, null, null]);
     const parsed = commerceEmailSnapshot.parse(order);
     const html = renderCommerceEmail(parsed, { origin: 'https://shop.example.test' }, 'v1');
-    for (const index of [0, 1, 2, 3, 4, 5]) expect(html.text).toContain(`Phone ${index}`); // every item is still listed
+    for (const index of [0, 1, 2, 3, 4, 5, 6]) expect(html.text).toContain(`Phone ${index}`); // every item is still listed
     expect(html.html).toContain(approved);
+    expect(html.html).toContain(historicalCloudinary);
     expect(html.html).not.toMatch(/evil\.example|javascript:/);
   });
 });

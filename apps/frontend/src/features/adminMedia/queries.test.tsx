@@ -1,16 +1,32 @@
 import type { ReactNode } from 'react';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/lib/api';
 import { queryKeys } from '@/lib/query';
 import { mediaConcurrencyTag } from './types';
 import { newIdempotencyKey } from './types';
-import { useMediaMutations } from './queries';
+import { useAdminMediaProducts, useAdminProductImages, useMediaMutations } from './queries';
 
 vi.mock('@/lib/api', () => ({ apiClient: vi.fn() }));
 
 describe('admin media mutations', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each([null, '', '   '])('preserves the saved editable alt text when it is %s', async altText => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['admin', 'media', 'product', 'product-1'], { data: { id: 'product-1', name: 'Test Tablet', slug: 'test-tablet' } });
+    vi.mocked(apiClient).mockResolvedValue({ data: [{ id: 'image-1', productId: 'product-1', url: '/photo.webp', altText,
+      sortOrder: 0, isPrimary: true, sourceRevision: null, mediaState: 'PUBLISHED', width: null, height: null,
+      updatedAt: '2026-10-28T12:00:00.000Z', indexing: { state: 'LEGACY', embeddingVersion: null, errorCode: null } }] } as never);
+    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const { result } = renderHook(() => useAdminProductImages('product-1'), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.data[0]?.altText).toBe(altText);
+    client.clear();
+  });
+
   it('uploads one file with a UUID idempotency key and multipart form data', async () => {
     const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     vi.mocked(apiClient).mockResolvedValue({ data: { id: 'image-1' } });
@@ -78,6 +94,24 @@ describe('admin media mutations', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.products.all });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.search.all });
     expect(mediaConcurrencyTag({ ...image, sourceRevision: 'rev-2' })).toBe(image.updatedAt);
+    client.clear();
+  });
+});
+
+describe('admin media product discovery', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('requests the server-filtered page and keeps the compatible data array plus total metadata', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const product = { id: 'product-31', name: 'Acer Cestus 330', slug: 'acer-cestus-330' };
+    vi.mocked(apiClient).mockResolvedValue({ data: [product], meta: { page: 2, pageSize: 30, total: 31, totalPages: 2 } } as never);
+    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const { result } = renderHook(() => useAdminMediaProducts(' EH-031 ', 2, 30), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(vi.mocked(apiClient).mock.calls[0]?.[0]).toBe('/api/admin/products?q=EH-031&page=2&pageSize=30');
+    expect(result.current.data?.data).toEqual([product]);
+    expect(result.current.data?.meta).toEqual({ page: 2, pageSize: 30, total: 31, totalPages: 2 });
     client.clear();
   });
 });

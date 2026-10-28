@@ -77,4 +77,10 @@ describe('listProductMediaTreeBounded', () => {
     await expect(listProductMediaTreeBounded(async () => [object(current), object(retired)], { pageSize: 5, maxEntries: 1 }))
       .rejects.toThrow('configured entry limit');
   });
+
+  it('propagates transient Storage listing failures instead of reporting confirmed missing objects', async () => {
+    const unavailable = new Error('Storage list temporarily unavailable');
+    await expect(listProductMediaTreeBounded(async () => { throw unavailable; }))
+      .rejects.toBe(unavailable);
+  });
 });

@@ -4,7 +4,7 @@ Evidence date: 2026-10-28. This report distinguishes implementation, isolated in
 
 ## 1. Final status
 
-PARTIAL. READY FOR ARCHITECT REVIEW: NO while the production recovery/release gate remains open. DEV schema deployment, real authenticated API→Storage→D3 worker→actual vector-reader integration passed. No production write occurred.
+PARTIAL. READY FOR ARCHITECT REVIEW: NO because final source changes still lack disposable PostgreSQL migration/worker execution and browser smoke evidence. PROD backup/PITR state is not a Task 04.3 source-acceptance blocker. Prior DEV schema deployment, authenticated API→Storage→D3 worker→vector-reader integration passed. No production write occurred.
 
 ## 2. Branch and repository
 
@@ -41,7 +41,7 @@ Admin UI supports preview, replacement comparison, partial multi-file results, s
 |---|---|---|---|---|
 | QA | Loopback TLS, launcher-owned `electrohub_disposable_media_41d1bea3a2` (SQL guards), `electrohub_disposable_media_d143c85e42` (real D3) | All 24 applied; second deploy no-op; exact raw checksum ledger | Both new migrations, uniquely owned disposable fixtures | VERIFIED replay, SQL guards, real worker and asynchronous gateway |
 | DEV | `pzxekjybdiulzmssalfo`, ACTIVE_HEALTHY, Seoul | Supported Prisma deploy/status and existing pre/post guard PASS; 24 applied, none pending | Both task migrations; public `product-media` bucket; traceable owned QA fixtures | VERIFIED real authentication, API publication, Storage, restricted worker and actual vector reader |
-| PROD | `yepfgjehdstlxbpespun`, ACTIVE_HEALTHY, Tokyo | 22 applied; Task 04.3 tables/worker role absent; zero products/images | None | BLOCKED: no available backups and PITR disabled; rechecked after reviewer interruption |
+| PROD | `yepfgjehdstlxbpespun`, Tokyo | Prior review observed 22 applied and Task 04.3 tables/worker role absent | None | No production write. Backup/PITR was not rechecked for this closure and is outside Task 04.3 source acceptance. |
 
 Before and after shared schema changes, DEV retained 229 products/432 images and ACTIVE D3 `siglip2-b16-p256-d1-b3900dd9fad5`; D3/Candidate C/retired base snapshots each had 412 vectors. Candidate C remained STAGING; no model pointer promotion. Post-migration media event/overlay counts were both zero; eligible legacy image count remained 412; `ai_media_worker` remained NOLOGIN. Duplicate published legacy primaries: zero. Historical migration bytes are preserved through a Git-blob deployment snapshot after normalized SQL equality checks; no ledger checksum rewriting.
 
@@ -140,14 +140,102 @@ Authored `docs/tasks/Phase-04/TASK_04.3_IMPLEMENTATION_PLAN.md`, this implementa
 
 ## 12. Remaining risks
 
-BLOCKER: PROD recovery gate fails; no PROD writes. Full test-suite failures remain disclosed above. Live DEV admin API, actual provider, worker, vector-reader, admin mutations and anonymous shopper image gates passed. Actual DEV cart/wishlist/search-card browser flows remain a test-coverage gap; no claim of full commerce-browser regression approval.
+No PROD write was performed. Backup/PITR is not a Task 04.3 source-acceptance blocker. Final source changes still need disposable PostgreSQL migration/worker execution and browser smoke evidence. Full test-suite failures remain disclosed above. Prior live DEV admin API, provider, worker, vector-reader, admin mutations and anonymous shopper image gates passed. Actual DEV cart/wishlist/search-card browser flows remain a test-coverage gap; no claim of full commerce-browser regression approval.
 
 Resolved interruption: automatic approval review temporarily failed due to its usage limit. The blocked status command was not executed and the check was not bypassed. After the owner restored reviewer availability and explicitly requested retry, the command and subsequent authorized DEV gates ran successfully. Seeded ADMIN credentials came from the owner-authorized backend `seed.ts`; no administrator was created or reset.
 
-NON-BLOCKING RESIDUAL RISK: legacy null-revision image bytes retain an explicit compatibility trust boundary; no hash backfill. Retained historical objects consume space; physical cleanup is deliberately absent. Worker deployment requires its own restricted login and compatible mounted artifact. Existing PROD workflow allows only Task 04.2 migration names and will reject pending Task 04.3 migrations until reviewed release authorization changes.
+NON-BLOCKING RESIDUAL RISK: legacy null-revision image bytes retain an explicit compatibility trust boundary; no hash backfill. Retained historical objects consume space; physical cleanup is deliberately absent. Worker deployment requires its own restricted login and compatible mounted artifact.
 
 OPTIONAL IMPROVEMENT: native browser zoom/manual assistive-technology review and a dedicated full media-editor Figma reference.
 
 ## 13. Final handoff
 
-Task 04.3: PARTIAL. Branch: `feature/04.3-product-media-storage-embedding-sync`. Implementation spans backend, frontend, Storage, database, AI and operations. DB/Storage: isolated replay, actual DEV migrations and actual DEV Storage verified; PROD recovery gate blocked. AI correctness: isolated SQL/real D3/asynchronous gateway and actual DEV authenticated publication/worker/vector-reader proofs passed. Browser: mocked four-width coverage, unmocked live admin mutation/read and anonymous shopper image verification passed with the stated limits. Tests: focused checks green with disclosed full-suite failures. QA fixture cleanup and final DEV vector fingerprints verified. Known blocker: PROD recovery prerequisite. Ready for Principal Architect review: NO. No self-approval.
+This was the pre-remediation handoff. Its PROD recovery-gate wording is superseded by the final closure below; previously recorded DEV/QA evidence remains historical evidence for the source revision tested at that time.
+
+## 14. Task 04.3 — final architect blocker closure
+
+Branch: `feature/04.3-product-media-storage-embedding-sync`
+HEAD/base: `fc3461a615f79b41bf06628cd00082362edc8b1b` (reviewed feature-branch baseline; working tree remains uncommitted).
+Changed files: AI worker configuration/runtime and tests; worker health migration and backend status/policy helpers/tests; Cloudinary receipt-image compatibility and tests; product-gallery accessible naming and tests; production migration allowlist; runbook and ADR addendum.
+
+**F-01 Worker environment isolation**
+Fix: exact DEV/PROD database and Storage project binding, approved direct/pooler forms, disposable-only QA/test targets, and process/env-file rejection of inherited vector, service, commerce, auth, and training credentials.
+Tests: `venv\Scripts\python.exe -m pytest tests/test_media_sync.py tests/test_settings.py -o addopts='' -q --basetemp=<writable-temp>`, with `TEMP`/`TMP` redirected to the writable task temp directory — 99 passed. Ruff and targeted mypy passed.
+Result: SOURCE AND FOCUSED TESTS CLOSED; no live cross-environment connection was attempted.
+
+**F-02 Worker health and shutdown**
+Fix: private per-process heartbeat rows, startup privilege/model/source checks, idle/processing heartbeats, bounded seven-day retention, queue/worker status classification, signal-aware drain and just-claimed lease release.
+Tests: worker lifecycle cases, including signal-after-claim lease release, are included in the 99 AI tests; backend status tests are included in 24 backend tests.
+Actual operational proof: NOT VERIFIED against PostgreSQL. No isolated PostgreSQL runtime was available; this closure made no DEV/PROD database writes.
+Result: IMPLEMENTED; source/unit evidence passes, but migration replay and live worker lifecycle remain unverified.
+
+**F-03 Historical order-image compatibility**
+Fix: accept only HTTPS Cloudinary image-upload paths for the explicitly configured cloud name, preserving historic receipt snapshots.
+Tests: backend email compatibility tests are included in 24 backend tests.
+Result: SOURCE AND FOCUSED TESTS CLOSED.
+
+**F-04 Accessible gallery names**
+Fix: meaningful alt-text fallback and thumbnail labels; regression assertions cover blank alt text and keyboard selection.
+Tests: three focused frontend test files — 29 passed.
+Browser check: NOT VERIFIED. Playwright browser binaries were unavailable and the CUA runtime could not initialize.
+Result: SOURCE AND COMPONENT TESTS CLOSED; browser smoke remains unverified.
+
+**Migration/release-policy compatibility**
+Result: exact ordered allowlist now includes `20261024000000_ai_vector_search`, `20261025000000_ai_vector_staging_guard`, `20261028000000_product_media`, `20261028010000_catalog_media_overlay`, and `20261028020000_product_media_worker_health`. Additive SQL scan passed; workflow safety suite passed 19/19 and policy check passed. No migration workflow was triggered and no PROD migration was applied.
+
+**Focused tests:** AI command above — 99 passed; `npm exec --workspace=@electrohub/backend -- vitest run tests/product-media-ops-health.test.ts src/services/__tests__/commerce-email.images.test.ts --maxWorkers=1` — 24 passed; `npm exec --workspace=@electrohub/frontend -- vitest run src/components/ui/ProductGallery/ProductGallery.test.tsx src/features/adminMedia/queries.test.tsx src/pages/customer/ProductDetailPage.test.tsx --maxWorkers=1` — 29 passed; `node --test .github/scripts/ci-safety.test.cjs` — 19 passed; `node .github/scripts/check-workflow-policy.cjs` — passed. `TEMP`/`TMP` were redirected for Node test runs after default Windows sandbox temp caused `EPERM`; the reruns passed.
+**Final affected suite:** these focused remediation regressions pass. New hosted CI is not available for the uncommitted source.
+**GitHub CI:** prior runs `40686252499` (Development CI) and `40686252518` (Security Audit) cover the previously pushed revision only; new changes are not CI-verified.
+
+Remaining blockers: disposable PostgreSQL migration/worker execution and real browser accessibility smoke could not be verified in this environment.
+Remaining non-blocking risks: legacy null-revision media retains its documented trust boundary; actual target-environment migration and worker provisioning remain release operations. PROD backup/PITR is not a Task 04.3 acceptance blocker.
+
+**STATUS: PARTIAL**
+**READY FOR ARCHITECT REVIEW: NO**
+**No commit/push/merge: CONFIRMED**
+
+## 15. Final execution & acceptance gate — 2026-10-28
+
+This addendum supersedes the Gate A/B status in §14; prior evidence remains historical. No commit, push, merge, deployment, PROD write, or model activation occurred.
+
+**A. PostgreSQL migration replay — PASS.** On the launcher-owned disposable PostgreSQL, `node scripts/product-media-qa.cjs --schema-only` replayed all 25 migrations; a second deploy was a no-op and all ledger checksums matched. Table RLS/revokes and 30 worker privilege/readiness checks passed. Cleanup left zero active pointers, queue events, temporary model registrations, signal-test heartbeats, or temporary roles.
+
+**B. Real worker health/shutdown — PASS.** The existing Linux AI image ran the current worker source against the disposable database and matching artifact. Actual states: STARTING → READY → STOPPING → STOPPED. SIGTERM exited 143; SIGINT exited 130; both persisted STOPPED with no current event and emitted signal-received events. Separate live QA observed advancing idle heartbeat, PROCESSING for event A, and successful A completion. The shutdown-after-claim regression safely returned the lease to RETRY_WAIT and cleared its token. Worker-status unit coverage distinguishes live, stale, failed, stopped, and unavailable. Prior unchanged lease-expiry/restart evidence was reused.
+
+**C. Browser accessibility — PASS.** Playwright smoke passed 1/1 on Chrome 156.0.8078.48 at 1440×1000, 1024×900, 768×1024, and 390×844. It verified null/empty/whitespace alt fallback, distinct thumbnail names, arrows/Enter/Space with focus, image switching, visible controls, and no horizontal overflow. Desktop/mobile screenshots: `apps/frontend/test-results/task04-3-media/customer-product-media.vis-437b6-tos-at-four-viewport-widths/customer-product-media-desktop.png` and `.../customer-product-media-mobile.png`. Bundled install command `npm exec --workspace=@electrohub/frontend -- playwright install chromium` failed with `ENOTFOUND cdn.playwright.dev`; installed Chrome provided the browser evidence.
+
+**D. Source/diff review.** Fixed the hosted runtime login mismatch (`ai_media_worker_runtime` member of the NOLOGIN worker role), over-privileged worker readiness acceptance, and column-grant readiness check. No gallery, receipt-image, or workflow defect found. Changed-file inventory: `.gitattributes`; `.github/scripts/{check-workflow-policy.cjs,ci-safety.test.cjs}`; `.github/workflows/prod-migration.yml`; AI service `.env.example`, `app/core/config.py`, `app/media_sync.py`, `tests/test_media_sync.py`, `tests/test_settings.py`; backend migration `20261028020000_product_media_worker_health/migration.sql`, `scripts/{product-media-ai-qa.py,product-media-migrate.cjs,product-media-ops.ts,product-media-ops-health.ts}`, `tests/product-media-ops-health.test.ts`, and commerce-email config/test; frontend ProductGallery, admin-media queries, ProductDetailPage, and `tests/visual/customer-product-media.visual.spec.ts`; this report, ADR-010, and the product-media runbook.
+
+**E. Migration policy — PASS.** Ordered allowlist remains `20261024000000_ai_vector_search`, `20261025000000_ai_vector_staging_guard`, `20261028000000_product_media`, `20261028010000_catalog_media_overlay`, `20261028020000_product_media_worker_health`. Trigger, project pin, concurrency, least-privilege, checksum/destructive-SQL, and pre/post guards are unchanged. Read-only PROD Prisma-ledger SELECT plus repository guard comparison found 22 applied and exactly the three Task 04.3 migrations pending in order, with no checksum or destructive-SQL findings. No PROD migration ran.
+
+**F. Focused/final tests.** AI pytest 101 passed; AI Ruff/format passed. Backend Vitest 24 passed; frontend Vitest 29 passed; workflow safety 19 passed; migration policy passed; Playwright 1 passed; QA script `py_compile` passed; `git diff --check` passed. The full D3 replacement QA was not repeated: one in-scope disposable attempt completed A but reported `SOURCE_UNAVAILABLE` for replacement B despite the fixture server reporting SENT; direct GET/SHA-256 for both images passed. Earlier DEV D3/Storage replacement evidence is unchanged and reused. Whole-file Ruff on the pre-existing QA script reported 66 findings; baseline attribution was not established, so it was not reformatted wholesale.
+
+**G. Remaining blockers.** None for the requested acceptance gates. The final disposable replacement-B rerun and whole-file QA-script Ruff baseline remain unverified; neither changes the previously verified DEV integration evidence. Uncommitted source has no new hosted CI run.
+
+**H. Ready for Principal Architect approval: YES.** This is an acceptance handoff, not self-approval.
+
+## 16. Customer image-search follow-up — 2026-10-28
+
+The existing §7 DEV evidence remains the verified source for the internal A→B vector behavior: A ranked after publication, B replacement immediately excluded A while pending, B later indexed and searchable, and the former-A query used the current B vector. It used the real DEV API, restricted worker, and pgvector reader; it did not submit the photo through the customer image-search UI.
+
+The requested customer image-search follow-up was **NOT VERIFIED** in this run. Read-only DEV inspection found the D3 pointer ACTIVE (`siglip2-b16-p256-d1-b3900dd9fad5`) and six `READY` media events, oldest created at 2026-10-28 14:08 UTC. The DEV database lacks `ai.media_worker_heartbeats`; its Prisma ledger has `20261028010000_catalog_media_overlay` but not `20261028020000_product_media_worker_health`. The local DEV backend, AI service and frontend endpoints on ports 5000, 8000 and 3200 were unavailable, and no restricted worker database credential was present in the worker environment. Therefore no new image upload or replacement was attempted; a pending state here would not establish a UI defect. The source image search and same-photo submission remain unverified by this run.
+
+No DEV or PROD data was changed. The internal stale-vector assertion relies on the existing §7 SQL/pgvector integration evidence; this addendum does not claim a new customer-search UI pass.
+
+## 17. Task 04.3 live addendum closure — 2026-10-28
+
+This section supersedes §16. No commit, push, merge, production write, or model promotion occurred.
+
+**Catalog search and pagination — VERIFIED.** The admin endpoint now searches eligible products server-side by name/SKU and returns bounded 30-item pages with matching totals and deterministic ordering; the UI reports `Showing 1–30 of 212 products` and offers Previous/Next. Live Chromium search for `EH-025-007-SPACE-GRAY-1TB` found the Apple iPad Air 11 M2 Wi‑Fi 1TB — Space Gray outside page one, opened its editor, and retained the same heading/gallery after refresh (GETs returned 200). The temporary QA product was later removed, leaving **211** eligible DEV products. Evidence screenshots are in `apps/frontend/test-results/task04-3-media/`.
+
+**Storage and image fallback — VERIFIED.** DEV project `pzxekjybdiulzmssalfo`, bucket `product-media`. Current Acer image `fb02b22e-8da7-493e-ba42-e5f5354539b9` (revision `99c9113c-e356-43bd-b992-262d123cbe4d`) remains PUBLISHED in PostgreSQL, but its exact object path `products/6e1cbed2-df05-4e0b-8ef2-d17d63f9d0e2/fb02b22e-8da7-493e-ba42-e5f5354539b9/99c9113c-e356-43bd-b992-262d123cbe4d/original.webp` is absent from Storage. An uncached request returned transport HTTP 400 with embedded `404 / NoSuchKey`. Reconciliation reported the current reference as missing and the separate retired revision as missing retained history; it performed no deletion. The other visible Acer photos are loaded local assets (`acermouse-01.jpg`, `acermouse-02.jpg`), not cached copies of the missing Storage object. The broken image uses the shared fallback in admin and customer views; authorized Replace/Remove controls remain available. The current missing source has no matching D3 overlay and remains PENDING, not INDEXED.
+
+**Alt text and browser accessibility — VERIFIED.** Loaded photos expose meaningful `alt` attributes without visible captions. Blank alt falls back to the product name; thumbnail names are distinct; failed images retain accessible descriptions and show visible fallback text without changing layout dimensions. The updated Chromium accessibility spec passed 1/1; focused frontend tests also cover loaded, broken, descriptive-alt, and blank-alt cases.
+
+**DEV AI image-search A→B — VERIFIED.** The old 8-second proxy deadline aborted a valid request whose AI retrieval took 12.1 seconds (AI request total 14.1 seconds); the default is now 15 seconds and remains capped at 15 seconds. The QA fixture’s private category slug also caused the backend category filter to discard its exact vector match; the fixture was corrected to canonical `headphones`. Customer search returned A at rank 1. Replacing A with visibly different B immediately changed the gallery while B was PENDING; the old A overlay was ineligible by current-source/revision join, and customer search with A no longer returned the product. Exact A event `9b47894e-b98d-4403-9fe1-20a9cbca97de` and B event `cfeb114b-5c57-4a2e-8a38-cb3ced23d574` each completed once; no unrelated events were claimed. B’s active D3 overlay matched its current revision, and customer search returned the product at rank 1. Worker health reached READY with a valid heartbeat; its exact-event run ended STOPPED with one success and zero failures. Active model and 412 base vectors stayed unchanged.
+
+**Authorized QA fixture cleanup — VERIFIED.** After the A→B gate, the temporary product `bcbb6186-e00a-4ffd-860d-3624a9b6f48e` / `EH-T043-DEV-69502083` was removed using an exact-DEV guarded cleanup. Two earlier attempts stopped in preflight before mutation; read-only checks confirmed no partial changes. The corrected run removed one product, one ProductImage, two completed media events, one overlay vector, and only the two A/B revision objects under that product UUID. Postchecks found zero product, images, events, overlay vectors, AI catalog-source rows, or Storage objects for the fixture; the shared `headphones` category, D3 pointer, all base vectors, and order/payment history were preserved. A fresh public product API request returned 404 `PRODUCT_NOT_FOUND`.
+
+**Files changed for this addendum:** backend product-media service/controller/API tests and OpenAPI; AI timeout config/test, backend environment example, and image-search documentation; bounded DEV fixture and cleanup scripts; Storage reconciliation regression test; frontend admin selector/query/types, ProductImage/ProductGallery and customer detail components/tests, and the Playwright accessibility spec; this report.
+
+**Focused verification:** backend Vitest 99/99 across 6 files; frontend Vitest 52/52 across 6 files; Chromium accessibility Playwright 1/1; backend/frontend typechecks passed; frontend production build passed with existing chunk/dynamic-import warnings; cleanup runner typecheck/targeted lint passed; `git diff --check` passed. One ad-hoc standalone `tsc` attempt outside the backend project config reported the pre-existing missing `proper-lockfile` declaration/implicit-any in `src/utils/logTransport.ts`; the official backend typecheck and focused cleanup-runner typecheck passed. Hosted CI was not run for uncommitted changes. No material Task 04.3 acceptance blocker remains.

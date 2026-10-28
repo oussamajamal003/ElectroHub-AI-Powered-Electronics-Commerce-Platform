@@ -1,7 +1,7 @@
 @use '@/styles/abstracts/variables' as *;
 
 .root { display: flex; align-items: center; justify-content: center; }
-.page { min-height: min(55vh, 32rem); }
+.page { min-height: 100vh; min-height: 100dvh; }
 .mark { display: grid; place-items: center; color: $color-primary; animation: turn 1.4s ease-in-out infinite; filter: drop-shadow(0 0 0.35rem rgba($color-primary, .25)); }
 .sm .mark { width: 1.5rem; height: 1.5rem; }
 .md .mark { width: 2.5rem; height: 2.5rem; }

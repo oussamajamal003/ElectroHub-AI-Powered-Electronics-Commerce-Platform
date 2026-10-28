@@ -6,6 +6,13 @@ export interface AdminMediaProduct {
   slug: string;
 }
 
+export interface AdminMediaProductPage {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
 export interface MediaImage {
   id: string;
   productId: string;
@@ -26,6 +33,7 @@ export interface MediaImage {
 }
 
 export interface ApiData<T> { data: T }
+export type AdminMediaProductsResponse = ApiData<AdminMediaProduct[]> & { meta?: AdminMediaProductPage };
 
 export function mediaConcurrencyTag(image: MediaImage): string {
   return image.updatedAt;

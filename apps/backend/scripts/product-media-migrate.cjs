@@ -1,5 +1,5 @@
 'use strict';
-// DEV-only entrypoint. PROD remains gated on separately verified backup/recovery evidence.
+// DEV-only entrypoint. PROD deployment is handled by the exact reviewed migration workflow.
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync, execFileSync } = require('node:child_process');
@@ -40,7 +40,8 @@ fs.copyFileSync(path.join(migrationRoot, 'migration_lock.toml'), path.join(snaps
 fs.copyFileSync(path.join(backend, 'prisma/schema.prisma'), path.join(snapshot, 'schema.prisma'));
 const environment = { ...process.env, ...values, DB_SSL_CA_CERT_PATH: path.resolve(backend, values.DB_SSL_CA_CERT_PATH || 'prisma/supabase-ca.pem'),
   MIGRATION_TARGET: 'DEV', EXPECTED_PROJECT_REF: 'pzxekjybdiulzmssalfo',
-  APPROVED_MIGRATIONS: '20261028000000_product_media,20261028010000_catalog_media_overlay', MIGRATIONS_DIR: path.join(snapshot, 'migrations') };
+  APPROVED_MIGRATIONS: '20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health',
+  MIGRATIONS_DIR: path.join(snapshot, 'migrations') };
 function run(args, cwd = root) {
   const result = spawnSync(process.execPath, args, { cwd, env: environment, stdio: 'inherit' });
   if (result.status !== 0) process.exit(result.status || 1);

@@ -12,7 +12,9 @@ import hashlib
 import logging
 import math
 import os
+import signal
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -37,6 +39,9 @@ MAX_ATTEMPTS = 12
 POLL_SECONDS = 2.0
 RECONCILE_INTERVAL_SECONDS = 30.0
 RECONCILE_BATCH_SIZE = 100
+HEARTBEAT_INTERVAL_SECONDS = 10.0
+HEARTBEAT_STALE_AFTER_SECONDS = 60
+HEARTBEAT_RETENTION_DAYS = 7
 
 _CLAIM_SQL = """
 WITH candidate AS (
@@ -46,6 +51,30 @@ WITH candidate AS (
       AND ("claimedUntil" IS NULL OR "claimedUntil" <= clock_timestamp())
     ORDER BY "createdAt", id
     FOR UPDATE SKIP LOCKED
+    LIMIT 1
+)
+UPDATE public.catalog_media_events AS event
+SET state = 'CLAIMED',
+    "attemptCount" = event."attemptCount" + 1,
+    "claimedUntil" = clock_timestamp() + (%s * interval '1 second'),
+    "leaseToken" = %s::uuid,
+    "updatedAt" = now()
+FROM candidate
+WHERE event.id = candidate.id
+RETURNING event.id, event."productId", event."productImageId", event.operation,
+          event."sourceRevision", event."sourceSha256", event."attemptCount", event."leaseToken"
+"""
+
+# Exact-ID claims are reserved for controlled one-shot QA and are used only after an operator
+# has verified the event's ownership and current source eligibility.
+_CLAIM_EVENT_SQL = """
+WITH candidate AS (
+    SELECT event.id FROM public.catalog_media_events AS event
+    WHERE event.id = %s::uuid
+      AND event.state IN ('READY', 'RETRY_WAIT', 'CLAIMED')
+      AND event."nextAttemptAt" <= clock_timestamp()
+      AND (event."claimedUntil" IS NULL OR event."claimedUntil" <= clock_timestamp())
+    FOR UPDATE OF event SKIP LOCKED
     LIMIT 1
 )
 UPDATE public.catalog_media_events AS event
@@ -97,6 +126,178 @@ SELECT a.embedding_version, m.model_version, m.preprocess_version, m.embedding_d
 FROM ai.active_index AS a
 JOIN ai.model_versions AS m ON m.embedding_version = a.embedding_version
 WHERE a.singleton
+"""
+
+_READINESS_SQL = """
+SELECT pg_has_role(current_user, 'ai_media_worker', 'MEMBER'),
+       EXISTS (
+           SELECT 1 FROM pg_roles AS runtime_role
+           WHERE runtime_role.rolname = current_user
+             AND runtime_role.rolcanlogin AND runtime_role.rolinherit
+             AND NOT runtime_role.rolsuper AND NOT runtime_role.rolbypassrls
+             AND NOT runtime_role.rolcreatedb AND NOT runtime_role.rolcreaterole
+             AND NOT runtime_role.rolreplication
+       ),
+       NOT EXISTS (
+           SELECT 1 FROM pg_auth_members AS membership
+           JOIN pg_roles AS granted_role ON granted_role.oid = membership.roleid
+           WHERE membership.member = (SELECT oid FROM pg_roles WHERE rolname = current_user)
+             AND granted_role.rolname <> 'ai_media_worker'
+       ),
+       NOT has_schema_privilege(current_user, 'ai', 'CREATE'),
+       NOT has_schema_privilege(current_user, 'extensions', 'CREATE'),
+       NOT has_schema_privilege(current_user, 'public', 'CREATE'),
+       NOT EXISTS (
+           SELECT 1
+           FROM pg_class AS relation
+           JOIN pg_namespace AS relation_schema ON relation_schema.oid = relation.relnamespace
+           WHERE relation_schema.nspname IN ('ai', 'public')
+             AND relation.relkind IN ('r', 'p', 'v', 'm', 'f')
+             AND CASE
+                 WHEN relation_schema.nspname = 'ai'
+                      AND relation.relname IN ('catalog_media_sources', 'active_index', 'model_versions') THEN
+                     has_table_privilege(current_user, relation.oid, 'INSERT')
+                     OR has_table_privilege(current_user, relation.oid, 'UPDATE')
+                     OR has_table_privilege(current_user, relation.oid, 'DELETE')
+                     OR has_table_privilege(current_user, relation.oid, 'TRUNCATE')
+                     OR has_table_privilege(current_user, relation.oid, 'REFERENCES')
+                     OR has_table_privilege(current_user, relation.oid, 'TRIGGER')
+                     OR has_any_column_privilege(current_user, relation.oid, 'INSERT')
+                     OR has_any_column_privilege(current_user, relation.oid, 'UPDATE')
+                     OR has_any_column_privilege(current_user, relation.oid, 'REFERENCES')
+                 WHEN relation_schema.nspname = 'public' AND relation.relname = 'catalog_media_events' THEN
+                     has_table_privilege(current_user, relation.oid, 'INSERT')
+                     OR has_table_privilege(current_user, relation.oid, 'DELETE')
+                     OR has_table_privilege(current_user, relation.oid, 'TRUNCATE')
+                     OR has_table_privilege(current_user, relation.oid, 'REFERENCES')
+                     OR has_table_privilege(current_user, relation.oid, 'TRIGGER')
+                     OR has_any_column_privilege(current_user, relation.oid, 'INSERT')
+                     OR has_any_column_privilege(current_user, relation.oid, 'REFERENCES')
+                     OR EXISTS (
+                         SELECT 1 FROM pg_attribute AS column_info
+                         WHERE column_info.attrelid = relation.oid
+                           AND column_info.attnum > 0 AND NOT column_info.attisdropped
+                           AND (
+                               (has_column_privilege(current_user, relation.oid, column_info.attname, 'SELECT')
+                                AND column_info.attname NOT IN ('id', 'productId', 'productImageId', 'operation',
+                                    'sourceRevision', 'sourceSha256', 'state', 'attemptCount', 'nextAttemptAt',
+                                    'claimedUntil', 'leaseToken', 'createdAt'))
+                               OR
+                               (has_column_privilege(current_user, relation.oid, column_info.attname, 'UPDATE')
+                                AND column_info.attname NOT IN ('state', 'attemptCount', 'nextAttemptAt',
+                                    'claimedUntil', 'leaseToken', 'lastErrorCode', 'completedAt', 'updatedAt'))
+                           )
+                     )
+                 WHEN relation_schema.nspname = 'ai' AND relation.relname = 'media_worker_heartbeats' THEN
+                     has_table_privilege(current_user, relation.oid, 'TRUNCATE')
+                     OR has_table_privilege(current_user, relation.oid, 'REFERENCES')
+                     OR has_table_privilege(current_user, relation.oid, 'TRIGGER')
+                 ELSE
+                     has_table_privilege(current_user, relation.oid, 'SELECT')
+                     OR has_table_privilege(current_user, relation.oid, 'INSERT')
+                     OR has_table_privilege(current_user, relation.oid, 'UPDATE')
+                     OR has_table_privilege(current_user, relation.oid, 'DELETE')
+                     OR has_table_privilege(current_user, relation.oid, 'TRUNCATE')
+                     OR has_table_privilege(current_user, relation.oid, 'REFERENCES')
+                     OR has_table_privilege(current_user, relation.oid, 'TRIGGER')
+                     OR has_any_column_privilege(current_user, relation.oid, 'SELECT')
+                     OR has_any_column_privilege(current_user, relation.oid, 'INSERT')
+                     OR has_any_column_privilege(current_user, relation.oid, 'UPDATE')
+                     OR has_any_column_privilege(current_user, relation.oid, 'REFERENCES')
+             END
+       ),
+       NOT EXISTS (
+           SELECT 1 FROM pg_class AS sequence
+           JOIN pg_namespace AS sequence_schema ON sequence_schema.oid = sequence.relnamespace
+           WHERE sequence_schema.nspname IN ('ai', 'public') AND sequence.relkind = 'S'
+             AND (has_sequence_privilege(current_user, sequence.oid, 'USAGE')
+                  OR has_sequence_privilege(current_user, sequence.oid, 'SELECT')
+                  OR has_sequence_privilege(current_user, sequence.oid, 'UPDATE'))
+       ),
+       NOT EXISTS (
+           SELECT 1 FROM pg_namespace AS function_schema
+           JOIN pg_proc AS privileged_function ON privileged_function.pronamespace = function_schema.oid
+           WHERE function_schema.nspname IN ('ai', 'public')
+             AND privileged_function.prosecdef
+             AND NOT (function_schema.nspname = 'ai'
+                      AND privileged_function.proname IN ('publish_media_embedding', 'enqueue_missing_media_events'))
+             AND has_function_privilege(current_user, privileged_function.oid, 'EXECUTE')
+       ),
+       has_schema_privilege(current_user, 'ai', 'USAGE'),
+       has_schema_privilege(current_user, 'extensions', 'USAGE'),
+       has_schema_privilege(current_user, 'public', 'USAGE'),
+       has_table_privilege(current_user, 'ai.catalog_media_sources', 'SELECT'),
+       has_table_privilege(current_user, 'ai.active_index', 'SELECT'),
+       has_table_privilege(current_user, 'ai.model_versions', 'SELECT'),
+       has_column_privilege(current_user, 'public.catalog_media_events', 'id', 'SELECT')
+         AND has_column_privilege(current_user, 'public.catalog_media_events', 'productId', 'SELECT')
+         AND has_column_privilege(current_user, 'public.catalog_media_events', 'productImageId', 'SELECT')
+         AND has_column_privilege(current_user, 'public.catalog_media_events', 'operation', 'SELECT')
+         AND has_column_privilege(current_user, 'public.catalog_media_events', 'sourceRevision', 'SELECT')
+         AND has_column_privilege(current_user, 'public.catalog_media_events', 'sourceSha256', 'SELECT')
+         AND has_column_privilege(current_user, 'public.catalog_media_events', 'state', 'SELECT')
+         AND has_column_privilege(current_user, 'public.catalog_media_events', 'attemptCount', 'SELECT')
+         AND has_column_privilege(current_user, 'public.catalog_media_events', 'nextAttemptAt', 'SELECT')
+         AND has_column_privilege(current_user, 'public.catalog_media_events', 'claimedUntil', 'SELECT')
+         AND has_column_privilege(current_user, 'public.catalog_media_events', 'leaseToken', 'SELECT')
+         AND has_column_privilege(current_user, 'public.catalog_media_events', 'createdAt', 'SELECT'),
+       has_column_privilege(current_user, 'public.catalog_media_events', 'state', 'UPDATE'),
+       has_column_privilege(current_user, 'public.catalog_media_events', 'attemptCount', 'UPDATE'),
+       has_column_privilege(current_user, 'public.catalog_media_events', 'nextAttemptAt', 'UPDATE'),
+       has_column_privilege(current_user, 'public.catalog_media_events', 'claimedUntil', 'UPDATE'),
+       has_column_privilege(current_user, 'public.catalog_media_events', 'leaseToken', 'UPDATE'),
+       has_column_privilege(current_user, 'public.catalog_media_events', 'lastErrorCode', 'UPDATE'),
+       has_column_privilege(current_user, 'public.catalog_media_events', 'completedAt', 'UPDATE'),
+       has_column_privilege(current_user, 'public.catalog_media_events', 'updatedAt', 'UPDATE'),
+       has_table_privilege(current_user, 'ai.media_worker_heartbeats', 'SELECT'),
+       has_table_privilege(current_user, 'ai.media_worker_heartbeats', 'INSERT'),
+       has_table_privilege(current_user, 'ai.media_worker_heartbeats', 'UPDATE'),
+       has_table_privilege(current_user, 'ai.media_worker_heartbeats', 'DELETE'),
+       EXISTS (
+           SELECT 1 FROM pg_proc p
+           WHERE p.pronamespace = 'ai'::regnamespace AND p.proname = 'enqueue_missing_media_events'
+             AND has_function_privilege(current_user, p.oid, 'EXECUTE')
+       ),
+       EXISTS (
+           SELECT 1 FROM pg_proc p
+           WHERE p.pronamespace = 'ai'::regnamespace AND p.proname = 'publish_media_embedding'
+             AND has_function_privilege(current_user, p.oid, 'EXECUTE')
+       )
+"""
+
+_HAS_HOSTED_MEDIA_SQL = """
+SELECT EXISTS (
+    SELECT 1 FROM ai.catalog_media_sources
+    WHERE eligible AND storage_provider = 'SUPABASE_STORAGE'
+)
+"""
+
+_HEARTBEAT_UPSERT_SQL = """
+INSERT INTO ai.media_worker_heartbeats (
+    worker_id, environment, state, heartbeat_at, active_model_version, current_event_id,
+    processed_success_count, processed_failure_count, last_error_code
+) VALUES (%s::uuid, %s, %s, clock_timestamp(), %s, %s::uuid, %s, %s, %s)
+ON CONFLICT (worker_id) DO UPDATE SET
+    environment = EXCLUDED.environment,
+    state = EXCLUDED.state,
+    heartbeat_at = clock_timestamp(),
+    active_model_version = EXCLUDED.active_model_version,
+    current_event_id = EXCLUDED.current_event_id,
+    processed_success_count = EXCLUDED.processed_success_count,
+    processed_failure_count = EXCLUDED.processed_failure_count,
+    last_error_code = EXCLUDED.last_error_code
+"""
+
+_PURGE_OLD_HEARTBEATS_SQL = """
+DELETE FROM ai.media_worker_heartbeats
+WHERE heartbeat_at < clock_timestamp() - (%s * interval '1 day')
+"""
+
+_RELEASE_CLAIM_SQL = """
+UPDATE public.catalog_media_events
+SET state = 'RETRY_WAIT', "nextAttemptAt" = clock_timestamp(), "claimedUntil" = NULL,
+    "leaseToken" = NULL, "lastErrorCode" = 'WORKER_SHUTDOWN', "updatedAt" = clock_timestamp()
+WHERE id = %s::uuid AND state = 'CLAIMED' AND "leaseToken" = %s::uuid
 """
 
 _PUBLISH_SQL = """
@@ -298,14 +499,31 @@ class MediaSyncWorker:
         encoder: Any,
         storage_base_url: str | None,
         catalog_root: Path,
+        environment: str = "test",
         connect: Any = psycopg.connect,
+        heartbeat_interval_seconds: float = HEARTBEAT_INTERVAL_SECONDS,
     ) -> None:
         self._dsn = dsn
         self._encoder = encoder
         self._storage_base_url = storage_base_url
         self._catalog_root = catalog_root
+        self._environment = environment
         self._connect = connect
         self._next_reconcile_at = 0.0
+        self._worker_id = uuid4()
+        self._status_lock = threading.Lock()
+        self._state = "STARTING"
+        self._active_model_version: str | None = None
+        self._current_event_id: UUID | None = None
+        self._processed_success_count = 0
+        self._processed_failure_count = 0
+        self._last_error_code: str | None = None
+        self._heartbeat_interval_seconds = heartbeat_interval_seconds
+        self._heartbeat_stop = threading.Event()
+        self._shutdown_requested = threading.Event()
+        self._heartbeat_failed = threading.Event()
+        self._heartbeat_thread: threading.Thread | None = None
+        self._ready = False
 
     def _connect_db(self) -> Any:
         return self._connect(
@@ -314,6 +532,167 @@ class MediaSyncWorker:
             connect_timeout=15,
             application_name="electrohub-ai-media-worker",
         )
+
+    def _snapshot(self) -> tuple[str, str | None, UUID | None, int, int, str | None]:
+        with self._status_lock:
+            return (
+                self._state,
+                self._active_model_version,
+                self._current_event_id,
+                self._processed_success_count,
+                self._processed_failure_count,
+                self._last_error_code,
+            )
+
+    def _set_state(self, state: str, *, current_event_id: UUID | None = None) -> None:
+        with self._status_lock:
+            if self._state == "FAILED" and state == "STOPPING":
+                return
+            self._state = state
+            self._current_event_id = current_event_id
+
+    def _set_error(self, code: str) -> None:
+        with self._status_lock:
+            self._last_error_code = code[:80]
+
+    def _record_success(self) -> None:
+        with self._status_lock:
+            self._processed_success_count += 1
+
+    def _record_failure(self, code: str) -> None:
+        with self._status_lock:
+            self._processed_failure_count += 1
+            self._last_error_code = code[:80]
+
+    def _write_heartbeat(self) -> None:
+        state, model_version, event_id, success_count, failure_count, error_code = self._snapshot()
+        with self._connect_db() as conn, conn.transaction():
+            conn.execute(
+                _HEARTBEAT_UPSERT_SQL,
+                (
+                    self._worker_id,
+                    self._environment,
+                    state,
+                    model_version,
+                    event_id,
+                    success_count,
+                    failure_count,
+                    error_code,
+                ),
+            )
+
+    def _heartbeat_loop(self) -> None:
+        while not self._heartbeat_stop.wait(self._heartbeat_interval_seconds):
+            try:
+                self._write_heartbeat()
+            except Exception as exc:
+                self._set_error("HEARTBEAT_WRITE_FAILED")
+                self._heartbeat_failed.set()
+                log_event(
+                    "ai.media_worker_heartbeat_failed",
+                    level=logging.ERROR,
+                    workerId=self._worker_id,
+                    exception=type(exc).__name__,
+                )
+
+    def startup(self) -> None:
+        """Persist STARTING, verify role/privileges/model/storage, then publish READY."""
+        self._set_state("STARTING")
+        try:
+            self._write_heartbeat()
+            with self._connect_db() as conn, conn.transaction():
+                privilege_row = conn.execute(_READINESS_SQL).fetchone()
+                if privilege_row is None or not all(bool(value) for value in privilege_row):
+                    raise ConfigurationError("media worker database role lacks required privileges")
+                active = conn.execute(_ACTIVE_SQL).fetchone()
+                if active is None or not _descriptor_matches(active, self._encoder.descriptor):
+                    raise MediaSyncError("ACTIVE_MODEL_MISMATCH")
+                has_hosted_sources = bool(conn.execute(_HAS_HOSTED_MEDIA_SQL).fetchone()[0])
+                if self._environment in {"development", "production"} and not self._storage_base_url:
+                    raise ConfigurationError("hosted media worker requires its environment Storage origin")
+                if has_hosted_sources and not self._storage_base_url:
+                    raise ConfigurationError("hosted media source requires a canonical Storage origin")
+                conn.execute(_PURGE_OLD_HEARTBEATS_SQL, (HEARTBEAT_RETENTION_DAYS,))
+            with self._status_lock:
+                self._active_model_version = str(active[0])
+                self._state = "READY"
+            self._write_heartbeat()
+            self._ready = True
+            self._heartbeat_thread = threading.Thread(
+                target=self._heartbeat_loop,
+                name=f"media-worker-heartbeat-{self._worker_id}",
+                daemon=True,
+            )
+            self._heartbeat_thread.start()
+            log_event(
+                "ai.media_worker_ready",
+                workerId=self._worker_id,
+                environment=self._environment,
+                modelVersion=self._active_model_version,
+            )
+        except Exception as exc:
+            code = exc.code if isinstance(exc, MediaSyncError) else "STARTUP_CHECK_FAILED"
+            self._set_error(code)
+            self._set_state("FAILED")
+            try:
+                self._write_heartbeat()
+            except Exception as status_exc:
+                log_event(
+                    "ai.media_worker_startup_status_failed",
+                    level=logging.WARNING,
+                    workerId=self._worker_id,
+                    exception=type(status_exc).__name__,
+                )
+            log_event(
+                "ai.media_worker_startup_failed",
+                level=logging.ERROR,
+                workerId=self._worker_id,
+                code=code,
+                exception=type(exc).__name__,
+            )
+            if isinstance(exc, ConfigurationError):
+                raise
+            raise ConfigurationError("media worker startup verification failed") from None
+
+    def request_shutdown(self) -> None:
+        """Signal the main loop to stop claiming; any already-running bounded event is allowed to finish."""
+        self._shutdown_requested.set()
+        current_event_id = self._snapshot()[2]
+        self._set_state("STOPPING", current_event_id=current_event_id)
+
+    def shutdown(self) -> None:
+        """Flush STOPPING/STOPPED state and join the bounded heartbeat thread."""
+        self.request_shutdown()
+        if self._snapshot()[0] == "FAILED":
+            self._heartbeat_stop.set()
+            return
+        try:
+            self._write_heartbeat()
+        except Exception as exc:
+            log_event(
+                "ai.media_worker_shutdown_status_failed",
+                level=logging.WARNING,
+                workerId=self._worker_id,
+                exception=type(exc).__name__,
+            )
+        self._heartbeat_stop.set()
+        if self._heartbeat_thread is not None:
+            # A heartbeat uses a 15-second database connect timeout and a 15-second statement timeout.
+            self._heartbeat_thread.join(timeout=31.0)
+            if self._heartbeat_thread.is_alive():
+                log_event("ai.media_worker_heartbeat_join_timeout", level=logging.ERROR, workerId=self._worker_id)
+                return
+        self._set_state("STOPPED")
+        try:
+            self._write_heartbeat()
+        except Exception as exc:
+            log_event(
+                "ai.media_worker_shutdown_status_failed",
+                level=logging.WARNING,
+                workerId=self._worker_id,
+                exception=type(exc).__name__,
+            )
+        self._ready = False
 
     def reconcile_if_due(self, *, now: float | None = None) -> int:
         """Queue at most one bounded reconciliation page every 30 seconds."""
@@ -330,11 +709,16 @@ class MediaSyncWorker:
             log_event("ai.media_reconciliation_failed", level=logging.WARNING, exception=type(exc).__name__)
             return 0
 
-    def claim(self) -> MediaEvent | None:
+    def claim(self, event_id: UUID | None = None) -> MediaEvent | None:
+        if not self._ready:
+            raise ConfigurationError("media worker is not ready to claim events")
         token = uuid4()
         with self._connect_db() as conn, conn.transaction():
-            conn.execute(_EXHAUSTED_LEASE_SQL, (MAX_ATTEMPTS,))
-            row = conn.execute(_CLAIM_SQL, (LEASE_SECONDS, token)).fetchone()
+            if event_id is None:
+                conn.execute(_EXHAUSTED_LEASE_SQL, (MAX_ATTEMPTS,))
+                row = conn.execute(_CLAIM_SQL, (LEASE_SECONDS, token)).fetchone()
+            else:
+                row = conn.execute(_CLAIM_EVENT_SQL, (event_id, LEASE_SECONDS, token)).fetchone()
         if row is None:
             return None
         return MediaEvent(
@@ -388,6 +772,12 @@ class MediaSyncWorker:
                 raise RuntimeError("media event lease was lost before acknowledgment")
             return True
 
+    def _acknowledge(self, event: MediaEvent, *, vector: str | None) -> bool:
+        completed = self._mark_complete(event, vector=vector)
+        if completed:
+            self._record_success()
+        return completed
+
     def _mark_failed(self, event: MediaEvent, code: str) -> None:
         delay = min(3600, 2 ** min(event.attempt_count, 10))
         with self._connect_db() as conn, conn.transaction():
@@ -399,11 +789,11 @@ class MediaSyncWorker:
                 row = conn.execute(_SOURCE_SQL, (event.image_id,)).fetchone()
             # Missing, retired, hidden, or superseded events are safely consumed without publishing vectors.
             if row is None or not row[3] or row[0] != event.product_id:
-                return self._mark_complete(event, vector=None)
+                return self._acknowledge(event, vector=None)
             if event.source_revision is None or event.source_sha256 is None:
-                return self._mark_complete(event, vector=None)
+                return self._acknowledge(event, vector=None)
             if row[1] != event.source_revision or str(row[2]).strip() != event.source_sha256:
-                return self._mark_complete(event, vector=None)
+                return self._acknowledge(event, vector=None)
             if not self._active_descriptor_matches():
                 raise MediaSyncError("ACTIVE_MODEL_MISMATCH")
             data = resolve_source(
@@ -422,7 +812,7 @@ class MediaSyncWorker:
                 raise MediaSyncError("SOURCE_DIGEST_MISMATCH")
             image = decode_image(data)
             vector = _vector_literal(list(self._encoder.encode(image)), self._encoder.descriptor)
-            if not self._mark_complete(event, vector=vector):
+            if not self._acknowledge(event, vector=vector):
                 log_event("ai.media_event_lease_lost", eventId=event.event_id)
                 return False
             log_event("ai.media_event_completed", eventId=event.event_id, imageId=event.image_id)
@@ -430,6 +820,7 @@ class MediaSyncWorker:
         except psycopg.errors.SerializationFailure:
             # The active pointer changed after the preflight descriptor check. Keep the event retryable
             # so the next worker build can encode it with the newly active model.
+            self._record_failure("ACTIVE_MODEL_CHANGED")
             self._mark_failed(event, "ACTIVE_MODEL_CHANGED")
             log_event(
                 "ai.media_event_failed",
@@ -439,10 +830,12 @@ class MediaSyncWorker:
             )
             return False
         except MediaSyncError as exc:
+            self._record_failure(exc.code)
             self._mark_failed(event, exc.code)
             log_event("ai.media_event_failed", level=logging.WARNING, eventId=event.event_id, code=exc.code)
             return False
         except Exception as exc:
+            self._record_failure("WORKER_ERROR")
             self._mark_failed(event, "WORKER_ERROR")
             log_event(
                 "ai.media_event_failed",
@@ -452,17 +845,44 @@ class MediaSyncWorker:
             )
             return False
 
-    def run_once(self) -> bool:
-        self.reconcile_if_due()
-        event = self.claim()
-        if event is None:
+    def run_once(self, event_id: UUID | None = None) -> bool:
+        if not self._ready:
+            raise ConfigurationError("media worker is not ready to process events")
+        if self._shutdown_requested.is_set() or self._heartbeat_failed.is_set():
             return False
-        self.process(event)
+        if event_id is None:
+            self.reconcile_if_due()
+        if self._shutdown_requested.is_set() or self._heartbeat_failed.is_set():
+            return False
+        event = self.claim() if event_id is None else self.claim(event_id)
+        if event is None:
+            self._set_state("READY")
+            return False
+        if self._shutdown_requested.is_set():
+            with self._connect_db() as conn, conn.transaction():
+                conn.execute(_RELEASE_CLAIM_SQL, (event.event_id, event.lease_token))
+            self._set_state("STOPPING")
+            self._write_heartbeat()
+            return False
+        self._set_state("PROCESSING", current_event_id=event.event_id)
+        try:
+            self._write_heartbeat()
+        except Exception:
+            with self._connect_db() as conn, conn.transaction():
+                conn.execute(_RELEASE_CLAIM_SQL, (event.event_id, event.lease_token))
+            raise ConfigurationError("media worker could not persist its processing heartbeat") from None
+        try:
+            self.process(event)
+        finally:
+            self._set_state("STOPPING" if self._shutdown_requested.is_set() else "READY")
+            self._write_heartbeat()
         return True
 
 
 def build_worker() -> MediaSyncWorker:
     settings = get_settings()
+    if settings.AI_PROCESS_ROLE != "media_worker":
+        raise ConfigurationError("AI_PROCESS_ROLE must be media_worker for the media worker entrypoint")
     if settings.AI_MEDIA_WORKER_DATABASE_URL is None:
         raise ConfigurationError("AI_MEDIA_WORKER_DATABASE_URL is required for the media worker")
     if settings.AI_MODEL_ARTIFACT_DIR is None:
@@ -477,28 +897,72 @@ def build_worker() -> MediaSyncWorker:
         encoder=encoder,
         storage_base_url=settings.AI_MEDIA_STORAGE_BASE_URL,
         catalog_root=Path(os.environ.get("AI_MEDIA_LEGACY_CATALOG_ROOT", "apps/frontend/public")),
+        environment=settings.AI_ENVIRONMENT,
     )
 
 
-def main(argv: list[str] | None = None) -> None:
+def _handle_worker_signal(signum: int, stop_event: threading.Event, worker: MediaSyncWorker | None) -> None:
+    stop_event.set()
+    if worker is not None:
+        worker.request_shutdown()
+    log_event("ai.media_worker_signal_received", signal=signal.Signals(signum).name)
+
+
+def _parse_event_id(value: str) -> UUID:
+    try:
+        return UUID(value)
+    except (AttributeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError("event ID must be a UUID") from exc
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.media_sync")
     parser.add_argument("--once", action="store_true", help="process at most one outbox event and exit")
+    parser.add_argument(
+        "--event-id",
+        type=_parse_event_id,
+        help="claim this pre-verified event only; requires --once and skips shared-queue reconciliation",
+    )
     parser.add_argument("--poll-seconds", type=float, default=POLL_SECONDS)
     args = parser.parse_args(argv)
+    if args.event_id is not None and not args.once:
+        parser.error("--event-id requires --once")
     if args.poll_seconds < 0.1 or args.poll_seconds > 60:
         parser.error("--poll-seconds must be between 0.1 and 60")
     configure_logging(os.environ.get("AI_LOG_LEVEL", "INFO"))
-    worker = build_worker()
+    stop_event = threading.Event()
+    worker: MediaSyncWorker | None = None
+    stop_signal: int | None = None
+
+    def handle_signal(signum: int, _frame: Any) -> None:
+        nonlocal stop_signal
+        stop_signal = signum
+        _handle_worker_signal(signum, stop_event, worker)
+
+    original_handlers = {sig: signal.signal(sig, handle_signal) for sig in (signal.SIGINT, signal.SIGTERM)}
+    exit_code = 0
     try:
-        while True:
-            claimed = worker.run_once()
-            if args.once:
-                return
-            if not claimed:
-                time.sleep(args.poll_seconds)
+        worker = build_worker()
+        if stop_event.is_set():
+            worker.request_shutdown()
+        else:
+            worker.startup()
+            while not stop_event.is_set() and not worker._heartbeat_failed.is_set():
+                worker.run_once(event_id=args.event_id)
+                if args.once:
+                    break
+                if not stop_event.is_set() and not worker._heartbeat_failed.is_set():
+                    stop_event.wait(args.poll_seconds)
+            if worker._heartbeat_failed.is_set():
+                exit_code = 1
     finally:
-        worker._encoder.close()
+        if worker is not None:
+            worker.shutdown()
+            worker._encoder.close()
+        for sig, handler in original_handlers.items():
+            signal.signal(sig, handler)
+    return 128 + stop_signal if stop_signal is not None else exit_code
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    raise SystemExit(main(sys.argv[1:]))

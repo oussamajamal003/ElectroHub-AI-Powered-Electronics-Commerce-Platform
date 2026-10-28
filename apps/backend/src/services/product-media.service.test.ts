@@ -5,7 +5,7 @@ import { ProductMediaService } from './product-media.service.js';
 const ids = vi.hoisted(() => ({ actor: '8f2813b4-a388-44d3-b51e-5d4c40386677', product: '1c5bb1a2-5f0e-4f7a-9d4e-2b8d1f0a9c11', image: '2d6cc2b3-6a1f-4a8b-8e5f-3c9e2a1b0d22', revision: '3e7dd4c4-7b2f-4b9c-8f6e-4d0f3b2c1e33' }));
 const state = vi.hoisted(() => ({ image: null as Record<string, unknown> | null, count: 0, created: 0, eventCreates: 0, failEvent: false, replay: null as Record<string, unknown> | null }));
 const db = vi.hoisted(() => ({
-  $transaction: vi.fn(), $queryRaw: vi.fn(), product: { findUnique: vi.fn() },
+  $transaction: vi.fn(), $queryRaw: vi.fn(), product: { findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn() },
   productImage: { findFirst: vi.fn(), findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), count: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findMany: vi.fn() },
   catalogMediaEvent: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), findMany: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
   user: { findFirst: vi.fn() },
@@ -37,6 +37,8 @@ beforeEach(() => {
     $queryRaw: vi.fn(queryRaw),
     $transaction: vi.fn(async (callback: (tx: typeof db) => Promise<unknown>) => callback(db)),
   });
+  db.product.findMany.mockResolvedValue([]);
+  db.product.count.mockResolvedValue(0);
   db.user.findFirst.mockResolvedValue({ id: ids.actor });
   db.productImage.findFirst.mockImplementation(async () => state.image);
   db.productImage.count.mockImplementation(async () => state.count);
@@ -57,6 +59,38 @@ const createService = () => new ProductMediaService(db as never, () => storage a
 const upload = async (service: ProductMediaService, overrides: Record<string, unknown> = {}) => service.upload({
   actorId: ids.actor, productId: ids.product, key: '4f8ee5d5-813e-4c42-a963-d63a98377d03', bytes: await requestImage(), mime: 'image/jpeg', ...overrides,
 } as Parameters<ProductMediaService['upload']>[0]);
+
+describe('ProductMediaService product discovery', () => {
+  it('searches name and SKU across all eligible products and returns a bounded deterministic page with the total', async () => {
+    db.product.count.mockResolvedValue(67);
+    db.product.findMany.mockResolvedValue([{ id: 'product-31', name: 'Acer Predator Cestus 330', slug: 'acer-predator-cestus-330' }]);
+
+    const result = await createService().products('acer', 2, 30);
+
+    expect(db.product.count).toHaveBeenCalledWith({ where: {
+      isTestFixture: false,
+      OR: [{ name: { contains: 'acer', mode: 'insensitive' } }, { sku: { contains: 'acer', mode: 'insensitive' } }],
+    } });
+    expect(db.product.findMany).toHaveBeenCalledWith({
+      where: { isTestFixture: false, OR: [
+        { name: { contains: 'acer', mode: 'insensitive' } }, { sku: { contains: 'acer', mode: 'insensitive' } },
+      ] },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }], skip: 30, take: 30,
+      select: { id: true, name: true, slug: true },
+    });
+    expect(result).toEqual({ data: [{ id: 'product-31', name: 'Acer Predator Cestus 330', slug: 'acer-predator-cestus-330' }],
+      meta: { page: 2, pageSize: 30, total: 67, totalPages: 3 } });
+  });
+
+  it('returns an empty array beyond the last page without issuing an unbounded offset query', async () => {
+    db.product.count.mockResolvedValue(2);
+
+    const result = await createService().products('', 999_999, 50);
+
+    expect(result).toEqual({ data: [], meta: { page: 999_999, pageSize: 50, total: 2, totalPages: 1 } });
+    expect(db.product.findMany).not.toHaveBeenCalled();
+  });
+});
 
 describe('ProductMediaService upload failure controls (mocked persistence)', () => {
   it('retries only failed current-source work and clears its terminal completion timestamp', async () => {

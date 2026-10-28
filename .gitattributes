@@ -5,5 +5,6 @@ apps/backend/prisma/migrations/20260925020000_remove_users_phone/migration.sql -
 # Task 04.3: preserve the exact reviewed bytes applied by Prisma to DEV.
 apps/backend/prisma/migrations/20261028000000_product_media/migration.sql -text
 apps/backend/prisma/migrations/20261028010000_catalog_media_overlay/migration.sql -text
+apps/backend/prisma/migrations/20261028020000_product_media_worker_health/migration.sql text eol=lf
 # Task 03.9 packaged PDF fonts: byte-exact (verified against the SHA-256 asset manifest at runtime).
 apps/backend/assets/documents/fonts/*.ttf binary

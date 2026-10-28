@@ -8,6 +8,34 @@ from pydantic import ValidationError
 from app.core.config import ConfigurationError, load_settings, settings_from_mapping
 from tests.conftest import TEST_KEY, make_settings
 
+DEV_REF = "pzxekjybdiulzmssalfo"
+PROD_REF = "yepfgjehdstlxbpespun"
+DEV_DATABASE_URL = (
+    f"postgresql://ai_media_worker_runtime:db-secret@db.{DEV_REF}.supabase.co:5432/postgres?sslmode=require"
+)
+PROD_DATABASE_URL = (
+    f"postgresql://ai_media_worker_runtime:db-secret@db.{PROD_REF}.supabase.co:5432/postgres?sslmode=require"
+)
+DEV_STORAGE_URL = f"https://{DEV_REF}.supabase.co"
+PROD_STORAGE_URL = f"https://{PROD_REF}.supabase.co"
+QA_DATABASE_URL = (
+    "postgresql://media_qa_worker_ab12cd34ef56:db-secret@127.0.0.1:55434/"
+    "electrohub_disposable_media_0123456789?sslmode=verify-full"
+)
+QA_STORAGE_URL = "http://127.0.0.1:35217"
+
+
+def media_worker_values(
+    *, environment: str = "development", database_url: str = DEV_DATABASE_URL, storage_url: str = DEV_STORAGE_URL
+) -> dict[str, str]:
+    return {
+        "AI_ENVIRONMENT": environment,
+        "AI_PROCESS_ROLE": "media_worker",
+        "AI_MEDIA_WORKER_DATABASE_URL": database_url,
+        "AI_MODEL_ARTIFACT_DIR": "C:/models/siglip",
+        "AI_MEDIA_STORAGE_BASE_URL": storage_url,
+    }
+
 
 def test_environment_is_required() -> None:
     with pytest.raises(ValidationError):
@@ -138,16 +166,145 @@ def test_media_worker_role_requires_its_own_database_and_artifact() -> None:
         load_settings({"AI_ENVIRONMENT": "test", "AI_PROCESS_ROLE": "media_worker"}, env_file=None)
 
 
-def test_media_storage_origin_rejects_unapproved_hosts_and_paths() -> None:
-    with pytest.raises(ValidationError, match="approved Supabase project origin"):
-        settings_from_mapping(
-            {
-                "AI_ENVIRONMENT": "test",
-                "AI_PROCESS_ROLE": "media_worker",
-                "AI_MEDIA_WORKER_DATABASE_URL": "postgresql://u:p@localhost:5432/electrohub",
-                "AI_MODEL_ARTIFACT_DIR": "C:/models",
-                "AI_MEDIA_STORAGE_BASE_URL": "https://attacker.example",
-            }
+def test_dev_worker_accepts_only_exact_dev_database_and_storage_identity() -> None:
+    settings = load_settings(media_worker_values(), env_file=None)
+    assert settings.AI_ENVIRONMENT == "development"
+
+    pooler_url = (
+        f"postgresql://ai_media_worker_runtime.{DEV_REF}:db-secret@aws-1-us-east-2.pooler.supabase.com:6543/"
+        "postgres?sslmode=verify-full"
+    )
+    assert load_settings(media_worker_values(database_url=pooler_url), env_file=None).AI_PROCESS_ROLE == "media_worker"
+
+
+@pytest.mark.parametrize(
+    ("environment", "database_url", "storage_url"),
+    [
+        ("development", PROD_DATABASE_URL, DEV_STORAGE_URL),
+        ("development", DEV_DATABASE_URL, PROD_STORAGE_URL),
+        ("production", DEV_DATABASE_URL, PROD_STORAGE_URL),
+        ("production", PROD_DATABASE_URL, DEV_STORAGE_URL),
+    ],
+)
+def test_hosted_worker_rejects_cross_environment_database_or_storage(
+    environment: str, database_url: str, storage_url: str
+) -> None:
+    with pytest.raises(ConfigurationError):
+        load_settings(
+            media_worker_values(environment=environment, database_url=database_url, storage_url=storage_url),
+            env_file=None,
+        )
+
+
+def test_production_worker_accepts_exact_prod_database_and_storage_identity() -> None:
+    assert (
+        load_settings(
+            media_worker_values(environment="production", database_url=PROD_DATABASE_URL, storage_url=PROD_STORAGE_URL),
+            env_file=None,
+        ).AI_ENVIRONMENT
+        == "production"
+    )
+
+
+def test_worker_environment_file_rejects_cross_environment_database_identity(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    lines = [f'{key}="{value}"' for key, value in media_worker_values().items()]
+    lines = [line.replace(DEV_DATABASE_URL, PROD_DATABASE_URL) for line in lines]
+    env_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    with pytest.raises(ConfigurationError):
+        load_settings({}, env_file=env_file)
+
+
+def test_worker_accepts_only_explicit_disposable_qa_database_and_local_media_source() -> None:
+    settings = load_settings(
+        media_worker_values(environment="qa", database_url=QA_DATABASE_URL, storage_url=QA_STORAGE_URL),
+        env_file=None,
+    )
+    assert settings.AI_ENVIRONMENT == "qa"
+    assert settings.AI_MEDIA_STORAGE_BASE_URL == QA_STORAGE_URL
+
+
+@pytest.mark.parametrize(
+    "database_url",
+    [
+        "postgresql://ai_media_worker_runtime:pw@db.pzxekjybdiulzmssalfo.evil.supabase.co:5432/postgres?sslmode=require",
+        f"postgresql://ai_media_worker_runtime.{PROD_REF}:pw@aws-1-us-east-2.pooler.supabase.com:5432/postgres?sslmode=require",
+        "postgresql://ai_media_worker_runtime:pw@203.0.113.25:5432/postgres?sslmode=require",
+        f"postgresql://ai_media_worker_runtime:pw@db.{DEV_REF}.supabase.co:5432/postgres?sslmode=disable",
+        f"postgresql://ai_media_worker_runtime:pw@db.{DEV_REF}.supabase.co:5432/postgres?sslmode=require&hostaddr=203.0.113.25",
+        f"postgresql://ai_media_worker_runtime:pw@db.{DEV_REF}.supabase.co:5432/postgres?sslmode=disable&sslmode=require",
+        f"postgresql://ai_media_worker_runtime:pw@db.{DEV_REF}.supabase.co:99999/postgres?sslmode=require",
+        f"postgresql://ai_media_worker_runtime:pw@db.{DEV_REF}.supabase.co:6543/postgres?sslmode=require",
+        f"postgresql://ai_media_worker:pw@db.{DEV_REF}.supabase.co:5432/postgres?sslmode=require",
+        f"postgresql://ai_media_worker.{DEV_REF}:pw@aws-1-us-east-2.pooler.supabase.com:6543/postgres?sslmode=require",
+        "postgresql://ai_media_worker:pw@localhost:5432/electrohub?sslmode=require",
+    ],
+)
+def test_worker_rejects_malformed_ambiguous_or_non_disposable_database_identity(database_url: str) -> None:
+    with pytest.raises(ConfigurationError):
+        load_settings(media_worker_values(database_url=database_url), env_file=None)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "AI_VECTOR_INGEST_DATABASE_URL",
+        "AI_VECTOR_ADMIN_DATABASE_URL",
+        "AI_VECTOR_DATABASE_URL",
+        "AI_SERVICE_API_KEY",
+    ],
+)
+def test_worker_rejects_ingest_and_admin_dsns_from_process_environment(name: str) -> None:
+    values = {**media_worker_values(), name: "postgresql://secret:must-not-leak@localhost/db"}
+    with pytest.raises(ConfigurationError) as exc:
+        load_settings(values, env_file=None)
+    assert name in str(exc.value)
+    assert "must-not-leak" not in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "AI_VECTOR_INGEST_DATABASE_URL",
+        "AI_VECTOR_ADMIN_DATABASE_URL",
+        "AI_VECTOR_DATABASE_URL",
+        "AI_SERVICE_API_KEY",
+        "STRIPE_SECRET_KEY",
+        "BREVO_API_KEY",
+        "JWT_SECRET",
+        "E2E_TEST_SUPPORT_TOKEN",
+    ],
+)
+def test_worker_rejects_vector_credentials_from_env_file(name: str, tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    lines = [f'{key}="{value}"' for key, value in media_worker_values().items()]
+    lines.append(f'{name}="postgresql://secret:env-file-secret@localhost/db"')
+    env_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    with pytest.raises(ConfigurationError) as exc:
+        load_settings({}, env_file=env_file)
+    assert name in str(exc.value)
+    assert "env-file-secret" not in str(exc.value)
+
+
+@pytest.mark.parametrize("name", ["AI_SERVICE_API_KEY", "STRIPE_SECRET_KEY", "BREVO_API_KEY", "JWT_SECRET"])
+def test_worker_rejects_api_or_commerce_credentials(name: str) -> None:
+    values = {**media_worker_values(), name: "private-not-for-worker"}
+    with pytest.raises(ConfigurationError) as exc:
+        load_settings(values, env_file=None)
+    assert name in str(exc.value)
+    assert "private-not-for-worker" not in str(exc.value)
+
+
+def test_worker_rejects_unapproved_storage_origin_and_hosted_qa_target() -> None:
+    with pytest.raises(ConfigurationError):
+        load_settings(
+            media_worker_values(environment="development", storage_url="https://attacker.example"),
+            env_file=None,
+        )
+    with pytest.raises(ConfigurationError):
+        load_settings(
+            media_worker_values(environment="qa", database_url=QA_DATABASE_URL, storage_url=DEV_STORAGE_URL),
+            env_file=None,
         )
 
 

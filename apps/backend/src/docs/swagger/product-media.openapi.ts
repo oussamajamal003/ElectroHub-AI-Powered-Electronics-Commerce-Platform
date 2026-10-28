@@ -12,8 +12,11 @@ const fileBody = { required: true, content: { 'multipart/form-data': { schema: {
   properties: { file: { type: 'string', format: 'binary', description: 'One JPEG, PNG or WebP; <=6 MiB, 128–6000 px, <=20M pixels' }, altText: { type: 'string', maxLength: 255 } } } } } };
 const key = { name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', format: 'uuid' } };
 export const productMediaPaths = {
-  '/admin/products': { get: { ...common, summary: 'Find existing products for media editing (maximum 30)',
-    parameters: [{ name: 'q', in: 'query', schema: { type: 'string', maxLength: 100 } }] } },
+  '/admin/products': { get: { ...common, summary: 'Search and page through existing products for media editing',
+    parameters: [{ name: 'q', in: 'query', schema: { type: 'string', maxLength: 100 }, description: 'Case-insensitive match across product name and SKU.' },
+      { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+      { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 50, default: 30 } }],
+    responses: { 200: { description: 'Product page in `data` plus `meta.page`, `meta.pageSize`, `meta.total`, and `meta.totalPages`.' }, ...errors } } },
   '/admin/products/{productId}/images': {
     get: { ...common, summary: 'Published gallery and truthful indexing states', parameters: [product] },
     post: { ...common, summary: 'Publish a normalized immutable photo', parameters: [product, key], requestBody: fileBody,

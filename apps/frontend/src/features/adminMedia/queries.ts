@@ -1,21 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { queryKeys } from '@/lib/query';
-import { mediaConcurrencyTag, type AdminMediaProduct, type ApiData, type MediaImage } from './types';
+import { mediaConcurrencyTag, type AdminMediaProduct, type AdminMediaProductsResponse, type ApiData, type MediaImage } from './types';
 
 const mediaKeys = {
-  products: (query: string) => ['admin', 'media', 'products', query] as const,
+  products: (query: string, page: number, pageSize: number) => ['admin', 'media', 'products', query, page, pageSize] as const,
   product: (productId: string) => ['admin', 'media', 'product', productId] as const,
   images: (productId: string) => ['admin', 'media', 'images', productId] as const,
 };
 
-export function useAdminMediaProducts(query: string) {
+export function useAdminMediaProducts(query: string, page = 1, pageSize = 30) {
   const params = new URLSearchParams();
   if (query.trim()) params.set('q', query.trim());
-  const suffix = params.size ? `?${params.toString()}` : '';
+  params.set('page', String(page));
+  params.set('pageSize', String(pageSize));
+  const suffix = `?${params.toString()}`;
   return useQuery({
-    queryKey: mediaKeys.products(query.trim()),
-    queryFn: ({ signal }) => apiClient<ApiData<AdminMediaProduct[]>>(`/api/admin/products${suffix}`, { signal }),
+    queryKey: mediaKeys.products(query.trim(), page, pageSize),
+    queryFn: ({ signal }) => apiClient<AdminMediaProductsResponse>(`/api/admin/products${suffix}`, { signal }),
     staleTime: 30_000,
   });
 }
@@ -26,6 +28,7 @@ export function useAdminMediaProduct(productId: string) {
     enabled: Boolean(productId),
   });
 }
+
 export function useAdminProductImages(productId: string) {
   return useQuery({
     queryKey: mediaKeys.images(productId),

@@ -82,6 +82,30 @@ describe('AdminProductMediaPage upload staging', () => {
     expect(screen.getByAltText('Front view')).toHaveAttribute('src', '/photo.webp');
   });
 
+  it('keeps descriptive alt text on a loaded admin preview without showing it as a caption', () => {
+    mocks.images = [{ id: 'image-1', productId: 'product-1', url: '/photo.webp', altText: 'Front angle of the headphones', sortOrder: 0,
+      isPrimary: true, sourceRevision: null, mediaState: 'PUBLISHED', width: 900, height: 900, updatedAt: '2026-10-28T12:00:00.000Z',
+      indexing: { state: 'LEGACY', embeddingVersion: null, errorCode: null } }];
+    render(<MemoryRouter initialEntries={['/admin/products/product-1/media']}><Routes><Route path="/admin/products/:productId/media" element={<AdminProductMediaPage />} /></Routes></MemoryRouter>);
+
+    const image = screen.getByAltText('Front angle of the headphones');
+    fireEvent.load(image);
+    expect(image).toHaveAttribute('alt', 'Front angle of the headphones');
+    expect(screen.queryByText('Front angle of the headphones')).not.toBeInTheDocument();
+  });
+
+  it.each([null, '', '   '])('uses product name and a readable fallback when admin preview alt is %s', altText => {
+    mocks.images = [{ id: 'image-1', productId: 'product-1', url: '/missing.webp', altText, sortOrder: 0,
+      isPrimary: true, sourceRevision: null, mediaState: 'PUBLISHED', width: 900, height: 900, updatedAt: '2026-10-28T12:00:00.000Z',
+      indexing: { state: 'LEGACY', embeddingVersion: null, errorCode: null } }];
+    render(<MemoryRouter initialEntries={['/admin/products/product-1/media']}><Routes><Route path="/admin/products/:productId/media" element={<AdminProductMediaPage />} /></Routes></MemoryRouter>);
+
+    const image = screen.getByAltText('Studio Headphones');
+    fireEvent.error(image);
+    expect(screen.getByRole('img', { name: 'Studio Headphones' })).toBeInTheDocument();
+    expect(screen.getByText('Photo unavailable: Studio Headphones')).toBeInTheDocument();
+  });
+
   it('reorders with one position update instead of a stale second neighbor patch', async () => {
     const first: MediaImage = { id: 'image-1', productId: 'product-1', url: '/front.webp', altText: 'Front view', sortOrder: 0,
       isPrimary: true, sourceRevision: null, mediaState: 'PUBLISHED', width: null, height: null, updatedAt: '2026-10-28T12:00:00.000Z',

@@ -4,6 +4,7 @@ import { env } from '../src/config/env.js';
 import { describeDatabaseTarget } from '../src/lib/database-target.js';
 import { SupabaseProductMediaStorage, resolveProductMediaStorageConfig } from '../src/integrations/storage/product-media.storage.js';
 import { listProductMediaTreeBounded, reconcileProductMedia } from '../src/integrations/storage/product-media.reconciliation.js';
+import { classifyMediaWorkers, summarizeMediaQueue, type MediaWorkerHeartbeatRow } from './product-media-ops-health.js';
 
 async function main() {
   const target = describeDatabaseTarget(env.DATABASE_URL);
@@ -28,14 +29,25 @@ async function main() {
     });
     console.log(JSON.stringify({ target: target.identity, retriedEvent: eventId })); return;
   }
-  const [counts, lag, active] = await Promise.all([
+  const [counts, lag, active, heartbeatRows] = await Promise.all([
     prisma.catalogMediaEvent.groupBy({ by: ['state'], _count: { _all: true } }),
     prisma.$queryRaw<{ oldestPendingSeconds: number | null }[]>`SELECT EXTRACT(EPOCH FROM (now()-min("createdAt")))::int AS "oldestPendingSeconds"
       FROM catalog_media_events WHERE state IN ('READY','CLAIMED','RETRY_WAIT')`,
     prisma.$queryRaw<{ embedding_version: string }[]>`SELECT embedding_version FROM ai.active_index WHERE singleton`,
+    prisma.$queryRaw<MediaWorkerHeartbeatRow[]>`
+      SELECT worker_id::text AS "workerId", environment, state, heartbeat_at AS "heartbeatAt",
+        GREATEST(0, EXTRACT(EPOCH FROM (clock_timestamp() - heartbeat_at)))::int AS "heartbeatAgeSeconds",
+        active_model_version AS "activeModelVersion", current_event_id::text AS "currentEventId",
+        processed_success_count::text AS "processedSuccessCount", processed_failure_count::text AS "processedFailureCount",
+        last_error_code AS "lastErrorCode"
+      FROM ai.media_worker_heartbeats
+      ORDER BY heartbeat_at DESC
+      LIMIT 100`,
   ]);
+  const { workerStatus, workers } = classifyMediaWorkers(heartbeatRows);
+  const queue = summarizeMediaQueue(counts.map(row => ({ state: row.state, count: row._count._all })), lag[0]?.oldestPendingSeconds ?? null);
   console.log(JSON.stringify({ target: target.identity, activeVersion: active[0]?.embedding_version ?? null,
-    counts: counts.map(row => ({ state: row.state, count: row._count._all })), oldestPendingSeconds: lag[0]?.oldestPendingSeconds ?? null }));
+    workerStatus, workers, queue }));
   if (command === 'status') return;
   const config = resolveProductMediaStorageConfig(process.env);
   if (!config || !target.identity.includes(config.projectRef)) throw new Error('Storage/database identity mismatch.');

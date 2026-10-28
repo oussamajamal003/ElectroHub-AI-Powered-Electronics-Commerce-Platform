@@ -25,7 +25,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   ids.role = 'CUSTOMER'; ids.active = true;
   db.user.findFirst.mockImplementation(async () => ids.active ? { id: ids.admin, role: { name: ids.role } } : null);
-  service.products.mockResolvedValue([]); service.list.mockResolvedValue([]); service.upload.mockResolvedValue(stable);
+  service.products.mockResolvedValue({ data: [], meta: { page: 1, pageSize: 30, total: 0, totalPages: 0 } }); service.list.mockResolvedValue([]); service.upload.mockResolvedValue(stable);
   service.patch.mockResolvedValue(stable); service.retire.mockResolvedValue({ id: ids.image }); service.retry.mockResolvedValue(stable);
 });
 
@@ -55,7 +55,32 @@ describe('product media route authentication and authorization', () => {
     const response = await get('/api/admin/products');
     expect(response.status).toBe(200);
     expect(response.headers['cache-control']).toBe('private, no-store');
-    expect(service.products).toHaveBeenCalledWith('');
+    expect(response.body).toEqual({ data: [], meta: { page: 1, pageSize: 30, total: 0, totalPages: 0 } });
+    expect(service.products).toHaveBeenCalledWith('', 1, 30);
+  });
+
+  it('passes bounded search and pagination to the service while keeping products in the data array', async () => {
+    ids.role = 'ADMIN';
+    service.products.mockResolvedValueOnce({ data: [{ id: ids.product, name: 'Acer Predator Cestus 330', slug: 'acer-predator-cestus-330' }],
+      meta: { page: 2, pageSize: 50, total: 79, totalPages: 2 } });
+
+    const response = await get('/api/admin/products?q=acer&page=2&pageSize=50');
+
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.body.data)).toBe(true);
+    expect(response.body).toEqual({ data: [{ id: ids.product, name: 'Acer Predator Cestus 330', slug: 'acer-predator-cestus-330' }],
+      meta: { page: 2, pageSize: 50, total: 79, totalPages: 2 } });
+    expect(service.products).toHaveBeenCalledWith('acer', 2, 50);
+  });
+
+  it('rejects invalid pagination bounds before querying products', async () => {
+    ids.role = 'ADMIN';
+    for (const query of ['page=0', 'page=1.5', 'pageSize=0', 'pageSize=51']) {
+      const response = await get(`/api/admin/products?${query}`);
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('MEDIA_REQUEST_INVALID');
+    }
+    expect(service.products).not.toHaveBeenCalled();
   });
 });
 

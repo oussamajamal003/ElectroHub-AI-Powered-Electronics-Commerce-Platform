@@ -225,11 +225,16 @@ test('the real DEV workflow is manual-only and PROD automates develop with scope
   assert.deepEqual(policy.getPushBranches(prod.text), ['develop']);
   const holders = files.filter((file) => /secrets\.ELECTROHUB_/.test(file.text)).map((file) => file.name);
   assert.deepEqual(holders, ['dev-migration.yml', 'prod-migration.yml']);
-  assert.match(prod.text, /20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard/);
+  assert.match(prod.text, /20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard,20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health/);
   assert.match(prod.text, /EXPECTED_PROJECT_REF: yepfgjehdstlxbpespun/);
   assert.match(prod.text, /MIGRATION_TARGET: PROD/);
   assert.match(prod.text, /environment: electrohub-prod-database/);
   assert.match(prod.text, /concurrency:\s*\r?\n\s+group: db-migration-electrohub-prod/);
+});
+
+test('Task 04.3 DEV migration helper approves its exact ordered additive migration set', () => {
+  const helper = fs.readFileSync(path.resolve(__dirname, '../../apps/backend/scripts/product-media-migrate.cjs'), 'utf8');
+  assert.match(helper, /APPROVED_MIGRATIONS:\s*'20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health'/);
 });
 
 test('policy rejects PROD workflow on feature branches, main, or pull requests', () => {
