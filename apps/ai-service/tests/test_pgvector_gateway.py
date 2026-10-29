@@ -404,3 +404,195 @@ def test_integration_readiness_and_search_run_read_only_against_the_real_schema(
         loop.run_until_complete(main())
     finally:
         loop.close()
+
+
+# --- Task 04.4: centroid and nearest-product reads -----------------------------------------------------------------
+
+PRODUCT_READ_SQL = (pgvector_gateway._CENTROIDS_SQL, pgvector_gateway._NEAREST_PRODUCTS_SQL)
+
+
+def _active_with(**changes: Any) -> tuple[Any, ...]:
+    names = (
+        "embedding_version",
+        "model_version",
+        "preprocess_version",
+        "dimension",
+        "artifact_format",
+        "sha256",
+        "status",
+        "expected",
+    )
+    values = dict(zip(names, ACTIVE_ROW, strict=True))
+    values.update(changes)
+    return tuple(values[name] for name in names)
+
+
+class ProductRowsDatabase(FakeDatabase):
+    """Same active-row and readiness handling as FakeDatabase; answers the two Task 04.4 product statements with rows.
+
+    FakeDatabase routes any statement that mentions ``ai.catalog_media_sources`` to the coverage branch, which the
+    product statements also mention, so they are intercepted here first.
+    """
+
+    def __init__(self, *, rows: Sequence[Any] = (), **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.product_rows = list(rows)
+
+    async def execute(self, query: str, params: Sequence[object] | None = None) -> FakeCursor:
+        if query in PRODUCT_READ_SQL:
+            if self.fail_with is not None:
+                raise self.fail_with
+            self.executed.append((query, params))
+            return FakeCursor(self.product_rows)
+        return await super().execute(query, params)
+
+
+def _product_params(query: str, db: FakeDatabase) -> Sequence[object] | None:
+    return next(params for executed, params in db.executed if executed == query)
+
+
+def test_parse_vector_accepts_pgvector_text_of_the_descriptor_dimension() -> None:
+    assert pgvector_gateway._parse_vector("[0.5,0,-1,2]", DESCRIPTOR) == (0.5, 0.0, -1.0, 2.0)
+
+
+@pytest.mark.parametrize("text", ["[1,0,0]", "[1,0,0,0,0]", "[]", "[1,,0,0]"])
+def test_parse_vector_rejects_the_wrong_dimension_or_empty_components(text: str) -> None:
+    with pytest.raises(InferenceOutputError):
+        pgvector_gateway._parse_vector(text, DESCRIPTOR)
+
+
+@pytest.mark.parametrize("text", ["[nan,0,0,0]", "[inf,0,0,0]", "[-inf,0,0,0]"])
+def test_parse_vector_rejects_non_finite_components(text: str) -> None:
+    with pytest.raises(InferenceOutputError):
+        pgvector_gateway._parse_vector(text, DESCRIPTOR)
+
+
+@pytest.mark.parametrize("text", ["1,0,0,0", "(1,0,0,0)", "[1,0,x,0]", "[1;0;0;0]", ""])
+def test_parse_vector_rejects_malformed_text(text: str) -> None:
+    with pytest.raises(InferenceOutputError):
+        pgvector_gateway._parse_vector(text, DESCRIPTOR)
+
+
+def test_centroids_for_no_products_return_empty_without_touching_the_database() -> None:
+    db = FakeDatabase()
+    assert run(gateway_for(db).product_centroids([], descriptor=DESCRIPTOR)) == {}
+    assert db.executed == [] and db.opened == 0
+
+
+def test_centroid_lookup_is_bounded_to_the_documented_maximum() -> None:
+    ids = [uuid.UUID(int=i) for i in range(1, 202)]
+    db = FakeDatabase()
+    with pytest.raises(ValidationFailedError):
+        run(gateway_for(db).product_centroids(ids, descriptor=DESCRIPTOR))
+    assert db.executed == []
+
+
+def test_centroid_lookup_accepts_exactly_the_maximum() -> None:
+    ids = [uuid.UUID(int=i) for i in range(1, 201)]
+    db = ProductRowsDatabase()
+    assert run(gateway_for(db).product_centroids(ids, descriptor=DESCRIPTOR)) == {}
+    params = _product_params(pgvector_gateway._CENTROIDS_SQL, db)
+    assert params is not None and len(params[2]) == 200  # type: ignore[arg-type]
+
+
+def test_centroids_map_each_product_to_its_vector_and_image_count() -> None:
+    db = ProductRowsDatabase(rows=[(uuid.UUID(int=1), "[1,0,0,0]", 3), (uuid.UUID(int=2), "[0,0.5,0,0]", 1)])
+    result = run(gateway_for(db).product_centroids([uuid.UUID(int=1), uuid.UUID(int=2)], descriptor=DESCRIPTOR))
+    assert result[uuid.UUID(int=1)] == pgvector_gateway.ProductVector(vector=(1.0, 0.0, 0.0, 0.0), image_count=3)
+    assert result[uuid.UUID(int=2)] == pgvector_gateway.ProductVector(vector=(0.0, 0.5, 0.0, 0.0), image_count=1)
+    params = _product_params(pgvector_gateway._CENTROIDS_SQL, db)
+    expected_ids = [str(uuid.UUID(int=1)), str(uuid.UUID(int=2))]
+    assert params == (DESCRIPTOR.embedding_version, DESCRIPTOR.embedding_version, expected_ids)
+
+
+def test_a_corrupt_centroid_row_is_an_output_error_not_a_result() -> None:
+    db = ProductRowsDatabase(rows=[(uuid.UUID(int=1), "[1,0,0]", 1)])
+    with pytest.raises(InferenceOutputError):
+        run(gateway_for(db).product_centroids([uuid.UUID(int=1)], descriptor=DESCRIPTOR))
+
+
+def test_nearest_products_score_is_one_minus_distance_and_exclusions_are_passed_as_strings() -> None:
+    db = ProductRowsDatabase(
+        rows=[(uuid.UUID(int=1), 0.25, "[1,0,0,0]"), (uuid.UUID(int=2), 1.5, "[0,1,0,0]")],
+    )
+    excluded = [uuid.UUID(int=9)]
+    restricted = [uuid.UUID(int=1), uuid.UUID(int=2)]
+
+    results = run(
+        gateway_for(db).nearest_products(
+            VECTOR, top_k=5, descriptor=DESCRIPTOR, exclude=excluded, restrict_to=restricted
+        )
+    )
+
+    assert [r.product_id for r in results] == [uuid.UUID(int=1), uuid.UUID(int=2)]
+    assert [round(r.score, 6) for r in results] == [0.75, -0.5]
+    assert results[0].vector == (1.0, 0.0, 0.0, 0.0)
+    version = DESCRIPTOR.embedding_version
+    assert _product_params(pgvector_gateway._NEAREST_PRODUCTS_SQL, db) == (
+        version,
+        version,
+        "[1.0,0.0,0.0,0.0]",
+        [str(uuid.UUID(int=9))],
+        [str(uuid.UUID(int=1)), str(uuid.UUID(int=2))],
+        [str(uuid.UUID(int=1)), str(uuid.UUID(int=2))],
+        5,
+    )
+
+
+def test_nearest_products_without_restriction_passes_empty_lists() -> None:
+    db = ProductRowsDatabase(rows=[(uuid.UUID(int=1), 0.1, "[1,0,0,0]")])
+    run(gateway_for(db).nearest_products(VECTOR, top_k=1, descriptor=DESCRIPTOR))
+    params = _product_params(pgvector_gateway._NEAREST_PRODUCTS_SQL, db)
+    assert params is not None
+    assert params[3] == [] and params[4] == [] and params[5] == []
+
+
+@pytest.mark.parametrize("top_k", [0, 201])
+def test_nearest_products_top_k_is_bounded(top_k: int) -> None:
+    db = ProductRowsDatabase()
+    with pytest.raises(ValidationFailedError):
+        run(gateway_for(db).nearest_products(VECTOR, top_k=top_k, descriptor=DESCRIPTOR))
+    assert db.executed == []
+
+
+def test_a_non_finite_distance_is_an_output_error() -> None:
+    db = ProductRowsDatabase(rows=[(uuid.UUID(int=1), math.nan, "[1,0,0,0]")])
+    with pytest.raises(InferenceOutputError):
+        run(gateway_for(db).nearest_products(VECTOR, top_k=1, descriptor=DESCRIPTOR))
+
+
+@pytest.mark.parametrize(
+    "active",
+    [
+        _active_with(status="RETIRED"),
+        _active_with(embedding_version="other-emb"),
+        _active_with(model_version="other-model"),
+        _active_with(sha256="f" * 64),
+        None,
+    ],
+)
+def test_product_reads_fail_closed_when_the_active_identity_does_not_match(active: tuple[Any, ...] | None) -> None:
+    db = ProductRowsDatabase(active=active, rows=[(uuid.UUID(int=1), 0.1, "[1,0,0,0]")])
+    gateway = gateway_for(db)
+    with pytest.raises(IndexNotReadyError):
+        run(gateway.nearest_products(VECTOR, top_k=1, descriptor=DESCRIPTOR))
+    with pytest.raises(IndexNotReadyError):
+        run(gateway.product_centroids([uuid.UUID(int=1)], descriptor=DESCRIPTOR))
+    assert not any(query in PRODUCT_READ_SQL for query, _ in db.executed)
+
+
+def test_product_reads_apply_the_04_3_eligibility_predicates() -> None:
+    predicates = (
+        "source.eligible",
+        "source.source_revision IS NULL",
+        "overlay.source_revision = source.source_revision",
+        "overlay.source_sha256 = source.source_sha256",
+    )
+    for query in PRODUCT_READ_SQL:
+        for predicate in predicates:
+            assert predicate in query
+
+    db = ProductRowsDatabase(rows=[(uuid.UUID(int=1), "[1,0,0,0]", 1)])
+    run(gateway_for(db).product_centroids([uuid.UUID(int=1)], descriptor=DESCRIPTOR))
+    executed_centroids = next(query for query, _ in db.executed if query == pgvector_gateway._CENTROIDS_SQL)
+    assert all(predicate in executed_centroids for predicate in predicates)

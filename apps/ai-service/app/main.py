@@ -16,7 +16,10 @@ from app.core.logging import configure_logging
 from app.core.middleware import BodySizeLimitMiddleware, InternalAuthMiddleware, RequestContextMiddleware
 from app.core.runtime import AppRuntime, build_lifespan
 from app.integrations.pgvector_gateway import PgVectorGateway
-from app.models.registry import ModelRegistry
+from app.integrations.vector_gateway import EmbeddingSearchGateway
+from app.models.descriptor import ModelDescriptor
+from app.models.embedding_recommender import EmbeddingRecommender
+from app.models.registry import ModelRegistry, RecommenderFactory
 from app.models.siglip_loader import ArtifactLoader
 from app.processors.inference import InferenceExecutor
 
@@ -37,7 +40,15 @@ def build_registry(settings: Settings) -> ModelRegistry:
         if settings.AI_VECTOR_DATABASE_URL is not None
         else None
     )
-    return ModelRegistry(image_encoder_loader=loader, vector_gateway=gateway)
+    recommender_factory: RecommenderFactory | None = None
+    if settings.AI_RECOMMENDATIONS_ENABLED and gateway is not None:
+        reader = gateway
+
+        def recommender_factory(descriptor: ModelDescriptor, _index: EmbeddingSearchGateway) -> EmbeddingRecommender:
+            # Same read-only gateway as image search; the descriptor is the loaded D3 encoder's exact identity.
+            return EmbeddingRecommender(descriptor=descriptor, reader=reader)
+
+    return ModelRegistry(image_encoder_loader=loader, vector_gateway=gateway, recommender_factory=recommender_factory)
 
 
 def create_app(settings: Settings | None = None, registry: ModelRegistry | None = None) -> FastAPI:

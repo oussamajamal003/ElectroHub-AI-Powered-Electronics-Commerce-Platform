@@ -265,7 +265,9 @@ describe('Cart Availability Regression Suite', () => {
 
   it('recovers once from a transient availability API failure', async () => {
     let attempts = 0;
-    vi.mocked(apiClient).mockImplementation(async () => {
+    vi.mocked(apiClient).mockImplementation(async (url: string) => {
+      // Optional Task 04.4 suggestions are a separate request; only cart availability attempts are counted.
+      if (url.startsWith('/api/recommendations')) throw new ApiError(503, 'Unavailable');
       attempts++;
       if (attempts === 1) throw new ApiError(503, 'Unavailable');
       return { data: validCart };

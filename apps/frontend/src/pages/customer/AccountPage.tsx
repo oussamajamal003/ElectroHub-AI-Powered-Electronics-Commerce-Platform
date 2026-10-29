@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SignOutModal } from '@/features/auth/components/SignOutModal';
 import { useMyReviews } from '@/features/products/queries';
 import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
+import { PersonalizationPanel } from '@/features/recommendations/components/PersonalizationPanel';
 import styles from './AccountPage.module.scss';
 
 export function AccountPage() {
@@ -97,6 +98,10 @@ export function AccountPage() {
             </Link>
           </div>
         </section>
+
+        <div className={styles.section}>
+          <PersonalizationPanel userId={user.id} />
+        </div>
 
         <section className={styles.section} aria-labelledby="your-reviews-title">
           <div className={styles.reviewHeading}><div><h2 id="your-reviews-title">Your Reviews</h2><p>Products you've reviewed</p></div></div>

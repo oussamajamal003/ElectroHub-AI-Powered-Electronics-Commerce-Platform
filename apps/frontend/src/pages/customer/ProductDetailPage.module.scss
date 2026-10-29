@@ -52,7 +52,4 @@
 .detailSkeletonThumbnails { display: flex; gap: $spacing-3; margin-top: $spacing-4; }
 .detailSkeletonSummary { display: grid; align-content: start; gap: $spacing-5; margin-top: $spacing-8; }
 .detailSkeletonTabs { margin-top: $spacing-12; }
-.related { margin-top: $spacing-16; }
-.relatedHeading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: $spacing-4; a { color: $color-primary; } }
-.relatedGrid { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: $spacing-6; @include respond-to(sm) { grid-template-columns: repeat(2, minmax(0, 1fr)); } @include respond-to(lg) { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 30rem) { .reviewForm { padding: $spacing-4; } .reviewActions > * { flex: 1 1 100%; } }

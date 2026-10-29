@@ -89,17 +89,45 @@ export const AI_RECOMMENDATION_MODES = [
 export type AiRecommendationMode = (typeof AI_RECOMMENDATION_MODES)[number];
 const MODES_REQUIRING_PRODUCT = new Set<AiRecommendationMode>(['SIMILAR_PRODUCTS', 'YOU_MAY_ALSO_LIKE', 'FREQUENTLY_BOUGHT_TOGETHER']);
 
+/** Task 04.4: bounds shared with the FastAPI contract (app/schemas/recommendations.py). */
+export const AI_MAX_EXCLUDED_PRODUCTS = 100;
+export const AI_MAX_PROFILE_SIGNALS = 50;
+export const AI_PROFILE_FEATURE_SPEC_VERSION = 'profile-v1';
+/** Strategies FastAPI may report: both are retrieval over the active D3 learned-embedding index. */
+export const AI_RECOMMENDATION_STRATEGIES = ['EMBEDDING_SIMILARITY', 'BEHAVIOR_EMBEDDING'] as const;
+
+const uniqueIds = (ids: string[]) => new Set(ids.map(id => id.toLowerCase())).size === ids.length;
+
 export const aiRecommendationRequestSchema = z.object({
   mode: z.enum(AI_RECOMMENDATION_MODES),
   productId: z.string().uuid().nullable().default(null),
   candidateProductIds: z.array(z.string().uuid()).max(AI_MAX_CANDIDATES).default([]),
+  excludeProductIds: z.array(z.string().uuid()).max(AI_MAX_EXCLUDED_PRODUCTS).default([]),
   limit: z.number().int().min(1).max(AI_MAX_TOP_K).default(AI_DEFAULT_LIMIT),
+  // Product ids and relative weights only: never a customer id, email, token or raw event.
+  context: z.object({
+    profileSignals: z.array(z.object({
+      productId: z.string().uuid(),
+      weight: z.number().finite().gt(0).max(1),
+    }).strict()).max(AI_MAX_PROFILE_SIGNALS).default([]),
+    featureSpecVersion: z.literal(AI_PROFILE_FEATURE_SPEC_VERSION).default(AI_PROFILE_FEATURE_SPEC_VERSION),
+  }).strict().optional(),
 }).strict().superRefine((request, ctx) => {
   if (MODES_REQUIRING_PRODUCT.has(request.mode) && request.productId === null) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'productId is required for this mode', path: ['productId'] });
   }
-  if (new Set(request.candidateProductIds.map(id => id.toLowerCase())).size !== request.candidateProductIds.length) {
+  if (!uniqueIds(request.candidateProductIds)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'candidateProductIds must be unique', path: ['candidateProductIds'] });
+  }
+  if (!uniqueIds(request.excludeProductIds)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'excludeProductIds must be unique', path: ['excludeProductIds'] });
+  }
+  const signals = request.context?.profileSignals ?? [];
+  if (!uniqueIds(signals.map(signal => signal.productId))) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'profileSignals must be unique', path: ['context', 'profileSignals'] });
+  }
+  if ((request.mode === 'RECOMMENDED_FOR_YOU') !== (signals.length > 0)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'profileSignals are required for, and only for, RECOMMENDED_FOR_YOU', path: ['context'] });
   }
 });
 export type AiRecommendationRequestInput = z.input<typeof aiRecommendationRequestSchema>;
@@ -134,6 +162,9 @@ export function aiRecommendationResultSchema(cap: number = AI_MAX_TOP_K) {
       items: rankedItemsSchema(cap),
       modelVersion: versionString,
       embeddingVersion: versionString,
+      strategy: z.enum(AI_RECOMMENDATION_STRATEGIES),
+      algorithmVersion: versionString,
+      anchorIndexed: z.boolean(),
     }).strict(),
   }).strict();
 }

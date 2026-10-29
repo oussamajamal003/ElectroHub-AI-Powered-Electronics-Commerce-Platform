@@ -138,13 +138,21 @@ export class AiServiceClient {
     return (await this.request('GET', '/internal/v1/capabilities', aiCapabilitiesSchema, opts)).data;
   }
 
-  /** POST /internal/v1/recommendations (04.1: the AI side answers 422 or 503 AI_MODEL_NOT_READY). */
+  /**
+   * POST /internal/v1/recommendations (Task 04.4: D3 embedding recommender; 503 while it or its index is not ready).
+   * The response must echo the mode and never contain the anchor, an excluded product or a profile product.
+   */
   async recommend(input: AiRecommendationRequestInput, opts: AiRequestOptions = {}): Promise<AiRecommendationResult> {
     const parsed = aiRecommendationRequestSchema.safeParse(input);
     if (!parsed.success) throw new AiServiceError('rejected', { code: 'AI_VALIDATION_FAILED' });
     const request = parsed.data;
-    const result = (await this.request('POST', '/internal/v1/recommendations', aiRecommendationResultSchema(request.limit), opts, { kind: 'json', value: request })).data;
+    const result = (await this.request('POST', '/internal/v1/recommendations', aiRecommendationResultSchema(request.limit), opts,
+      { kind: 'json', value: request }, { timeoutMs: this.config.recommendationTimeoutMs })).data;
     if (result.mode !== request.mode) throw new AiServiceError('invalid_response');
+    const forbidden = new Set([request.productId, ...request.excludeProductIds,
+      ...(request.context?.profileSignals ?? []).map(signal => signal.productId)]
+      .filter((id): id is string => id !== null).map(id => id.toLowerCase()));
+    if (result.items.some(item => forbidden.has(item.productId.toLowerCase()))) throw new AiServiceError('invalid_response');
     return result;
   }
 

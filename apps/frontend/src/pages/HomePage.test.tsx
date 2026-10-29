@@ -9,6 +9,8 @@ import { useCart } from '@/features/cart/context';
 vi.mock('@/features/search/queries', () => ({ useCategories: vi.fn() }));
 vi.mock('@/features/products/queries', () => ({ useDeals: vi.fn(), useProducts: vi.fn() }));
 vi.mock('@/features/cart/context', () => ({ useCart: vi.fn() }));
+vi.mock('@/features/recommendations/queries', () => import('@/test/recommendationQueriesMock'));
+vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: () => ({ user: null, isAuthenticated: false }) }));
 
 const renderPage = () => render(<MemoryRouter><HomePage /></MemoryRouter>);
 

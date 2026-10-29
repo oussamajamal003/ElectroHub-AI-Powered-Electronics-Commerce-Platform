@@ -129,8 +129,8 @@ function checkWorkflow(name, rawText) {
       if (!text.includes('EXPECTED_PROJECT_REF: yepfgjehdstlxbpespun')) fail('PROD workflow must pin the PROD project ref');
       if (!text.includes('MIGRATION_TARGET: PROD')) fail('PROD workflow must explicitly select PROD in the migration guard');
       if (!text.includes('electrohub-prod-database')) fail('PROD workflow must use the protected PROD environment');
-      if (!text.includes('20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard,20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health')) {
-        fail('PROD workflow must pin the reviewed ordered migration allowlist (Task 04.2 AI migrations followed by Task 04.3 media migrations)');
+      if (!text.includes('20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard,20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health,20261029000000_recommendations')) {
+        fail('PROD workflow must pin the reviewed ordered migration allowlist (Task 04.2 AI, Task 04.3 media, then Task 04.4 recommendations migrations)');
       }
       if (/ELECTROHUB_DEV_(?:DATABASE|DIRECT)_URL/.test(text)) fail('PROD workflow must not expose DEV database secrets');
       if (!/prisma\s+migrate\s+status/.test(text)) fail('PROD workflow must run prisma migrate status after deploy');

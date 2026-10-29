@@ -13,6 +13,7 @@ import logging
 import math
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from dataclasses import dataclass
 from typing import Any, Final, Protocol
 from uuid import UUID
 
@@ -33,6 +34,8 @@ POOL_MAX_SIZE: Final = 4
 CONNECT_TIMEOUT_SECONDS: Final = 15
 POOL_MIN_SIZE: Final = 1
 POOL_TIMEOUT_SECONDS: Final = 10.0
+# Task 04.4: bound on product ids per centroid lookup and on candidates per recommendation retrieval.
+MAX_PRODUCT_LOOKUP: Final = 200
 _SESSION_OPTIONS: Final = (
     f"-c search_path=ai,extensions -c statement_timeout={STATEMENT_TIMEOUT_MS} -c default_transaction_read_only=on"
 )
@@ -76,8 +79,11 @@ _BASE_COUNT_SQL: Final = """
 SELECT count(*) FROM ai.product_image_embeddings WHERE embedding_version = %s
 """
 
-_NEAREST_SQL: Final = """
-WITH eligible_vectors AS (
+# Task 04.3 source eligibility, shared by image search and recommendations (Task 04.4): a base vector counts only for a
+# legacy (revision-less) eligible source, an overlay vector only for the exact current revision and digest. Takes the
+# embedding version twice.
+_ELIGIBLE_VECTORS_CTE: Final = """
+eligible_vectors AS (
     SELECT base.product_id, base.embedding
     FROM ai.product_image_embeddings AS base
     JOIN ai.catalog_media_sources AS source
@@ -97,7 +103,10 @@ WITH eligible_vectors AS (
       AND source.source_revision IS NOT NULL
       AND overlay.source_revision = source.source_revision
       AND overlay.source_sha256 = source.source_sha256
-), product_distances AS (
+)"""
+
+_NEAREST_SQL: Final = f"""
+WITH {_ELIGIBLE_VECTORS_CTE}, product_distances AS (
     SELECT product_id, MIN(embedding <=> %s::vector) AS d
     FROM eligible_vectors
     GROUP BY product_id
@@ -105,9 +114,47 @@ WITH eligible_vectors AS (
 SELECT product_id, d FROM product_distances
 ORDER BY d ASC, product_id ASC
 LIMIT %s
-"""
+"""  # noqa: S608 - composed only from module constants; values are bound parameters
+
+# Task 04.4: one representation per product = mean of its current eligible unit image vectors, so a product with many
+# photos is neither favoured (as MIN distance over images would) nor represented by a stale or retired image.
+_CENTROIDS_SQL: Final = f"""
+WITH {_ELIGIBLE_VECTORS_CTE}
+SELECT product_id, avg(embedding)::text, count(*)
+FROM eligible_vectors
+WHERE product_id = ANY(%s::uuid[])
+GROUP BY product_id
+ORDER BY product_id
+"""  # noqa: S608 - composed only from module constants; values are bound parameters
+
+_NEAREST_PRODUCTS_SQL: Final = f"""
+WITH {_ELIGIBLE_VECTORS_CTE}, centroids AS (
+    SELECT product_id, avg(embedding) AS centroid
+    FROM eligible_vectors
+    GROUP BY product_id
+)
+SELECT product_id, centroid <=> %s::vector AS d, centroid::text
+FROM centroids
+WHERE NOT (product_id = ANY(%s::uuid[]))
+  AND (cardinality(%s::uuid[]) = 0 OR product_id = ANY(%s::uuid[]))
+ORDER BY d ASC, product_id ASC
+LIMIT %s
+"""  # noqa: S608 - composed only from module constants; values are bound parameters
 
 _REPEATABLE_READ_SQL: Final = "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"
+
+
+@dataclass(frozen=True)
+class ProductVector:
+    vector: tuple[float, ...]
+    image_count: int
+
+
+@dataclass(frozen=True)
+class ScoredProduct:
+    product_id: UUID
+    score: float
+    vector: tuple[float, ...]
 
 
 class _Cursor(Protocol):
@@ -229,9 +276,7 @@ class PgVectorGateway:
     ) -> Sequence[RankedProduct]:
         if not 1 <= top_k <= HARD_MAX_TOP_K:
             raise ValidationFailedError("topK is out of range.")
-        if len(vector) != descriptor.embedding_dimension or not all(math.isfinite(v) for v in vector):
-            raise InferenceOutputError()
-        literal = "[" + ",".join(repr(float(v)) for v in vector) + "]"
+        literal = _vector_literal(vector, descriptor)
 
         try:
             async with self._read_transaction() as conn:
@@ -256,6 +301,75 @@ class PgVectorGateway:
             score = max(-1.0, min(1.0, 1.0 - distance))
             ranked.append(RankedProduct(product_id=UUID(str(row[0])), score=score, rank=position))
         return ranked
+
+    async def product_centroids(
+        self,
+        product_ids: Sequence[UUID],
+        *,
+        descriptor: ModelDescriptor,
+    ) -> dict[UUID, ProductVector]:
+        """Mean eligible vector per requested product (products without a current eligible vector are absent)."""
+        if not product_ids:
+            return {}
+        if len(product_ids) > MAX_PRODUCT_LOOKUP:
+            raise ValidationFailedError("Too many products requested.")
+        ids = [str(value) for value in product_ids]
+        rows = await self._read_active(
+            descriptor,
+            _CENTROIDS_SQL,
+            (descriptor.embedding_version, descriptor.embedding_version, ids),
+        )
+        vectors: dict[UUID, ProductVector] = {}
+        for row in rows:
+            vector = _parse_vector(row[1], descriptor)
+            vectors[UUID(str(row[0]))] = ProductVector(vector=vector, image_count=int(row[2]))
+        return vectors
+
+    async def nearest_products(
+        self,
+        vector: Sequence[float],
+        *,
+        top_k: int,
+        descriptor: ModelDescriptor,
+        exclude: Sequence[UUID] = (),
+        restrict_to: Sequence[UUID] = (),
+    ) -> list[ScoredProduct]:
+        """Products ranked by cosine similarity of their eligible-image centroid to ``vector`` (ties by product id)."""
+        if not 1 <= top_k <= MAX_PRODUCT_LOOKUP:
+            raise ValidationFailedError("topK is out of range.")
+        literal = _vector_literal(vector, descriptor)
+        excluded = [str(value) for value in exclude]
+        restricted = [str(value) for value in restrict_to]
+        version = descriptor.embedding_version
+        params = (version, version, literal, excluded, restricted, restricted, top_k)
+        rows = await self._read_active(descriptor, _NEAREST_PRODUCTS_SQL, params)
+        scored: list[ScoredProduct] = []
+        for row in rows:
+            distance = float(row[1])
+            if not math.isfinite(distance):
+                raise InferenceOutputError()
+            scored.append(
+                ScoredProduct(
+                    product_id=UUID(str(row[0])),
+                    score=max(-1.0, min(1.0, 1.0 - distance)),
+                    vector=_parse_vector(row[2], descriptor),
+                )
+            )
+        return scored
+
+    async def _read_active(self, descriptor: ModelDescriptor, query: str, params: Sequence[object]) -> list[Any]:
+        try:
+            async with self._read_transaction() as conn:
+                # Same snapshot as the vectors: an activation between requests is an index miss, never a mixed space.
+                active = await _fetch_one(conn, _ACTIVE_SQL)
+                if active is None or not _identity_matches(active, descriptor):
+                    raise IndexNotReadyError()
+                cursor = await conn.execute(query, params)
+                rows: list[Any] = await cursor.fetchall()
+                return rows
+        except (psycopg.Error, TimeoutError) as exc:
+            log_event("ai.index_query_failed", level=logging.ERROR, exception=type(exc).__name__)
+            raise IndexNotReadyError() from exc
 
     async def close(self) -> None:
         pool, self._pool = self._pool, None
@@ -283,3 +397,23 @@ def _identity_matches(row: Sequence[Any], descriptor: ModelDescriptor) -> bool:
         and artifact_format == descriptor.artifact_format
         and str(sha256).strip() == descriptor.artifact_sha256
     )
+
+
+def _vector_literal(vector: Sequence[float], descriptor: ModelDescriptor) -> str:
+    if len(vector) != descriptor.embedding_dimension or not all(math.isfinite(v) for v in vector):
+        raise InferenceOutputError()
+    return "[" + ",".join(repr(float(v)) for v in vector) + "]"
+
+
+def _parse_vector(text: object, descriptor: ModelDescriptor) -> tuple[float, ...]:
+    """pgvector text form ``[a,b,...]``; a wrong dimension or non-finite value means a corrupt row, not a result."""
+    raw = str(text).strip()
+    if not (raw.startswith("[") and raw.endswith("]")):
+        raise InferenceOutputError()
+    try:
+        values = tuple(float(part) for part in raw[1:-1].split(","))
+    except ValueError as exc:
+        raise InferenceOutputError() from exc
+    if len(values) != descriptor.embedding_dimension or not all(math.isfinite(v) for v in values):
+        raise InferenceOutputError()
+    return values

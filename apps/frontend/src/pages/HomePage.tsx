@@ -12,6 +12,9 @@ import { useWishlist } from '@/features/wishlist/context';
 import { useCategories } from '@/features/search/queries';
 import { useDeals, useProducts } from '@/features/products/queries';
 import { orderCategoriesByCount } from '@/features/products/categoryOrder';
+import { useAuth } from '@/features/auth/context/AuthContext';
+import { usePersonalRecommendations, usePopularRecommendations } from '@/features/recommendations/queries';
+import { RecommendationSectionRail } from '@/features/recommendations/components/RecommendationSectionRail';
 import { BenefitsReveal, HeroEntrance, SectionReveal, StaggerContainer, StaggerItem } from '@/components/motion/Motion';
 import styles from './HomePage.module.scss';
 
@@ -122,6 +125,16 @@ export function HomePage() {
   const orderedCategories = useMemo(() => orderCategoriesByCount(categories.data ?? []), [categories.data]);
   const visibleCategories = showAllCategories ? orderedCategories : orderedCategories.slice(0, INITIAL_CATEGORY_COUNT);
   const { activeSlot, slotImages } = useHeroRotation(HERO_IMAGES);
+  // Task 04.4: "Recommended for You" only when the server built a real personal profile; "Popular Products" only from
+  // measured demand (its new-arrivals fallback would duplicate the New Arrivals section below, so it is not shown here).
+  const { user, isAuthenticated } = useAuth();
+  const customerId = isAuthenticated && user?.role === 'CUSTOMER' ? user.id : undefined;
+  const personal = usePersonalRecommendations(customerId, 4);
+  const popular = usePopularRecommendations(4);
+  const personalSection = personal.data?.data.isPersonalized ? personal.data.data : undefined;
+  const personalIds = new Set(personalSection?.items.map(item => item.product.id) ?? []);
+  const popularSection = popular.data?.data.strategy === 'MEASURED_POPULARITY'
+    ? { ...popular.data.data, items: popular.data.data.items.filter(item => !personalIds.has(item.product.id)) } : undefined;
 
   useEffect(() => {
     if (location.state?.accountDeleted) {
@@ -196,6 +209,11 @@ export function HomePage() {
       {deals.data && <StaggerContainer replay className={styles.productGrid}>{deals.data.data.map((product, index) => <StaggerItem key={product.id} index={index}><ProductCard {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} /></StaggerItem>)}</StaggerContainer>}
       {deals.data?.data.length === 0 && <p>No deals are available right now.</p>}
     </section>
+    {(personalSection || popularSection) && <div className={styles.recommendations}>
+      {personalSection && <RecommendationSectionRail id="recommended-for-you-title" section={personalSection} recordPersonalClicks />}
+      {popularSection && popularSection.items.length >= 2 && <RecommendationSectionRail id="popular-products-title" section={popularSection}
+        recordPersonalClicks={Boolean(personalSection)} />}
+    </div>}
     <section className={styles.promoGrid} aria-label="Explore electronics">
       {deals.isPending && Array.from({ length: 2 }, (_, index) => <div key={index} className={styles.promoSkeleton} aria-hidden="true"><span /><span /><span /></div>)}
       {deals.data?.data.slice(0, 2).map((product, index) => <SectionReveal replay key={product.id}><article className={styles.promoCard}>

@@ -15,6 +15,7 @@ const config: AiServiceEnabledConfig = {
   environment: 'test',
   timeoutMs: 1000,
   imageSearchTimeoutMs: 8000,
+  recommendationTimeoutMs: 1000,
   maxResponseBytes: 256 * 1024,
 };
 

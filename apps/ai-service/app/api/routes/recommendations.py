@@ -18,7 +18,7 @@ router = APIRouter(tags=["Recommendations"])
     responses={
         422: {"model": ErrorEnvelope, "description": "AI_VALIDATION_FAILED"},
         429: {"model": ErrorEnvelope, "description": "AI_RATE_LIMITED"},
-        503: {"model": ErrorEnvelope, "description": "AI_MODEL_NOT_READY (always in Task 04.1)"},
+        503: {"model": ErrorEnvelope, "description": "AI_MODEL_NOT_READY / AI_INDEX_NOT_READY"},
         504: {"model": ErrorEnvelope, "description": "AI_INFERENCE_TIMEOUT"},
     },
 )
@@ -26,5 +26,6 @@ async def recommend(
     body: RecommendationRequest,
     service: Annotated[RecommendationService, Depends(get_recommendation_service)],
 ) -> DataEnvelope[RecommendationResult]:
-    """Ranked product references from a trained ranker (Task 04.4). Returns 503 until one exists."""
+    """Advisory ranked product references from the D3 embedding recommender (Task 04.4). Express re-validates every
+    product against the catalog. 503 while the recommender or its vector index is not ready."""
     return DataEnvelope(data=await service.recommend(body))

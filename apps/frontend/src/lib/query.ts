@@ -36,6 +36,17 @@ export const queryKeys = {
     myReview: (slug: string) => ['products', 'reviews', slug, 'me'] as const,
     myReviews: (page: number, pageSize: number) => ['reviews', 'me', page, pageSize] as const,
   },
+  // Task 04.4: public keys carry no identity; private keys always carry the signed-in user's id.
+  recommendations: {
+    all: ['recommendations'] as const,
+    product: (slug: string, limit: number) => ['recommendations', 'product', slug, limit] as const,
+    popular: (limit: number) => ['recommendations', 'popular', limit] as const,
+    cart: (productIds: string, limit: number) => ['recommendations', 'cart', productIds, limit] as const,
+    personal: (userId: string, limit: number) => ['recommendations', 'personal', userId, limit] as const,
+    preferences: (userId: string) => ['recommendations', 'preferences', userId] as const,
+    recentlyViewed: (userId: string) => ['recommendations', 'recently-viewed', userId] as const,
+    userScoped: (userId: string) => [['recommendations', 'personal', userId], ['recommendations', 'recently-viewed', userId]] as const,
+  },
   categories: { all: ['categories'] as const, detail: (slug: string) => ['categories', 'detail', slug] as const },
   brands: { all: ['brands'] as const, detail: (slug: string) => ['brands', 'detail', slug] as const },
   search: {

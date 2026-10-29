@@ -5,6 +5,8 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/task04',
   testMatch: '**/*.spec.ts',
+  // The Task 04.4 recommendations spec is fully mocked and runs from playwright.recommendations.config.ts.
+  testIgnore: 'recommendations.spec.ts',
   globalSetup: './tests/task04/global-setup.ts',
   outputDir: './test-results/task04-dev',
   fullyParallel: false,

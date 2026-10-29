@@ -9,6 +9,7 @@ import paymentRoutes from './payment.routes.js';
 import wishlistRoutes from './wishlist.routes.js';
 import accountRoutes from './account.routes.js';
 import productRoutes from './product.routes.js';
+import recommendationRoutes from './recommendation.routes.js';
 import searchRoutes from './search.routes.js';
 import e2eSupportRoutes from './e2e-support.routes.js';
 import aiAdminRoutes from './ai-admin.routes.js';
@@ -31,6 +32,8 @@ router.use(orderDocumentRoutes);
 router.use(checkoutRoutes);
 router.use(wishlistRoutes);
 router.use('/account', accountRoutes);
+// Task 04.4: before productRoutes so /products/:slug/recommendations is owned by its own limiter and cache policy.
+router.use(recommendationRoutes);
 router.use(productRoutes);
 router.use('/search', searchRoutes);
 router.use(aiAdminRoutes);

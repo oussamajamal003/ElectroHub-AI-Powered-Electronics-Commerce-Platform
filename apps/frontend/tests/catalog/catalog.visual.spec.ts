@@ -108,6 +108,21 @@ test.beforeEach(async ({ page }) => {
         summary: { averageRating, reviewCount: entries.length },
         meta: { page: requestPage, pageSize, total: entries.length, totalPages: Math.ceil(entries.length / pageSize) } });
     }
+    // Must precede the product-detail branch below, which would otherwise answer /recommendations with product JSON.
+    if (/^\/api\/products\/[^/]+\/recommendations$/.test(pathname)) {
+      const slug = decodeURIComponent(pathname.split('/')[3] ?? '');
+      const source = dataset.products.find(item => item.slug === slug);
+      if (!source) return respond({ error: { code: 'PRODUCT_NOT_FOUND', message: 'Product not found.' } }, 404);
+      const peers = summaries.filter(item => item.category.slug === source.categorySlug && item.slug !== slug).slice(0, 4);
+      const emptySection = (mode: string) => ({ mode, surface: 'product_detail', strategy: 'NO_DATA', isPersonalized: false, isFallback: false,
+        fallbackReason: null, modelVersion: null, embeddingVersion: null, algorithmVersion: 'catalog-visual-mock', context: null, impressionToken: null, items: [] });
+      return respond({ data: { sections: [
+        { mode: 'SIMILAR_PRODUCTS', surface: 'product_detail', strategy: 'FALLBACK_CATEGORY', isPersonalized: false, isFallback: true,
+          fallbackReason: 'AI_UNAVAILABLE', modelVersion: null, embeddingVersion: null, algorithmVersion: 'catalog-visual-mock',
+          context: { categoryName: category(source.categorySlug).name, categorySlug: source.categorySlug }, impressionToken: null,
+          items: peers.map((product, index) => ({ rank: index + 1, product })) },
+        emptySection('YOU_MAY_ALSO_LIKE'), emptySection('FREQUENTLY_BOUGHT_TOGETHER') ] } });
+    }
     if (pathname.startsWith('/api/products/') && !pathname.endsWith('/reviews/me')) {
       const slug = decodeURIComponent(pathname.split('/')[3] ?? '');
       if (delayedProductRequest?.slug === slug) await new Promise<void>(resolve => { delayedProductRequestEntered = true; delayedProductRequest!.release = resolve; });

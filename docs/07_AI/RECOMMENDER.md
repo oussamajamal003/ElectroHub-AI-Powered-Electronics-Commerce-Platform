@@ -1,5 +1,62 @@
 # AI Product Recommender
 
+> **Implemented in Task 04.4.** This section is authoritative; the numbered sections below are the Phase 00 planning
+> baseline. Note: the shipped encoder is the D3 SigLIP2 model from Tasks 04.2/04.3, not the EfficientNet-B0 named there.
+> Feature and API view: [`05_Features/RECOMMENDATIONS.md`](../05_Features/RECOMMENDATIONS.md).
+
+## Implemented recommender (Task 04.4)
+
+### What is ML and what is not
+
+| Mode | Computed by | Learned model? |
+|---|---|---|
+| Similar Products | FastAPI `EmbeddingRecommender`, pgvector | Yes: D3 SigLIP2 image embeddings (`siglip2-b16-p256-d1`, 256-d) |
+| You May Also Like | FastAPI, same index, deeper pool; Express diversifies by category | Yes (embeddings) + rule (diversity) |
+| Recommended for You | FastAPI profile vector over D3 centroids from Express-built `profile-v1` signals | Yes (embeddings); weights are hand-set hyperparameters |
+| Frequently Bought Together | Express SQL over qualifying orders | No (co-purchase counting) |
+| Popular Products | Express SQL over decayed signals | No (measured demand) |
+
+No new model was trained. **Training GO/NO-GO: NO-GO** for a separately trained behaviour ranker: DEV holds 54 paid
+orders from 10 QA users, 6 distinct co-purchase pairs (max support 2) and no interaction history, and there is no
+consent basis to export behaviour to Kaggle. Revisit once consented interaction volume exists.
+
+### Algorithm `d3-centroid-v1`
+
+- Product vector = mean of the product's source-eligible unit image vectors of the **active** embedding version
+  (Task 04.3 eligibility: base or matching-revision overlay vectors), read in one REPEATABLE READ snapshot with an
+  active-identity recheck; a mismatch is `AI_INDEX_NOT_READY`, never mixed versions.
+- Similar: cosine nearest centroids to the anchor (excluding anchor and excluded ids), pool `min(200, 3·limit)`,
+  near-duplicate suppression at cosine ≥ 0.995, ties by product id.
+- Recommended for You: normalised weighted sum of the signal products' unit centroids; signal products are excluded.
+- FBT and POPULAR requests to FastAPI return 422 by design.
+
+### Signals (`profile-v1`, Express)
+
+VIEW 1, RECOMMENDATION_CLICK 1.5, CART 2, WISHLIST 3, PURCHASE 4; 14-day half-life; 90-day window; weights normalised
+to (0, 1]; evidence threshold ≥ 2 products and total weight ≥ 3. VIEW / RECOMMENDATION_CLICK count only with consent.
+Qualifying purchase: payment `SUCCEEDED`, not refunded, order `CONFIRMED | PREPARING | OUT_FOR_DELIVERY | DELIVERED`,
+non-fixture products. Popularity: 30-day decayed per-user maximum, ≥ 3 contributing users. FBT support ≥ 2 orders.
+
+### Offline evaluation (QA vector store, 2026-10-28)
+
+`apps/ai-service/training/recommendations/evaluate.py`; labels frozen before results (device family + brand = 3,
+family = 2, category = 1). 206 anchors / 206-product pool; result file
+`apps/ai-service/training/recommendations/results/eval-siglip2-b16-p256-d1-b3900dd9fad5.json`.
+
+| Strategy | Recall@1 | Recall@10 | NDCG@5 | NDCG@10 | Coverage@10 | Category diversity@10 | Mean ms |
+|---|---|---|---|---|---|---|---|
+| Category baseline | 0.879 | 0.966 | 0.904 | 0.936 | 0.612 | 0.000 | n/a |
+| Popularity baseline | not evaluated (no measured demand) | | | | | | |
+| **D3 centroid** | **1.000** | **1.000** | **0.979** | **0.982** | **1.000** | 0.170 | 0.45 |
+
+Limitations: the catalog has many near-identical variants (storage/colour), which inflates absolute scores; the
+baseline is weak by construction (id-ordered category listing). Worst anchors are single-member families
+(TP-Link TL-SG105, JBL Bar 300, ROG Ally, PS5) where visual neighbours cross categories; You May Also Like can
+surface visually similar but functionally unrelated items (e.g. cameras after a router). Visual similarity is not
+compatibility. Latency is local scoring only; end-to-end QA measured ~120–175 ms per product page request.
+
+---
+
 ## 1. Purpose
 
 This document defines the AI-assisted product recommendation architecture for ElectroHub.

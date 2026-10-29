@@ -1,0 +1,22 @@
+@use '@/styles/abstracts' as *;
+
+.rail { margin-top: $spacing-16; }
+.heading {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: $spacing-4; margin-bottom: $spacing-6;
+  h2, h3 { margin: 0; }
+}
+.description { margin: $spacing-2 0 0; color: $color-text-secondary; }
+.action {
+  color: $color-primary; font-weight: $font-weight-semibold; text-decoration: none; text-underline-offset: 4px;
+  &:hover { color: $color-primary-dark; text-decoration: underline; }
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
+}
+// Same breakpoints and gap as the existing product detail/related grid, so cards keep the store's dimensions.
+.grid {
+  display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: $spacing-6; margin: 0; padding: 0; list-style: none;
+  @include respond-to(sm) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @include respond-to(lg) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.threeColumns { @include respond-to(lg) { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.item { display: flex; min-width: 0; > * { flex: 1; } }
+.unavailable { display: flex; flex-wrap: wrap; align-items: center; gap: $spacing-3; margin: 0; color: $color-text-secondary; }

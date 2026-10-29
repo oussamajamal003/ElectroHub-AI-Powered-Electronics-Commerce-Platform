@@ -2,6 +2,20 @@
 
 > Task 02.5 implementation supersedes the historical 02.2 catalog details below. Current local schema has 23 application models, including Brand and ProductSpecification. Shared DEV/PROD application and live schema verification are deferred to Gemini; see [database handoff](PRODUCT_FOUNDATION_HANDOFF.md).
 
+## Task 04.4 tables (migration `20261029000000_recommendations`, additive)
+
+| Table | Key / constraints | Purpose |
+|---|---|---|
+| `recommendation_preferences` | PK `userId` → users (cascade); `personalizationEnabled` default `false` | Explicit opt-in |
+| `product_interactions` | UUID PK; unique (`userId`, `idempotencyKey`); CHECK `eventType` ∈ VIEW, RECOMMENDATION_CLICK; surface/key regex; indexes (`userId`,`occurredAt`), (`productId`,`eventType`,`occurredAt`), (`occurredAt`) | Consented behaviour, 90-day retention |
+| `recently_viewed_products` | PK (`userId`,`productId`); `viewCount` 1..1000000; index (`userId`,`lastViewedAt`) | Account Recently Viewed (≤ 20 per user) |
+| `recommendation_events` | UUID PK; unique (`batchId`,`productId`,`eventType`); CHECKs on type/mode/strategy/surface, rank 1..100 | Non-personal impression/click attribution (no user id) |
+
+All four have RLS enabled with no policies and no `anon`/`authenticated` grants (server-only access via Prisma).
+Account deletion deletes the user's preference, interaction and recently-viewed rows in its transaction.
+Applied: disposable QA (replayed, second run no-op) and DEV `pzxekjybdiulzmssalfo` (2026-10-28). PROD: not applied;
+added to the `prod-migration.yml` allowlist for the reviewed release path.
+
 ## Task 02.5 tables
 
 New tables: brands (UUID PK, unique name/slug, optional metadata, timestamps) and product_specifications (UUID PK, Product FK, group/name/value/sortOrder, timestamps). Existing products receive nullable brandId, modelNumber and compareAtPrice. categories receives nullable imageUrl. product_images keeps physical position; Prisma exposes sortOrder. No existing table or transaction history is removed.

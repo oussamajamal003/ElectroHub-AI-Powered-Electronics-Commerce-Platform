@@ -10,6 +10,7 @@ vi.mock('@/features/auth/context/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
 vi.mock('@/features/products/queries', () => ({ useMyReviews: vi.fn() }));
+vi.mock('@/features/recommendations/queries', () => import('@/test/recommendationQueriesMock'));
 
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {

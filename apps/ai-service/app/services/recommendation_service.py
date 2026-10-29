@@ -1,12 +1,19 @@
 """Recommendation orchestration: configured limits -> readiness gate -> bounded ranker run ->
-validated ranked references. In 04.1 the readiness gate always refuses."""
+validated ranked references with model, embedding and algorithm identity."""
 
 from __future__ import annotations
 
+import anyio
 from pydantic import ValidationError
 
 from app.core.config import Settings
-from app.core.errors import InferenceOutputError, ModelNotReadyError, ValidationFailedError
+from app.core.errors import (
+    IndexNotReadyError,
+    InferenceOutputError,
+    InferenceTimeoutError,
+    ModelNotReadyError,
+    ValidationFailedError,
+)
 from app.models.interfaces import RecommendationRanker
 from app.models.registry import ModelRegistry
 from app.processors.inference import InferenceExecutor
@@ -25,18 +32,29 @@ class RecommendationService:
         if len(request.candidate_product_ids) > self._settings.AI_MAX_CANDIDATES:
             raise ValidationFailedError(f"candidateProductIds must not exceed {self._settings.AI_MAX_CANDIDATES}.")
 
-    def ensure_available(self) -> RecommendationRanker:
+    async def ensure_available(self) -> RecommendationRanker:
+        # A recent index failure is re-checked (rate-limited) so a recovered index serves again without a probe.
+        await self._registry.refresh_index_if_stale()
         ranker = self._registry.ranker
-        if ranker is None or not self._registry.feature_status("recommendations").available:
+        status = self._registry.feature_status("recommendations")
+        if ranker is not None and status.reason == "INDEX_NOT_READY":
+            raise IndexNotReadyError()
+        if ranker is None or not status.available:
             raise ModelNotReadyError()
         return ranker
 
     async def recommend(self, request: RecommendationRequest) -> RecommendationResult:
         self.validate_limits(request)
-        ranker = self.ensure_available()
+        ranker = await self.ensure_available()
         descriptor = ranker.descriptor
+        try:
+            # One budget for retrieval and scoring; the database statement timeout bounds each query underneath.
+            with anyio.fail_after(self._settings.AI_INFERENCE_TIMEOUT_SECONDS):
+                outcome = await ranker.recommend(request, self._executor.run)
+        except TimeoutError as exc:
+            raise InferenceTimeoutError() from exc
 
-        items = list(await self._executor.run(lambda: ranker.rank(request)))
+        items = list(outcome.items)
         if len(items) > request.limit:
             raise InferenceOutputError()
         try:
@@ -45,6 +63,9 @@ class RecommendationService:
                 items=items,
                 model_version=descriptor.model_version,
                 embedding_version=descriptor.embedding_version,
+                strategy=outcome.strategy,
+                algorithm_version=outcome.algorithm_version,
+                anchor_indexed=outcome.anchor_indexed,
             )
         except ValidationError as exc:
             raise InferenceOutputError() from exc
