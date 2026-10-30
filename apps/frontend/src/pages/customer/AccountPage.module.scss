@@ -25,15 +25,36 @@
   margin-top: $spacing-4;
 }
 
+.pageIntro {
+  display: grid;
+  gap: $spacing-2;
+  padding: 0 0 $spacing-4;
+  border-bottom: 1px solid $color-border;
+
+  h1 { margin: 0; color: $color-text-primary; font-size: $font-size-3xl; line-height: $line-height-tight; }
+  > p:last-child { margin: 0; color: $color-text-secondary; }
+}
+
+.pageEyebrow {
+  margin: 0;
+  color: $color-primary;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 // ─── Profile Card ──────────────────────────────────────────
 .profileCard {
   display: flex;
   align-items: center;
   justify-content: space-between;
   border: 1px solid $color-border;
+  border-top: 3px solid $color-primary;
   border-radius: $radius-lg;
   padding: $spacing-6;
-  background-color: $color-surface;
+  background-color: $color-background;
+  box-shadow: $shadow-sm;
   
   @media (max-width: $breakpoint-sm) {
     flex-direction: column;
@@ -92,6 +113,7 @@
   display: flex;
   flex-direction: column;
   gap: $spacing-4;
+  min-width: 0;
 }
 
 .sectionTitle {
@@ -118,14 +140,16 @@
   align-items: center;
   gap: $spacing-4;
   border: 1px solid $color-border;
-  border-radius: 0;
-  padding: $spacing-5 $spacing-4;
-  background-color: $color-surface;
+  padding: $spacing-5;
+  min-height: 6.5rem;
+  background-color: $color-background;
   text-decoration: none;
-  transition: border-color $transition-fast;
+  transition: border-color $transition-fast, box-shadow $transition-fast, transform $transition-fast;
   
   &:hover:not(.gridItemDisabled) {
     border-color: $color-primary;
+    box-shadow: $shadow-sm;
+    transform: translateY(-1px);
     
     .itemTitle {
       color: $color-primary;
@@ -218,3 +242,12 @@
 .reviewSkeletonRating { width: 45%; height: 1.25rem; }
 .reviewSkeletonDate { width: 35%; height: 1.1rem; }
 .reviewSkeletonPreview { width: 100%; height: 2.5rem; }
+
+@media (max-width: $breakpoint-sm) {
+  .container { padding: 0 $spacing-4; gap: $spacing-8; }
+  .pageIntro h1 { font-size: $font-size-2xl; }
+  .profileCard { padding: $spacing-4; width: 100%; }
+  .profileInfo { gap: $spacing-3; min-width: 0; }
+  .profileEmail { overflow-wrap: anywhere; }
+  .reviewStrip { grid-auto-columns: minmax(13rem, 82vw); }
+}

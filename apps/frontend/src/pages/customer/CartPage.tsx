@@ -9,7 +9,22 @@ import { ApiError } from '@/lib/api';
 import { useCart, type CartContextValue } from '@/features/cart/context';
 import type { CartLine } from '@/features/cart/types';
 import { customerReturnPath } from '@/features/auth/returnPath';
+import { useCartRecommendations } from '@/features/recommendations/queries';
+import { RecommendationSectionRail } from '@/features/recommendations/components/RecommendationSectionRail';
 import styles from './CartPage.module.scss';
+
+/**
+ * Task 04.4: optional Frequently Bought Together suggestions from real co-purchases. Outside the summary and checkout
+ * path: they never change the basket, totals or the checkout button, and are simply absent when there is no evidence.
+ */
+export function CartSuggestions({ productIds }: { productIds: string[] }) {
+  const suggestions = useCartRecommendations(productIds, 4);
+  // FBT is usually empty, so it never shows a skeleton that would then vanish. Each cart's cards come only from that
+  // cart's own response: when the cart changes, the previous anchor set's cards are not kept, so nothing renders until
+  // the server confirms products for the current cart.
+  const section = suggestions.data?.data;
+  return <RecommendationSectionRail id="cart-bought-together-title" section={section} />;
+}
 
 function money(value: string) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value)); }
 
@@ -30,7 +45,7 @@ function CartSkeleton() {
   </div>;
 }
 
-export function CartPageContent({ cart, pendingPurchases, hasPendingPurchases = false }: { cart: CartContextValue; pendingPurchases?: ReactNode; hasPendingPurchases?: boolean }) {
+export function CartPageContent({ cart, pendingPurchases, hasPendingPurchases = false, suggestions }: { cart: CartContextValue; pendingPurchases?: ReactNode; hasPendingPurchases?: boolean; suggestions?: ReactNode }) {
   const navigate = useNavigate(); const location = useLocation();
   const returnTo = customerReturnPath(location.state?.from) ?? '/checkout';
   const [actionError, setActionError] = useState('');
@@ -81,11 +96,14 @@ export function CartPageContent({ cart, pendingPurchases, hasPendingPurchases = 
         <Link className={styles.continue} to="/products">Continue shopping</Link>
       </aside>
     </div>}
+    {cart.data && cart.data.items.length > 0 && suggestions}
   </main>;
 }
 
 export function CartPage() {
   const cart = useCart(); const purchases = usePaymentPurchases();
   const pending = purchases.data?.data.some(item => item.pending) ?? false;
-  return <CartPageContent cart={{ ...cart, isLoading: cart.isLoading || !cart.data?.items.length && !cart.isGuest && purchases.isLoading }} hasPendingPurchases={pending} pendingPurchases={!cart.isGuest ? <PendingPurchases /> : undefined} />;
+  const productIds = cart.data?.items.map(item => item.productId) ?? [];
+  return <CartPageContent cart={{ ...cart, isLoading: cart.isLoading || !cart.data?.items.length && !cart.isGuest && purchases.isLoading }} hasPendingPurchases={pending} pendingPurchases={!cart.isGuest ? <PendingPurchases /> : undefined}
+    suggestions={productIds.length > 0 ? <CartSuggestions productIds={productIds} /> : undefined} />;
 }

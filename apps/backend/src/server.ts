@@ -5,9 +5,11 @@ import { prisma } from './lib/prisma.js';
 import { inProcessRecoveryEnabled, startInProcessRecovery } from './payment-inprocess-recovery.js';
 import { paymentIsolation } from './payment-isolation.js';
 import { logCommerceEmailRuntime } from './services/commerce-email.runtime.js';
+import { startOperationalRecommendationRetentionRunner } from './recommendation-retention-runner.js';
 
 const PORT = env.PORT;
 let stopRecovery: (() => Promise<void>) | null = null;
+let stopRecommendationRetention: (() => Promise<void>) | null = null;
 installFatalLogging();
 logger.info('Server starting', { operation: 'server.starting' });
 {
@@ -63,6 +65,8 @@ export const server = app.listen(PORT, async () => {
       event: 'server.degraded',
     });
   }
+  // The bounded retention runner owns retries if startup DB readiness is degraded.
+  if (!shuttingDown) stopRecommendationRetention = startOperationalRecommendationRetentionRunner();
 });
 
 let shuttingDown = false;
@@ -72,6 +76,7 @@ export const gracefulShutdown = (signal: string) => {
   // Signal immediately, then drain the current lease owner before disconnecting
   // its shared pool. The existing shutdown deadline still bounds the process.
   const recoveryStopped = stopRecovery?.();
+  const retentionStopped = stopRecommendationRetention?.();
   logger.info(`${signal} signal received. Closing HTTP server.`, { event: 'server.stopping' });
 
   // Force close after 10s if graceful shutdown hangs
@@ -91,6 +96,7 @@ export const gracefulShutdown = (signal: string) => {
 
     try {
       await recoveryStopped;
+      await retentionStopped;
       await prisma.$disconnect();
       logger.info('Database connection pool closed cleanly.', { event: 'db.disconnected' });
     } catch (dbErr) {

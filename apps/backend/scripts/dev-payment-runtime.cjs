@@ -302,10 +302,9 @@ async function preflight(deps = {}, options = {}) {
       if (rows[0].others + reserve > 15) throw new Error('Existing sessions plus API/runner/email reserve exceed conservative DEV limit 15.');
       const migrations = await tx.$queryRaw`SELECT migration_name,checksum,started_at,finished_at,rolled_back_at,logs FROM "_prisma_migrations"`;
       const migrationCount = verifyMigrationLedger(migrations);
-      const [unfinishedWork, historicalIncidents] = await Promise.all([
-        tx.paymentWork.count({ where: { state: { not: 'DONE' } } }),
-        tx.paymentAttempt.count({ where: { state: 'INCIDENT', work: { is: { state: 'DONE' } } } }),
-      ]);
+      // Sequential: an interactive transaction client cannot run concurrent queries.
+      const unfinishedWork = await tx.paymentWork.count({ where: { state: { not: 'DONE' } } });
+      const historicalIncidents = await tx.paymentAttempt.count({ where: { state: 'INCIDENT', work: { is: { state: 'DONE' } } } });
       let reviewedAttempt = null;
       const reviewedAttempts = [];
       for (const id of options.reviewedRecoveryAttempts ?? (options.reviewedRecoveryAttempt ? [options.reviewedRecoveryAttempt] : [])) {

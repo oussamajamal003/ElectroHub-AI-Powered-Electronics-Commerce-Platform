@@ -223,10 +223,16 @@ export class AuthService {
       throw new AppError('Invalid or expired refresh token', 401, 'SESSION_REVOKED');
     }
 
+    // Identity for the restoring client (the /api/auth/me shape), read AFTER the rotation commits and strictly best-effort. Running it sequentially
+    // keeps the rotation's connection use unchanged (the pool is small), and a failure must never fail the refresh: the successor cookie is already
+    // committed, so a 500 here would lose it. On any error the identity is omitted and the client falls back to /api/auth/me.
+    const authMethods = await this.repository.getAccountAuthMethods(user.id).catch(() => null);
+
     return {
       accessToken: newAccessToken,
       refreshToken: newRawRefreshToken,
       userId: user.id,
+      user: authMethods && { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: roleName, authMethods },
     };
   }
 

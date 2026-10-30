@@ -18,6 +18,12 @@ export const AI_MAX_TIMEOUT_MS = 10_000;
  */
 export const AI_DEFAULT_IMAGE_SEARCH_TIMEOUT_MS = 15_000;
 export const AI_MAX_IMAGE_SEARCH_TIMEOUT_MS = 15_000;
+/**
+ * Task 04.4: bounded budget for indexed recommendation retrieval (no image inference). A managed pgvector query can
+ * exceed the general AI timeout under load; recommendation rails remain optional and fall back at this ceiling.
+ */
+export const AI_DEFAULT_RECOMMENDATION_TIMEOUT_MS = 8000;
+export const AI_MAX_RECOMMENDATION_TIMEOUT_MS = 10_000;
 /** Express-side response cap (contract: 256 KiB). */
 export const AI_MAX_RESPONSE_BYTES = 256 * 1024;
 export const AI_MIN_API_KEY_LENGTH = 32;
@@ -27,7 +33,8 @@ export type AiServiceIssue =
   | 'AI_SERVICE_API_KEY'
   | 'AI_SERVICE_ENVIRONMENT'
   | 'AI_SERVICE_TIMEOUT_MS'
-  | 'AI_IMAGE_SEARCH_TIMEOUT_MS';
+  | 'AI_IMAGE_SEARCH_TIMEOUT_MS'
+  | 'AI_RECOMMENDATION_TIMEOUT_MS';
 
 export interface AiServiceEnabledConfig {
   status: 'enabled';
@@ -36,6 +43,7 @@ export interface AiServiceEnabledConfig {
   environment: AiServiceEnvironment;
   timeoutMs: number;
   imageSearchTimeoutMs: number;
+  recommendationTimeoutMs: number;
   maxResponseBytes: number;
 }
 
@@ -106,12 +114,16 @@ function parseTimeout(raw: string | undefined): number | undefined {
   return parsed >= AI_MIN_TIMEOUT_MS && parsed <= AI_MAX_TIMEOUT_MS ? parsed : undefined;
 }
 
-function parseImageSearchTimeout(raw: string | undefined): number | undefined {
-  if (!present(raw)) return AI_DEFAULT_IMAGE_SEARCH_TIMEOUT_MS;
+function parseBoundedTimeout(raw: string | undefined, fallback: number, max: number): number | undefined {
+  if (!present(raw)) return fallback;
   const value = raw.trim();
   if (!/^\d{1,6}$/.test(value)) return undefined;
   const parsed = Number(value);
-  return parsed >= AI_MIN_TIMEOUT_MS && parsed <= AI_MAX_IMAGE_SEARCH_TIMEOUT_MS ? parsed : undefined;
+  return parsed >= AI_MIN_TIMEOUT_MS && parsed <= max ? parsed : undefined;
+}
+
+function parseImageSearchTimeout(raw: string | undefined): number | undefined {
+  return parseBoundedTimeout(raw, AI_DEFAULT_IMAGE_SEARCH_TIMEOUT_MS, AI_MAX_IMAGE_SEARCH_TIMEOUT_MS);
 }
 
 function resolveEnvironment(raw: string | undefined, nodeEnv: string): AiServiceEnvironment | undefined {
@@ -147,11 +159,17 @@ export function resolveAiServiceConfig(source: NodeJS.ProcessEnv, nodeEnv: strin
     const imageSearchTimeoutMs = parseImageSearchTimeout(source.AI_IMAGE_SEARCH_TIMEOUT_MS);
     if (imageSearchTimeoutMs === undefined) issues.push('AI_IMAGE_SEARCH_TIMEOUT_MS');
 
-    if (issues.length > 0 || !baseUrl || !environment || timeoutMs === undefined || imageSearchTimeoutMs === undefined || typeof apiKey !== 'string') {
+    const recommendationTimeoutMs = parseBoundedTimeout(source.AI_RECOMMENDATION_TIMEOUT_MS,
+      AI_DEFAULT_RECOMMENDATION_TIMEOUT_MS, AI_MAX_RECOMMENDATION_TIMEOUT_MS);
+    if (recommendationTimeoutMs === undefined) issues.push('AI_RECOMMENDATION_TIMEOUT_MS');
+
+    if (issues.length > 0 || !baseUrl || !environment || timeoutMs === undefined || imageSearchTimeoutMs === undefined
+      || recommendationTimeoutMs === undefined || typeof apiKey !== 'string') {
       return { status: 'disabled', reason: 'MISCONFIGURED', issues };
     }
     return {
-      status: 'enabled', baseUrl, apiKey, environment, timeoutMs, imageSearchTimeoutMs, maxResponseBytes: AI_MAX_RESPONSE_BYTES,
+      status: 'enabled', baseUrl, apiKey, environment, timeoutMs, imageSearchTimeoutMs, recommendationTimeoutMs,
+      maxResponseBytes: AI_MAX_RESPONSE_BYTES,
     };
   } catch {
     // Defensive: a resolver bug must never block startup.

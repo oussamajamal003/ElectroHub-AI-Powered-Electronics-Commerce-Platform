@@ -11,7 +11,8 @@ import { useSearchResults } from '@/features/search/queries';
 import { ApiError } from '@/lib/api';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: vi.fn() }));
-vi.mock('@/features/cart/context', () => ({ useCart: vi.fn() }));
+vi.mock('@/features/cart/context', async () => ({ useCart: vi.fn(), CartContext: (await import('react')).createContext(null) }));
+vi.mock('@/features/recommendations/queries', () => import('@/test/recommendationQueriesMock'));
 vi.mock('@/features/products/queries', () => ({ useProduct: vi.fn(), useMyReview: vi.fn(), useReviewMutation: vi.fn(), useReviews: vi.fn() }));
 vi.mock('@/features/search/queries', () => ({ useSearchResults: vi.fn() }));
 

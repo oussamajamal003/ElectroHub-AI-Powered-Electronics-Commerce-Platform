@@ -47,3 +47,14 @@ it('allows a genuine retry after a transient prepared-session failure', async ()
   expect(await session.restoreSession()).toEqual(user);
   expect(authApi.refreshSession).toHaveBeenCalledTimes(2);
 });
+it('uses the identity returned with the rotation and makes no /me request, but falls back to /me when it is absent', async () => {
+  sessionStorage.setItem('electrohub:cached-user', JSON.stringify({ ...user, id: 'remembered-owner' }));
+  vi.mocked(authApi.refreshSession).mockResolvedValue({ accessToken: 'test-token', user });
+  const session = await import('./sessionRestore');
+  expect(await session.restoreSession()).toEqual(user);
+  expect(authApi.getCurrentUser).not.toHaveBeenCalled();
+  vi.mocked(authApi.refreshSession).mockResolvedValue({ accessToken: 'test-token', user: { id: 7 } as never });
+  vi.mocked(authApi.getCurrentUser).mockResolvedValue({ user });
+  expect(await session.restoreSession()).toEqual(user);
+  expect(authApi.getCurrentUser).toHaveBeenCalledTimes(1);
+});

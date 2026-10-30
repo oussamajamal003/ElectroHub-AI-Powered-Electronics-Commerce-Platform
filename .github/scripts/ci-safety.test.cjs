@@ -225,7 +225,7 @@ test('the real DEV workflow is manual-only and PROD automates develop with scope
   assert.deepEqual(policy.getPushBranches(prod.text), ['develop']);
   const holders = files.filter((file) => /secrets\.ELECTROHUB_/.test(file.text)).map((file) => file.name);
   assert.deepEqual(holders, ['dev-migration.yml', 'prod-migration.yml']);
-  assert.match(prod.text, /20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard,20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health/);
+  assert.match(prod.text, /20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard,20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health,20261029000000_recommendations,20261029010000_recommendation_retention_index,20261029020000_recommendation_consent_consistency/);
   assert.match(prod.text, /EXPECTED_PROJECT_REF: yepfgjehdstlxbpespun/);
   assert.match(prod.text, /MIGRATION_TARGET: PROD/);
   assert.match(prod.text, /environment: electrohub-prod-database/);
@@ -234,7 +234,29 @@ test('the real DEV workflow is manual-only and PROD automates develop with scope
 
 test('Task 04.3 DEV migration helper approves its exact ordered additive migration set', () => {
   const helper = fs.readFileSync(path.resolve(__dirname, '../../apps/backend/scripts/product-media-migrate.cjs'), 'utf8');
-  assert.match(helper, /APPROVED_MIGRATIONS:\s*'20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health'/);
+  assert.match(helper, /approvedMigrations:\s*'20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health'/);
+});
+
+test('Task 04.4 DEV migration helper approves the ordered recommendations migration set', () => {
+  const helper = fs.readFileSync(path.resolve(__dirname, '../../apps/backend/scripts/recommendations-migrate.cjs'), 'utf8');
+  assert.match(helper, /approvedMigrations:\s*'20261029000000_recommendations,20261029010000_recommendation_retention_index,20261029020000_recommendation_consent_consistency'/);
+});
+
+test('Task 04.4 consent consistency is a forward-only additive migration', () => {
+  const name = '20261029020000_recommendation_consent_consistency';
+  const file = path.resolve(__dirname, `../../apps/backend/prisma/migrations/${name}/migration.sql`);
+  const sql = fs.readFileSync(file, 'utf8');
+  assert.match(sql, /ADD CONSTRAINT "recommendation_preferences_consent_consistency_check"\s+CHECK/);
+  assert.match(sql, /"personalizationEnabled" = TRUE AND "consentedAt" IS NOT NULL/);
+  assert.match(sql, /"personalizationEnabled" = FALSE AND "consentedAt" IS NULL/);
+  assert.deepEqual(plan.checkDestructiveSql(name, sql), []);
+});
+
+test('shared DEV migration deploy pins the DEV project and uses only the entrypoint allowlist', () => {
+  const shared = fs.readFileSync(path.resolve(__dirname, '../../apps/backend/scripts/dev-migrate.cjs'), 'utf8');
+  assert.match(shared, /assertTarget\([^)]*'pzxekjybdiulzmssalfo', 'DEV'\)/);
+  assert.match(shared, /APPROVED_MIGRATIONS: approvedMigrations,/);
+  assert.doesNotMatch(shared, /process\.env\.APPROVED_MIGRATIONS/);
 });
 
 test('policy rejects PROD workflow on feature branches, main, or pull requests', () => {

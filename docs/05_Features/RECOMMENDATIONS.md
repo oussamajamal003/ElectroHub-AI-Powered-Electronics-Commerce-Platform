@@ -1,5 +1,66 @@
 # Recommendations
 
+> **Implemented in Task 04.4 (branch `feature/04.4-ml-powered-recommendations`).** The sections after "Implemented
+> behaviour" are the original Phase 00 planning baseline; where they differ, this section and the code are authoritative.
+> Algorithm, signals and evaluation: [`07_AI/RECOMMENDER.md`](../07_AI/RECOMMENDER.md).
+
+## Implemented behaviour (Task 04.4)
+
+| Rail | Where | Strategy (server `strategy`) | Shown when |
+|---|---|---|---|
+| Similar Products | Product detail | `EMBEDDING_SIMILARITY` (D3 SigLIP2 centroids + pgvector) | AI ready; otherwise `FALLBACK_CATEGORY` titled "More in {category}" with a "View category" link |
+| You May Also Like | Product detail | `HYBRID_EMBEDDING` (deeper D3 pool, excludes Similar ids, category-diversified) | AI ready and at least 2 items |
+| Frequently Bought Together | Product detail, Cart | `CO_PURCHASE` | At least 2 distinct qualifying orders contain the pair; otherwise `NO_DATA` and the rail is hidden |
+| Recommended for You | Home (signed-in customers) | `BEHAVIOR_EMBEDDING` | Consent on and profile evidence ≥ 2 products and weight ≥ 3; otherwise hidden (`isPersonalized: false`) |
+| Popular Products | Home | `MEASURED_POPULARITY` | ≥ 3 distinct contributing users in 30 days; the `FALLBACK_NEW_ARRIVALS` answer is not shown on Home (it would duplicate New Arrivals) |
+| Recently Viewed | Account | Customer's own history (not a recommendation) | Consent on |
+
+Every rail reuses the store `ProductCard` (same cart, wishlist and navigation), is a semantic `<section aria-labelledby>`
+grid (no carousel), shows skeletons only while nothing is loaded, and is hidden rather than showing "no results".
+Failures never block the page, cart or checkout.
+
+### API (Express)
+
+| Method and path | Access | Notes |
+|---|---|---|
+| `GET /api/products/:slug/recommendations?limit=1..12` | Public | `{ sections: [SIMILAR, YOU_MAY_ALSO_LIKE, FBT] }`, deduplicated across sections, `Cache-Control: private, no-store` to protect per-response attribution batches, 120/min |
+| `GET /api/recommendations/popular` | Public | Measured popularity or honest new-arrivals fallback; `Cache-Control: private, no-store` because the response carries a per-response attribution token |
+| `POST /api/recommendations/cart` | Public | `{ productIds ≤ 50, limit }`; ids are context only, cart is never mutated; `Cache-Control: private, no-store` |
+| `POST /api/recommendations/events` | Public | `{ token, events ≤ 24 }` IMPRESSION/CLICK; HMAC token issued per section; no user id stored; `202` |
+| `GET /api/me/recommendations` | CUSTOMER | Personal rail or fallback; `private, no-store` |
+| `GET/PATCH /api/me/recommendation-preferences` | CUSTOMER | Opt-in (default off). Turning off deletes interactions and recently viewed |
+| `GET/DELETE /api/me/recently-viewed` | CUSTOMER | Clear deletes the list and its VIEW events |
+| `DELETE /api/me/recently-viewed/:productId` | CUSTOMER | Idempotently removes that customer's item and its VIEW events; other signals remain |
+| `POST /api/product-interactions` | CUSTOMER | VIEW / RECOMMENDATION_CLICK, idempotent key; ignored (200) without consent, 201 when recorded |
+
+All AI ids are re-hydrated through the public catalog projection (active, storefront-visible, non-fixture, current
+price and stock). Clients never send user ids, prices, weights or strategy.
+
+### Privacy
+
+- Personalization is explicit opt-in; nothing behavioural is stored for anonymous visitors or without consent.
+- Wishlist, cart and paid-order signals are read in place (no copies) and only for the signed-in user's own profile.
+- Retention: interactions 90 days (reads filter, hourly purge); recently viewed capped at 20 per user.
+- Account deletion removes preferences, interactions and recently viewed in the deletion transaction.
+- FastAPI receives only product ids and normalised weights (`profile-v1`); no user ids, emails or orders.
+- Two-horizon profile: the long-horizon profile (all signals, 14-day half-life) is ranked as before. Products browsed in the
+  last 3 days (views and recommendation clicks, 1-day half-life) form a second, short-horizon profile, ranked concurrently
+  with every profile product excluded. Two or three recently browsed products earn one rail slot and four or more earn two;
+  these slots are positions 2 and 4. A single accidental view earns nothing, long-term interests always keep position 1 and
+  at least half the rail, and a failed recent ranking only drops its slots.
+- `recommendation_events` stores batch, product, mode, strategy, surface and rank only.
+
+### Configuration
+
+| Variable | Service | Default |
+|---|---|---|
+| `AI_RECOMMENDATIONS_ENABLED` | FastAPI | `true` |
+| `AI_RECOMMENDATION_TIMEOUT_MS` | Express | `4000` (100–10000) |
+
+The impression-token key is derived from the existing `JWT_SECRET`; no new secret.
+
+---
+
 ## 1. Purpose
 
 The Recommendation System provides personalized and contextual product suggestions throughout ElectroHub.

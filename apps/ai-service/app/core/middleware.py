@@ -18,7 +18,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.config import Settings
 from app.core.errors import AIServiceError, error_response, http_error_details
-from app.core.logging import log_event
+from app.core.logging import log_event, request_context
 from app.core.security import (
     API_KEY_HEADER,
     ENVIRONMENT_HEADER,
@@ -52,6 +52,7 @@ class RequestContextMiddleware:
         incoming = Headers(scope=scope).get(REQUEST_ID_HEADER)
         request_id = incoming if incoming and _SAFE_REQUEST_ID.fullmatch(incoming) else str(uuid.uuid4())
         scope.setdefault("state", {})["request_id"] = request_id
+        context_token = request_context.set(request_id)
         started = time.perf_counter()
         status = 500
         response_started = False
@@ -87,6 +88,7 @@ class RequestContextMiddleware:
                 status=status,
                 durationMs=round((time.perf_counter() - started) * 1000, 2),
             )
+            request_context.reset(context_token)
 
 
 class InternalAuthMiddleware:

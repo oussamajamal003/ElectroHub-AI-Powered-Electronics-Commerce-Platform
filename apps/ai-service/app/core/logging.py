@@ -10,10 +10,12 @@ import json
 import logging
 import re
 import sys
+from contextvars import ContextVar
 from datetime import UTC, datetime
 
 LOGGER_NAME = "electrohub.ai"
 _logger = logging.getLogger(LOGGER_NAME)
+request_context: ContextVar[str | None] = ContextVar("ai_request_id", default=None)
 
 _SENSITIVE_FIELD = re.compile(
     r"key|secret|token|authorization|password|cookie|credential|image|vector|embedding|body|payload|email|address|phone",
@@ -65,4 +67,7 @@ def sanitize_fields(fields: dict[str, object]) -> dict[str, object]:
 
 
 def log_event(event: str, *, level: int = logging.INFO, exc_info: bool = False, **fields: object) -> None:
+    request_id = request_context.get()
+    if request_id is not None:
+        fields.setdefault("requestId", request_id)
     _logger.log(level, event, exc_info=exc_info, extra={"fields": sanitize_fields(fields)})

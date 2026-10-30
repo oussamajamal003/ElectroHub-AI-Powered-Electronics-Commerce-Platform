@@ -100,6 +100,51 @@ describe('central API client', () => {
       window.removeEventListener('electrohub:session-expired', onExpired);
     } finally { vi.useRealTimers(); }
   });
+  it('serializes refreshes across documents through an origin-wide lock so two documents never present one cookie at once', async () => {
+    let tail: Promise<unknown> = Promise.resolve();
+    const held: string[] = [];
+    vi.stubGlobal('navigator', { locks: { request: (name: string, _options: unknown, callback: () => Promise<unknown>) => {
+      held.push(name);
+      const run = tail.then(callback);
+      tail = run.catch(() => undefined);
+      return run;
+    } } });
+    let inFlight = 0; let maxInFlight = 0; let calls = 0;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => {
+      if (url !== '/api/auth/refresh') return json(200, { ok: true });
+      calls++; inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise(resolve => setTimeout(resolve, 5));
+      inFlight--;
+      return json(200, { accessToken: `t${calls}` });
+    }));
+    // Two separate "documents" each issue their own refresh (the in-memory single-flight cannot see across them).
+    await Promise.all([apiClient('/api/auth/refresh', { method: 'POST' }), apiClient('/api/auth/refresh', { method: 'POST' })]);
+    expect(calls).toBe(2);
+    expect(maxInFlight).toBe(1);
+    expect(held).toEqual(['electrohub:auth-refresh', 'electrohub:auth-refresh']);
+  });
+  it('falls back to an unlocked refresh when the lock wait times out so a wedged holder cannot block sign-in', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal('navigator', { locks: { request: (_name: string, options: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      }) } });
+      const fetchMock = vi.fn().mockResolvedValue(json(200, { accessToken: 'ok' }));
+      vi.stubGlobal('fetch', fetchMock);
+      const pending = apiClient('/api/auth/refresh', { method: 'POST' });
+      await vi.advanceTimersByTimeAsync(8_100);
+      await expect(pending).resolves.toEqual({ accessToken: 'ok' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); }
+  });
+  it('sends refresh as keepalive so a navigation cannot cancel it and lose the rotated cookie, but not ordinary requests', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => json(200, { accessToken: 'ok' }));
+    vi.stubGlobal('fetch', fetchMock);
+    await apiClient('/api/auth/refresh', { method: 'POST' });
+    await apiClient('/api/products');
+    expect(fetchMock.mock.calls[0]?.[1]?.keepalive).toBe(true);
+    expect(fetchMock.mock.calls[1]?.[1]?.keepalive).toBeUndefined();
+  });
   it('shares a failed refresh, clears the token, and notifies AuthContext once', async () => {
     setAccessToken('old-sensitive-token');
     let releaseRefresh: ((response: Response) => void) | undefined;

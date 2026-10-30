@@ -1,0 +1,419 @@
+{
+  "evaluation_status": "historical; recall metrics invalid under the corrected standard recall@k definition",
+  "recall_definition": "INVALID legacy denominator min(k, relevant_count); values retained for provenance, do not cite",
+  "independent_relevance_judgments": "not available; taxonomy labels only",
+  "label_definition": "graded relevance between anchor A and candidate C: same family and same brand = 3; same family = 2; same category only = 1; otherwise 0. Brands match when both are present and equal (case and surrounding whitespace ignored). Recall counts grade >= 2 as relevant. NDCG uses gain 2^g - 1.",
+  "anchor_rule": "every candidate-pool product with a centroid and exactly one family label",
+  "candidate_pool_size": 206,
+  "anchor_count": 206,
+  "strategies": {
+    "category_baseline": {
+      "status": "evaluated",
+      "metrics": {
+        "recall@1": {
+          "mean": 0.8793969849246231,
+          "n": 199
+        },
+        "recall@5": {
+          "mean": 0.9055276381909547,
+          "n": 199
+        },
+        "recall@10": {
+          "mean": 0.966499162479062,
+          "n": 199
+        },
+        "ndcg@5": {
+          "mean": 0.9039161143681439,
+          "n": 206
+        },
+        "ndcg@10": {
+          "mean": 0.9361653988681575,
+          "n": 206
+        },
+        "category_diversity@10": {
+          "mean": 0.0,
+          "n": 204
+        }
+      },
+      "catalog_coverage@10": 0.6116504854368932
+    },
+    "popularity_baseline": {
+      "status": "not evaluated (no measured popularity data)"
+    },
+    "d3_centroid": {
+      "status": "evaluated",
+      "metrics": {
+        "recall@1": {
+          "mean": 1.0,
+          "n": 199
+        },
+        "recall@5": {
+          "mean": 0.9959798994974873,
+          "n": 199
+        },
+        "recall@10": {
+          "mean": 1.0,
+          "n": 199
+        },
+        "ndcg@5": {
+          "mean": 0.9792547663129746,
+          "n": 206
+        },
+        "ndcg@10": {
+          "mean": 0.9818650593929698,
+          "n": 206
+        },
+        "category_diversity@10": {
+          "mean": 0.16990291262135923,
+          "n": 206
+        }
+      },
+      "catalog_coverage@10": 1.0,
+      "latency_ms": {
+        "mean": 0.45319271843810977,
+        "p95": 0.9283749997166524,
+        "queries": 206
+      }
+    }
+  },
+  "failures": [
+    {
+      "anchor": {
+        "id": "d2615658-521a-5537-8519-38c148e528c2",
+        "name": "TP-Link TL-SG105",
+        "family": "ethernet-switch",
+        "category": "networking-wifi"
+      },
+      "ndcg@10": 0.41802406015059584,
+      "top3": [
+        {
+          "id": "d71f394b-91a9-5fee-b706-ab5a8829b01e",
+          "name": "Brother HL-L2460DW",
+          "family": "printer",
+          "category": "printers-scanners",
+          "grade": 0
+        },
+        {
+          "id": "5683ae5b-8adb-574c-adf6-9d24f97d0627",
+          "name": "Samsung 870 EVO 1TB",
+          "family": "internal-ssd",
+          "category": "storage-ssds",
+          "grade": 0
+        },
+        {
+          "id": "dcd715c4-0b3c-598c-9338-2da72c6abd6b",
+          "name": "TP-Link Archer AX10",
+          "family": "wireless-router",
+          "category": "networking-wifi",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "anchor": {
+        "id": "f1e81362-777e-5ff1-8d81-5fd623d9c990",
+        "name": "JBL Bar 300",
+        "family": "soundbar",
+        "category": "speakers-audio"
+      },
+      "ndcg@10": 0.45260163770064993,
+      "top3": [
+        {
+          "id": "8fbb71dc-367f-5857-b6e6-9e1b9b176718",
+          "name": "Logitech K780",
+          "family": "computer-keyboard",
+          "category": "keyboards-mice",
+          "grade": 0
+        },
+        {
+          "id": "acf5d217-0c84-56e3-b267-52cebec64d04",
+          "name": "Logitech MX Keys S",
+          "family": "computer-keyboard",
+          "category": "keyboards-mice",
+          "grade": 0
+        },
+        {
+          "id": "1b0f4f56-0782-51ec-988a-def53d14249f",
+          "name": "Logitech MX Mechanical Tactile Quiet",
+          "family": "computer-keyboard",
+          "category": "keyboards-mice",
+          "grade": 0
+        }
+      ]
+    },
+    {
+      "anchor": {
+        "id": "4dc06dac-1f06-4adc-96b8-5a833d18ac6b",
+        "name": "ASUS ROG Ally Z1 Extreme RC71L",
+        "family": "handheld-gaming-pc",
+        "category": "gaming"
+      },
+      "ndcg@10": 0.6131471927654584,
+      "top3": [
+        {
+          "id": "a0d15af2-3943-41f7-8ad0-2cefe14320a9",
+          "name": "Sony PlayStation 5 Launch Disc Edition",
+          "family": "game-console",
+          "category": "gaming",
+          "grade": 1
+        },
+        {
+          "id": "f313adcf-74eb-455c-a3f8-206332cc2260",
+          "name": "Apple iPhone 16 512GB — White",
+          "family": "smartphone",
+          "category": "smartphones",
+          "grade": 0
+        },
+        {
+          "id": "365e4efe-82e8-445e-99e3-c67a312a0b64",
+          "name": "Apple iPhone 16 256GB — White",
+          "family": "smartphone",
+          "category": "smartphones",
+          "grade": 0
+        }
+      ]
+    },
+    {
+      "anchor": {
+        "id": "a0d15af2-3943-41f7-8ad0-2cefe14320a9",
+        "name": "Sony PlayStation 5 Launch Disc Edition",
+        "family": "game-console",
+        "category": "gaming"
+      },
+      "ndcg@10": 0.6131471927654584,
+      "top3": [
+        {
+          "id": "4dc06dac-1f06-4adc-96b8-5a833d18ac6b",
+          "name": "ASUS ROG Ally Z1 Extreme RC71L",
+          "family": "handheld-gaming-pc",
+          "category": "gaming",
+          "grade": 1
+        },
+        {
+          "id": "f1e0e2ca-7632-4535-8009-3c7df3dddc41",
+          "name": "Apple iPhone 16 128GB — White",
+          "family": "smartphone",
+          "category": "smartphones",
+          "grade": 0
+        },
+        {
+          "id": "14bb926b-99c9-4e41-ba99-379ec17c5d0b",
+          "name": "Apple iPhone 15 128GB — Blue",
+          "family": "smartphone",
+          "category": "smartphones",
+          "grade": 0
+        }
+      ]
+    },
+    {
+      "anchor": {
+        "id": "bb3a2c22-9a84-5139-9242-5daa699456da",
+        "name": "TP-Link Archer T3U",
+        "family": "usb-wifi-adapter",
+        "category": "networking-wifi"
+      },
+      "ndcg@10": 0.8020378746650066,
+      "top3": [
+        {
+          "id": "1cda32c4-891f-58e3-9632-9a3d6ca33735",
+          "name": "TP-Link Archer C6",
+          "family": "wireless-router",
+          "category": "networking-wifi",
+          "grade": 1
+        },
+        {
+          "id": "41e2cbae-5189-543e-a378-bff0f404c747",
+          "name": "TP-Link Archer AX23",
+          "family": "wireless-router",
+          "category": "networking-wifi",
+          "grade": 1
+        },
+        {
+          "id": "076fadf5-bf71-5bf3-83e4-60e839224170",
+          "name": "TP-Link Archer AXE75",
+          "family": "wireless-router",
+          "category": "networking-wifi",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "anchor": {
+        "id": "c68774dd-f684-5b6f-a826-e6bfe3f8af7d",
+        "name": "Tapo T110 EU",
+        "family": "contact-sensor",
+        "category": "smart-home"
+      },
+      "ndcg@10": 0.855095623993845,
+      "top3": [
+        {
+          "id": "d7da5b79-f179-5784-8a3a-b2d8576c30b5",
+          "name": "Tapo P100 EU V1",
+          "family": "smart-plug",
+          "category": "smart-home",
+          "grade": 1
+        },
+        {
+          "id": "a512c5d5-b353-501c-b99b-e3b3b66029c2",
+          "name": "Tapo P110 EU V1",
+          "family": "smart-plug",
+          "category": "smart-home",
+          "grade": 1
+        },
+        {
+          "id": "8373ddde-4e8a-54bd-808d-b76ceeec1caf",
+          "name": "Tapo C110 V1",
+          "family": "security-camera",
+          "category": "smart-home",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "anchor": {
+        "id": "15806b04-c6af-4055-ae84-5ab23cfeaaea",
+        "name": "Apple iPad Air 11 M2 Wi-Fi 256GB — Starlight",
+        "family": "tablet-computer",
+        "category": "tablets"
+      },
+      "ndcg@10": 0.8971820102793304,
+      "top3": [
+        {
+          "id": "f084148c-ec9b-47da-8415-017292849f49",
+          "name": "Apple iPad Air 11 M2 Wi-Fi 512GB — Starlight",
+          "family": "tablet-computer",
+          "category": "tablets",
+          "grade": 3
+        },
+        {
+          "id": "b25b63ea-8def-4a83-b02e-dd2da9932feb",
+          "name": "Apple iPad Air 11 M2 Wi-Fi 128GB — Starlight",
+          "family": "tablet-computer",
+          "category": "tablets",
+          "grade": 3
+        },
+        {
+          "id": "c8319094-9915-4c28-ae69-8216eb2446b4",
+          "name": "Apple iPad Air 11 M2 Wi-Fi 1TB — Starlight",
+          "family": "tablet-computer",
+          "category": "tablets",
+          "grade": 3
+        }
+      ]
+    },
+    {
+      "anchor": {
+        "id": "b25b63ea-8def-4a83-b02e-dd2da9932feb",
+        "name": "Apple iPad Air 11 M2 Wi-Fi 128GB — Starlight",
+        "family": "tablet-computer",
+        "category": "tablets"
+      },
+      "ndcg@10": 0.8971820102793304,
+      "top3": [
+        {
+          "id": "c8319094-9915-4c28-ae69-8216eb2446b4",
+          "name": "Apple iPad Air 11 M2 Wi-Fi 1TB — Starlight",
+          "family": "tablet-computer",
+          "category": "tablets",
+          "grade": 3
+        },
+        {
+          "id": "15806b04-c6af-4055-ae84-5ab23cfeaaea",
+          "name": "Apple iPad Air 11 M2 Wi-Fi 256GB — Starlight",
+          "family": "tablet-computer",
+          "category": "tablets",
+          "grade": 3
+        },
+        {
+          "id": "f084148c-ec9b-47da-8415-017292849f49",
+          "name": "Apple iPad Air 11 M2 Wi-Fi 512GB — Starlight",
+          "family": "tablet-computer",
+          "category": "tablets",
+          "grade": 3
+        }
+      ]
+    },
+    {
+      "anchor": {
+        "id": "c8319094-9915-4c28-ae69-8216eb2446b4",
+        "name": "Apple iPad Air 11 M2 Wi-Fi 1TB — Starlight",
+        "family": "tablet-computer",
+        "category": "tablets"
+      },
+      "ndcg@10": 0.8971820102793304,
+      "top3": [
+        {
+          "id": "b25b63ea-8def-4a83-b02e-dd2da9932feb",
+          "name": "Apple iPad Air 11 M2 Wi-Fi 128GB — Starlight",
+          "family": "tablet-computer",
+          "category": "tablets",
+          "grade": 3
+        },
+        {
+          "id": "f084148c-ec9b-47da-8415-017292849f49",
+          "name": "Apple iPad Air 11 M2 Wi-Fi 512GB — Starlight",
+          "family": "tablet-computer",
+          "category": "tablets",
+          "grade": 3
+        },
+        {
+          "id": "15806b04-c6af-4055-ae84-5ab23cfeaaea",
+          "name": "Apple iPad Air 11 M2 Wi-Fi 256GB — Starlight",
+          "family": "tablet-computer",
+          "category": "tablets",
+          "grade": 3
+        }
+      ]
+    },
+    {
+      "anchor": {
+        "id": "f084148c-ec9b-47da-8415-017292849f49",
+        "name": "Apple iPad Air 11 M2 Wi-Fi 512GB — Starlight",
+        "family": "tablet-computer",
+        "category": "tablets"
+      },
+      "ndcg@10": 0.8971820102793304,
+      "top3": [
+        {
+          "id": "15806b04-c6af-4055-ae84-5ab23cfeaaea",
+          "name": "Apple iPad Air 11 M2 Wi-Fi 256GB — Starlight",
+          "family": "tablet-computer",
+          "category": "tablets",
+          "grade": 3
+        },
+        {
+          "id": "c8319094-9915-4c28-ae69-8216eb2446b4",
+          "name": "Apple iPad Air 11 M2 Wi-Fi 1TB — Starlight",
+          "family": "tablet-computer",
+          "category": "tablets",
+          "grade": 3
+        },
+        {
+          "id": "b25b63ea-8def-4a83-b02e-dd2da9932feb",
+          "name": "Apple iPad Air 11 M2 Wi-Fi 128GB — Starlight",
+          "family": "tablet-computer",
+          "category": "tablets",
+          "grade": 3
+        }
+      ]
+    }
+  ],
+  "catalog": {
+    "file": "eval_catalog.json",
+    "file_sha256": "c4d499d840f6e527067de39dfdcbfd2ef2f64bf717bc533fe6ecb657536b7c07",
+    "entries": 206,
+    "with_centroid": 206,
+    "without_centroid": 0,
+    "without_family": 0,
+    "ambiguous_family": 0
+  },
+  "descriptor": {
+    "name": "electrohub-visual-search",
+    "model_version": "siglip2-b16-p256-d1",
+    "embedding_version": "siglip2-b16-p256-d1-b3900dd9fad5",
+    "preprocess_version": "siglip2-rgb-r224-bilinear-norm05-v1",
+    "embedding_dimension": 256,
+    "artifact_format": "safetensors",
+    "artifact_sha256": "b3900dd9fad5222758071cdaede682cb375a1ae8cf06624c30346abd1aff243a"
+  }
+}

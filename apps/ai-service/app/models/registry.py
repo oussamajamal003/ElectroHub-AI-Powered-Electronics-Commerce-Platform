@@ -1,19 +1,27 @@
 """Owns model artifacts for the life of the process: load once at startup, close on shutdown,
 and report readiness truthfully. A feature without a configured loader reports
-``NOT_READY / MODEL_NOT_CONFIGURED``; the index is re-validated on every readiness probe."""
+``NOT_READY / MODEL_NOT_CONFIGURED``; the index is re-validated on every readiness probe.
+
+Task 04.4: recommendations either come from a dedicated ``ranker_loader`` or, by default, from a
+``recommender_factory`` built over the loaded image encoder's descriptor and the vector index (the D3
+embedding recommender). Either way the feature is READY only while that index is ready."""
 
 from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import anyio.to_thread
 
 from app.core.logging import log_event
 from app.integrations.vector_gateway import EmbeddingSearchGateway
+from app.models.descriptor import ModelDescriptor
 from app.models.interfaces import ImageEmbeddingEncoder, LoadedModel, ModelLoader, RecommendationRanker
 from app.schemas.common import FeatureName, FeatureStatus, NotReadyReason
+
+RecommenderFactory = Callable[[ModelDescriptor, EmbeddingSearchGateway], RecommendationRanker]
 
 
 @dataclass
@@ -31,12 +39,15 @@ class ModelRegistry:
         image_encoder_loader: ModelLoader | None = None,
         ranker_loader: ModelLoader | None = None,
         vector_gateway: EmbeddingSearchGateway | None = None,
+        recommender_factory: RecommenderFactory | None = None,
     ) -> None:
         self._slots: dict[FeatureName, _Slot] = {
             "imageSearch": _Slot(image_encoder_loader, ImageEmbeddingEncoder),
             "recommendations": _Slot(ranker_loader, RecommendationRanker),
         }
         self._gateway = vector_gateway
+        self._recommender_factory = recommender_factory
+        self._recommender_uses_index = False
         self._index_ready = False
         self._last_index_check = float("-inf")
 
@@ -60,7 +71,28 @@ class ModelRegistry:
                 slot.load_failed = True
                 log_event("ai.model_load_failed", level=logging.ERROR, feature=feature, exception=type(exc).__name__)
 
+        self._build_recommender()
         await self.refresh_index()
+
+    def _build_recommender(self) -> None:
+        slot = self._slots["recommendations"]
+        encoder = self.image_encoder
+        if slot.loader is not None or self._recommender_factory is None or encoder is None or self._gateway is None:
+            return
+        try:
+            slot.model = self._recommender_factory(encoder.descriptor, self._gateway)
+            self._recommender_uses_index = True
+            log_event(
+                "ai.model_loaded",
+                feature="recommendations",
+                modelVersion=encoder.descriptor.model_version,
+                embeddingVersion=encoder.descriptor.embedding_version,
+            )
+        except Exception as exc:
+            slot.load_failed = True
+            log_event(
+                "ai.model_load_failed", level=logging.ERROR, feature="recommendations", exception=type(exc).__name__
+            )
 
     async def refresh_index_if_stale(self, min_interval_seconds: float = 5.0) -> None:
         """Self-healing for the search path: when the index was last seen not ready, re-check at most once per interval,
@@ -119,7 +151,7 @@ class ModelRegistry:
         reason: NotReadyReason | None
         if slot.model is None:
             reason = "MODEL_NOT_LOADED" if slot.load_failed else "MODEL_NOT_CONFIGURED"
-        elif feature == "imageSearch" and not self._index_ready:
+        elif not self._index_ready and (feature == "imageSearch" or self._recommender_uses_index):
             reason = "INDEX_NOT_READY"
         else:
             reason = None

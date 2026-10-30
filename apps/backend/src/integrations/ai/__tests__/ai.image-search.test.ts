@@ -60,7 +60,7 @@ let decoy: Awaited<ReturnType<typeof startServer>>;
 function config(overrides: Partial<AiServiceEnabledConfig> = {}): AiServiceEnabledConfig {
   return {
     status: 'enabled', baseUrl: new URL(ai.origin), apiKey: KEY, environment: ENV, timeoutMs: 1000,
-    imageSearchTimeoutMs: 8000, maxResponseBytes: AI_MAX_RESPONSE_BYTES, ...overrides,
+    imageSearchTimeoutMs: 8000, recommendationTimeoutMs: 1000, maxResponseBytes: AI_MAX_RESPONSE_BYTES, ...overrides,
   };
 }
 

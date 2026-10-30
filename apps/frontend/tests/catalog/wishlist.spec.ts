@@ -62,6 +62,15 @@ async function harness(page: Page, options: { signedIn?: boolean; serverIds?: st
     if (url.pathname === '/api/cart') { cartReads++; if (options.cartQuantity) await wishlistGate; return send({ data: { items: [], totalQuantity: options.cartQuantity ?? 0, subtotal: '0.00', total: '0.00', shipping: '0.00', currency: 'USD', canCheckout: false } }); }
     if (url.pathname.endsWith('/reviews/me')) return send({ data: null });
     if (url.pathname.endsWith('/reviews')) return send({ data: [], meta: { page: 1, pageSize: 10, total: 0, totalPages: 0 }, summary: { averageRating: null, reviewCount: 0 } });
+    if (url.pathname === `/api/products/${first.slug}/recommendations`) {
+      const empty = (mode: string, surface: string) => ({ mode, surface, strategy: 'NO_DATA', isPersonalized: false, isFallback: false, fallbackReason: null,
+        modelVersion: null, embeddingVersion: null, algorithmVersion: 'wishlist-mock', context: null, impressionToken: null, items: [] });
+      return send({ data: { sections: [
+        { mode: 'SIMILAR_PRODUCTS', surface: 'product_detail', strategy: 'FALLBACK_CATEGORY', isPersonalized: false, isFallback: true, fallbackReason: 'AI_UNAVAILABLE',
+          modelVersion: null, embeddingVersion: null, algorithmVersion: 'wishlist-mock', context: { categoryName: first.category.name, categorySlug: first.category.slug },
+          impressionToken: null, items: [second, third].map((product, index) => ({ rank: index + 1, product })) },
+        empty('YOU_MAY_ALSO_LIKE', 'product_detail'), empty('FREQUENTLY_BOUGHT_TOGETHER', 'product_detail') ] } });
+    }
     if (url.pathname === `/api/products/${first.slug}`) return send({ data: { ...first, sku: 'PHONE', modelNumber: null, availableQuantity: 5,
       images: [first.primaryImage, { ...first.primaryImage, id: 'second-image', sortOrder: 1, isPrimary: false }], specifications: [] } });
     if (url.pathname === '/api/search/products' && options.delayProducts) await productsGate;

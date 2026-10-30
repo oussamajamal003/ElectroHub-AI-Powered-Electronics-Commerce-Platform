@@ -21,7 +21,7 @@ on:
         description: 'Exact ordered migration list override (leave blank for reviewed production allowlist).'
         required: false
         type: string
-        default: '20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard,20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health'
+        default: '20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard,20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health,20261029000000_recommendations,20261029010000_recommendation_retention_index,20261029020000_recommendation_consent_consistency'
 
 permissions:
   contents: read
@@ -38,7 +38,7 @@ jobs:
       MIGRATION_TARGET: PROD
       EXPECTED_PROJECT_REF: yepfgjehdstlxbpespun
       APPROVED_COMMIT: ${{ inputs.approved_commit || github.sha }}
-      APPROVED_MIGRATIONS: ${{ inputs.approved_migrations || '20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard,20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health' }}
+      APPROVED_MIGRATIONS: ${{ inputs.approved_migrations || '20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard,20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health,20261029000000_recommendations,20261029010000_recommendation_retention_index,20261029020000_recommendation_consent_consistency' }}
     steps:
       - name: Verify triggering event, commit SHA, and approved migration allowlist
         shell: bash
@@ -53,7 +53,7 @@ jobs:
             echo "This run is at a different commit than the approved one. Refusing." >&2
             exit 1
           fi
-          expected='20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard,20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health'
+          expected='20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard,20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health,20261029000000_recommendations,20261029010000_recommendation_retention_index,20261029020000_recommendation_consent_consistency'
           if [ "$APPROVED_MIGRATIONS" != "$expected" ]; then
             echo "The approved PROD migration list or order is not exact. Refusing." >&2
             exit 1

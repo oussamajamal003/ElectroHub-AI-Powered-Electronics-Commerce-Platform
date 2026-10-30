@@ -238,6 +238,9 @@ class Settings(BaseSettings):
     AI_RELEVANCE_ARTIFACT_DIR: Path | None = None
     # Least-privilege, read-only connection to the ai schema (ai_vector_reader). Unset = no index (503).
     AI_VECTOR_DATABASE_URL: SecretStr | None = None
+    # Task 04.4 feature flag: the D3 embedding recommender over the same read-only vector index. Off = NOT_READY
+    # recommendations (Express then serves its honest fallbacks) without touching image search.
+    AI_RECOMMENDATIONS_ENABLED: bool = True
     # Separate, narrowly privileged catalog-media sync worker. Never used by the online API process.
     AI_MEDIA_WORKER_DATABASE_URL: SecretStr | None = None
     # Public Supabase project URL used only to construct immutable canonical object URLs from trusted DB keys.

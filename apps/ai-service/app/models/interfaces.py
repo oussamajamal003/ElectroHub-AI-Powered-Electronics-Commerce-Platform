@@ -1,18 +1,20 @@
-"""Interfaces a real trained model must satisfy (implemented in 04.2 / 04.4).
+"""Interfaces a real model must satisfy (04.2 image encoder, 04.4 recommender).
 
-Nothing in Task 04.1 implements these outside tests: with no artifact loaded the service
-reports the features as not ready instead of simulating results (U07).
+With no artifact or index the service reports the features as not ready instead of simulating results (U07).
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Protocol, runtime_checkable
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
+from typing import Protocol, TypeVar, runtime_checkable
 
 from app.models.descriptor import ModelDescriptor
 from app.processors.image import ValidatedImage
 from app.schemas.common import RankedProduct
-from app.schemas.recommendations import RecommendationRequest
+from app.schemas.recommendations import RecommendationRequest, RecommendationStrategy
+
+T = TypeVar("T")
 
 
 @runtime_checkable
@@ -34,10 +36,29 @@ class ImageEmbeddingEncoder(LoadedModel, Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class RecommendationOutcome:
+    items: Sequence[RankedProduct]
+    strategy: RecommendationStrategy
+    algorithm_version: str
+    anchor_indexed: bool
+
+
+class CpuRunner(Protocol):
+    """Runs bounded CPU work off the event loop (``InferenceExecutor.run``)."""
+
+    def __call__(self, fn: Callable[[], T]) -> Awaitable[T]: ...
+
+
 @runtime_checkable
 class RecommendationRanker(LoadedModel, Protocol):
-    def rank(self, request: RecommendationRequest) -> Sequence[RankedProduct]:
-        """CPU-bound ranking of product references; scores are similarities, not probabilities."""
+    async def recommend(
+        self,
+        request: RecommendationRequest,
+        run_cpu: CpuRunner,
+    ) -> RecommendationOutcome:
+        """Ranked product references. Vector retrieval is async I/O; any scoring math goes through ``run_cpu`` so
+        the event loop is never blocked. Scores are similarities, not probabilities."""
         ...
 
 

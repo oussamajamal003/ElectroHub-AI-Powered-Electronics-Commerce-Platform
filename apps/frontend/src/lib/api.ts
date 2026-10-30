@@ -54,7 +54,10 @@ async function readResponse<T>(response: Response): Promise<T> {
  */
 const ROTATION_RETRY_DELAYS_MS = [250, 600, 1200];
 const ROTATION_RETRY_AFTER_CAP_MS = 5_000;
-async function fetchRefresh(url: string, init: RequestInit): Promise<Response> {
+async function fetchRefreshUnlocked(url: string, baseInit: RequestInit): Promise<Response> {
+  // keepalive: a navigation must not cancel an in-flight refresh. The server rotates the token whether or not this document survives, and a
+  // cancelled request loses the Set-Cookie carrying the successor, stranding the next document on a superseded cookie (409s, then a reuse 401).
+  const init: RequestInit = { ...baseInit, keepalive: true };
   let response = await fetch(url, init);
   for (const delay of ROTATION_RETRY_DELAYS_MS) {
     if (response.status !== 409) break;
@@ -65,6 +68,33 @@ async function fetchRefresh(url: string, init: RequestInit): Promise<Response> {
     response = await fetch(url, init);
   }
   return response;
+}
+
+/**
+ * The in-memory single-flight above cannot span documents: a full reload or a second tab starts its own refresh with the cookie it can see, and
+ * two documents presenting one cookie is exactly what the server answers with 409 (or, past its window, treats as replay). The Web Locks API is
+ * origin-wide, so refreshes from every document of this origin run one at a time and each reads the cookie its predecessor committed. A document
+ * that is unloading releases its lock automatically. The wait is bounded so a wedged holder can never block sign-in; without the API (or on
+ * timeout) behavior is unchanged. This does not recover a rotated cookie whose response was lost: that stays a clean re-authentication.
+ */
+const REFRESH_LOCK_NAME = 'electrohub:auth-refresh';
+const REFRESH_LOCK_WAIT_MS = 8_000;
+async function fetchRefresh(url: string, init: RequestInit): Promise<Response> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  if (!locks || typeof locks.request !== 'function') return fetchRefreshUnlocked(url, init);
+  const waitAbort = new AbortController();
+  const timer = setTimeout(() => waitAbort.abort(), REFRESH_LOCK_WAIT_MS);
+  try {
+    return await locks.request(REFRESH_LOCK_NAME, { signal: waitAbort.signal }, async () => {
+      clearTimeout(timer);
+      return fetchRefreshUnlocked(url, init);
+    });
+  } catch (error) {
+    if (isAbortError(error) && waitAbort.signal.aborted) return fetchRefreshUnlocked(url, init);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 const postRefresh = (init: RequestInit) => fetchRefresh('/api/auth/refresh', init);
 

@@ -3,8 +3,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate, useParams, useNavigationType } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { ProductGallery } from '@/components/ui/ProductGallery';
-import { ProductCard } from '@/components/ui/ProductCard';
-import { ProductCardSkeleton } from '@/components/ui/ProductCard/ProductCardSkeleton';
 import { ProductDetailsTabs } from '@/components/ui/ProductDetailsTabs/ProductDetailsTabs';
 import { ProductReviews } from '@/components/ui/ProductReviews/ProductReviews';
 import { ProductSpecifications } from '@/components/ui/ProductSpecifications/ProductSpecifications';
@@ -17,14 +15,16 @@ import { useWishlist } from '@/features/wishlist/context';
 import { WishlistButton } from '@/components/ui/WishlistButton/WishlistButton';
 import { Rating } from '@/components/ui/Rating/Rating';
 import { useProduct, useMyReview, useReviewMutation, useReviews } from '@/features/products/queries';
-import { useSearchResults } from '@/features/search/queries';
-import { productCardProps } from '@/features/search/api';
+import { useProductRecommendations, useRecommendationPreferences, useRecordProductView } from '@/features/recommendations/queries';
+import { RecommendationSectionRail } from '@/features/recommendations/components/RecommendationSectionRail';
 import { ApiError } from '@/lib/api';
 import { queryKeys } from '@/lib/query';
 import type { ProductDetail, ProductResponse } from '@/features/products/types';
 import styles from './ProductDetailPage.module.scss';
 import { ProductPurchaseActions } from './ProductPurchaseActions';
 import { saveBuyNow } from '@/features/checkout/buyNow';
+
+const RECOMMENDATION_LIMIT = 4;
 
 function formatPrice(value: string) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value));
@@ -55,7 +55,7 @@ export function ProductDetailPage() {
       }
     }
   }, [slug, navigationType]);
-  const { isAuthenticated, isInitializing } = useAuth();
+  const { isAuthenticated, isInitializing, user } = useAuth();
   const productQuery = useProduct(slug);
   // A stale cached detail may have become non-public (for example, a test fixture).
   // Render only after a fresh server read so a denied product never flashes from cache.
@@ -74,8 +74,13 @@ export function ProductDetailPage() {
   const reviewQuery = useReviews(slug, reviewPage);
   const ownQuery = useMyReview(slug, isAuthenticated);
   const mutation = useReviewMutation(slug);
-  const recommendations = useSearchResults({ q: '', category: product?.category.slug,
-    page: 1, pageSize: 5 }, Boolean(product));
+  // Task 04.4: one request returns Similar Products (D3 image embeddings, or an honestly labelled same-category
+  // fallback), You May Also Like and Frequently Bought Together, already de-duplicated across rails.
+  const recommendations = useProductRecommendations(slug, RECOMMENDATION_LIMIT, Boolean(product));
+  const customerId = isAuthenticated && user?.role === 'CUSTOMER' ? user.id : undefined;
+  const preferences = useRecommendationPreferences(customerId);
+  const personalizationEnabled = preferences.data?.data.personalizationEnabled ?? false;
+  useRecordProductView(product?.id, customerId, personalizationEnabled);
 
   useEffect(() => {
     setRating(ownQuery.data?.data?.rating ?? 5);
@@ -113,7 +118,8 @@ export function ProductDetailPage() {
       setFeedback(error instanceof ApiError ? error.message : 'Review could not be deleted. Please try again.');
     }
   };
-  const related = recommendations.data?.data.filter(item => item.id !== product.id).slice(0, 4) ?? [];
+  // Only this product's response is ever rendered: the query key is the slug, and a section for another anchor cannot match.
+  const sections = recommendations.data?.data.sections ?? [];
   const addToCart = async () => {
     if (cartAction.current || !product.purchasable || remainingQuantity < cartQuantity) return;
     cartAction.current = true;
@@ -168,10 +174,12 @@ export function ProductDetailPage() {
         </section> : <section className={styles.reviewGuest}><h3>Share your experience</h3><p>Sign in to write a review of this product.</p><Button type="button" onClick={() => window.dispatchEvent(new Event('electrohub:open-auth'))}>Sign In</Button></section>}
       </>} />
 
-    <section className={styles.related} aria-labelledby="related-title"><div className={styles.relatedHeading}><h2 id="related-title">More in {product.category.name}</h2><Link to={`/products?category=${encodeURIComponent(product.category.slug)}`}>View category →</Link></div>
-      {recommendations.isPending && <div role="status" aria-label="Loading related products" className={styles.relatedGrid}>{Array.from({ length: 4 }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
-      {recommendations.isError && <p role="alert">Related products are unavailable. <Button type="button" onClick={() => void recommendations.refetch()}>Retry</Button></p>}
-      {related.length > 0 && <div className={styles.relatedGrid}>{related.map(item => <ProductCard key={item.id} {...productCardProps(item)} isWishlisted={wishlist?.productIds.includes(item.id)} wishlistPending={wishlist?.pending.includes(item.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(item.id)} />)}</div>}
-    </section>
+    {recommendations.isPending && <RecommendationSectionRail id="recommendations-loading" loading />}
+    {recommendations.isError && !recommendations.data && <RecommendationSectionRail id="recommendations-unavailable" error
+      onRetry={() => void recommendations.refetch()} />}
+    {sections.map(section => <RecommendationSectionRail key={section.mode} id={`${section.mode.toLowerCase().replace(/_/g, '-')}-title`}
+      section={section} recordPersonalClicks={personalizationEnabled}
+      action={section.strategy === 'FALLBACK_CATEGORY' && section.context
+        ? { href: `/products?category=${encodeURIComponent(section.context.categorySlug)}`, label: 'View category' } : undefined} />)}
   </main>;
 }

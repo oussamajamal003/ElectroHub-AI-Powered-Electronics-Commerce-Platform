@@ -55,6 +55,10 @@ export class AccountDeletionService {
       await transaction.cart.deleteMany({ where: { userId } });
       await transaction.wishlist.deleteMany({ where: { userId } });
       await transaction.securityEvent.deleteMany({ where: { userId } });
+      // Task 04.4: the account is anonymized, not deleted, so FK cascades never fire for personal recommendation data.
+      await transaction.productInteraction.deleteMany({ where: { userId } });
+      await transaction.recentlyViewedProduct.deleteMany({ where: { userId } });
+      await transaction.recommendationPreference.deleteMany({ where: { userId } });
 
       const orders = await transaction.order.findMany({
         where: { userId },

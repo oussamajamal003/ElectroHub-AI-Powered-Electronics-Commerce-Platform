@@ -18,8 +18,8 @@ export interface VerificationResponse extends AuthResponse {
 }
 
 export const authApi = {
-  refreshSession: async (): Promise<{ accessToken: string }> => {
-    return apiClient<{ accessToken: string }>('/api/auth/refresh', { method: 'POST' });
+  refreshSession: async (): Promise<{ accessToken: string; user?: User }> => {
+    return apiClient<{ accessToken: string; user?: User }>('/api/auth/refresh', { method: 'POST' });
   },
   reauthenticateDeletionWithPassword: async (password: string): Promise<{ message: string }> => {
     return apiClient('/api/account/deletion/reauth/password', { method: 'POST', data: { password } });

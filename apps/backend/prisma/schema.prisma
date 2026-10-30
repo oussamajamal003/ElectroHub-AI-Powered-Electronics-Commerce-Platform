@@ -117,6 +117,9 @@ model User {
   reviews             Review[]
   paymentAttempts     PaymentAttempt[]
   commerceEmails      CommerceEmailOutbox[]
+  recommendationPreference RecommendationPreference?
+  productInteractions      ProductInteraction[]
+  recentlyViewedProducts   RecentlyViewedProduct[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -214,6 +217,9 @@ model Product {
   orderItems OrderItem[]
   paymentAttemptItems PaymentAttemptItem[]
   reviews    Review[]
+  interactions        ProductInteraction[]
+  recentlyViewedBy    RecentlyViewedProduct[]
+  recommendationEvents RecommendationEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -893,4 +899,75 @@ model CommerceEmailAttempt {
   @@unique([outboxId, attemptNumber])
   @@index([outboxId, startedAt])
   @@map("commerce_email_attempts")
+}
+
+/// Task 04.4: explicit, opt-in personalization consent. Absent row = personalization off.
+model RecommendationPreference {
+  userId                 String   @id @db.Uuid
+  personalizationEnabled Boolean  @default(false)
+  consentedAt            DateTime?
+  updatedAt              DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@map("recommendation_preferences")
+}
+
+/// Task 04.4: signed-in, consenting customers' meaningful product activity (VIEW, RECOMMENDATION_CLICK).
+/// Purchases, cart and wishlist signals are read from their authoritative tables, never from client events.
+model ProductInteraction {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  productId      String   @db.Uuid
+  eventType      String   @db.VarChar(32)
+  surface        String   @db.VarChar(32)
+  idempotencyKey String   @db.VarChar(100)
+  occurredAt     DateTime
+  receivedAt     DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, occurredAt])
+  @@index([productId, eventType, occurredAt])
+  @@index([occurredAt])
+  @@map("product_interactions")
+}
+
+/// Task 04.4: one row per (customer, product), capped per customer by the service.
+model RecentlyViewedProduct {
+  userId       String   @db.Uuid
+  productId    String   @db.Uuid
+  lastViewedAt DateTime
+  viewCount    Int      @default(1)
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([userId, productId])
+  @@index([userId, lastViewedAt])
+  @@index([lastViewedAt])
+  @@map("recently_viewed_products")
+}
+
+/// Task 04.4: non-personal recommendation attribution (no user or session identifier). One row per
+/// (server-issued batch, product, event type), so retries and replays cannot inflate counts.
+model RecommendationEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  batchId    String   @db.Uuid
+  productId  String   @db.Uuid
+  eventType  String   @db.VarChar(16)
+  mode       String   @db.VarChar(32)
+  strategy   String   @db.VarChar(32)
+  surface    String   @db.VarChar(32)
+  rank       Int
+  occurredAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([batchId, productId, eventType])
+  @@index([productId, eventType, occurredAt])
+  @@index([occurredAt])
+  @@map("recommendation_events")
 }

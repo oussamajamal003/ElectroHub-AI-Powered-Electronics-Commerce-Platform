@@ -1,0 +1,46 @@
+{
+  "schema_version": "agent-relevance-v1",
+  "created_at": "2026-10-29",
+  "judgment_source": "agent",
+  "human_judgments": false,
+  "blinded_before_scoring": true,
+  "source": {
+    "catalog": "isolated QA public storefront catalog at localhost:55434/electrohub_disposable",
+    "visual_evidence": "local catalog primary photos under apps/frontend/public/images/catalog",
+    "selection": "manual fixed anchors and candidates; score/ranking/evaluation outputs were not accessed"
+  },
+  "grade_guide": {
+    "0": "no meaningful product or use-case relationship",
+    "1": "adjacent or complementary product with a direct use-case connection",
+    "2": "same kind of product and primary function; plausible alternative",
+    "3": "same model or clearly interchangeable SKU variant"
+  },
+  "pairs": [
+    {"anchor_id":"e2fe4c67-52fb-5488-9ef7-a1587108e54e","anchor_name":"Canon EOS R10","candidate_id":"e98ea145-6a84-5d53-8fd4-b7a2b2478c12","candidate_name":"Canon EOS R100","grade":2,"rationale":"Another interchangeable-lens Canon EOS mirrorless camera; plausible camera-body alternative."},
+    {"anchor_id":"e2fe4c67-52fb-5488-9ef7-a1587108e54e","anchor_name":"Canon EOS R10","candidate_id":"9e8b028e-08dd-5c22-877c-22db966052c4","candidate_name":"Canon EOS R50","grade":2,"rationale":"Another interchangeable-lens Canon EOS mirrorless camera; similar shopper use and form."},
+    {"anchor_id":"e2fe4c67-52fb-5488-9ef7-a1587108e54e","anchor_name":"Canon EOS R10","candidate_id":"c90de3d5-b4af-5f05-b3fa-9fc78078fe20","candidate_name":"Canon EOS R7","grade":2,"rationale":"Another interchangeable-lens Canon EOS mirrorless camera; plausible camera-body alternative."},
+    {"anchor_id":"e2fe4c67-52fb-5488-9ef7-a1587108e54e","anchor_name":"Canon EOS R10","candidate_id":"e6bd0544-2863-5eb9-9c0a-dd7b002e7e63","candidate_name":"TP-Link Archer AX73","grade":0,"rationale":"A wireless router serves a different use and is visibly unrelated to a camera body."},
+    {"anchor_id":"e2fe4c67-52fb-5488-9ef7-a1587108e54e","anchor_name":"Canon EOS R10","candidate_id":"ec7553cd-5bbb-5d99-a8d4-dfb2c1349ed4","candidate_name":"Logitech MX Master 3S Bluetooth Edition","grade":0,"rationale":"A computer mouse has no direct camera use or product similarity."},
+    {"anchor_id":"e2fe4c67-52fb-5488-9ef7-a1587108e54e","anchor_name":"Canon EOS R10","candidate_id":"dbfd1fe1-30b3-42a1-a0fb-671f3f1a099f","candidate_name":"Apple MacBook Air 13 M3 16GB 1TB — Midnight","grade":1,"rationale":"A laptop can be used to manage or edit photos, but is not a camera substitute."},
+    {"anchor_id":"e2fe4c67-52fb-5488-9ef7-a1587108e54e","anchor_name":"Canon EOS R10","candidate_id":"a7459308-c2fe-4e05-82f4-5117462f0484","candidate_name":"Sony WH-1000XM5","grade":0,"rationale":"Headphones have no direct camera use or product similarity."},
+    {"anchor_id":"e2fe4c67-52fb-5488-9ef7-a1587108e54e","anchor_name":"Canon EOS R10","candidate_id":"acf5d217-0c84-56e3-b267-52cebec64d04","candidate_name":"Logitech MX Keys S","grade":0,"rationale":"A keyboard has no direct camera use or product similarity."},
+
+    {"anchor_id":"e6bd0544-2863-5eb9-9c0a-dd7b002e7e63","anchor_name":"TP-Link Archer AX73","candidate_id":"dcd715c4-0b3c-598c-9338-2da72c6abd6b","candidate_name":"TP-Link Archer AX10","grade":2,"rationale":"Another TP-Link Wi-Fi router; plausible substitute despite a different model tier."},
+    {"anchor_id":"e6bd0544-2863-5eb9-9c0a-dd7b002e7e63","anchor_name":"TP-Link Archer AX73","candidate_id":"41e2cbae-5189-543e-a378-bff0f404c747","candidate_name":"TP-Link Archer AX23","grade":2,"rationale":"Another TP-Link Wi-Fi router with the same primary function."},
+    {"anchor_id":"e6bd0544-2863-5eb9-9c0a-dd7b002e7e63","anchor_name":"TP-Link Archer AX73","candidate_id":"43e75f45-c5fa-517c-b937-e49668da53dc","candidate_name":"TP-Link Archer AX55","grade":2,"rationale":"Another TP-Link Wi-Fi router; a direct alternative in the same product line."},
+    {"anchor_id":"e6bd0544-2863-5eb9-9c0a-dd7b002e7e63","anchor_name":"TP-Link Archer AX73","candidate_id":"076fadf5-bf71-5bf3-83e4-60e839224170","candidate_name":"TP-Link Archer AXE75","grade":2,"rationale":"Another TP-Link Wi-Fi router with the same primary function."},
+    {"anchor_id":"e6bd0544-2863-5eb9-9c0a-dd7b002e7e63","anchor_name":"TP-Link Archer AX73","candidate_id":"1cda32c4-891f-58e3-9632-9a3d6ca33735","candidate_name":"TP-Link Archer C6","grade":2,"rationale":"Another Wi-Fi router; plausible substitute though a different generation/model tier."},
+    {"anchor_id":"e6bd0544-2863-5eb9-9c0a-dd7b002e7e63","anchor_name":"TP-Link Archer AX73","candidate_id":"bb3a2c22-9a84-5139-9242-5daa699456da","candidate_name":"TP-Link Archer T3U","grade":1,"rationale":"A USB Wi-Fi adapter serves network connectivity but is an add-on/client adapter, not a router substitute."},
+    {"anchor_id":"e6bd0544-2863-5eb9-9c0a-dd7b002e7e63","anchor_name":"TP-Link Archer AX73","candidate_id":"ec7553cd-5bbb-5d99-a8d4-dfb2c1349ed4","candidate_name":"Logitech MX Master 3S Bluetooth Edition","grade":0,"rationale":"A computer mouse has no network connectivity role."},
+    {"anchor_id":"e6bd0544-2863-5eb9-9c0a-dd7b002e7e63","anchor_name":"TP-Link Archer AX73","candidate_id":"dbfd1fe1-30b3-42a1-a0fb-671f3f1a099f","candidate_name":"Apple MacBook Air 13 M3 16GB 1TB — Midnight","grade":0,"rationale":"A laptop uses a network but is not related to or a substitute for a router."},
+
+    {"anchor_id":"ec7553cd-5bbb-5d99-a8d4-dfb2c1349ed4","anchor_name":"Logitech MX Master 3S Bluetooth Edition","candidate_id":"cabfdf4c-5f81-5c06-a19a-b24c49f9181b","candidate_name":"Logitech M720 Triathlon","grade":2,"rationale":"A wireless computer mouse serving the same pointing function; plausible alternative."},
+    {"anchor_id":"ec7553cd-5bbb-5d99-a8d4-dfb2c1349ed4","anchor_name":"Logitech MX Master 3S Bluetooth Edition","candidate_id":"3159105f-6cc9-57dd-b5f6-d9b9337a1cd1","candidate_name":"Logitech Lift Right-Handed","grade":2,"rationale":"A Logitech wireless mouse with the same primary function, though a different ergonomic shape."},
+    {"anchor_id":"ec7553cd-5bbb-5d99-a8d4-dfb2c1349ed4","anchor_name":"Logitech MX Master 3S Bluetooth Edition","candidate_id":"be6339de-7f4d-5648-be6b-5943b6a5f151","candidate_name":"Logitech MX Anywhere 3S","grade":2,"rationale":"A Logitech MX wireless mouse with the same primary function; plausible alternative."},
+    {"anchor_id":"ec7553cd-5bbb-5d99-a8d4-dfb2c1349ed4","anchor_name":"Logitech MX Master 3S Bluetooth Edition","candidate_id":"aaaae01d-b7ae-55e5-a2b4-fea4825f4547","candidate_name":"Logitech Signature M650","grade":2,"rationale":"A wireless computer mouse serving the same pointing function."},
+    {"anchor_id":"ec7553cd-5bbb-5d99-a8d4-dfb2c1349ed4","anchor_name":"Logitech MX Master 3S Bluetooth Edition","candidate_id":"acf5d217-0c84-56e3-b267-52cebec64d04","candidate_name":"Logitech MX Keys S","grade":1,"rationale":"A same-brand computer input peripheral that commonly complements a mouse, but is not a substitute."},
+    {"anchor_id":"ec7553cd-5bbb-5d99-a8d4-dfb2c1349ed4","anchor_name":"Logitech MX Master 3S Bluetooth Edition","candidate_id":"e6bd0544-2863-5eb9-9c0a-dd7b002e7e63","candidate_name":"TP-Link Archer AX73","grade":0,"rationale":"A wireless router has no mouse function or product similarity."},
+    {"anchor_id":"ec7553cd-5bbb-5d99-a8d4-dfb2c1349ed4","anchor_name":"Logitech MX Master 3S Bluetooth Edition","candidate_id":"e2fe4c67-52fb-5488-9ef7-a1587108e54e","candidate_name":"Canon EOS R10","grade":0,"rationale":"A camera has no mouse function or product similarity."},
+    {"anchor_id":"ec7553cd-5bbb-5d99-a8d4-dfb2c1349ed4","anchor_name":"Logitech MX Master 3S Bluetooth Edition","candidate_id":"a7459308-c2fe-4e05-82f4-5117462f0484","candidate_name":"Sony WH-1000XM5","grade":0,"rationale":"Headphones have no mouse function or product similarity."}
+  ]
+}

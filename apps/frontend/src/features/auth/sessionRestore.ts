@@ -24,10 +24,12 @@ export function readCachedUser(): User | null {
 function startRestore(): Promise<User> {
   tokenReady = false;
   return (async () => {
-    const { accessToken } = await authApi.refreshSession();
+    const { accessToken, user: refreshed } = await authApi.refreshSession();
     setAccessToken(accessToken);
     tokenReady = true;
     window.dispatchEvent(new Event('electrohub:session-token-ready'));
+    // The rotation response carries the same identity /me returns; older servers omit it, so /me stays the fallback.
+    if (refreshed && typeof refreshed.id === 'string' && typeof refreshed.email === 'string') return refreshed;
     const { user } = await authApi.getCurrentUser();
     return user;
   })().catch(error => { tokenReady = false; throw error; });

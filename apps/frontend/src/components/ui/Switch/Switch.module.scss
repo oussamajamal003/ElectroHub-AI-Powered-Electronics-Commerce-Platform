@@ -5,11 +5,12 @@
   width: 40px;
   height: 24px;
   background-color: $color-border;
-  border-radius: 0;
+  border-radius: 9999px;
   position: relative;
   box-shadow: none;
   cursor: pointer;
   box-sizing: border-box;
+  transition: background-color 180ms cubic-bezier(0.2, 0, 0, 1);
 
   &:focus-visible {
     outline: none;
@@ -33,11 +34,15 @@
   background-color: white;
   border-radius: 9999px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: transform 100ms;
+  transition: transform 180ms cubic-bezier(0.2, 0, 0, 1);
   transform: translateX(2px);
   will-change: transform;
 
   &[data-state='checked'] {
     transform: translateX(18px);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch, .thumb { transition-duration: 0.01ms; }
 }

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { AI_DEFAULT_IMAGE_SEARCH_TIMEOUT_MS, AI_DEFAULT_TIMEOUT_MS, AI_MAX_IMAGE_SEARCH_TIMEOUT_MS, AI_MAX_RESPONSE_BYTES, resolveAiServiceConfig } from '../ai.config.js';
+import {
+  AI_DEFAULT_IMAGE_SEARCH_TIMEOUT_MS, AI_DEFAULT_RECOMMENDATION_TIMEOUT_MS, AI_DEFAULT_TIMEOUT_MS, AI_MAX_IMAGE_SEARCH_TIMEOUT_MS,
+  AI_MAX_RECOMMENDATION_TIMEOUT_MS, AI_MAX_RESPONSE_BYTES, resolveAiServiceConfig,
+} from '../ai.config.js';
 
 const KEY = 'k7Qp2Zr9Xw4Lm8Nv3Bt6Hy1Jd5Fs0Gc_AiSvc';
 const base = { AI_SERVICE_URL: 'http://127.0.0.1:8000', AI_SERVICE_API_KEY: KEY, AI_SERVICE_ENVIRONMENT: 'development' };
@@ -86,6 +89,24 @@ describe('resolveAiServiceConfig', () => {
     const hostile = new Proxy({}, { get() { throw new Error('boom'); } }) as NodeJS.ProcessEnv;
     expect(() => resolveAiServiceConfig(hostile, 'development')).not.toThrow();
     expect(resolveAiServiceConfig(hostile, 'development')).toEqual({ status: 'disabled', reason: 'MISCONFIGURED', issues: [] });
+  });
+});
+
+describe('recommendation timeout (Task 04.4)', () => {
+  const base = { AI_SERVICE_URL: 'http://localhost:8000', AI_SERVICE_API_KEY: KEY, AI_SERVICE_ENVIRONMENT: 'development' };
+  it('defaults AI_RECOMMENDATION_TIMEOUT_MS to 8000 ms', () => {
+    expect(AI_DEFAULT_RECOMMENDATION_TIMEOUT_MS).toBe(8000);
+    expect(resolveAiServiceConfig(base, 'development')).toMatchObject({ status: 'enabled', recommendationTimeoutMs: 8000 });
+  });
+  it('accepts the 100 ms floor and the 10000 ms ceiling', () => {
+    expect(resolveAiServiceConfig({ ...base, AI_RECOMMENDATION_TIMEOUT_MS: '100' }, 'development'))
+      .toMatchObject({ status: 'enabled', recommendationTimeoutMs: 100 });
+    expect(resolveAiServiceConfig({ ...base, AI_RECOMMENDATION_TIMEOUT_MS: String(AI_MAX_RECOMMENDATION_TIMEOUT_MS) }, 'development'))
+      .toMatchObject({ status: 'enabled', recommendationTimeoutMs: 10000 });
+  });
+  it.each([['0'], ['20000'], ['abc']])('rejects %s by variable name only', (value) => {
+    const result = resolveAiServiceConfig({ ...base, AI_RECOMMENDATION_TIMEOUT_MS: value }, 'development');
+    expect(result).toMatchObject({ status: 'disabled', reason: 'MISCONFIGURED', issues: ['AI_RECOMMENDATION_TIMEOUT_MS'] });
   });
 });
 

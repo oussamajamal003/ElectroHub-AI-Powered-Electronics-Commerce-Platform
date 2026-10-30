@@ -189,3 +189,8 @@
   span:last-child { width: 30%; }
 }
 @media (prefers-reduced-motion: reduce) { .promoCard, .promoBg, .promoCard a { transition: none; } .promoCard:hover .promoBg { transform: none; } }
+// Task 04.4: personal/popular rails share the page's section width; each rail brings its own heading spacing.
+.recommendations { max-width: 90rem; margin: 0 auto; padding: 0 $spacing-4 $spacing-12;
+  @include respond-to(md) { padding-inline: $spacing-8; } @include respond-to(lg) { padding-inline: $spacing-12; }
+  > section:first-child { margin-top: $spacing-4; }
+}

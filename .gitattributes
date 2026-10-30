@@ -6,5 +6,8 @@ apps/backend/prisma/migrations/20260925020000_remove_users_phone/migration.sql -
 apps/backend/prisma/migrations/20261028000000_product_media/migration.sql -text
 apps/backend/prisma/migrations/20261028010000_catalog_media_overlay/migration.sql -text
 apps/backend/prisma/migrations/20261028020000_product_media_worker_health/migration.sql text eol=lf
+apps/backend/prisma/migrations/20261029000000_recommendations/migration.sql text eol=lf
+apps/backend/prisma/migrations/20261029010000_recommendation_retention_index/migration.sql text eol=lf
+apps/backend/prisma/migrations/20261029020000_recommendation_consent_consistency/migration.sql text eol=lf
 # Task 03.9 packaged PDF fonts: byte-exact (verified against the SHA-256 asset manifest at runtime).
 apps/backend/assets/documents/fonts/*.ttf binary
