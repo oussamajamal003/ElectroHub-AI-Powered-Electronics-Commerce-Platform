@@ -36,8 +36,10 @@ export async function coPurchases(anchorIds: readonly string[], minSupport: numb
     pairs AS (
       SELECT l."productId", COUNT(DISTINCT l."orderId") AS support
       FROM lines l JOIN anchor_orders a ON a."orderId" = l."orderId"
-      -- Only storefront-visible candidates compete for the LIMIT (hidden ones would be dropped at hydration).
+      -- Only candidates that can be shown compete for the LIMIT: storefront-visible and in stock (the same rule as
+      -- purchasable), otherwise unavailable products would take slots and be dropped at hydration.
       JOIN "products" p ON p."id" = l."productId" AND ${visibleProduct}
+      JOIN "inventory" inv ON inv."productId" = p."id" AND inv."quantity" > 0
       WHERE NOT (l."productId" = ANY(${anchors}::uuid[]))
       GROUP BY l."productId"
     ),
@@ -71,20 +73,20 @@ function signals(windowDays: number, userId?: string) {
   return Prisma.sql`
     SELECT pi."productId", pi."userId",
       CASE pi."eventType" WHEN 'VIEW' THEN ${SIGNAL_WEIGHTS.VIEW} ELSE ${SIGNAL_WEIGHTS.RECOMMENDATION_CLICK} END::float8 AS weight,
-      pi."occurredAt" AS at
+      pi."occurredAt" AS at, true AS browsing
     FROM "product_interactions" pi
     JOIN "recommendation_preferences" rp ON rp."userId" = pi."userId" AND rp."personalizationEnabled"
     WHERE pi."occurredAt" > ${since} ${forUser(Prisma.sql`pi."userId"`)}
     UNION ALL
-    SELECT wi."productId", w."userId", ${SIGNAL_WEIGHTS.WISHLIST}::float8, wi."createdAt"
+    SELECT wi."productId", w."userId", ${SIGNAL_WEIGHTS.WISHLIST}::float8, wi."createdAt", false
     FROM "wishlist_items" wi JOIN "wishlists" w ON w."id" = wi."wishlistId"
     WHERE wi."createdAt" > ${since} ${forUser(Prisma.sql`w."userId"`)}
     UNION ALL
-    SELECT ci."productId", c."userId", ${SIGNAL_WEIGHTS.CART}::float8, ci."updatedAt"
+    SELECT ci."productId", c."userId", ${SIGNAL_WEIGHTS.CART}::float8, ci."updatedAt", false
     FROM "cart_items" ci JOIN "carts" c ON c."id" = ci."cartId"
     WHERE ci."updatedAt" > ${since} ${forUser(Prisma.sql`c."userId"`)}
     UNION ALL
-    SELECT oi."productId", q."userId", ${SIGNAL_WEIGHTS.PURCHASE}::float8, q."createdAt"
+    SELECT oi."productId", q."userId", ${SIGNAL_WEIGHTS.PURCHASE}::float8, q."createdAt", false
     FROM "order_items" oi JOIN (${qualifyingOrders}) q ON q."id" = oi."orderId"
     WHERE q."createdAt" > ${since} ${forUser(Prisma.sql`q."userId"`)}`;
 }
@@ -114,18 +116,41 @@ export async function measuredPopularity(windowDays: number, minUsers: number, l
   return { rows: rows.map(row => ({ productId: row.productId, score: Number(row.score), users: Number(row.users) })), contributingUsers };
 }
 
-/** `score` is the decayed weight used for ranking; `evidence` is the undecayed weight used for the evidence threshold. */
-export interface ProfileSignalRow { productId: string; score: number; evidence: number; lastAt: Date }
+/**
+ * `score` is the decayed weight used for ranking; `evidence` is the undecayed weight used for the evidence threshold;
+ * `recent` is the short-horizon browsing interest (views and recommendation clicks in the last RECENT_INTEREST days,
+ * one-day half-life), 0 for a product with no recent browsing.
+ */
+export interface ProfileSignalRow { productId: string; score: number; evidence: number; recent: number; lastAt: Date }
 
-/** One customer's decayed, per-product summed signals over the window (strongest first), for the profile-v1 vector. */
+/** Short horizon of the two-horizon profile: what the customer is browsing now, next to the long-term profile. */
+export const RECENT_INTEREST = { windowDays: 3, halfLifeDays: 1, maxSignals: 20 } as const;
+
+/**
+ * One customer's decayed, per-product summed signals over the window, in one statement: the `limit` strongest
+ * long-horizon rows plus up to RECENT_INTEREST.maxSignals recently browsed rows, so a heavy purchase history can
+ * never truncate the products the customer is exploring now.
+ */
 export async function profileSignals(userId: string, windowDays: number, limit: number): Promise<ProfileSignalRow[]> {
-  const rows = await prisma.$queryRaw<{ productId: string; score: number; evidence: number; lastAt: Date }[]>(Prisma.sql`
-    WITH signals AS (${signals(windowDays, userId)})
-    SELECT s."productId", SUM(s.weight * ${decay})::float8 AS score, SUM(s.weight)::float8 AS evidence, MAX(s.at) AS "lastAt"
-    FROM signals s JOIN "products" p ON p."id" = s."productId"
-    WHERE ${visibleProduct}
-    GROUP BY s."productId"
-    ORDER BY score DESC, s."productId" ASC
-    LIMIT ${limit}`);
-  return rows.map(row => ({ productId: row.productId, score: Number(row.score), evidence: Number(row.evidence), lastAt: row.lastAt }));
+  const recentAge = Prisma.sql`extract(epoch FROM (now() - s.at))`;
+  const rows = await prisma.$queryRaw<{ productId: string; score: number; evidence: number; recent: number; lastAt: Date }[]>(Prisma.sql`
+    WITH signals AS (${signals(windowDays, userId)}),
+    per_product AS (
+      SELECT s."productId", SUM(s.weight * ${decay})::float8 AS score, SUM(s.weight)::float8 AS evidence, MAX(s.at) AS "lastAt",
+        COALESCE(SUM(s.weight * exp(-ln(2) * ${recentAge} / ${RECENT_INTEREST.halfLifeDays * 86400}))
+          FILTER (WHERE s.browsing AND ${recentAge} <= ${RECENT_INTEREST.windowDays * 86400}), 0)::float8 AS recent
+      FROM signals s JOIN "products" p ON p."id" = s."productId"
+      WHERE ${visibleProduct}
+      GROUP BY s."productId"
+    ),
+    ranked AS (
+      SELECT *, row_number() OVER (ORDER BY score DESC, "productId" ASC) AS score_rank,
+        row_number() OVER (ORDER BY recent DESC, "productId" ASC) AS recent_rank
+      FROM per_product
+    )
+    SELECT "productId", score, evidence, recent, "lastAt" FROM ranked
+    WHERE score_rank <= ${limit} OR (recent > 0 AND recent_rank <= ${RECENT_INTEREST.maxSignals})
+    ORDER BY score DESC, "productId" ASC`);
+  return rows.map(row => ({ productId: row.productId, score: Number(row.score), evidence: Number(row.evidence),
+    recent: Number(row.recent), lastAt: row.lastAt }));
 }

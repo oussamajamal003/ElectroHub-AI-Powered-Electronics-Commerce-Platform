@@ -5,17 +5,39 @@ import { HomePage } from './HomePage';
 import { useCategories } from '@/features/search/queries';
 import { useDeals, useProducts } from '@/features/products/queries';
 import { useCart } from '@/features/cart/context';
+import { useAuth } from '@/features/auth/context/AuthContext';
+import { usePersonalRecommendations, useRecommendationPreferences } from '@/features/recommendations/queries';
 
 vi.mock('@/features/search/queries', () => ({ useCategories: vi.fn() }));
 vi.mock('@/features/products/queries', () => ({ useDeals: vi.fn(), useProducts: vi.fn() }));
-vi.mock('@/features/cart/context', () => ({ useCart: vi.fn() }));
+vi.mock('@/features/cart/context', async importOriginal => ({ ...await importOriginal<typeof import('@/features/cart/context')>(), useCart: vi.fn() }));
 vi.mock('@/features/recommendations/queries', () => import('@/test/recommendationQueriesMock'));
-vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: () => ({ user: null, isAuthenticated: false }) }));
+vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: vi.fn(() => ({ user: null, isAuthenticated: false, isSessionVerified: true })) }));
 
 const renderPage = () => render(<MemoryRouter><HomePage /></MemoryRouter>);
 
 describe('Home catalog sections', () => {
-  beforeEach(() => { vi.clearAllMocks(); vi.mocked(useCart).mockReturnValue({ addItem: vi.fn() } as unknown as ReturnType<typeof useCart>); });
+  beforeEach(() => { vi.clearAllMocks(); vi.mocked(useAuth).mockReturnValue({ user: null, isAuthenticated: false, isSessionVerified: true } as ReturnType<typeof useAuth>); vi.mocked(useCart).mockReturnValue({ addItem: vi.fn() } as unknown as ReturnType<typeof useCart>); });
+
+  it('waits for session verification before requesting private recommendations', () => {
+    vi.mocked(useCategories).mockReturnValue({ isPending: true } as ReturnType<typeof useCategories>);
+    vi.mocked(useDeals).mockReturnValue({ isPending: true } as ReturnType<typeof useDeals>);
+    vi.mocked(useProducts).mockReturnValue({ isPending: true } as ReturnType<typeof useProducts>);
+    const cached = { user: { id: 'user-1', role: 'CUSTOMER' }, isAuthenticated: true, isSessionVerified: false } as ReturnType<typeof useAuth>;
+    vi.mocked(useAuth).mockReturnValue(cached);
+    const { rerender } = renderPage();
+    expect(usePersonalRecommendations).toHaveBeenLastCalledWith(undefined, 4);
+    expect(useRecommendationPreferences).toHaveBeenLastCalledWith(undefined);
+    // Session restoring is not "no recommendations": the neutral skeleton is already reserved, without any personal data.
+    expect(screen.getByRole('status', { name: 'Loading recommendations' })).toBeInTheDocument();
+    vi.mocked(useAuth).mockReturnValue({ ...cached, isAuthenticated: false, user: null, isSessionVerified: true });
+    rerender(<MemoryRouter><HomePage /></MemoryRouter>);
+    expect(screen.queryByRole('status', { name: 'Loading recommendations' })).not.toBeInTheDocument();
+    vi.mocked(useAuth).mockReturnValue({ ...cached, isSessionVerified: true });
+    rerender(<MemoryRouter><HomePage /></MemoryRouter>);
+    expect(usePersonalRecommendations).toHaveBeenLastCalledWith('user-1', 4);
+    expect(useRecommendationPreferences).toHaveBeenLastCalledWith('user-1');
+  });
 
   it('reserves content-shaped sections while queries load in the approved order', () => {
     vi.mocked(useCategories).mockReturnValue({ isPending: true } as ReturnType<typeof useCategories>);

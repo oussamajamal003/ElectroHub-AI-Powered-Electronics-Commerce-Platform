@@ -165,11 +165,15 @@ describe('Auth refresh cookie preservation', () => {
       accessToken: 'new-access-token-123',
       refreshToken: 'new-raw-refresh-token-456',
       userId: 'usr-123',
+      user: { id: 'usr-123', email: 'a@example.invalid', firstName: 'A', lastName: 'B', role: 'CUSTOMER', authMethods: { password: true, google: false } },
     });
 
     const response = await request(app).post('/api/auth/refresh').set('Cookie', 'electrohub_refresh=valid-old-token');
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ accessToken: 'new-access-token-123' });
+    // The identity rides along (same shape as /me); the refresh token itself never appears in the body.
+    expect(response.body).toEqual({ accessToken: 'new-access-token-123',
+      user: { id: 'usr-123', email: 'a@example.invalid', firstName: 'A', lastName: 'B', role: 'CUSTOMER', authMethods: { password: true, google: false } } });
+    expect(JSON.stringify(response.body)).not.toContain('new-raw-refresh-token-456');
     expect(response.headers['set-cookie']).toBeDefined();
     expect(response.headers['set-cookie'][0]).toContain('Path=/api/auth');
     expect(response.headers['set-cookie'][0]).toContain('HttpOnly');

@@ -9,8 +9,12 @@ vector or product list is logged.
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import logging
 import math
+import struct
+import time
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
@@ -141,6 +145,86 @@ ORDER BY d ASC, product_id ASC
 LIMIT %s
 """  # noqa: S608 - composed only from module constants; values are bound parameters
 
+# Task 04.4: the shared DEV database is remote and each SQL round trip is expensive from a desktop runtime. Keep
+# active-identity validation, anchor/profile construction, candidate centroids and nearest-neighbour ranking in one
+# statement. A single statement has one PostgreSQL snapshot, so the active descriptor and eligible vectors cannot mix
+# even though this path does not need a separate SET TRANSACTION round trip.
+_RECOMMENDATION_CANDIDATES_SQL: Final = f"""
+WITH active_identity AS (
+    SELECT a.embedding_version, m.model_version, m.preprocess_version, m.embedding_dimension,
+           m.artifact_format, m.artifact_sha256, m.status
+    FROM ai.active_index AS a
+    JOIN ai.model_versions AS m ON m.embedding_version = a.embedding_version
+    WHERE a.singleton
+),
+{_ELIGIBLE_VECTORS_CTE}, requested_products AS (
+    SELECT product_id FROM unnest(%s::uuid[]) AS requested(product_id)
+), requested_signals AS (
+    SELECT product_id, weight
+    FROM unnest(%s::uuid[], %s::double precision[]) AS signal(product_id, weight)
+), query_centroids AS (
+    SELECT eligible.product_id, extensions.avg(eligible.embedding) AS centroid
+    FROM eligible_vectors AS eligible
+    JOIN requested_products AS requested USING (product_id)
+    GROUP BY eligible.product_id
+), anchor_vector AS (
+    SELECT CASE WHEN extensions.vector_norm(centroid) > 1e-12
+                THEN extensions.l2_normalize(centroid) END AS vector
+    FROM query_centroids
+    WHERE %s::uuid IS NOT NULL AND product_id = %s::uuid
+), profile_components AS (
+    SELECT extensions.l2_normalize(query_centroids.centroid)
+               OPERATOR(extensions.*)
+               (('[' || array_to_string(
+                   array_fill(requested_signals.weight, ARRAY[%s]), ','
+               ) || ']')::extensions.vector)
+               AS weighted_vector
+    FROM requested_signals
+    JOIN query_centroids USING (product_id)
+    WHERE extensions.vector_norm(query_centroids.centroid) > 1e-12
+), profile_sum AS (
+    SELECT extensions.sum(weighted_vector) AS vector FROM profile_components
+), profile_vector AS (
+    SELECT CASE WHEN vector IS NOT NULL AND extensions.vector_norm(vector) > 1e-12
+                THEN extensions.l2_normalize(vector) END AS vector
+    FROM profile_sum
+), query_vector AS (
+    SELECT vector FROM anchor_vector WHERE vector IS NOT NULL
+    UNION ALL
+    SELECT vector FROM profile_vector WHERE %s::uuid IS NULL AND vector IS NOT NULL
+), product_centroids AS (
+    SELECT product_id, extensions.avg(embedding) AS centroid
+    FROM eligible_vectors
+    GROUP BY product_id
+), active_match AS (
+    SELECT EXISTS (
+        SELECT 1 FROM active_identity
+        WHERE embedding_version = %s
+          AND model_version = %s
+          AND preprocess_version = %s
+          AND embedding_dimension = %s
+          AND artifact_format = %s
+          AND artifact_sha256 = %s
+          AND status = 'ACTIVE'
+    ) AS compatible
+), request_state AS (
+    SELECT compatible, EXISTS (SELECT 1 FROM query_vector) AS queryable FROM active_match
+)
+SELECT request_state.compatible, request_state.queryable, ranked.product_id, ranked.distance, ranked.centroid
+FROM request_state
+LEFT JOIN LATERAL (
+    SELECT candidate.product_id,
+           candidate.centroid OPERATOR(extensions.<=>) query_vector.vector AS distance,
+           encode(extensions.vector_send(candidate.centroid), 'base64') AS centroid
+    FROM query_vector
+    CROSS JOIN product_centroids AS candidate
+    WHERE candidate.product_id <> ALL(%s::uuid[])
+      AND (cardinality(%s::uuid[]) = 0 OR candidate.product_id = ANY(%s::uuid[]))
+    ORDER BY distance ASC, candidate.product_id ASC
+    LIMIT %s
+) AS ranked ON request_state.compatible AND request_state.queryable
+"""  # noqa: S608 - composed only from module constants; all caller values are bound parameters
+
 _REPEATABLE_READ_SQL: Final = "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"
 
 
@@ -193,6 +277,9 @@ def _default_pool_factory(dsn: str) -> PoolFactory:
                 "options": _SESSION_OPTIONS,
                 "application_name": APPLICATION_NAME,
                 "connect_timeout": CONNECT_TIMEOUT_SECONDS,
+                # Reads are read-only by session default. Autocommit lets the one-statement recommendation path use
+                # one remote exchange; multi-statement readiness/search paths explicitly open repeatable-read blocks.
+                "autocommit": True,
             },
         )
 
@@ -357,6 +444,103 @@ class PgVectorGateway:
             )
         return scored
 
+    async def recommendation_candidates(
+        self,
+        *,
+        anchor_product_id: UUID | None,
+        profile_signals: Sequence[tuple[UUID, float]],
+        top_k: int,
+        descriptor: ModelDescriptor,
+        exclude: Sequence[UUID] = (),
+        restrict_to: Sequence[UUID] = (),
+    ) -> tuple[bool, list[ScoredProduct]]:
+        """Build one product/profile query vector and retrieve its neighbours in one consistent DB statement.
+
+        Returns ``(queryable, candidates)``. ``False`` means the anchor/profile has no current eligible D3 vector;
+        an active descriptor mismatch or database failure fails closed as ``INDEX_NOT_READY``.
+        """
+        if not 1 <= top_k <= MAX_PRODUCT_LOOKUP:
+            raise ValidationFailedError("topK is out of range.")
+        if (anchor_product_id is None) == (len(profile_signals) == 0):
+            raise ValidationFailedError("Exactly one anchor product or non-empty profile is required.")
+        if len(profile_signals) > 50:
+            raise ValidationFailedError("Too many profile signals.")
+        if any(not math.isfinite(weight) or not 0.0 < weight <= 1.0 for _, weight in profile_signals):
+            raise ValidationFailedError("Profile weights are out of range.")
+
+        requested_ids = [anchor_product_id] if anchor_product_id is not None else [item[0] for item in profile_signals]
+        request_id_strings = [str(value) for value in requested_ids]
+        signal_ids = [str(product_id) for product_id, _ in profile_signals]
+        signal_weights = [weight for _, weight in profile_signals]
+        version = descriptor.embedding_version
+        params = (
+            version,
+            version,
+            request_id_strings,
+            signal_ids,
+            signal_weights,
+            str(anchor_product_id) if anchor_product_id is not None else None,
+            str(anchor_product_id) if anchor_product_id is not None else None,
+            descriptor.embedding_dimension,
+            str(anchor_product_id) if anchor_product_id is not None else None,
+            version,
+            descriptor.model_version,
+            descriptor.preprocess_version,
+            descriptor.embedding_dimension,
+            descriptor.artifact_format,
+            descriptor.artifact_sha256,
+            [str(value) for value in exclude],
+            [str(value) for value in restrict_to],
+            [str(value) for value in restrict_to],
+            top_k,
+        )
+        phase = "pool_initialization"
+        started = time.perf_counter()
+        acquired: float | None = None
+        executed: float | None = None
+        try:
+            pool = await self._ready_pool()
+            # The complete active-version check and retrieval are one SQL statement and therefore share a single
+            # PostgreSQL statement snapshot. Avoid separate BEGIN/COMMIT exchanges on the remote DEV pooler.
+            phase = "connection_acquisition"
+            async with pool.connection() as conn:
+                acquired = time.perf_counter()
+                phase = "sql_execution"
+                cursor = await conn.execute(_RECOMMENDATION_CANDIDATES_SQL, params)
+                executed = time.perf_counter()
+                phase = "result_fetch"
+                rows = await cursor.fetchall()
+                phase = "complete"
+        except (psycopg.Error, TimeoutError) as exc:
+            log_event("ai.index_query_failed", level=logging.ERROR, exception=type(exc).__name__)
+            raise IndexNotReadyError() from exc
+        finally:
+            ended = time.perf_counter()
+            log_event("ai.recommendation_db_timing", phase=phase,
+                      totalMs=round((ended - started) * 1000, 2),
+                      acquisitionMs=round(((acquired or ended) - started) * 1000, 2),
+                      sqlMs=round(((executed or ended) - acquired) * 1000, 2) if acquired is not None else None,
+                      fetchMs=round((ended - executed) * 1000, 2) if executed is not None else None)
+
+        if not rows or not bool(rows[0][0]):
+            raise IndexNotReadyError()
+        queryable = bool(rows[0][1])
+        candidates: list[ScoredProduct] = []
+        for row in rows:
+            if row[2] is None:
+                continue
+            distance = float(row[3])
+            if not math.isfinite(distance):
+                raise InferenceOutputError()
+            candidates.append(
+                ScoredProduct(
+                    product_id=UUID(str(row[2])),
+                    score=max(-1.0, min(1.0, 1.0 - distance)),
+                    vector=_parse_compact_vector(row[4], descriptor),
+                )
+            )
+        return queryable, candidates
+
     async def _read_active(self, descriptor: ModelDescriptor, query: str, params: Sequence[object]) -> list[Any]:
         try:
             async with self._read_transaction() as conn:
@@ -415,5 +599,25 @@ def _parse_vector(text: object, descriptor: ModelDescriptor) -> tuple[float, ...
     except ValueError as exc:
         raise InferenceOutputError() from exc
     if len(values) != descriptor.embedding_dimension or not all(math.isfinite(v) for v in values):
+        raise InferenceOutputError()
+    return values
+
+
+def _parse_compact_vector(encoded: object, descriptor: ModelDescriptor) -> tuple[float, ...]:
+    """Decode pgvector's network-order float32 format without losing its original precision."""
+    if not isinstance(encoded, str):
+        raise InferenceOutputError()
+    try:
+        raw = base64.b64decode("".join(encoded.split()), validate=True)
+        dimension = descriptor.embedding_dimension
+        if len(raw) != 4 + 4 * dimension:
+            raise InferenceOutputError()
+        actual, reserved = struct.unpack_from("!HH", raw)
+        if actual != dimension or reserved != 0:
+            raise InferenceOutputError()
+        values = struct.unpack_from(f"!{dimension}f", raw, 4)
+    except (binascii.Error, ValueError, struct.error) as exc:
+        raise InferenceOutputError() from exc
+    if not all(math.isfinite(value) for value in values):
         raise InferenceOutputError()
     return values

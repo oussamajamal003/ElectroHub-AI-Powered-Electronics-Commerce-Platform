@@ -8,6 +8,7 @@ from uuid import UUID
 
 import pytest
 
+from training.recommendations import metrics as recommendation_metrics
 from training.recommendations.evaluate import (
     Product,
     build_pool,
@@ -34,22 +35,22 @@ def pid(n: int) -> str:
 # --------------------------------------------------------------------------------------------------------------------
 
 
-def test_recall_counts_relevant_hits_in_top_k_over_min_k_and_relevant_size() -> None:
+def test_recall_counts_hits_over_the_complete_relevant_set() -> None:
     ranked = ["a", "b", "c", "d"]
     relevant = {"a", "c", "x"}
-    assert recall_at_k(ranked, relevant, 2) == pytest.approx(1 / min(2, 3))  # top2 {a,b} hits a
-    assert recall_at_k(ranked, relevant, 3) == pytest.approx(2 / min(3, 3))  # top3 {a,b,c} hits a,c
-    assert recall_at_k(ranked, relevant, 5) == pytest.approx(2 / min(5, 3))  # list shorter than k
+    assert recall_at_k(ranked, relevant, 2) == pytest.approx(1 / 3)  # top2 {a,b} hits a of {a,c,x}
+    assert recall_at_k(ranked, relevant, 3) == pytest.approx(2 / 3)  # top3 {a,b,c} hits a,c of {a,c,x}
+    assert recall_at_k(ranked, relevant, 5) == pytest.approx(2 / 3)  # list shorter than k
 
 
 def test_recall_is_one_when_the_only_relevant_item_is_first() -> None:
     assert recall_at_k(["q", "r"], {"q"}, 1) == 1.0
 
 
-def test_recall_denominator_is_capped_by_relevant_count() -> None:
+def test_recall_denominator_is_not_capped_by_k_or_ranking_length() -> None:
     relevant = {"a", "b", "c", "d", "e"}
-    assert recall_at_k(["a", "b", "x"], relevant, 1) == pytest.approx(1 / min(1, 5))
-    assert recall_at_k(["a", "b", "x"], relevant, 10) == pytest.approx(2 / min(10, 5))
+    assert recall_at_k(["a", "b", "x"], relevant, 1) == pytest.approx(1 / 5)
+    assert recall_at_k(["a", "b", "x"], relevant, 10) == pytest.approx(2 / 5)
 
 
 def test_recall_is_none_when_no_item_is_relevant() -> None:
@@ -74,6 +75,18 @@ def test_ndcg_matches_hand_computed_value() -> None:
 
 def test_ndcg_is_one_for_the_ideal_order() -> None:
     assert ndcg_at_k(["a", "c", "d", "b"], GAINS, 4) == pytest.approx(1.0)
+
+
+def test_ndcg_clamps_floating_point_overshoot(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = 0
+
+    def slightly_different_log2(_: float) -> float:
+        nonlocal calls
+        calls += 1
+        return 1.0 if calls == 1 else math.nextafter(1.0, 2.0)
+
+    monkeypatch.setattr(recommendation_metrics.math, "log2", slightly_different_log2)
+    assert ndcg_at_k(["a"], {"a": 2}, 1) == 1.0
 
 
 def test_ndcg_ideal_uses_the_whole_pool_not_only_the_ranked_list() -> None:
@@ -295,8 +308,8 @@ def test_query_metrics_for_laptop_a_hand_computed() -> None:
         i: 0 for i in range(len(pool.products)) if i not in (anchor, _index(pool, "Laptop B"), _index(pool, "Laptop C"))
     }
     metrics = query_metrics(pool, gains, rank_d3_centroid(pool, anchor))
-    assert metrics["recall@1"] == 1.0  # top-1 is Laptop B, relevant
-    assert metrics["recall@5"] == 1.0  # both relevant items in the top 5, denominator min(5, 2)
+    assert metrics["recall@1"] == 0.5  # top-1 finds one of the two relevant laptops
+    assert metrics["recall@5"] == 1.0  # both items in the complete relevant set are in the top 5
     expected_ndcg = 8.5 / (7 + 3 / math.log2(3))  # DCG: 7/log2(2) + 3/log2(4); IDCG: 7/log2(2) + 3/log2(3)
     assert metrics["ndcg@5"] == pytest.approx(expected_ndcg)
     assert metrics["ndcg@10"] == pytest.approx(expected_ndcg)
@@ -316,7 +329,7 @@ def test_run_evaluation_end_to_end_on_synthetic_catalog() -> None:
     assert d3["status"] == "evaluated"
     # Recall needs a relevant item (grade >= 2): only Laptop A, B and C have one (D, E, F are sole family members).
     assert d3["metrics"]["recall@10"]["n"] == 3
-    assert d3["metrics"]["recall@1"]["mean"] == pytest.approx(2 / 3)  # A: hit, B: hit, C: top-1 is Headphones F
+    assert d3["metrics"]["recall@1"]["mean"] == pytest.approx(1 / 3)  # A/B hit 1 of 2; C misses both
     assert d3["metrics"]["recall@5"]["mean"] == pytest.approx(1.0)
     # NDCG is None only for Monitor D (no positive gain anywhere in its pool).
     assert d3["metrics"]["ndcg@10"]["n"] == 5

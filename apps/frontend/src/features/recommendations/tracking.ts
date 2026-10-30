@@ -17,6 +17,7 @@ export function resetImpressionDedupeForTests() { sent.clear(); }
 export function useImpressionTracking(token: string | null) {
   const timers = useRef(new Map<Element, ReturnType<typeof setTimeout>>());
   const ids = useRef(new Map<Element, string>());
+  const inViewport = useRef(new Set<Element>());
   const queue = useRef<string[]>([]);
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const observer = useRef<IntersectionObserver | null>(null);
@@ -30,30 +31,49 @@ export function useImpressionTracking(token: string | null) {
   useEffect(() => {
     if (!token || typeof IntersectionObserver === 'undefined') return;
     const pending = timers.current;
+    const viewport = inViewport.current;
+    const startDwell = (element: Element) => {
+      const productId = ids.current.get(element);
+      if (!productId || document.visibilityState !== 'visible' || pending.has(element)) return;
+      const key = `${token}:${productId}`;
+      if (sent.has(key)) return;
+      pending.set(element, setTimeout(() => {
+        pending.delete(element);
+        if (document.visibilityState !== 'visible' || !viewport.has(element) || sent.has(key)) return;
+        sent.add(key);
+        queue.current.push(productId);
+        flushTimer.current ??= setTimeout(flush, FLUSH_DELAY_MS);
+      }, IMPRESSION_DWELL_MS));
+    };
     observer.current = new IntersectionObserver(entries => {
       for (const entry of entries) {
         const productId = ids.current.get(entry.target);
         if (!productId) continue;
-        const key = `${token}:${productId}`;
-        if (entry.isIntersecting && entry.intersectionRatio >= IMPRESSION_VISIBLE_RATIO && !sent.has(key)) {
-          if (pending.has(entry.target)) continue;
-          pending.set(entry.target, setTimeout(() => {
-            pending.delete(entry.target);
-            if (document.visibilityState !== 'visible' || sent.has(key)) return;
-            sent.add(key);
-            queue.current.push(productId);
-            flushTimer.current ??= setTimeout(flush, FLUSH_DELAY_MS);
-          }, IMPRESSION_DWELL_MS));
+        if (entry.isIntersecting && entry.intersectionRatio >= IMPRESSION_VISIBLE_RATIO) {
+          viewport.add(entry.target);
+          startDwell(entry.target);
         } else {
+          viewport.delete(entry.target);
           clearTimeout(pending.get(entry.target));
           pending.delete(entry.target);
         }
       }
     }, { threshold: [IMPRESSION_VISIBLE_RATIO] });
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        for (const element of viewport) startDwell(element);
+      } else {
+        for (const timer of pending.values()) clearTimeout(timer);
+        pending.clear();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
     for (const element of ids.current.keys()) observer.current.observe(element);
     return () => {
       observer.current?.disconnect();
       observer.current = null;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      viewport.clear();
       for (const timer of pending.values()) clearTimeout(timer);
       pending.clear();
       if (flushTimer.current) { clearTimeout(flushTimer.current); flush(); }
@@ -72,6 +92,7 @@ export function useImpressionTracking(token: string | null) {
           observer.current?.unobserve(previous);
           clearTimeout(timers.current.get(previous));
           timers.current.delete(previous);
+          inViewport.current.delete(previous);
           ids.current.delete(previous);
           elements.current.delete(productId);
         }

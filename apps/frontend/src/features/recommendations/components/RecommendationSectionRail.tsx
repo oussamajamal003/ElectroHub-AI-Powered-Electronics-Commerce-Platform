@@ -9,7 +9,7 @@ interface Props extends Pick<RecommendationRailProps, 'id' | 'columns' | 'headin
   section?: RecommendationSection;
   loading?: boolean;
   error?: boolean;
-  /** Copy while nothing is loaded yet (the real heading depends on the server's strategy). */
+  /** Heading while nothing is loaded yet, only when it is certain to be the final one; omit it when the server's strategy decides the heading (the skeleton is then headingless). */
   loadingTitle?: string;
   /** Also record the click in the signed-in, consenting customer's own activity (server re-checks consent). */
   recordPersonalClicks?: boolean;
@@ -25,7 +25,9 @@ export function RecommendationSectionRail({ section, loading, error, loadingTitl
   if (!section && !loading && !error) return null;
 
   return <RecommendationRail {...rail} {...cardActions}
-    title={copy?.title ?? loadingTitle ?? 'Recommendations'} description={copy?.description}
+    title={copy?.title ?? loadingTitle ?? (loading ? undefined : 'Recommendations')} description={copy?.description && section?.isPersonalized && section.fallbackReason === 'AI_UNAVAILABLE'
+      ? `${copy.description} Recommendations are temporarily unavailable; showing your last personalized results.`
+      : copy?.description}
     products={section?.items.map(item => item.product) ?? []} loading={loading} error={error}
     cardRef={tracking.observe}
     onNavigate={(href, product) => {

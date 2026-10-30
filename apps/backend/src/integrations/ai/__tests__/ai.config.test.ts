@@ -94,9 +94,9 @@ describe('resolveAiServiceConfig', () => {
 
 describe('recommendation timeout (Task 04.4)', () => {
   const base = { AI_SERVICE_URL: 'http://localhost:8000', AI_SERVICE_API_KEY: KEY, AI_SERVICE_ENVIRONMENT: 'development' };
-  it('defaults AI_RECOMMENDATION_TIMEOUT_MS to 4000 ms', () => {
-    expect(AI_DEFAULT_RECOMMENDATION_TIMEOUT_MS).toBe(4000);
-    expect(resolveAiServiceConfig(base, 'development')).toMatchObject({ status: 'enabled', recommendationTimeoutMs: 4000 });
+  it('defaults AI_RECOMMENDATION_TIMEOUT_MS to 8000 ms', () => {
+    expect(AI_DEFAULT_RECOMMENDATION_TIMEOUT_MS).toBe(8000);
+    expect(resolveAiServiceConfig(base, 'development')).toMatchObject({ status: 'enabled', recommendationTimeoutMs: 8000 });
   });
   it('accepts the 100 ms floor and the 10000 ms ceiling', () => {
     expect(resolveAiServiceConfig({ ...base, AI_RECOMMENDATION_TIMEOUT_MS: '100' }, 'development'))

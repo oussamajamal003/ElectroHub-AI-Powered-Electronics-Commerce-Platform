@@ -17,9 +17,13 @@ import styles from './CartPage.module.scss';
  * Task 04.4: optional Frequently Bought Together suggestions from real co-purchases. Outside the summary and checkout
  * path: they never change the basket, totals or the checkout button, and are simply absent when there is no evidence.
  */
-function CartSuggestions({ productIds }: { productIds: string[] }) {
+export function CartSuggestions({ productIds }: { productIds: string[] }) {
   const suggestions = useCartRecommendations(productIds, 4);
-  return <RecommendationSectionRail id="cart-bought-together-title" section={suggestions.data?.data} />;
+  // FBT is usually empty, so it never shows a skeleton that would then vanish. Each cart's cards come only from that
+  // cart's own response: when the cart changes, the previous anchor set's cards are not kept, so nothing renders until
+  // the server confirms products for the current cart.
+  const section = suggestions.data?.data;
+  return <RecommendationSectionRail id="cart-bought-together-title" section={section} />;
 }
 
 function money(value: string) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value)); }

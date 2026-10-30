@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { ProductSummary } from '@/features/products/types';
 import { RecommendationRail, type RecommendationRailProps } from './RecommendationRail';
+import styles from './RecommendationRail.module.scss';
 
 function product(id: string, name: string): ProductSummary {
   return {
@@ -94,6 +95,14 @@ describe('RecommendationRail', () => {
     expect(within(list).getAllByRole('listitem')).toHaveLength(products.length);
   });
 
+  it('keeps a one-product history card full width and places its remove action after the card', () => {
+    renderRail({ products: [products[0]!], onRemove: vi.fn() });
+    const item = screen.getByRole('listitem');
+    expect(item).toHaveClass(styles.itemWithRemove!);
+    expect(item.firstElementChild).toHaveAttribute('data-testid', 'product-card');
+    expect(within(item).getByRole('button', { name: 'Remove Sample Speaker from recently viewed' })).toBeInTheDocument();
+  });
+
   it('passes each product id to cardRef and attaches the returned ref to its list item', () => {
     const attached = vi.fn();
     const cardRef = vi.fn(() => attached);
@@ -101,5 +110,28 @@ describe('RecommendationRail', () => {
     expect(cardRef).toHaveBeenCalledWith('p1');
     expect(cardRef).toHaveBeenCalledWith('p2');
     expect(attached).toHaveBeenCalledWith(expect.any(HTMLLIElement));
+  });
+
+  it('shows a headingless skeleton while loading when the final heading is not known, and never a misleading title', () => {
+    render(<MemoryRouter><RecommendationRail id="neutral" products={[]} loading /></MemoryRouter>);
+    expect(screen.queryByRole('heading')).toBeNull();
+    expect(screen.getByRole('status', { name: 'Loading recommendations' })).toBeInTheDocument();
+    expect(screen.getByTestId('rail-neutral')).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('keeps a known heading on its skeleton and keeps products visible (no skeleton) during a background refetch', () => {
+    const { rerender } = render(<MemoryRouter><RecommendationRail id="known" title="Popular Products" products={[]} loading /></MemoryRouter>);
+    expect(screen.getByRole('heading', { name: 'Popular Products' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading Popular Products' })).toBeInTheDocument();
+    rerender(<MemoryRouter><RecommendationRail id="known" title="Popular Products" products={products} loading /></MemoryRouter>);
+    expect(screen.queryByRole('status', { name: /Loading/ })).toBeNull();
+    expect(screen.getByText('Sample Speaker')).toBeInTheDocument();
+  });
+
+  it('removes the skeleton and the whole section when the response is empty', () => {
+    const { container, rerender } = render(<MemoryRouter><RecommendationRail id="gone" products={[]} loading /></MemoryRouter>);
+    expect(container.querySelector('section')).not.toBeNull();
+    rerender(<MemoryRouter><RecommendationRail id="gone" products={[]} loading={false} /></MemoryRouter>);
+    expect(container).toBeEmptyDOMElement();
   });
 });

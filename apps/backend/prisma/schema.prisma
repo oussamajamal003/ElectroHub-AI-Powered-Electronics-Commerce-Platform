@@ -947,6 +947,7 @@ model RecentlyViewedProduct {
 
   @@id([userId, productId])
   @@index([userId, lastViewedAt])
+  @@index([lastViewedAt])
   @@map("recently_viewed_products")
 }
 

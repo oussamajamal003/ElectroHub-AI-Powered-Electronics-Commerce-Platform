@@ -19,8 +19,8 @@ Near-duplicate suppression drops a candidate whose centroid is practically ident
 
 from __future__ import annotations
 
+import time
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import Final, Protocol
 from uuid import UUID
 
@@ -28,6 +28,7 @@ import numpy as np
 import numpy.typing as npt
 
 from app.core.errors import ValidationFailedError
+from app.core.logging import log_event
 from app.integrations.pgvector_gateway import MAX_PRODUCT_LOOKUP, ProductVector, ScoredProduct
 from app.models.descriptor import ModelDescriptor
 from app.models.interfaces import CpuRunner, RecommendationOutcome
@@ -49,26 +50,16 @@ FloatArray = npt.NDArray[np.float64]
 
 
 class RecommendationVectorReader(Protocol):
-    async def product_centroids(
-        self, product_ids: Sequence[UUID], *, descriptor: ModelDescriptor
-    ) -> dict[UUID, ProductVector]: ...
-
-    async def nearest_products(
+    async def recommendation_candidates(
         self,
-        vector: Sequence[float],
         *,
+        anchor_product_id: UUID | None,
+        profile_signals: Sequence[tuple[UUID, float]],
         top_k: int,
         descriptor: ModelDescriptor,
         exclude: Sequence[UUID] = (),
         restrict_to: Sequence[UUID] = (),
-    ) -> list[ScoredProduct]: ...
-
-
-@dataclass(frozen=True)
-class _Query:
-    vector: tuple[float, ...]
-    exclude: tuple[UUID, ...]
-    strategy: RecommendationStrategy
+    ) -> tuple[bool, list[ScoredProduct]]: ...
 
 
 def unit(vector: Sequence[float]) -> FloatArray | None:
@@ -134,51 +125,44 @@ class EmbeddingRecommender:
     async def recommend(self, request: RecommendationRequest, run_cpu: CpuRunner) -> RecommendationOutcome:
         if request.mode not in EMBEDDING_MODES:
             raise ValidationFailedError(f"{request.mode.value} is served from order and activity data, not embeddings.")
-        query = await self._query(request, run_cpu)
-        if query is None:
+        profile_mode = request.mode is RecommendationMode.RECOMMENDED_FOR_YOU
+        signals = request.context.profile_signals if profile_mode and request.context else []
+        anchor = None if profile_mode else request.product_id
+        signal_weights = [(signal.product_id, signal.weight) for signal in signals]
+        exclude = ([anchor] if anchor is not None else [])
+        exclude.extend(request.exclude_product_ids)
+        exclude.extend(signal.product_id for signal in signals)
+        pool = min(MAX_PRODUCT_LOOKUP, max(request.limit, request.limit * POOL_FACTOR))
+        queryable, candidates = await self._reader.recommendation_candidates(
+            anchor_product_id=anchor,
+            profile_signals=signal_weights,
+            top_k=pool,
+            descriptor=self._descriptor,
+            exclude=_dedupe(exclude),
+            restrict_to=request.candidate_product_ids,
+        )
+        if not queryable:
             return RecommendationOutcome(
                 items=[],
                 strategy=_strategy(request.mode),
                 algorithm_version=ALGORITHM_VERSION,
                 anchor_indexed=False,
             )
-        pool = min(MAX_PRODUCT_LOOKUP, max(request.limit, request.limit * POOL_FACTOR))
-        candidates = await self._reader.nearest_products(
-            query.vector,
-            top_k=pool,
-            descriptor=self._descriptor,
-            exclude=query.exclude,
-            restrict_to=request.candidate_product_ids,
-        )
-        items = await run_cpu(lambda: select_ranked(candidates, request.limit))
+        scoring_started = time.perf_counter()
+        try:
+            items = await run_cpu(lambda: select_ranked(candidates, request.limit))
+        finally:
+            log_event(
+                "ai.recommendation_scoring_timing",
+                durationMs=round((time.perf_counter() - scoring_started) * 1000, 2),
+                candidateCount=len(candidates),
+            )
         return RecommendationOutcome(
             items=items,
-            strategy=query.strategy,
+            strategy=_strategy(request.mode),
             algorithm_version=ALGORITHM_VERSION,
             anchor_indexed=True,
         )
-
-    async def _query(self, request: RecommendationRequest, run_cpu: CpuRunner) -> _Query | None:
-        excluded = list(request.exclude_product_ids)
-        if request.mode is RecommendationMode.RECOMMENDED_FOR_YOU:
-            signals = request.context.profile_signals if request.context else []
-            ids = [signal.product_id for signal in signals]
-            centroids = await self._reader.product_centroids(ids, descriptor=self._descriptor)
-            weights = [(signal.product_id, signal.weight) for signal in signals]
-            vector = await run_cpu(lambda: profile_vector(centroids, weights))
-            if vector is None:
-                return None
-            return _Query(vector, _dedupe([*excluded, *ids]), RecommendationStrategy.BEHAVIOR_EMBEDDING)
-
-        anchor = request.product_id
-        if anchor is None:  # Guarded by the request model; kept for type narrowing.
-            raise ValidationFailedError("productId is required.")
-        centroids = await self._reader.product_centroids([anchor], descriptor=self._descriptor)
-        entry = centroids.get(anchor)
-        normalised = unit(entry.vector) if entry is not None else None
-        if normalised is None:
-            return None
-        return _Query(tuple(normalised.tolist()), _dedupe([anchor, *excluded]), _strategy(request.mode))
 
 
 def _strategy(mode: RecommendationMode) -> RecommendationStrategy:

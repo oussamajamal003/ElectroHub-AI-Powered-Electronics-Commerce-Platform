@@ -19,10 +19,10 @@ export const AI_MAX_TIMEOUT_MS = 10_000;
 export const AI_DEFAULT_IMAGE_SEARCH_TIMEOUT_MS = 15_000;
 export const AI_MAX_IMAGE_SEARCH_TIMEOUT_MS = 15_000;
 /**
- * Task 04.4: recommendation budget (two indexed pgvector reads, no image inference). Recommendation rails are optional,
- * so a slow index falls back quickly instead of holding a product page.
+ * Task 04.4: bounded budget for indexed recommendation retrieval (no image inference). A managed pgvector query can
+ * exceed the general AI timeout under load; recommendation rails remain optional and fall back at this ceiling.
  */
-export const AI_DEFAULT_RECOMMENDATION_TIMEOUT_MS = 4000;
+export const AI_DEFAULT_RECOMMENDATION_TIMEOUT_MS = 8000;
 export const AI_MAX_RECOMMENDATION_TIMEOUT_MS = 10_000;
 /** Express-side response cap (contract: 256 KiB). */
 export const AI_MAX_RESPONSE_BYTES = 256 * 1024;

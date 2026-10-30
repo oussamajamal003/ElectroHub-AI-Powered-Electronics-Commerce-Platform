@@ -1,4 +1,7 @@
 {
+  "evaluation_status": "historical; recall metrics invalid under the corrected standard recall@k definition",
+  "recall_definition": "INVALID legacy denominator min(k, relevant_count); values retained for provenance, do not cite",
+  "independent_relevance_judgments": "not available; taxonomy labels only",
   "label_definition": "graded relevance between anchor A and candidate C: same family and same brand = 3; same family = 2; same category only = 1; otherwise 0. Brands match when both are present and equal (case and surrounding whitespace ignored). Recall counts grade >= 2 as relevant. NDCG uses gain 2^g - 1.",
   "anchor_rule": "every candidate-pool product with a centroid and exactly one family label",
   "candidate_pool_size": 206,

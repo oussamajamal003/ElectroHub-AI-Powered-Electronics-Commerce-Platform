@@ -20,9 +20,11 @@ export const recommendationsApi = {
     apiClient<Envelope<RecommendationPreferences>>('/api/me/recommendation-preferences', { method: 'PATCH', data: { personalizationEnabled } }),
   recentlyViewed: (limit: number, signal?: AbortSignal) =>
     apiClient<Envelope<RecentlyViewed>>(`/api/me/recently-viewed?limit=${limit}`, { signal }),
+  removeRecentlyViewed: (productId: string) =>
+    apiClient<void>(`/api/me/recently-viewed/${encodeURIComponent(productId)}`, { method: 'DELETE' }),
   clearRecentlyViewed: () => apiClient<void>('/api/me/recently-viewed', { method: 'DELETE' }),
   recordInteraction: (input: { productId: string; eventType: 'VIEW' | 'RECOMMENDATION_CLICK'; surface: string; idempotencyKey: string }) =>
-    apiClient<Envelope<{ recorded: boolean; reason: string | null }>>('/api/product-interactions', { method: 'POST', data: input }),
+    apiClient<Envelope<{ recorded: boolean; reason: string | null; historyUpdated?: boolean }>>('/api/product-interactions', { method: 'POST', data: input }),
 };
 
 /**

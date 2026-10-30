@@ -16,5 +16,6 @@ export const useRecommendationPreferences = vi.fn(idle);
 export const useRecentlyViewed = vi.fn(idle);
 export const useSetRecommendationPreferences = vi.fn(mutation);
 export const useClearRecentlyViewed = vi.fn(mutation);
+export const useRemoveRecentlyViewed = vi.fn(mutation);
 export const useRecordProductView = vi.fn();
 export const recordRecommendationClick = vi.fn();

@@ -4,11 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import routes from './recommendation.routes.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { requestId } from '../middleware/requestId.js';
+import { issueImpressionToken, verifyImpressionToken } from '../services/recommendation-token.js';
 
 const ids = vi.hoisted(() => ({ customer: '9de3d92a-d180-41f2-8bd1-ad6f9a6d1e99' }));
 const service = vi.hoisted(() => ({
   productSections: vi.fn(), popular: vi.fn(), forCart: vi.fn(), forUser: vi.fn(), preferences: vi.fn(), setPreferences: vi.fn(),
-  recentlyViewed: vi.fn(), clearRecentlyViewed: vi.fn(), recordInteraction: vi.fn(), recordEvents: vi.fn(),
+  recentlyViewed: vi.fn(), removeRecentlyViewed: vi.fn(), clearRecentlyViewed: vi.fn(), recordInteraction: vi.fn(), recordEvents: vi.fn(),
 }));
 
 vi.mock('../lib/prisma.js', () => ({ prisma: {} }));
@@ -49,6 +50,7 @@ beforeEach(() => {
   service.preferences.mockResolvedValue({ personalizationEnabled: false, updatedAt: null });
   service.setPreferences.mockResolvedValue({ personalizationEnabled: false, updatedAt: null });
   service.clearRecentlyViewed.mockResolvedValue(undefined);
+  service.removeRecentlyViewed.mockResolvedValue(undefined);
   service.recordInteraction.mockResolvedValue({ recorded: true, reason: null });
   service.recordEvents.mockResolvedValue({ accepted: 1 });
 });
@@ -70,11 +72,11 @@ describe('GET /api/products/:slug/recommendations', () => {
     expect(service.productSections).not.toHaveBeenCalled();
   });
 
-  it('returns a short public cache policy, the default limit, and the service payload', async () => {
+  it('prevents caching of attribution batches, uses the default limit, and returns the service payload', async () => {
     service.productSections.mockResolvedValue({ sections: [{ mode: 'SIMILAR_PRODUCTS' }] });
     const res = await request(app).get('/api/products/good-slug/recommendations');
     expect(res.status).toBe(200);
-    expect(res.headers['cache-control']).toBe('public, max-age=30');
+    expect(res.headers['cache-control']).toBe('private, no-store');
     expect(service.productSections).toHaveBeenCalledWith('good-slug', 4, expect.any(String));
     expect(res.body).toEqual({ data: { sections: [{ mode: 'SIMILAR_PRODUCTS' }] } });
   });
@@ -106,6 +108,33 @@ describe('GET /api/me/recommendations', () => {
     expect(res.headers.vary).toBe('Authorization');
     expect(service.forUser).toHaveBeenCalledTimes(1);
     expect(service.forUser).toHaveBeenCalledWith(ids.customer, 3, expect.any(String));
+  });
+});
+
+describe('attribution response caching', () => {
+  it('issues independent non-cacheable batches to separate clients for the same product', async () => {
+    service.productSections.mockImplementation(async () => ({ sections: [{
+      impressionToken: issueImpressionToken({ mode: 'SIMILAR_PRODUCTS', strategy: 'EMBEDDING_SIMILARITY',
+        surface: 'product_detail', productIds: [PRODUCT] }),
+    }] }));
+    const first = await request(app).get('/api/products/good-slug/recommendations');
+    const second = await request(app).get('/api/products/good-slug/recommendations');
+    expect(first.headers['cache-control']).toBe('private, no-store');
+    expect(second.headers['cache-control']).toBe('private, no-store');
+    const a = verifyImpressionToken(first.body.data.sections[0].impressionToken);
+    const b = verifyImpressionToken(second.body.data.sections[0].impressionToken);
+    expect(a?.productIds).toEqual([PRODUCT]);
+    expect(b?.productIds).toEqual([PRODUCT]);
+    expect(a?.batchId).toBeTruthy();
+    expect(b?.batchId).toBeTruthy();
+    expect(a?.batchId).not.toBe(b?.batchId);
+  });
+
+  it('also disables caching for popular recommendation batches', async () => {
+    service.popular.mockResolvedValue({ items: [] });
+    const res = await request(app).get('/api/recommendations/popular');
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toBe('private, no-store');
   });
 });
 
@@ -173,10 +202,10 @@ describe('cart recommendations', () => {
     expect(service.forCart).not.toHaveBeenCalled();
   });
 
-  it('answers with no-store, deduplicates ids, and accepts exactly 50 unique products', async () => {
+  it('answers with private no-store, deduplicates ids, and accepts exactly 50 unique products', async () => {
     const res = await post({ productIds: [uuidFor(1), uuidFor(1), uuidFor(2)] });
     expect(res.status).toBe(200);
-    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.headers['cache-control']).toBe('private, no-store');
     expect(service.forCart).toHaveBeenLastCalledWith([uuidFor(1), uuidFor(2)], 4);
 
     const fifty = Array.from({ length: 50 }, (_, index) => uuidFor(index + 1));
@@ -204,6 +233,18 @@ describe('recommendation preferences', () => {
 });
 
 describe('recently viewed', () => {
+  it('removes one product for the session user and rejects unauthenticated or malformed requests', async () => {
+    const path = `/api/me/recently-viewed/${PRODUCT}`;
+    expect((await request(app).delete(path)).status).toBe(401);
+    expect((await customerAuth(request(app).delete('/api/me/recently-viewed/not-a-uuid'))).status).toBe(400);
+    expect(service.removeRecentlyViewed).not.toHaveBeenCalled();
+
+    const res = await customerAuth(request(app).delete(path));
+    expect(res.status).toBe(204);
+    expect(res.text).toBe('');
+    expect(service.removeRecentlyViewed).toHaveBeenCalledWith(ids.customer, PRODUCT);
+  });
+
   it('clears the list with 204 for the session user and requires authentication', async () => {
     expect((await request(app).delete('/api/me/recently-viewed')).status).toBe(401);
     const res = await customerAuth(request(app).delete('/api/me/recently-viewed'));

@@ -20,13 +20,17 @@ def _check_k(k: int) -> None:
 
 
 def recall_at_k(ranked_ids: Sequence[T], relevant_ids: Iterable[T], k: int) -> float | None:
-    """|top-k intersect relevant| / min(k, |relevant|). ``None`` when there are no relevant items (query excluded)."""
+    """Fraction of all known relevant items found in the top k.
+
+    ``None`` when there are no relevant items (query excluded). This is standard recall@k: the denominator is the
+    complete relevant set, even when it is larger than k or the returned ranking is shorter than k.
+    """
     _check_k(k)
     relevant = set(relevant_ids)
     if not relevant:
         return None
     top_k = set(ranked_ids[:k])
-    return len(top_k & relevant) / min(k, len(relevant))
+    return len(top_k & relevant) / len(relevant)
 
 
 def ndcg_at_k(ranked_ids: Sequence[T], gains: Mapping[T, int], k: int) -> float | None:
@@ -48,7 +52,7 @@ def ndcg_at_k(ranked_ids: Sequence[T], gains: Mapping[T, int], k: int) -> float 
     idcg = sum((2**grade - 1) / math.log2(rank + 1) for rank, grade in enumerate(ideal, start=1) if grade)
     if idcg == 0:
         return None
-    return float(dcg / idcg)
+    return min(1.0, max(0.0, float(dcg / idcg)))
 
 
 def catalog_coverage(lists: Iterable[Sequence[T]], eligible_count: int) -> float:

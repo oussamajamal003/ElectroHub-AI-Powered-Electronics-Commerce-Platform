@@ -28,7 +28,9 @@ const privateNoStore = (_req: Request, res: Response, next: NextFunction) => {
   res.set('Vary', 'Authorization');
   next();
 };
-const shortPublicCache = (res: Response) => res.set('Cache-Control', 'public, max-age=30');
+// Payloads contain a freshly issued attribution batch; sharing or reusing a response
+// would collapse independent viewers' impressions into the same batch.
+const noStore = (res: Response) => res.set('Cache-Control', 'private, no-store');
 
 function failure(error: unknown, next: NextFunction) {
   next(error instanceof z.ZodError ? new AppError('Invalid recommendation request.', 400, 'VALIDATION_ERROR') : error);
@@ -38,7 +40,7 @@ router.get('/products/:slug/recommendations', limiter(120), async (req, res, nex
   try {
     const { limit } = limitQuery().parse(req.query);
     const result = await recommendationService.productSections(slug.parse(req.params.slug), limit, req.id);
-    shortPublicCache(res);
+    noStore(res);
     res.json({ data: result });
   } catch (error) { failure(error, next); }
 });
@@ -46,7 +48,7 @@ router.get('/products/:slug/recommendations', limiter(120), async (req, res, nex
 router.get('/recommendations/popular', limiter(120), async (req, res, next) => {
   try {
     const { limit } = limitQuery().parse(req.query);
-    shortPublicCache(res);
+    noStore(res);
     res.json({ data: await recommendationService.popular(limit, 'home') });
   } catch (error) { failure(error, next); }
 });
@@ -58,7 +60,7 @@ router.post('/recommendations/cart', limiter(60), async (req, res, next) => {
       productIds: z.array(uuid).min(1).max(MAX_CART_ANCHORS).transform(ids => [...new Set(ids)]),
       limit: z.number().int().min(1).max(RECOMMENDATION_MAX_LIMIT).default(RECOMMENDATION_DEFAULT_LIMIT),
     }).strict().parse(req.body);
-    res.set('Cache-Control', 'no-store');
+    noStore(res);
     res.json({ data: await recommendationService.forCart(input.productIds, input.limit) });
   } catch (error) { failure(error, next); }
 });
@@ -101,6 +103,13 @@ router.get('/me/recently-viewed', ...customer, async (req, res, next) => {
   try {
     const { limit } = limitQuery(RECENTLY_VIEWED_CAP, 12).parse(req.query);
     res.json({ data: await recommendationService.recentlyViewed(req.user!.userId, limit) });
+  } catch (error) { failure(error, next); }
+});
+
+router.delete('/me/recently-viewed/:productId', limiter(20), ...customer, async (req, res, next) => {
+  try {
+    await recommendationService.removeRecentlyViewed(req.user!.userId, uuid.parse(req.params.productId));
+    res.status(204).end();
   } catch (error) { failure(error, next); }
 });
 

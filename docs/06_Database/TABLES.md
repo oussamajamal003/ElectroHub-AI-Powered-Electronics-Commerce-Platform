@@ -2,19 +2,18 @@
 
 > Task 02.5 implementation supersedes the historical 02.2 catalog details below. Current local schema has 23 application models, including Brand and ProductSpecification. Shared DEV/PROD application and live schema verification are deferred to Gemini; see [database handoff](PRODUCT_FOUNDATION_HANDOFF.md).
 
-## Task 04.4 tables (migration `20261029000000_recommendations`, additive)
+## Task 04.4 tables (additive migrations `20261029000000_recommendations`, `20261029010000_recommendation_retention_index`, and `20261029020000_recommendation_consent_consistency`)
 
 | Table | Key / constraints | Purpose |
 |---|---|---|
-| `recommendation_preferences` | PK `userId` → users (cascade); `personalizationEnabled` default `false` | Explicit opt-in |
+| `recommendation_preferences` | PK `userId` → users (cascade); `personalizationEnabled` default `false`; CHECK enabled iff `consentedAt` is non-null | Explicit opt-in |
 | `product_interactions` | UUID PK; unique (`userId`, `idempotencyKey`); CHECK `eventType` ∈ VIEW, RECOMMENDATION_CLICK; surface/key regex; indexes (`userId`,`occurredAt`), (`productId`,`eventType`,`occurredAt`), (`occurredAt`) | Consented behaviour, 90-day retention |
-| `recently_viewed_products` | PK (`userId`,`productId`); `viewCount` 1..1000000; index (`userId`,`lastViewedAt`) | Account Recently Viewed (≤ 20 per user) |
+| `recently_viewed_products` | PK (`userId`,`productId`); `viewCount` 1..1000000; indexes (`userId`,`lastViewedAt`), (`lastViewedAt`) | Account Recently Viewed (≤ 20 per user); global 90-day retention sweep |
 | `recommendation_events` | UUID PK; unique (`batchId`,`productId`,`eventType`); CHECKs on type/mode/strategy/surface, rank 1..100 | Non-personal impression/click attribution (no user id) |
 
 All four have RLS enabled with no policies and no `anon`/`authenticated` grants (server-only access via Prisma).
 Account deletion deletes the user's preference, interaction and recently-viewed rows in its transaction.
-Applied: disposable QA (replayed, second run no-op) and DEV `pzxekjybdiulzmssalfo` (2026-10-28). PROD: not applied;
-added to the `prod-migration.yml` allowlist for the reviewed release path.
+The base recommendations migration was applied to disposable QA (replayed, second run no-op) and DEV `pzxekjybdiulzmssalfo` (2026-10-28). Both follow-up migrations were applied to disposable QA and confirmed with a second no-op run; they remain pending in DEV and PROD. Both follow-ups are additive and are included in their exact ordered release allowlists. The consent-consistency constraint is present and validated in QA. No Task 04.4 migration has been applied to PROD.
 
 ## Task 02.5 tables
 

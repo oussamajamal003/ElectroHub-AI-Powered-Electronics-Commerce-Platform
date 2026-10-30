@@ -37,23 +37,33 @@ to (0, 1]; evidence threshold ≥ 2 products and total weight ≥ 3. VIEW / RECO
 Qualifying purchase: payment `SUCCEEDED`, not refunded, order `CONFIRMED | PREPARING | OUT_FOR_DELIVERY | DELIVERED`,
 non-fixture products. Popularity: 30-day decayed per-user maximum, ≥ 3 contributing users. FBT support ≥ 2 orders.
 
-### Offline evaluation (QA vector store, 2026-10-28)
+### Offline evaluation (QA vector store, historical diagnostics and corrected recall rerun)
 
-`apps/ai-service/training/recommendations/evaluate.py`; labels frozen before results (device family + brand = 3,
-family = 2, category = 1). 206 anchors / 206-product pool; result file
-`apps/ai-service/training/recommendations/results/eval-siglip2-b16-p256-d1-b3900dd9fad5.json`.
+`apps/ai-service/training/recommendations/evaluate.py`; taxonomy rule fixed before results (device family + brand = 3,
+family = 2, category = 1). This is not an independent judgment set. The corrected results below use the frozen
+206-anchor / 206-product isolated-QA snapshot in
+`apps/ai-service/training/recommendations/judgments/taxonomy_evaluation_206.json` (199 anchors contribute to recall;
+206 contribute to NDCG). D3 local scoring latency was mean 0.069 ms / p95 0.078 ms; end-to-end QA requests were
+approximately 120–175 ms.
 
 | Strategy | Recall@1 | Recall@10 | NDCG@5 | NDCG@10 | Coverage@10 | Category diversity@10 | Mean ms |
 |---|---|---|---|---|---|---|---|
-| Category baseline | 0.879 | 0.966 | 0.904 | 0.936 | 0.612 | 0.000 | n/a |
+| Category baseline | 0.081 | 0.558 | 0.904 | 0.936 | 0.612 | 0.000 | n/a |
 | Popularity baseline | not evaluated (no measured demand) | | | | | | |
-| **D3 centroid** | **1.000** | **1.000** | **0.979** | **0.982** | **1.000** | 0.170 | 0.45 |
+| **D3 centroid** | **0.129** | **0.591** | **0.979** | **0.982** | **1.000** | 0.170 | 0.069 |
 
 Limitations: the catalog has many near-identical variants (storage/colour), which inflates absolute scores; the
 baseline is weak by construction (id-ordered category listing). Worst anchors are single-member families
 (TP-Link TL-SG105, JBL Bar 300, ROG Ally, PS5) where visual neighbours cross categories; You May Also Like can
 surface visually similar but functionally unrelated items (e.g. cameras after a router). Visual similarity is not
 compatibility. Latency is local scoring only; end-to-end QA measured ~120–175 ms per product page request.
+
+Recall@k must divide top-k hits by the complete relevant set size. The checked-in historical JSON used
+`min(k, relevant_count)` and therefore overstated recall; those historical values are invalid and are not used in
+this table. The table reports the new isolated-QA snapshot identified above.
+The taxonomy-derived NDCG remains a measure of agreement with the frozen family/brand/category rule, not independent
+or human-judged recommendation quality. A separate, small blinded agent-judged sample and its limitations are recorded
+in `apps/ai-service/training/recommendations/judgments/README.md`.
 
 ---
 

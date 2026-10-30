@@ -43,6 +43,12 @@ export function AccountPage() {
           </Breadcrumb>
         </div>
 
+        <header className={styles.pageIntro}>
+          <p className={styles.pageEyebrow}>Your ElectroHub</p>
+          <h1>My Account</h1>
+          <p>Manage your profile, orders, saved products and preferences.</p>
+        </header>
+
         <section className={styles.profileCard}>
           <div className={styles.profileInfo}>
             <Avatar initials={initial} className={styles.avatar} />
@@ -99,9 +105,9 @@ export function AccountPage() {
           </div>
         </section>
 
-        <div className={styles.section}>
+        {user.role === 'CUSTOMER' && <div className={styles.section}>
           <PersonalizationPanel userId={user.id} />
-        </div>
+        </div>}
 
         <section className={styles.section} aria-labelledby="your-reviews-title">
           <div className={styles.reviewHeading}><div><h2 id="your-reviews-title">Your Reviews</h2><p>Products you've reviewed</p></div></div>

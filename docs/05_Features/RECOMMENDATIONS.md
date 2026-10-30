@@ -23,13 +23,14 @@ Failures never block the page, cart or checkout.
 
 | Method and path | Access | Notes |
 |---|---|---|
-| `GET /api/products/:slug/recommendations?limit=1..12` | Public | `{ sections: [SIMILAR, YOU_MAY_ALSO_LIKE, FBT] }`, deduplicated across sections, `Cache-Control: public, max-age=30`, 120/min |
-| `GET /api/recommendations/popular` | Public | Measured popularity or honest new-arrivals fallback |
-| `POST /api/recommendations/cart` | Public | `{ productIds ≤ 50, limit }`; ids are context only, cart is never mutated; `no-store` |
+| `GET /api/products/:slug/recommendations?limit=1..12` | Public | `{ sections: [SIMILAR, YOU_MAY_ALSO_LIKE, FBT] }`, deduplicated across sections, `Cache-Control: private, no-store` to protect per-response attribution batches, 120/min |
+| `GET /api/recommendations/popular` | Public | Measured popularity or honest new-arrivals fallback; `Cache-Control: private, no-store` because the response carries a per-response attribution token |
+| `POST /api/recommendations/cart` | Public | `{ productIds ≤ 50, limit }`; ids are context only, cart is never mutated; `Cache-Control: private, no-store` |
 | `POST /api/recommendations/events` | Public | `{ token, events ≤ 24 }` IMPRESSION/CLICK; HMAC token issued per section; no user id stored; `202` |
 | `GET /api/me/recommendations` | CUSTOMER | Personal rail or fallback; `private, no-store` |
 | `GET/PATCH /api/me/recommendation-preferences` | CUSTOMER | Opt-in (default off). Turning off deletes interactions and recently viewed |
 | `GET/DELETE /api/me/recently-viewed` | CUSTOMER | Clear deletes the list and its VIEW events |
+| `DELETE /api/me/recently-viewed/:productId` | CUSTOMER | Idempotently removes that customer's item and its VIEW events; other signals remain |
 | `POST /api/product-interactions` | CUSTOMER | VIEW / RECOMMENDATION_CLICK, idempotent key; ignored (200) without consent, 201 when recorded |
 
 All AI ids are re-hydrated through the public catalog projection (active, storefront-visible, non-fixture, current
@@ -42,6 +43,11 @@ price and stock). Clients never send user ids, prices, weights or strategy.
 - Retention: interactions 90 days (reads filter, hourly purge); recently viewed capped at 20 per user.
 - Account deletion removes preferences, interactions and recently viewed in the deletion transaction.
 - FastAPI receives only product ids and normalised weights (`profile-v1`); no user ids, emails or orders.
+- Two-horizon profile: the long-horizon profile (all signals, 14-day half-life) is ranked as before. Products browsed in the
+  last 3 days (views and recommendation clicks, 1-day half-life) form a second, short-horizon profile, ranked concurrently
+  with every profile product excluded. Two or three recently browsed products earn one rail slot and four or more earn two;
+  these slots are positions 2 and 4. A single accidental view earns nothing, long-term interests always keep position 1 and
+  at least half the rail, and a failed recent ranking only drops its slots.
 - `recommendation_events` stores batch, product, mode, strategy, surface and rank only.
 
 ### Configuration

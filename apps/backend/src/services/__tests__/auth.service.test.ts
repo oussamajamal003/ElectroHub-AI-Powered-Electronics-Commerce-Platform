@@ -303,6 +303,9 @@ describe('AuthService', () => {
       expect(result.accessToken).toBeDefined();
       expect(result.refreshToken).toBeDefined();
       expect(result.userId).toBe(mockUser.id);
+      // The identity /api/auth/me would return comes back with the rotation (no separate round trip for a restoring client)
+      expect(result.user).toMatchObject({ id: mockUser.id, email: mockUser.email, role: expect.any(String) });
+      expect(result).not.toHaveProperty('user.passwordHash');
       const newHash = sha(result.refreshToken!);
       // Old token is revoked and linked to its successor in a single conditional update
       expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
@@ -313,6 +316,21 @@ describe('AuthService', () => {
       expect(prisma.refreshToken.create).toHaveBeenCalledWith({
         data: { userId: mockUser.id, tokenHash: newHash, expiresAt: expect.any(Date), familyId: FAMILY_ID },
       });
+    });
+
+    it('still completes the rotation and omits the identity when the identity read fails', async () => {
+      vi.mocked(prisma.refreshToken.findUnique).mockResolvedValueOnce(activeRow());
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(mockUser as unknown as User);
+      vi.mocked(prisma.refreshToken.findFirst).mockResolvedValueOnce({ id: 'tok-1', familyId: FAMILY_ID } as unknown as RefreshToken);
+      vi.mocked(prisma.refreshToken.updateMany).mockResolvedValueOnce({ count: 1 });
+      vi.mocked(prisma.refreshToken.create).mockResolvedValueOnce({ id: 'tok-2' } as unknown as RefreshToken);
+      vi.mocked(prisma.oAuthAccount.findFirst).mockRejectedValueOnce(new Error('transient'));
+      try {
+        const result = await authService.refreshSession(rawToken);
+        expect(result.accessToken).toBeDefined();
+        expect(result.refreshToken).toBeDefined();
+        expect(result.user).toBeNull();
+      } finally { vi.mocked(prisma.oAuthAccount.findFirst).mockResolvedValue(null); }
     });
 
     it('should reject an expired refresh token with 401 AppError', async () => {

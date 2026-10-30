@@ -174,8 +174,8 @@ export function ProductDetailPage() {
         </section> : <section className={styles.reviewGuest}><h3>Share your experience</h3><p>Sign in to write a review of this product.</p><Button type="button" onClick={() => window.dispatchEvent(new Event('electrohub:open-auth'))}>Sign In</Button></section>}
       </>} />
 
-    {recommendations.isPending && <RecommendationSectionRail id="similar-title" loading loadingTitle="Similar Products" />}
-    {recommendations.isError && !recommendations.data && <RecommendationSectionRail id="similar-title" error loadingTitle="Similar Products"
+    {recommendations.isPending && <RecommendationSectionRail id="recommendations-loading" loading />}
+    {recommendations.isError && !recommendations.data && <RecommendationSectionRail id="recommendations-unavailable" error
       onRetry={() => void recommendations.refetch()} />}
     {sections.map(section => <RecommendationSectionRail key={section.mode} id={`${section.mode.toLowerCase().replace(/_/g, '-')}-title`}
       section={section} recordPersonalClicks={personalizationEnabled}

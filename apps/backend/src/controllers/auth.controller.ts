@@ -225,8 +225,10 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
 
     logger.info('AUTH_REFRESH_SUCCESS', { userId: result.userId });
 
+    // `user` is the same identity /api/auth/me returns, so a restoring client needs no second request.
     res.status(200).json({
       accessToken: result.accessToken,
+      user: result.user,
     });
   } catch (error) {
     if (error instanceof AppError && error.code === 'REFRESH_ROTATION_IN_PROGRESS') {

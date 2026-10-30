@@ -43,6 +43,20 @@ describe('AccountPage', () => {
     renderWithRouter(<AccountPage />);
     expect(screen.getByText('Home')).toBeInTheDocument();
     expect(screen.getAllByText('Account').length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { level: 1, name: 'My Account' })).toBeInTheDocument();
+  });
+
+  it('keeps recommendation preferences in the customer account and hides them for non-customers', () => {
+    const { unmount } = renderWithRouter(<AccountPage />);
+    expect(screen.getByRole('heading', { name: 'Personalized recommendations' })).toBeInTheDocument();
+    unmount();
+
+    vi.mocked(useAuth).mockReturnValue({
+      user: { id: 'admin-1', firstName: 'Admin', lastName: 'User', email: 'admin@example.com', role: 'ADMIN' },
+      isAuthenticated: true, login: vi.fn(), logout: mockLogout,
+    } as any);
+    renderWithRouter(<AccountPage />);
+    expect(screen.queryByRole('heading', { name: 'Personalized recommendations' })).not.toBeInTheDocument();
   });
 
   it('renders user details', () => {

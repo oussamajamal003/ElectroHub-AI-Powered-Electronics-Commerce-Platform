@@ -121,6 +121,20 @@ describe('useImpressionTracking', () => {
     unmount();
   });
 
+  it('restarts the dwell when a hidden tab becomes visible again', () => {
+    const { result, unmount } = renderHook(() => useImpressionTracking('tok-visibility-change'));
+    const observer = observerAt(0);
+    const card = makeCard();
+    act(() => { result.current.observe('p1')(card); observer.deliver([visible(card)]); });
+    act(() => { vi.advanceTimersByTime(100); visibility = 'hidden'; document.dispatchEvent(new Event('visibilitychange')); });
+    act(() => { vi.advanceTimersByTime(850); visibility = 'visible'; document.dispatchEvent(new Event('visibilitychange')); });
+    act(() => { vi.advanceTimersByTime(IMPRESSION_DWELL_MS - 1); });
+    expect(send).not.toHaveBeenCalled();
+    act(() => { vi.advanceTimersByTime(1 + FLUSH_DELAY_MS); });
+    expect(send).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+
   it('counts the same token and product only once, across hook instances and repeated visibility', () => {
     const first = renderHook(() => useImpressionTracking('tok-dedupe'));
     const firstObserver = observerAt(0);

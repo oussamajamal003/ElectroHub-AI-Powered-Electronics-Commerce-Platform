@@ -11,8 +11,9 @@ catalog-derived labels. It compares three strategies on the same anchors and the
 | `popularity_baseline` | Only with `--popularity`. Without measured data it is reported as "not evaluated". |
 | `d3_centroid` | The production ranking: cosine similarity of per-product centroids (mean of eligible unit image vectors of the active D3 SigLIP2 embedding version), ties by product id ascending. |
 
-Metrics: Recall@1/5/10 (relevant = grade >= 2), NDCG@5/10 (graded), catalog coverage@10, intra-list category
-diversity@10, and mean local scoring latency for `d3_centroid`. Database latency is not measured here.
+Metrics: standard Recall@1/5/10 (relevant = grade >= 2; denominator is the full relevant set), NDCG@5/10 (graded),
+catalog coverage@10, intra-list category diversity@10, and mean local scoring latency for `d3_centroid`. Database
+latency is not measured here.
 The output also has a failure table with the 10 anchors where `d3_centroid` has the lowest NDCG@10.
 
 ## How to run
@@ -60,7 +61,7 @@ A list of objects, one per catalog product:
   for catalogs where a family matches on the "Device type" specification (for example the wireless router rule).
   Without it, those products are labelled from the name only and may end up unlabelled.
 
-## Labels (frozen before results were inspected)
+## Taxonomy labels (rule frozen before results were inspected)
 
 Family comes from `training/taxonomy/device_families.json` using the rule in
 `training/data/family_coverage.py` (`families_of`, loaded by path). A product gets a family only when exactly one
@@ -75,9 +76,10 @@ Graded relevance between anchor A and candidate C:
 - otherwise: **0**
 
 Brands match when both are present and equal, ignoring case and surrounding spaces. Recall counts grade >= 2 as
-relevant. NDCG uses gain `2^g - 1` and discount `1/log2(rank + 1)`, with the ideal ordering taken over the whole
-candidate pool. Queries with no relevant item (Recall) or no positive gain (NDCG) are left out of that metric's mean,
-and the `n` for each metric is reported.
+relevant and divides top-k hits by the complete relevant set size (standard recall@k); it is not capped by `k`.
+NDCG uses gain `2^g - 1` and discount `1/log2(rank + 1)`, with the ideal ordering taken over the whole candidate
+pool. Queries with no relevant item (Recall) or no positive gain (NDCG) are left out of that metric's mean, and the
+`n` for each metric is reported.
 
 ## Data inventory and decision: no trained behaviour ranker (NO-GO)
 
@@ -95,6 +97,13 @@ strategy this evaluation measures.
 
 - The labels are catalog taxonomy (family, brand, category), not human judgements of relevance. A high score means
   agreement with the taxonomy, not that customers find the recommendations useful.
+- No independent blinded relevance judgments were available for the historical 206-product evaluation: the catalog
+  snapshot is absent, and the checked-in result already reveals its ranked examples. The taxonomy labels are therefore
+  not independent validation and no agent- or human-labeled metric is claimed.
+- The checked-in result JSON was produced before the recall denominator correction. Its Recall@1/5/10 values are
+  invalid under standard recall and must not be cited. NDCG, coverage, diversity, and local scoring latency are
+  unaffected by that metric correction. Recompute the evaluation when the matching catalog snapshot and read-only
+  vector-store access are available; future output uses the corrected recall implementation.
 - Whether the D3 embedding was trained on labels that overlap with this taxonomy was not checked here. If it was,
   the agreement is not independent evidence.
 - The candidate pool is only the products in the catalog file that also have a centroid. Products without a current

@@ -12,6 +12,7 @@ import anyio
 
 from app.integrations.pgvector_gateway import ProductVector, ScoredProduct
 from app.models.descriptor import ModelDescriptor
+from app.models.embedding_recommender import profile_vector, unit
 from app.models.interfaces import CpuRunner, RecommendationOutcome
 from app.processors.image import ValidatedImage
 from app.schemas.common import RankedProduct
@@ -173,3 +174,31 @@ class FakeVectorReader:
             )
         )
         return list(self.neighbours)
+
+    async def recommendation_candidates(
+        self,
+        *,
+        anchor_product_id: uuid.UUID | None,
+        profile_signals: Sequence[tuple[uuid.UUID, float]],
+        top_k: int,
+        descriptor: ModelDescriptor,
+        exclude: Sequence[uuid.UUID] = (),
+        restrict_to: Sequence[uuid.UUID] = (),
+    ) -> tuple[bool, list[ScoredProduct]]:
+        """Keep the fake's mathematical seam equivalent to the single production gateway operation."""
+        product_ids = (anchor_product_id,) if anchor_product_id is not None else tuple(
+            pid for pid, _ in profile_signals
+        )
+        centroids = await self.product_centroids(product_ids, descriptor=descriptor)
+        if anchor_product_id is not None:
+            entry = centroids.get(anchor_product_id)
+            query_vector = unit(entry.vector) if entry is not None else None
+        else:
+            vector = profile_vector(centroids, profile_signals)
+            query_vector = unit(vector) if vector is not None else None
+        if query_vector is None:
+            return False, []
+        candidates = await self.nearest_products(
+            tuple(query_vector.tolist()), top_k=top_k, descriptor=descriptor, exclude=exclude, restrict_to=restrict_to
+        )
+        return True, candidates
