@@ -129,7 +129,7 @@ class EmbeddingRecommender:
         signals = request.context.profile_signals if profile_mode and request.context else []
         anchor = None if profile_mode else request.product_id
         signal_weights = [(signal.product_id, signal.weight) for signal in signals]
-        exclude = ([anchor] if anchor is not None else [])
+        exclude = [anchor] if anchor is not None else []
         exclude.extend(request.exclude_product_ids)
         exclude.extend(signal.product_id for signal in signals)
         pool = min(MAX_PRODUCT_LOOKUP, max(request.limit, request.limit * POOL_FACTOR))

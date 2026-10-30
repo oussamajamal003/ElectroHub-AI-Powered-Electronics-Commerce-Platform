@@ -516,11 +516,14 @@ class PgVectorGateway:
             raise IndexNotReadyError() from exc
         finally:
             ended = time.perf_counter()
-            log_event("ai.recommendation_db_timing", phase=phase,
-                      totalMs=round((ended - started) * 1000, 2),
-                      acquisitionMs=round(((acquired or ended) - started) * 1000, 2),
-                      sqlMs=round(((executed or ended) - acquired) * 1000, 2) if acquired is not None else None,
-                      fetchMs=round((ended - executed) * 1000, 2) if executed is not None else None)
+            log_event(
+                "ai.recommendation_db_timing",
+                phase=phase,
+                totalMs=round((ended - started) * 1000, 2),
+                acquisitionMs=round(((acquired or ended) - started) * 1000, 2),
+                sqlMs=round(((executed or ended) - acquired) * 1000, 2) if acquired is not None else None,
+                fetchMs=round((ended - executed) * 1000, 2) if executed is not None else None,
+            )
 
         if not rows or not bool(rows[0][0]):
             raise IndexNotReadyError()

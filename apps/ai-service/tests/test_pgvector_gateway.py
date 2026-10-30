@@ -471,8 +471,16 @@ def test_compact_vector_preserves_float32_and_rejects_corrupt_rows() -> None:
     wrong_reserved = base64.b64encode(struct.pack("!HH4f", 4, 1, 1, 0, 0, 0)).decode()
     wrong_endian = base64.b64encode(struct.pack("<HH4f", 4, 0, 1, 0, 0, 0)).decode()
     truncated = base64.b64encode(struct.pack("!HH4f", 4, 0, 1, 0, 0, 0)[:-1]).decode()
-    for value in ("not-base64", compact(1, 2, 3), compact(math.nan, 0, 0, 0),
-                  compact(math.inf, 0, 0, 0), wrong_reserved, wrong_endian, truncated, None):
+    for value in (
+        "not-base64",
+        compact(1, 2, 3),
+        compact(math.nan, 0, 0, 0),
+        compact(math.inf, 0, 0, 0),
+        wrong_reserved,
+        wrong_endian,
+        truncated,
+        None,
+    ):
         with pytest.raises(InferenceOutputError):
             pgvector_gateway._parse_compact_vector(value, DESCRIPTOR)
 
@@ -620,12 +628,15 @@ def test_recommendation_candidates_build_anchor_and_neighbours_in_one_eligible_s
     assert "extensions.l2_normalize" in query and "extensions.sum" in query
     assert "active_identity" in query and "active_match" in query
     assert "ORDER BY distance ASC, candidate.product_id ASC" in query
-    assert all(predicate in query for predicate in (
-        "source.eligible",
-        "source.source_revision IS NULL",
-        "overlay.source_revision = source.source_revision",
-        "overlay.source_sha256 = source.source_sha256",
-    ))
+    assert all(
+        predicate in query
+        for predicate in (
+            "source.eligible",
+            "source.source_revision IS NULL",
+            "overlay.source_revision = source.source_revision",
+            "overlay.source_sha256 = source.source_sha256",
+        )
+    )
     assert DESCRIPTOR.embedding_version not in query and "43e75" not in query
 
 
@@ -642,9 +653,14 @@ def test_cancelled_recommendation_records_the_pending_database_phase(monkeypatch
     db = FakeDatabase()
     gateway = PgVectorGateway(dsn=DSN, pool_factory=lambda: WaitingPool(db))
     with pytest.raises(TimeoutError):
-        run(asyncio.wait_for(gateway.recommendation_candidates(
-            anchor_product_id=uuid.UUID(int=7), profile_signals=(), top_k=2, descriptor=DESCRIPTOR
-        ), timeout=0.01))
+        run(
+            asyncio.wait_for(
+                gateway.recommendation_candidates(
+                    anchor_product_id=uuid.UUID(int=7), profile_signals=(), top_k=2, descriptor=DESCRIPTOR
+                ),
+                timeout=0.01,
+            )
+        )
     assert len(events) == 1
     assert events[0][0] == "ai.recommendation_db_timing"
     assert events[0][1]["phase"] == "connection_acquisition"
@@ -656,7 +672,10 @@ def test_recommendation_candidates_pass_profile_ids_and_weights_without_customer
     db = ProductRowsDatabase(rows=[(True, True, uuid.UUID(int=3), 0.2, compact(0, 1, 0, 0))])
     indexed, results = run(
         gateway_for(db).recommendation_candidates(
-            anchor_product_id=None, profile_signals=signals, top_k=3, descriptor=DESCRIPTOR,
+            anchor_product_id=None,
+            profile_signals=signals,
+            top_k=3,
+            descriptor=DESCRIPTOR,
             exclude=[uuid.UUID(int=1), uuid.UUID(int=2)],
         )
     )
@@ -686,9 +705,11 @@ def test_recommendation_candidates_report_unindexed_anchor_and_active_mismatch_f
 
     mismatch = ProductRowsDatabase(rows=[(False, True, None, None, None)])
     with pytest.raises(IndexNotReadyError):
-        run(gateway_for(mismatch).recommendation_candidates(
-            anchor_product_id=uuid.UUID(int=7), profile_signals=(), top_k=2, descriptor=DESCRIPTOR
-        ))
+        run(
+            gateway_for(mismatch).recommendation_candidates(
+                anchor_product_id=uuid.UUID(int=7), profile_signals=(), top_k=2, descriptor=DESCRIPTOR
+            )
+        )
 
 
 @pytest.mark.parametrize(
@@ -707,9 +728,11 @@ def test_recommendation_candidates_validate_query_and_boundaries(
 ) -> None:
     db = ProductRowsDatabase()
     with pytest.raises(ValidationFailedError):
-        run(gateway_for(db).recommendation_candidates(
-            anchor_product_id=anchor, profile_signals=signals, top_k=top_k, descriptor=DESCRIPTOR
-        ))
+        run(
+            gateway_for(db).recommendation_candidates(
+                anchor_product_id=anchor, profile_signals=signals, top_k=top_k, descriptor=DESCRIPTOR
+            )
+        )
     assert db.executed == []
 
 

@@ -186,8 +186,8 @@ class FakeVectorReader:
         restrict_to: Sequence[uuid.UUID] = (),
     ) -> tuple[bool, list[ScoredProduct]]:
         """Keep the fake's mathematical seam equivalent to the single production gateway operation."""
-        product_ids = (anchor_product_id,) if anchor_product_id is not None else tuple(
-            pid for pid, _ in profile_signals
+        product_ids = (
+            (anchor_product_id,) if anchor_product_id is not None else tuple(pid for pid, _ in profile_signals)
         )
         centroids = await self.product_centroids(product_ids, descriptor=descriptor)
         if anchor_product_id is not None:
