@@ -169,3 +169,20 @@ Requirements 19/20 · Architecture 14/15 · Security 14/15 · Testing 14/15 · D
   - An event can be lost between commit and emit; refetch and polling recover it.
   - Logout drops the sockets on the user's other devices; they refresh and reconnect.
   - There is no deactivation hook yet.
+
+## 8. Final blocker closure (correction commit `03125f0`, baseline `17209cd`)
+
+**Fixed files:** `delivery-simulation.runner.ts` (+ test), `useDeliveryLiveUpdates.ts` (+ test). No schema, payment, auth or deployment files touched.
+
+| Defect | Root cause | Fix |
+|---|---|---|
+| Stop could be followed by a simulation write | `stop()` removed the runner and recorded STOPPED without waiting for a tick already in flight | Runner has `stopping`, `inflight` and a shared `stopped` promise. Stop clears the timer, awaits the in-flight tick, then records STOPPED once. A tick that has not reached its write checks `stopping` first. `stopAll()` also sets it. |
+| "Live"/"Back online" shown before REST was current | A subscribe ack triggered an invalidate and the state flipped immediately | `connected`/`resynced` only after `refetchQueries(..., { throwOnError: true })` succeeds and the cached revision is at least the acked revision. Superseded, unmounted or owner-switched attempts are discarded. No retry loop; the 60 s poll and "Refresh now" remain. |
+
+**Focused tests:** runner 7/7 (A1, A1b, A2, A3, shutdown, plus the two existing bounds tests); hook 14/14 (B1–B4 plus existing T7 tests). Backend socket/controller/simulation 45 passed, 7 skipped. Typecheck and lint clean on both apps; `git diff --check` clean.
+
+**Review:** `engineering:code-review`, SELF-APPLIED (not independent). No material finding. Low note: a REST refetch cancelled by a newer event-driven refetch may reject, leaving the state unsynchronized until Refresh or the poll (truthful degradation).
+
+**Reused evidence (unchanged areas):** 33/33 disposable PostgreSQL gate, 7/7 Chromium realtime, 9/9 Chromium map.
+
+**Not covered:** no browser run of the corrected reconnect or Stop flows; final-head CI is recorded in the PR.
