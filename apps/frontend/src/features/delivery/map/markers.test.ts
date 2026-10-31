@@ -52,6 +52,9 @@ describe('Task 04.6 map layers', () => {
     expect(mapTileConfig({ VITE_MAP_TILE_URL: 'http://tiles.example/{z}/{x}/{y}.png', VITE_MAP_ATTRIBUTION: 'x' })).toBeNull();
     expect(mapTileConfig({ VITE_MAP_TILE_URL: 'https://tiles.example/static.png', VITE_MAP_ATTRIBUTION: 'x' })).toBeNull();
     expect(mapTileConfig({ VITE_MAP_TILE_URL: 'http://127.0.0.1:4599/{z}/{x}/{y}.png', VITE_MAP_ATTRIBUTION: '© OSM' }))
-      .toEqual({ url: 'http://127.0.0.1:4599/{z}/{x}/{y}.png', attribution: '© OSM' });
+      .toEqual({ url: 'http://127.0.0.1:4599/{z}/{x}/{y}.png', attribution: '© OSM', attributionUrl: 'https://www.openstreetmap.org/copyright' });
+    expect(mapTileConfig({ VITE_MAP_TILE_URL: 'https://t.example/{z}/{x}/{y}.png', VITE_MAP_ATTRIBUTION: '© Provider', VITE_MAP_ATTRIBUTION_URL: 'https://t.example/terms' })!
+      .attributionUrl).toBe('https://t.example/terms');
+    expect(mapTileConfig({ VITE_MAP_TILE_URL: 'https://t.example/{z}/{x}/{y}.png', VITE_MAP_ATTRIBUTION: 'x', VITE_MAP_ATTRIBUTION_URL: 'javascript:alert(1)' })).toBeNull();
   });
 });

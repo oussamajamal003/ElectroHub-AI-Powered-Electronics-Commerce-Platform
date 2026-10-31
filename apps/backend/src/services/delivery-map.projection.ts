@@ -23,14 +23,16 @@ const round3 = (value: number) => Math.round(value * 1000) / 1000;
 export function buildDeliveryMap(input: {
   origin: DeliveryOrigin;
   shipping: { latitude: number | null; longitude: number | null };
-  points: { latitude: number | null; longitude: number | null }[];
+  points: { latitude: number | null; longitude: number | null; simulated?: boolean }[];
   isSimulated: boolean;
 }): CustomerDeliveryMap {
+  // A simulated delivery draws only simulation-sourced points and a real one only recorded points, so the two never share a line.
   const { latitude, longitude } = input.shipping;
   const destination = latitude !== null && longitude !== null && inRange(latitude, longitude)
     ? { latitude: round3(latitude), longitude: round3(longitude) } : null;
   const path: [number, number][] = [];
   for (const point of input.points) {
+    if (Boolean(point.simulated) !== input.isSimulated) continue;
     if (point.latitude === null || point.longitude === null || !inRange(point.latitude, point.longitude)) continue;
     path.push([point.latitude, point.longitude]);
   }

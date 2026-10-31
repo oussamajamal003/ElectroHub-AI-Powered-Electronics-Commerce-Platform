@@ -268,8 +268,11 @@ describe.skipIf(!enabled).sequential('Task 04.5 DeliveryService on real PostgreS
     await service.start(admin.id, order.reference);
     await service.applyUpdate(admin.id, order.reference, { expectedRevision: 1, status: 'OUT_FOR_DELIVERY', location: { latitude: 33.88, longitude: 35.51 } });
     await prisma.delivery.update({ where: { orderId: order.id }, data: { isSimulated: true } });
-    expect((await mapped.getCustomerSnapshot(customer.id, order.reference)).map).toMatchObject({ path: [[33.88, 35.51]], pathKind: 'SIMULATED_FIXTURE' });
     const deliveryId = (await prisma.delivery.findUniqueOrThrow({ where: { orderId: order.id } })).id;
+    // The admin-recorded position is real data: it never appears on a simulated line.
+    expect((await mapped.getCustomerSnapshot(customer.id, order.reference)).map).toMatchObject({ path: [], pathKind: 'NONE' });
+    await prisma.deliveryEvent.updateMany({ where: { deliveryId, changes: { has: 'LOCATION' } }, data: { source: 'SIMULATION' } });
+    expect((await mapped.getCustomerSnapshot(customer.id, order.reference)).map).toMatchObject({ path: [[33.88, 35.51]], pathKind: 'SIMULATED_FIXTURE' });
     await prisma.deliveryEvent.updateMany({ where: { deliveryId }, data: { latitude: null, longitude: null } });
     expect((await mapped.getCustomerSnapshot(customer.id, order.reference)).map).toMatchObject({ destination: null, path: [], pathKind: 'NONE' });
   });

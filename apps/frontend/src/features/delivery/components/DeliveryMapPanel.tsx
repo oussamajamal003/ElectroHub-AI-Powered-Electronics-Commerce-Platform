@@ -65,7 +65,7 @@ function DeliveryMap({ snapshot, tiles, stale }: { snapshot: CustomerDeliverySna
   </Alert>;
   return <MapBoundary key={attempt} onError={fail}>
     <Suspense fallback={<div className={styles.mapLoading} aria-hidden="true"><Skeleton width="100%" height="100%" /></div>}>
-      <LeafletDeliveryMap key={attempt} layers={layers} tiles={tiles} summaryId="delivery-map-summary" onError={fail} />
+      <LeafletDeliveryMap layers={layers} tiles={tiles} summaryId="delivery-map-summary" onError={fail} />
     </Suspense>
   </MapBoundary>;
 }

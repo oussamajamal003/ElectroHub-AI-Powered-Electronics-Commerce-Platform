@@ -8,7 +8,7 @@ const MAX_FIT_ZOOM = 15;
 /**
  * Owns one Leaflet map for the life of the container: created once, layers updated in place when the snapshot changes (no remount), and
  * removed on unmount. Bounds are fitted on the first draw only, so a background refetch never yanks the viewport; Recenter fits again.
- * Tile failure before any tile loads, or an init failure, is reported once through `onError`.
+ * A first view in which no tile loads at all, or an init failure, is reported through `onError`.
  */
 export function useLeafletMap(container: RefObject<HTMLDivElement | null>, options: {
   tiles: MapTileConfig; layers: DeliveryLayers; classes: Record<string, string>; label: string; describedBy: string; onError: () => void;
@@ -30,7 +30,8 @@ export function useLeafletMap(container: RefObject<HTMLDivElement | null>, optio
       let loaded = false;
       L.tileLayer(tiles.url, { maxZoom: 19, crossOrigin: false })
         .on('tileload', () => { loaded = true; })
-        .on('tileerror', () => { if (!loaded) errorRef.current(); })
+        // 'load' fires once every visible tile has settled (loaded or failed): fail only when none of them loaded.
+        .on('load', () => { if (!loaded) errorRef.current(); })
         .addTo(map);
       groupRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;

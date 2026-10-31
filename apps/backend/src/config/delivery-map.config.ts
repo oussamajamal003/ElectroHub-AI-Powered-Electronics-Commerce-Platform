@@ -22,8 +22,12 @@ export function parseDeliveryOrigin(source: NodeJS.ProcessEnv): DeliveryOrigin |
   return { latitude: parsed.data.DELIVERY_ORIGIN_LAT, longitude: parsed.data.DELIVERY_ORIGIN_LNG, label: parsed.data.DELIVERY_ORIGIN_LABEL };
 }
 
-let cached: { value: DeliveryOrigin | null } | undefined;
+let cached: { value: DeliveryOrigin | null } | { error: Error } | undefined;
+/** Parsed once per process; an invalid configuration is remembered too, so it is reported the same way without re-parsing. */
 export function deliveryOrigin(): DeliveryOrigin | null {
-  cached ??= { value: parseDeliveryOrigin(process.env) };
+  if (!cached) {
+    try { cached = { value: parseDeliveryOrigin(process.env) }; } catch (error) { cached = { error: error as Error }; }
+  }
+  if ('error' in cached) throw cached.error;
   return cached.value;
 }

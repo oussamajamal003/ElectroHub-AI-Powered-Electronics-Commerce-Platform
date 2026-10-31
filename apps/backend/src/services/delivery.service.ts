@@ -143,10 +143,10 @@ export class DeliveryService {
   async getCustomerSnapshot(userId: string, reference: string): Promise<CustomerDeliverySnapshot> {
     const order = await this.database.order.findFirst({ where: { id: parseOrderReference(reference), userId }, include });
     if (!order) throw new AppError('Order not found.', 404, 'ORDER_NOT_FOUND');
-    const events = order.delivery ? await this.database.deliveryEvent.findMany({ where: { deliveryId: order.delivery.id, ...customerTimelineWhere },
+    const [events, map] = await Promise.all([order.delivery ? this.database.deliveryEvent.findMany({ where: { deliveryId: order.delivery.id, ...customerTimelineWhere },
       orderBy: { revision: 'desc' }, take: CUSTOMER_TIMELINE_LIMIT,
-      select: { id: true, type: true, changes: true, toStatus: true, estimatedAt: true, occurredAt: true } }) : [];
-    return { ...customerFields(order, customerTimeline(events), this.clock()), map: await this.customerMap(order) };
+      select: { id: true, type: true, changes: true, toStatus: true, estimatedAt: true, occurredAt: true } }) : [], this.customerMap(order)]);
+    return { ...customerFields(order, customerTimeline(events), this.clock()), map };
   }
 
   /**
@@ -160,10 +160,11 @@ export class DeliveryService {
     const live = order.status === 'OUT_FOR_DELIVERY' && order.delivery.latitude !== null && order.delivery.longitude !== null;
     const points = live ? await this.database.deliveryEvent.findMany({
       where: { deliveryId: order.delivery.id, changes: { has: 'LOCATION' }, latitude: { not: null }, longitude: { not: null } },
-      orderBy: { revision: 'desc' }, take: MAP_PATH_LIMIT, select: { latitude: true, longitude: true } }) : [];
+      orderBy: { revision: 'desc' }, take: MAP_PATH_LIMIT, select: { latitude: true, longitude: true, source: true } }) : [];
     return buildDeliveryMap({ origin, isSimulated: order.delivery.isSimulated,
       shipping: { latitude: coordinate(order.shippingLatitude), longitude: coordinate(order.shippingLongitude) },
-      points: points.reverse().map(point => ({ latitude: coordinate(point.latitude), longitude: coordinate(point.longitude) })) });
+      points: points.reverse().map(point => ({ latitude: coordinate(point.latitude), longitude: coordinate(point.longitude),
+        simulated: point.source === 'SIMULATION' })) });
   }
 
   async getAdminSnapshot(reference: string, database: PrismaClient | Tx = this.database): Promise<AdminDeliverySnapshot> {

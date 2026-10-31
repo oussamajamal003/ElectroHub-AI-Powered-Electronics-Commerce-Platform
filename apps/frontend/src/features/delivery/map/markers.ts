@@ -58,13 +58,14 @@ export function markerIcon(L: typeof Leaflet, kind: MarkerKind, stale: boolean, 
     iconAnchor: kind === 'destination' ? [width / 2, height] : [width / 2, height / 2] });
 }
 
-export interface MapTileConfig { url: string; attribution: string }
+export interface MapTileConfig { url: string; attribution: string; attributionUrl: string }
+const OSM_COPYRIGHT = 'https://www.openstreetmap.org/copyright';
 
 /**
- * VITE_MAP_TILE_URL / VITE_MAP_ATTRIBUTION. Missing or malformed → null and the panel stays text-only. Only an XYZ template over https
+ * VITE_MAP_TILE_URL / VITE_MAP_ATTRIBUTION (+ optional VITE_MAP_ATTRIBUTION_URL). Missing or malformed → null and the panel stays text-only. Only an XYZ template over https
  * (or plain http on a loopback host for local QA) is accepted; the attribution is rendered as text, never as HTML.
  */
-export function mapTileConfig(env: { VITE_MAP_TILE_URL?: string; VITE_MAP_ATTRIBUTION?: string } = import.meta.env): MapTileConfig | null {
+export function mapTileConfig(env: { VITE_MAP_TILE_URL?: string; VITE_MAP_ATTRIBUTION?: string; VITE_MAP_ATTRIBUTION_URL?: string } = import.meta.env): MapTileConfig | null {
   const url = env.VITE_MAP_TILE_URL?.trim();
   const attribution = env.VITE_MAP_ATTRIBUTION?.trim();
   if (!url || !attribution || !['{z}', '{x}', '{y}'].every(part => url.includes(part))) return null;
@@ -73,5 +74,11 @@ export function mapTileConfig(env: { VITE_MAP_TILE_URL?: string; VITE_MAP_ATTRIB
     const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname);
     if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback)) return null;
   } catch { return null; }
-  return { url, attribution };
+  // The provider's own terms link (D1); OSM's copyright page when unset. Only an https link is accepted.
+  const link = env.VITE_MAP_ATTRIBUTION_URL?.trim();
+  let attributionUrl = OSM_COPYRIGHT;
+  if (link) {
+    try { if (new URL(link).protocol !== 'https:') return null; attributionUrl = link; } catch { return null; }
+  }
+  return { url, attribution, attributionUrl };
 }

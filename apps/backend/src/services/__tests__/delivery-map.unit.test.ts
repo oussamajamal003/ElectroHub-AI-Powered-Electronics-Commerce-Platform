@@ -32,8 +32,11 @@ describe('Task 04.6 DeliveryMapProjection', () => {
     expect(map.path.at(-1)).toEqual([24.9, 1]);
   });
 
-  it('T6-09 a simulated delivery is labelled SIMULATED_FIXTURE', () => {
-    expect(buildDeliveryMap({ origin, shipping: none, isSimulated: true, points: [{ latitude: 1, longitude: 1 }] }).pathKind).toBe('SIMULATED_FIXTURE');
+  it('T6-09 a simulated delivery draws only simulation points as SIMULATED_FIXTURE; real points never join it', () => {
+    const points = [{ latitude: 1, longitude: 1 }, { latitude: 2, longitude: 2, simulated: true }];
+    expect(buildDeliveryMap({ origin, shipping: none, isSimulated: true, points })).toMatchObject({ path: [[2, 2]], pathKind: 'SIMULATED_FIXTURE' });
+    expect(buildDeliveryMap({ origin, shipping: none, isSimulated: false, points })).toMatchObject({ path: [[1, 1]], pathKind: 'RECORDED' });
+    expect(buildDeliveryMap({ origin, shipping: none, isSimulated: true, points: [{ latitude: 1, longitude: 1 }] }).pathKind).toBe('NONE');
   });
 });
 

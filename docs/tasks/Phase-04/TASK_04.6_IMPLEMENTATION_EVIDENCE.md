@@ -1,6 +1,6 @@
 # Task 04.6 — Leaflet + OpenStreetMap Delivery Map: Implementation Evidence
 
-- **Branch:** `feature/04.6-leaflet-osm`, cut from `develop` at `660d30ff37e3d5d1efa12d1c8fa35c9ff73b5c75` (Task 04.5 merged, PR #41). **Uncommitted.** No commit, push, PR, merge or deploy.
+- **Branch:** `feature/04.6-leaflet-osm`, cut from `develop` at `660d30ff37e3d5d1efa12d1c8fa35c9ff73b5c75` (Task 04.5 merged, PR #41). Commit `9a239bc` plus a review follow-up, in PR https://github.com/oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerce-Platform/pull/42 against `develop`. **Not merged, not deployed.**
 - **Date:** 2026-10-31
 - **Scope:** 04.6 only. No Socket.IO, simulation runner or other 04.7 work. No migration. No shared DEV/PROD database writes. The PROD migration workflow was not touched.
 - **Visual source:** artifact https://claude.ai/artifact/9uEiC6tbMUUTPViergzFCd (`DeliveryMapPanel` README and `tokens.json`), handoff §9.3, architecture §7. **Figma:** DEFERRED TO PHASE 05 BY OWNER DECISION.
@@ -79,11 +79,24 @@ Screenshots (git-ignored): `apps/frontend/screenshots/delivery-04.6/`: `map-reco
 | Medium | After an admin cleared the live location, the recorded path was still returned | path served only while a current position exists | PG test asserts `path: [], pathKind: NONE` after `location: null` (26/26) |
 | Medium | `DeliveryMap` was not keyed per order, so switching orders could inherit the previous viewport or failure state | `key={snapshot.orderReference}` | frontend 23/23, typecheck, lint |
 
-## 5. Known limitations and risks
+## 5. PR #42 code review (installed `code-review` skill, run by this session on the PR diff, so SELF-APPLIED rather than independent)
+
+All 7 findings were fixed in a follow-up commit:
+1. A tile error is reported only when no visible tile loads at all (Leaflet `load` event); a single failed tile no longer fails the map.
+2. A simulated delivery draws only `SIMULATION`-sourced points and a real one only recorded points, so they never share a line. Covered by unit and PostgreSQL tests; the QA seed marks its simulated events.
+3. The timeline and map queries run in parallel.
+4. The mobile gate follows viewport `change` events, so rotation or resize re-applies it.
+5. An invalid `DELIVERY_ORIGIN_*` is cached and rethrown without re-parsing.
+6. Retry remounts through the boundary key only.
+7. New optional `VITE_MAP_ATTRIBUTION_URL` (https only, defaults to the OSM copyright page).
+
+After the fixes: PostgreSQL 26/26, backend map unit 7/7, frontend 23/23, Chromium map spec 9/9, typecheck and lint clean.
+
+## 6. Known limitations and risks
 
 - **D1 open:** production tile provider. The public OSM tiles are for dev/review only. The Phase 06 Nginx CSP `img-src` must add the chosen tile host. Tile requests reveal the viewed area (x/y/z) plus IP and Referer to the tile host.
-- `SIMULATED_FIXTURE` is driven by `Delivery.isSimulated`; the 04.7 runner that writes simulated positions does not exist. The QA fixture sets the flag directly and its points are entered as `MANUAL`, so the 04.5 text summary reads "Position shared by the courier team" beside the "Simulated demo" pill (04.5 wording, unchanged).
+- `SIMULATED_FIXTURE` needs `Delivery.isSimulated` plus `SIMULATION`-sourced events; the 04.7 runner that writes them does not exist. The QA fixture sets both directly, and its location rows are `MANUAL`, so the 04.5 text summary reads "Position shared by the courier team" beside the "Simulated demo" pill (04.5 wording, unchanged).
 - Path thinning keeps the newest 200 points rather than downsampling the whole history.
-- The mobile gate uses a viewport media query (`max-width: 47.99rem`) evaluated at mount, not a container query.
+- The mobile gate uses a viewport media query (`max-width: 47.99rem`, tracked live), not a container query.
 - Screen-reader behaviour is not verified with real AT. The map container carries `role=region`, `aria-roledescription=map`, a label and the summary as its description.
 - `npm install` reported 23 pre-existing moderate audit findings; none were introduced by `leaflet@1.9.4`, which has no dependencies.

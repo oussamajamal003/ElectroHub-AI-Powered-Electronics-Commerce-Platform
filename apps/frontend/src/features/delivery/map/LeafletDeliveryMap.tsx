@@ -22,12 +22,20 @@ export interface LeafletDeliveryMapProps {
  */
 export default function LeafletDeliveryMap({ layers, tiles, summaryId, onError }: LeafletDeliveryMapProps) {
   const container = useRef<HTMLDivElement>(null);
-  const [narrow] = useState(narrowNow);
+  const [narrow, setNarrow] = useState(narrowNow);
   const [exploring, setExploring] = useState(false);
   const map = useLeafletMap(container, { tiles, layers, classes: styles, label: 'Delivery map', describedBy: summaryId, onError });
   const interactive = !narrow || exploring;
   const { setInteractive } = map;
   useEffect(() => { setInteractive(interactive); }, [interactive, setInteractive]);
+  // Rotation or resizing across 48rem re-applies the gate, so touch scrolling is never captured by a newly narrow map.
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia(NARROW);
+    const change = () => { setNarrow(query.matches); setExploring(false); };
+    query.addEventListener('change', change);
+    return () => query.removeEventListener('change', change);
+  }, []);
 
   const simulated = layers.line?.kind === 'simulated';
   const hasDestination = layers.markers.some(marker => marker.kind === 'destination');
@@ -45,7 +53,7 @@ export default function LeafletDeliveryMap({ layers, tiles, summaryId, onError }
       </div>}
       {narrow && exploring && <button type="button" className={`${styles.control} ${styles.done}`} onClick={() => setExploring(false)}>Done</button>}
       <p className={styles.attribution}>
-        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">{tiles.attribution}</a>
+        <a href={tiles.attributionUrl} target="_blank" rel="noopener noreferrer">{tiles.attribution}</a>
       </p>
     </div>
     <ul className={styles.legend} aria-label="Map legend">

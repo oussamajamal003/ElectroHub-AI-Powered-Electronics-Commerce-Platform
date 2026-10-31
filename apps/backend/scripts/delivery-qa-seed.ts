@@ -87,7 +87,8 @@ async function main() {
   await patch(outSimulated, { expectedRevision: 2, location: { latitude: 34.0470, longitude: -118.2500 } });
   await patch(outSimulated, { expectedRevision: 3, location: { latitude: 34.0510, longitude: -118.2450 } });
   // The 04.7 simulation runner does not exist yet; the fixture marks the delivery as simulated directly so the dashed route can be reviewed.
-  await prisma.delivery.update({ where: { orderId: outSimulated.slice(4).toLowerCase() }, data: { isSimulated: true } });
+  const simulated = await prisma.delivery.update({ where: { orderId: outSimulated.slice(4).toLowerCase() }, data: { isSimulated: true } });
+  await prisma.deliveryEvent.updateMany({ where: { deliveryId: simulated.id, changes: { has: 'LOCATION' } }, data: { source: 'SIMULATION' } });
 
   writeFileSync(output, JSON.stringify({ admin, customer, other, orders: { notStarted, adminFlow, confirmedTracked, preparing, outFresh, outStale, outNoLocation,
     delivered, cancelled, awaitingCapture, legacyUnpaid, otherCustomer, outRoute, outSimulated } }, null, 2));
