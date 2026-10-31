@@ -72,6 +72,35 @@ enum DeliveryStatus {
   DELIVERED
 }
 
+// Task 04.5 delivery tracking. Order.status stays canonical; these describe the revisioned delivery history.
+enum DeliveryEventType {
+  TRACKING_STARTED
+  STATUS_CHANGED
+  LOCATION_UPDATED
+  LOCATION_CLEARED
+  ETA_UPDATED
+  ETA_CLEARED
+  SIMULATION_STARTED
+  SIMULATION_STOPPED
+}
+
+enum DeliveryEventSource {
+  ADMIN
+  SIMULATION
+  SYSTEM
+}
+
+enum DeliveryEventChange {
+  STATUS
+  LOCATION
+  ETA
+}
+
+enum DeliveryLocationSource {
+  MANUAL
+  SIMULATED
+}
+
 enum AddressType {
   SHIPPING
   BILLING
@@ -117,6 +146,7 @@ model User {
   reviews             Review[]
   paymentAttempts     PaymentAttempt[]
   commerceEmails      CommerceEmailOutbox[]
+  deliveryEvents      DeliveryEvent[]      @relation("DeliveryEventActor")
   recommendationPreference RecommendationPreference?
   productInteractions      ProductInteraction[]
   recentlyViewedProducts   RecentlyViewedProduct[]
@@ -637,14 +667,50 @@ model Delivery {
   longitude    Decimal?       @db.Decimal(9, 6)
   estimatedAt  DateTime?
   deliveredAt  DateTime?
+  // Task 04.5: +1 per accepted change (CHECK revision >= 0); each accepted change writes exactly one DeliveryEvent.
+  revision          Int                     @default(0)
+  locationLabel     String?                 @db.VarChar(80)
+  locationSource    DeliveryLocationSource?
+  locationUpdatedAt DateTime?
+  etaUpdatedAt      DateTime?
+  isSimulated       Boolean                 @default(false)
 
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  order  Order           @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  events DeliveryEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
+  @@index([status, updatedAt])
   @@map("deliveries")
+}
+
+/// Immutable revisioned delivery history (Task 04.5). Only the account-deletion / retention scrubs null coordinates and notes.
+model DeliveryEvent {
+  id          String                @id @default(uuid()) @db.Uuid
+  deliveryId  String                @db.Uuid
+  revision    Int
+  type        DeliveryEventType
+  changes     DeliveryEventChange[]
+  source      DeliveryEventSource
+  fromStatus  OrderStatus?
+  toStatus    OrderStatus?
+  latitude    Decimal?              @db.Decimal(9, 6)
+  longitude   Decimal?              @db.Decimal(9, 6)
+  estimatedAt DateTime?
+  actorUserId String?               @db.Uuid
+  note        String?               @db.VarChar(280)
+  occurredAt  DateTime              @default(now())
+  createdAt   DateTime              @default(now())
+
+  delivery Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  actor    User?    @relation("DeliveryEventActor", fields: [actorUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@unique([deliveryId, revision])
+  @@index([deliveryId, occurredAt])
+  @@index([type, occurredAt])
+  @@map("delivery_events")
 }
 
 model RefreshToken {

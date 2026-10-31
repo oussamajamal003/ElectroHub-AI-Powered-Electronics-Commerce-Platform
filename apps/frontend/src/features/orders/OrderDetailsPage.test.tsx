@@ -61,7 +61,11 @@ describe('Order Details page', () => {
     expect(address).toHaveTextContent('Standard Delivery · Estimated Thursday, September 10');
     const summary = screen.getByRole('region', { name: 'Order Summary' });
     expect(summary).toHaveTextContent('Free'); expect(summary).toHaveTextContent('Total paid$1,099.99'); expect(summary).toHaveTextContent('Paid with Visa ending 4242');
-    expect(screen.queryByText(/Track Delivery|Tracking/)).toBeNull();
+    // Task 04.5: a paid CONFIRMED order offers tracking as a navigation link (not a button), after Order Documents and before Back to Orders.
+    const track = screen.getByRole('link', { name: 'Track delivery' });
+    expect(track).toHaveAttribute('href', `/orders/${reference}/tracking`);
+    expect(screen.queryByRole('button', { name: /track delivery/i })).toBeNull();
+    expect(track.compareDocumentPosition(screen.getByRole('link', { name: 'Back to Orders' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Back to Orders' })).toHaveAttribute('href', '/orders');
   });
   it('returns to the originating history page when it came from the list', async () => {
@@ -86,6 +90,18 @@ describe('Order Details page', () => {
     expect(document.body).toHaveTextContent(`Order status: ${fulfillment}`); expect(document.body).toHaveTextContent(`Payment status: ${payment}`);
     expect(screen.getByRole('region', { name: 'Order Summary' })).toHaveTextContent(totalLabel);
     if (paymentState !== 'PAID') expect(screen.queryByText(/Total paid|Paid with|Paid on/)).toBeNull();
+  });
+  // T5-19 (Task 04.5): tracking is offered only for paid orders in a fulfillment status; never for unpaid, awaiting-capture or cancelled orders.
+  it.each([
+    ['CONFIRMED', 'PAID', 'Track delivery'], ['PREPARING', 'PAID', 'Track delivery'], ['OUT_FOR_DELIVERY', 'PAID', 'Track delivery'],
+    ['DELIVERED', 'PAID', 'View delivery details'], ['AWAITING_CAPTURE', 'PENDING', null], ['CANCELLED', 'REFUNDED', null],
+    ['CONFIRMED', 'UNPROCESSED', null], ['CONFIRMED', 'PENDING', null], ['CONFIRMED', 'FAILED', null],
+  ] as const)('tracking entry for %s / %s: %s', async (status, paymentState, label) => {
+    signedIn(); resolve(orderDetails({ status, paymentState }));
+    renderDetails();
+    await screen.findByRole('heading', { level: 1, name: /^Order ORD-/ });
+    if (label) expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', `/orders/${reference}/tracking`);
+    else expect(screen.queryByRole('link', { name: /track delivery|delivery details/i })).toBeNull();
   });
   it('renders every line of a many-item Order, paid shipping, long address and image fallback', async () => {
     signedIn(); resolve(manyItemsDetails());

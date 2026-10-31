@@ -85,7 +85,12 @@ export class AccountDeletionService {
         });
         await transaction.delivery.updateMany({
           where: { orderId: { in: completedOrderIds } },
-          data: { latitude: null, longitude: null },
+          data: { latitude: null, longitude: null, locationLabel: null, locationSource: null },
+        });
+        // Task 04.5: recorded courier positions and admin notes are personal data too; the event rows (revision, type, status) remain.
+        await transaction.deliveryEvent.updateMany({
+          where: { delivery: { orderId: { in: completedOrderIds } } },
+          data: { latitude: null, longitude: null, note: null },
         });
       }
 

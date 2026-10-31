@@ -12,6 +12,7 @@ import { ApiError, apiClient } from '@/lib/api';
 import { queryKeys } from '@/lib/query';
 import { OrderBadges } from './OrderBadges';
 import { OrderDocumentsPanel } from './documents/OrderDocumentsPanel';
+import { TrackDeliveryAction } from '@/features/delivery/TrackDeliveryAction';
 import { OrdersAccessGate } from './OrdersAccessGate';
 import { OrdersBreadcrumb } from './OrdersBreadcrumb';
 import { cardBrand, deliveryLabel, formatDate, formatEstimate, formatMoney, statusNote } from './presentation';
@@ -123,6 +124,7 @@ function OwnedOrderDetails() {
           </div>}
         </section>
         <OrderDocumentsPanel orderReference={order.orderReference} variant="details" />
+        <TrackDeliveryAction className={styles.trackLink} orderReference={order.orderReference} status={order.status} paymentState={order.paymentState} />
         <Link className={styles.backLink} to={backTo}>Back to Orders</Link>
       </div>
     </div>

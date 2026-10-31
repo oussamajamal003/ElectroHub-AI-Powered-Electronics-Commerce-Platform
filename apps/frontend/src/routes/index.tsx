@@ -47,6 +47,9 @@ const OrderDetailsPage = lazy(() => import('@/features/orders/OrderDetailsPage')
 const PaymentStatusPage = lazy(() => import('@/features/checkout/PaymentStatusPage').then(module => ({ default: module.PaymentStatusPage })));
 const AdminProductsPage = lazy(() => import('@/pages/admin/AdminProductsPage').then(module => ({ default: module.AdminProductsPage })));
 const AdminProductMediaPage = lazy(() => import('@/pages/admin/AdminProductMediaPage').then(module => ({ default: module.AdminProductMediaPage })));
+const DeliveryTrackingPage = lazy(() => import('@/features/delivery/DeliveryTrackingPage').then(module => ({ default: module.DeliveryTrackingPage })));
+const AdminDeliveriesPage = lazy(() => import('@/pages/admin/AdminDeliveriesPage').then(module => ({ default: module.AdminDeliveriesPage })));
+const AdminDeliveryDetailPage = lazy(() => import('@/pages/admin/AdminDeliveryDetailPage').then(module => ({ default: module.AdminDeliveryDetailPage })));
 const route = (content: React.ReactNode) => <Suspense fallback={<ElectroHubLoader page />}>{content}</Suspense>;
 
 export function AppRoutes() {
@@ -71,6 +74,8 @@ export function AppRoutes() {
           <Route path="/orders" element={<OrdersPage />} />
           {/* Same session boundary as /orders (sign-in card for guests); ownership is enforced by the API. */}
           <Route path="/orders/:orderReference" element={route(<OrderDetailsPage />)} />
+          {/* Task 04.5: same session boundary; the API enforces ownership (identical 404 for other customers). */}
+          <Route path="/orders/:orderReference/tracking" element={route(<DeliveryTrackingPage />)} />
 
           <Route element={<ProtectedRoute requiredRole="CUSTOMER" redirectTo="/cart" requireVerifiedSession preserveReturnPath />}>
             <Route path="/account/payment-retry/:attemptId" element={route(<PaymentRetryPage />)} />
@@ -95,6 +100,8 @@ export function AppRoutes() {
             <Route path="/admin" element={<div>Admin Dashboard</div>} />
             <Route path="/admin/products" element={route(<AdminProductsPage />)} />
             <Route path="/admin/products/:productId/media" element={route(<AdminProductMediaPage />)} />
+            <Route path="/admin/deliveries" element={route(<AdminDeliveriesPage />)} />
+            <Route path="/admin/deliveries/:orderReference" element={route(<AdminDeliveryDetailPage />)} />
           </Route>
         </Route>
 

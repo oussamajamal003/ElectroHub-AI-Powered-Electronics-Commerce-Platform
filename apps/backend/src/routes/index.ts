@@ -14,6 +14,7 @@ import searchRoutes from './search.routes.js';
 import e2eSupportRoutes from './e2e-support.routes.js';
 import aiAdminRoutes from './ai-admin.routes.js';
 import productMediaRoutes from './product-media.routes.js';
+import deliveryAdminRoutes from './delivery.admin.routes.js';
 import { env } from '../config/env.js';
 
 /**
@@ -38,6 +39,8 @@ router.use(productRoutes);
 router.use('/search', searchRoutes);
 router.use(aiAdminRoutes);
 router.use(productMediaRoutes);
+// Task 04.5: admin delivery operations (its own ADMIN + private no-store chain).
+router.use(deliveryAdminRoutes);
 if (env.NODE_ENV === 'test') router.use('/__e2e', e2eSupportRoutes);
 
 export default router;

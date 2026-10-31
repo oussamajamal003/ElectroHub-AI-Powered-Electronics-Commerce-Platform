@@ -1,5 +1,23 @@
 # Delivery Tracking
 
+> **Task 04.5 Delivery Tracking Foundation (2026-10-31): IMPLEMENTED on `feature/04.5-04.7-delivery-tracking`, uncommitted, awaiting architect review.** Evidence: [TASK_04.5_IMPLEMENTATION_EVIDENCE.md](../tasks/Phase-04/TASK_04.5_IMPLEMENTATION_EVIDENCE.md). What exists now:
+> - Customer page `/orders/:orderReference/tracking` with an overview, a 4-stage stepper, an event timeline and a text-only location panel. Order Details shows **Track delivery** for paid CONFIRMED→DELIVERED orders.
+> - Customer API `GET /api/orders/:orderReference/delivery` (owner-scoped, 60/min/user, `private, no-store`).
+> - Admin API under `/api/admin/deliveries`: list, read, `POST …/start`, `PATCH …` with `expectedRevision` (409 on conflict). Admin pages at `/admin/deliveries` and `/admin/deliveries/:orderReference`.
+> - Additive migration `20261031000000_delivery_tracking`: new columns on `deliveries` and a `delivery_events` table, one event per accepted change.
+> - `Order.status` stays canonical. Status changes reuse `transitionFulfillment`: forward-only, with a successful payment checked inside the transaction.
+> - **Not implemented:** the map (Leaflet/OSM, Task 04.6) and real-time updates or simulation (Socket.IO, Task 04.7). The customer page refreshes by polling every 60 s, and only while the order is out for delivery and the tab is visible.
+>
+> The earlier design note below is kept for history; where the two disagree, the implementation and evidence above are what the code does.
+
+> **Tasks 04.5–04.7 design update (2026-10-31): DESIGNED / PROPOSED, not approved, not implemented.** No delivery code exists yet: `Delivery` is never written, and Order Details has no tracking control. The proposed contracts are in [TASK_04.5_04.7_DESIGN_ARCHITECTURE.md](../tasks/Phase-04/TASK_04.5_04.7_DESIGN_ARCHITECTURE.md) and [ADR-011 (proposed)](../ADR/ADR-011-delivery-tracking-realtime.md). They refine this document as follows:
+> - Customers track at `/orders/:orderReference/tracking`, as a dedicated page linked from Order Details, not inside it.
+> - The API uses `:orderReference`, not `:id` (§21).
+> - `Order.status` stays canonical.
+> - The route shown is recorded positions only. There is no routing or geocoding provider.
+> - Simulated data is always labelled.
+> - Arabic/RTL (§20) has no runtime in the app yet, so it is designed with logical properties and deferred.
+
 ## 1. Purpose
 
 This document defines the real-time delivery-tracking functionality for ElectroHub.

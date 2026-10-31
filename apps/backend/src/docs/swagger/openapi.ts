@@ -25,6 +25,7 @@ export const openapiDefinition = {
   ],
   tags: [
     { name: 'Search', description: 'Public text search and suggestions' },
+    { name: 'Delivery', description: 'Task 04.5 delivery tracking: owner-scoped customer snapshot and ADMIN delivery operations' },
     { name: 'Products', description: 'Product, category, and brand read foundation' },
     {
       name: 'Authentication',

@@ -97,6 +97,7 @@
 .helperText {
   font-family: $font-family-base;
   font-size: $font-size-sm;
-  color: $color-text-muted;
+  // Task 04.5: muted (#94a3b8) is 2.56:1 on white; secondary meets WCAG AA (4.5:1) for 14px helper text.
+  color: $color-text-secondary;
   margin: 0;
 }
