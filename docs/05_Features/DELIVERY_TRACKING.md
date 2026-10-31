@@ -1,12 +1,17 @@
 # Delivery Tracking
 
+> **Task 04.6 Leaflet + OpenStreetMap (2026-10-31): IMPLEMENTED on `feature/04.6-leaflet-osm`, uncommitted, awaiting Principal Architect review.** Evidence: [TASK_04.6_IMPLEMENTATION_EVIDENCE.md](../tasks/Phase-04/TASK_04.6_IMPLEMENTATION_EVIDENCE.md). On top of 04.5:
+> - `GET /api/orders/:orderReference/delivery` gains an additive `map` field `{ origin, destination, path, pathKind }` (`null` when no hub is configured or the order is not trackable). The origin is the `DELIVERY_ORIGIN_LAT/LNG/LABEL` hub (all unset = map off; partial or out of range = the server refuses to boot). The destination is only the stored `Order.shippingLatitude/Longitude`, rounded to 3 dp. The path is the recorded LOCATION positions of the delivery, oldest first, at most 200, and only while the order is OUT_FOR_DELIVERY. There is no geocoding, no routing and no migration, and **no origin→destination line is ever drawn**.
+> - The location panel keeps its text summary first, then lazy-loads a Leaflet map (`features/delivery/map/`) only when tiles are configured (`VITE_MAP_TILE_URL`, `VITE_MAP_ATTRIBUTION`) and there is a courier position or a recorded path of 2+ points. Tile, init or chunk failures show a warning with Retry. Below 48rem the map stays inert until **Explore map**.
+> - Production tiles are an open decision (D1): the public OSM tiles are for dev/review only, and the Phase 06 Nginx CSP `img-src` must add the chosen tile host.
+
 > **Task 04.5 Delivery Tracking Foundation (2026-10-31): IMPLEMENTED on `feature/04.5-04.7-delivery-tracking`, uncommitted, awaiting architect review.** Evidence: [TASK_04.5_IMPLEMENTATION_EVIDENCE.md](../tasks/Phase-04/TASK_04.5_IMPLEMENTATION_EVIDENCE.md). What exists now:
 > - Customer page `/orders/:orderReference/tracking` with an overview, a 4-stage stepper, an event timeline and a text-only location panel. Order Details shows **Track delivery** for paid CONFIRMED→DELIVERED orders.
 > - Customer API `GET /api/orders/:orderReference/delivery` (owner-scoped, 60/min/user, `private, no-store`).
 > - Admin API under `/api/admin/deliveries`: list, read, `POST …/start`, `PATCH …` with `expectedRevision` (409 on conflict). Admin pages at `/admin/deliveries` and `/admin/deliveries/:orderReference`.
 > - Additive migration `20261031000000_delivery_tracking`: new columns on `deliveries` and a `delivery_events` table, one event per accepted change.
 > - `Order.status` stays canonical. Status changes reuse `transitionFulfillment`: forward-only, with a successful payment checked inside the transaction.
-> - **Not implemented:** the map (Leaflet/OSM, Task 04.6) and real-time updates or simulation (Socket.IO, Task 04.7). The customer page refreshes by polling every 60 s, and only while the order is out for delivery and the tab is visible.
+> - **Not implemented (in 04.5):** the map (Leaflet/OSM, added by Task 04.6 above) and real-time updates or simulation (Socket.IO, Task 04.7). The customer page refreshes by polling every 60 s, and only while the order is out for delivery and the tab is visible.
 >
 > The earlier design note below is kept for history; where the two disagree, the implementation and evidence above are what the code does.
 

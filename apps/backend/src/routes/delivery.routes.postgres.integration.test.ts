@@ -122,7 +122,11 @@ describe.skipIf(!enabled).sequential('Task 04.5 delivery HTTP contract on real P
     expect(text).not.toContain(admin.email);
     expect([...keys(response.body.data)].filter(key => !found.has(key))).toEqual([]);
     expect(Object.keys(response.body.data).sort()).toEqual(['availability', 'deliveredAt', 'deliveryMethod', 'eta', 'isSimulated', 'location',
-      'orderReference', 'paymentState', 'revision', 'serverTime', 'status', 'timeline', 'trackingReference'].sort());
+      'map', 'orderReference', 'paymentState', 'revision', 'serverTime', 'status', 'timeline', 'trackingReference'].sort());
+    // Task 04.6 additive map: owner-scoped recorded positions only; never an address, label or event metadata.
+    expect(response.body.data.map).toEqual({ origin: { latitude: 33.9, longitude: 35.5, label: 'ElectroHub demo hub' }, destination: null,
+      path: [[33.8938, 35.5018]], pathKind: 'RECORDED' });
+    expect(response.headers['cache-control']).toBe('no-store');
     expect(response.body.data.location).toEqual({ latitude: 33.8938, longitude: 35.5018, label: 'Hub', updatedAt: expect.any(String), source: 'MANUAL' });
     for (const entry of response.body.data.timeline) expect(Object.keys(entry).every(key => ['id', 'type', 'occurredAt', 'status', 'estimatedAt'].includes(key))).toBe(true);
   });

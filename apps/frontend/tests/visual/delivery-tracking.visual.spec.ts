@@ -134,7 +134,10 @@ test('keyboard: overview-first focus order, visible focus ring, 44px targets, ar
   expect(copy).toBeGreaterThanOrEqual(0);
   expect(copy).toBeLessThan(details);
   for (const stop of main) expect(stop.outline, stop.name).toMatch(/^solid 2px$/);
-  for (const stop of main.filter(item => !['Home', 'Orders'].includes(item.name) && !item.name.startsWith('ORD-'))) expect(stop.height, stop.name).toBeGreaterThanOrEqual(44);
+  // Inline-text targets are exempt (WCAG 2.5.8): breadcrumb links and the Task 04.6 map attribution (a 12px caption link per the handoff).
+  for (const stop of main.filter(item => !['Home', 'Orders', '© OpenStreetMap contributors'].includes(item.name) && !item.name.startsWith('ORD-'))) {
+    expect(stop.height, stop.name).toBeGreaterThanOrEqual(44);
+  }
   const transition = await page.locator('button', { hasText: 'Copy' }).evaluate(element => getComputedStyle(element).transitionDuration);
   // The global reduced-motion rule clamps every transition to 0.01ms (reported as 1e-05s): effectively instant.
   expect(parseFloat(transition)).toBeLessThanOrEqual(0.001);

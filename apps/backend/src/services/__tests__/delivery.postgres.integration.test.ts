@@ -234,6 +234,46 @@ describe.skipIf(!enabled).sequential('Task 04.5 DeliveryService on real PostgreS
     expect(await code(service.getCustomerSnapshot(customer.id, 'not-a-reference'))).toBe('ORDER_REFERENCE_INVALID');
   });
 
+  it('T6-01 / T6-03 map: stored destination rounded, recorded path oldest-first and bounded, corrupt rows dropped, route hidden once delivered', async () => {
+    const mapped = new (await import('../delivery.service.js')).DeliveryService(prisma, () => new Date(), () => ({ latitude: 33.9, longitude: 35.5, label: 'Hub' }));
+    const order = await fixtures.order(customer.id, 'PREPARING', 'SUCCEEDED');
+    await prisma.order.update({ where: { id: order.id }, data: { shippingLatitude: 33.871234, shippingLongitude: 35.509876 } });
+    expect((await mapped.getCustomerSnapshot(customer.id, order.reference)).map).toBeNull();
+    await service.start(admin.id, order.reference);
+    const before = (await mapped.getCustomerSnapshot(customer.id, order.reference)).map;
+    expect(before).toEqual({ origin: { latitude: 33.9, longitude: 35.5, label: 'Hub' }, destination: { latitude: 33.871, longitude: 35.51 }, path: [], pathKind: 'NONE' });
+    let revision = 1;
+    await service.applyUpdate(admin.id, order.reference, { expectedRevision: revision++, status: 'OUT_FOR_DELIVERY', location: { latitude: 33.89, longitude: 35.5 } });
+    for (let index = 1; index <= 205; index++) {
+      await service.applyUpdate(admin.id, order.reference, { expectedRevision: revision++, location: { latitude: 33.89 - index / 10000, longitude: 35.5 } });
+    }
+    await service.applyUpdate(admin.id, order.reference, { expectedRevision: revision++, estimatedAt: soon(3) });
+    const view = await mapped.getCustomerSnapshot(customer.id, order.reference);
+    expect(view.map!.pathKind).toBe('RECORDED');
+    expect(view.map!.path).toHaveLength(200);
+    expect(view.map!.path.at(-1)).toEqual([33.8695, 35.5]);
+    expect(view.map!.path[0]).toEqual([33.8894, 35.5]);
+    expect(view.map!.path).not.toContainEqual([33.9, 35.5]);
+    // Clearing the live location also withdraws the recorded route.
+    await service.applyUpdate(admin.id, order.reference, { expectedRevision: revision++, location: null });
+    expect((await mapped.getCustomerSnapshot(customer.id, order.reference)).map).toMatchObject({ path: [], pathKind: 'NONE' });
+    await service.applyUpdate(admin.id, order.reference, { expectedRevision: revision++, status: 'DELIVERED' });
+    expect((await mapped.getCustomerSnapshot(customer.id, order.reference)).map).toMatchObject({ path: [], pathKind: 'NONE' });
+    expect(await code(mapped.getCustomerSnapshot((await fixtures.user('CUSTOMER', 'mapper')).id, order.reference))).toBe('ORDER_NOT_FOUND');
+  });
+
+  it('T6-09 map: a simulated delivery reports SIMULATED_FIXTURE; a redacted owner has no destination or path', async () => {
+    const mapped = new (await import('../delivery.service.js')).DeliveryService(prisma, () => new Date(), () => ({ latitude: 33.9, longitude: 35.5, label: 'Hub' }));
+    const order = await fixtures.order(customer.id, 'PREPARING', 'SUCCEEDED');
+    await service.start(admin.id, order.reference);
+    await service.applyUpdate(admin.id, order.reference, { expectedRevision: 1, status: 'OUT_FOR_DELIVERY', location: { latitude: 33.88, longitude: 35.51 } });
+    await prisma.delivery.update({ where: { orderId: order.id }, data: { isSimulated: true } });
+    expect((await mapped.getCustomerSnapshot(customer.id, order.reference)).map).toMatchObject({ path: [[33.88, 35.51]], pathKind: 'SIMULATED_FIXTURE' });
+    const deliveryId = (await prisma.delivery.findUniqueOrThrow({ where: { orderId: order.id } })).id;
+    await prisma.deliveryEvent.updateMany({ where: { deliveryId }, data: { latitude: null, longitude: null } });
+    expect((await mapped.getCustomerSnapshot(customer.id, order.reference)).map).toMatchObject({ destination: null, path: [], pathKind: 'NONE' });
+  });
+
   it('T5-20 account deletion nulls delivery coordinates, labels and event notes/coordinates for completed orders', async () => {
     const leaving = await fixtures.user('CUSTOMER', 'leaving');
     const order = await fixtures.order(leaving.id, 'PREPARING', 'SUCCEEDED');

@@ -152,6 +152,11 @@ $eyebrow-tracking: .06em;
   dt { font-size: $font-size-xs; font-weight: $font-weight-medium; letter-spacing: $eyebrow-tracking; text-transform: uppercase; color: $color-text-secondary; }
   dd { margin: 0; font-size: $font-size-base; overflow-wrap: anywhere; } }
 @container dt (min-width: 40rem) { .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+// Task 04.6: the loading block holds the map's final aspect ratio so nothing shifts when the lazy chunk arrives.
+.mapLoading { aspect-ratio: 4 / 3; max-height: 18rem; width: 100%; }
+@container dt (min-width: 48rem) { .mapLoading { aspect-ratio: 16 / 9; max-height: 24rem; } }
+@media (min-width: $breakpoint-2xl) { .mapLoading { max-height: 28rem; } }
+.mapAlert { p { margin: 0 0 $spacing-3; } }
 
 // --- Notices ------------------------------------------------------------------------------------------------------------------------
 .notice { display: flex; gap: $spacing-4; align-items: flex-start; padding: $spacing-6; border: 1px solid $color-border; background: $color-background;

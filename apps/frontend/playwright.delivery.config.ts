@@ -6,7 +6,7 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests/visual',
-  testMatch: 'delivery-tracking.visual.spec.ts',
+  testMatch: ['delivery-tracking.visual.spec.ts', 'delivery-map.visual.spec.ts'],
   outputDir: './test-results/delivery-tracking',
   fullyParallel: false,
   workers: 1,

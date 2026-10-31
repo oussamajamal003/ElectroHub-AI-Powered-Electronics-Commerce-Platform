@@ -1,0 +1,54 @@
+@use '@/styles/abstracts' as *;
+
+// Task 04.6 map (handoff §9.3, artifact tokens): delivery aliases resolve to existing tokens only; square everywhere but the courier dot.
+$delivery-route-recorded: $color-primary;
+$delivery-route-simulated: $color-text-secondary;
+$delivery-marker-origin: $color-secondary;
+$delivery-marker-destination: $color-primary;
+$delivery-marker-courier: $color-primary;
+$control-size: 2.75rem;
+
+.wrap { display: grid; gap: $spacing-3; min-width: 0; }
+
+// isolation keeps Leaflet's internal z-indexes (400–1000) below the sticky header.
+.frame { position: relative; isolation: isolate; overflow: hidden; border: 1px solid $color-border; background: $color-surface;
+  aspect-ratio: 4 / 3; max-height: 18rem; width: 100%; }
+@container dt (min-width: 48rem) { .frame { aspect-ratio: 16 / 9; max-height: 24rem; } }
+@media (min-width: $breakpoint-2xl) { .frame { max-height: 28rem; } }
+.map { position: absolute; inset: 0; z-index: 0; background: $color-surface; font-family: inherit;
+  &:focus-visible { outline: 2px solid $color-primary; outline-offset: -4px; } }
+.frame[data-interactive='false'] .map { pointer-events: none; }
+
+.controls { position: absolute; z-index: 2; inset-block-start: $spacing-3; inset-inline-end: $spacing-3; display: grid; gap: $spacing-2; }
+.control { display: inline-grid; place-items: center; min-width: $control-size; min-height: $control-size; padding: 0 $spacing-3; border: 1px solid $color-border;
+  background: $color-background; color: $color-text-primary; box-shadow: $shadow-sm; cursor: pointer; font: inherit; font-weight: $font-weight-medium;
+  svg { width: 1.25rem; height: 1.25rem; }
+  &:hover:not(:disabled) { color: $color-primary; border-color: $color-primary; }
+  &:disabled { color: $color-text-secondary; cursor: not-allowed; opacity: .6; }
+  @include focus-ring; }
+.gate { position: absolute; z-index: 1; inset: 0; display: grid; place-items: center; }
+.done { position: absolute; z-index: 2; inset-block-start: $spacing-3; inset-inline-start: $spacing-3; }
+
+.attribution { position: absolute; z-index: 2; inset-block-end: 0; inset-inline-end: 0; margin: 0; padding: 2px $spacing-2; background: $color-background;
+  font-size: $font-size-xs; line-height: $line-height-normal; color: $color-text-secondary;
+  a { color: $color-text-secondary; text-decoration: underline; &:hover { color: $color-primary; } @include focus-ring; } }
+
+.legend { display: flex; flex-wrap: wrap; gap: $spacing-2 $spacing-5; margin: 0; padding: 0; list-style: none; font-size: $font-size-sm; color: $color-text-primary;
+  li { display: inline-flex; align-items: center; gap: $spacing-2; } }
+.swatch { display: inline-block; flex: none; width: 1rem; height: 1rem; }
+.swatchOrigin { background: $delivery-marker-origin; }
+.swatchCourier { border-radius: $radius-full; background: $delivery-marker-courier; box-shadow: 0 0 0 2px $color-background, 0 0 0 3px $delivery-marker-courier; }
+.swatchStale { background: $color-background; box-shadow: 0 0 0 3px $color-warning-foreground; }
+.swatchRecorded { height: 4px; width: 1.5rem; background: $delivery-route-recorded; }
+.swatchSimulated { height: 0; width: 1.5rem; border-top: 3px dashed $delivery-route-simulated; }
+.swatchDestination { width: .75rem; height: 1rem; background: $delivery-marker-destination; clip-path: polygon(0 0, 100% 0, 100% 65%, 50% 100%, 0 65%); }
+.caption { margin: 0; font-size: $font-size-xs; line-height: $line-height-normal; color: $color-text-secondary; }
+
+// divIcon markers (decorative; summary and legend carry the facts).
+.marker { background: transparent; border: 0; span { display: block; width: 100%; height: 100%; } }
+.origin span { background: $delivery-marker-origin; border: 2px solid $color-background; box-shadow: $shadow-sm; }
+.destination span { background: $delivery-marker-destination; clip-path: polygon(0 0, 100% 0, 100% 65%, 50% 100%, 0 65%); }
+.courier span { border-radius: $radius-full; background: $delivery-marker-courier; border: 3px solid $color-background; box-shadow: 0 0 0 1px $delivery-marker-courier; }
+.courier.stale span { background: $color-background; border-color: $color-warning-foreground; box-shadow: none; }
+.routeRecorded { stroke: $delivery-route-recorded; }
+.routeSimulated { stroke: $delivery-route-simulated; }

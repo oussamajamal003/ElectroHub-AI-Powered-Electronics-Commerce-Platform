@@ -6,11 +6,14 @@ import { inProcessRecoveryEnabled, startInProcessRecovery } from './payment-inpr
 import { paymentIsolation } from './payment-isolation.js';
 import { logCommerceEmailRuntime } from './services/commerce-email.runtime.js';
 import { startOperationalRecommendationRetentionRunner } from './recommendation-retention-runner.js';
+import { deliveryOrigin } from './config/delivery-map.config.js';
 
 const PORT = env.PORT;
 let stopRecovery: (() => Promise<void>) | null = null;
 let stopRecommendationRetention: (() => Promise<void>) | null = null;
 installFatalLogging();
+// Task 04.6: a partial or out-of-range DELIVERY_ORIGIN_* configuration refuses to boot; unset leaves the map off.
+logger.info('Delivery map origin resolved', { event: 'delivery.map.origin_resolved', configured: deliveryOrigin() !== null });
 logger.info('Server starting', { operation: 'server.starting' });
 {
   const isolation = paymentIsolation();
