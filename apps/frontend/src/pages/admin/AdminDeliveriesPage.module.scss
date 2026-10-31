@@ -1,0 +1,19 @@
+@use '@/styles/abstracts' as *;
+
+// Same shell as Admin Product media: centred column, eyebrow + title, bordered square surfaces.
+.page { width: min(100%, 1120px); margin: 0 auto; display: grid; gap: $spacing-6; min-width: 0; }
+.header { display: flex; align-items: end; justify-content: space-between; gap: $spacing-4; flex-wrap: wrap;
+  h1 { margin: 0 0 $spacing-2; font-size: clamp(1.6rem, 4vw, 2.25rem); color: $color-text-primary; } p { margin: 0; color: $color-text-secondary; } }
+.eyebrow { color: $color-primary !important; font-size: $font-size-xs; font-weight: $font-weight-semibold; letter-spacing: .08em; margin-bottom: $spacing-2 !important; }
+.count { color: $color-text-secondary; font-size: $font-size-sm; white-space: nowrap; }
+.filters { max-width: 18rem; }
+.table { min-width: 0; overflow-x: auto; border: 1px solid $color-border; background: $color-background; }
+.reference { font-family: $font-family-mono; font-size: $font-size-sm; overflow-wrap: anywhere; }
+.customer { display: grid; gap: 2px; min-width: 0; strong { font-weight: $font-weight-medium; } span { color: $color-text-secondary; font-size: $font-size-sm; overflow-wrap: anywhere; } }
+.muted { color: $color-text-secondary; font-size: $font-size-sm; }
+.loading { display: grid; place-items: center; min-height: 40vh; }
+.pagination { display: flex; align-items: center; justify-content: center; gap: $spacing-4; color: $color-text-secondary; font-size: $font-size-sm; }
+.manageLink { display: inline-flex; align-items: center; gap: $spacing-2; min-height: 2.75rem; padding: $spacing-2 $spacing-3; border: 1px solid $color-border;
+  color: $color-text-primary; text-decoration: none; font-size: $font-size-sm; white-space: nowrap;
+  &:hover { color: $color-primary; border-color: $color-primary; }
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }

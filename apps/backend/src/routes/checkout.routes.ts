@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { CheckoutService } from '../services/checkout.service.js';
 import { OrderService } from '../services/order.service.js';
+import { getCustomerDelivery } from '../controllers/delivery.controller.js';
 import { orderPaginationSchema } from '../validators/order.validator.js';
 import { collectDbMetrics } from '../lib/db-request-metrics.js';
 import { logSafely } from '../utils/logger.js';
@@ -88,6 +89,21 @@ const handle = (error: unknown) => error instanceof z.ZodError
  *       200: { description: 'Order status, payment projection (UNPROCESSED|PENDING|PAID|FAILED|REFUNDED), snapshots, decimal-string totals, payment paidAt/refundedAt or null' }
  *       400: { description: ORDER_REFERENCE_INVALID }
  *       404: { description: ORDER_NOT_FOUND — identical for unknown and other customers' Orders }
+ * /orders/{orderReference}/delivery:
+ *   get:
+ *     tags: [Delivery]
+ *     summary: Owner-scoped delivery snapshot (Task 04.5). Availability tells the UI what to render; no admin notes, actors or event coordinates
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: orderReference
+ *         required: true
+ *         schema: { type: string, maxLength: 40, description: ORD- followed by the Order UUID }
+ *     responses:
+ *       200: { description: 'CustomerDeliverySnapshot: availability (AVAILABLE|NOT_STARTED|PAYMENT_PENDING|CANCELLED), status, paymentState, revision, trackingReference, deliveryMethod, eta, location (only while OUT_FOR_DELIVERY), deliveredAt, isSimulated, timeline (<=50, newest first), serverTime' }
+ *       400: { description: ORDER_REFERENCE_INVALID }
+ *       404: { description: ORDER_NOT_FOUND — identical for unknown and other customers' Orders }
+ *       429: { description: RATE_LIMITED }
  * /orders/{orderReference}/confirmation:
  *   get:
  *     tags: [Checkout]
@@ -144,6 +160,10 @@ router.get('/orders/attempts/:attemptId/confirmation', async (req, res, next) =>
 router.get('/orders/:orderReference/confirmation', async (req, res, next) => {
   try { res.json({ data: await orders.getConfirmation(req.user!.userId, String(req.params.orderReference)) }); } catch (error) { next(handle(error)); }
 });
+// Task 04.5: owner-scoped delivery snapshot inside the same CUSTOMER + no-store guard (identical 404 for unknown and other customers' orders).
+const deliveryReads = rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false, keyGenerator: req => req.user!.userId,
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many tracking requests. Please try again shortly.' } } });
+router.get('/orders/:orderReference/delivery', deliveryReads, getCustomerDelivery);
 // Registered after the more specific /orders/... reads; it only matches a single path segment.
 router.get('/orders/:orderReference', async (req, res, next) => {
   try { res.json({ data: await orders.getDetails(req.user!.userId, String(req.params.orderReference)) }); } catch (error) { next(handle(error)); }

@@ -9,6 +9,7 @@ export function AdminLayout() {
         <nav className={styles.nav} aria-label="Admin navigation">
           <div>Dashboard</div>
           <Link to="/admin/products">Products</Link>
+          <Link to="/admin/deliveries">Deliveries</Link>
           <div>Orders</div>
           <div>Customers</div>
         </nav>

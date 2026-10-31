@@ -1,0 +1,175 @@
+@use '@/styles/abstracts' as *;
+
+// Task 04.5 delivery tracking (handoff §9). Square, bordered, flat; only stepper/timeline nodes are round. Container queries let the same
+// markup lay out by its real width: the page (`dt`) and the overview card (`ov`) each own a container.
+$eyebrow-tracking: .06em;
+
+.tracking { container: dt / inline-size; min-width: 0; }
+
+// --- Header -------------------------------------------------------------------------------------------------------------------------
+.header { display: grid; gap: $spacing-3; margin-bottom: $spacing-6; }
+.titleRow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: $spacing-4; }
+.titleBlock { min-width: 0; flex: 1 1 18rem;
+  h1 { margin: 0; font-size: clamp(1.75rem, 2.4vw, 2.5rem); line-height: $line-height-tight; overflow-wrap: anywhere; &:focus { outline: none; } }
+  p { margin: $spacing-2 0 0; color: $color-text-secondary; }
+  time { font-family: $font-family-mono; font-size: $font-size-sm; color: $color-text-primary; }
+}
+.refreshNotice { margin-bottom: $spacing-6; }
+
+// --- Page grid: DOM order header → Overview → Progress → Location → History → Actions; desktop moves the Overview to a sticky aside ---
+.grid { display: grid; gap: $spacing-6; align-items: start; > * { min-width: 0; } }
+@container dt (min-width: 64rem) {
+  .grid { grid-template-columns: minmax(0, 2fr) minmax(20rem, 1fr); gap: $spacing-8;
+    grid-template-areas: 'step ov' 'map ov' 'tl ov' 'act ov'; grid-template-rows: auto auto auto 1fr; }
+  .areaStep { grid-area: step; } .areaMap { grid-area: map; } .areaTimeline { grid-area: tl; } .areaActions { grid-area: act; }
+  .areaOverview { grid-area: ov; position: sticky; top: $spacing-4; }
+}
+
+.card { display: grid; gap: $spacing-5; padding: $spacing-5; border: 1px solid $color-border; background: $color-background; min-width: 0; }
+@container dt (min-width: 48rem) { .card { padding: $spacing-8; } }
+.cardHead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: $spacing-2 $spacing-4;
+  h2 { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; line-height: $line-height-tight; } }
+@container dt (min-width: 48rem) { .cardHead h2 { font-size: $font-size-xl; } }
+.sub { font-size: $font-size-sm; color: $color-text-secondary; }
+.eyebrow { font-size: $font-size-xs; font-weight: $font-weight-medium; letter-spacing: $eyebrow-tracking; text-transform: uppercase; color: $color-text-secondary; }
+.mono { font-family: $font-family-mono; }
+.visuallyHidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.pill { display: inline-flex; align-items: center; gap: $spacing-1; width: fit-content; min-height: 1.5rem; padding: 0 $spacing-2; font-size: $font-size-sm;
+  font-weight: $font-weight-medium; border: 1px solid; svg { width: .875rem; height: .875rem; flex-shrink: 0; } }
+.pillOk { background: $color-success-background; color: $color-success-foreground; border-color: $color-success-border; }
+.pillWarn { background: $color-background; color: $color-warning-foreground; border-color: $color-warning-border; }
+.pillInfo { background: $color-info-background; color: $color-info-foreground; border-color: $color-info-border; }
+
+// --- Overview card -------------------------------------------------------------------------------------------------------------------
+.overviewWrap { container: ov / inline-size; }
+.overview { display: grid; gap: $spacing-5; padding: $spacing-5; border: 1px solid $color-border; background: $color-background; }
+@container dt (min-width: 48rem) { .overview { padding: $spacing-6; } }
+
+.hero { display: grid; gap: $spacing-4; padding: $spacing-5; border: 1px solid; }
+.heroConfirmed { background: $color-info-background; border-color: $color-info-border; color: $color-info-foreground; }
+.heroPreparing { background: $color-warning-background; border-color: $color-warning-border; color: $color-warning-foreground; }
+.heroDelivered { background: $color-success-background; border-color: $color-success-border; color: $color-success-foreground; }
+.heroOut { background: $color-secondary; border-color: $color-secondary; color: $color-text-inverse; }
+.heroTop { display: flex; align-items: center; gap: $spacing-4; }
+.tile { width: 3.5rem; height: 3.5rem; flex: none; display: grid; place-items: center; background: $color-background; border: 1px solid currentColor;
+  svg { width: 1.75rem; height: 1.75rem; } }
+.heroOut .tile { background: $color-primary; border-color: $color-primary; color: $color-text-inverse; }
+.heroText { display: grid; gap: 2px; min-width: 0; }
+.hero .eyebrow { color: inherit; }
+.heroOut .eyebrow { color: $color-border; }
+.heroTitle { font-size: $font-size-2xl; font-weight: $font-weight-bold; line-height: $line-height-tight; overflow-wrap: anywhere; }
+.heroDescription { margin: 0; font-size: $font-size-base; line-height: $line-height-normal; color: $color-text-primary; }
+.heroOut .heroDescription { color: $color-text-inverse; }
+.segments { display: grid; grid-template-columns: repeat(4, 1fr); gap: $spacing-1; }
+.segment { height: 6px; background: $color-background; border: 1px solid currentColor; opacity: .55; }
+.segmentOn { background: currentColor; opacity: 1; }
+.heroOut .segment { background: $color-secondary-light; border-color: $color-secondary-light; opacity: 1; }
+.heroOut .segmentOn { background: $color-primary-light; border-color: $color-primary-light; }
+.stepOf { font-size: $font-size-sm; font-weight: $font-weight-medium; }
+
+.panels { display: grid; gap: $spacing-4; }
+@container ov (min-width: 34rem) { .panels { grid-template-columns: 1fr 1fr; } }
+.panel { display: grid; gap: $spacing-2; align-content: start; padding: $spacing-5; border: 1px solid $color-border; background: $color-surface; min-width: 0; }
+.panelMuted { background: $color-background; border-style: dashed; }
+.panelWarn { background: $color-warning-background; border-color: $color-warning-border; }
+.panelDone { background: $color-success-background; border-color: $color-success-border; }
+.panelTile { width: 2.5rem; height: 2.5rem; display: grid; place-items: center; margin-bottom: $spacing-1; background: $color-info-background;
+  color: $color-info-foreground; border: 1px solid $color-info-border; svg { width: 1.25rem; height: 1.25rem; } }
+.panelTileNeutral { background: $color-surface; color: $color-text-secondary; border-color: $color-border; }
+.panelTileWarn { background: $color-background; color: $color-warning-foreground; border-color: $color-warning-border; }
+.panelTileOk { background: $color-background; color: $color-success-foreground; border-color: $color-success-border; }
+.big { font-size: 1.75rem; font-weight: $font-weight-bold; line-height: 1.15; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.bigSoft { font-size: 1.375rem; color: $color-text-secondary; font-weight: $font-weight-semibold; }
+@container ov (min-width: 34rem) { .big { font-size: 2rem; } .bigSoft { font-size: $font-size-2xl; } }
+.mid { display: flex; align-items: center; gap: $spacing-2; font-size: $font-size-base; font-weight: $font-weight-medium; color: $color-text-primary;
+  overflow-wrap: anywhere; svg { width: 1rem; height: 1rem; flex-shrink: 0; } }
+.midStrong { font-weight: $font-weight-semibold; font-size: $font-size-lg; }
+.panelNote { display: flex; gap: $spacing-2; align-items: flex-start; margin: 0; font-size: $font-size-sm; color: $color-text-secondary;
+  svg { width: .875rem; height: .875rem; margin-top: 3px; flex-shrink: 0; } }
+
+.meta { display: grid; gap: $spacing-4; margin: 0; padding-top: $spacing-5; border-top: 1px solid $color-border;
+  dt { font-size: $font-size-xs; font-weight: $font-weight-medium; letter-spacing: $eyebrow-tracking; text-transform: uppercase; color: $color-text-secondary; margin-bottom: $spacing-1; }
+  dd { margin: 0; font-size: $font-size-sm; overflow-wrap: anywhere; } }
+@container ov (min-width: 34rem) { .meta { grid-template-columns: 1.6fr 1fr 1fr; } }
+.reference { display: flex; flex-wrap: wrap; align-items: center; gap: $spacing-2 $spacing-3; }
+.copy { display: inline-flex; align-items: center; gap: $spacing-2; min-height: 2.75rem; min-width: 2.75rem; padding: 0 $spacing-3; background: $color-background;
+  border: 1px solid $color-border; font: $font-weight-medium $font-size-sm $font-family-base; color: $color-text-primary; cursor: pointer;
+  svg { width: 1rem; height: 1rem; }
+  &:hover { border-color: $color-primary; color: $color-primary; }
+  @include focus-ring;
+  @include motion-safe { transition: border-color $transition-normal, color $transition-normal; } }
+.copyError { flex-basis: 100%; margin: 0; font-size: $font-size-sm; color: $color-error-foreground; }
+
+// --- Progress stepper ----------------------------------------------------------------------------------------------------------------
+.steps { list-style: none; margin: 0; padding: 0; display: grid; }
+.step { position: relative; display: grid; grid-template-columns: 2.5rem 1fr; gap: $spacing-4; padding-bottom: $spacing-6;
+  &:last-child { padding-bottom: 0; }
+  &:not(:last-child)::after { content: ''; position: absolute; inset-inline-start: 19px; top: 44px; bottom: 4px; width: 2px; background: $color-border; } }
+.stepDone:not(:last-child)::after { background: $color-primary; }
+.node { position: relative; width: 2.5rem; height: 2.5rem; border-radius: $radius-full; display: grid; place-items: center; background: $color-surface;
+  border: 2px solid $color-border; color: $color-text-secondary; svg { width: 1.25rem; height: 1.25rem; }
+  @include motion-safe { transition: background-color $transition-normal, border-color $transition-normal, color $transition-normal; } }
+.stepDone .node { background: $color-primary; border-color: $color-primary; color: $color-text-inverse; }
+.stepCurrent:not(.stepDone) .node { background: $color-background; border-color: $color-primary; color: $color-primary; box-shadow: 0 0 0 4px $color-info-background; }
+.stepFinal .node { background: $color-success-foreground; border-color: $color-success-foreground; }
+.tick { position: absolute; inset-inline-end: -4px; bottom: -4px; width: 18px; height: 18px; border-radius: $radius-full; display: grid; place-items: center;
+  background: $color-background; color: $color-success-foreground; border: 2px solid $color-success-foreground; svg { width: 10px; height: 10px; } }
+.stepText { display: grid; gap: 2px; align-content: start; padding-top: 2px; min-width: 0; }
+.stepLabel { font-size: $font-size-base; font-weight: $font-weight-semibold; }
+.stepFuture .stepLabel { color: $color-text-secondary; font-weight: $font-weight-medium; }
+.stepState { font-size: $font-size-xs; font-weight: $font-weight-medium; letter-spacing: .04em; text-transform: uppercase; color: $color-text-secondary; }
+.stepCurrent .stepState { color: $color-info-foreground; }
+.stepFinal .stepState { color: $color-success-foreground; }
+.stepTime { font-family: $font-family-mono; font-size: $font-size-xs; color: $color-text-secondary; }
+@container dt (min-width: 40rem) {
+  .steps { grid-template-columns: repeat(4, 1fr); }
+  .step { grid-template-columns: 1fr; justify-items: center; text-align: center; padding-bottom: 0; gap: $spacing-3;
+    &:not(:last-child)::after { inset-inline-start: calc(50% + 28px); inset-inline-end: calc(-50% + 28px); width: auto; top: 19px; bottom: auto; height: 2px; } }
+  .stepText { justify-items: center; }
+}
+
+// --- Timeline -----------------------------------------------------------------------------------------------------------------------
+.timeline { list-style: none; margin: 0; padding: 0; display: grid; }
+.event { position: relative; display: grid; grid-template-columns: 2rem 1fr; gap: $spacing-1 $spacing-4; padding-bottom: $spacing-6;
+  &:last-child { padding-bottom: 0; }
+  &:not(:last-child)::before { content: ''; position: absolute; inset-inline-start: 15px; top: 36px; bottom: 4px; width: 2px; background: $color-border; }
+  time { grid-column: 2; font-family: $font-family-mono; font-size: $font-size-xs; color: $color-text-secondary; } }
+.eventNode { width: 2rem; height: 2rem; border-radius: $radius-full; display: grid; place-items: center; background: $color-surface; border: 1px solid $color-border;
+  color: $color-text-secondary; svg { width: 1rem; height: 1rem; } }
+.eventLatest .eventNode { background: $color-primary; border-color: $color-primary; color: $color-text-inverse; box-shadow: 0 0 0 4px $color-info-background; }
+.eventBody { display: grid; gap: 2px; min-width: 0; padding-top: $spacing-1;
+  p { margin: 0; font-size: $font-size-sm; color: $color-text-secondary; overflow-wrap: anywhere; } }
+.eventTitle { display: flex; flex-wrap: wrap; align-items: center; gap: $spacing-2; strong { font-size: $font-size-base; font-weight: $font-weight-semibold; } }
+@container dt (min-width: 40rem) { .event { grid-template-columns: 2rem 1fr auto; time { grid-column: 3; padding-top: $spacing-2; } } }
+.empty { display: flex; gap: $spacing-4; align-items: flex-start; padding: $spacing-5; background: $color-surface; border: 1px dashed $color-border;
+  color: $color-text-secondary; font-size: $font-size-sm; p { margin: 0; } svg { width: 1.5rem; height: 1.5rem; flex-shrink: 0; }
+  strong { display: block; color: $color-text-primary; font-weight: $font-weight-semibold; font-size: $font-size-base; margin-bottom: 2px; } }
+
+// --- Location shell (04.5 text only; 04.6 adds the map) ------------------------------------------------------------------------------
+.summary { margin: 0; font-size: $font-size-sm; line-height: $line-height-normal; color: $color-text-secondary; max-width: 60ch; }
+.facts { display: grid; gap: $spacing-3; margin: 0;
+  div { display: grid; gap: $spacing-1; }
+  dt { font-size: $font-size-xs; font-weight: $font-weight-medium; letter-spacing: $eyebrow-tracking; text-transform: uppercase; color: $color-text-secondary; }
+  dd { margin: 0; font-size: $font-size-base; overflow-wrap: anywhere; } }
+@container dt (min-width: 40rem) { .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+// --- Notices ------------------------------------------------------------------------------------------------------------------------
+.notice { display: flex; gap: $spacing-4; align-items: flex-start; padding: $spacing-6; border: 1px solid $color-border; background: $color-background;
+  h2, h3 { margin: 0 0 $spacing-1; font-size: $font-size-lg; font-weight: $font-weight-semibold; }
+  p { margin: 0 0 $spacing-4; font-size: $font-size-sm; color: $color-text-secondary; &:last-child { margin-bottom: 0; } } }
+.noticeIcon { width: 3rem; height: 3rem; flex: none; display: grid; place-items: center; background: $color-surface; border: 1px solid $color-border;
+  color: $color-text-secondary; svg { width: 1.75rem; height: 1.75rem; } }
+.noticeError { border-top: 3px solid $color-error-foreground; .noticeIcon { color: $color-error-foreground; background: $color-error-background; border-color: $color-error-border; } }
+.noticeInline { padding: $spacing-4; border-style: dashed; .noticeIcon { width: 2.25rem; height: 2.25rem; svg { width: 1.25rem; height: 1.25rem; } } p { margin-bottom: 0; } }
+.noticeActions { display: flex; flex-wrap: wrap; gap: $spacing-3; }
+
+// --- Actions ------------------------------------------------------------------------------------------------------------------------
+.actions { display: grid; gap: $spacing-3; }
+@container dt (min-width: 48rem) { .actions { grid-template-columns: auto auto; justify-content: start; } }
+@container dt (min-width: 64rem) { .actions { grid-template-columns: 1fr; } }
+.back { display: inline-flex; align-items: center; justify-content: center; gap: $spacing-2; min-height: 2.75rem; font-size: $font-size-base;
+  font-weight: $font-weight-medium; color: $color-text-primary; text-decoration: none; svg { width: 1rem; height: 1rem; }
+  &:hover { color: $color-primary; text-decoration: underline; }
+  @include focus-ring; }
+
+.skeletonStack { display: grid; gap: $spacing-4; }

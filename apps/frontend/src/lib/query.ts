@@ -23,6 +23,11 @@ export const queryKeys = {
     detail: (userId: string, reference: string) => ['orders', 'detail', userId, reference] as const,
     // Task 03.9: document metadata only (never PDF bytes), owner-scoped like every private order read.
     documents: (userId: string, reference: string) => ['orders', 'documents', userId, reference] as const },
+  // Task 04.5: customer snapshots carry the signed-in user's id; admin keys are separate and never shared with customer caches.
+  delivery: { snapshot: (userId: string, reference: string) => ['delivery', 'snapshot', userId, reference] as const,
+    adminAll: ['delivery', 'admin'] as const,
+    admin: (reference: string) => ['delivery', 'admin', 'detail', reference] as const,
+    adminList: (status: string, page: number) => ['delivery', 'admin', 'list', status, page] as const },
   wishlist: { all: ['wishlist'] as const, current: (userId: string) => ['wishlist', 'current', userId] as const,
     guest: (ids: string) => ['wishlist', 'guest', ids] as const },
   cart: { all: ['cart'] as const, current: (userId: string) => ['cart', 'current', userId] as const,

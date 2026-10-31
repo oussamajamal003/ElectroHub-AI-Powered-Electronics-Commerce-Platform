@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { verifyPassword } from '../utils/hash.js';
 import { createAccountDeletionProof } from './account-deletion-proof.js';
+import { REDACTED_SHIPPING } from './delivery-privacy.js';
 
 export class AccountDeletionService {
   async verifyPassword(userId: string, password: string) {
@@ -64,28 +65,26 @@ export class AccountDeletionService {
         where: { userId },
         select: { id: true, status: true, delivery: { select: { status: true } } },
       });
+      // A cancelled order can never be fulfilled (delivery writes are refused once it is cancelled), even when its Delivery row still
+      // says PREPARING or OUT_FOR_DELIVERY, so it is always final. A delivered order is final once its Delivery agrees.
       const completedOrderIds = orders
-        .filter(order => ['DELIVERED', 'CANCELLED'].includes(order.status)
-          && (!order.delivery || order.delivery.status === 'DELIVERED'))
+        .filter(order => order.status === 'CANCELLED' || (order.status === 'DELIVERED' && (!order.delivery || order.delivery.status === 'DELIVERED')))
         .map(order => order.id);
+      // Historical courier positions and admin notes are not needed to finish an active delivery (only the current location is), so
+      // they go for every order now. An active order keeps its shipping snapshot and current location; DeliveryService redacts them when
+      // that order reaches DELIVERED for an anonymized owner.
+      await transaction.deliveryEvent.updateMany({
+        where: { delivery: { order: { userId } } },
+        data: { latitude: null, longitude: null, note: null },
+      });
       if (completedOrderIds.length > 0) {
         await transaction.order.updateMany({
           where: { id: { in: completedOrderIds } },
-          data: {
-            shippingRecipient: 'Deleted customer',
-            shippingLine1: 'Redacted',
-            shippingLine2: null,
-            shippingCity: 'Redacted',
-            shippingState: null,
-            shippingPostalCode: null,
-            shippingCountry: 'Redacted',
-            shippingLatitude: null,
-            shippingLongitude: null,
-          },
+          data: { ...REDACTED_SHIPPING },
         });
         await transaction.delivery.updateMany({
           where: { orderId: { in: completedOrderIds } },
-          data: { latitude: null, longitude: null },
+          data: { latitude: null, longitude: null, locationLabel: null, locationSource: null },
         });
       }
 

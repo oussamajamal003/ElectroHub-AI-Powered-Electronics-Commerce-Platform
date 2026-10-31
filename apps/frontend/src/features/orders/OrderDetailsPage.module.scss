@@ -69,6 +69,9 @@
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
 }
 
+// Task 04.5: Track delivery sits between Order Documents and Back to Orders, full width like its neighbours.
+.trackLink { gap: $spacing-2; min-height: 3.125rem; @include respond-to(md) { font-size: $font-size-lg; } }
+
 .stateArea { display: grid; place-items: center; min-height: clamp(18rem, 42vh, 30rem); }
 .unavailable { width: 100%; max-width: 34rem; padding: $spacing-10 $spacing-6; background: $color-background; }
 .stateActions { display: flex; flex-wrap: wrap; justify-content: center; gap: $spacing-3; }

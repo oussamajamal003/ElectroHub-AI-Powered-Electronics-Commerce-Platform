@@ -1,0 +1,28 @@
+@use '@/styles/abstracts' as *;
+
+.page { width: min(100%, 1280px); margin: 0 auto; display: grid; gap: $spacing-6; min-width: 0; }
+.back { display: inline-flex; align-items: center; gap: $spacing-2; width: fit-content; min-height: 2.75rem; color: $color-text-secondary; text-decoration: none;
+  font-size: $font-size-sm; &:hover { color: $color-primary; } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
+.header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: $spacing-4; }
+.title { min-width: 0; h1 { margin: 0 0 $spacing-2; font-family: $font-family-mono; font-size: clamp(1.1rem, 2.4vw, 1.6rem); overflow-wrap: anywhere; }
+  p { margin: 0; color: $color-text-secondary; overflow-wrap: anywhere; } }
+.eyebrow { color: $color-primary !important; font-family: $font-family-base; font-size: $font-size-xs; font-weight: $font-weight-semibold; letter-spacing: .08em; margin-bottom: $spacing-2 !important; }
+.loading { display: grid; place-items: center; min-height: 40vh; }
+.layout { display: grid; gap: $spacing-6; align-items: start; @include respond-to(xl) { grid-template-columns: minmax(0, 1.4fr) minmax(20rem, 1fr); } }
+.main, .aside { display: grid; gap: $spacing-6; min-width: 0; }
+.aside { @include respond-to(xl) { position: sticky; top: $spacing-4; } }
+.previewTitle { margin: 0; font-size: $font-size-base; font-weight: $font-weight-semibold; color: $color-text-secondary; }
+.card { display: grid; gap: $spacing-4; padding: $spacing-5; border: 1px solid $color-border; background: $color-background; min-width: 0;
+  @include respond-to(md) { padding: $spacing-6; }
+  h2 { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; } }
+.facts { display: grid; gap: $spacing-4; margin: 0; @include respond-to(sm) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  div { display: grid; gap: $spacing-1; min-width: 0; }
+  dt { font-size: $font-size-xs; font-weight: $font-weight-medium; letter-spacing: .06em; text-transform: uppercase; color: $color-text-secondary; }
+  dd { margin: 0; overflow-wrap: anywhere; } }
+.mono { font-family: $font-family-mono; font-size: $font-size-sm; }
+.muted { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; }
+.tableWrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: $font-size-sm;
+  th, td { padding: $spacing-3; border-bottom: 1px solid $color-border; text-align: start; vertical-align: top; }
+  th { font-weight: $font-weight-semibold; color: $color-text-secondary; white-space: nowrap; }
+  td:last-child { white-space: nowrap; } }
