@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { verifyPassword } from '../utils/hash.js';
 import { createAccountDeletionProof } from './account-deletion-proof.js';
+import { REDACTED_SHIPPING } from './delivery-privacy.js';
 
 export class AccountDeletionService {
   async verifyPassword(userId: string, password: string) {
@@ -79,17 +80,7 @@ export class AccountDeletionService {
       if (completedOrderIds.length > 0) {
         await transaction.order.updateMany({
           where: { id: { in: completedOrderIds } },
-          data: {
-            shippingRecipient: 'Deleted customer',
-            shippingLine1: 'Redacted',
-            shippingLine2: null,
-            shippingCity: 'Redacted',
-            shippingState: null,
-            shippingPostalCode: null,
-            shippingCountry: 'Redacted',
-            shippingLatitude: null,
-            shippingLongitude: null,
-          },
+          data: { ...REDACTED_SHIPPING },
         });
         await transaction.delivery.updateMany({
           where: { orderId: { in: completedOrderIds } },

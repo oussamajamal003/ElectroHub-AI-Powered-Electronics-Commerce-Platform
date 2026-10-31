@@ -260,7 +260,7 @@ describe.skipIf(!enabled).sequential('Task 04.5 DeliveryService on real PostgreS
     expect(after).toMatchObject({ latitude: null, longitude: null, locationLabel: null, locationSource: null, revision: before.revision, status: 'OUT_FOR_DELIVERY' });
     expect(after.events.map(event => event.id).sort()).toEqual(before.events.map(event => event.id).sort());
     expect(after.events.every(event => event.latitude === null && event.longitude === null && event.note === null)).toBe(true);
-    expect(await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ shippingRecipient: 'Deleted customer', shippingLine1: 'Redacted' });
+    expect(await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ shippingRecipient: 'Deleted customer', shippingPhone: 'Redacted', shippingLine1: 'Redacted' });
     expect(await prisma.payment.count({ where: { orderId: order.id, status: 'SUCCEEDED' } })).toBe(1);
   });
 
@@ -277,7 +277,7 @@ describe.skipIf(!enabled).sequential('Task 04.5 DeliveryService on real PostgreS
     expect(delivery.events).toHaveLength(2);
     expect(delivery.events.every(event => event.latitude === null && event.longitude === null && event.note === null)).toBe(true);
     expect(Number(delivery.latitude)).toBe(33.9);
-    expect(await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ shippingRecipient: 'Delivery QA', shippingLine1: '1 QA Street' });
+    expect(await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ shippingRecipient: 'Delivery QA', shippingPhone: '+10000000000', shippingLine1: '1 QA Street' });
 
     expect(await code(accountDeletion.deleteAccount(leaving.id))).toBe('UNAUTHENTICATED');
     await service.applyUpdate(admin.id, order.reference, { expectedRevision: 2, status: 'DELIVERED' });
@@ -285,7 +285,7 @@ describe.skipIf(!enabled).sequential('Task 04.5 DeliveryService on real PostgreS
     expect(delivery).toMatchObject({ latitude: null, longitude: null, locationLabel: null, locationSource: null, revision: 3, status: 'DELIVERED' });
     expect(delivery.events).toHaveLength(3);
     expect(delivery.events.every(event => event.latitude === null && event.longitude === null && event.note === null)).toBe(true);
-    expect(await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ shippingRecipient: 'Deleted customer', shippingLine1: 'Redacted', shippingCity: 'Redacted' });
+    expect(await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ shippingRecipient: 'Deleted customer', shippingPhone: 'Redacted', shippingLine1: 'Redacted', shippingCity: 'Redacted' });
     expect(await prisma.payment.count({ where: { orderId: order.id, status: 'SUCCEEDED' } })).toBe(1);
   });
 
@@ -311,7 +311,7 @@ describe.skipIf(!enabled).sequential('Task 04.5 DeliveryService on real PostgreS
       await redactDeliveryForDeletedOwner(tx, order.id);
     });
     const after = await snapshotOf(order.id);
-    expect(after).toMatchObject({ status: 'CANCELLED', shippingRecipient: 'Deleted customer', shippingLine1: 'Redacted', shippingCity: 'Redacted', shippingLatitude: null, shippingLongitude: null });
+    expect(after).toMatchObject({ status: 'CANCELLED', shippingRecipient: 'Deleted customer', shippingPhone: 'Redacted', shippingLine1: 'Redacted', shippingCity: 'Redacted', shippingLatitude: null, shippingLongitude: null });
     expect(after.delivery).toMatchObject({ latitude: null, longitude: null, locationLabel: null, locationSource: null, revision: before.delivery!.revision, status: before.delivery!.status });
     expect(after.delivery!.events.map(event => event.id).sort()).toEqual(before.delivery!.events.map(event => event.id).sort());
     expect(after.delivery!.events.every(event => event.latitude === null && event.longitude === null && event.note === null)).toBe(true);
@@ -353,11 +353,24 @@ describe.skipIf(!enabled).sequential('Task 04.5 DeliveryService on real PostgreS
     expect(await snapshotOf(order.id)).toEqual(before);
   });
 
+  it('T5-20h partial prior redaction: only the phone left behind is still scrubbed, with no write once everything is redacted', async () => {
+    const { redactDeliveryForDeletedOwner } = await import('../delivery-privacy.js');
+    const order = await activeDeletedOrder('partial');
+    await prisma.order.update({ where: { id: order.id }, data: { status: 'CANCELLED', shippingRecipient: 'Deleted customer', shippingLine1: 'Redacted', shippingLine2: null,
+      shippingCity: 'Redacted', shippingState: null, shippingPostalCode: null, shippingCountry: 'Redacted', shippingLatitude: null, shippingLongitude: null } });
+    expect((await snapshotOf(order.id)).shippingPhone).toBe('+10000000000');
+    await prisma.$transaction(tx => redactDeliveryForDeletedOwner(tx, order.id));
+    const once = await snapshotOf(order.id);
+    expect(once.shippingPhone).toBe('Redacted');
+    await prisma.$transaction(tx => redactDeliveryForDeletedOwner(tx, order.id));
+    expect(await snapshotOf(order.id)).toEqual(once);
+  });
+
   it('T5-20d a delivered order for an active customer is never redacted by the delivery service', async () => {
     const order = await fixtures.order(customer.id, 'PREPARING', 'SUCCEEDED');
     await service.start(admin.id, order.reference);
     await service.applyUpdate(admin.id, order.reference, { expectedRevision: 1, status: 'OUT_FOR_DELIVERY' });
     await service.applyUpdate(admin.id, order.reference, { expectedRevision: 2, status: 'DELIVERED' });
-    expect(await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ shippingRecipient: 'Delivery QA', shippingLine1: '1 QA Street' });
+    expect(await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ shippingRecipient: 'Delivery QA', shippingPhone: '+10000000000', shippingLine1: '1 QA Street' });
   });
 });
