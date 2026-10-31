@@ -289,6 +289,70 @@ describe.skipIf(!enabled).sequential('Task 04.5 DeliveryService on real PostgreS
     expect(await prisma.payment.count({ where: { orderId: order.id, status: 'SUCCEEDED' } })).toBe(1);
   });
 
+  // Cancellation is owned by PaymentService.compensate, which calls redactDeliveryForDeletedOwner right after the CANCELLED write in the
+  // same transaction. These cases drive that exact helper in a real transaction; the lifecycle suite (scenario T) drives compensate itself.
+  async function activeDeletedOrder(name: string) {
+    const leaving = await fixtures.user('CUSTOMER', name);
+    const order = await fixtures.order(leaving.id, 'PREPARING', 'SUCCEEDED');
+    await service.start(admin.id, order.reference);
+    await service.applyUpdate(admin.id, order.reference, { expectedRevision: 1, status: 'OUT_FOR_DELIVERY', location: { latitude: 33.9, longitude: 35.5, label: 'Near home' }, note: 'Gate code 1234' });
+    await new AccountDeletionService().deleteAccount(leaving.id);
+    return order;
+  }
+  const snapshotOf = (orderId: string) => prisma.order.findUniqueOrThrow({ where: { id: orderId }, include: { delivery: { include: { events: true } }, payment: true } });
+
+  it('T5-20e deleted customer, active order, then cancellation: shipping and current location are scrubbed atomically; payment, revision and events stay', async () => {
+    const { redactDeliveryForDeletedOwner } = await import('../delivery-privacy.js');
+    const order = await activeDeletedOrder('cancel-after-delete');
+    const before = await snapshotOf(order.id);
+    expect(before.shippingLine1).toBe('1 QA Street');
+    await prisma.$transaction(async tx => {
+      await tx.order.update({ where: { id: order.id }, data: { status: 'CANCELLED' } });
+      await redactDeliveryForDeletedOwner(tx, order.id);
+    });
+    const after = await snapshotOf(order.id);
+    expect(after).toMatchObject({ status: 'CANCELLED', shippingRecipient: 'Deleted customer', shippingLine1: 'Redacted', shippingCity: 'Redacted', shippingLatitude: null, shippingLongitude: null });
+    expect(after.delivery).toMatchObject({ latitude: null, longitude: null, locationLabel: null, locationSource: null, revision: before.delivery!.revision, status: before.delivery!.status });
+    expect(after.delivery!.events.map(event => event.id).sort()).toEqual(before.delivery!.events.map(event => event.id).sort());
+    expect(after.delivery!.events.every(event => event.latitude === null && event.longitude === null && event.note === null)).toBe(true);
+    expect(after.payment).toEqual(before.payment);
+  });
+
+  it('T5-20f the redaction is idempotent, and an active customer who cancels is not redacted', async () => {
+    const { redactDeliveryForDeletedOwner } = await import('../delivery-privacy.js');
+    const order = await activeDeletedOrder('cancel-twice');
+    await prisma.order.update({ where: { id: order.id }, data: { status: 'CANCELLED' } });
+    await prisma.$transaction(tx => redactDeliveryForDeletedOwner(tx, order.id));
+    const once = await snapshotOf(order.id);
+    await prisma.$transaction(tx => redactDeliveryForDeletedOwner(tx, order.id));
+    expect(await snapshotOf(order.id)).toEqual(once); // a repeat writes nothing, not even updatedAt
+
+    const active = await fixtures.order(customer.id, 'PREPARING', 'SUCCEEDED');
+    await service.start(admin.id, active.reference);
+    await service.applyUpdate(admin.id, active.reference, { expectedRevision: 1, status: 'OUT_FOR_DELIVERY', location: { latitude: 33.9, longitude: 35.5, label: 'Near home' }, note: 'n' });
+    const kept = await snapshotOf(active.id);
+    await prisma.$transaction(async tx => {
+      await tx.order.update({ where: { id: active.id }, data: { status: 'CANCELLED' } });
+      await redactDeliveryForDeletedOwner(tx, active.id);
+    });
+    const after = await snapshotOf(active.id);
+    expect(after).toMatchObject({ shippingRecipient: kept.shippingRecipient, shippingLine1: kept.shippingLine1, status: 'CANCELLED' });
+    expect(Number(after.delivery!.latitude)).toBe(33.9);
+    expect(after.delivery!.events.some(event => event.note === 'n')).toBe(true);
+  });
+
+  it('T5-20g a failure after the redaction rolls the whole cancellation back: no partial redaction', async () => {
+    const { redactDeliveryForDeletedOwner } = await import('../delivery-privacy.js');
+    const order = await activeDeletedOrder('cancel-rollback');
+    const before = await snapshotOf(order.id);
+    await expect(prisma.$transaction(async tx => {
+      await tx.order.update({ where: { id: order.id }, data: { status: 'CANCELLED' } });
+      await redactDeliveryForDeletedOwner(tx, order.id);
+      throw new Error('simulated failure after redaction');
+    })).rejects.toThrow('simulated failure');
+    expect(await snapshotOf(order.id)).toEqual(before);
+  });
+
   it('T5-20d a delivered order for an active customer is never redacted by the delivery service', async () => {
     const order = await fixtures.order(customer.id, 'PREPARING', 'SUCCEEDED');
     await service.start(admin.id, order.reference);

@@ -105,10 +105,22 @@ The QA stack was stopped afterwards; run evidence is in `.cache/delivery-qa-stac
 - A CANCELLED order is always final (delivery writes are refused once cancelled).
 - Historical `DeliveryEvent` coordinates and notes are cleared for **every** order of the deleted user. Only the current location is needed for an active delivery.
 - An ACTIVE order keeps its shipping snapshot and current location so it can be fulfilled. When it is later delivered for an anonymized owner, `DeliveryService.applyUpdate` redacts shipping, current location and events in the same transaction (`redactForDeletedOwner`).
-- Remaining risk: an active order that is **cancelled after** its owner was deleted keeps its shipping snapshot, because the cancellation path is payment code that was deliberately not modified.
+- Cancellation after deletion: closed in section 6.
 
 **Observability.** Every delivery endpoint (customer read, admin list/read, start, update) now emits one `delivery.<op>.timing` event: `delivery.customer_read`, `delivery.admin_list`, `delivery.admin_read`, `delivery.start`, `delivery.update`. Fields: request id, outcome or safe error code, HTTP status, `revisionConflict`, `changed`/`created`, duration, and the existing scoped DB metrics (operation count, timing, attribution). No coordinates, labels, notes, names, emails, references or user IDs are logged. The event is emitted in `finally`, inside `try/catch`, so it cannot change a response or mask an error.
 
 **Accessibility.** The tracking page no longer nests `<main>`; breadcrumb links have a 2.75 rem (44 px) minimum height; shared `Input` helper text uses `$color-text-secondary` (AA contrast), matching `Textarea`.
 
 **Focused results.** Backend controller timing tests 7/7 (plus unit 3/3); disposable PostgreSQL gate 20/20 (17 + 3 new deletion tests; 0 delivery drift); frontend `src/features`, `src/components/ui`, `src/pages/admin` vitest 858/858 (96 files); Chromium delivery suite 8/8 (includes axe); backend and frontend typecheck, lint and build pass. The broader backend suite still fails on the same environment guards noted above. Final-head GitHub CI is reported in the PR, not here.
+
+## 6. Closure: cancellation after account deletion (PR #40)
+
+The last privacy gap is closed. Both terminal outcomes now remove retained personal delivery data for an anonymized owner through one shared helper, `redactDeliveryForDeletedOwner` (`services/delivery-privacy.ts`), run inside the transaction that ends the order:
+- `DELIVERED`: `DeliveryService.applyUpdate` (behaviour unchanged, now calls the helper).
+- `CANCELLED`: `PaymentService.compensate` calls it right after the existing `CANCELLED` write, in the same fenced transaction. It is a privacy-only addition: it reads the owner and clears shipping, current location and event coordinates/notes. No payment, refund, Stripe, inventory or email code changed.
+
+It redacts only when the owner is inactive with a `@deleted.invalid` email, so active customers are untouched. Each write matches only rows that still hold data, so a repeat writes nothing; `compensate` itself already returns early once `compensatedAt` is set. Order items, payment rows, delivery revision/status and event ids are not modified.
+
+Verified (disposable PostgreSQL gate, `node scripts/delivery-pg.cjs`): 23/23, including T5-20e (deleted owner, active order, cancellation: scrubbed, payment/revision/events unchanged), T5-20f (repeat is a no-op; an active customer's cancellation is not redacted), T5-20g (a failure after redaction rolls back everything), and the existing T5-20/b/c/d (DELIVERED cleanup unchanged). Backend typecheck, lint and build pass.
+
+Not verified: the `compensate` call site is not executed by any test here. The payment unit suites fail identically before and after this change (166 failures on environment guards such as `Payments are unavailable`), and the payment lifecycle PostgreSQL runner needs PostgreSQL 17 with a CA-signed setup that was not available locally. The helper is exercised through the same transaction shape; the call is one awaited line after the `CANCELLED` write.
