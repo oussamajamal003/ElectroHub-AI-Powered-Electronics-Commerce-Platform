@@ -89,12 +89,12 @@ describe('useDeliveryLiveUpdates with a fake socket', () => {
   afterEach(() => { closeDeliverySocket(); vi.useRealTimers(); });
 
   it('T7-01 subscribes on connect, refetches REST, then shows "Live updates on"; merges the next revision and announces status changes', async () => {
-    const invalidate = vi.spyOn(client, 'invalidateQueries').mockResolvedValue();
+    const refetchQueries = vi.spyOn(client, 'refetchQueries').mockResolvedValue();
     mount('customer-a');
     expect(sockets).toHaveLength(1);
     await act(async () => { sockets[0]!.serverAccept(); });
     expect(sockets[0]!.emitted[0]).toEqual({ event: 'delivery:subscribe', payload: { orderReference: reference } });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: key('customer-a'), exact: true });
+    expect(refetchQueries).toHaveBeenCalledWith({ queryKey: key('customer-a'), exact: true }, { throwOnError: true });
     expect(state()).toBe('connected');
     expect(screen.getByText('Live updates on')).toBeInTheDocument();
 
@@ -120,7 +120,7 @@ describe('useDeliveryLiveUpdates with a fake socket', () => {
   });
 
   it('T7-07 / T7-11 a drop shows Reconnecting…, becomes paused after 10 s (announced once), and reconnect resyncs with a REST refetch', async () => {
-    const invalidate = vi.spyOn(client, 'invalidateQueries').mockResolvedValue();
+    const refetchQueries = vi.spyOn(client, 'refetchQueries').mockResolvedValue();
     mount('customer-a');
     await act(async () => { sockets[0]!.serverAccept(); });
     await act(async () => { sockets[0]!.serverDrop(); });
@@ -129,9 +129,9 @@ describe('useDeliveryLiveUpdates with a fake socket', () => {
     expect(state()).toBe('paused');
     expect(screen.getByTestId('announce').textContent).toBe('Live updates paused. Showing the last saved status.');
     expect(screen.getByRole('button', { name: 'Refresh now' })).toBeInTheDocument();
-    invalidate.mockClear();
+    refetchQueries.mockClear();
     await act(async () => { sockets[0]!.serverAccept(); });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: key('customer-a'), exact: true });
+    expect(refetchQueries).toHaveBeenCalledWith({ queryKey: key('customer-a'), exact: true }, { throwOnError: true });
     expect(state()).toBe('resynced');
     expect(screen.getByText('Back online · up to date')).toBeInTheDocument();
     expect(screen.getByTestId('announce').textContent).toBe('Live updates restored. Tracking is up to date.');
@@ -185,5 +185,64 @@ describe('useDeliveryLiveUpdates with a fake socket', () => {
     await act(async () => { sockets[0]!.serverEmit('delivery:revoked', { v: 1, orderReference: reference, reason: 'ORDER_CANCELLED' }); });
     expect(invalidate).toHaveBeenCalledTimes(1);
     expect(sockets[0]!.emitted.at(-1)).toEqual({ event: 'delivery:unsubscribe', payload: { orderReference: reference } });
+  });
+
+  describe('REST reconciliation gates the live state', () => {
+    const deferred = () => { let resolve!: () => void; let reject!: (error: Error) => void;
+      const promise = new Promise<void>((ok, fail) => { resolve = ok; reject = fail; }); return { promise, resolve, reject }; };
+
+    it('B1 slow REST: no "Live updates on" and polling stays enabled until the read completes with the acknowledged revision', async () => {
+      const rest = deferred();
+      vi.spyOn(client, 'refetchQueries').mockImplementation(() => rest.promise);
+      sockets.length = 0;
+      mount('customer-a');
+      sockets[0]!.onSubscribe = () => ({ ok: true, revision: 5 });
+      await act(async () => { sockets[0]!.serverAccept(); });
+      expect(state()).toBe('connecting');
+      expect(screen.queryByText('Live updates on')).not.toBeInTheDocument();
+      await act(async () => { rest.resolve(); await rest.promise; });
+      expect(state()).toBe('connected');
+    });
+
+    it('B2 failed REST after a successful subscribe: no success state or restored announcement, and Refresh now completes it', async () => {
+      const refetchQueries = vi.spyOn(client, 'refetchQueries').mockRejectedValue(new Error('network'));
+      mount('customer-a');
+      await act(async () => { sockets[0]!.serverAccept(); });
+      await act(async () => { sockets[0]!.serverDrop(); });
+      await act(async () => { vi.advanceTimersByTime(10_000); });
+      expect(state()).toBe('paused');
+      await act(async () => { sockets[0]!.serverAccept(); });
+      expect(state()).toBe('paused');
+      expect(screen.queryByText('Back online · up to date')).not.toBeInTheDocument();
+      expect(screen.getByTestId('announce').textContent).toBe('Live updates paused. Showing the last saved status.');
+      expect(screen.getByRole('button', { name: 'Refresh now' })).toBeInTheDocument();
+      refetchQueries.mockResolvedValue();
+      await act(async () => { screen.getByRole('button', { name: 'Refresh now' }).click(); });
+      expect(state()).toBe('resynced');
+      expect(screen.getByTestId('announce').textContent).toBe('Live updates restored. Tracking is up to date.');
+    });
+
+    it('B3 revision gap: stays unsynchronized until REST reaches the acknowledged revision', async () => {
+      const refetchQueries = vi.spyOn(client, 'refetchQueries').mockResolvedValue();
+      mount('customer-a');
+      sockets[0]!.onSubscribe = () => ({ ok: true, revision: 8 });
+      await act(async () => { sockets[0]!.serverAccept(); });
+      expect(state()).toBe('connecting');
+      refetchQueries.mockImplementation(async () => { client.setQueryData(key('customer-a'), { data: snapshot({ revision: 8 }) }); return undefined; });
+      await act(async () => { sockets[0]!.serverDrop(); });
+      await act(async () => { sockets[0]!.serverAccept(); });
+      expect(state()).toBe('resynced');
+    });
+
+    it('B4 stale completion: unmounting while REST is pending leaves no success state and the old owner cache untouched', async () => {
+      const rest = deferred();
+      vi.spyOn(client, 'refetchQueries').mockImplementation(() => rest.promise);
+      const view = mount('customer-a');
+      await act(async () => { sockets[0]!.serverAccept(); });
+      view.unmount();
+      await act(async () => { rest.resolve(); await rest.promise; });
+      expect(client.getQueryData<{ data: CustomerDeliverySnapshot }>(key('customer-a'))?.data.revision).toBe(5);
+      expect(sockets[0]!.disconnects).toBe(1);
+    });
   });
 });

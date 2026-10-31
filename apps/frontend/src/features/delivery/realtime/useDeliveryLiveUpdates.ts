@@ -43,6 +43,7 @@ export function useDeliveryLiveUpdates(orderReference: string, snapshot: Custome
   const [announcement, setAnnouncement] = useState('');
   const [notices, setNotices] = useState<LiveNotice[]>([]);
   const socketRef = useRef<Socket | null>(null);
+  const resyncRef = useRef<() => void>(() => undefined);
   const userRef = useRef(userId);
   userRef.current = userId;
   const noticeId = useRef(0);
@@ -72,7 +73,35 @@ export function useDeliveryLiveUpdates(orderReference: string, snapshot: Custome
     let paused = false;
     const refetch = () => client.invalidateQueries({ queryKey, exact: true });
 
+    // A subscription ack is not proof the REST snapshot is current. Live/resynced is reported only after a REST read actually succeeds and
+    // is at least the acknowledged revision. A newer attempt (or unmount / owner change) supersedes an older one; failure stays truthful
+    // and leaves the 60 s polling fallback and "Refresh now" in charge. There is no automatic retry loop.
+    let attempt = 0;
+    let acked: number | null = null;
+    const settle = (ackRevision: number, succeeded: boolean) => {
+      const current = client.getQueryData<Snapshot>(queryKey)?.data;
+      if (!succeeded || client.getQueryState(queryKey)?.error || !current || current.revision < ackRevision) return;
+      if (pauseTimer) { clearTimeout(pauseTimer); pauseTimer = null; }
+      if (interrupted) {
+        if (paused) announce('Live updates restored. Tracking is up to date.');
+        interrupted = false; paused = false;
+        setState('resynced');
+        if (resyncTimer) clearTimeout(resyncTimer);
+        resyncTimer = setTimeout(() => { if (!disposed) setState('connected'); }, RESYNCED_FOR_MS);
+      } else setState('connected');
+    };
+    const confirm = async (ackRevision: number) => {
+      const mine = ++attempt;
+      let succeeded = true;
+      try { await client.refetchQueries({ queryKey, exact: true }, { throwOnError: true }); } catch { succeeded = false; }
+      if (disposed || mine !== attempt || userRef.current !== owner) return;
+      settle(ackRevision, succeeded);
+    };
+    // "Refresh now" has just completed its own REST read: it can complete a pending reconciliation without a second request.
+    resyncRef.current = () => { if (acked !== null && socket.connected) settle(acked, true); };
+
     const subscribe = () => {
+      acked = null;
       socket.timeout(5_000).emitWithAck('delivery:subscribe', { orderReference }).then((ack: Ack) => {
         if (disposed) return;
         if (!ack.ok) {
@@ -81,16 +110,8 @@ export function useDeliveryLiveUpdates(orderReference: string, snapshot: Custome
           setState('paused');
           return;
         }
-        if (pauseTimer) { clearTimeout(pauseTimer); pauseTimer = null; }
-        // Always re-read REST after (re)subscribing; only newer revisions are applied afterwards.
-        void refetch();
-        if (interrupted) {
-          if (paused) announce('Live updates restored. Tracking is up to date.');
-          interrupted = false; paused = false;
-          setState('resynced');
-          if (resyncTimer) clearTimeout(resyncTimer);
-          resyncTimer = setTimeout(() => { if (!disposed) setState('connected'); }, RESYNCED_FOR_MS);
-        } else setState('connected');
+        acked = ack.revision;
+        void confirm(ack.revision);
       }).catch(() => { if (!disposed) onDrop(); });
     };
     const onDrop = () => {
@@ -144,6 +165,8 @@ export function useDeliveryLiveUpdates(orderReference: string, snapshot: Custome
       socket.off('delivery:revoked', onRevoked);
       if (socket.connected) socket.emit('delivery:unsubscribe', { orderReference });
       socketRef.current = null;
+      resyncRef.current = () => undefined;
+      attempt++;
       releaseDeliverySocket(socket);
     };
   }, [client, eligible, terminal, userId, orderReference, announce, pushNotices]);
@@ -154,6 +177,7 @@ export function useDeliveryLiveUpdates(orderReference: string, snapshot: Custome
     try {
       if (socketRef.current && !socketRef.current.connected) socketRef.current.connect();
       await client.refetchQueries({ queryKey: key, exact: true });
+      resyncRef.current();
     } finally { setRefreshing(false); }
   }, [client, key]);
 

@@ -14,7 +14,13 @@ import { SIMULATION_MAX_TICKS, SIMULATION_ROUTES, SIMULATION_TICK_MS, simulation
  * never status, payment, Stripe or order data. One runner per delivery; ticks are at least 5 s apart; at most 240 ticks.
  */
 const STOP_CODES = new Set(['DELIVERY_TERMINAL', 'DELIVERY_ORDER_CANCELLED', 'DELIVERY_LOCATION_NOT_ALLOWED', 'DELIVERY_PAYMENT_INELIGIBLE', 'ORDER_NOT_FOUND']);
-type Runner = { orderId: string; reference: string; actorUserId: string; routeId: string; index: number; ticks: number; timer: NodeJS.Timeout | null; busy: boolean };
+type Runner = { orderId: string; reference: string; actorUserId: string; routeId: string; index: number; ticks: number; timer: NodeJS.Timeout | null; busy: boolean;
+  /** Set once Stop (or shutdown) begins: no new tick starts and an accepted tick must not write after this. */
+  stopping: boolean;
+  /** The tick currently running, so Stop can wait for it to settle before recording STOPPED. */
+  inflight: Promise<boolean> | null;
+  /** The single in-progress Stop, shared by concurrent callers. */
+  stopped: Promise<void> | null };
 export type SimulationStatus = { enabled: boolean; running: boolean; routeId: string | null; ticks: number; maxTicks: number; tickSeconds: number;
   routes: { id: string; label: string; points: number }[] };
 
@@ -47,7 +53,7 @@ export class DeliverySimulationRunner {
     const orderId = parseOrderReference(reference);
     if (this.runners.has(orderId)) throw new AppError('A demo simulation is already running for this delivery.', 409, 'DELIVERY_SIMULATION_RUNNING');
     // Reserve before the first await so two concurrent starts cannot both win.
-    const runner: Runner = { orderId, reference, actorUserId, routeId, index: 0, ticks: 0, timer: null, busy: false };
+    const runner: Runner = { orderId, reference, actorUserId, routeId, index: 0, ticks: 0, timer: null, busy: false, stopping: false, inflight: null, stopped: null };
     this.runners.set(orderId, runner);
     try { await this.service.recordSimulation(actorUserId, reference, 'STARTED'); }
     catch (error) { this.runners.delete(orderId); throw error; }
@@ -62,15 +68,33 @@ export class DeliverySimulationRunner {
     const orderId = parseOrderReference(reference);
     const runner = this.runners.get(orderId);
     // Idempotent: stopping a delivery with no runner (already stopped, finished or never started) is a successful no-op.
-    if (runner) await this.finish(runner, reason);
+    if (runner) {
+      // Concurrent callers share one stop. Stopping flag + cleared timer mean nothing new starts; an already-accepted tick settles first so
+      // no location can commit after the STOPPED marker.
+      runner.stopped ??= (async () => {
+        runner.stopping = true;
+        if (runner.timer) { clearTimeout(runner.timer); runner.timer = null; }
+        await runner.inflight?.catch(() => undefined);
+        await this.finish(runner, reason);
+      })();
+      await runner.stopped;
+    }
     return this.status(reference);
   }
 
   /** One tick; the timer calls it, and tests call it directly instead of waiting 5 s. Returns false once the runner has stopped. */
   async tick(reference: string): Promise<boolean> {
     const runner = this.runners.get(parseOrderReference(reference));
-    if (!runner || runner.busy) return Boolean(runner);
+    if (!runner || runner.stopping) return false;
+    if (runner.busy) return true;
     runner.busy = true;
+    const run = this.runTick(runner);
+    runner.inflight = run;
+    try { return await run; }
+    finally { runner.busy = false; if (runner.inflight === run) runner.inflight = null; }
+  }
+
+  private async runTick(runner: Runner): Promise<boolean> {
     try {
       const route = SIMULATION_ROUTES.get(runner.routeId)!;
       const origin = deliveryOrigin();
@@ -82,6 +106,8 @@ export class DeliverySimulationRunner {
       const latitude = Math.round((origin.latitude + dLat) * 1e6) / 1e6, longitude = Math.round((origin.longitude + dLng) * 1e6) / 1e6;
       const current = await prisma.delivery.findUnique({ where: { orderId: runner.orderId }, select: { revision: true } });
       if (!current) { await this.finish(runner, 'TERMINAL'); return false; }
+      // Stop began while the revision was being read: cancel before anything is written.
+      if (runner.stopping) return false;
       try {
         const { changed, changes } = await this.service.applyUpdate(runner.actorUserId, runner.reference,
           { expectedRevision: current.revision, location: { latitude, longitude, label: null } }, 'SIMULATION');
@@ -99,14 +125,12 @@ export class DeliverySimulationRunner {
       realtimeMetrics.increment('simulation_failed');
       logSafely('warn', 'Delivery simulation tick failed', { event: 'delivery.simulation.tick_failed', errorName: error instanceof Error ? error.name : 'Unknown' });
       return true;
-    } finally {
-      runner.busy = false;
     }
   }
 
   /** Process shutdown: timers stop; boot recovery records the stop marker next time. */
   stopAll() {
-    for (const runner of this.runners.values()) if (runner.timer) clearTimeout(runner.timer);
+    for (const runner of this.runners.values()) { runner.stopping = true; if (runner.timer) clearTimeout(runner.timer); runner.timer = null; }
     this.runners.clear();
     realtimeMetrics.set('simulation_runners', 0);
   }
@@ -129,13 +153,14 @@ export class DeliverySimulationRunner {
     if (!this.autoTick) return;
     runner.timer = setTimeout(async () => {
       runner.timer = null;
-      if (await this.tick(runner.reference) && this.runners.get(runner.orderId) === runner) this.schedule(runner);
+      if (await this.tick(runner.reference) && !runner.stopping && this.runners.get(runner.orderId) === runner) this.schedule(runner);
     }, this.tickMs);
     runner.timer.unref();
   }
 
   private async finish(runner: Runner, reason: string) {
     if (this.runners.get(runner.orderId) !== runner) return;
+    runner.stopping = true;
     if (runner.timer) clearTimeout(runner.timer);
     this.runners.delete(runner.orderId);
     realtimeMetrics.set('simulation_runners', this.runners.size);
