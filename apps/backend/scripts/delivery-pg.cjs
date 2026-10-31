@@ -78,6 +78,8 @@ async function run() {
   const env = {
     ...process.env, NODE_ENV: 'test', DELIVERY_PG_RUN: '1', DATABASE_URL: url, DIRECT_URL: url,
     DB_SSL_CA_CERT_PATH: path.join(work, 'server.crt'), NODE_EXTRA_CA_CERTS: path.join(work, 'server.crt'),
+    // Task 04.6: clearly fictional demo hub for the map projection.
+    DELIVERY_ORIGIN_LAT: '33.9', DELIVERY_ORIGIN_LNG: '35.5', DELIVERY_ORIGIN_LABEL: 'ElectroHub demo hub',
     JWT_SECRET: crypto.randomBytes(48).toString('base64url'), ELECTROHUB_LOG_DIR: path.join(work, 'logs'),
     STRIPE_SECRET_KEY: '', STRIPE_WEBHOOK_SECRET: '', BREVO_API_KEY: '', GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '',
     PAYMENT_SHARED_MUTATIONS_APPROVED: '', COMMERCE_EMAIL_ENQUEUE_ENABLED: 'true', COMMERCE_EMAIL_DISPATCH_ENABLED: 'false',

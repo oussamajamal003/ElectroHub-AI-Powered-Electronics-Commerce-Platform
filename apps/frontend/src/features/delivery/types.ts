@@ -26,6 +26,17 @@ export interface CustomerDeliverySnapshot {
   isSimulated: boolean;
   timeline: DeliveryTimelineEntry[];
   serverTime: string;
+  /** Task 04.6 (architecture §7.3). Absent from 04.5 servers; null when no hub is configured or the order is not trackable. */
+  map?: CustomerDeliveryMap | null;
+}
+
+export type DeliveryMapPathKind = 'RECORDED' | 'SIMULATED_FIXTURE' | 'NONE';
+export interface CustomerDeliveryMap {
+  origin: { latitude: number; longitude: number; label: string };
+  destination: { latitude: number; longitude: number } | null;
+  /** [latitude, longitude] recorded positions, oldest first, at most 200. */
+  path: [number, number][];
+  pathKind: DeliveryMapPathKind;
 }
 
 export interface AdminDeliveryEvent {

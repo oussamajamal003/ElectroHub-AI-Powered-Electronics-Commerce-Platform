@@ -83,6 +83,8 @@ async function run() {
     FRONTEND_URL: `http://localhost:${ports.frontend}`, STRIPE_SECRET_KEY: '', STRIPE_WEBHOOK_SECRET: '', BREVO_API_KEY: '', GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '',
     PAYMENT_SHARED_MUTATIONS_APPROVED: '', PAYMENT_CONFIRMATION_SIGNAL: 'false', COMMERCE_EMAIL_ENQUEUE_ENABLED: 'true', COMMERCE_EMAIL_DISPATCH_ENABLED: 'false',
     COMMERCE_EMAIL_SEND_MODE: 'disabled', COMMERCE_EMAIL_ORIGIN: `http://localhost:${ports.frontend}`, OTP_HASH_SECRET: crypto.randomBytes(24).toString('hex'),
+    // Task 04.6: clearly fictional demo hub.
+    DELIVERY_ORIGIN_LAT: '34.0380', DELIVERY_ORIGIN_LNG: '-118.2660', DELIVERY_ORIGIN_LABEL: 'ElectroHub demo hub',
   };
   const tsx = path.join(path.dirname(require.resolve('tsx/package.json')), 'dist', 'cli.mjs');
   const credentials = path.join(work, 'credentials.json');
@@ -90,13 +92,37 @@ async function run() {
   serve('backend', [tsx, 'src/bootstrap.ts'], env, backend);
   await waitFor(`http://127.0.0.1:${ports.backend}/api/health`, 'backend');
   const vite = path.join(path.dirname(require.resolve('vite/package.json', { paths: [frontend] })), 'bin', 'vite.js');
+  const tiles = await tileStub();
   serve('frontend', [vite, '--port', String(ports.frontend), '--strictPort'], { ...process.env, E2E_FRONTEND_PORT: String(ports.frontend),
-    E2E_API_PROXY_TARGET: `http://localhost:${ports.backend}` }, frontend);
+    E2E_API_PROXY_TARGET: `http://localhost:${ports.backend}`, VITE_MAP_TILE_URL: `${tiles}/{z}/{x}/{y}.svg`,
+    VITE_MAP_ATTRIBUTION: '© OpenStreetMap contributors' }, frontend);
   await waitFor(`http://localhost:${ports.frontend}/`, 'frontend');
-  const state = { frontend: `http://localhost:${ports.frontend}`, backend: `http://127.0.0.1:${ports.backend}`, credentials, database: `loopback:${pgPort}/${database}`, run: work };
+  const state = { frontend: `http://localhost:${ports.frontend}`, backend: `http://127.0.0.1:${ports.backend}`, tiles, credentials, database: `loopback:${pgPort}/${database}`, run: work };
   fs.writeFileSync(path.join(work, 'state.json'), JSON.stringify(state, null, 2));
   fs.writeFileSync(path.join(root, '.cache', 'delivery-qa-stack.current'), path.join(work, 'state.json'));
   console.log(`Delivery QA stack ready: ${state.frontend} (API ${state.backend}, ${state.database}); state: ${path.relative(root, path.join(work, 'state.json'))}`);
+}
+
+/**
+ * Task 04.6 local tile stub: plain SVG tiles on a random loopback port, so browser QA never contacts the public OSM servers. Only
+ * /{z}/{x}/{y}.svg paths are answered (each request path is appended to tile-requests.log for the AC2 network audit); anything else is 404.
+ */
+async function tileStub() {
+  const http = require('node:http');
+  const port = await unusedPort();
+  const server = http.createServer((req, res) => {
+    const match = /^\/(\d+)\/(\d+)\/(\d+)\.svg$/.exec(req.url || '');
+    fs.appendFileSync(path.join(work, 'tile-requests.log'), `${req.method} ${req.url}
+`);
+    if (!match) { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
+    res.end(`<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#f1f5f9"/>` +
+      `<path d="M0 128H256M128 0V256" stroke="#e2e8f0" stroke-width="10"/><rect x="0.5" y="0.5" width="255" height="255" fill="none" stroke="#cbd5e1"/>` +
+      `<text x="8" y="20" font-family="monospace" font-size="11" fill="#64748b">${match[1]}/${match[2]}/${match[3]}</text></svg>`);
+  });
+  await new Promise(resolve => server.listen(port, '127.0.0.1', resolve));
+  children.push({ kill: () => server.close() });
+  return `http://127.0.0.1:${port}`;
 }
 
 let stopping = false;

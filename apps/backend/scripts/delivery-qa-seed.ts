@@ -74,9 +74,24 @@ async function main() {
   const awaitingCapture = await order(customer, 'AWAITING_CAPTURE', 'PROCESSING');
   const legacyUnpaid = await order(customer, 'CONFIRMED', null);
   const otherCustomer = await order(other, 'CONFIRMED', 'SUCCEEDED'); await start(otherCustomer);
+  // Task 04.6 map fixtures: several recorded positions (fictional, around the demo hub) and stored delivery-area coordinates.
+  const outRoute = await order(customer, 'PREPARING', 'SUCCEEDED'); await start(outRoute);
+  await prisma.order.update({ where: { id: outRoute.slice(4).toLowerCase() }, data: { shippingLatitude: 34.0612, shippingLongitude: -118.2268 } });
+  const route: [number, number][] = [[34.0405, -118.2620], [34.0452, -118.2551], [34.0498, -118.2478], [34.0533, -118.2402], [34.0561, -118.2339]];
+  await patch(outRoute, { expectedRevision: 1, status: 'OUT_FOR_DELIVERY', estimatedAt: hours(2), location: { latitude: route[0]![0], longitude: route[0]![1], label: 'Left the hub' } });
+  for (const [index, [latitude, longitude]] of route.slice(1).entries()) {
+    await patch(outRoute, { expectedRevision: index + 2, location: { latitude, longitude, label: index === route.length - 2 ? 'Harbor district' : null } });
+  }
+  const outSimulated = await order(customer, 'PREPARING', 'SUCCEEDED'); await start(outSimulated);
+  await patch(outSimulated, { expectedRevision: 1, status: 'OUT_FOR_DELIVERY', location: { latitude: 34.0420, longitude: -118.2600 } });
+  await patch(outSimulated, { expectedRevision: 2, location: { latitude: 34.0470, longitude: -118.2500 } });
+  await patch(outSimulated, { expectedRevision: 3, location: { latitude: 34.0510, longitude: -118.2450 } });
+  // The 04.7 simulation runner does not exist yet; the fixture marks the delivery as simulated directly so the dashed route can be reviewed.
+  const simulated = await prisma.delivery.update({ where: { orderId: outSimulated.slice(4).toLowerCase() }, data: { isSimulated: true } });
+  await prisma.deliveryEvent.updateMany({ where: { deliveryId: simulated.id, changes: { has: 'LOCATION' } }, data: { source: 'SIMULATION' } });
 
   writeFileSync(output, JSON.stringify({ admin, customer, other, orders: { notStarted, adminFlow, confirmedTracked, preparing, outFresh, outStale, outNoLocation,
-    delivered, cancelled, awaitingCapture, legacyUnpaid, otherCustomer } }, null, 2));
+    delivered, cancelled, awaitingCapture, legacyUnpaid, otherCustomer, outRoute, outSimulated } }, null, 2));
   const counts = { orders: await prisma.order.count(), deliveries: await prisma.delivery.count(), events: await prisma.deliveryEvent.count(),
     outbox: await prisma.commerceEmailOutbox.count() };
   console.log(`Delivery QA fixtures seeded: ${JSON.stringify(counts)}`);

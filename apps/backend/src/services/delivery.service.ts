@@ -3,6 +3,8 @@ import { Prisma, PrismaClient, type DeliveryEventChange, type DeliveryEventType,
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { transitionFulfillment } from './commerce-email.producer.js';
+import { deliveryOrigin, type DeliveryOrigin } from '../config/delivery-map.config.js';
+import { buildDeliveryMap, MAP_PATH_LIMIT, type CustomerDeliveryMap } from './delivery-map.projection.js';
 import { redactDeliveryForDeletedOwner } from './delivery-privacy.js';
 import { parseOrderReference } from './order.service.js';
 import type { DeliveryUpdateInput } from '../validators/delivery.validator.js';
@@ -128,22 +130,41 @@ function adminFields(order: LoadedOrder & { user: { email: string; firstName: st
   };
 }
 
-export type CustomerDeliverySnapshot = ReturnType<typeof customerFields>;
+export type CustomerDeliverySnapshot = ReturnType<typeof customerFields> & { map: CustomerDeliveryMap | null };
 export type AdminDeliverySnapshot = ReturnType<typeof adminFields>;
 
 const customerTimelineWhere: Prisma.DeliveryEventWhereInput = { OR: [{ type: 'TRACKING_STARTED' }, { changes: { hasSome: ['STATUS', 'ETA'] } }] };
 
 export class DeliveryService {
-  constructor(private readonly database: PrismaClient = prisma, private readonly clock: () => Date = () => new Date()) {}
+  constructor(private readonly database: PrismaClient = prisma, private readonly clock: () => Date = () => new Date(),
+    private readonly origin: () => DeliveryOrigin | null = deliveryOrigin) {}
 
   /** Owner-scoped read. Unknown and other customers' orders are the same 404 as Order Details, so existence never leaks. */
   async getCustomerSnapshot(userId: string, reference: string): Promise<CustomerDeliverySnapshot> {
     const order = await this.database.order.findFirst({ where: { id: parseOrderReference(reference), userId }, include });
     if (!order) throw new AppError('Order not found.', 404, 'ORDER_NOT_FOUND');
-    const events = order.delivery ? await this.database.deliveryEvent.findMany({ where: { deliveryId: order.delivery.id, ...customerTimelineWhere },
+    const [events, map] = await Promise.all([order.delivery ? this.database.deliveryEvent.findMany({ where: { deliveryId: order.delivery.id, ...customerTimelineWhere },
       orderBy: { revision: 'desc' }, take: CUSTOMER_TIMELINE_LIMIT,
-      select: { id: true, type: true, changes: true, toStatus: true, estimatedAt: true, occurredAt: true } }) : [];
-    return customerFields(order, customerTimeline(events), this.clock());
+      select: { id: true, type: true, changes: true, toStatus: true, estimatedAt: true, occurredAt: true } }) : [], this.customerMap(order)]);
+    return { ...customerFields(order, customerTimeline(events), this.clock()), map };
+  }
+
+  /**
+   * Task 04.6 map: only for a trackable order with a configured hub. Recorded positions are shared only while the live location itself is
+   * shared (OUT_FOR_DELIVERY with a current position), so a delivered or cancelled order, or one whose location an admin cleared, never
+   * exposes its route. Redacted owners already hold null coordinates.
+   */
+  private async customerMap(order: LoadedOrder): Promise<CustomerDeliveryMap | null> {
+    const origin = this.origin();
+    if (!origin || availability(order) !== 'AVAILABLE' || !order.delivery) return null;
+    const live = order.status === 'OUT_FOR_DELIVERY' && order.delivery.latitude !== null && order.delivery.longitude !== null;
+    const points = live ? await this.database.deliveryEvent.findMany({
+      where: { deliveryId: order.delivery.id, changes: { has: 'LOCATION' }, latitude: { not: null }, longitude: { not: null } },
+      orderBy: { revision: 'desc' }, take: MAP_PATH_LIMIT, select: { latitude: true, longitude: true, source: true } }) : [];
+    return buildDeliveryMap({ origin, isSimulated: order.delivery.isSimulated,
+      shipping: { latitude: coordinate(order.shippingLatitude), longitude: coordinate(order.shippingLongitude) },
+      points: points.reverse().map(point => ({ latitude: coordinate(point.latitude), longitude: coordinate(point.longitude),
+        simulated: point.source === 'SIMULATION' })) });
   }
 
   async getAdminSnapshot(reference: string, database: PrismaClient | Tx = this.database): Promise<AdminDeliverySnapshot> {

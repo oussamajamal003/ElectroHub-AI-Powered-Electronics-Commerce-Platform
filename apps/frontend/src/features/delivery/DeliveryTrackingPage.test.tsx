@@ -10,6 +10,12 @@ import type { CustomerDeliverySnapshot } from './types';
 
 vi.mock('@/lib/api', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/api')>(), apiClient: vi.fn() }));
 vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: vi.fn() }));
+// Task 04.6: the lazy Leaflet chunk is replaced by a probe that records whether it was ever requested (AC4).
+const mapChunk = vi.hoisted(() => ({ requested: 0 }));
+vi.mock('./map/LeafletDeliveryMap', () => {
+  mapChunk.requested++;
+  return { default: ({ layers }: { layers: { line: { kind: string } | null } }) => <div data-testid="map-probe">{layers.line?.kind ?? 'no-line'}</div> };
+});
 
 const reference = 'ORD-7F3A21C0-9B4E-4D1A-8C55-2E0A6B1F93D4';
 const now = '2026-11-04T10:48:00.000Z';
@@ -152,5 +158,37 @@ describe('Delivery tracking page', () => {
     expect(writeText).toHaveBeenCalledWith('EH-TRK-4K9Q2M7XPA');
     expect(button).toHaveTextContent('Copied');
     expect(screen.getByRole('status', { name: '' })).toHaveTextContent('Tracking reference copied.');
+  });
+});
+
+describe('Task 04.6 map panel', () => {
+  const tiles = () => { vi.stubEnv('VITE_MAP_TILE_URL', 'http://127.0.0.1:4599/{z}/{x}/{y}.png'); vi.stubEnv('VITE_MAP_ATTRIBUTION', '© OpenStreetMap contributors'); };
+  const origin = { latitude: 33.9, longitude: 35.5, label: 'Hub' };
+  afterEach(() => { vi.unstubAllEnvs(); });
+
+  it('T6-02 no coordinates: text summary only, Leaflet chunk never requested', async () => {
+    tiles(); signedIn(); mapChunk.requested = 0;
+    resolve(snapshot({ location: null, map: { origin, destination: null, path: [], pathKind: 'NONE' } }));
+    renderPage();
+    expect(await screen.findByText('Out for delivery, but no location has been shared yet.')).toBeInTheDocument();
+    expect(screen.queryByTestId('map-probe')).toBeNull();
+    expect(mapChunk.requested).toBe(0);
+  });
+
+  it('T6-01 / T6-09 loads the lazy map below the summary when there is something to draw', async () => {
+    tiles(); signedIn();
+    resolve(snapshot({ isSimulated: true, map: { origin, destination: null, path: [[33.89, 35.5], [33.88, 35.51]], pathKind: 'SIMULATED_FIXTURE' } }));
+    renderPage();
+    expect(await screen.findByTestId('map-probe')).toHaveTextContent('simulated');
+    const summary = document.getElementById('delivery-map-summary')!;
+    expect(summary.compareDocumentPosition(screen.getByTestId('map-probe')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('missing tile configuration falls back to the text summary', async () => {
+    vi.stubEnv('VITE_MAP_TILE_URL', ''); signedIn();
+    resolve(snapshot({ map: { origin, destination: null, path: [[33.89, 35.5], [33.88, 35.51]], pathKind: 'RECORDED' } }));
+    renderPage();
+    expect(await screen.findByText(/Last known location: Downtown Distribution Point/)).toBeInTheDocument();
+    expect(screen.queryByTestId('map-probe')).toBeNull();
   });
 });
