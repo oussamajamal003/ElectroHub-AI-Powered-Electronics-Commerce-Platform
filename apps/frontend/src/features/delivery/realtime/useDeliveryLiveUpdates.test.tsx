@@ -244,5 +244,33 @@ describe('useDeliveryLiveUpdates with a fake socket', () => {
       expect(client.getQueryData<{ data: CustomerDeliverySnapshot }>(key('customer-a'))?.data.revision).toBe(5);
       expect(sockets[0]!.disconnects).toBe(1);
     });
+
+    it('C1 a disconnect during reconciliation: the late REST completion never reports live, and a reconnect then does', async () => {
+      const rest = deferred();
+      const refetchQueries = vi.spyOn(client, 'refetchQueries').mockImplementation(() => rest.promise);
+      mount('customer-a');
+      await act(async () => { sockets[0]!.serverAccept(); });
+      await act(async () => { sockets[0]!.serverDrop(); });
+      await act(async () => { rest.resolve(); await rest.promise; });
+      expect(state()).toBe('reconnecting');
+      expect(screen.queryByText('Back online · up to date')).not.toBeInTheDocument();
+      await act(async () => { vi.advanceTimersByTime(10_000); });
+      expect(state()).toBe('paused');
+      refetchQueries.mockResolvedValue();
+      await act(async () => { sockets[0]!.serverAccept(); });
+      expect(state()).toBe('resynced');
+    });
+
+    it('C2 a delayed acknowledgment from the old connection cannot establish live state', async () => {
+      const refetchQueries = vi.spyOn(client, 'refetchQueries').mockResolvedValue();
+      mount('customer-a');
+      let answerOld!: (ack: unknown) => void;
+      sockets[0]!.onSubscribe = () => new Promise(resolve => { answerOld = resolve; });
+      await act(async () => { sockets[0]!.serverAccept(); });
+      await act(async () => { sockets[0]!.serverDrop(); });
+      await act(async () => { answerOld({ ok: true, revision: 0 }); });
+      expect(refetchQueries).not.toHaveBeenCalled();
+      expect(state()).toBe('reconnecting');
+    });
   });
 });

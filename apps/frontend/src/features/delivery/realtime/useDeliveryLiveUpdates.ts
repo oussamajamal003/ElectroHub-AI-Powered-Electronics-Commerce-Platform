@@ -80,6 +80,8 @@ export function useDeliveryLiveUpdates(orderReference: string, snapshot: Custome
     let acked: number | null = null;
     const settle = (ackRevision: number, succeeded: boolean) => {
       const current = client.getQueryData<Snapshot>(queryKey)?.data;
+      // Only a connected socket with a live subscription can be reported as synchronized.
+      if (!socket.connected || acked === null) return;
       if (!succeeded || client.getQueryState(queryKey)?.error || !current || current.revision < ackRevision) return;
       if (pauseTimer) { clearTimeout(pauseTimer); pauseTimer = null; }
       if (interrupted) {
@@ -102,8 +104,10 @@ export function useDeliveryLiveUpdates(orderReference: string, snapshot: Custome
 
     const subscribe = () => {
       acked = null;
+      // Each (re)subscribe starts a new generation: an ack or REST completion from an earlier connection is discarded.
+      const generation = ++attempt;
       socket.timeout(5_000).emitWithAck('delivery:subscribe', { orderReference }).then((ack: Ack) => {
-        if (disposed) return;
+        if (disposed || generation !== attempt) return;
         if (!ack.ok) {
           // NOT_FOUND / INVALID: REST decides what the page shows. Limits: stay on the polling fallback.
           void refetch();
@@ -116,6 +120,9 @@ export function useDeliveryLiveUpdates(orderReference: string, snapshot: Custome
     };
     const onDrop = () => {
       if (disposed) return;
+      // A disconnect invalidates any pending acknowledgment or REST reconciliation.
+      attempt++;
+      acked = null;
       interrupted = true;
       setState(current => current === 'paused' ? 'paused' : 'reconnecting');
       if (!pauseTimer && !paused) pauseTimer = setTimeout(() => {

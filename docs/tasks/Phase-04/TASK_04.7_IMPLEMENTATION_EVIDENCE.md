@@ -186,3 +186,5 @@ Requirements 19/20 · Architecture 14/15 · Security 14/15 · Testing 14/15 · D
 **Reused evidence (unchanged areas):** 33/33 disposable PostgreSQL gate, 7/7 Chromium realtime, 9/9 Chromium map.
 
 **Not covered:** no browser run of the corrected reconnect or Stop flows; final-head CI is recorded in the PR.
+
+**Reconnect race closure (baseline `5c3987b`):** `useDeliveryLiveUpdates.ts` now treats every (re)subscribe as a generation and invalidates it on disconnect; `settle()` also requires a connected socket with a live subscription. A REST completion or ack from a previous connection can no longer report live. Tests C1 (disconnect mid-reconcile, then reconnect) and C2 (stale ack) added: hook 16/16, delivery frontend 39/39, typecheck and lint clean. Self-applied review only.
