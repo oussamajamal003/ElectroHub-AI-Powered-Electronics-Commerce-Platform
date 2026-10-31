@@ -13,6 +13,7 @@ import { ATTEMPT_LIFETIME_MS, SUBMITTED_ABANDON_GRACE_MS, WORK_LEASE_MS, MAX_PAY
   cents, retryDelay, customerPaymentStatus, ABANDONMENT_FAILURE_CODES, NOT_CONFIRMED_FAILURE_CODE, CANCELED_BY_CUSTOMER_FAILURE_CODE, NEVER_CONFIRMED_GRACE_MS, CONFIRMATION_SIGNAL_GRACE_MS, SUBMITTED_UNRESOLVED_WINDOW_MS, confirmationSignalEnabled, verifyBinding, type Attempt, type PaymentProvider, type ProviderIntent } from './payment.domain.js';
 import { isSerializationConflict } from './transaction-conflict.js';
 import { redactDeliveryForDeletedOwner } from './delivery-privacy.js';
+import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
 import { enqueueCancellation, enqueuePaymentSucceeded, logCreatedEvents } from './commerce-email.producer.js';
 import { logSafely } from '../utils/logger.js';
 import { paymentIsolation, type PaymentIsolationDecision } from '../payment-isolation.js';
@@ -1139,6 +1140,8 @@ export class PaymentService {
         refund: refunded && latest.refundId && latest.refundAmountCents ? { id: latest.refundId, amountCents: latest.refundAmountCents, refundedAt: cancelledAt } : null });
     });
     logCreatedEvents(emails);
+    // Task 04.7: after commit, a hint so live tracking pages refetch and show Cancelled. A no-op without an attached gateway (workers).
+    if (attempt.orderId) DeliveryPublisher.revoked(attempt.orderId, `ORD-${attempt.orderId.toUpperCase()}`, 'ORDER_CANCELLED');
   }
 
   /** `scope`: exact attempt IDs, or (governed DEV) only attempts created at/after a boundary. Undefined = unscoped (production). */

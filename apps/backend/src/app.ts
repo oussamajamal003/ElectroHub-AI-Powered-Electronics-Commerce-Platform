@@ -40,10 +40,11 @@ app.use(requestLogger);
 // Security headers
 app.use(helmet());
 
-// CORS — configured for development; restrict in production
+// CORS — configured for development; restrict in production. Task 04.7: the Socket.IO gateway uses the same allowlist.
+export const corsOrigin = process.env.FRONTEND_URL || 'http://localhost:3000';
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: corsOrigin,
     credentials: true,
   })
 );

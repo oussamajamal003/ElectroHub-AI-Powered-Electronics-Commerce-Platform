@@ -4,6 +4,7 @@ import { AppError } from '../middleware/errorHandler.js';
 import { verifyPassword } from '../utils/hash.js';
 import { createAccountDeletionProof } from './account-deletion-proof.js';
 import { REDACTED_SHIPPING } from './delivery-privacy.js';
+import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
 
 export class AccountDeletionService {
   async verifyPassword(userId: string, password: string) {
@@ -102,5 +103,7 @@ export class AccountDeletionService {
         },
       });
     }, { maxWait: 10000, timeout: 30000 });
+    // After commit only: a rolled-back deletion keeps the account and its sockets.
+    DeliveryPublisher.disconnectUser(userId, 'ACCOUNT_DELETED');
   }
 }

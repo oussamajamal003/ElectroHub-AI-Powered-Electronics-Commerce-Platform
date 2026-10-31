@@ -347,13 +347,13 @@ export class AuthRepository {
    * committed rows after the lock is held, so it includes any rotation that committed first and
    * never includes one that rolled back. Works without any process-local state.
    */
-  async revokeRefreshTokenFamily(tokenHash: string): Promise<void> {
+  async revokeRefreshTokenFamily(tokenHash: string): Promise<string | undefined> {
     // userId is immutable for a token row, so it may be read before taking the lock.
     const token = await prisma.refreshToken.findUnique({
       where: { tokenHash },
       select: { userId: true },
     });
-    if (!token) return;
+    if (!token) return undefined;
 
     await prisma.$transaction(async (transaction) => {
       await lockUserTokenLifecycle(transaction, token.userId);
@@ -369,6 +369,8 @@ export class AuthRepository {
         data: { isRevoked: true, expiresAt: new Date(0) },
       });
     }, { timeout: 10000 });
+    // Task 04.7: the owner lets logout drop that account's live delivery sockets.
+    return token.userId;
   }
 
   /**

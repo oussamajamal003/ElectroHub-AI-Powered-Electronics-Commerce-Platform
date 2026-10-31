@@ -30,6 +30,9 @@ export type DeliveryUpdateInput = z.infer<ReturnType<typeof deliveryUpdateSchema
 
 export const deliveryStartSchema = z.object({}).strict();
 
+/** Task 04.7: an approved fixture id only; the runner rejects ids that are not in the fixture set. */
+export const deliverySimulationStartSchema = z.object({ routeId: z.string().regex(/^[a-z0-9-]{1,40}$/) }).strict();
+
 const pageNumber = (fallback: number, maximum: number) => z.string().regex(/^[1-9]\d*$/)
   .transform(Number).pipe(z.number().int().safe().max(maximum)).prefault(String(fallback));
 

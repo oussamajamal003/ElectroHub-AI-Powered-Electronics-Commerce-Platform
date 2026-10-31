@@ -86,3 +86,30 @@ export interface AdminDeliveryUpdate {
   estimatedAt?: string | null;
   note?: string;
 }
+
+/** Task 04.7 `GET|POST|DELETE /api/admin/orders/:orderReference/delivery/simulation`. */
+export interface DeliverySimulationStatus {
+  enabled: boolean;
+  running: boolean;
+  routeId: string | null;
+  ticks: number;
+  maxTicks: number;
+  tickSeconds: number;
+  routes: { id: string; label: string; points: number }[];
+}
+
+/** Task 04.7 socket events, v1 (architecture §8.3). The snapshot omits the timeline and the recorded map path (clients append). */
+export type DeliveryLiveChange = 'status' | 'location' | 'eta' | 'tracking' | 'simulation';
+export interface DeliveryUpdatedEvent {
+  v: 1;
+  orderReference: string;
+  revision: number;
+  occurredAt: string;
+  changed: DeliveryLiveChange[];
+  snapshot: Omit<CustomerDeliverySnapshot, 'timeline' | 'map'> & { map?: Omit<CustomerDeliveryMap, 'path'> | null };
+  timelineEntry: DeliveryTimelineEntry | null;
+  /** Additive to v1: every customer-visible entry of the event (status and ETA can change together). */
+  timelineEntries?: DeliveryTimelineEntry[];
+  source: 'ADMIN' | 'SIMULATION';
+}
+export interface DeliveryRevokedEvent { v: 1; orderReference: string; reason: 'ACCESS_REVOKED' | 'ORDER_CANCELLED' }

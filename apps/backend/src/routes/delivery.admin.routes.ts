@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { getAdminDelivery, listAdminDeliveries, startAdminDelivery, updateAdminDelivery } from '../controllers/delivery.controller.js';
+import { getAdminDelivery, getDeliverySimulation, listAdminDeliveries, startAdminDelivery, startDeliverySimulation, stopDeliverySimulation,
+  updateAdminDelivery } from '../controllers/delivery.controller.js';
 
 /**
  * Task 04.5 admin delivery operations. ADMIN is enforced server-side before any parsing; responses are private and never cached.
@@ -78,6 +79,31 @@ import { getAdminDelivery, listAdminDeliveries, startAdminDelivery, updateAdminD
  *       400: { description: VALIDATION_ERROR }
  *       404: { description: ORDER_NOT_FOUND | DELIVERY_NOT_STARTED }
  *       409: { description: 'DELIVERY_REVISION_CONFLICT (body includes the current snapshot) | DELIVERY_PAYMENT_INELIGIBLE | DELIVERY_ORDER_CANCELLED | DELIVERY_TERMINAL | ORDER_TRANSITION_INVALID | DELIVERY_LOCATION_NOT_ALLOWED' }
+ * /admin/orders/{orderReference}/delivery/simulation:
+ *   get:
+ *     tags: [Delivery]
+ *     summary: Task 04.7 demo simulation status and approved fictional routes
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: 'enabled, running, routeId, ticks, maxTicks, tickSeconds, routes[]' }
+ *   post:
+ *     tags: [Delivery]
+ *     summary: Start the demo simulation (DELIVERY_SIMULATION_ENABLED, non-production, disposable database only; OUT_FOR_DELIVERY only)
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { type: object, additionalProperties: false, required: [routeId], properties: { routeId: { type: string, pattern: '^[a-z0-9-]{1,40}$' } } }
+ *     responses:
+ *       201: { description: Simulation running; status in data }
+ *       409: { description: 'DELIVERY_SIMULATION_DISABLED | DELIVERY_SIMULATION_RUNNING | DELIVERY_LOCATION_NOT_ALLOWED | DELIVERY_ORDER_CANCELLED | DELIVERY_PAYMENT_INELIGIBLE' }
+ *   delete:
+ *     tags: [Delivery]
+ *     summary: Stop the demo simulation (records SIMULATION_STOPPED)
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: 'Stopped, or already not running (idempotent); status in data' }
  */
 const router = Router();
 router.use(['/admin/deliveries', '/admin/orders/:orderReference/delivery'], requireAuth, requireRole('ADMIN'),
@@ -88,4 +114,7 @@ router.get('/admin/deliveries', listAdminDeliveries);
 router.get('/admin/orders/:orderReference/delivery', getAdminDelivery);
 router.post('/admin/orders/:orderReference/delivery', writes, startAdminDelivery);
 router.patch('/admin/orders/:orderReference/delivery', writes, updateAdminDelivery);
+router.get('/admin/orders/:orderReference/delivery/simulation', getDeliverySimulation);
+router.post('/admin/orders/:orderReference/delivery/simulation', writes, startDeliverySimulation);
+router.delete('/admin/orders/:orderReference/delivery/simulation', writes, stopDeliverySimulation);
 export default router;

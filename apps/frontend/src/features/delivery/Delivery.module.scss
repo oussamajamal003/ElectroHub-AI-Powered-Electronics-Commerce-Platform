@@ -15,6 +15,7 @@ $eyebrow-tracking: .06em;
   time { font-family: $font-family-mono; font-size: $font-size-sm; color: $color-text-primary; }
 }
 .refreshNotice { margin-bottom: $spacing-6; }
+.liveRow { display: flex; flex-wrap: wrap; gap: $spacing-2; margin-top: $spacing-2; &:empty { display: none; } }
 
 // --- Page grid: DOM order header → Overview → Progress → Location → History → Actions; desktop moves the Overview to a sticky aside ---
 .grid { display: grid; gap: $spacing-6; align-items: start; > * { min-width: 0; } }

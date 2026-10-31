@@ -2,7 +2,7 @@
 
 /*
  * Task 04.5 delivery tracking real-PostgreSQL gate (DISPOSABLE only). Provisions a brand-new local PostgreSQL cluster on a random loopback
- * port, applies every repository migration with psql (pgvector-only migrations skipped and logged), runs the delivery tracking service + HTTP suites (T5-01…T5-20)
+ * port, applies every repository migration with psql (pgvector-only migrations skipped and logged), runs the delivery tracking service + HTTP suites (T5-01…T5-20) and the Task 04.7 real-time suite
  * against it, and stops the cluster. It never reads .env DATABASE_URL/DIRECT_URL and cannot target a hosted database: the only
  * URL it builds is its own loopback cluster. Mirrors scripts/commerce-email-pg.cjs.
  *
@@ -84,6 +84,8 @@ async function run() {
     STRIPE_SECRET_KEY: '', STRIPE_WEBHOOK_SECRET: '', BREVO_API_KEY: '', GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '',
     PAYMENT_SHARED_MUTATIONS_APPROVED: '', COMMERCE_EMAIL_ENQUEUE_ENABLED: 'true', COMMERCE_EMAIL_DISPATCH_ENABLED: 'false',
     COMMERCE_EMAIL_SEND_MODE: 'disabled', COMMERCE_EMAIL_ORIGIN: 'http://localhost:5173', PAYMENT_CONFIRMATION_SIGNAL: 'false',
+    // Task 04.7: the demo simulation is allowed here only because this runner's own loopback electrohub_disposable_* database is the target.
+    DELIVERY_SIMULATION_ENABLED: 'true',
   };
   const vitest = path.join(path.dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
   child = spawn(process.execPath, [vitest, 'run', '--config', 'vitest.delivery-pg.config.mts'], { cwd: backend, env, stdio: 'inherit', windowsHide: true });

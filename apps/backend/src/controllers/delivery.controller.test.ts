@@ -39,7 +39,7 @@ describe('Task 04.5 delivery timing events', () => {
   });
 
   it('an accepted update emits one event flagged changed, and no coordinates, label or note ever reach the log', async () => {
-    service.applyUpdate.mockResolvedValue({ changed: true, snapshot: { orderId: 'o1', status: 'OUT_FOR_DELIVERY', current: { revision: 3 } } });
+    service.applyUpdate.mockResolvedValue({ changed: true, changes: ['STATUS', 'LOCATION'], snapshot: { orderId: 'o1', status: 'OUT_FOR_DELIVERY', current: { revision: 3 } } });
     const body = { expectedRevision: 2, location: { latitude: 33.123456, longitude: 35.654321, label: 'Secret Street 5' }, note: 'Gate code 4321' };
     await call(updateAdminDelivery, { body });
     const events = timing('delivery.update.timing');
@@ -50,7 +50,7 @@ describe('Task 04.5 delivery timing events', () => {
   });
 
   it('a no-op update is classified changed:false; a started delivery is classified created', async () => {
-    service.applyUpdate.mockResolvedValue({ changed: false, snapshot: { orderId: 'o1', status: 'PREPARING', current: { revision: 2 } } });
+    service.applyUpdate.mockResolvedValue({ changed: false, changes: [], snapshot: { orderId: 'o1', status: 'PREPARING', current: { revision: 2 } } });
     await call(updateAdminDelivery, { body: { expectedRevision: 2, note: 'x', estimatedAt: null } });
     expect(timing('delivery.update.timing')[0]).toMatchObject({ outcome: 'ok', changed: false });
     service.start.mockResolvedValue({ created: true, snapshot: { orderId: 'o1', revision: 1 } });

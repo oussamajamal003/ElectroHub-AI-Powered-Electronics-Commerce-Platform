@@ -62,7 +62,8 @@ export function getFrontendServerConfig(environment: FrontendServerEnvironment, 
   return {
     port,
     strictPort: true as const,
-    proxy: { '/api': { target: parsed.origin, changeOrigin: true as const } },
+    // Task 04.7: the live delivery socket shares the API origin through the same proxy (WebSocket upgrade included).
+    proxy: { '/api': { target: parsed.origin, changeOrigin: true as const }, '/socket.io': { target: parsed.origin, changeOrigin: true as const, ws: true as const } },
   };
 }
 

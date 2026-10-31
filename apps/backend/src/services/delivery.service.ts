@@ -132,6 +132,12 @@ function adminFields(order: LoadedOrder & { user: { email: string; firstName: st
 
 export type CustomerDeliverySnapshot = ReturnType<typeof customerFields> & { map: CustomerDeliveryMap | null };
 export type AdminDeliverySnapshot = ReturnType<typeof adminFields>;
+/** Task 04.7 `delivery:updated` payload body: the customer projection without the timeline or the recorded map path (clients append). */
+export type RealtimeDeliveryProjection = { orderId: string; orderReference: string; revision: number; occurredAt: string;
+  snapshot: Omit<CustomerDeliverySnapshot, 'timeline' | 'map'> & { map: Omit<CustomerDeliveryMap, 'path'> | null };
+  timelineEntries: TimelineEntry[]; source: 'ADMIN' | 'SIMULATION' | 'SYSTEM' };
+/** Who wrote an update. SIMULATION is the Task 04.7 demo runner: it marks the delivery and its location as simulated. */
+export type DeliveryUpdateSource = 'ADMIN' | 'SIMULATION';
 
 const customerTimelineWhere: Prisma.DeliveryEventWhereInput = { OR: [{ type: 'TRACKING_STARTED' }, { changes: { hasSome: ['STATUS', 'ETA'] } }] };
 
@@ -214,9 +220,10 @@ export class DeliveryService {
   }
 
   /** One accepted request = one revision = one DeliveryEvent. A request that changes nothing writes nothing. */
-  async applyUpdate(actorUserId: string, reference: string, input: DeliveryUpdateInput): Promise<{ changed: boolean; snapshot: AdminDeliverySnapshot }> {
+  async applyUpdate(actorUserId: string, reference: string, input: DeliveryUpdateInput, source: DeliveryUpdateSource = 'ADMIN'):
+    Promise<{ changed: boolean; changes: DeliveryEventChange[]; snapshot: AdminDeliverySnapshot }> {
     const orderId = parseOrderReference(reference);
-    const changed = await this.database.$transaction(async tx => {
+    const changes = await this.database.$transaction(async tx => {
       const order = await this.lockOrder(tx, orderId);
       this.assertWritable(order);
       const delivery = order.delivery;
@@ -240,7 +247,7 @@ export class DeliveryService {
         if (input.status === 'DELIVERED') data.deliveredAt = now;
         Object.assign(event, { fromStatus: order.status, toStatus: input.status });
       }
-      if (input.location !== undefined) this.applyLocation(delivery, status, input.location, now, changes, data, event);
+      if (input.location !== undefined) this.applyLocation(delivery, status, input.location, now, changes, data, event, source);
       if (input.estimatedAt !== undefined) {
         const next = input.estimatedAt === null ? null : new Date(input.estimatedAt);
         if (next?.getTime() !== delivery.estimatedAt?.getTime()) {
@@ -250,21 +257,66 @@ export class DeliveryService {
           event.estimatedAt = next;
         }
       }
-      if (changes.length === 0) return false;
+      if (changes.length === 0) return changes;
+      if (source === 'SIMULATION') data.isSimulated = true;
 
       const revision = delivery.revision + 1;
       const updated = await tx.delivery.updateMany({ where: { id: delivery.id, revision: delivery.revision }, data: { ...data, revision } as Prisma.DeliveryUpdateManyMutationInput });
       if (updated.count !== 1) throw new DeliveryRevisionConflict(reference);
-      await tx.deliveryEvent.create({ data: { ...event, deliveryId: delivery.id, revision, type: primaryType(changes, data), changes, source: 'ADMIN',
+      await tx.deliveryEvent.create({ data: { ...event, deliveryId: delivery.id, revision, type: primaryType(changes, data), changes, source,
         actorUserId, note: input.note ?? null, occurredAt: now } });
       if (status === 'DELIVERED') await redactDeliveryForDeletedOwner(tx, orderId);
-      return true;
+      return changes;
     }, TX_OPTIONS);
-    return { changed, snapshot: await this.getAdminSnapshot(reference) };
+    return { changed: changes.length > 0, changes, snapshot: await this.getAdminSnapshot(reference) };
+  }
+
+  /**
+   * Task 04.7 demo markers. SIMULATION_STARTED flags the delivery as simulated; SIMULATION_STOPPED records the end. Both take the same lock,
+   * revision and single-event path as admin updates, never touch status, payment or the order, and never reach the customer timeline.
+   * Returns the new revision, or null when the delivery can no longer change (stop after DELIVERED/CANCELLED writes nothing).
+   */
+  async recordSimulation(actorUserId: string | null, reference: string, marker: 'STARTED' | 'STOPPED'): Promise<number | null> {
+    const orderId = parseOrderReference(reference);
+    return this.database.$transaction(async tx => {
+      const order = await this.lockOrder(tx, orderId);
+      if (marker === 'STOPPED' && (order.status !== 'OUT_FOR_DELIVERY' || !order.delivery)) return null;
+      this.assertWritable(order);
+      const delivery = order.delivery;
+      if (!delivery) throw new AppError('Start tracking before updating this delivery.', 404, 'DELIVERY_NOT_STARTED');
+      if (order.status !== 'OUT_FOR_DELIVERY') throw new AppError('A simulation can run only while the order is out for delivery.', 409, 'DELIVERY_LOCATION_NOT_ALLOWED');
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "deliveries" WHERE "id" = ${delivery.id}::uuid FOR UPDATE`);
+      const revision = delivery.revision + 1;
+      const updated = await tx.delivery.updateMany({ where: { id: delivery.id, revision: delivery.revision },
+        data: { revision, ...(marker === 'STARTED' ? { isSimulated: true } : {}) } });
+      if (updated.count !== 1) throw new DeliveryRevisionConflict(reference);
+      await tx.deliveryEvent.create({ data: { deliveryId: delivery.id, revision, type: marker === 'STARTED' ? 'SIMULATION_STARTED' : 'SIMULATION_STOPPED',
+        changes: [], source: actorUserId ? 'SIMULATION' : 'SYSTEM', actorUserId, occurredAt: this.clock() } });
+      return revision;
+    }, TX_OPTIONS);
+  }
+
+  /**
+   * Task 04.7: the customer-safe projection published after a commit, read back from the database so the revision is the persisted one.
+   * Timeline entries come from the event at that revision only (none for location-only or simulation markers). Null when the order is gone.
+   */
+  async getRealtimeProjection(orderId: string): Promise<RealtimeDeliveryProjection | null> {
+    const order = await this.database.order.findUnique({ where: { id: orderId }, include });
+    if (!order) return null;
+    const event = order.delivery ? await this.database.deliveryEvent.findUnique({ where: { deliveryId_revision: { deliveryId: order.delivery.id, revision: order.delivery.revision } },
+      select: { id: true, type: true, changes: true, toStatus: true, estimatedAt: true, occurredAt: true, source: true } }) : null;
+    const now = this.clock();
+    const { timeline: _timeline, ...fields } = customerFields(order, [], now);
+    void _timeline;
+    const map = await this.customerMap(order);
+    const visible = event && (event.type === 'TRACKING_STARTED' || event.changes.some(change => change !== 'LOCATION'));
+    return { orderId, orderReference: fields.orderReference, revision: fields.revision, occurredAt: (event?.occurredAt ?? now).toISOString(),
+      snapshot: { ...fields, map: map ? { origin: map.origin, destination: map.destination, pathKind: map.pathKind } : null },
+      timelineEntries: visible && fields.availability !== 'PAYMENT_PENDING' ? customerTimeline([event]) : [], source: event?.source ?? 'SYSTEM' };
   }
 
   private applyLocation(delivery: DeliveryRow, status: OrderStatus, location: DeliveryUpdateInput['location'], now: Date,
-    changes: DeliveryEventChange[], data: Prisma.DeliveryUpdateInput, event: Partial<Prisma.DeliveryEventUncheckedCreateInput>) {
+    changes: DeliveryEventChange[], data: Prisma.DeliveryUpdateInput, event: Partial<Prisma.DeliveryEventUncheckedCreateInput>, source: DeliveryUpdateSource) {
     const hasLocation = delivery.latitude !== null && delivery.longitude !== null;
     if (location === null) {
       if (!hasLocation) return;
@@ -278,7 +330,8 @@ export class DeliveryService {
     const label = location.label ?? null;
     if (hasLocation && Number(delivery.latitude) === location.latitude && Number(delivery.longitude) === location.longitude && delivery.locationLabel === label) return;
     changes.push('LOCATION');
-    Object.assign(data, { latitude: location.latitude, longitude: location.longitude, locationLabel: label, locationSource: 'MANUAL', locationUpdatedAt: now });
+    Object.assign(data, { latitude: location.latitude, longitude: location.longitude, locationLabel: label,
+      locationSource: source === 'SIMULATION' ? 'SIMULATED' : 'MANUAL', locationUpdatedAt: now });
     Object.assign(event, { latitude: location.latitude, longitude: location.longitude });
   }
 

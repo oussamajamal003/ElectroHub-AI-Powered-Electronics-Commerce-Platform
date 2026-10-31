@@ -140,7 +140,7 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
     it('logout that starts in the window after the rollback released the lock sees only committed state', async () => {
       await login('raw-1');
       const boom = new Error('injected failure after successor was staged');
-      let logout: Promise<void> | undefined;
+      let logout: Promise<unknown> | undefined;
       let failed = false;
       db.hook = async (event) => {
         if (!failed && isStatement('refreshToken.create')(event)) {

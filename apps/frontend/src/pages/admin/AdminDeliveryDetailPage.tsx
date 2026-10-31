@@ -6,6 +6,7 @@ import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoa
 import { ApiError } from '@/lib/api';
 import { OrderBadges } from '@/features/orders/OrderBadges';
 import { AdminDeliveryUpdatePanel } from '@/features/adminDelivery/AdminDeliveryUpdatePanel';
+import { AdminDeliverySimulationPanel } from '@/features/adminDelivery/AdminDeliverySimulationPanel';
 import { DeliveryOverviewCard } from '@/features/delivery/components/DeliveryOverviewCard';
 import { formatStamp, stageOf } from '@/features/delivery/presentation';
 import { useAdminDelivery } from '@/features/delivery/queries';
@@ -50,13 +51,14 @@ export function AdminDeliveryDetailPage() {
             <div><dt>Delivery status</dt><dd>{current ? stageOf(current.status).label : '—'}</dd></div>
             <div><dt>Revision</dt><dd className={styles.mono}>{current?.revision ?? 0}</dd></div>
             <div><dt>Estimated arrival</dt><dd>{current?.estimatedAt ? formatStamp(current.estimatedAt) : 'Not set'}</dd></div>
-            <div><dt>Current location</dt><dd>{current?.location ? <>{current.location.label ?? 'Unlabelled position'}
+            <div><dt>Current location</dt><dd>{current?.location ? <>{current.location.source === 'SIMULATED' ? 'Simulated demo position' : current.location.label ?? 'Unlabelled position'}
               <span className={styles.mono}> ({current.location.latitude}, {current.location.longitude})</span></> : 'Not shared'}</dd></div>
             <div><dt>Allowed next status</dt><dd>{snapshot.allowedNextStatus ? stageOf(snapshot.allowedNextStatus).label : 'None'}</dd></div>
             <div><dt>Delivered at</dt><dd>{current?.deliveredAt ? formatStamp(current.deliveredAt) : '—'}</dd></div>
           </dl>
         </section>
         <AdminDeliveryUpdatePanel snapshot={snapshot} onLoadLatest={() => query.refetch()} />
+        {current && <AdminDeliverySimulationPanel snapshot={snapshot} />}
         <section className={styles.card} aria-labelledby="admin-delivery-history">
           <h2 id="admin-delivery-history">Event history</h2>
           {snapshot.history.length === 0 ? <p className={styles.muted}>No delivery events recorded.</p>

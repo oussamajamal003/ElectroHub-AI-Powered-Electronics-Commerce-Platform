@@ -85,6 +85,8 @@ async function run() {
     COMMERCE_EMAIL_SEND_MODE: 'disabled', COMMERCE_EMAIL_ORIGIN: `http://localhost:${ports.frontend}`, OTP_HASH_SECRET: crypto.randomBytes(24).toString('hex'),
     // Task 04.6: clearly fictional demo hub.
     DELIVERY_ORIGIN_LAT: '34.0380', DELIVERY_ORIGIN_LNG: '-118.2660', DELIVERY_ORIGIN_LABEL: 'ElectroHub demo hub',
+    // Task 04.7: demo simulation on this stack's own loopback electrohub_disposable_* database only (never shared DEV or PROD).
+    DELIVERY_SIMULATION_ENABLED: 'true',
   };
   const tsx = path.join(path.dirname(require.resolve('tsx/package.json')), 'dist', 'cli.mjs');
   const credentials = path.join(work, 'credentials.json');
