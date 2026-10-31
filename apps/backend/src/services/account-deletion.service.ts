@@ -64,10 +64,18 @@ export class AccountDeletionService {
         where: { userId },
         select: { id: true, status: true, delivery: { select: { status: true } } },
       });
+      // A cancelled order can never be fulfilled (delivery writes are refused once it is cancelled), even when its Delivery row still
+      // says PREPARING or OUT_FOR_DELIVERY, so it is always final. A delivered order is final once its Delivery agrees.
       const completedOrderIds = orders
-        .filter(order => ['DELIVERED', 'CANCELLED'].includes(order.status)
-          && (!order.delivery || order.delivery.status === 'DELIVERED'))
+        .filter(order => order.status === 'CANCELLED' || (order.status === 'DELIVERED' && (!order.delivery || order.delivery.status === 'DELIVERED')))
         .map(order => order.id);
+      // Historical courier positions and admin notes are not needed to finish an active delivery (only the current location is), so
+      // they go for every order now. An active order keeps its shipping snapshot and current location; DeliveryService redacts them when
+      // that order reaches DELIVERED for an anonymized owner.
+      await transaction.deliveryEvent.updateMany({
+        where: { delivery: { order: { userId } } },
+        data: { latitude: null, longitude: null, note: null },
+      });
       if (completedOrderIds.length > 0) {
         await transaction.order.updateMany({
           where: { id: { in: completedOrderIds } },
@@ -86,11 +94,6 @@ export class AccountDeletionService {
         await transaction.delivery.updateMany({
           where: { orderId: { in: completedOrderIds } },
           data: { latitude: null, longitude: null, locationLabel: null, locationSource: null },
-        });
-        // Task 04.5: recorded courier positions and admin notes are personal data too; the event rows (revision, type, status) remain.
-        await transaction.deliveryEvent.updateMany({
-          where: { delivery: { orderId: { in: completedOrderIds } } },
-          data: { latitude: null, longitude: null, note: null },
         });
       }
 

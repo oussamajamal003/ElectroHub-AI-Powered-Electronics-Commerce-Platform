@@ -1,6 +1,6 @@
 # Task 04.5 — Delivery Tracking Foundation: Implementation Evidence
 
-- **Branch:** `feature/04.5-04.7-delivery-tracking` (uncommitted working tree; nothing committed, pushed or merged)
+- **Branch:** `feature/04.5-04.7-delivery-tracking`, PR #40 against `develop` (baseline commit `75272d8`; closure fixes below). Not merged.
 - **Date:** 2026-10-31
 - **Scope:** 04.5 only. The map (04.6) and Socket.IO/simulation (04.7) are not started. No Phase 05 work.
 - **Design baseline:** refined artifact https://claude.ai/artifact/9uEiC6tbMUUTPViergzFCd, with [TASK_04.5_04.7_DESIGN_SYSTEM_HANDOFF.md](TASK_04.5_04.7_DESIGN_SYSTEM_HANDOFF.md) and [TASK_04.5_04.7_DESIGN_ARCHITECTURE.md](TASK_04.5_04.7_DESIGN_ARCHITECTURE.md).
@@ -94,10 +94,21 @@ The QA stack was stopped afterwards; run evidence is in `.cache/delivery-qa-stac
 - Payment and Stripe code and guards are unchanged. Delivery writes only read payment state; they never change it.
 
 ## 4. Known limitations
-- Tracking pages nest a `<main>` inside the layout's `<main>`, the same pattern other pages use.
-- The breadcrumb links are 24 px tall: inline-text links, below the 44 px target size.
-- The shared `Input` helper text still uses the muted colour (below AA). It was left alone because it has many consumers; it needs a separate foundation fix.
-- Account deletion scrubs delivery data only for completed orders; in-progress deliveries are not scrubbed.
+- Account deletion keeps an ACTIVE order's shipping snapshot and current location (needed to finish delivery); see the closure section for the lifecycle.
 - Order Details does not show a status line from cached tracking data. It shows the link only.
 - If the clipboard is unavailable, Copy only shows a "copy manually" message; there is no other fallback.
 - Screen-reader announcements were checked through the accessibility tree and axe only.
+
+## 5. Closure of review findings (PR #40)
+
+**Privacy (account deletion).** Root cause: `account-deletion.service.ts` treated an order as final only when it was DELIVERED/CANCELLED *and* its Delivery was absent or DELIVERED, so a CANCELLED order whose Delivery still said PREPARING/OUT_FOR_DELIVERY kept shipping data, coordinates and notes. Fix, inside the existing transaction and with no payment change:
+- A CANCELLED order is always final (delivery writes are refused once cancelled).
+- Historical `DeliveryEvent` coordinates and notes are cleared for **every** order of the deleted user. Only the current location is needed for an active delivery.
+- An ACTIVE order keeps its shipping snapshot and current location so it can be fulfilled. When it is later delivered for an anonymized owner, `DeliveryService.applyUpdate` redacts shipping, current location and events in the same transaction (`redactForDeletedOwner`).
+- Remaining risk: an active order that is **cancelled after** its owner was deleted keeps its shipping snapshot, because the cancellation path is payment code that was deliberately not modified.
+
+**Observability.** Every delivery endpoint (customer read, admin list/read, start, update) now emits one `delivery.<op>.timing` event: `delivery.customer_read`, `delivery.admin_list`, `delivery.admin_read`, `delivery.start`, `delivery.update`. Fields: request id, outcome or safe error code, HTTP status, `revisionConflict`, `changed`/`created`, duration, and the existing scoped DB metrics (operation count, timing, attribution). No coordinates, labels, notes, names, emails, references or user IDs are logged. The event is emitted in `finally`, inside `try/catch`, so it cannot change a response or mask an error.
+
+**Accessibility.** The tracking page no longer nests `<main>`; breadcrumb links have a 2.75 rem (44 px) minimum height; shared `Input` helper text uses `$color-text-secondary` (AA contrast), matching `Textarea`.
+
+**Focused results.** Backend controller timing tests 7/7 (plus unit 3/3); disposable PostgreSQL gate 20/20 (17 + 3 new deletion tests; 0 delivery drift); frontend `src/features`, `src/components/ui`, `src/pages/admin` vitest 858/858 (96 files); Chromium delivery suite 8/8 (includes axe); backend and frontend typecheck, lint and build pass. The broader backend suite still fails on the same environment guards noted above. Final-head GitHub CI is reported in the PR, not here.

@@ -246,4 +246,54 @@ describe.skipIf(!enabled).sequential('Task 04.5 DeliveryService on real PostgreS
     expect(delivery.events).toHaveLength(3);
     expect(delivery.events.every(event => event.latitude === null && event.longitude === null && event.note === null)).toBe(true);
   });
+
+  it('T5-20b account deletion scrubs a CANCELLED order whose Delivery still says OUT_FOR_DELIVERY, without touching revision, events or payment', async () => {
+    const leaving = await fixtures.user('CUSTOMER', 'leaving-cancelled');
+    const order = await fixtures.order(leaving.id, 'PREPARING', 'SUCCEEDED');
+    await service.start(admin.id, order.reference);
+    await service.applyUpdate(admin.id, order.reference, { expectedRevision: 1, status: 'OUT_FOR_DELIVERY', location: { latitude: 33.9, longitude: 35.5, label: 'Near home' }, note: 'Gate code 1234' });
+    await prisma.order.update({ where: { id: order.id }, data: { status: 'CANCELLED' } });
+    const before = await prisma.delivery.findUniqueOrThrow({ where: { orderId: order.id }, include: { events: true } });
+    expect(before.status).toBe('OUT_FOR_DELIVERY');
+    await new AccountDeletionService().deleteAccount(leaving.id);
+    const after = await prisma.delivery.findUniqueOrThrow({ where: { orderId: order.id }, include: { events: true } });
+    expect(after).toMatchObject({ latitude: null, longitude: null, locationLabel: null, locationSource: null, revision: before.revision, status: 'OUT_FOR_DELIVERY' });
+    expect(after.events.map(event => event.id).sort()).toEqual(before.events.map(event => event.id).sort());
+    expect(after.events.every(event => event.latitude === null && event.longitude === null && event.note === null)).toBe(true);
+    expect(await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ shippingRecipient: 'Deleted customer', shippingLine1: 'Redacted' });
+    expect(await prisma.payment.count({ where: { orderId: order.id, status: 'SUCCEEDED' } })).toBe(1);
+  });
+
+  it('T5-20c an ACTIVE order loses historical positions and notes at deletion, keeps what fulfilment needs, and is redacted when delivered', async () => {
+    const leaving = await fixtures.user('CUSTOMER', 'leaving-active');
+    const order = await fixtures.order(leaving.id, 'PREPARING', 'SUCCEEDED');
+    await service.start(admin.id, order.reference);
+    await service.applyUpdate(admin.id, order.reference, { expectedRevision: 1, status: 'OUT_FOR_DELIVERY', location: { latitude: 33.9, longitude: 35.5, label: 'Near home' }, note: 'Gate code 1234' });
+    const accountDeletion = new AccountDeletionService();
+    await accountDeletion.deleteAccount(leaving.id);
+
+    let delivery = await prisma.delivery.findUniqueOrThrow({ where: { orderId: order.id }, include: { events: true } });
+    expect(delivery.revision).toBe(2);
+    expect(delivery.events).toHaveLength(2);
+    expect(delivery.events.every(event => event.latitude === null && event.longitude === null && event.note === null)).toBe(true);
+    expect(Number(delivery.latitude)).toBe(33.9);
+    expect(await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ shippingRecipient: 'Delivery QA', shippingLine1: '1 QA Street' });
+
+    expect(await code(accountDeletion.deleteAccount(leaving.id))).toBe('UNAUTHENTICATED');
+    await service.applyUpdate(admin.id, order.reference, { expectedRevision: 2, status: 'DELIVERED' });
+    delivery = await prisma.delivery.findUniqueOrThrow({ where: { orderId: order.id }, include: { events: true } });
+    expect(delivery).toMatchObject({ latitude: null, longitude: null, locationLabel: null, locationSource: null, revision: 3, status: 'DELIVERED' });
+    expect(delivery.events).toHaveLength(3);
+    expect(delivery.events.every(event => event.latitude === null && event.longitude === null && event.note === null)).toBe(true);
+    expect(await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ shippingRecipient: 'Deleted customer', shippingLine1: 'Redacted', shippingCity: 'Redacted' });
+    expect(await prisma.payment.count({ where: { orderId: order.id, status: 'SUCCEEDED' } })).toBe(1);
+  });
+
+  it('T5-20d a delivered order for an active customer is never redacted by the delivery service', async () => {
+    const order = await fixtures.order(customer.id, 'PREPARING', 'SUCCEEDED');
+    await service.start(admin.id, order.reference);
+    await service.applyUpdate(admin.id, order.reference, { expectedRevision: 1, status: 'OUT_FOR_DELIVERY' });
+    await service.applyUpdate(admin.id, order.reference, { expectedRevision: 2, status: 'DELIVERED' });
+    expect(await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({ shippingRecipient: 'Delivery QA', shippingLine1: '1 QA Street' });
+  });
 });

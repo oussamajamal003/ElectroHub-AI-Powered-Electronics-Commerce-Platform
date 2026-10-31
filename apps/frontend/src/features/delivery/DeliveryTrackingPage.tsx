@@ -53,7 +53,7 @@ function OwnedDeliveryTracking() {
     { label: 'Tracking' }];
   const notFound = query.error instanceof ApiError && (query.error.status === 404 || query.error.status === 400);
 
-  if (!snapshot) return <main className={shared.page}>
+  if (!snapshot) return <div className={shared.page}>
     <OrdersBreadcrumb items={notFound ? [{ label: 'Home', to: '/' }, { label: 'Orders', to: '/orders' }, { label: 'Tracking' }] : crumbs} />
     {query.isPending ? <><h1 className={styles.visuallyHidden}>Track order</h1><TrackingSkeleton /></>
       : notFound ? <div className={styles.tracking}><EmptyState role="alert" icon={<PackageSearch size={40} aria-hidden="true" />} title="Order not found"
@@ -62,10 +62,10 @@ function OwnedDeliveryTracking() {
         <DeliveryStateNotice kind="failed" role="alert" actions={<>
           <Button onClick={() => void query.refetch()} isLoading={query.isFetching} disabled={query.isFetching}>Retry</Button>
           <Link className={shared.outlineLink} to={detailsPath}>Back to order</Link></>} /></div>}
-  </main>;
+  </div>;
 
   const latest = latestUpdate(snapshot);
-  return <main className={shared.page}>
+  return <div className={shared.page}>
     <OrdersBreadcrumb items={crumbs} />
     <div className={styles.tracking}>
       <header className={styles.header}>
@@ -81,7 +81,7 @@ function OwnedDeliveryTracking() {
         <Button size="small" variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}>Retry</Button></div>}
       <TrackingBody snapshot={snapshot} detailsPath={detailsPath} busy={query.isFetching} />
     </div>
-  </main>;
+  </div>;
 }
 
 function TrackingBody({ snapshot, detailsPath, busy }: { snapshot: CustomerDeliverySnapshot; detailsPath: string; busy: boolean }) {

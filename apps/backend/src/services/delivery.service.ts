@@ -235,6 +235,7 @@ export class DeliveryService {
       if (updated.count !== 1) throw new DeliveryRevisionConflict(reference);
       await tx.deliveryEvent.create({ data: { ...event, deliveryId: delivery.id, revision, type: primaryType(changes, data), changes, source: 'ADMIN',
         actorUserId, note: input.note ?? null, occurredAt: now } });
+      if (status === 'DELIVERED') await this.redactForDeletedOwner(tx, order.userId, orderId, delivery.id);
       return true;
     }, TX_OPTIONS);
     return { changed, snapshot: await this.getAdminSnapshot(reference) };
@@ -257,6 +258,19 @@ export class DeliveryService {
     changes.push('LOCATION');
     Object.assign(data, { latitude: location.latitude, longitude: location.longitude, locationLabel: label, locationSource: 'MANUAL', locationUpdatedAt: now });
     Object.assign(event, { latitude: location.latitude, longitude: location.longitude });
+  }
+
+  /**
+   * Account deletion keeps an ACTIVE order's shipping snapshot and current location so it can still be fulfilled. When that order is
+   * delivered for an owner who has since been anonymized, nothing justifies keeping them, so they are redacted in the same transaction.
+   */
+  private async redactForDeletedOwner(tx: Tx, userId: string, orderId: string, deliveryId: string) {
+    const owner = await tx.user.findUnique({ where: { id: userId }, select: { isActive: true, email: true } });
+    if (!owner || owner.isActive || !owner.email.endsWith('@deleted.invalid')) return;
+    await tx.order.update({ where: { id: orderId }, data: { shippingRecipient: 'Deleted customer', shippingLine1: 'Redacted', shippingLine2: null,
+      shippingCity: 'Redacted', shippingState: null, shippingPostalCode: null, shippingCountry: 'Redacted', shippingLatitude: null, shippingLongitude: null } });
+    await tx.delivery.update({ where: { id: deliveryId }, data: { latitude: null, longitude: null, locationLabel: null, locationSource: null } });
+    await tx.deliveryEvent.updateMany({ where: { deliveryId }, data: { latitude: null, longitude: null, note: null } });
   }
 
   private async lockOrder(tx: Tx, orderId: string) {
