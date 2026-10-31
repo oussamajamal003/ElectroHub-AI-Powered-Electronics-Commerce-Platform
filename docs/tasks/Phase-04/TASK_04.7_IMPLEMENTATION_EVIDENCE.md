@@ -144,3 +144,28 @@ Reviewed source: `feature/04.7-socketio-delivery` working tree on base `2638bb6`
 
 ### Gate A score
 Requirements 19/20 · Architecture 14/15 · Security 14/15 · Testing 14/15 · DB/API 9/10 · Performance 5/5 · Quality 4/5 · Docs 4/5 · Edge/A11y 4/5 · Source/Diff 5/5 = **92/100. Decision: Approve.** No Critical or High findings remain open.
+
+## 7. Gate B / Gate C closure
+
+- **PR:** https://github.com/oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerce-Platform/pull/43 (base `develop`).
+  - Reviewed commit `a802b17`, followed by a closure commit with this section and an end-of-file whitespace fix.
+  - Not merged. Auto-merge is off.
+- **Code-review plugin:** `engineering:code-review` is a local checklist, so the review is **SELF-APPLIED**, not independent. It found nothing beyond §6 (verdict Approve).
+- **CI:** see the final report. Pending checks are reported as pending.
+- **Gate C (04.5–04.7 integration):** this reuses credible existing evidence. No new end-to-end vertical run was made in this review.
+  - Covered by evidence on the reviewed source:
+    - paid order → start, and admin PATCH → live customer update (PG `:80`, Chromium `:90`)
+    - location → Leaflet marker and simulation dashed route (Chromium `:116`, 04.6 map spec 9/9)
+    - ETA → overview and toast (Chromium `:90`)
+    - offline → REST fallback → reconnect at the current revision (Chromium `:155`, `:187`)
+    - two customers and two tabs isolated (Chromium `:90`, gateway `:96`)
+    - account switch (Chromium `:201`)
+    - delivered stops updates (Chromium `:249`)
+    - responsive at 390, 768, 1440 and 1920 px plus 200% zoom, with axe (Chromium `:222`)
+  - Server-side only, not shown in a browser: account deletion revoking sockets (gateway `:124`), cancelled terminal (`payment.service` revoked hook and 04.5 spec), simulation Stop with no further ticks (PG `:128` and runner test).
+  - Not verified: the 04.5 tracking spec was not re-run on a fresh stack; Figma comparison is deferred to Phase 05; artifact parity was checked against the handoff and real screenshots, not by a pixel diff; no screen reader or real devices.
+- **Remaining risks:**
+  - Single instance only (Redis adapter in Phase 06).
+  - An event can be lost between commit and emit; refetch and polling recover it.
+  - Logout drops the sockets on the user's other devices; they refresh and reconnect.
+  - There is no deactivation hook yet.

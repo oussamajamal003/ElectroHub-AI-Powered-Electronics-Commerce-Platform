@@ -51,4 +51,3 @@ export const DeliveryPublisher = {
     try { gateway?.disconnectUser(userId, reason); } catch { realtimeMetrics.increment('publish_failed'); }
   },
 };
-
