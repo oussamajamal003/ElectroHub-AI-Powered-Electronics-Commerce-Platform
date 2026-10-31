@@ -4,7 +4,9 @@ const mocks = vi.hoisted(() => ({
   listen: vi.fn(), prewarm: vi.fn(), start: vi.fn(), stop: vi.fn(),
   disconnect: vi.fn(), close: vi.fn(), log: vi.fn(),
 }));
-vi.mock('./app.js', () => ({ default: { listen: mocks.listen } }));
+vi.mock('./app.js', () => ({ default: { listen: mocks.listen }, corsOrigin: 'http://localhost:3000' }));
+// Task 04.7: the Socket.IO gateway needs a real HTTP server; this suite only exercises payment recovery, so it gets an inert gateway.
+vi.mock('./sockets/delivery.gateway.js', () => ({ attachDeliveryGateway: () => ({ close: () => Promise.resolve() }) }));
 vi.mock('./config/env.js', () => ({ env: { PORT: 0, NODE_ENV: 'test' } }));
 vi.mock('./lib/prisma.js', () => ({ prisma: { $queryRaw: mocks.prewarm, $disconnect: mocks.disconnect } }));
 vi.mock('./payment-inprocess-recovery.js', () => ({
