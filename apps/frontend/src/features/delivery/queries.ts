@@ -12,6 +12,16 @@ export const OUT_FOR_DELIVERY_POLL_MS = 60_000;
 const ACTIVE = new Set(['CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY']);
 
 /**
+ * The 60 s fallback keeps running until a read succeeds, including after a failed one (a transient 5xx or a network drop must not leave the
+ * page stuck on "Reconnecting"). It stops once live, for finished deliveries, and on errors a retry cannot fix (401/403/404).
+ */
+export function snapshotPollInterval(live: boolean, data: CustomerDeliverySnapshot | undefined, error: unknown): number | false {
+  const status = (error as { status?: unknown } | null)?.status;
+  if (status === 401 || status === 403 || status === 404) return false;
+  return !live && data && ACTIVE.has(data.status) && (data.availability === 'AVAILABLE' || data.availability === 'NOT_STARTED') ? OUT_FOR_DELIVERY_POLL_MS : false;
+}
+
+/**
  * Customer snapshot, scoped to the signed-in account and reference. Nothing private is requested until the session is verified, and a
  * key change (account switch, other order) never shows the previous order's data.
  */
@@ -22,11 +32,7 @@ export function useDeliverySnapshot(orderReference: string, live = false) {
     queryFn: ({ signal }) => apiClient<{ data: CustomerDeliverySnapshot }>(`/api/orders/${encodeURIComponent(orderReference)}/delivery`, { signal }),
     enabled: Boolean(user && isSessionVerified && !isLoggingOut && orderReference),
     retry: false, staleTime: 10_000, refetchOnWindowFocus: true,
-    refetchInterval: query => {
-      const data = query.state.data?.data;
-      return !live && data && ACTIVE.has(data.status) && (data.availability === 'AVAILABLE' || data.availability === 'NOT_STARTED') && !query.state.error
-        ? OUT_FOR_DELIVERY_POLL_MS : false;
-    },
+    refetchInterval: query => snapshotPollInterval(live, query.state.data?.data, query.state.error),
     refetchIntervalInBackground: false,
   });
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { hashKey, useQueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { queryKeys } from '@/lib/query';
@@ -78,11 +78,14 @@ export function useDeliveryLiveUpdates(orderReference: string, snapshot: Custome
     // and leaves the 60 s polling fallback and "Refresh now" in charge. There is no automatic retry loop.
     let attempt = 0;
     let acked: number | null = null;
+    let synced = false;
     const settle = (ackRevision: number, succeeded: boolean) => {
+      if (synced) return;
       const current = client.getQueryData<Snapshot>(queryKey)?.data;
       // Only a connected socket with a live subscription can be reported as synchronized.
       if (!socket.connected || acked === null) return;
       if (!succeeded || client.getQueryState(queryKey)?.error || !current || current.revision < ackRevision) return;
+      synced = true;
       if (pauseTimer) { clearTimeout(pauseTimer); pauseTimer = null; }
       if (interrupted) {
         if (paused) announce('Live updates restored. Tracking is up to date.');
@@ -102,8 +105,15 @@ export function useDeliveryLiveUpdates(orderReference: string, snapshot: Custome
     // "Refresh now" has just completed its own REST read: it can complete a pending reconciliation without a second request.
     resyncRef.current = () => { if (acked !== null && socket.connected) settle(acked, true); };
 
+    // If the reconciliation read failed, a later successful REST read (the 60 s fallback poll or Refresh now) completes it.
+    const unwatch = client.getQueryCache().subscribe(change => {
+      if (disposed || synced || acked === null || !socket.connected || change.type !== 'updated' || change.action.type !== 'success') return;
+      if (change.query.queryHash === hashKey(queryKey)) settle(acked, true);
+    });
+
     const subscribe = () => {
       acked = null;
+      synced = false;
       // Each (re)subscribe starts a new generation: an ack or REST completion from an earlier connection is discarded.
       const generation = ++attempt;
       socket.timeout(5_000).emitWithAck('delivery:subscribe', { orderReference }).then((ack: Ack) => {
@@ -123,6 +133,7 @@ export function useDeliveryLiveUpdates(orderReference: string, snapshot: Custome
       // A disconnect invalidates any pending acknowledgment or REST reconciliation.
       attempt++;
       acked = null;
+      synced = false;
       interrupted = true;
       setState(current => current === 'paused' ? 'paused' : 'reconnecting');
       if (!pauseTimer && !paused) pauseTimer = setTimeout(() => {
@@ -163,6 +174,7 @@ export function useDeliveryLiveUpdates(orderReference: string, snapshot: Custome
 
     return () => {
       disposed = true;
+      unwatch();
       if (pauseTimer) clearTimeout(pauseTimer);
       if (resyncTimer) clearTimeout(resyncTimer);
       socket.off('connect', subscribe);

@@ -77,9 +77,12 @@ async function run() {
     command(exe('psql'), ['-h', '127.0.0.1', '-p', String(pgPort), '-U', 'postgres', '-d', database, '-v', 'ON_ERROR_STOP=1', '-q', '-f', path.join(migrations, name, 'migration.sql')]);
   }
   const url = `postgresql://postgres@127.0.0.1:${pgPort}/${database}?sslmode=require`;
+  // Disposable-stack secret, kept in the run folder so browser QA can mint a short-lived test-only access token (session-expiry case).
+  const jwtSecret = crypto.randomBytes(48).toString('base64url');
+  fs.writeFileSync(path.join(work, 'jwt-secret.txt'), jwtSecret);
   const env = {
     ...process.env, NODE_ENV: 'development', PORT: String(ports.backend), DATABASE_URL: url, DIRECT_URL: url, DB_SSL_CA_CERT_PATH: path.join(work, 'server.crt'),
-    NODE_EXTRA_CA_CERTS: path.join(work, 'server.crt'), JWT_SECRET: crypto.randomBytes(48).toString('base64url'), ELECTROHUB_LOG_DIR: path.join(work, 'logs'),
+    NODE_EXTRA_CA_CERTS: path.join(work, 'server.crt'), JWT_SECRET: jwtSecret, ELECTROHUB_LOG_DIR: path.join(work, 'logs'),
     FRONTEND_URL: `http://localhost:${ports.frontend}`, STRIPE_SECRET_KEY: '', STRIPE_WEBHOOK_SECRET: '', BREVO_API_KEY: '', GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '',
     PAYMENT_SHARED_MUTATIONS_APPROVED: '', PAYMENT_CONFIRMATION_SIGNAL: 'false', COMMERCE_EMAIL_ENQUEUE_ENABLED: 'true', COMMERCE_EMAIL_DISPATCH_ENABLED: 'false',
     COMMERCE_EMAIL_SEND_MODE: 'disabled', COMMERCE_EMAIL_ORIGIN: `http://localhost:${ports.frontend}`, OTP_HASH_SECRET: crypto.randomBytes(24).toString('hex'),
@@ -99,7 +102,7 @@ async function run() {
     E2E_API_PROXY_TARGET: `http://localhost:${ports.backend}`, VITE_MAP_TILE_URL: `${tiles}/{z}/{x}/{y}.svg`,
     VITE_MAP_ATTRIBUTION: '© OpenStreetMap contributors' }, frontend);
   await waitFor(`http://localhost:${ports.frontend}/`, 'frontend');
-  const state = { frontend: `http://localhost:${ports.frontend}`, backend: `http://127.0.0.1:${ports.backend}`, tiles, credentials, database: `loopback:${pgPort}/${database}`, run: work };
+  const state = { frontend: `http://localhost:${ports.frontend}`, backend: `http://127.0.0.1:${ports.backend}`, tiles, credentials, jwtSecretFile: path.join(work, 'jwt-secret.txt'), database: `loopback:${pgPort}/${database}`, run: work };
   fs.writeFileSync(path.join(work, 'state.json'), JSON.stringify(state, null, 2));
   fs.writeFileSync(path.join(root, '.cache', 'delivery-qa-stack.current'), path.join(work, 'state.json'));
   console.log(`Delivery QA stack ready: ${state.frontend} (API ${state.backend}, ${state.database}); state: ${path.relative(root, path.join(work, 'state.json'))}`);

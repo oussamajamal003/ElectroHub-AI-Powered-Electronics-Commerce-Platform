@@ -272,5 +272,15 @@ describe('useDeliveryLiveUpdates with a fake socket', () => {
       expect(refetchQueries).not.toHaveBeenCalled();
       expect(state()).toBe('reconnecting');
     });
+
+    it('C3 a failed reconciliation is completed by the next successful REST read (fallback poll), not by the socket alone', async () => {
+      const refetchQueries = vi.spyOn(client, 'refetchQueries').mockRejectedValue(new Error('429'));
+      mount('customer-a');
+      await act(async () => { sockets[0]!.serverAccept(); });
+      expect(state()).toBe('connecting');
+      refetchQueries.mockRestore();
+      await act(async () => { client.setQueryData(key('customer-a'), { data: snapshot() }); });
+      expect(state()).toBe('connected');
+    });
   });
 });
