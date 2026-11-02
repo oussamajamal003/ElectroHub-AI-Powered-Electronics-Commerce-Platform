@@ -59,15 +59,41 @@ export function devDemoSimulationScope(source: NodeJS.ProcessEnv = process.env):
   return { runId, orderIds, customerUserId, productId };
 }
 
-/** Environment configuration alone cannot grant QA authority to the dedicated QA runtime; the ordinary backend uses the separate DEV demo scope. */
+/**
+ * DEV-wide simulation (Task 04.7 follow-up): any legitimately trackable OUT_FOR_DELIVERY order on the verified shared DEV project, with no order,
+ * customer, product or marker allowlist. It needs the trusted explicit opt-in (DELIVERY_DEV_DEMO=true) and the positively verified DEV identity.
+ * It grants NO payment privilege: eligibility (successful payment, status, delivery record) is still enforced under the order row lock by
+ * DeliveryService. Unpaid zero-value QA fixtures are a separate mechanism (`devDemoSimulationScope` / `sharedDevSimulationScope`).
+ */
+export function devWideSimulationEnabled(source: NodeJS.ProcessEnv = process.env): boolean {
+  if (source.NODE_ENV !== 'development' || source.DELIVERY_DEV_DEMO !== 'true' || source.DELIVERY_SIMULATION_ENABLED !== 'true') return false;
+  try {
+    const targets = resolveDatabaseTargets(source);
+    return targets.runtime.category === 'dev' && targets.runtime.identity === 'supabase:pzxekjybdiulzmssalfo/postgres' && targets.migration.identity === targets.runtime.identity;
+  } catch { return false; }
+}
+
+/** The dedicated QA runtime keeps its exact allowlist; DEV-wide never applies there. Null means "not the QA runtime". */
+export function qaRuntimeSimulationScope(): ReturnType<typeof sharedDevSimulationScope> {
+  return isDeliveryQaRuntimeActive() ? sharedDevSimulationScope() : null;
+}
+
+/** Scope that may grant the unpaid zero-value QA payment exception: the QA runtime's, else the optional DEV fixture allowlist. */
 export function activeSharedDevSimulationScope(): ReturnType<typeof sharedDevSimulationScope> {
-  return (isDeliveryQaRuntimeActive() ? sharedDevSimulationScope() : null) ?? devDemoSimulationScope();
+  return qaRuntimeSimulationScope() ?? devDemoSimulationScope();
+}
+
+export type SimulationMode = 'QA_RUNTIME' | 'DEV_WIDE' | null;
+export function simulationMode(source: NodeJS.ProcessEnv = process.env): SimulationMode {
+  if (source === process.env && isDeliveryQaRuntimeActive()) return qaRuntimeSimulationScope() ? 'QA_RUNTIME' : null;
+  if (source !== process.env && sharedDevSimulationScope(source)) return 'QA_RUNTIME';
+  return devWideSimulationEnabled(source) ? 'DEV_WIDE' : null;
 }
 
 export function simulationAvailability(source: NodeJS.ProcessEnv = process.env): SimulationAvailability {
   if (source.DELIVERY_SIMULATION_ENABLED !== 'true') return { enabled: false, reason: 'FLAG_OFF' };
   if (source.NODE_ENV === 'production') return { enabled: false, reason: 'PRODUCTION' };
-  if ((source === process.env ? activeSharedDevSimulationScope() : (sharedDevSimulationScope(source) ?? devDemoSimulationScope(source)))) return { enabled: true };
+  if (simulationMode(source)) return { enabled: true };
   try {
     if (describeDatabaseTarget(source.DATABASE_URL).category !== 'disposable') return { enabled: false, reason: 'DATABASE_NOT_DISPOSABLE' };
   } catch { return { enabled: false, reason: 'DATABASE_NOT_DISPOSABLE' }; }

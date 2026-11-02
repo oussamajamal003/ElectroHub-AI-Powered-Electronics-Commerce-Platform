@@ -356,3 +356,18 @@ Change: a separate `devDemoSimulationScope()` (`simulation.config.ts`) enables s
 Fixture (reused, verified read-only with `scripts/delivery-dev-demo-fixture.ts`): run `QA-DELIVERY-20261101-d145efc6`, order `ORD-D9B5B7DC-EBEF-436E-9567-EFF3CAFACDB0` (customer A, unpaid, total 0, hidden test-fixture product).
 
 Chromium on `localhost:3000` against shared DEV: admin start returned 201; revisions 23 (`SIMULATION_STARTED`), 24–27 (`LOCATION_UPDATED`, source SIMULATION), 28 (`SIMULATION_STOPPED`); no movement after STOPPED; customer saw "Simulated demo" and the map; refresh kept the position; second stop was a no-op; customer start attempt 403; an ordinary paid order reported `enabled: false` and Start returned 409 `DELIVERY_SIMULATION_DISABLED`; unauthenticated 401. Order stayed `OUT_FOR_DELIVERY`, total 0, no payment or attempt. Not verified: a dev-server restart mid-run (runners are in memory, so none resumes), and the production rejection is covered by unit tests only.
+
+## DEV-wide demo simulation for all eligible shared-DEV deliveries (2026-11-02)
+
+Two separate boundaries now exist. **DEV-wide** (`DELIVERY_SIMULATION_ENABLED=true` + `DELIVERY_DEV_DEMO=true`, `NODE_ENV=development`, verified project
+`pzxekjybdiulzmssalfo` for both URLs) enables Demo tools for any order that `DeliveryService` already treats as trackable: successful payment, status
+`OUT_FOR_DELIVERY`, delivery record, not cancelled. It carries no payment privilege and needs no order, customer, product or marker allowlist. The **unpaid
+QA fixture** exception (`DELIVERY_DEV_DEMO_*` allowlist, or the dedicated QA runtime) is unchanged and optional. The dedicated QA runtime keeps its exact allowlist.
+Orphan recovery touches only simulated, out-for-delivery deliveries whose latest marker is STARTED.
+
+Shared-DEV evidence (backend :5410, Vite :3410, order `ORD-229CD28B-D084-4374-82D4-58053BF168A9`, paid, rev 3): the development-only confirmation was shown, POST 201,
+revisions 4 `SIMULATION_STARTED`, 5-8 `LOCATION_UPDATED` (SIMULATION), 9 `SIMULATION_STOPPED` (DELETE 200); no change 15 s after Stop; order status, `updatedAt`,
+total, payment (1, SUCCEEDED), attempt (1) and items (6) unchanged. Unpaid orders returned 409 `DELIVERY_PAYMENT_INELIGIBLE`, an admin-less request 401, a customer 403.
+Not verified: a second *paid* OUT_FOR_DELIVERY order (none exists; advancing another would change a real order), and a browser refresh after Stop (headless Chromium
+crashed on the Leaflet page reload; the post-Stop state was read through the API and database instead).
+

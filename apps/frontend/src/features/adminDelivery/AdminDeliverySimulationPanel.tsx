@@ -5,13 +5,24 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { ApiError } from '@/lib/api';
 import { useDeliverySimulation } from '@/features/delivery/queries';
-import type { AdminDeliverySnapshot } from '@/features/delivery/types';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
+import type { AdminDeliverySnapshot, DeliverySimulationReason } from '@/features/delivery/types';
 import styles from './AdminDeliveryUpdatePanel.module.scss';
+
+const UNAVAILABLE: Record<DeliverySimulationReason, string> = {
+  FEATURE_DISABLED: 'The demo simulation is turned off in this environment. It is available only in the approved shared development environment, never in production.',
+  QA_SCOPE: 'This QA environment runs the demo simulation only for its approved QA deliveries.',
+  ORDER_NOT_FOUND: 'This order could not be found.',
+  ORDER_CANCELLED: 'This order was cancelled, so its delivery can no longer be simulated.',
+  PAYMENT_INELIGIBLE: 'Delivery tracking needs a confirmed successful payment, so this order cannot be simulated.',
+  NOT_OUT_FOR_DELIVERY: 'The demo simulation is available only while the order is out for delivery.',
+  DELIVERY_NOT_STARTED: 'Start delivery tracking for this order before running the demo simulation.',
+};
 
 /**
  * Task 04.7 admin Demo tools (architecture §8.5). Plays an approved fictional route through the same revisioned update path as an admin,
  * one position every 5 s. It only ever moves the courier position: never status, payment or the order. Available only when the server
- * allows it (flag on, non-production, disposable database); every customer surface then labels the data "Simulated demo".
+ * allows it (flag on, non-production, disposable or verified shared-DEV database, trackable order); every customer surface then labels the data "Simulated demo".
  */
 export function AdminDeliverySimulationPanel({ snapshot }: { snapshot: AdminDeliverySnapshot }) {
   const { status, start, stop } = useDeliverySimulation(snapshot.orderReference);
@@ -19,14 +30,14 @@ export function AdminDeliverySimulationPanel({ snapshot }: { snapshot: AdminDeli
   const [routeId, setRouteId] = useState('');
   const chosen = routeId || data?.routes[0]?.id || '';
   const outForDelivery = snapshot.status === 'OUT_FOR_DELIVERY';
+  const [confirming, setConfirming] = useState(false);
   const error = start.error ?? stop.error;
   return <section className={styles.panel} aria-labelledby="admin-delivery-demo">
     <h2 id="admin-delivery-demo"><FlaskConical size={18} aria-hidden="true" /> Demo tools</h2>
     <p>Plays a fictional route for demos and QA. Customers see it labelled “Simulated demo”. It never changes status, payment or the order.</p>
     {status.isPending ? <p className={styles.help}>Checking demo availability…</p>
       : !data ? <Alert variant="warning"><span>Demo availability could not be loaded.</span></Alert>
-      : !data.enabled ? <p className={styles.help}>The demo simulation is not available for this delivery. In shared DEV it is restricted to approved QA/demo deliveries,
-        it also runs on local or disposable QA databases when enabled, and it is always off in production.</p>
+      : !data.enabled ? <p className={styles.help} role="status">{UNAVAILABLE[data.reason ?? 'FEATURE_DISABLED']}</p>
       : <div className={styles.content}>
         {data.running
           ? <p className={styles.help} role="status">Running “{data.routes.find(route => route.id === data.routeId)?.label ?? data.routeId}”: {data.ticks} of at most
@@ -38,9 +49,21 @@ export function AdminDeliverySimulationPanel({ snapshot }: { snapshot: AdminDeli
         <div className={styles.dialogActions}>
           {data.running
             ? <Button type="button" variant="outline" onClick={() => stop.mutate()} isLoading={stop.isPending} disabled={stop.isPending}>Stop simulation</Button>
-            : <Button type="button" onClick={() => start.mutate(chosen)} isLoading={start.isPending} disabled={!outForDelivery || !chosen || start.isPending}>
+            : <Button type="button" onClick={() => setConfirming(true)} isLoading={start.isPending} disabled={!outForDelivery || !chosen || start.isPending}>
               Start simulation</Button>}
         </div>
       </div>}
+    <Dialog open={confirming} onOpenChange={open => { if (!open && !start.isPending) setConfirming(false); }}>
+      <DialogContent>
+        <DialogTitle>Start demo simulation?</DialogTitle>
+        <DialogDescription>{snapshot.orderReference}</DialogDescription>
+        <p>Demo simulation will replace this order’s customer-visible courier position with fictional movement. Available only in development.</p>
+        <div className={styles.dialogActions}>
+          <Button type="button" variant="outline" onClick={() => setConfirming(false)} disabled={start.isPending}>Cancel</Button>
+          <Button type="button" isLoading={start.isPending} disabled={start.isPending || !chosen}
+            onClick={() => start.mutate(chosen, { onSettled: () => setConfirming(false) })}>Confirm and start</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   </section>;
 }

@@ -3,11 +3,10 @@ import { AppError } from '../../middleware/errorHandler.js';
 import { DeliveryPublisher, toPublishChanges } from '../../sockets/delivery.publisher.js';
 import { realtimeMetrics } from '../../sockets/realtime-metrics.js';
 import { logSafely } from '../../utils/logger.js';
-import { DeliveryRevisionConflict, DeliveryService } from '../delivery.service.js';
+import { DeliveryRevisionConflict, DeliveryService, type SimulationIneligibleReason } from '../delivery.service.js';
 import { parseOrderReference } from '../order.service.js';
 import { deliveryOrigin } from '../../config/delivery-map.config.js';
-import { isDeliveryQaRuntimeActive } from '../../delivery-qa-runtime.config.js';
-import { SIMULATION_MAX_TICKS, SIMULATION_ROUTES, SIMULATION_TICK_MS, simulationAvailability, activeSharedDevSimulationScope, devDemoSimulationScope, type SimulationAvailability } from './simulation.config.js';
+import { SIMULATION_MAX_TICKS, SIMULATION_ROUTES, SIMULATION_TICK_MS, simulationAvailability, qaRuntimeSimulationScope, type SimulationAvailability } from './simulation.config.js';
 
 /**
  * Task 04.7 in-process demo runner (architecture §8.5). Every tick goes through DeliveryService.applyUpdate with source SIMULATION (same
@@ -22,7 +21,7 @@ type Runner = { orderId: string; reference: string; actorUserId: string; routeId
   inflight: Promise<boolean> | null;
   /** The single in-progress Stop, shared by concurrent callers. */
   stopped: Promise<void> | null };
-export type SimulationStatus = { enabled: boolean; running: boolean; routeId: string | null; ticks: number; maxTicks: number; tickSeconds: number;
+export type SimulationStatus = { enabled: boolean; reason: SimulationIneligibleReason | 'FEATURE_DISABLED' | 'QA_SCOPE' | null; running: boolean; routeId: string | null; ticks: number; maxTicks: number; tickSeconds: number;
   routes: { id: string; label: string; points: number }[] };
 
 export class DeliverySimulationRunner {
@@ -38,13 +37,24 @@ export class DeliverySimulationRunner {
     if (!this.availability().enabled) throw new AppError('The delivery demo simulation is not available in this environment.', 409, 'DELIVERY_SIMULATION_DISABLED');
   }
 
+  /** Synchronous view (no database): the QA runtime keeps its exact order allowlist; DEV-wide has none. */
   status(reference: string): SimulationStatus {
     const orderId = parseOrderReference(reference);
     const runner = this.runners.get(orderId);
-    const scope = activeSharedDevSimulationScope();
-    return { enabled: this.availability().enabled && (!scope || scope.orderIds.includes(orderId)), running: Boolean(runner), routeId: runner?.routeId ?? null, ticks: runner?.ticks ?? 0,
-      maxTicks: SIMULATION_MAX_TICKS, tickSeconds: this.tickMs / 1000,
+    const scope = qaRuntimeSimulationScope();
+    const available = this.availability().enabled;
+    const inScope = !scope || scope.orderIds.includes(orderId);
+    return { enabled: available && inScope, reason: !available ? 'FEATURE_DISABLED' : !inScope ? 'QA_SCOPE' : null, running: Boolean(runner), routeId: runner?.routeId ?? null,
+      ticks: runner?.ticks ?? 0, maxTicks: SIMULATION_MAX_TICKS, tickSeconds: this.tickMs / 1000,
       routes: [...SIMULATION_ROUTES.values()].map(route => ({ id: route.id, label: route.label, points: route.offsets.length })) };
+  }
+
+  /** Per-order status for the admin page: adds the specific reason this delivery cannot start. An active run always stays stoppable. */
+  async statusFor(reference: string): Promise<SimulationStatus> {
+    const status = this.status(reference);
+    if (!status.enabled || status.running) return status;
+    const reason = await this.service.simulationEligibility(reference);
+    return reason ? { ...status, enabled: false, reason } : status;
   }
 
   async start(actorUserId: string, reference: string, routeId: string): Promise<SimulationStatus> {
@@ -54,7 +64,8 @@ export class DeliverySimulationRunner {
     // Routes are offsets from the hub; without a configured hub there is nowhere truthful to play them.
     if (!deliveryOrigin()) throw new AppError('Configure the delivery hub before running the demo simulation.', 409, 'DELIVERY_SIMULATION_DISABLED');
     const orderId = parseOrderReference(reference);
-    const scope = activeSharedDevSimulationScope();
+    // Only the dedicated QA runtime is order-scoped; DEV-wide eligibility (payment, status, delivery) is enforced under the order lock by recordSimulation.
+    const scope = qaRuntimeSimulationScope();
     if (scope) {
       if (!scope.orderIds.includes(orderId)) throw new AppError('The delivery demo simulation is not available for this order.', 409, 'DELIVERY_SIMULATION_DISABLED');
       const fixture = await prisma.order.findUnique({ where: { id: orderId }, select: { shippingRecipient: true, shippingLine1: true,
@@ -152,11 +163,10 @@ export class DeliverySimulationRunner {
   /** Boot: an out-for-delivery simulated delivery whose last marker is STARTED has no runner any more, so it gets a SYSTEM stop marker. */
   async recoverOrphans(): Promise<number> {
     if (!this.availability().enabled) return 0;
-    // Shared DEV has unrelated deliveries; this QA process never repairs them on startup.
-    // The dedicated QA runtime never repairs unrelated orders; the ordinary DEV demo scope repairs only its allowlisted orders, so a restart never leaves one looking mid-run.
-    if (isDeliveryQaRuntimeActive() && activeSharedDevSimulationScope()) return 0;
-    const scope = devDemoSimulationScope();
-    const candidates = await prisma.delivery.findMany({ where: { isSimulated: true, status: 'OUT_FOR_DELIVERY', ...(scope ? { orderId: { in: scope.orderIds } } : {}) }, select: { orderId: true,
+    // The dedicated QA runtime never repairs unrelated orders. Elsewhere only deliveries this capability left mid-run qualify: simulated, still out
+    // for delivery, and whose latest lifecycle marker is STARTED (checked below). Nothing else is read for writing, so historic deliveries are untouched.
+    if (qaRuntimeSimulationScope()) return 0;
+    const candidates = await prisma.delivery.findMany({ where: { isSimulated: true, status: 'OUT_FOR_DELIVERY' }, select: { orderId: true,
       events: { where: { type: { in: ['SIMULATION_STARTED', 'SIMULATION_STOPPED'] } }, orderBy: { revision: 'desc' }, take: 1, select: { type: true } } } });
     let recovered = 0;
     for (const delivery of candidates) {

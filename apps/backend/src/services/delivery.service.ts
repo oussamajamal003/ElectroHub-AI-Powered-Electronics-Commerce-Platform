@@ -16,6 +16,7 @@ import { activeSharedDevSimulationScope } from './delivery-simulation/simulation
  * Every write starts by locking the Order row, the same lock payment compensation takes, so delivery writes and cancellation serialize.
  */
 type Tx = Prisma.TransactionClient;
+export type SimulationIneligibleReason = 'ORDER_NOT_FOUND' | 'ORDER_CANCELLED' | 'PAYMENT_INELIGIBLE' | 'NOT_OUT_FOR_DELIVERY' | 'DELIVERY_NOT_STARTED';
 export type DeliveryAvailability = 'AVAILABLE' | 'NOT_STARTED' | 'PAYMENT_PENDING' | 'CANCELLED';
 const FULFILLMENT: readonly OrderStatus[] = ['CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED'];
 const NEXT: Partial<Record<OrderStatus, OrderStatus>> = { CONFIRMED: 'PREPARING', PREPARING: 'OUT_FOR_DELIVERY', OUT_FOR_DELIVERY: 'DELIVERED' };
@@ -305,6 +306,19 @@ export class DeliveryService {
         changes: [], source: actorUserId ? 'SIMULATION' : 'SYSTEM', actorUserId, occurredAt: this.clock() } });
       return revision;
     }, TX_OPTIONS);
+  }
+
+  /**
+   * Why (or whether) a demo simulation could start for this order. Read-only and advisory: Start re-checks everything under the order lock in
+   * recordSimulation. Mirrors assertWritable, so payment-ineligible orders (including ordinary unpaid ones) are never reported as eligible.
+   */
+  async simulationEligibility(reference: string): Promise<SimulationIneligibleReason | null> {
+    const order = await this.database.order.findUnique({ where: { id: parseOrderReference(reference) }, include });
+    if (!order) return 'ORDER_NOT_FOUND';
+    if (order.status === 'CANCELLED') return 'ORDER_CANCELLED';
+    if (!paymentEligible(order) || !FULFILLMENT.includes(order.status)) return 'PAYMENT_INELIGIBLE';
+    if (order.status !== 'OUT_FOR_DELIVERY') return 'NOT_OUT_FOR_DELIVERY';
+    return order.delivery ? null : 'DELIVERY_NOT_STARTED';
   }
 
   /**

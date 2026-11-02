@@ -88,8 +88,11 @@ export interface AdminDeliveryUpdate {
 }
 
 /** Task 04.7 `GET|POST|DELETE /api/admin/orders/:orderReference/delivery/simulation`. */
+export type DeliverySimulationReason = 'FEATURE_DISABLED' | 'QA_SCOPE' | 'ORDER_NOT_FOUND' | 'ORDER_CANCELLED' | 'PAYMENT_INELIGIBLE' | 'NOT_OUT_FOR_DELIVERY' | 'DELIVERY_NOT_STARTED';
 export interface DeliverySimulationStatus {
   enabled: boolean;
+  /** Why Start is unavailable for this delivery; null when enabled. */
+  reason: DeliverySimulationReason | null;
   running: boolean;
   routeId: string | null;
   ticks: number;

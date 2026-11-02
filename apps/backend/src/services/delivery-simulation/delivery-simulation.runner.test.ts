@@ -49,6 +49,49 @@ describe('DeliverySimulationRunner bounds', () => {
     await simulation.stop(reference);
     expect(service.recordSimulation).toHaveBeenCalledTimes(2);
   });
+  it('after a restart mid-run, DEV-wide recovery records STOPPED only for simulated deliveries whose latest marker is STARTED', async () => {
+    const allowed = randomUUID(), settled = randomUUID();
+    const url = 'postgresql://postgres.pzxekjybdiulzmssalfo:x@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres';
+    for (const [name, value] of Object.entries({ NODE_ENV: 'development', DATABASE_URL: url, DIRECT_URL: url, DELIVERY_SIMULATION_ENABLED: 'true', DELIVERY_DEV_DEMO: 'true',
+      DELIVERY_DEV_DEMO_RUN_ID: 'QA-DELIVERY-20261101-abcd', DELIVERY_DEV_DEMO_ORDER_IDS: `${allowed},${settled}`,
+      DELIVERY_DEV_DEMO_CUSTOMER_USER_ID: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', DELIVERY_DEV_DEMO_PRODUCT_ID: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' })) vi.stubEnv(name, value);
+    db.findMany.mockResolvedValue([{ orderId: allowed, events: [{ type: 'SIMULATION_STARTED' }] }, { orderId: settled, events: [{ type: 'SIMULATION_STOPPED' }] }]);
+    const { service, simulation } = runner();
+    await expect(simulation.recoverOrphans()).resolves.toBe(1);
+    expect(db.findMany.mock.calls.at(-1)?.[0].where).toEqual({ isSimulated: true, status: 'OUT_FOR_DELIVERY' });
+    expect(service.recordSimulation).toHaveBeenCalledTimes(1);
+    expect(service.recordSimulation).toHaveBeenCalledWith(null, `ORD-${allowed.toUpperCase()}`, 'STOPPED');
+    // A fresh runner after the "restart" holds no timers, so the order can be started again.
+    expect(simulation.status(`ORD-${allowed.toUpperCase()}`).running).toBe(false);
+  });
+  it('DEV-wide: any order id starts with no allowlist or fixture lookup, and the specific ineligibility reason is reported per order', async () => {
+    const url = 'postgresql://postgres.pzxekjybdiulzmssalfo:x@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres';
+    for (const [name, value] of Object.entries({ NODE_ENV: 'development', DATABASE_URL: url, DIRECT_URL: url, DELIVERY_SIMULATION_ENABLED: 'true', DELIVERY_DEV_DEMO: 'true' })) vi.stubEnv(name, value);
+    db.order.mockClear();
+    const { service, simulation } = runner();
+    const eligibility = vi.fn().mockResolvedValue(null);
+    Object.assign(service, { simulationEligibility: eligibility });
+    const first = `ORD-${randomUUID().toUpperCase()}`, second = `ORD-${randomUUID().toUpperCase()}`;
+    await expect(simulation.statusFor(first)).resolves.toMatchObject({ enabled: true, reason: null });
+    await expect(simulation.start(randomUUID(), first, routeId)).resolves.toMatchObject({ running: true });
+    await expect(simulation.start(randomUUID(), second, routeId)).resolves.toMatchObject({ running: true });
+    expect(db.order).not.toHaveBeenCalled();
+    // Running deliveries stay stoppable even when eligibility would now fail.
+    eligibility.mockResolvedValue('NOT_OUT_FOR_DELIVERY');
+    await expect(simulation.statusFor(first)).resolves.toMatchObject({ enabled: true, running: true });
+    await simulation.stop(first); await simulation.stop(second);
+    for (const reason of ['PAYMENT_INELIGIBLE', 'NOT_OUT_FOR_DELIVERY', 'ORDER_CANCELLED', 'DELIVERY_NOT_STARTED', 'ORDER_NOT_FOUND']) {
+      eligibility.mockResolvedValue(reason);
+      await expect(simulation.statusFor(first)).resolves.toMatchObject({ enabled: false, reason });
+    }
+  });
+  it('without the opt-in nothing is enabled, whatever the order', async () => {
+    const url = 'postgresql://postgres.pzxekjybdiulzmssalfo:x@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres';
+    for (const [name, value] of Object.entries({ NODE_ENV: 'development', DATABASE_URL: url, DIRECT_URL: url, DELIVERY_SIMULATION_ENABLED: 'true', DELIVERY_DEV_DEMO: '' })) vi.stubEnv(name, value);
+    const simulation = new DeliverySimulationRunner({ simulationEligibility: vi.fn() } as unknown as DeliveryService, undefined, 5_000, false);
+    await expect(simulation.statusFor(reference)).resolves.toMatchObject({ enabled: false, reason: 'FEATURE_DISABLED' });
+    await expect(simulation.start(randomUUID(), reference, routeId)).rejects.toMatchObject({ code: 'DELIVERY_SIMULATION_DISABLED' });
+  });
   it('stops at the tick cap even when every revision read fails', async () => {
     db.findUnique.mockRejectedValue(new Error('database unavailable'));
     const { service, simulation } = runner();

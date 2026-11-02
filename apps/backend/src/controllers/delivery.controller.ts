@@ -84,7 +84,7 @@ export const updateAdminDelivery = action('delivery.update.timing', async (req, 
 
 /** Task 04.7 demo tools (ADMIN; disposable databases only). Status is readable everywhere so the admin page can explain why it is off. */
 export const getDeliverySimulation = action('delivery.simulation_read.timing', async (req, res) => {
-  res.json({ data: deliverySimulation.status(String(req.params.orderReference)) });
+  res.json({ data: await deliverySimulation.statusFor(String(req.params.orderReference)) });
 });
 
 export const startDeliverySimulation = action('delivery.simulation_start.timing', async (req, res) => {
