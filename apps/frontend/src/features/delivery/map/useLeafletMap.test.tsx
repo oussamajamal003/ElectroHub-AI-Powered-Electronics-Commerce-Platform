@@ -10,9 +10,11 @@ function mount() {
   const maps: L.Map[] = [];
   const original = L.map;
   vi.spyOn(L, 'map').mockImplementation((...args: Parameters<typeof L.map>) => { const map = original(...args); maps.push(map); return map; });
-  const hook = renderHook(() => useLeafletMap({ current: element }, { tiles: { url: 'https://tiles.test/{z}/{x}/{y}.png', attribution: 'test' },
-    layers: { line: null, markers: [], stale: false }, classes: {}, label: 'Delivery map', describedBy: 'map-help', onError: vi.fn() }));
-  return { ...hook, map: maps[0], element };
+  const hook = renderHook(() => useLeafletMap({ current: element }, { tiles: { url: 'https://tiles.test/{z}/{x}/{y}.png', attribution: 'test', attributionUrl: 'https://tiles.test/copyright' },
+    layers: { line: null, markers: [], stale: false, courierSimulated: false, routeUnavailable: false }, classes: {}, label: 'Delivery map', describedBy: 'map-help', onError: vi.fn() }));
+  const map = maps[0];
+  if (!map) throw new Error('Leaflet map was not created');
+  return { ...hook, map, element };
 }
 
 describe('useLeafletMap wheel zoom', () => {
