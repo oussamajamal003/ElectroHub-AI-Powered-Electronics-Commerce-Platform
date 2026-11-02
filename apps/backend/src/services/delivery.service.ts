@@ -8,6 +8,7 @@ import { buildDeliveryMap, MAP_PATH_LIMIT, type CustomerDeliveryMap } from './de
 import { redactDeliveryForDeletedOwner } from './delivery-privacy.js';
 import { parseOrderReference } from './order.service.js';
 import type { DeliveryUpdateInput } from '../validators/delivery.validator.js';
+import { activeSharedDevSimulationScope } from './delivery-simulation/simulation.config.js';
 
 /**
  * Task 04.5 Delivery Tracking Foundation (architecture §3–§5). Order.status stays canonical; Delivery.status mirrors it and is written
@@ -25,6 +26,8 @@ const TX_OPTIONS = { maxWait: 10_000, timeout: 20_000 };
 const include = {
   payment: { select: { status: true } },
   delivery: true,
+  paymentAttempt: { select: { id: true } },
+  items: { select: { product: { select: { id: true, isTestFixture: true } } } },
 } satisfies Prisma.OrderInclude;
 type LoadedOrder = Prisma.OrderGetPayload<{ include: typeof include }>;
 type DeliveryRow = NonNullable<LoadedOrder['delivery']>;
@@ -42,7 +45,15 @@ export class DeliveryRevisionConflict extends AppError {
 const orderReference = (id: string) => `ORD-${id.toUpperCase()}`;
 const iso = (value: Date | null | undefined) => value ? value.toISOString() : null;
 const coordinate = (value: Prisma.Decimal | null) => value === null ? null : Number(value);
-const paymentEligible = (order: Pick<LoadedOrder, 'status' | 'payment'>) => order.status !== 'AWAITING_CAPTURE' && order.payment?.status === 'SUCCEEDED';
+/** No synthetic payment: the narrowly scoped QA exception stays visibly unpaid in all projections. */
+export const paymentEligible = (order: LoadedOrder) => {
+  if (order.status === 'AWAITING_CAPTURE') return false;
+  if (order.payment?.status === 'SUCCEEDED') return true;
+  const scope = activeSharedDevSimulationScope();
+  return Boolean(scope && scope.orderIds.includes(order.id) && order.shippingRecipient === scope.runId && order.shippingLine1 === scope.runId &&
+    order.userId === scope.customerUserId && order.total.isZero() &&
+    !order.payment && !order.paymentAttempt && order.items.length && order.items.every(item => item.product.id === scope.productId && item.product.isTestFixture));
+};
 
 export function availability(order: LoadedOrder): DeliveryAvailability {
   if (order.status === 'CANCELLED') return 'CANCELLED';

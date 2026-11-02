@@ -34,7 +34,10 @@ describe('Task 04.6 map layers', () => {
   it('T6-09 simulated fixture → dashed simulated line; stale courier flagged', () => {
     const layers = buildDeliveryLayers({ map: map({ pathKind: 'SIMULATED_FIXTURE' }), status: 'OUT_FOR_DELIVERY', location, stale: true });
     expect(layers.line!.kind).toBe('simulated');
+    expect(layers.courierSimulated).toBe(false);
     expect(layers.stale).toBe(true);
+    expect(buildDeliveryLayers({ map: map({ pathKind: 'SIMULATED_FIXTURE' }), status: 'OUT_FOR_DELIVERY',
+      location: { ...location, source: 'SIMULATED' }, stale: false }).courierSimulated).toBe(true);
   });
 
   it('T6-02 / AC4 nothing to draw when pathKind is NONE and there is no location (chunk never requested)', () => {

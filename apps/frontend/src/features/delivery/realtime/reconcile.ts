@@ -21,9 +21,14 @@ export function reconcileDeliveryEvent(cached: CustomerDeliverySnapshot | undefi
   let map = cached.map;
   if (liveMap === null) map = null;
   else if (liveMap) {
-    const path = [...(cached.map?.path ?? [])];
+    // A changed path kind cannot safely inherit the old kind's points. If the new kind already has history,
+    // the event carries no path, so retrieve the authoritative projection instead of guessing.
+    if (cached.map && cached.map.pathKind !== liveMap.pathKind && cached.map.path.length && liveMap.pathKind !== 'NONE') return { kind: 'refetch' };
+    const path = cached.map?.pathKind === liveMap.pathKind ? [...cached.map.path] : [];
     const location = fields.location;
-    if (event.changed.includes('location') && location) {
+    const sameSource = location && (liveMap.pathKind === 'SIMULATED_FIXTURE' ? location.source === 'SIMULATED'
+      : liveMap.pathKind === 'RECORDED' && location.source === 'MANUAL');
+    if (event.changed.includes('location') && location && sameSource) {
       const last = path.at(-1);
       if (!last || last[0] !== location.latitude || last[1] !== location.longitude) path.push([location.latitude, location.longitude]);
     }

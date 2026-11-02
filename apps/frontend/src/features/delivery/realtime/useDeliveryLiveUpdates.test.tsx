@@ -55,6 +55,20 @@ describe('T7-08 reconcileDeliveryEvent', () => {
     expect(merged.next.timeline.map(entry => entry.id)).toEqual(['e6:status', 'e1']);
     expect(merged.next.map?.path).toEqual([]);
   });
+
+  it('never appends a manual location to a simulated route, or reuses a path of another kind', () => {
+    const cached = snapshot();
+    const manual = event(6, { location: { latitude: 34, longitude: 36, label: 'Manual', updatedAt: '2026-11-04T10:50:00.000Z', source: 'MANUAL' } },
+      { source: 'ADMIN' });
+    const result = reconcileDeliveryEvent(cached, manual);
+    expect(result.kind).toBe('merge');
+    if (result.kind === 'merge') {
+      expect(result.next.map?.path).toEqual(cached.map?.path);
+      expect(result.next.location?.source).toBe('MANUAL');
+    }
+    const changedKind = event(6, { map: { ...cached.map!, pathKind: 'RECORDED' } });
+    expect(reconcileDeliveryEvent(cached, changedKind)).toEqual({ kind: 'refetch' });
+  });
 });
 
 describe('useDeliveryLiveUpdates with a fake socket', () => {

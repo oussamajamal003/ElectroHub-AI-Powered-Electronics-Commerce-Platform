@@ -46,7 +46,8 @@ export function AdminDeliveryDetailPage() {
         <section className={styles.card} aria-labelledby="admin-delivery-state">
           <h2 id="admin-delivery-state">Current tracking state</h2>
           <dl className={styles.facts}>
-            <div><dt>Payment eligibility</dt><dd>{snapshot.paymentEligible ? 'Eligible (payment succeeded)' : 'Not eligible'}</dd></div>
+            <div><dt>Payment eligibility</dt><dd>{snapshot.paymentEligible ? snapshot.paymentState === 'PAID'
+              ? 'Eligible (payment succeeded)' : 'QA test order (unpaid)' : 'Not eligible'}</dd></div>
             <div><dt>Tracking reference</dt><dd className={styles.mono}>{current?.trackingReference ?? 'Not started'}</dd></div>
             <div><dt>Delivery status</dt><dd>{current ? stageOf(current.status).label : '—'}</dd></div>
             <div><dt>Revision</dt><dd className={styles.mono}>{current?.revision ?? 0}</dd></div>

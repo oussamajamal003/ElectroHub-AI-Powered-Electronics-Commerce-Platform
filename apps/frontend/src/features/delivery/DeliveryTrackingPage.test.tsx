@@ -59,6 +59,13 @@ describe('Task 04.5 delivery presentation', () => {
 });
 
 describe('Delivery tracking page', () => {
+  it('does not claim payment succeeded for an unpaid QA delivery fixture', async () => {
+    signedIn(); resolve(snapshot({ availability: 'NOT_STARTED', status: 'CONFIRMED', paymentState: 'UNPROCESSED', location: null, timeline: [] }));
+    renderPage();
+    const overview = await screen.findByRole('region', { name: 'Delivery overview' });
+    expect(overview).toHaveTextContent('QA test order: no payment was processed');
+    expect(overview).not.toHaveTextContent('Your payment is confirmed');
+  });
   it('T5-01 renders header, premium overview, stepper, location text and the recorded timeline from the owned snapshot', async () => {
     signedIn(); resolve(snapshot());
     renderPage();

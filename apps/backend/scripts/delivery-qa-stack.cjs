@@ -21,12 +21,14 @@ const root = path.resolve(backend, '../..');
 fs.mkdirSync(path.join(root, '.cache'), { recursive: true });
 const work = fs.mkdtempSync(path.join(root, '.cache/delivery-qa-stack-'));
 const data = path.join(work, 'data');
+const pointer = process.env.DELIVERY_QA_STACK_POINTER || path.join(root, '.cache', 'delivery-qa-stack.current');
 const binaries = process.env.ELECTROHUB_LOCAL_PG_BIN || 'C:/Program Files/PostgreSQL/18/bin';
 const exe = name => path.join(binaries, process.platform === 'win32' ? `${name}.exe` : name);
 const database = `electrohub_disposable_delivery_qa_${crypto.randomBytes(4).toString('hex')}`;
 const ports = { backend: Number(process.env.DELIVERY_QA_BACKEND_PORT || 5310), frontend: Number(process.env.DELIVERY_QA_FRONTEND_PORT || 3310) };
 const children = [];
 let started = false;
+let pointerOwned = false;
 
 function command(executable, args, env = process.env, cwd = work) {
   const output = fs.openSync(path.join(work, 'provisioning.log'), 'a');
@@ -104,7 +106,8 @@ async function run() {
   await waitFor(`http://localhost:${ports.frontend}/`, 'frontend');
   const state = { frontend: `http://localhost:${ports.frontend}`, backend: `http://127.0.0.1:${ports.backend}`, tiles, credentials, jwtSecretFile: path.join(work, 'jwt-secret.txt'), database: `loopback:${pgPort}/${database}`, run: work };
   fs.writeFileSync(path.join(work, 'state.json'), JSON.stringify(state, null, 2));
-  fs.writeFileSync(path.join(root, '.cache', 'delivery-qa-stack.current'), path.join(work, 'state.json'));
+  fs.writeFileSync(pointer, path.join(work, 'state.json'), { flag: 'wx' });
+  pointerOwned = true;
   console.log(`Delivery QA stack ready: ${state.frontend} (API ${state.backend}, ${state.database}); state: ${path.relative(root, path.join(work, 'state.json'))}`);
 }
 
@@ -135,7 +138,7 @@ function shutdown(code = 0) {
   if (stopping) return; stopping = true;
   for (const child of children) { try { child.kill(); } catch { /* gone */ } }
   if (started) { try { command(exe('pg_ctl'), ['-D', data, '-m', 'immediate', '-w', 'stop']); } catch { process.stderr.write('Disposable PostgreSQL stop failed.\n'); } }
-  try { fs.rmSync(path.join(root, '.cache', 'delivery-qa-stack.current'), { force: true }); } catch { /* ignore */ }
+  try { if (pointerOwned && fs.readFileSync(pointer, 'utf8') === path.join(work, 'state.json')) fs.unlinkSync(pointer); } catch { /* ignore */ }
   console.log(`Delivery QA stack stopped. Evidence: ${path.relative(root, work)}`);
   process.exit(code);
 }

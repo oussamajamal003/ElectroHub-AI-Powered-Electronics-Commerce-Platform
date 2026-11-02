@@ -6,7 +6,7 @@ import { logSafely } from '../../utils/logger.js';
 import { DeliveryRevisionConflict, DeliveryService } from '../delivery.service.js';
 import { parseOrderReference } from '../order.service.js';
 import { deliveryOrigin } from '../../config/delivery-map.config.js';
-import { SIMULATION_MAX_TICKS, SIMULATION_ROUTES, SIMULATION_TICK_MS, simulationAvailability, type SimulationAvailability } from './simulation.config.js';
+import { SIMULATION_MAX_TICKS, SIMULATION_ROUTES, SIMULATION_TICK_MS, simulationAvailability, activeSharedDevSimulationScope, type SimulationAvailability } from './simulation.config.js';
 
 /**
  * Task 04.7 in-process demo runner (architecture §8.5). Every tick goes through DeliveryService.applyUpdate with source SIMULATION (same
@@ -38,8 +38,10 @@ export class DeliverySimulationRunner {
   }
 
   status(reference: string): SimulationStatus {
-    const runner = this.runners.get(parseOrderReference(reference));
-    return { enabled: this.availability().enabled, running: Boolean(runner), routeId: runner?.routeId ?? null, ticks: runner?.ticks ?? 0,
+    const orderId = parseOrderReference(reference);
+    const runner = this.runners.get(orderId);
+    const scope = activeSharedDevSimulationScope();
+    return { enabled: this.availability().enabled && (!scope || scope.orderIds.includes(orderId)), running: Boolean(runner), routeId: runner?.routeId ?? null, ticks: runner?.ticks ?? 0,
       maxTicks: SIMULATION_MAX_TICKS, tickSeconds: this.tickMs / 1000,
       routes: [...SIMULATION_ROUTES.values()].map(route => ({ id: route.id, label: route.label, points: route.offsets.length })) };
   }
@@ -51,6 +53,17 @@ export class DeliverySimulationRunner {
     // Routes are offsets from the hub; without a configured hub there is nowhere truthful to play them.
     if (!deliveryOrigin()) throw new AppError('Configure the delivery hub before running the demo simulation.', 409, 'DELIVERY_SIMULATION_DISABLED');
     const orderId = parseOrderReference(reference);
+    const scope = activeSharedDevSimulationScope();
+    if (scope) {
+      if (!scope.orderIds.includes(orderId)) throw new AppError('The delivery demo simulation is not available for this order.', 409, 'DELIVERY_SIMULATION_DISABLED');
+      const fixture = await prisma.order.findUnique({ where: { id: orderId }, select: { shippingRecipient: true, shippingLine1: true,
+        userId: true, total: true, payment: { select: { id: true } }, paymentAttempt: { select: { id: true } }, items: { select: { product: { select: { id: true, isTestFixture: true } } } } } });
+      if (!fixture || fixture.shippingRecipient !== scope.runId || fixture.shippingLine1 !== scope.runId || !fixture.total.isZero() ||
+          fixture.userId !== scope.customerUserId || fixture.payment ||
+          fixture.paymentAttempt || !fixture.items.length || fixture.items.some(item => item.product.id !== scope.productId || !item.product.isTestFixture)) {
+        throw new AppError('The delivery demo simulation is not available for this order.', 409, 'DELIVERY_SIMULATION_DISABLED');
+      }
+    }
     if (this.runners.has(orderId)) throw new AppError('A demo simulation is already running for this delivery.', 409, 'DELIVERY_SIMULATION_RUNNING');
     // Reserve before the first await so two concurrent starts cannot both win.
     const runner: Runner = { orderId, reference, actorUserId, routeId, index: 0, ticks: 0, timer: null, busy: false, stopping: false, inflight: null, stopped: null };
@@ -138,6 +151,8 @@ export class DeliverySimulationRunner {
   /** Boot: an out-for-delivery simulated delivery whose last marker is STARTED has no runner any more, so it gets a SYSTEM stop marker. */
   async recoverOrphans(): Promise<number> {
     if (!this.availability().enabled) return 0;
+    // Shared DEV has unrelated deliveries; this QA process never repairs them on startup.
+    if (activeSharedDevSimulationScope()) return 0;
     const candidates = await prisma.delivery.findMany({ where: { isSimulated: true, status: 'OUT_FOR_DELIVERY' }, select: { orderId: true,
       events: { where: { type: { in: ['SIMULATION_STARTED', 'SIMULATION_STOPPED'] } }, orderBy: { revision: 'desc' }, take: 1, select: { type: true } } } });
     let recovered = 0;

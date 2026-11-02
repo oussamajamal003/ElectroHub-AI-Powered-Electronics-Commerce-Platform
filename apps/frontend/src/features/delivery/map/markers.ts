@@ -12,6 +12,7 @@ export interface DeliveryLayers {
   markers: { kind: MarkerKind; position: LatLng }[];
   line: { kind: 'recorded' | 'simulated'; points: LatLng[] } | null;
   stale: boolean;
+  courierSimulated: boolean;
   routeUnavailable: boolean;
 }
 
@@ -38,7 +39,7 @@ export function buildDeliveryLayers({ map, status, location, stale }: Input): De
   const points = map.pathKind === 'NONE' ? [] : sanitizePath(map.path);
   // A single point is not a line; it is still represented by the courier marker.
   const line = points.length >= 2 ? { kind: map.pathKind === 'SIMULATED_FIXTURE' ? 'simulated' as const : 'recorded' as const, points } : null;
-  return { markers, line, stale: Boolean(courier) && stale, routeUnavailable: line === null };
+  return { markers, line, stale: Boolean(courier) && stale, courierSimulated: courier?.source === 'SIMULATED', routeUnavailable: line === null };
 }
 
 /** AC4: the Leaflet chunk is wanted only when there is a courier position or a drawable path. */

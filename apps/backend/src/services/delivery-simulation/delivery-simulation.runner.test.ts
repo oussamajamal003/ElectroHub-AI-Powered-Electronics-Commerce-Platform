@@ -3,16 +3,17 @@
  * publisher are stubbed; the disposable-PostgreSQL suite covers the real transaction path.
  */
 import { randomUUID } from 'node:crypto';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const db = vi.hoisted(() => ({ findUnique: vi.fn() }));
-vi.mock('../../lib/prisma.js', () => ({ prisma: { delivery: { findUnique: db.findUnique } } }));
+const db = vi.hoisted(() => ({ findUnique: vi.fn(), findMany: vi.fn(), order: vi.fn() }));
+vi.mock('../../lib/prisma.js', () => ({ prisma: { delivery: { findUnique: db.findUnique, findMany: db.findMany }, order: { findUnique: db.order } } }));
 vi.mock('../../config/delivery-map.config.js', () => ({ deliveryOrigin: () => ({ latitude: 34, longitude: -118, label: 'Demo hub' }) }));
 vi.mock('../../sockets/delivery.publisher.js', () => ({ DeliveryPublisher: { afterCommit: vi.fn() }, toPublishChanges: () => [] }));
 
 import { DeliverySimulationRunner } from './delivery-simulation.runner.js';
 import { SIMULATION_MAX_TICKS, SIMULATION_ROUTES } from './simulation.config.js';
 import type { DeliveryService } from '../delivery.service.js';
+import { activateDeliveryQaRuntime, deactivateDeliveryQaRuntime } from '../../delivery-qa-runtime.config.js';
 
 const reference = `ORD-${randomUUID().toUpperCase()}`;
 const routeId = [...SIMULATION_ROUTES.keys()][0];
@@ -24,6 +25,30 @@ function runner() {
 }
 
 describe('DeliverySimulationRunner bounds', () => {
+  afterEach(() => { deactivateDeliveryQaRuntime(); vi.unstubAllEnvs(); });
+  it('shared DEV checks the allowlist and persisted unpaid fixture and never scans unrelated orphans', async () => {
+    const id = reference.slice(4).toLowerCase();
+    const url = 'postgresql://postgres.pzxekjybdiulzmssalfo:x@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres';
+    const runId = 'QA-DELIVERY-20261101-abcd';
+    for (const [name, value] of Object.entries({ NODE_ENV: 'development', DATABASE_URL: url, DIRECT_URL: url,
+      DELIVERY_SIMULATION_ENABLED: 'true', DELIVERY_SHARED_DEV_QA: 'true', DELIVERY_SHARED_DEV_SIMULATION: 'true',
+      STRIPE_SECRET_KEY: '', BREVO_API_KEY: '', COMMERCE_EMAIL_ENQUEUE_ENABLED: 'false', COMMERCE_EMAIL_DISPATCH_ENABLED: 'false', COMMERCE_EMAIL_SEND_MODE: 'disabled',
+      DELIVERY_QA_RUN_ID: runId, DELIVERY_QA_ORDER_IDS: id, DELIVERY_QA_CUSTOMER_USER_ID: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', DELIVERY_QA_PRODUCT_ID: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' })) vi.stubEnv(name, value);
+    activateDeliveryQaRuntime();
+    const { simulation, service } = runner();
+    db.order.mockResolvedValue({ shippingRecipient: runId, shippingLine1: runId, userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', total: { isZero: () => true }, payment: null,
+      paymentAttempt: null, items: [{ product: { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', isTestFixture: true } }] });
+    await expect(simulation.start(randomUUID(), `ORD-${randomUUID().toUpperCase()}`, routeId)).rejects.toMatchObject({ code: 'DELIVERY_SIMULATION_DISABLED' });
+    db.order.mockResolvedValueOnce({ shippingRecipient: runId, shippingLine1: runId, userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', total: { isZero: () => true }, payment: { id: randomUUID() },
+      paymentAttempt: null, items: [{ product: { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', isTestFixture: true } }] });
+    await expect(simulation.start(randomUUID(), reference, routeId)).rejects.toMatchObject({ code: 'DELIVERY_SIMULATION_DISABLED' });
+    await expect(simulation.start(randomUUID(), reference, routeId)).resolves.toMatchObject({ running: true });
+    db.findMany.mockClear();
+    await expect(simulation.recoverOrphans()).resolves.toBe(0);
+    expect(db.findMany).not.toHaveBeenCalled();
+    await simulation.stop(reference);
+    expect(service.recordSimulation).toHaveBeenCalledTimes(2);
+  });
   it('stops at the tick cap even when every revision read fails', async () => {
     db.findUnique.mockRejectedValue(new Error('database unavailable'));
     const { service, simulation } = runner();

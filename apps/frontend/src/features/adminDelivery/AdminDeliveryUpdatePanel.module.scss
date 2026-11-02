@@ -1,10 +1,10 @@
 @use '@/styles/abstracts' as *;
 
-.panel { display: grid; gap: $spacing-5; padding: $spacing-5; border: 1px solid $color-border; background: $color-background; min-width: 0;
+.panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: $spacing-5; padding: $spacing-5; border: 1px solid $color-border; background: $color-background; min-width: 0;
   @include respond-to(md) { padding: $spacing-6; }
   h2 { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; }
   > p { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; } }
-.content { display: grid; gap: $spacing-5; }
+.content { display: grid; grid-template-columns: minmax(0, 1fr); gap: $spacing-5; min-width: 0; }
 .help { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; }
 .fieldset { display: grid; gap: $spacing-4; margin: 0; padding: $spacing-4; border: 1px solid $color-border; min-width: 0;
   legend { padding: 0 $spacing-2; font-weight: $font-weight-semibold; font-size: $font-size-sm; } }

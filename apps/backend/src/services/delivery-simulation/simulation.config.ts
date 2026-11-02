@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { describeDatabaseTarget } from '../../lib/database-target.js';
+import { describeDatabaseTarget, resolveDatabaseTargets } from '../../lib/database-target.js';
+import { assertDeliveryQaRuntime, isDeliveryQaRuntimeActive } from '../../delivery-qa-runtime.config.js';
 import coastal from './routes/demo-hub-coastal.json';
 import north from './routes/demo-hub-north.json';
 
@@ -14,9 +15,36 @@ export const SIMULATION_MAX_POINTS = 120;
 
 export type SimulationAvailability = { enabled: true } | { enabled: false; reason: 'FLAG_OFF' | 'PRODUCTION' | 'DATABASE_NOT_DISPOSABLE' };
 
+/** Strictly scoped opt-in for the dedicated shared-DEV QA entrypoint; never inferred from the ordinary simulation flag. */
+export function sharedDevSimulationScope(source: NodeJS.ProcessEnv = process.env): { runId: string; orderIds: string[]; customerUserId: string; productId: string } | null {
+  if (source.NODE_ENV !== 'development' || source.DELIVERY_SHARED_DEV_QA !== 'true' ||
+      source.DELIVERY_SHARED_DEV_SIMULATION !== 'true' || source.DELIVERY_SIMULATION_ENABLED !== 'true') return null;
+  const runId = source.DELIVERY_QA_RUN_ID ?? '';
+  const orderIds = (source.DELIVERY_QA_ORDER_IDS ?? '').split(',');
+  const customerUserId = source.DELIVERY_QA_CUSTOMER_USER_ID ?? '';
+  const productId = source.DELIVERY_QA_PRODUCT_ID ?? '';
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  if (!/^QA-DELIVERY-[0-9]{8}-[a-z0-9]{4,32}$/.test(runId) || !orderIds.length || orderIds.length > 10 ||
+      orderIds.some(id => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id)) ||
+      new Set(orderIds).size !== orderIds.length || !uuid.test(customerUserId) || !uuid.test(productId)) return null;
+  try {
+    assertDeliveryQaRuntime(source);
+    const targets = resolveDatabaseTargets(source);
+    if (targets.runtime.category !== 'dev' || targets.runtime.identity !== 'supabase:pzxekjybdiulzmssalfo/postgres' ||
+        targets.migration.identity !== targets.runtime.identity) return null;
+  } catch { return null; }
+  return { runId, orderIds, customerUserId, productId };
+}
+
+/** Environment configuration alone cannot grant QA authority to an ordinary application process. */
+export function activeSharedDevSimulationScope(): ReturnType<typeof sharedDevSimulationScope> {
+  return isDeliveryQaRuntimeActive() ? sharedDevSimulationScope() : null;
+}
+
 export function simulationAvailability(source: NodeJS.ProcessEnv = process.env): SimulationAvailability {
   if (source.DELIVERY_SIMULATION_ENABLED !== 'true') return { enabled: false, reason: 'FLAG_OFF' };
   if (source.NODE_ENV === 'production') return { enabled: false, reason: 'PRODUCTION' };
+  if ((source === process.env ? activeSharedDevSimulationScope() : sharedDevSimulationScope(source))) return { enabled: true };
   try {
     if (describeDatabaseTarget(source.DATABASE_URL).category !== 'disposable') return { enabled: false, reason: 'DATABASE_NOT_DISPOSABLE' };
   } catch { return { enabled: false, reason: 'DATABASE_NOT_DISPOSABLE' }; }

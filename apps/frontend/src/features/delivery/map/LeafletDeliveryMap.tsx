@@ -59,7 +59,7 @@ export default function LeafletDeliveryMap({ layers, tiles, summaryId, onError }
     <ul className={styles.legend} aria-label="Map legend">
       <li><span className={`${styles.swatch} ${styles.swatchOrigin}`} aria-hidden="true" />Dispatch hub</li>
       {hasCourier && <li><span className={`${styles.swatch} ${styles.swatchCourier} ${layers.stale ? styles.swatchStale : ''}`} aria-hidden="true" />
-        {layers.stale ? 'Last known position (stale)' : simulated ? 'Simulated position' : 'Latest position'}</li>}
+        {layers.stale ? 'Last known position (stale)' : layers.courierSimulated ? 'Simulated position' : 'Latest position'}</li>}
       {layers.line && <li><span className={`${styles.swatch} ${simulated ? styles.swatchSimulated : styles.swatchRecorded}`} aria-hidden="true" />
         {simulated ? 'Simulated route' : 'Recorded positions'}</li>}
       {hasDestination && <li><span className={`${styles.swatch} ${styles.swatchDestination}`} aria-hidden="true" />Delivery area</li>}
