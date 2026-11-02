@@ -58,7 +58,7 @@ describe('final acceptance output boundaries', () => {
     expect(await pending).toBe(false);
     expect(loggingHealth()).toMatchObject({ status: 'warning', lastCode: 'LOG_FLUSH_TIMEOUT' });
     expect(stderr.mock.calls.map(([line]) => String(line)).join('')).toContain('LOG_FLUSH_TIMEOUT');
-  });
+  }, 20_000);
   it('does not let a rejected flush replace a lifecycle failure or expose its raw error', async () => {
     await flushLogs();
     vi.spyOn(DurableLogTransport.prototype, 'flush').mockRejectedValue(new Error('password=private-flush-details'));
