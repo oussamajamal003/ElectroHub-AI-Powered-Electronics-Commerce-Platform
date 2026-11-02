@@ -97,7 +97,7 @@ function checkWorkflow(name, rawText) {
     } else if (name === 'prod-migration.yml') {
       const allowedTriggers = new Set(['push', 'workflow_dispatch']);
       const hasDisallowed = on.some((t) => !allowedTriggers.has(t));
-      if (hasDisallowed || !on.includes('workflow_dispatch')) {
+      if (hasDisallowed || !on.includes('push')) {
         fail(`PROD workflow trigger must be push and/or workflow_dispatch (found: ${on.join(', ') || 'none'})`);
       }
       if (on.includes('push')) {
@@ -129,9 +129,7 @@ function checkWorkflow(name, rawText) {
       if (!text.includes('EXPECTED_PROJECT_REF: yepfgjehdstlxbpespun')) fail('PROD workflow must pin the PROD project ref');
       if (!text.includes('MIGRATION_TARGET: PROD')) fail('PROD workflow must explicitly select PROD in the migration guard');
       if (!text.includes('electrohub-prod-database')) fail('PROD workflow must use the protected PROD environment');
-      if (!text.includes('20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard,20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health,20261029000000_recommendations,20261029010000_recommendation_retention_index,20261029020000_recommendation_consent_consistency')) {
-        fail('PROD workflow must pin the reviewed ordered migration allowlist (Task 04.2 AI, Task 04.3 media, then Task 04.4 recommendations migrations)');
-      }
+      if (/APPROVED_MIGRATIONS|approved_migrations/.test(text)) fail('PROD workflow must discover pending migrations from the checked-in Prisma history and PROD ledger');
       if (/ELECTROHUB_DEV_(?:DATABASE|DIRECT)_URL/.test(text)) fail('PROD workflow must not expose DEV database secrets');
       if (!/prisma\s+migrate\s+status/.test(text)) fail('PROD workflow must run prisma migrate status after deploy');
     }
