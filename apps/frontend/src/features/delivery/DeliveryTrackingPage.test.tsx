@@ -10,6 +10,11 @@ import type { CustomerDeliverySnapshot } from './types';
 
 vi.mock('@/lib/api', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/api')>(), apiClient: vi.fn() }));
 vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: vi.fn() }));
+// Task 04.7: the page opens a live socket; these REST-focused cases use an inert one (the hook has its own suite).
+vi.mock('./realtime/deliverySocket', async () => {
+  const { FakeDeliverySocket } = await import('./realtime/fakeSocket');
+  return { acquireDeliverySocket: () => new FakeDeliverySocket().asSocket(), releaseDeliverySocket: () => undefined, closeDeliverySocket: () => undefined };
+});
 // Task 04.6: the lazy Leaflet chunk is replaced by a probe that records whether it was ever requested (AC4).
 const mapChunk = vi.hoisted(() => ({ requested: 0 }));
 vi.mock('./map/LeafletDeliveryMap', () => {
@@ -54,6 +59,13 @@ describe('Task 04.5 delivery presentation', () => {
 });
 
 describe('Delivery tracking page', () => {
+  it('does not claim payment succeeded for an unpaid QA delivery fixture', async () => {
+    signedIn(); resolve(snapshot({ availability: 'NOT_STARTED', status: 'CONFIRMED', paymentState: 'UNPROCESSED', location: null, timeline: [] }));
+    renderPage();
+    const overview = await screen.findByRole('region', { name: 'Delivery overview' });
+    expect(overview).toHaveTextContent('QA test order: no payment was processed');
+    expect(overview).not.toHaveTextContent('Your payment is confirmed');
+  });
   it('T5-01 renders header, premium overview, stepper, location text and the recorded timeline from the owned snapshot', async () => {
     signedIn(); resolve(snapshot());
     renderPage();

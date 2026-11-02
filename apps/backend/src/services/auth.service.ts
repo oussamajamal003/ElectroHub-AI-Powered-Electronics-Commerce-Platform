@@ -7,6 +7,7 @@ import { emailService } from './email.service.js';
 import { OtpPurpose, SecurityEventType, User, Role } from '@prisma/client';
 import { logger } from '../utils/logger.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
 
 const normalizeEmail = (email: string) => email.toLowerCase().trim();
 
@@ -241,7 +242,10 @@ export class AuthService {
    */
   async logout(rawRefreshToken: string) {
     const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
-    await this.repository.revokeRefreshTokenFamily(tokenHash);
+    const userId = await this.repository.revokeRefreshTokenFamily(tokenHash);
+    // Task 04.7: live delivery sockets carry no session family, so every socket of the account is dropped. Other devices keep valid
+    // sessions: their clients refresh through the REST path and reconnect, so the session-family semantics are unchanged.
+    if (userId) DeliveryPublisher.disconnectUser(userId, 'LOGOUT');
   }
 
   /**

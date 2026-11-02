@@ -83,15 +83,22 @@ async function main() {
     await patch(outRoute, { expectedRevision: index + 2, location: { latitude, longitude, label: index === route.length - 2 ? 'Harbor district' : null } });
   }
   const outSimulated = await order(customer, 'PREPARING', 'SUCCEEDED'); await start(outSimulated);
-  await patch(outSimulated, { expectedRevision: 1, status: 'OUT_FOR_DELIVERY', location: { latitude: 34.0420, longitude: -118.2600 } });
-  await patch(outSimulated, { expectedRevision: 2, location: { latitude: 34.0470, longitude: -118.2500 } });
-  await patch(outSimulated, { expectedRevision: 3, location: { latitude: 34.0510, longitude: -118.2450 } });
-  // The 04.7 simulation runner does not exist yet; the fixture marks the delivery as simulated directly so the dashed route can be reviewed.
-  const simulated = await prisma.delivery.update({ where: { orderId: outSimulated.slice(4).toLowerCase() }, data: { isSimulated: true } });
-  await prisma.deliveryEvent.updateMany({ where: { deliveryId: simulated.id, changes: { has: 'LOCATION' } }, data: { source: 'SIMULATION' } });
+  await patch(outSimulated, { expectedRevision: 1, status: 'OUT_FOR_DELIVERY' });
+  // Task 04.7: simulated positions go through the same SIMULATION path the demo runner uses (isSimulated, locationSource SIMULATED,
+  // event source SIMULATION), so the customer copy reads "Simulated position", never "shared by the courier team".
+  await service.applyUpdate(admin.id, outSimulated, { expectedRevision: 2, location: { latitude: 34.0420, longitude: -118.2600 } }, 'SIMULATION');
+  await service.applyUpdate(admin.id, outSimulated, { expectedRevision: 3, location: { latitude: 34.0470, longitude: -118.2500 } }, 'SIMULATION');
+  await service.applyUpdate(admin.id, outSimulated, { expectedRevision: 4, location: { latitude: 34.0510, longitude: -118.2450 } }, 'SIMULATION');
+  // Task 04.7 live fixtures: one active delivery per customer for the two-customer isolation run, and one for the demo simulation.
+  const liveA = await order(customer, 'PREPARING', 'SUCCEEDED'); await start(liveA);
+  await patch(liveA, { expectedRevision: 1, estimatedAt: hours(6) });
+  const liveSimulation = await order(customer, 'PREPARING', 'SUCCEEDED'); await start(liveSimulation);
+  await patch(liveSimulation, { expectedRevision: 1, status: 'OUT_FOR_DELIVERY', estimatedAt: hours(2) });
+  const liveOther = await order(other, 'PREPARING', 'SUCCEEDED'); await start(liveOther);
+  await patch(liveOther, { expectedRevision: 1, estimatedAt: hours(5) });
 
   writeFileSync(output, JSON.stringify({ admin, customer, other, orders: { notStarted, adminFlow, confirmedTracked, preparing, outFresh, outStale, outNoLocation,
-    delivered, cancelled, awaitingCapture, legacyUnpaid, otherCustomer, outRoute, outSimulated } }, null, 2));
+    delivered, cancelled, awaitingCapture, legacyUnpaid, otherCustomer, outRoute, outSimulated, liveA, liveSimulation, liveOther } }, null, 2));
   const counts = { orders: await prisma.order.count(), deliveries: await prisma.delivery.count(), events: await prisma.deliveryEvent.count(),
     outbox: await prisma.commerceEmailOutbox.count() };
   console.log(`Delivery QA fixtures seeded: ${JSON.stringify(counts)}`);

@@ -4,8 +4,10 @@ import { z } from 'zod';
 import { AppError } from '../middleware/errorHandler.js';
 import { collectDbMetrics } from '../lib/db-request-metrics.js';
 import { DeliveryRevisionConflict, DeliveryService } from '../services/delivery.service.js';
-import { adminDeliveryListSchema, deliveryStartSchema, deliveryUpdateSchema } from '../validators/delivery.validator.js';
+import { adminDeliveryListSchema, deliverySimulationStartSchema, deliveryStartSchema, deliveryUpdateSchema } from '../validators/delivery.validator.js';
 import { logSafely } from '../utils/logger.js';
+import { DeliveryPublisher, toPublishChanges } from '../sockets/delivery.publisher.js';
+import { deliverySimulation } from '../services/delivery-simulation/delivery-simulation.runner.js';
 
 const service = new DeliveryService();
 
@@ -66,13 +68,30 @@ export const startAdminDelivery = action('delivery.start.timing', async (req, re
   // Operational metadata only: no coordinates, labels or notes are ever logged.
   if (created) logSafely('info', 'Delivery tracking started', { event: 'delivery.started', requestId: req.id, orderId: snapshot.orderId, revision: snapshot.revision });
   res.status(created ? 201 : 200).json({ data: snapshot });
+  // Task 04.7: after the transaction committed; never awaited into the response and never able to fail it.
+  if (created) void DeliveryPublisher.afterCommit(snapshot.orderId, ['tracking']);
 });
 
 export const updateAdminDelivery = action('delivery.update.timing', async (req, res, facts) => {
   const input = parse(deliveryUpdateSchema(), req.body);
-  const { changed, snapshot } = await service.applyUpdate(req.user!.userId, String(req.params.orderReference), input);
+  const { changed, changes, snapshot } = await service.applyUpdate(req.user!.userId, String(req.params.orderReference), input);
   facts.changed = changed;
   if (changed) logSafely('info', 'Delivery tracking updated', { event: 'delivery.updated', requestId: req.id, orderId: snapshot.orderId,
     revision: snapshot.current?.revision, status: snapshot.status });
   res.json({ data: snapshot, meta: { changed } });
+  if (changed) void DeliveryPublisher.afterCommit(snapshot.orderId, toPublishChanges(changes));
+});
+
+/** Task 04.7 demo tools (ADMIN; disposable databases only). Status is readable everywhere so the admin page can explain why it is off. */
+export const getDeliverySimulation = action('delivery.simulation_read.timing', async (req, res) => {
+  res.json({ data: await deliverySimulation.statusFor(String(req.params.orderReference)) });
+});
+
+export const startDeliverySimulation = action('delivery.simulation_start.timing', async (req, res) => {
+  const { routeId } = parse(deliverySimulationStartSchema, req.body);
+  res.status(201).json({ data: await deliverySimulation.start(req.user!.userId, String(req.params.orderReference), routeId) });
+});
+
+export const stopDeliverySimulation = action('delivery.simulation_stop.timing', async (req, res) => {
+  res.json({ data: await deliverySimulation.stop(String(req.params.orderReference)) });
 });

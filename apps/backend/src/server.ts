@@ -1,4 +1,4 @@
-import app from './app.js';
+import app, { corsOrigin } from './app.js';
 import { env } from './config/env.js';
 import { logger, flushLogsWithDeadline, installFatalLogging } from './utils/logger.js';
 import { prisma } from './lib/prisma.js';
@@ -7,6 +7,11 @@ import { paymentIsolation } from './payment-isolation.js';
 import { logCommerceEmailRuntime } from './services/commerce-email.runtime.js';
 import { startOperationalRecommendationRetentionRunner } from './recommendation-retention-runner.js';
 import { deliveryOrigin } from './config/delivery-map.config.js';
+import { attachDeliveryGateway, type DeliveryGateway } from './sockets/delivery.gateway.js';
+import { DeliveryPublisher } from './sockets/delivery.publisher.js';
+import { startRealtimeMetricsLog } from './sockets/realtime-metrics.js';
+import { assertSimulationBootConfig, simulationAvailability } from './services/delivery-simulation/simulation.config.js';
+import { deliverySimulation } from './services/delivery-simulation/delivery-simulation.runner.js';
 
 const PORT = env.PORT;
 let stopRecovery: (() => Promise<void>) | null = null;
@@ -14,6 +19,9 @@ let stopRecommendationRetention: (() => Promise<void>) | null = null;
 installFatalLogging();
 // Task 04.6: a partial or out-of-range DELIVERY_ORIGIN_* configuration refuses to boot; unset leaves the map off.
 logger.info('Delivery map origin resolved', { event: 'delivery.map.origin_resolved', configured: deliveryOrigin() !== null });
+// Task 04.7: the demo simulation flag in production refuses to boot.
+assertSimulationBootConfig();
+logger.info('Delivery simulation resolved', { event: 'delivery.simulation.resolved', ...simulationAvailability() });
 logger.info('Server starting', { operation: 'server.starting' });
 {
   const isolation = paymentIsolation();
@@ -70,7 +78,15 @@ export const server = app.listen(PORT, async () => {
   }
   // The bounded retention runner owns retries if startup DB readiness is degraded.
   if (!shuttingDown) stopRecommendationRetention = startOperationalRecommendationRetentionRunner();
+  if (isDbReady && !shuttingDown) {
+    deliverySimulation.recoverOrphans().catch(() => logger.warn('Delivery simulation recovery failed', { event: 'delivery.simulation.recovery_failed' }));
+  }
 });
+
+// Task 04.7: Socket.IO /delivery on the same HTTP server and CORS allowlist; closed before the HTTP server on shutdown.
+const deliveryGateway: DeliveryGateway = attachDeliveryGateway(server, { corsOrigin });
+DeliveryPublisher.attach(deliveryGateway);
+const stopRealtimeMetrics = startRealtimeMetricsLog();
 
 let shuttingDown = false;
 export const gracefulShutdown = (signal: string) => {
@@ -81,6 +97,11 @@ export const gracefulShutdown = (signal: string) => {
   const recoveryStopped = stopRecovery?.();
   const retentionStopped = stopRecommendationRetention?.();
   logger.info(`${signal} signal received. Closing HTTP server.`, { event: 'server.stopping' });
+  deliverySimulation.stopAll();
+  stopRealtimeMetrics();
+  DeliveryPublisher.attach(null);
+  // io.close() disconnects every socket first (clients reconnect and refetch), then closes the HTTP server itself.
+  const socketsClosed = deliveryGateway.close();
 
   // Force close after 10s if graceful shutdown hangs
   const forceTimer = setTimeout(async () => {
@@ -91,7 +112,8 @@ export const gracefulShutdown = (signal: string) => {
   forceTimer.unref();
 
   server.close(async (closeErr) => {
-    if (closeErr) {
+    await socketsClosed;
+    if (closeErr && (closeErr as NodeJS.ErrnoException).code !== 'ERR_SERVER_NOT_RUNNING') {
       logger.error('Error closing HTTP server', { event: 'server.close_error', error: closeErr.message });
     } else {
       logger.info('HTTP server closed.', { event: 'server.http_closed' });

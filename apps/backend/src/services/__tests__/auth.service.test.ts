@@ -384,7 +384,7 @@ describe('AuthService', () => {
     describe('superseded refresh tokens never authenticate on their own (R3)', () => {
       type Repository = {
         findRefreshTokenByHash: (hash: string) => Promise<unknown>; hasActiveFamilyToken: (hash: string) => Promise<boolean>;
-        revokeRefreshTokenFamily: (hash: string) => Promise<void>; revokeAllUserRefreshTokens: (userId: string) => Promise<void>;
+        revokeRefreshTokenFamily: (hash: string) => Promise<string | undefined>; revokeAllUserRefreshTokens: (userId: string) => Promise<void>;
         rotateRefreshToken: (...args: unknown[]) => Promise<boolean>; findUserById: (id: string) => Promise<unknown>;
       };
       const repository = () => (authService as unknown as { repository: Repository }).repository;
@@ -394,7 +394,7 @@ describe('AuthService', () => {
         const repo = repository();
         vi.spyOn(repo, 'findRefreshTokenByHash').mockResolvedValue(stored);
         vi.spyOn(repo, 'hasActiveFamilyToken').mockResolvedValue(familyAlive);
-        const revokeFamily = vi.spyOn(repo, 'revokeRefreshTokenFamily').mockResolvedValue();
+        const revokeFamily = vi.spyOn(repo, 'revokeRefreshTokenFamily').mockResolvedValue(undefined);
         const revokeAll = vi.spyOn(repo, 'revokeAllUserRefreshTokens').mockResolvedValue();
         const findUser = vi.spyOn(repo, 'findUserById').mockResolvedValue(mockUser);
         const rotate = vi.spyOn(repo, 'rotateRefreshToken').mockResolvedValue(true);

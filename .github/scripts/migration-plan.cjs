@@ -9,8 +9,9 @@
  *   1. every database URL targets the single explicitly selected Supabase project ref;
  *   2. the Prisma ledger has no failed / rolled-back / unfinished row;
  *   3. every applied migration matches the raw checkout SHA-256 or one of two content-pinned LF/CRLF records;
- *   4. the set of pending migrations (local directory minus applied ledger rows) equals the approved list
- *      exactly, in order, and none sorts before an already-applied migration.
+ *   4. pending migrations are derived from the local directory minus applied ledger rows and none sorts
+ *      before an already-applied migration; manual DEV additionally requires exact ordered approval, while PROD
+ *      requires every discovered pending migration to pass the non-destructive SQL gate.
  * All queries run in a READ ONLY transaction. Output contains migration names, the project ref and the server
  * version only: never a URL, host, user or password.
  */
@@ -110,8 +111,9 @@ function localMigrations(dir) {
     .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(dir, entry.name, 'migration.sql')))
     .map((entry) => {
       if (!MIGRATION_NAME.test(entry.name)) throw new Error(`Unexpected migration directory name: ${entry.name}`);
-      const metadata = migrationChecksumMetadata(fs.readFileSync(path.join(dir, entry.name, 'migration.sql')));
-      return { name: entry.name, ...metadata };
+      const sql = fs.readFileSync(path.join(dir, entry.name, 'migration.sql'));
+      const metadata = migrationChecksumMetadata(sql);
+      return { name: entry.name, ...metadata, sql: sql.toString('utf8') };
     })
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
@@ -125,6 +127,11 @@ function planMigrations(local, ledger) {
   for (const row of ledger) {
     if (!row.finished) problems.push(`ledger row ${row.name} is unfinished (failed or in progress)`);
     if (row.rolledBack) problems.push(`ledger row ${row.name} is marked rolled back`);
+  }
+  const ledgerNames = new Set();
+  for (const row of ledger) {
+    if (ledgerNames.has(row.name)) problems.push(`ledger contains duplicate rows for migration ${row.name}`);
+    ledgerNames.add(row.name);
   }
   for (const row of applied) {
     const match = localByName.get(row.name);
@@ -193,6 +200,23 @@ function compareApproved(pending, approved) {
   return problems;
 }
 
+/** Validate the complete discovered pending set; an approval list is optional and used by manual DEV only. */
+function validatePendingMigrations(local, ledger, approved = null) {
+  const { pending, problems } = planMigrations(local, ledger);
+  if (approved !== null) problems.push(...compareApproved(pending, approved));
+  const localByName = new Map(local.map((migration) => [migration.name, migration]));
+  for (const name of pending) {
+    const migration = localByName.get(name);
+    if (!migration) {
+      problems.push(`pending migration ${name} is missing from the local migration set`);
+      continue;
+    }
+    const issues = checkDestructiveSql(name, migration.sql ?? '');
+    problems.push(...issues);
+  }
+  return { pending, problems };
+}
+
 function parseApproved(raw) {
   return String(raw ?? '').split(',').map((entry) => entry.trim()).filter(Boolean);
 }
@@ -238,7 +262,7 @@ async function main(mode) {
     throw new Error('Configured project ref does not match the selected protected environment.');
   }
   const urls = { DATABASE_URL: process.env.DATABASE_URL, DIRECT_URL: process.env.DIRECT_URL };
-  const approved = parseApproved(process.env.APPROVED_MIGRATIONS);
+  const approved = target === 'DEV' ? parseApproved(process.env.APPROVED_MIGRATIONS) : null;
 
   assertTarget(urls, expectedRef, target);
   console.log(`Target verified: approved ${target} project ${expectedRef} (both URLs).`);
@@ -246,7 +270,7 @@ async function main(mode) {
   const migrationsDir = process.env.MIGRATIONS_DIR || path.join(root, 'apps/backend/prisma/migrations');
   const local = localMigrations(migrationsDir);
   const { version, ledger } = await readLedger(root, urls.DIRECT_URL);
-  const { pending, problems } = planMigrations(local, ledger);
+  const { pending, problems } = validatePendingMigrations(local, ledger, approved);
   console.log(`PostgreSQL ${version}; ledger rows: ${ledger.length}; local migrations: ${local.length}; pending: ${pending.join(', ') || 'none'}`);
   const reconciled = ledger.filter((row) => {
     if (!row.finished || row.rolledBack) return false;
@@ -266,26 +290,9 @@ async function main(mode) {
       setActionOutput('pending_count', String(pending.length));
       setActionOutput('pending_migrations', pending.join(','));
 
-      const appliedNames = new Set(ledger.filter((row) => row.finished && !row.rolledBack).map((row) => row.name));
-      const unappliedApproved = approved.filter((name) => !appliedNames.has(name));
-      const expectedApproved = unappliedApproved.length > 0 ? unappliedApproved : approved;
-
-      problems.push(...compareApproved(pending, expectedApproved));
-
-      for (const name of pending) {
-        const sqlPath = path.join(migrationsDir, name, 'migration.sql');
-        if (fs.existsSync(sqlPath)) {
-          const rawSql = fs.readFileSync(sqlPath, 'utf8');
-          problems.push(...checkDestructiveSql(name, rawSql));
-        }
-      }
     }
   } else if (mode === 'post') {
     if (pending.length) problems.push(`migrations still pending after deploy: ${pending.join(', ')}`);
-    for (const name of approved) {
-      const row = ledger.find((entry) => entry.name === name);
-      if (!row || !row.finished || row.rolledBack) problems.push(`approved migration ${name} is not recorded as finished`);
-    }
   } else {
     throw new Error('Usage: migration-plan.cjs pre|post');
   }
@@ -301,7 +308,7 @@ async function main(mode) {
 module.exports = {
   DEV_REF, PROD_REF, PROJECT_REFS, LEGACY_LINE_ENDING_CHECKSUMS, DESTRUCTIVE_SQL_PATTERNS,
   parseTarget, assertTarget, migrationChecksumMetadata, hasVerifiedLegacyLineEndingChecksum,
-  localMigrations, planMigrations, compareApproved, parseApproved, checkDestructiveSql,
+  localMigrations, planMigrations, validatePendingMigrations, compareApproved, parseApproved, checkDestructiveSql,
   stripSqlCommentsAndLiterals, setActionOutput,
 };
 

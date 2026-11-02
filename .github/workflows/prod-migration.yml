@@ -1,7 +1,7 @@
 name: Production Database Migration
 
 # Automated production path on develop push/merge, with optional manual workflow_dispatch.
-# Automatically deploys reviewed, non-destructive Prisma migrations to the PROD database
+# Automatically discovers and deploys reviewed, non-destructive Prisma migrations to the PROD database
 # (project ref yepfgjehdstlxbpespun) when pushed or merged to develop.
 #
 # If the database is already up to date, the workflow performs a read-only verification
@@ -17,18 +17,13 @@ on:
         description: 'Full 40-character SHA of the reviewed commit; defaults to current HEAD if omitted.'
         required: false
         type: string
-      approved_migrations:
-        description: 'Exact ordered migration list override (leave blank for reviewed production allowlist).'
-        required: false
-        type: string
-        default: '20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard,20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health,20261029000000_recommendations,20261029010000_recommendation_retention_index,20261029020000_recommendation_consent_consistency'
 
 permissions:
   contents: read
 
 jobs:
   migrate:
-    name: Deploy approved Prisma migrations to PROD
+    name: Deploy pending Prisma migrations to PROD
     runs-on: ubuntu-latest
     environment: electrohub-prod-database
     concurrency:
@@ -38,9 +33,8 @@ jobs:
       MIGRATION_TARGET: PROD
       EXPECTED_PROJECT_REF: yepfgjehdstlxbpespun
       APPROVED_COMMIT: ${{ inputs.approved_commit || github.sha }}
-      APPROVED_MIGRATIONS: ${{ inputs.approved_migrations || '20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard,20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health,20261029000000_recommendations,20261029010000_recommendation_retention_index,20261029020000_recommendation_consent_consistency' }}
     steps:
-      - name: Verify triggering event, commit SHA, and approved migration allowlist
+      - name: Verify triggering event and commit SHA
         shell: bash
         run: |
           set -euo pipefail
@@ -53,12 +47,7 @@ jobs:
             echo "This run is at a different commit than the approved one. Refusing." >&2
             exit 1
           fi
-          expected='20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard,20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health,20261029000000_recommendations,20261029010000_recommendation_retention_index,20261029020000_recommendation_consent_consistency'
-          if [ "$APPROVED_MIGRATIONS" != "$expected" ]; then
-            echo "The approved PROD migration list or order is not exact. Refusing." >&2
-            exit 1
-          fi
-          echo "Target commit: $APPROVED_COMMIT verified. Production allowlist: $APPROVED_MIGRATIONS verified."
+          echo "Target commit: $APPROVED_COMMIT verified. Pending migrations will be discovered from the checked-in Prisma migrations and PROD ledger."
 
       - uses: actions/checkout@v4
         with:
@@ -76,14 +65,14 @@ jobs:
       - name: Verify Prisma version
         run: npm exec --workspace=@electrohub/backend -- prisma --version
 
-      - name: Pre-check (read-only) - target, checksums, ledger, and exact approved pending set
+      - name: Pre-check (read-only) - target, checksums, ledger, and all pending migrations
         id: pre
         env:
           DATABASE_URL: ${{ secrets.ELECTROHUB_PROD_DATABASE_URL }}
           DIRECT_URL: ${{ secrets.ELECTROHUB_PROD_DIRECT_URL }}
         run: node .github/scripts/migration-plan.cjs pre
 
-      - name: Deploy approved Prisma migrations
+      - name: Deploy all safe pending Prisma migrations
         if: steps.pre.outputs.has_pending == 'true'
         env:
           DATABASE_URL: ${{ secrets.ELECTROHUB_PROD_DATABASE_URL }}
@@ -97,7 +86,7 @@ jobs:
           DIRECT_URL: ${{ secrets.ELECTROHUB_PROD_DIRECT_URL }}
         run: npm exec --workspace=@electrohub/backend -- prisma migrate status
 
-      - name: Post-check (read-only) - nothing pending and approved entries finished
+      - name: Post-check (read-only) - nothing pending and applied history intact
         if: steps.pre.outputs.has_pending == 'true'
         env:
           DATABASE_URL: ${{ secrets.ELECTROHUB_PROD_DATABASE_URL }}

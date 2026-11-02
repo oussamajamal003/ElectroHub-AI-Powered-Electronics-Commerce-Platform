@@ -26,7 +26,7 @@ export function useLeafletMap(container: RefObject<HTMLDivElement | null>, optio
     let map: L.Map;
     try {
       // Leaflet's own attribution control writes HTML; the component renders the attribution as text instead.
-      map = L.map(element, { zoomControl: false, attributionControl: false, scrollWheelZoom: false, keyboard: true, zoomSnap: 0.5 });
+      map = L.map(element, { zoomControl: false, attributionControl: false, scrollWheelZoom: true, keyboard: true, zoomSnap: 0.5 });
       let loaded = false;
       L.tileLayer(tiles.url, { maxZoom: 19, crossOrigin: false })
         .on('tileload', () => { loaded = true; })
@@ -81,7 +81,7 @@ export function useLeafletMap(container: RefObject<HTMLDivElement | null>, optio
   const setInteractive = useCallback((interactive: boolean) => {
     const map = mapRef.current;
     if (!map) return;
-    for (const handler of [map.dragging, map.touchZoom, map.doubleClickZoom, map.boxZoom, map.keyboard]) {
+    for (const handler of [map.dragging, map.touchZoom, map.scrollWheelZoom, map.doubleClickZoom, map.boxZoom, map.keyboard]) {
       if (interactive) handler.enable(); else handler.disable();
     }
     // Leaflet's keyboard handler owns the container's tab stop; a disabled map is not a focus target.

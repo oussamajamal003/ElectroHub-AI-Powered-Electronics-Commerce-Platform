@@ -11,6 +11,8 @@ let accessToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
 
 export function setAccessToken(token: string | null) { accessToken = token; }
+/** Task 04.7: the live delivery socket authenticates with the same in-memory token (never stored, never in a URL). */
+export function getAccessToken() { return accessToken; }
 
 function notifySessionExpired() {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('electrohub:session-expired'));
@@ -121,6 +123,9 @@ async function refreshSession(): Promise<string | null> {
   }
   return refreshPromise;
 }
+
+/** Task 04.7: the socket's session:expired / UNAUTHENTICATED path reuses the single-flight refresh (null when the session is over). */
+export function refreshAccessToken(): Promise<string | null> { return refreshSession(); }
 
 export function isAbortError(error: unknown): boolean {
   if (!error) return false;

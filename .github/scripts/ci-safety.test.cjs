@@ -49,6 +49,36 @@ test('planMigrations detects pending, modified, missing, failed, rolled-back and
   assert.match(plan.planMigrations(local, [row(local[1].name, sha(2))]).problems.join(), /sorts before already-applied/);
 });
 
+test('automatic pending plan succeeds with zero, one and multiple safe migrations', () => {
+  const a = { name: '20261030000000_safe_a', sha256: sha(1), sql: 'CREATE TABLE a (id UUID PRIMARY KEY);' };
+  const b = { name: '20261031000000_delivery_tracking', sha256: sha(2), sql: 'CREATE TABLE delivery_events (id UUID PRIMARY KEY);' };
+  const row = (migration) => ({ name: migration.name, checksum: migration.sha256, finished: true, rolledBack: false });
+
+  assert.deepEqual(plan.validatePendingMigrations([a], [row(a)]), { pending: [], problems: [] });
+  assert.deepEqual(plan.validatePendingMigrations([a], []), { pending: [a.name], problems: [] });
+  assert.deepEqual(plan.validatePendingMigrations([a, b], []), { pending: [a.name, b.name], problems: [] });
+});
+
+test('automatic pending plan fails closed for unsafe SQL and ledger integrity defects', () => {
+  const safe = { name: '20261030000000_safe', sha256: sha(1), sql: 'CREATE TABLE added (id UUID);' };
+  const unsafe = { name: '20261031000000_unsafe', sha256: sha(2), sql: 'DROP TABLE customer_orders;' };
+  const row = (migration) => ({ name: migration.name, checksum: migration.sha256, finished: true, rolledBack: false });
+  assert.match(plan.validatePendingMigrations([safe, unsafe], []).problems.join(), /destructive SQL detected/);
+  assert.match(plan.validatePendingMigrations([safe], [{ name: '20261029000000_failed', checksum: sha(9), finished: false, rolledBack: false }]).problems.join(), /unfinished/);
+  assert.match(plan.validatePendingMigrations([safe], [row(safe), row(safe)]).problems.join(), /duplicate rows/);
+});
+
+test('the missed delivery tracking migration is automatically discovered and passes the additive SQL gate', () => {
+  const local = plan.localMigrations(path.resolve(__dirname, '../../apps/backend/prisma/migrations'));
+  const target = '20261031000000_delivery_tracking';
+  const migration = local.find((entry) => entry.name === target);
+  assert.ok(migration);
+  const ledger = local.filter((entry) => entry.name !== target).map((entry) => ({
+    name: entry.name, checksum: entry.sha256, finished: true, rolledBack: false,
+  }));
+  assert.deepEqual(plan.validatePendingMigrations(local, ledger), { pending: [target], problems: [] });
+});
+
 test('line-ending reconciliation accepts only the two exact, content-pinned legacy CRLF checksums', () => {
   const name = '20261012120000_payment_purchase_ownership';
   const legacy = plan.LEGACY_LINE_ENDING_CHECKSUMS[name];
@@ -225,7 +255,8 @@ test('the real DEV workflow is manual-only and PROD automates develop with scope
   assert.deepEqual(policy.getPushBranches(prod.text), ['develop']);
   const holders = files.filter((file) => /secrets\.ELECTROHUB_/.test(file.text)).map((file) => file.name);
   assert.deepEqual(holders, ['dev-migration.yml', 'prod-migration.yml']);
-  assert.match(prod.text, /20261024000000_ai_vector_search,20261025000000_ai_vector_staging_guard,20261028000000_product_media,20261028010000_catalog_media_overlay,20261028020000_product_media_worker_health,20261029000000_recommendations,20261029010000_recommendation_retention_index,20261029020000_recommendation_consent_consistency/);
+  assert.doesNotMatch(prod.text, /APPROVED_MIGRATIONS|approved_migrations|20261029020000_recommendation_consent_consistency/);
+  assert.match(prod.text, /Pending migrations will be discovered from the checked-in Prisma migrations and PROD ledger/);
   assert.match(prod.text, /EXPECTED_PROJECT_REF: yepfgjehdstlxbpespun/);
   assert.match(prod.text, /MIGRATION_TARGET: PROD/);
   assert.match(prod.text, /environment: electrohub-prod-database/);

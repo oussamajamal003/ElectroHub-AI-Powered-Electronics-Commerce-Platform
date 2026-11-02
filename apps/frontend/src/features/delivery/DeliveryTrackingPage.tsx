@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, PackageSearch } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Toast, ToastClose, ToastProvider, ToastTitle, ToastViewport } from '@/components/ui/Toast';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ApiError } from '@/lib/api';
 import { OrderBadges } from '@/features/orders/OrderBadges';
@@ -14,9 +15,12 @@ import { DeliveryOverviewCard } from './components/DeliveryOverviewCard';
 import { DeliveryProgressStepper } from './components/DeliveryProgressStepper';
 import { DeliveryStateNotice } from './components/DeliveryStateNotice';
 import { DeliveryTimeline } from './components/DeliveryTimeline';
-import { formatStampWithZone, latestUpdate } from './presentation';
+import { formatStampWithZone, formatTime, latestUpdate } from './presentation';
 import { useDeliverySnapshot } from './queries';
 import type { CustomerDeliverySnapshot } from './types';
+import { ConnectionStatusBanner, ConnectionStatusPill } from './realtime/ConnectionStatusIndicator';
+import { TOAST_MS } from './realtime/constants';
+import { useDeliveryLiveUpdates } from './realtime/useDeliveryLiveUpdates';
 import styles from './Delivery.module.scss';
 
 export function DeliveryTrackingPage() {
@@ -40,8 +44,12 @@ function TrackingSkeleton({ label = 'Loading delivery tracking' }: { label?: str
 function OwnedDeliveryTracking() {
   const { orderReference = '' } = useParams();
   const heading = useRef<HTMLHeadingElement>(null);
-  const query = useDeliverySnapshot(orderReference);
+  // Task 04.7: polling is the fallback only while the live subscription is not open.
+  const [live, setLive] = useState(false);
+  const query = useDeliverySnapshot(orderReference, live);
   const snapshot = query.data?.data;
+  const connection = useDeliveryLiveUpdates(orderReference, snapshot);
+  useEffect(() => setLive(connection.live), [connection.live]);
   const loaded = Boolean(snapshot);
   useEffect(() => {
     // Focus the title once per reference when it first renders (never on background refetches or polling).
@@ -73,14 +81,27 @@ function OwnedDeliveryTracking() {
           <div className={styles.titleBlock}>
             <h1 ref={heading} tabIndex={-1}>Track order {snapshot.orderReference}</h1>
             <p>{latest ? <>Last updated <time dateTime={latest}>{formatStampWithZone(latest)}</time></> : 'No delivery updates recorded yet.'}</p>
+            <div className={styles.liveRow}><ConnectionStatusPill state={connection.state} /></div>
           </div>
           <OrderBadges status={snapshot.status} paymentState={snapshot.paymentState} />
         </div>
       </header>
+      {/* The single polite live region for this page: paused/restored and status/ETA changes, announced once. */}
+      <div className={styles.visuallyHidden} aria-live="polite" aria-atomic="true" data-testid="delivery-live-region">{connection.announcement}</div>
+      <ConnectionStatusBanner state={connection.state} lastSaved={latest ? formatTime(latest) : null} onRefresh={() => void connection.refreshNow()}
+        refreshing={connection.refreshing} />
       {query.isError && <div className={`${shared.notice} ${styles.refreshNotice}`} role="alert"><p>We could not refresh tracking. Showing the last loaded status.</p>
         <Button size="small" variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}>Retry</Button></div>}
       <TrackingBody snapshot={snapshot} detailsPath={detailsPath} busy={query.isFetching} />
     </div>
+    {/* Status/ETA toasts are visual only (announce-excluded): the live region above is what screen readers hear. */}
+    <ToastProvider duration={TOAST_MS} label="Delivery updates">
+      {connection.notices.map(notice => <Toast key={notice.id} open variant={notice.tone} onOpenChange={open => { if (!open) connection.dismissNotice(notice.id); }}>
+        <div data-radix-toast-announce-exclude=""><ToastTitle>{notice.title}</ToastTitle></div>
+        <ToastClose aria-label="Dismiss delivery update" />
+      </Toast>)}
+      <ToastViewport />
+    </ToastProvider>
   </div>;
 }
 

@@ -22,6 +22,7 @@ export function DeliveryOverviewCard({ snapshot, headingLevel = 2 }: { snapshot:
   const latest = latestUpdate(snapshot);
 
   let description = stage.description;
+  if (snapshot.status === 'CONFIRMED' && snapshot.paymentState !== 'PAID') description = 'QA test order: no payment was processed. Delivery tracking is enabled for this test.';
   if (delivered && snapshot.deliveredAt) description = `Delivered on ${formatDay(snapshot.deliveredAt)} at ${formatTime(snapshot.deliveredAt)}.`;
   if (outForDelivery && snapshot.isSimulated) description = 'Simulated demo journey. This is not a real courier.';
 

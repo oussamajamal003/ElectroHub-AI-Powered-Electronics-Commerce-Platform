@@ -11,7 +11,7 @@ import { expect, test, type Page } from '@playwright/test';
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../../../..');
-const pointer = path.join(root, '.cache', 'delivery-qa-stack.current');
+const pointer = process.env.DELIVERY_QA_STACK_POINTER || path.join(root, '.cache', 'delivery-qa-stack.current');
 const state = existsSync(pointer) ? JSON.parse(readFileSync(readFileSync(pointer, 'utf8').trim(), 'utf8')) as { frontend: string; credentials: string } : null;
 const fixtures = state ? JSON.parse(readFileSync(state.credentials, 'utf8')) as {
   admin: { email: string; password: string }; customer: { email: string; password: string }; other: { email: string; password: string };
@@ -107,6 +107,15 @@ test('T5-21 responsive: 390 / 768 / 1920 and 200% zoom keep the order and never 
     await page.screenshot({ path: path.join(shots, `tracking-${key}-390.png`), fullPage: true });
     await noOverflow(page);
   }
+});
+
+test('admin delivery demo controls remain within the mobile viewport', async ({ page }) => {
+  await signIn(page, 'admin');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${base}/admin/deliveries/${fixtures!.orders.outFresh}`);
+  await expect(page.getByRole('heading', { name: 'Demo tools' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Demo route' })).toBeVisible();
+  await noOverflow(page);
 });
 
 test('keyboard: overview-first focus order, visible focus ring, 44px targets, aria-current, reduced motion', async ({ page }) => {
