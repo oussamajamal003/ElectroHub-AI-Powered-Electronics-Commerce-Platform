@@ -25,8 +25,8 @@ export function AdminDeliverySimulationPanel({ snapshot }: { snapshot: AdminDeli
     <p>Plays a fictional route for demos and QA. Customers see it labelled “Simulated demo”. It never changes status, payment or the order.</p>
     {status.isPending ? <p className={styles.help}>Checking demo availability…</p>
       : !data ? <Alert variant="warning"><span>Demo availability could not be loaded.</span></Alert>
-      : !data.enabled ? <p className={styles.help}>The demo simulation is off in this environment. It runs only on a local or disposable database with
-        DELIVERY_SIMULATION_ENABLED, never in production or on shared DEV.</p>
+      : !data.enabled ? <p className={styles.help}>The demo simulation is not available for this delivery. In shared DEV it is restricted to approved QA/demo deliveries,
+        it also runs on local or disposable QA databases when enabled, and it is always off in production.</p>
       : <div className={styles.content}>
         {data.running
           ? <p className={styles.help} role="status">Running “{data.routes.find(route => route.id === data.routeId)?.label ?? data.routeId}”: {data.ticks} of at most

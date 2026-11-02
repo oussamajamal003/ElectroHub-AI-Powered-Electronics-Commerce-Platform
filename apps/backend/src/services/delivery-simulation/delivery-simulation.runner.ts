@@ -6,7 +6,8 @@ import { logSafely } from '../../utils/logger.js';
 import { DeliveryRevisionConflict, DeliveryService } from '../delivery.service.js';
 import { parseOrderReference } from '../order.service.js';
 import { deliveryOrigin } from '../../config/delivery-map.config.js';
-import { SIMULATION_MAX_TICKS, SIMULATION_ROUTES, SIMULATION_TICK_MS, simulationAvailability, activeSharedDevSimulationScope, type SimulationAvailability } from './simulation.config.js';
+import { isDeliveryQaRuntimeActive } from '../../delivery-qa-runtime.config.js';
+import { SIMULATION_MAX_TICKS, SIMULATION_ROUTES, SIMULATION_TICK_MS, simulationAvailability, activeSharedDevSimulationScope, devDemoSimulationScope, type SimulationAvailability } from './simulation.config.js';
 
 /**
  * Task 04.7 in-process demo runner (architecture §8.5). Every tick goes through DeliveryService.applyUpdate with source SIMULATION (same
@@ -152,8 +153,10 @@ export class DeliverySimulationRunner {
   async recoverOrphans(): Promise<number> {
     if (!this.availability().enabled) return 0;
     // Shared DEV has unrelated deliveries; this QA process never repairs them on startup.
-    if (activeSharedDevSimulationScope()) return 0;
-    const candidates = await prisma.delivery.findMany({ where: { isSimulated: true, status: 'OUT_FOR_DELIVERY' }, select: { orderId: true,
+    // The dedicated QA runtime never repairs unrelated orders; the ordinary DEV demo scope repairs only its allowlisted orders, so a restart never leaves one looking mid-run.
+    if (isDeliveryQaRuntimeActive() && activeSharedDevSimulationScope()) return 0;
+    const scope = devDemoSimulationScope();
+    const candidates = await prisma.delivery.findMany({ where: { isSimulated: true, status: 'OUT_FOR_DELIVERY', ...(scope ? { orderId: { in: scope.orderIds } } : {}) }, select: { orderId: true,
       events: { where: { type: { in: ['SIMULATION_STARTED', 'SIMULATION_STOPPED'] } }, orderBy: { revision: 'desc' }, take: 1, select: { type: true } } } });
     let recovered = 0;
     for (const delivery of candidates) {

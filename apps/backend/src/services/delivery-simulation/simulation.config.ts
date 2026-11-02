@@ -36,15 +36,38 @@ export function sharedDevSimulationScope(source: NodeJS.ProcessEnv = process.env
   return { runId, orderIds, customerUserId, productId };
 }
 
-/** Environment configuration alone cannot grant QA authority to an ordinary application process. */
+/**
+ * Permanent DEV demo scope for the ordinary shared-DEV backend (any local port). Eligibility rests on trusted server configuration and the
+ * positively verified DEV database identity, never on ports or client input: an explicit allowlist of order UUIDs plus the QA run marker,
+ * the one QA customer and the one test-fixture product. The runner and the payment-eligibility exception re-verify every order against the
+ * database (zero total, unpaid, no attempt, marker, fixture product), so an ordinary purchase can never qualify.
+ */
+export function devDemoSimulationScope(source: NodeJS.ProcessEnv = process.env): ReturnType<typeof sharedDevSimulationScope> {
+  if (source.NODE_ENV !== 'development' || source.DELIVERY_DEV_DEMO !== 'true' || source.DELIVERY_SIMULATION_ENABLED !== 'true') return null;
+  const runId = source.DELIVERY_DEV_DEMO_RUN_ID ?? '';
+  const orderIds = (source.DELIVERY_DEV_DEMO_ORDER_IDS ?? '').split(',').map(id => id.trim());
+  const customerUserId = source.DELIVERY_DEV_DEMO_CUSTOMER_USER_ID ?? '';
+  const productId = source.DELIVERY_DEV_DEMO_PRODUCT_ID ?? '';
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  if (!/^QA-DELIVERY-[0-9]{8}-[a-z0-9]{4,32}$/.test(runId) || !orderIds.length || orderIds.length > 10 || orderIds.some(id => !uuid.test(id)) ||
+      new Set(orderIds).size !== orderIds.length || !uuid.test(customerUserId) || !uuid.test(productId)) return null;
+  try {
+    const targets = resolveDatabaseTargets(source);
+    if (targets.runtime.category !== 'dev' || targets.runtime.identity !== 'supabase:pzxekjybdiulzmssalfo/postgres' ||
+        targets.migration.identity !== targets.runtime.identity) return null;
+  } catch { return null; }
+  return { runId, orderIds, customerUserId, productId };
+}
+
+/** Environment configuration alone cannot grant QA authority to the dedicated QA runtime; the ordinary backend uses the separate DEV demo scope. */
 export function activeSharedDevSimulationScope(): ReturnType<typeof sharedDevSimulationScope> {
-  return isDeliveryQaRuntimeActive() ? sharedDevSimulationScope() : null;
+  return (isDeliveryQaRuntimeActive() ? sharedDevSimulationScope() : null) ?? devDemoSimulationScope();
 }
 
 export function simulationAvailability(source: NodeJS.ProcessEnv = process.env): SimulationAvailability {
   if (source.DELIVERY_SIMULATION_ENABLED !== 'true') return { enabled: false, reason: 'FLAG_OFF' };
   if (source.NODE_ENV === 'production') return { enabled: false, reason: 'PRODUCTION' };
-  if ((source === process.env ? activeSharedDevSimulationScope() : sharedDevSimulationScope(source))) return { enabled: true };
+  if ((source === process.env ? activeSharedDevSimulationScope() : (sharedDevSimulationScope(source) ?? devDemoSimulationScope(source)))) return { enabled: true };
   try {
     if (describeDatabaseTarget(source.DATABASE_URL).category !== 'disposable') return { enabled: false, reason: 'DATABASE_NOT_DISPOSABLE' };
   } catch { return { enabled: false, reason: 'DATABASE_NOT_DISPOSABLE' }; }
