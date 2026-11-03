@@ -1,13 +1,14 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Image as ImageIcon, Plus, Trash2 } from 'lucide-react';
+import { Archive, Image as ImageIcon, Plus, Send, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
+import { SearchSelect, type SearchSelectOption } from '@/components/ui/SearchSelect';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
-import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
 import {
-  useAdminProduct, useCatalogOptions, useCreateProduct, useUpdateProduct, type AdminProduct, type ProductFields, type ProductStatus,
+  useAdminProduct, useCatalogOptions, useCreateProduct, useDeleteProduct, useProductStatus, useUpdateProduct, type AdminProduct, type CatalogOptions,
+  type ProductFields, type ProductStatus,
 } from '@/features/admin/products/api';
 import { ActivePill, ButtonLink, ConfirmDialog, PageHeader, QueryProblem, StockPill, useAdminToast } from '@/features/admin/shared/AdminUi';
 import { errorCode, errorMessage, fieldErrors } from '@/features/admin/shared/api';
@@ -67,11 +68,67 @@ function toFields(draft: Draft): ProductFields {
   };
 }
 
+const products = (count: number) => `${formatCount(count)} product${count === 1 ? '' : 's'}`;
+
+/**
+ * Category and brand choices ranked by how the live catalog combines them (`pairs`). Ranking only: any active category may be combined with
+ * any brand, so a new brand or a first product in a category is never blocked. Hidden categories stay listed but cannot be newly assigned.
+ */
+function rankedChoices(catalog: CatalogOptions | undefined, draft: { categoryId: string; brandId: string }, currentCategoryId?: string) {
+  const pairs = new Map((catalog?.pairs ?? []).map(pair => [`${pair.categoryId}:${pair.brandId}`, pair.products]));
+  const brandName = catalog?.brands.find(brand => brand.id === draft.brandId)?.name;
+  const categoryName = catalog?.categories.find(category => category.id === draft.categoryId)?.name;
+
+  const categoryCount = (categoryId: string) => draft.brandId ? pairs.get(`${categoryId}:${draft.brandId}`) ?? 0 : 0;
+  const brandCount = (brandId: string) => draft.categoryId ? pairs.get(`${draft.categoryId}:${brandId}`) ?? 0 : 0;
+
+  const categories: SearchSelectOption[] = (catalog?.categories ?? []).map(category => ({
+    value: category.id, label: category.isActive ? category.name : `${category.name} (hidden)`,
+    disabled: !category.isActive && category.id !== currentCategoryId,
+  }));
+  const usedCategories = categories.filter(option => !option.disabled && categoryCount(option.value) > 0)
+    .sort((a, b) => categoryCount(b.value) - categoryCount(a.value));
+  const otherCategories = categories.filter(option => !usedCategories.includes(option)).sort((a, b) => Number(a.disabled) - Number(b.disabled));
+  const categoryOptions: SearchSelectOption[] = usedCategories.length
+    ? [...usedCategories.map(option => ({ ...option, group: `Used with ${brandName}`, hint: products(categoryCount(option.value)) })),
+      ...otherCategories.map(option => ({ ...option, group: 'All categories' }))]
+    : otherCategories;
+
+  const brands: SearchSelectOption[] = (catalog?.brands ?? []).map(brand => ({ value: brand.id, label: brand.name }));
+  const usedBrands = brands.filter(option => brandCount(option.value) > 0).sort((a, b) => brandCount(b.value) - brandCount(a.value));
+  const otherBrands = brands.filter(option => !usedBrands.includes(option));
+  const brandOptions: SearchSelectOption[] = [{ value: 'NONE', label: 'No brand' }, ...(usedBrands.length
+    ? [...usedBrands.map(option => ({ ...option, group: `Common in ${categoryName}`, hint: products(brandCount(option.value)) })),
+      ...otherBrands.map(option => ({ ...option, group: 'All brands' }))]
+    : otherBrands)];
+
+  /** Active categories that already hold products of this brand. */
+  const categoriesFor = (brandId: string) => (catalog?.categories ?? []).filter(category => category.isActive && pairs.has(`${category.id}:${brandId}`));
+  return { categoryOptions, brandOptions, categoriesFor };
+}
+
+/** Mirrors the form while the product loads, so nothing editable appears before its data does. */
+function ProductFormSkeleton() {
+  const field = (key: number) => <div key={key} className={styles.skeletonField}><Skeleton width="7rem" height="0.875rem" /><Skeleton height="2.75rem" /></div>;
+  const panel = (key: number, fields: number) => <section key={key} className={styles.panel}>
+    <Skeleton width="9rem" height="1.25rem" />{Array.from({ length: fields }, (_, index) => field(index))}
+  </section>;
+  return <div className={styles.page} aria-busy="true">
+    <span role="status" className={styles.visuallyHidden}>Loading product…</span>
+    <div className={styles.skeletonHeader}><Skeleton width="14rem" height="0.875rem" /><Skeleton width="min(26rem, 80%)" height="2.5rem" />
+      <Skeleton width="min(20rem, 60%)" height="0.875rem" /></div>
+    <div className={styles.split}>
+      <div className={styles.stack}>{panel(1, 4)}{panel(2, 1)}</div>
+      <div className={styles.stack}>{panel(3, 3)}{panel(4, 2)}{panel(5, 2)}</div>
+    </div>
+  </div>;
+}
+
 export function AdminProductFormPage() {
   const { productId } = useParams();
   const creating = !productId;
   const product = useAdminProduct(productId);
-  if (!creating && product.isPending) return <div className={styles.page}><ElectroHubLoader /></div>;
+  if (!creating && product.isPending) return <ProductFormSkeleton />;
   if (!creating && !product.data) {
     const notFound = (product.error as { status?: number } | null)?.status === 404;
     return <div className={styles.page}>
@@ -94,8 +151,14 @@ function ProductForm({ product, onReload }: { product?: AdminProduct; onReload: 
   const [touched, setTouched] = useState(false);
   const create = useCreateProduct();
   const update = useUpdateProduct(product?.id ?? '');
+  const statusChange = useProductStatus();
+  const remove = useDeleteProduct();
+  const [lifecycle, setLifecycle] = useState<'status' | 'delete' | null>(null);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
   const mutation = creating ? create : update;
   const dirty = snapshot(draft) !== snapshot(initial);
+  const catalog = options.data?.data;
+  const { categoryOptions, brandOptions, categoriesFor } = rankedChoices(catalog, draft, product?.category.id);
 
   // A created product moves to its edit page; an edit stays guarded after each save (the saved product becomes the new baseline).
   const guard = useUnsavedChangesGuard(dirty && !create.isSuccess);
@@ -104,6 +167,16 @@ function ProductForm({ product, onReload }: { product?: AdminProduct; onReload: 
   const errors = { ...fieldErrors(mutation.error), ...clientErrors };
   const conflict = errorCode(mutation.error) === 'PRODUCT_CONFLICT';
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft(current => ({ ...current, [key]: value }));
+  const chooseCategory = (categoryId: string) => { set('categoryId', categoryId); setSuggestion(null); };
+  // A brand chosen first fills an empty category only when exactly one active category already holds that brand's products, and says so.
+  const chooseBrand = (value: string) => {
+    const brandId = value === 'NONE' ? '' : value;
+    const only = brandId && !draft.categoryId ? categoriesFor(brandId) : [];
+    if (only.length === 1) {
+      setDraft(current => ({ ...current, brandId, categoryId: only[0]!.id }));
+      setSuggestion(`Set to ${only[0]!.name}, the only category with ${catalog?.brands.find(brand => brand.id === brandId)?.name} products. You can change it.`);
+    } else set('brandId', brandId);
+  };
   const setSpec = (key: number, field: 'group' | 'name' | 'value', value: string) =>
     set('specifications', draft.specifications.map(spec => spec.key === key ? { ...spec, [field]: value } : spec));
 
@@ -117,20 +190,32 @@ function ProductForm({ product, onReload }: { product?: AdminProduct; onReload: 
     }
     if (creating) {
       create.mutate({ ...toFields(draft), status: draft.status, inventory: { quantity: Number(draft.quantity), lowStockAt: Number(draft.lowStockAt) } }, {
-        onSuccess: response => { toast(`${response.data.name} was created.`); guard.leave(() => navigate(`/admin/products/${response.data.id}/edit`, { replace: true })); },
+        onSuccess: response => {
+          toast(response.data.status === 'ACTIVE' ? `${response.data.name} was published.` : `${response.data.name} was saved as a draft.`);
+          guard.leave(() => navigate(`/admin/products/${response.data.id}/edit`, { replace: true }));
+        },
       });
     } else {
       update.mutate({ ...toFields(draft), expectedUpdatedAt: product.updatedAt }, { onSuccess: () => toast('Product changes saved.') });
     }
   };
 
-  const categoryOptions = (options.data?.data.categories ?? []).map(category => ({
-    value: category.id, label: category.isActive ? category.name : `${category.name} (hidden)`,
-    // A hidden category cannot receive new or moved products; the current one stays selectable.
-    disabled: !category.isActive && category.id !== product?.category.id,
-  }));
-  const brandOptions = [{ value: 'NONE', label: 'No brand' }, ...(options.data?.data.brands ?? []).map(brand => ({ value: brand.id, label: brand.name }))];
   const title = creating ? 'Add product' : product.name;
+  const nextStatus: ProductStatus = product?.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+  const changeStatus = () => {
+    if (!product) return;
+    statusChange.mutate({ id: product.id, status: nextStatus, expectedUpdatedAt: product.updatedAt }, {
+      onSuccess: response => { setLifecycle(null); toast(nextStatus === 'ACTIVE' ? `${response.data.name} was published.` : `${response.data.name} was unpublished.`); },
+      onError: error => { if (errorCode(error) === 'PRODUCT_CONFLICT') onReload(); },
+    });
+  };
+  const deleteProduct = () => {
+    if (!product) return;
+    remove.mutate(product.id, {
+      onSuccess: () => { setLifecycle(null); toast(`${product.name} was deleted.`); navigate('/admin/products', { replace: true }); },
+      onError: error => { if (errorCode(error) === 'PRODUCT_IN_USE') onReload(); },
+    });
+  };
 
   return <div className={styles.page}>
     <PageHeader title={title} crumbs={[{ label: 'Dashboard', to: '/admin' }, { label: 'Products', to: '/admin/products' }, { label: creating ? 'Add product' : 'Edit' }]}
@@ -189,21 +274,37 @@ function ProductForm({ product, onReload }: { product?: AdminProduct; onReload: 
         <div className={styles.stack}>
           <section className={styles.panel} aria-labelledby="organization-title">
             <h2 id="organization-title" className={styles.panelTitle}>Organization</h2>
-            <Select label="Category" required options={categoryOptions} value={draft.categoryId || undefined} placeholder="Choose a category"
-              onValueChange={value => set('categoryId', value)} error={errors.categoryId} fullWidth square />
-            <Select label="Brand" options={brandOptions} value={draft.brandId || 'NONE'} onValueChange={value => set('brandId', value === 'NONE' ? '' : value)}
-              error={errors.brandId} fullWidth square />
-            {creating ? <div className={styles.field} role="group" aria-labelledby="publish-label">
+            <SearchSelect label="Category" required options={categoryOptions} value={draft.categoryId || undefined} onValueChange={chooseCategory}
+              placeholder={catalog ? 'Choose a category' : 'Loading categories…'} searchPlaceholder="Search categories" disabled={!catalog}
+              error={errors.categoryId} helperText={suggestion} fullWidth />
+            <SearchSelect label="Brand" options={brandOptions} value={draft.brandId || 'NONE'} onValueChange={chooseBrand}
+              placeholder={catalog ? 'No brand' : 'Loading brands…'} searchPlaceholder="Search brands" disabled={!catalog} error={errors.brandId} fullWidth />
+            {creating ? <div className={styles.field} role="radiogroup" aria-labelledby="publish-label">
               <span id="publish-label" className={styles.fieldLabel}>Storefront</span>
               <div className={styles.segmented}>
-                <button type="button" className={styles.segment} aria-pressed={draft.status === 'INACTIVE'} onClick={() => set('status', 'INACTIVE')}>Save as draft</button>
-                <button type="button" className={styles.segment} aria-pressed={draft.status === 'ACTIVE'} onClick={() => set('status', 'ACTIVE')}>Publish now</button>
+                {([['INACTIVE', 'Save as draft'], ['ACTIVE', 'Publish now']] as const).map(([value, text]) =>
+                  <button key={value} type="button" role="radio" aria-checked={draft.status === value} tabIndex={draft.status === value ? 0 : -1}
+                    className={styles.segment} onClick={() => set('status', value)}
+                    onKeyDown={event => { if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+                      event.preventDefault(); const other = value === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'; set('status', other);
+                      (event.currentTarget.parentElement?.querySelector(`[data-status="${other}"]`) as HTMLElement | null)?.focus(); } }}
+                    data-status={value}>{text}</button>)}
               </div>
-            </div> : <dl className={styles.details}>
-              <dt>Status</dt><dd><ActivePill active={product.status === 'ACTIVE'} inactiveLabel="Archived" /></dd>
-              <dt>Storefront</dt><dd>{product.storefrontVisible ? 'Visible' : 'Hidden'}</dd>
-              <dt>On orders</dt><dd>{formatCount(product.orderLineCount)} order lines</dd>
-            </dl>}
+              <p className={styles.fieldHelp}>{draft.status === 'ACTIVE'
+                ? 'Customers can find and buy it as soon as it is created.' : 'Hidden from customers until you publish it.'}</p>
+            </div> : <>
+              <dl className={styles.details}>
+                <dt>Status</dt><dd><ActivePill active={product.status === 'ACTIVE'} activeLabel="Published" inactiveLabel="Unpublished" /></dd>
+                <dt>Storefront</dt><dd>{product.storefrontVisible ? 'Visible' : product.status === 'ACTIVE' ? 'Hidden (category is hidden)' : 'Hidden'}</dd>
+                <dt>On orders</dt><dd>{formatCount(product.orderLineCount)} order lines</dd>
+              </dl>
+              <div className={styles.actionsStart}>
+                <Button type="button" variant="outline" size="small" disabled={dirty} onClick={() => { statusChange.reset(); setLifecycle('status'); }}>
+                  {product.status === 'ACTIVE' ? <><Archive aria-hidden="true" size={16} /> Unpublish</> : <><Send aria-hidden="true" size={16} /> Publish</>}
+                </Button>
+              </div>
+              {dirty && <p className={styles.fieldHelp}>Save or discard your edits before publishing, unpublishing or deleting.</p>}
+            </>}
           </section>
 
           <section className={styles.panel} aria-labelledby="pricing-title">
@@ -229,15 +330,39 @@ function ProductForm({ product, onReload }: { product?: AdminProduct; onReload: 
               <Link className={styles.panelLink} to={`/admin/inventory?q=${encodeURIComponent(product.sku)}`}>Adjust stock</Link>
             </>}
           </section>
+
+          {!creating && <section className={styles.panel} aria-labelledby="delete-title">
+            <h2 id="delete-title" className={styles.panelTitle}>Delete product</h2>
+            <p className={styles.fieldHelp}>{product.deletable
+              ? 'Nothing references this product yet (no orders, carts, reviews, photos or activity), so it can be removed permanently.'
+              : `Permanent deletion is not available. ${product.deleteBlocker ?? ''}`}</p>
+            <div className={styles.actionsStart}>
+              <Button type="button" variant="destructive" size="small" disabled={!product.deletable || dirty} onClick={() => { remove.reset(); setLifecycle('delete'); }}>
+                <Trash2 aria-hidden="true" size={16} /> Delete permanently
+              </Button>
+            </div>
+          </section>}
         </div>
       </div>
 
       <div className={styles.formActions}>
         <ButtonLink to="/admin/products" variant="outline">{dirty ? 'Discard' : 'Back to products'}</ButtonLink>
-        <Button type="submit" isLoading={mutation.isPending} disabled={!creating && !dirty}>{creating ? 'Create product' : 'Save changes'}</Button>
+        <Button type="submit" isLoading={mutation.isPending} disabled={!catalog || (!creating && !dirty)}>
+          {creating ? draft.status === 'ACTIVE' ? 'Create and publish' : 'Create draft' : 'Save changes'}</Button>
       </div>
     </form>
     <ConfirmDialog {...guard.dialog} destructive title="Leave without saving?" confirmLabel="Leave page"
       description={<p>Your changes to this product have not been saved and will be lost.</p>} />
+    {product && <ConfirmDialog open={lifecycle === 'status'} onOpenChange={open => { if (!open) setLifecycle(null); }} pending={statusChange.isPending}
+      title={nextStatus === 'ACTIVE' ? 'Publish product?' : 'Unpublish product?'} confirmLabel={nextStatus === 'ACTIVE' ? 'Publish' : 'Unpublish'}
+      destructive={nextStatus === 'INACTIVE'} error={statusChange.isError ? errorMessage(statusChange.error) : null} onConfirm={changeStatus}
+      description={nextStatus === 'ACTIVE'
+        ? product.category.isActive ? <p><strong>{product.name}</strong> will appear on the storefront and can be added to carts.</p>
+          : <p>Its category <strong>{product.category.name}</strong> is hidden. Make the category visible first; the server refuses to publish into a hidden category.</p>
+        : <><p><strong>{product.name}</strong> will leave the storefront and cannot be added to new carts.</p><p>Past orders keep their item details.</p></>} />}
+    {product && <ConfirmDialog open={lifecycle === 'delete'} onOpenChange={open => { if (!open) setLifecycle(null); }} pending={remove.isPending} destructive
+      title={`Delete ${product.name}?`} confirmLabel="Delete permanently" error={remove.isError ? errorMessage(remove.error) : null} onConfirm={deleteProduct}
+      description={<><p>SKU <span className={styles.mono}>{product.sku}</span>. The product, its stock record and its specifications are removed.</p>
+        <p>This cannot be undone. The server checks again that nothing references it before deleting.</p></>} />}
   </div>;
 }

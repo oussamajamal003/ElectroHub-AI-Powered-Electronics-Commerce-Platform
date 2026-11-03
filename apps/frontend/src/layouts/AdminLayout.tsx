@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useMatch } from 'react-router-dom';
 import clsx from 'clsx';
 import { AlertTriangle, Bell, ExternalLink, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, Truck, Zap, ClipboardList } from 'lucide-react';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/Drawer';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/DropdownMenu';
 import { Tooltip } from '@/components/ui/Tooltip';
-import { ADMIN_NAVIGATION, SIDEBAR_PREFERENCE_KEY } from '@/features/admin/shell/navigation';
+import { ADMIN_NAVIGATION, SIDEBAR_PREFERENCE_KEY, type AdminNavItem } from '@/features/admin/shell/navigation';
 import { useAdminAlerts } from '@/features/admin/dashboard/api';
-import { AdminToastProvider } from '@/features/admin/shared/AdminUi';
+import { AdminToastProvider, ConfirmDialog } from '@/features/admin/shared/AdminUi';
 import { formatCount, initials } from '@/features/admin/shared/format';
 import styles from './AdminLayout.module.scss';
 
@@ -16,20 +16,34 @@ function readCollapsed() {
   try { return window.localStorage.getItem(SIDEBAR_PREFERENCE_KEY) === '1'; } catch { return false; }
 }
 
-function Navigation({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
+// The class is resolved here, not through NavLink's className callback: the rail wraps links in a Radix Tooltip trigger, whose Slot
+// merges class names as strings and would turn a callback into an unusable string (the unstyled, cramped rail seen before).
+function NavItem({ item, collapsed, onNavigate }: { item: AdminNavItem; collapsed?: boolean; onNavigate?: () => void }) {
+  const active = Boolean(useMatch({ path: item.to, end: Boolean(item.end) }));
+  const Icon = item.icon;
+  const link = <NavLink to={item.to} end={item.end} onClick={onNavigate} aria-label={collapsed ? item.label : undefined}
+    className={clsx(styles.navLink, active && styles.navLinkActive)}>
+    <Icon className={styles.navIcon} aria-hidden="true" />
+    {!collapsed && <span>{item.label}</span>}
+  </NavLink>;
+  return <li>{collapsed ? <Tooltip content={item.label} side="right" sideOffset={10}>{link}</Tooltip> : link}</li>;
+}
+
+/** `onToggle` (desktop sidebar only) puts the collapse control on the first section's heading row. */
+function Navigation({ collapsed, onNavigate, onToggle }: { collapsed?: boolean; onNavigate?: () => void; onToggle?: () => void }) {
   return <nav className={styles.nav} aria-label="Admin navigation">
-    {ADMIN_NAVIGATION.map(section => <div key={section.label} className={styles.navSection}>
-      <p className={clsx(styles.navHeading, collapsed && styles.visuallyHidden)}>{section.label}</p>
+    {ADMIN_NAVIGATION.map((section, index) => <div key={section.label} className={styles.navSection}>
+      <div className={clsx(styles.navHeadingRow, collapsed && styles.navHeadingRowCollapsed)}>
+        <p className={clsx(styles.navHeading, collapsed && styles.visuallyHidden)}>{section.label}</p>
+        {index === 0 && onToggle && <Tooltip content={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} side="right" sideOffset={10}>
+          <button type="button" className={styles.collapseButton} onClick={onToggle}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-pressed={collapsed}>
+            {collapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
+          </button>
+        </Tooltip>}
+      </div>
       <ul className={styles.navList}>
-        {section.items.map(item => {
-          const Icon = item.icon;
-          const link = <NavLink to={item.to} end={item.end} onClick={onNavigate} aria-label={collapsed ? item.label : undefined}
-            className={({ isActive }) => clsx(styles.navLink, isActive && styles.navLinkActive)}>
-            <Icon className={styles.navIcon} aria-hidden="true" />
-            {!collapsed && <span>{item.label}</span>}
-          </NavLink>;
-          return <li key={item.to}>{collapsed ? <Tooltip content={item.label} side="right" sideOffset={8}>{link}</Tooltip> : link}</li>;
-        })}
+        {section.items.map(item => <NavItem key={item.to} item={item} collapsed={collapsed} onNavigate={onNavigate} />)}
       </ul>
     </div>)}
   </nav>;
@@ -70,14 +84,24 @@ function AlertsMenu() {
   </DropdownMenu>;
 }
 
+/** Avatar-only trigger; the name, email and actions live in the menu. Sign out asks first, then uses the existing AuthContext logout. */
 function ProfileMenu() {
   const { user, logout } = useAuth();
+  const [confirming, setConfirming] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const name = user ? `${user.firstName} ${user.lastName}`.trim() : '';
-  return <DropdownMenu>
+  const signOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    // logout() always ends the local session (tokens and cached admin data are cleared even if the server call fails); the protected
+    // route then redirects to /admin/login. Reset only matters if this component is still mounted.
+    try { await logout(); } finally { setSigningOut(false); }
+  };
+  return <>
+  <DropdownMenu>
     <DropdownMenuTrigger asChild>
       <button type="button" className={styles.profileButton} aria-label={`Account menu for ${name || 'administrator'}`}>
         <span className={styles.avatar} aria-hidden="true">{initials(name, 'A')}</span>
-        <span className={styles.profileName}>{name || 'Administrator'}</span>
       </button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" sideOffset={8} className={styles.menu}>
@@ -91,11 +115,14 @@ function ProfileMenu() {
         <a href="/" target="_blank" rel="noopener noreferrer" className={styles.menuLink}><ExternalLink aria-hidden="true" /> View storefront</a>
       </DropdownMenuItem>
       <DropdownMenuSeparator />
-      <DropdownMenuItem variant="destructive" onSelect={() => { void logout(); }} className={styles.menuLink}>
+      <DropdownMenuItem variant="destructive" onSelect={() => setConfirming(true)} className={styles.menuLink}>
         <LogOut aria-hidden="true" /> Sign out
       </DropdownMenuItem>
     </DropdownMenuContent>
-  </DropdownMenu>;
+  </DropdownMenu>
+  <ConfirmDialog open={confirming} onOpenChange={setConfirming} pending={signingOut} destructive title="Sign out of ElectroHub?"
+    confirmLabel="Sign out" onConfirm={() => { void signOut(); }} description={<p>Your admin session will end on this device.</p>} />
+  </>;
 }
 
 export function AdminLayout() {
@@ -112,15 +139,11 @@ export function AdminLayout() {
   return <AdminToastProvider>
     <div className={clsx(styles.shell, collapsed && styles.shellCollapsed)}>
       <a href="#admin-main" className={styles.skipLink}>Skip to content</a>
-      <header className={styles.header}>
+      <header className={styles.header} data-admin-header>
         <div className={styles.headerStart}>
           <button type="button" className={clsx(styles.iconButton, styles.menuButton)} onClick={() => setDrawerOpen(true)}
             aria-label="Open navigation" aria-expanded={drawerOpen} aria-controls="admin-drawer">
             <Menu aria-hidden="true" />
-          </button>
-          <button type="button" className={clsx(styles.iconButton, styles.collapseButton)} onClick={() => setCollapsed(value => !value)}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-pressed={collapsed}>
-            {collapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
           </button>
           <Link to="/admin" className={styles.brand} aria-label="ElectroHub admin — Dashboard">
             <span className={styles.brandTile} aria-hidden="true"><Zap /></span>
@@ -135,7 +158,7 @@ export function AdminLayout() {
       </header>
 
       <aside className={styles.sidebar} aria-label="Sidebar">
-        <Navigation collapsed={collapsed} />
+        <Navigation collapsed={collapsed} onToggle={() => setCollapsed(value => !value)} />
       </aside>
 
       <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>

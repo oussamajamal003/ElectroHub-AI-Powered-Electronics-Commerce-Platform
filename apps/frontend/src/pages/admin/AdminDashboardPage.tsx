@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, type KeyboardEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { ArrowRight, Boxes, ClipboardList, DollarSign, Package, ShoppingCart, Truck, Users } from 'lucide-react';
@@ -24,21 +24,56 @@ function RevenueChart({ overview }: { overview: DashboardOverview }) {
       return { day, amount: byDay.get(day) ?? 0 };
     });
   }, [overview, currency]);
+  const [active, setActive] = useState<number | null>(null);
   const max = Math.max(...days.map(day => day.amount), 0);
-  const total = overview.revenue.find(row => row.currency === currency);
+  const top = niceCeiling(max);
+  const total = days.reduce((sum, day) => sum + day.amount, 0);
+  const best = days.reduce((winner, day) => day.amount > winner.amount ? day : winner, days[0]!);
+  const paidDays = days.filter(day => day.amount > 0).length;
+  const money = (amount: number) => formatMoney(amount.toFixed(2), currency);
+  const compact = new Intl.NumberFormat('en-US', { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1 });
+  const label = (day: string) => formatDate(`${day}T12:00:00Z`);
+  const focused = active === null ? null : days[active]!;
+  const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+    if (event.key === 'Home' || event.key === 'End') { event.preventDefault(); setActive(event.key === 'Home' ? 0 : days.length - 1); return; }
+    if (!step) return;
+    event.preventDefault();
+    setActive(current => Math.min(days.length - 1, Math.max(0, (current ?? (step > 0 ? -1 : days.length)) + step)));
+  };
   return <div className={styles.chart}>
-    <div className={styles.bars} role="img"
-      aria-label={max === 0 ? `No paid revenue in the last ${overview.window.days} days.`
-        : `Daily paid revenue in ${currency} over the last ${overview.window.days} days, totalling ${formatMoney(total?.amount ?? '0', currency)}.`}>
-      {days.map(day => <span key={day.day} className={clsx(styles.bar, day.amount === 0 && styles.barEmpty)}
-        style={{ height: max ? `${Math.max(2, (day.amount / max) * 100)}%` : '2px' }}
-        title={`${formatDate(`${day.day}T12:00:00Z`)}: ${formatMoney(String(day.amount), currency)}`} />)}
+    <dl className={styles.chartStats}>
+      <div><dt>Total</dt><dd>{money(total)}</dd></div>
+      <div><dt>Daily average</dt><dd>{money(total / days.length)}</dd></div>
+      <div><dt>Best day</dt><dd>{max ? <>{money(best.amount)} <small>{label(best.day)}</small></> : '—'}</dd></div>
+      <div><dt>Days with sales</dt><dd>{formatCount(paidDays)} <small>of {formatCount(days.length)}</small></dd></div>
+    </dl>
+    <div className={styles.chartFrame}>
+      <div className={styles.chartScale} aria-hidden="true"><span>{compact.format(top)}</span><span>{compact.format(top / 2)}</span><span>{compact.format(0)}</span></div>
+      {/* One focusable chart: hover or Left/Right/Home/End reads a day; the live line below repeats it for screen readers. */}
+      <div className={styles.bars} role="group" tabIndex={0} onKeyDown={onKey} onMouseLeave={() => setActive(null)} onBlur={() => setActive(null)}
+        aria-label={max === 0 ? `No paid revenue in the last ${overview.window.days} days.`
+          : `Daily paid revenue in ${currency} over the last ${overview.window.days} days, totalling ${money(total)}. Use the arrow keys to read each day.`}>
+        {days.map((day, index) => <span key={day.day} className={clsx(styles.bar, day.amount === 0 && styles.barEmpty, index === active && styles.barActive)}
+          style={{ height: top ? `${Math.max(1.5, (day.amount / top) * 100)}%` : '2px' }} onMouseEnter={() => setActive(index)} />)}
+        {focused && <span className={clsx(styles.chartTip, active! < days.length * 0.15 && styles.chartTipStart, active! > days.length * 0.85 && styles.chartTipEnd)} style={{ left: `${((active! + 0.5) / days.length) * 100}%` }} aria-hidden="true">
+          <strong>{money(focused.amount)}</strong>{label(focused.day)}</span>}
+      </div>
     </div>
     <div className={styles.chartAxis} aria-hidden="true">
-      <span>{formatDate(`${days[0]!.day}T12:00:00Z`)}</span><span>{formatDate(`${days[days.length - 1]!.day}T12:00:00Z`)}</span>
+      <span>{label(days[0]!.day)}</span><span>{label(days[Math.floor((days.length - 1) / 2)]!.day)}</span><span>{label(days[days.length - 1]!.day)}</span>
     </div>
+    <p className={styles.visuallyHidden} aria-live="polite">{focused ? `${label(focused.day)}: ${money(focused.amount)}` : ''}</p>
     {overview.revenue.length > 1 && <p className={styles.panelHint}>Chart shows {currency}. Other currencies are listed in the revenue total and are never converted.</p>}
   </div>;
+}
+
+/** Rounds the axis maximum up to 1, 2 or 5 × 10ⁿ so the scale labels are readable round numbers. */
+function niceCeiling(value: number) {
+  if (value <= 0) return 0;
+  const power = 10 ** Math.floor(Math.log10(value));
+  const step = [1, 2, 2.5, 5, 10].find(candidate => candidate * power >= value)!;
+  return step * power;
 }
 
 export function AdminDashboardPage() {

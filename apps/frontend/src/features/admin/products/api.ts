@@ -11,12 +11,18 @@ export interface AdminProductRow {
   image: { url: string; altText: string | null } | null; imageCount: number;
   inventory: { quantity: number; lowStockAt: number; status: StockStatus; updatedAt: string } | null;
   storefrontVisible: boolean; createdAt: string; updatedAt: string;
+  /** Permanent deletion is offered only when the server found no history at all; `deleteBlocker` says why not. */
+  deletable: boolean; deleteBlocker: string | null;
 }
 export interface Specification { id?: string; group: string; name: string; value: string }
 export interface AdminProduct extends AdminProductRow {
   description: string | null; modelNumber: string | null; specifications: Specification[]; orderLineCount: number;
 }
-export interface CatalogOptions { categories: { id: string; name: string; isActive: boolean }[]; brands: { id: string; name: string }[] }
+export interface CatalogOptions {
+  categories: { id: string; name: string; isActive: boolean }[]; brands: { id: string; name: string }[];
+  /** How many catalog products use each category/brand pair: used to rank likely matches, never to restrict choices. */
+  pairs: { categoryId: string; brandId: string; products: number }[];
+}
 
 export interface ProductFields {
   name: string; sku: string; description: string | null; modelNumber: string | null; categoryId: string; brandId: string | null;
@@ -89,5 +95,14 @@ export function useProductStatus() {
       apiClient<ItemResponse<AdminProduct>>(`/api/admin/catalog/products/${encodeURIComponent(id)}/status`,
         { method: 'PATCH', data: { status, expectedUpdatedAt } }),
     onSuccess: response => settle(response.data),
+  });
+}
+
+export function useDeleteProduct() {
+  const client = useQueryClient();
+  const settle = useCatalogInvalidation();
+  return useMutation({
+    mutationFn: (id: string) => apiClient<void>(`/api/admin/catalog/products/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    onSuccess: (_result, id) => { client.removeQueries({ queryKey: adminKeys.product(id) }); settle(); void client.invalidateQueries({ queryKey: adminKeys.options }); },
   });
 }

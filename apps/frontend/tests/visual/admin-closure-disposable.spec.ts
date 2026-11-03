@@ -36,10 +36,16 @@ async function login(page: Page) {
   await page.getByRole('button', { name: 'Sign In', exact: true }).click();
   await page.waitForURL(url => url.pathname === '/admin');
 }
+// One API sign-in per account per run (the login limiter allows 30 attempts per 15 minutes per IP).
+const tokens = new Map<string, string>();
 async function token(request: APIRequestContext, account: Account) {
+  const cached = tokens.get(account.email);
+  if (cached) return cached;
   const response = await request.post(`${state!.backend}/api/auth/login`, { data: { email: account.email, password: account.password } });
   expect(response.status()).toBe(200);
-  return (await response.json() as { accessToken: string }).accessToken;
+  const value = (await response.json() as { accessToken: string }).accessToken;
+  tokens.set(account.email, value);
+  return value;
 }
 async function api(request: APIRequestContext, bearer: string, method: 'get' | 'post' | 'patch', url: string, data?: unknown) {
   return request[method](`${state!.backend}${url}`, { headers: { Authorization: `Bearer ${bearer}` }, data });
@@ -48,10 +54,12 @@ async function api(request: APIRequestContext, bearer: string, method: 'get' | '
 let qa: { id: string; name: string; sku: string } | null = null;
 async function qaProduct(request: APIRequestContext, admin: string) {
   if (qa) return qa;
-  const options = await (await api(request, admin, 'get', '/api/admin/catalog/options')).json() as { data: { categories: { id: string; isActive: boolean }[] } };
   const sku = `QA-051-${Date.now().toString(36).toUpperCase()}`;
+  // Its own visible category: the seeded "Delivery QA" category holds only a protected fixture, so the console hides it.
+  const category = (await (await api(request, admin, 'post', '/api/admin/categories', { name: `QA closure ${sku}` })).json() as { data: { id: string; updatedAt: string } }).data;
+  expect((await api(request, admin, 'patch', `/api/admin/categories/${category.id}/status`, { isActive: true, expectedUpdatedAt: category.updatedAt })).ok()).toBe(true);
   const created = await api(request, admin, 'post', '/api/admin/catalog/products', { name: `QA 05.1 closure ${sku}`, sku,
-    categoryId: options.data.categories.find(category => category.isActive)!.id, price: '19.99', inventory: { quantity: 10, lowStockAt: 2 } });
+    categoryId: category.id, price: '19.99', inventory: { quantity: 10, lowStockAt: 2 } });
   expect(created.ok()).toBe(true);
   const body = await created.json() as { data: { id: string; name: string } };
   qa = { id: body.data.id, name: body.data.name, sku };
@@ -367,6 +375,7 @@ test('B01: live sign-out ends admin access', async ({ page, request }) => {
   await expect(page.getByRole('table')).toBeVisible();
   await page.getByRole('button', { name: /Account menu/ }).click();
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await page.getByRole('dialog', { name: 'Sign out of ElectroHub?' }).getByRole('button', { name: 'Sign out' }).click();
   await page.waitForURL(url => url.pathname === '/admin/login');
   await shot(page, 'b01-after-sign-out');
   const leaked = await page.getByRole('table').count();

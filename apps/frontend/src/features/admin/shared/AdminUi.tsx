@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
 import clsx from 'clsx';
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info, RotateCcw, Search, X, XCircle } from 'lucide-react';
@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { Toast, ToastClose, ToastDescription, ToastProvider, ToastViewport } from '@/components/ui/Toast';
 import { errorMessage, type PageMeta } from './api';
 import { formatCount, stockLabel } from './format';
+import { scrollToContentTop } from './scroll';
 import buttonStyles from '@/components/ui/Button/Button.module.scss';
 import styles from './AdminUi.module.scss';
 
@@ -50,6 +51,10 @@ export function FilterBand({ search, onSearch, placeholder, searchLabel, chips, 
   search: string; onSearch: (value: string) => void; placeholder: string; searchLabel: string;
   chips?: Chip[]; active?: string; onChip?: (value: string | undefined) => void; onReset: () => void; resetDisabled?: boolean; children?: ReactNode;
 }) {
+  // The clicked chip shows as selected at once; the URL update (and the list render it triggers) follows as a router transition.
+  const [picked, setPicked] = useState<{ value: string | undefined } | null>(null);
+  useEffect(() => { setPicked(null); }, [active]);
+  const selected = picked ? picked.value : active;
   return <div className={styles.filterBand} role="search" aria-label={searchLabel}>
     <label className={styles.searchField}>
       <span className={styles.visuallyHidden}>{searchLabel}</span>
@@ -59,8 +64,8 @@ export function FilterBand({ search, onSearch, placeholder, searchLabel, chips, 
       {search && <button type="button" className={styles.searchClear} onClick={() => onSearch('')} aria-label="Clear search"><X aria-hidden="true" /></button>}
     </label>
     {chips && onChip && <div className={styles.chips} role="group" aria-label="Filter">
-      {chips.map(chip => <button key={chip.label} type="button" className={clsx(styles.chip, active === chip.value && styles.chipActive)}
-        aria-pressed={active === chip.value} onClick={() => onChip(chip.value)}>
+      {chips.map(chip => <button key={chip.label} type="button" className={clsx(styles.chip, selected === chip.value && styles.chipActive)}
+        aria-pressed={selected === chip.value} onClick={() => { setPicked({ value: chip.value }); onChip(chip.value); }}>
         {chip.label}{chip.count !== undefined && <span className={styles.chipCount}>{formatCount(chip.count)}</span>}
       </button>)}
     </div>}
@@ -112,16 +117,18 @@ export function TableCard({ children, busy, label }: { children: ReactNode; busy
 
 export function Pager({ meta, onPage, disabled, label }: { meta: PageMeta | undefined; onPage: (page: number) => void; disabled?: boolean; label: string }) {
   if (!meta || meta.total === 0) return null;
+  // The live summary below announces the new range; focus stays on the button so Next can be pressed again.
+  const go = (page: number) => { onPage(page); scrollToContentTop(); };
   const start = (meta.page - 1) * meta.pageSize + 1;
   const end = Math.min(meta.total, meta.page * meta.pageSize);
   return <nav className={styles.pager} aria-label={label}>
     <span className={styles.pagerSummary} aria-live="polite">Showing {formatCount(start)}–{formatCount(end)} of {formatCount(meta.total)}</span>
     {meta.totalPages > 1 && <div className={styles.pagerControls}>
-      <Button type="button" variant="outline" size="small" disabled={disabled || meta.page <= 1} onClick={() => onPage(meta.page - 1)}>
+      <Button type="button" variant="outline" size="small" disabled={disabled || meta.page <= 1} onClick={() => go(meta.page - 1)}>
         <ChevronLeft aria-hidden="true" size={16} /> Previous
       </Button>
       <span className={styles.pagerPage}>Page {meta.page} of {meta.totalPages}</span>
-      <Button type="button" variant="outline" size="small" disabled={disabled || meta.page >= meta.totalPages} onClick={() => onPage(meta.page + 1)}>
+      <Button type="button" variant="outline" size="small" disabled={disabled || meta.page >= meta.totalPages} onClick={() => go(meta.page + 1)}>
         Next <ChevronRight aria-hidden="true" size={16} />
       </Button>
     </div>}

@@ -1,0 +1,58 @@
+@use '../../../styles/abstracts/variables' as *;
+
+// Same trigger metrics as the shared Select (44px, square system, Poppins); the popup adds a search row over a bounded listbox.
+
+.visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.container { position: relative; display: flex; flex-direction: column; gap: $spacing-2; min-width: 0; }
+.fullWidth { width: 100%; .trigger { width: 100%; } }
+
+.label { display: flex; align-items: center; gap: $spacing-1; margin: 0; font-family: $font-family-base; font-size: $font-size-sm;
+  font-weight: $font-weight-medium; color: $color-text-primary; }
+.labelDisabled { color: $color-text-muted; }
+.required { color: $color-error; }
+
+.trigger { display: inline-flex; align-items: center; justify-content: space-between; gap: $spacing-2; min-width: 0; min-height: 44px; height: 44px;
+  padding: 0 $spacing-3; border: 1px solid $color-border; background: $color-background; color: $color-text-primary; font-family: $font-family-base;
+  font-size: $font-size-base; cursor: pointer; transition: background-color $transition-fast, border-color $transition-fast, box-shadow $transition-fast;
+  &:hover:not(:disabled) { background: $color-surface; border-color: $color-text-muted; }
+  &:focus-visible { outline: none; border-color: $color-primary; box-shadow: 0 0 0 $focus-ring-width $focus-ring-color; }
+  &[aria-expanded='true'] { border-color: $color-primary; }
+  &:disabled { cursor: not-allowed; background: $color-surface; color: $color-text-muted; } }
+.error { border-color: $color-error-border; background: $color-error-background;
+  &:focus-visible { border-color: $color-error; box-shadow: 0 0 0 $focus-ring-width rgba($color-error, .3); } }
+.value { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; line-height: $line-height-tight; }
+.placeholder { color: $color-text-muted; }
+.icon { width: 16px; height: 16px; flex-shrink: 0; color: $color-text-muted; transition: transform $transition-fast; }
+.iconOpen { transform: rotate(180deg); }
+
+.panel { position: absolute; top: calc(100% + 4px); left: 0; z-index: $z-dropdown; display: flex; flex-direction: column; min-width: 100%;
+  width: max-content; max-width: min(28rem, calc(100vw - 2rem)); background: $color-background; border: 1px solid $color-border; box-shadow: $shadow-lg; }
+.up { top: auto; bottom: calc(100% + 4px); }
+.right { left: auto; right: 0; }
+
+.searchRow { position: relative; display: flex; align-items: center; border-bottom: 1px solid $color-border; }
+.searchIcon { position: absolute; left: $spacing-3; width: 16px; height: 16px; color: $color-text-muted; pointer-events: none; }
+.search { width: 100%; min-height: 2.75rem; padding: 0 $spacing-3 0 2.25rem; border: 0; background: transparent; color: $color-text-primary;
+  font-family: $font-family-base; font-size: $font-size-sm;
+  &::placeholder { color: $color-text-muted; }
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: -2px; } }
+
+.list { max-height: min(18rem, 50vh); overflow-y: auto; overscroll-behavior: contain; padding: $spacing-1; }
+.groupLabel { padding: $spacing-2 $spacing-3 $spacing-1; font-size: $font-size-xs; font-weight: $font-weight-semibold; letter-spacing: .06em;
+  text-transform: uppercase; color: $color-text-muted; }
+.option { position: relative; display: flex; align-items: center; gap: $spacing-3; min-height: 2.75rem; padding: $spacing-2 $spacing-3 $spacing-2 $spacing-8;
+  font-family: $font-family-base; font-size: $font-size-sm; line-height: $line-height-tight; color: $color-text-primary; white-space: nowrap; cursor: pointer;
+  user-select: none; }
+.optionLabel { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.hint { flex-shrink: 0; font-size: $font-size-xs; color: $color-text-muted; }
+.check { position: absolute; left: $spacing-2; width: 16px; height: 16px; visibility: hidden; }
+.optionSelected { color: $color-primary; font-weight: $font-weight-semibold; .check { visibility: visible; } }
+.optionActive { background: $color-primary; color: $color-text-inverse; .hint { color: inherit; opacity: .85; } }
+.optionDisabled { color: $color-text-muted; cursor: not-allowed; }
+.empty { padding: $spacing-4 $spacing-3; font-size: $font-size-sm; color: $color-text-secondary; text-align: center; }
+
+.helper { font-size: $font-size-xs; color: $color-text-secondary; }
+.errorMessage { font-family: $font-family-base; font-size: $font-size-sm; color: $color-error; }
+
+@media (prefers-reduced-motion: reduce) { .trigger, .icon { transition: none; } }

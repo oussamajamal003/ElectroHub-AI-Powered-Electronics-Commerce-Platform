@@ -46,14 +46,48 @@ describe('AdminLayout shell', () => {
     expect(within(screen.getByRole('navigation', { name: 'Admin navigation' })).getByRole('link', { name: 'Orders' })).toBeInTheDocument();
   });
 
-  it('signs out through AuthContext from the profile menu', async () => {
-    renderAt('/admin');
+  const openSignOut = async () => {
     const trigger = screen.getByRole('button', { name: 'Account menu for Ada Admin' });
+    expect(trigger).not.toHaveTextContent('Ada Admin'); // avatar only: the name lives in the menu
     fireEvent.pointerDown(trigger);
     fireEvent.click(trigger);
-    const item = await screen.findByRole('menuitem', { name: /sign out/i });
-    fireEvent.click(item);
+    fireEvent.click(await screen.findByRole('menuitem', { name: /sign out/i }));
+    return screen.findByRole('dialog', { name: 'Sign out of ElectroHub?' });
+  };
+
+  it('asks before signing out; Cancel keeps the session', async () => {
+    renderAt('/admin');
+    const dialog = await openSignOut();
+    expect(within(dialog).getByText('Your admin session will end on this device.')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(logout).not.toHaveBeenCalled();
+  });
+
+  it('signs out once through AuthContext after confirmation, ignoring repeated clicks', async () => {
+    logout.mockImplementation(() => new Promise(() => undefined));
+    renderAt('/admin');
+    const dialog = await openSignOut();
+    const confirm = within(dialog).getByRole('button', { name: 'Sign out' });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
     await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
+  });
+
+  it('puts the collapse control on the MAIN heading row of the sidebar, not in the header', () => {
+    renderAt('/admin');
+    const toggle = screen.getByRole('button', { name: 'Collapse sidebar' });
+    expect(toggle.closest('aside')).not.toBeNull();
+    expect(toggle.closest('header')).toBeNull();
+    expect(toggle.parentElement).toHaveTextContent('Main');
+  });
+
+  it('styles rail links like expanded links (Tooltip trigger keeps the resolved class)', () => {
+    window.localStorage.setItem(SIDEBAR_PREFERENCE_KEY, '1');
+    renderAt('/admin/orders');
+    const link = within(screen.getByRole('navigation', { name: 'Admin navigation' })).getByRole('link', { name: 'Orders' });
+    expect(link.className).not.toMatch(/function|=>/);
+    expect(link).toHaveAttribute('aria-current', 'page');
   });
 
   it('provides a skip link to the main content', () => {

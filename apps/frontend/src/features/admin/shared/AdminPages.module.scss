@@ -62,6 +62,10 @@ td .mono, td .muted { white-space: nowrap; }
 .fieldLabel { font-size: $font-size-sm; font-weight: $font-weight-medium; color: $color-text-primary; }
 .fieldError { margin: 0; font-size: $font-size-xs; color: $color-error-foreground; }
 .fieldHelp { margin: 0; font-size: $font-size-xs; color: $color-text-secondary; }
+// Loading placeholders shaped like the real header and fields.
+.skeletonHeader { display: grid; gap: $spacing-3; }
+.skeletonField { display: grid; gap: $spacing-2; }
+.filterPicker { flex: 0 1 15rem; min-width: 12rem; }
 .formActions { display: flex; gap: $spacing-3; justify-content: flex-end; flex-wrap: wrap; position: sticky; bottom: 0; padding: $spacing-4 0;
   background: linear-gradient(to top, $color-surface 70%, rgba($color-surface, 0)); }
 .formError { margin: 0; padding: $spacing-3 $spacing-4; border: 1px solid $color-error-border; background: $color-error-background; color: $color-error-foreground;
@@ -74,7 +78,8 @@ td .mono, td .muted { white-space: nowrap; }
 .segment { min-height: 2.5rem; padding: 0 $spacing-4; border: 0; background: transparent; color: $color-text-secondary; font: inherit; font-size: $font-size-sm;
   font-weight: $font-weight-medium; cursor: pointer;
   & + & { border-left: 1px solid $color-border; }
-  &[aria-pressed='true'] { background: $color-primary; color: $color-text-inverse; }
+  &:hover:not([aria-pressed='true']):not([aria-checked='true']) { background: rgba($color-primary, .06); color: $color-primary; }
+  &[aria-pressed='true'], &[aria-checked='true'] { background: $color-primary; color: $color-text-inverse; font-weight: $font-weight-semibold; }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: 2px; } }
 
 // ─── Detail pages ────────────────────────────────────────
@@ -96,11 +101,31 @@ td .mono, td .muted { white-space: nowrap; }
 .stepCurrent { color: $color-primary; font-weight: $font-weight-semibold; &::before { background: $color-primary; } .stepDot { border-color: $color-primary; color: $color-primary; } }
 
 .chart { display: grid; gap: $spacing-2; }
-.bars { display: flex; align-items: flex-end; gap: 2px; height: 10rem; padding-top: $spacing-2; border-bottom: 1px solid $color-border; }
+.chartStats { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: $spacing-4; margin: 0 0 $spacing-2;
+  div { display: grid; gap: 2px; min-width: 0; }
+  dt { font-size: $font-size-xs; color: $color-text-secondary; }
+  dd { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; font-variant-numeric: tabular-nums; color: $color-text-primary;
+    small { font-size: $font-size-xs; font-weight: $font-weight-regular; color: $color-text-secondary; } } }
+.chartFrame { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: $spacing-3; }
+.chartScale { display: flex; flex-direction: column; justify-content: space-between; height: 12rem; padding-top: $spacing-2; font-size: $font-size-xs;
+  color: $color-text-muted; text-align: right; font-variant-numeric: tabular-nums; span { line-height: 1; transform: translateY(-50%); }
+  span:last-child { transform: none; } }
+// Gridlines at 0, 50 and 100% of the rounded scale.
+.bars { position: relative; display: flex; align-items: flex-end; gap: 2px; height: 12rem; padding-top: $spacing-2; border-bottom: 1px solid $color-border;
+  background: linear-gradient($color-border, $color-border) 0 $spacing-2 / 100% 1px no-repeat,
+    linear-gradient($color-border, $color-border) 0 calc(50% + #{$spacing-2} / 2) / 100% 1px no-repeat;
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: 4px; } }
+.bar.barActive { opacity: 1; background: $color-primary-dark; }
+.chartTip { position: absolute; top: 0; transform: translate(-50%, -100%); display: grid; gap: 2px; padding: $spacing-2 $spacing-3; white-space: nowrap;
+  background: $color-secondary; color: $color-text-inverse; font-size: $font-size-xs; pointer-events: none; z-index: 1; box-shadow: $shadow-md;
+  strong { font-size: $font-size-sm; font-variant-numeric: tabular-nums; } }
+// Near the edges the tip hangs inward so it never overflows the panel.
+.chartTipStart { transform: translate(0, -100%); }
+.chartTipEnd { transform: translate(-100%, -100%); }
 .bar { flex: 1 1 0; min-width: 2px; background: $color-primary; opacity: .85;
   &:hover { opacity: 1; } }
 .barEmpty { background: $color-border; }
-.chartAxis { display: flex; justify-content: space-between; font-size: $font-size-xs; color: $color-text-secondary; font-family: $font-family-mono; }
+.chartAxis { display: flex; justify-content: space-between; padding-left: 2.75rem; font-size: $font-size-xs; color: $color-text-secondary; }
 .statusList { display: grid; gap: $spacing-2; margin: 0; padding: 0; list-style: none; }
 .statusRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: $spacing-2; align-items: center; font-size: $font-size-sm; }
 .meter { grid-column: 1 / -1; height: 6px; background: $color-surface; border: 1px solid $color-border; overflow: hidden;

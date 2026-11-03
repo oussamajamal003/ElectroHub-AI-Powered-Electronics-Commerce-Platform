@@ -17,8 +17,9 @@
 .crumbSeparator { width: 14px; height: 14px; color: $color-text-muted; flex-shrink: 0; }
 .titleRow { display: flex; align-items: flex-end; justify-content: space-between; gap: $spacing-4; flex-wrap: wrap; }
 .titleBlock { min-width: 0; display: grid; gap: $spacing-1; }
-.title { margin: 0; font-size: clamp(1.5rem, 2.4vw, 1.875rem); font-weight: $font-weight-semibold; color: $color-text-primary; line-height: $line-height-tight;
-  overflow-wrap: anywhere; }
+// Page titles: ~36px bold on desktop, ~28px on phones; one shared rule so every admin page has the same hierarchy.
+.title { margin: 0; font-family: $font-family-heading; font-size: clamp(1.75rem, 1.2rem + 1.4vw, 2.25rem); font-weight: $font-weight-bold;
+  letter-spacing: -.015em; color: $color-text-primary; line-height: 1.15; overflow-wrap: anywhere; text-wrap: balance; }
 .description { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; max-width: 70ch; }
 .actions { display: flex; gap: $spacing-2; flex-wrap: wrap; }
 .buttonLink { text-decoration: none; svg { width: 16px; height: 16px; } }
@@ -55,15 +56,19 @@
 // ─── KPI ──────────────────────────────────────────────────
 .kpi { display: grid; gap: $spacing-2; align-content: start; min-width: 0; padding: $spacing-5; background: $color-background; border: 1px solid $color-border;
   color: inherit; text-decoration: none; }
-.kpiLink { transition: border-color $transition-fast, box-shadow $transition-fast;
-  &:hover { border-color: $color-primary; box-shadow: $shadow-sm; }
-  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
+// Only linked cards react like controls (they navigate); static KPI cards stay still so they never look clickable.
+.kpiLink { position: relative; cursor: pointer; transition: border-color $transition-fast, box-shadow $transition-fast, transform $transition-fast;
+  &:hover { border-color: $color-primary; box-shadow: $shadow-md; transform: translateY(-2px); }
+  &:active { transform: translateY(0); box-shadow: $shadow-sm; }
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
+  @media (prefers-reduced-motion: reduce) { transition: none; &:hover, &:active { transform: none; } } }
 .kpiCentered { justify-items: center; text-align: center; .kpiTop { justify-content: center; } }
 .kpiTop { display: flex; align-items: center; justify-content: space-between; gap: $spacing-3; }
 .kpiLabel { color: $color-text-secondary; font-size: $font-size-sm; font-weight: $font-weight-medium; }
 .kpiIcon { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; flex-shrink: 0; svg { width: 18px; height: 18px; } }
-.kpiValue { font-family: $font-family-mono; font-size: clamp(1.4rem, 2.2vw, 1.75rem); font-weight: $font-weight-semibold; color: $color-text-primary;
-  line-height: 1.2; overflow-wrap: anywhere; min-height: 2.1rem; }
+// Figures use the UI face with tabular digits (columns of numbers line up); monospace is kept for identifiers such as SKUs and order refs.
+.kpiValue { font-family: $font-family-base; font-size: clamp(1.6rem, 1.2rem + 1vw, 2.125rem); font-weight: $font-weight-bold; letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums; color: $color-text-primary; line-height: 1.15; overflow-wrap: anywhere; min-height: 2.4rem; }
 .kpiHint { color: $color-text-secondary; font-size: $font-size-xs; }
 .kpiSkeleton { display: inline-block; width: 5rem; height: 1.5rem; vertical-align: middle; background: linear-gradient(90deg, $color-surface, $color-border, $color-surface);
   background-size: 200% 100%; animation: shimmer 1.4s ease-in-out infinite; @media (prefers-reduced-motion: reduce) { animation: none; } }
@@ -86,14 +91,20 @@
   font-weight: $font-weight-semibold; white-space: nowrap; line-height: 1.5; svg { width: 13px; height: 13px; flex-shrink: 0; } }
 
 // ─── Table surface ────────────────────────────────────────
-.tableCard { display: grid; min-width: 0; background: $color-background;
+// While a newer page/filter loads, the previous rows stay (no empty flash) but dim under a thin progress bar, so they never pass for current.
+.tableCard { position: relative; display: grid; min-width: 0; background: $color-background;
+  &[aria-busy='true'] { tbody { opacity: .55; transition: opacity 120ms linear; }
+    &::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; z-index: 2;
+      background: linear-gradient(90deg, transparent, $color-primary, transparent) 0 0 / 40% 100% no-repeat, rgba($color-primary, .15);
+      animation: tableBusy 1s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) { tbody { transition: none; } &::before { animation: none; background: $color-primary; } } }
   table { min-width: 720px; }
   th { background: $color-surface; }
   // Names and labels use the UI face (Figma); identifiers and money opt back into mono via .mono/.money.
   td { font-family: $font-family-base; font-size: $font-size-sm; } }
 .pager { display: flex; align-items: center; justify-content: space-between; gap: $spacing-3; flex-wrap: wrap; padding: $spacing-3 $spacing-4;
   border: 1px solid $color-border; border-top: 0; background: $color-background; font-size: $font-size-sm; color: $color-text-secondary; }
-.pagerSummary { font-family: $font-family-mono; font-size: $font-size-xs; }
+.pagerSummary { font-size: $font-size-xs; font-variant-numeric: tabular-nums; }
 .pagerControls { display: flex; align-items: center; gap: $spacing-3; }
 .pagerPage { white-space: nowrap; }
 
@@ -123,3 +134,4 @@
   .resetButton { margin-left: 0; }
   .pager { justify-content: center; }
 }
+@keyframes tableBusy { from { background-position: -40% 0, 0 0; } to { background-position: 140% 0, 0 0; } }

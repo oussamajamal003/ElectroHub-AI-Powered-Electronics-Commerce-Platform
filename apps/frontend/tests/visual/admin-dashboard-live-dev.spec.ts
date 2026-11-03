@@ -2,7 +2,8 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
 /**
  * Task 05.1 live admin QA on shared DEV. Writes are limited to QA-tagged records:
- * one "QA 05.1" category (created, edited, deleted) and one "QA 05.1" draft product (created, edited, stock-adjusted; never published).
+ * one "QA 05.1" category (created, edited, deleted) and one "QA 05.1" draft product (created, edited, stock-adjusted, never published,
+ * then permanently deleted at the end).
  * Orders and customers are read only. Credentials come only from the environment and are never logged.
  */
 const enabled = process.env.EH_RUN_LIVE_ADMIN_DEV === 'true';
@@ -161,20 +162,20 @@ test('admin console: every route, responsive shell, QA catalog/inventory flow, r
   // QA product: create as a draft in an existing visible category, then edit it. It is never published.
   await page.goto('/admin/products/new', { waitUntil: 'domcontentloaded' });
   await settle(page);
-  await page.getByRole('button', { name: 'Create product' }).click();
+  await page.getByRole('button', { name: 'Create draft' }).click();
   await expect(page.locator('[aria-invalid="true"]').first()).toBeFocused();
   await shot(page, info, '1440-product-new-errors');
   await page.getByLabel('Product name').fill(`${tag} Probe`);
   await page.getByLabel('SKU').fill(sku);
-  await page.getByRole('combobox', { name: 'Category' }).click();
+  await page.getByRole('button', { name: /^Category/ }).click();
   await page.getByRole('option').filter({ hasNotText: '(hidden)' }).first().click();
   await page.getByRole('textbox', { name: /^Price(?: \*)?$/ }).fill('99.00');
   await page.getByLabel('Starting stock').fill('3');
   await page.getByRole('button', { name: 'Add specification' }).click();
   await page.getByLabel('Name', { exact: true }).fill('QA');
   await page.getByLabel('Value', { exact: true }).fill('Task 05.1 probe');
-  await expect(page.getByRole('button', { name: 'Save as draft' })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Create product' }).click();
+  await expect(page.getByRole('radio', { name: 'Save as draft' })).toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('button', { name: 'Create draft' }).click();
   await page.waitForURL(/\/admin\/products\/[0-9a-f-]{36}\/edit$/);
   const productId = page.url().match(/products\/([0-9a-f-]{36})\/edit/)![1];
   await expect(page.getByRole('heading', { level: 1, name: `${tag} Probe` })).toBeVisible();
@@ -188,13 +189,13 @@ test('admin console: every route, responsive shell, QA catalog/inventory flow, r
   await page.goto(`/admin/products?q=${encodeURIComponent(sku)}`, { waitUntil: 'domcontentloaded' });
   await settle(page);
   const productRow = page.getByRole('row').filter({ hasText: sku });
-  await expect(productRow).toContainText('Archived');
+  await expect(productRow).toContainText('Unpublished');
   await expect(productRow).toContainText('$129.00');
-  // The reactivate confirmation opens but is cancelled: the probe must stay off the shared storefront.
-  await productRow.getByRole('button', { name: `Reactivate ${tag} Probe` }).click();
-  await expect(page.getByRole('heading', { name: 'Reactivate product?' })).toBeVisible();
+  // The publish confirmation opens but is cancelled: the probe must stay off the shared storefront.
+  await productRow.getByRole('button', { name: `Publish ${tag} Probe` }).click();
+  await expect(page.getByRole('heading', { name: 'Publish product?' })).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('heading', { name: 'Reactivate product?' })).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'Publish product?' })).toBeHidden();
 
   // Inventory: restock +2 (3 → 5), then set an exact count of 4, on the QA product only.
   await page.goto(`/admin/inventory?q=${encodeURIComponent(sku)}`, { waitUntil: 'domcontentloaded' });
@@ -241,6 +242,14 @@ test('admin console: every route, responsive shell, QA catalog/inventory flow, r
   await drawer.getByRole('link', { name: 'Inventory' }).click();
   await expect(drawer).toBeHidden();
   await expect(page).toHaveURL(/\/admin\/inventory$/);
+
+  // Leave shared DEV as found: the probe was never published, ordered or photographed, so it is permanently deletable.
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/admin/products/${productId}/edit`, { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'Delete permanently' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete permanently' }).click();
+  await expect(page.getByText(`${tag} Probe was deleted.`, { exact: true })).toBeVisible();
+  report.cleanup = 'probe product deleted';
 
   report.overflow = overflow;
   report.problems = problems;

@@ -108,7 +108,11 @@
   box-shadow: $shadow-lg;
   border: 1px solid $color-border;
   z-index: $z-page-overlay;
-  width: var(--radix-select-trigger-width);
+  // At least as wide as the trigger, as wide as its longest option allows, never wider than the room beside it or 28rem.
+  min-width: var(--radix-select-trigger-width);
+  width: max-content;
+  max-width: min(28rem, var(--radix-select-content-available-width, calc(100vw - 1rem)), calc(100vw - 1rem));
+  max-height: min(22rem, var(--radix-select-content-available-height));
 }
 
 .viewport {
@@ -118,7 +122,8 @@
 .item {
   font-family: $font-family-base;
   font-size: $font-size-base;
-  line-height: 1;
+  line-height: $line-height-tight;
+  white-space: nowrap;
   color: $color-text-primary;
   border-radius: $radius-sm;
   display: flex;
@@ -141,6 +146,8 @@
 
   &[data-state='checked']:not([data-highlighted]) { background-color: $color-surface; color: $color-primary; font-weight: $font-weight-semibold; }
 }
+// One line per option: very long names end in an ellipsis and keep their full text in the item's title.
+.itemText { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .square { border-radius: 0; }
 .squareItem { border-radius: 0; }
 

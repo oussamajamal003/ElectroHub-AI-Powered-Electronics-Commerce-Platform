@@ -3,13 +3,13 @@ import { ArrowRight } from 'lucide-react';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { DataTable, type Column } from '@/components/ui/DataTable';
-import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
 import { Select } from '@/components/ui/Select';
 import { OrderBadges } from '@/features/orders/OrderBadges';
 import { useAdminDeliveries } from '@/features/delivery/queries';
 import { formatStamp } from '@/features/delivery/presentation';
 import type { AdminDeliveryRow, DeliveryStage } from '@/features/delivery/types';
-import { PageHeader } from '@/features/admin/shared/AdminUi';
+import { EmptyRows, ListEmpty, PageHeader } from '@/features/admin/shared/AdminUi';
+import { scrollToContentTop } from '@/features/admin/shared/scroll';
 import styles from './AdminDeliveriesPage.module.scss';
 
 const FILTERS: { value: DeliveryStage | 'ALL'; label: string }[] = [
@@ -26,12 +26,15 @@ export function AdminDeliveriesPage() {
   const rawPage = params.get('page');
   const page = rawPage && /^[1-9]\d{0,2}$/.test(rawPage) ? Number(rawPage) : 1;
   const setStatus = (value: DeliveryStage | 'ALL') => setParams(value === 'ALL' ? {} : { status: value }, { replace: true });
-  const setPage = (update: (value: number) => number) => setParams(current => {
-    const next = new URLSearchParams(current);
-    const value = update(page);
-    if (value > 1) next.set('page', String(value)); else next.delete('page');
-    return next;
-  }, { replace: true });
+  const setPage = (update: (value: number) => number) => {
+    setParams(current => {
+      const next = new URLSearchParams(current);
+      const value = update(page);
+      if (value > 1) next.set('page', String(value)); else next.delete('page');
+      return next;
+    }, { replace: true });
+    scrollToContentTop();
+  };
   const deliveries = useAdminDeliveries(status, page);
   const rows = deliveries.data?.data ?? [];
   const meta = deliveries.data?.meta;
@@ -57,10 +60,12 @@ export function AdminDeliveriesPage() {
     {deliveries.isError && <Alert variant="error"><span>{deliveries.data ? 'The list could not be refreshed. Showing the last loaded orders.'
       : 'Deliveries could not be loaded. Check your connection and try again.'}</span>{' '}
       <Button type="button" variant="outline" size="small" disabled={deliveries.isFetching} onClick={() => void deliveries.refetch()}>Retry</Button></Alert>}
-    {deliveries.isPending ? <div className={styles.loading}><ElectroHubLoader /></div>
-      : <div className={styles.table} aria-busy={deliveries.isFetching || undefined}>
-        <DataTable data={rows} columns={columns} keyExtractor={row => row.orderReference}
-          emptyMessage={status === 'ALL' ? 'No paid orders are waiting for delivery tracking.' : 'No paid orders have this status.'} /></div>}
+    {/* Same convention as the other admin lists: the table frame renders at once with skeleton rows, and earlier rows stay during refetches. */}
+    <div className={styles.table} aria-busy={deliveries.isFetching || undefined}>
+      <DataTable caption="Deliveries" data={rows} columns={columns} keyExtractor={row => row.orderReference} loadingRows={deliveries.isPending ? 8 : undefined}
+        emptyMessage={<ListEmpty failed={deliveries.isError && !deliveries.data}>
+          <EmptyRows title={status === 'ALL' ? 'No paid orders are waiting for delivery tracking.' : 'No paid orders have this status.'} /></ListEmpty>} />
+    </div>
     {meta && meta.totalPages > 1 && <nav className={styles.pagination} aria-label="Delivery result pages">
       <Button type="button" variant="outline" size="small" disabled={page <= 1 || deliveries.isFetching} onClick={() => setPage(value => Math.max(1, value - 1))}>Previous</Button>
       <span aria-live="polite">Page {meta.page} of {meta.totalPages}</span>

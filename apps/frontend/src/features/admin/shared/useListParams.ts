@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { DataTableSort } from '@/components/ui/DataTable';
 
-const SEARCH_DELAY_MS = 300;
+const SEARCH_DELAY_MS = 200;
 
 interface Options<F extends string> {
   /** Allowed values (or a validator) per filter key; anything else in the URL is ignored (no client-forged filter reaches the API). */
