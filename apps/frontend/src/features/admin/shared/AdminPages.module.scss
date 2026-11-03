@@ -1,0 +1,127 @@
+@use '@/styles/abstracts' as *;
+
+// Task 05.1 page layouts shared by every admin module (dashboard, catalog, inventory, orders, customers).
+
+.visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.page { display: grid; gap: $spacing-6; min-width: 0; align-content: start;
+  // Grid items default to min-width: auto; without this a wide table or chip strip widens the page instead of scrolling inside its card.
+  > * { min-width: 0; } }
+.kpiGrid { display: grid; gap: $spacing-4; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.kpiGrid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.split { display: grid; gap: $spacing-6; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+.splitEven { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.stack { display: grid; gap: $spacing-6; min-width: 0; align-content: start; }
+
+.panel { display: grid; gap: $spacing-4; min-width: 0; padding: $spacing-6; background: $color-background; border: 1px solid $color-border; align-content: start; }
+.panelFlush { padding: 0; gap: 0; > .panelHeader { padding: $spacing-5 $spacing-6; border-bottom: 1px solid $color-border; } }
+.panelHeader { display: flex; align-items: center; justify-content: space-between; gap: $spacing-3; flex-wrap: wrap; min-width: 0; }
+.panelTitle { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; color: $color-text-primary; }
+.panelHint { margin: 0; font-size: $font-size-sm; color: $color-text-secondary; }
+.panelLink { display: inline-flex; align-items: center; gap: $spacing-1; color: $color-primary; font-size: $font-size-sm; font-weight: $font-weight-medium;
+  text-decoration: none; svg { width: 16px; height: 16px; }
+  &:hover { text-decoration: underline; }
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
+
+.details { display: grid; grid-template-columns: minmax(8rem, max-content) minmax(0, 1fr); gap: $spacing-3 $spacing-6; margin: 0; font-size: $font-size-sm;
+  dt { color: $color-text-secondary; }
+  dd { margin: 0; color: $color-text-primary; overflow-wrap: anywhere; } }
+
+// ─── Table cells ─────────────────────────────────────────
+.cellMain { display: flex; align-items: center; gap: $spacing-3; min-width: 0; }
+.cellText { display: grid; gap: 2px; min-width: 0;
+  strong { font-weight: $font-weight-medium; color: $color-text-primary; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22rem; }
+  span { font-size: $font-size-xs; color: $color-text-secondary; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22rem; } }
+.thumb { width: 2.75rem; height: 2.75rem; flex-shrink: 0; object-fit: contain; background: $color-surface; border: 1px solid $color-border; }
+.thumbEmpty { display: grid; place-items: center; color: $color-text-muted; svg { width: 18px; height: 18px; } }
+.mono { font-family: $font-family-mono; font-size: $font-size-xs; }
+.money { font-family: $font-family-mono; font-size: $font-size-sm; font-weight: $font-weight-medium; white-space: nowrap; }
+.muted { color: $color-text-secondary; }
+// Identifiers and timestamps in table cells never break mid-value.
+td .mono, td .muted { white-space: nowrap; }
+.strike { color: $color-text-muted; text-decoration: line-through; font-size: $font-size-xs; margin-left: $spacing-1; }
+.rowLink { color: $color-text-primary; font-weight: $font-weight-medium; text-decoration: none;
+  &:hover { color: $color-primary; text-decoration: underline; }
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: 2px; } }
+.rowActions { display: flex; gap: $spacing-2; justify-content: flex-end; flex-wrap: nowrap; }
+.iconAction { display: inline-grid; place-items: center; width: 2.5rem; height: 2.5rem; border: 1px solid $color-border; background: $color-background;
+  color: $color-text-secondary; cursor: pointer; text-decoration: none; svg { width: 16px; height: 16px; }
+  &:hover:not(:disabled) { color: $color-primary; border-color: $color-primary; }
+  &:disabled { opacity: .5; cursor: not-allowed; }
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: 2px; } }
+.iconActionDanger:hover:not(:disabled) { color: $color-error-foreground; border-color: $color-error-foreground; }
+.actionsStart { display: flex; gap: $spacing-2; flex-wrap: wrap; align-items: center; }
+.address { font-style: normal; font-size: $font-size-sm; color: $color-text-secondary; line-height: $line-height-normal; strong { color: $color-text-primary; } }
+.titleMono { font-family: $font-family-mono; font-size: .8em; overflow-wrap: anywhere; }
+.tags { display: flex; gap: $spacing-1; flex-wrap: wrap; }
+
+// ─── Forms ───────────────────────────────────────────────
+.form { display: grid; gap: $spacing-6; min-width: 0; }
+.fieldGrid { display: grid; gap: $spacing-4; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.fieldFull { grid-column: 1 / -1; }
+.field { display: grid; gap: $spacing-2; min-width: 0; }
+.fieldLabel { font-size: $font-size-sm; font-weight: $font-weight-medium; color: $color-text-primary; }
+.fieldError { margin: 0; font-size: $font-size-xs; color: $color-error-foreground; }
+.fieldHelp { margin: 0; font-size: $font-size-xs; color: $color-text-secondary; }
+.formActions { display: flex; gap: $spacing-3; justify-content: flex-end; flex-wrap: wrap; position: sticky; bottom: 0; padding: $spacing-4 0;
+  background: linear-gradient(to top, $color-surface 70%, rgba($color-surface, 0)); }
+.formError { margin: 0; padding: $spacing-3 $spacing-4; border: 1px solid $color-error-border; background: $color-error-background; color: $color-error-foreground;
+  font-size: $font-size-sm; }
+.notice { margin: 0; padding: $spacing-3 $spacing-4; border: 1px solid $color-info-border; background: $color-info-background; color: $color-info-foreground;
+  font-size: $font-size-sm; }
+.noticeWarning { border-color: $color-warning-border; background: $color-warning-background; color: $color-warning-foreground; }
+.specRow { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: $spacing-3; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) auto; align-items: end; }
+.segmented { display: inline-flex; border: 1px solid $color-border; background: $color-background; }
+.segment { min-height: 2.5rem; padding: 0 $spacing-4; border: 0; background: transparent; color: $color-text-secondary; font: inherit; font-size: $font-size-sm;
+  font-weight: $font-weight-medium; cursor: pointer;
+  & + & { border-left: 1px solid $color-border; }
+  &[aria-pressed='true'] { background: $color-primary; color: $color-text-inverse; }
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: 2px; } }
+
+// ─── Detail pages ────────────────────────────────────────
+.lineItems { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.lineItem { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: $spacing-3; align-items: center; padding: $spacing-3 0;
+  border-bottom: 1px solid $color-border; &:last-child { border-bottom: 0; } }
+.totals { display: grid; gap: $spacing-2; margin: 0; padding-top: $spacing-3; border-top: 1px solid $color-border; font-size: $font-size-sm;
+  div { display: flex; justify-content: space-between; gap: $spacing-3; }
+  dt { color: $color-text-secondary; } dd { margin: 0; font-family: $font-family-mono; }
+  .grand { font-weight: $font-weight-semibold; font-size: $font-size-base; dt { color: $color-text-primary; } } }
+.timeline { display: flex; gap: 0; margin: 0; padding: 0; list-style: none; overflow-x: auto; }
+.step { flex: 1 1 0; min-width: 7rem; display: grid; gap: $spacing-2; justify-items: center; text-align: center; position: relative; font-size: $font-size-xs;
+  color: $color-text-muted; padding-top: $spacing-1;
+  &::before { content: ''; position: absolute; top: 0.95rem; left: -50%; width: 100%; height: 2px; background: $color-border; z-index: 0; }
+  &:first-child::before { display: none; } }
+.stepDot { position: relative; z-index: 1; display: grid; place-items: center; width: 1.9rem; height: 1.9rem; border-radius: 50%; border: 2px solid $color-border;
+  background: $color-background; svg { width: 14px; height: 14px; } }
+.stepDone { color: $color-text-primary; &::before { background: $color-primary; } .stepDot { border-color: $color-primary; background: $color-primary; color: $color-text-inverse; } }
+.stepCurrent { color: $color-primary; font-weight: $font-weight-semibold; &::before { background: $color-primary; } .stepDot { border-color: $color-primary; color: $color-primary; } }
+
+.chart { display: grid; gap: $spacing-2; }
+.bars { display: flex; align-items: flex-end; gap: 2px; height: 10rem; padding-top: $spacing-2; border-bottom: 1px solid $color-border; }
+.bar { flex: 1 1 0; min-width: 2px; background: $color-primary; opacity: .85;
+  &:hover { opacity: 1; } }
+.barEmpty { background: $color-border; }
+.chartAxis { display: flex; justify-content: space-between; font-size: $font-size-xs; color: $color-text-secondary; font-family: $font-family-mono; }
+.statusList { display: grid; gap: $spacing-2; margin: 0; padding: 0; list-style: none; }
+.statusRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: $spacing-2; align-items: center; font-size: $font-size-sm; }
+.meter { grid-column: 1 / -1; height: 6px; background: $color-surface; border: 1px solid $color-border; overflow: hidden;
+  span { display: block; height: 100%; background: $color-primary; } }
+.windowSwitch { display: inline-flex; }
+
+.notFound { display: grid; justify-items: start; gap: $spacing-3; padding: $spacing-10 $spacing-6; background: $color-background; border: 1px solid $color-border;
+  h1 { margin: 0; font-size: $font-size-2xl; } p { margin: 0; color: $color-text-secondary; } }
+
+@media (max-width: $breakpoint-xl - 1px) {
+  .kpiGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .split, .splitEven { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: $breakpoint-md - 1px) {
+  .fieldGrid { grid-template-columns: minmax(0, 1fr); }
+  .specRow { grid-template-columns: minmax(0, 1fr); padding-bottom: $spacing-3; border-bottom: 1px solid $color-border; }
+  .panel { padding: $spacing-4; }
+  .panelFlush { padding: 0; > .panelHeader { padding: $spacing-4; } }
+  .details { grid-template-columns: minmax(0, 1fr); gap: $spacing-1; dd { margin-bottom: $spacing-2; } }
+  .kpiGrid3 { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: $breakpoint-sm - 1px) {
+  .kpiGrid { grid-template-columns: minmax(0, 1fr); }
+}

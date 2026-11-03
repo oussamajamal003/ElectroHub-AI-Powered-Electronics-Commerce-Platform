@@ -11,6 +11,7 @@ import { DeliveryOverviewCard } from '@/features/delivery/components/DeliveryOve
 import { formatStamp, stageOf } from '@/features/delivery/presentation';
 import { useAdminDelivery } from '@/features/delivery/queries';
 import type { AdminDeliveryEvent } from '@/features/delivery/types';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList } from '@/components/ui/Breadcrumb';
 import styles from './AdminDeliveryDetailPage.module.scss';
 
 const EVENT_LABEL: Record<AdminDeliveryEvent['type'], string> = {
@@ -23,7 +24,15 @@ export function AdminDeliveryDetailPage() {
   const { orderReference = '' } = useParams();
   const query = useAdminDelivery(orderReference);
   const snapshot = query.data?.data;
-  const back = <Link className={styles.back} to="/admin/deliveries"><ArrowLeft size={16} aria-hidden="true" />All deliveries</Link>;
+  // Task 05.1: shell breadcrumbs (Dashboard › Delivery › reference) plus the existing back link.
+  const back = <>
+    <Breadcrumb><BreadcrumbList className={styles.crumbs}>
+      <BreadcrumbItem><Link to="/admin">Dashboard</Link></BreadcrumbItem>
+      <BreadcrumbItem><Link to="/admin/deliveries">Delivery</Link></BreadcrumbItem>
+      <BreadcrumbItem><span aria-current="page" className={styles.mono}>{orderReference}</span></BreadcrumbItem>
+    </BreadcrumbList></Breadcrumb>
+    <Link className={styles.back} to="/admin/deliveries"><ArrowLeft size={16} aria-hidden="true" />All deliveries</Link>
+  </>;
 
   if (!snapshot) return <section className={styles.page}>{back}
     {query.isPending ? <div className={styles.loading}><ElectroHubLoader /></div>
@@ -37,6 +46,7 @@ export function AdminDeliveryDetailPage() {
     {back}
     <header className={styles.header}>
       <div className={styles.title}><p className={styles.eyebrow}>DELIVERY</p><h1>{snapshot.orderReference}</h1>
+        <p><Link to={`/admin/orders/${encodeURIComponent(snapshot.orderReference)}`}>View order</Link></p>
         <p>{snapshot.customer.name ?? 'Customer'} · {snapshot.customer.email}</p></div>
       <OrderBadges status={snapshot.status} paymentState={snapshot.paymentState} />
     </header>

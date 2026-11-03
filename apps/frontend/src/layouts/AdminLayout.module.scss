@@ -1,13 +1,110 @@
 @use '@/styles/abstracts' as *;
-.shell { display: flex; min-height: 100vh; background: $color-background; }
-.sidebar { flex: 0 0 260px; width: 260px; background: $color-surface; border-right: 1px solid $color-border; padding: $spacing-6; }
-.brand { font-family: $font-family-heading; font-size: $font-size-lg; margin: 0 0 $spacing-8; color: $color-text-primary; }
-.nav { display: flex; flex-direction: column; gap: $spacing-4; a, div { color: $color-text-secondary; text-decoration: none; } a { border-radius: $radius-md; padding: $spacing-2 $spacing-3; &:hover { color: $color-primary; background: rgba($color-primary, .06); } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } } }
-.main { flex: 1; min-width: 0; padding: $spacing-8; }
-@media (max-width: 767px) {
-  .shell { flex-direction: column; }
-  .sidebar { flex: 0 0 auto; width: auto; padding: $spacing-3 $spacing-4; border-right: 0; border-bottom: 1px solid $color-border; }
-  .brand { margin: 0 0 $spacing-2; font-size: $font-size-base; }
-  .nav { flex-direction: row; gap: $spacing-2; overflow-x: auto; a, div { flex: 0 0 auto; } }
-  .main { padding: $spacing-5 $spacing-4; }
+
+// Task 05.1 admin shell (Figma Make admin screens, 1920 desktop): full-width header with the blue logo tile, ElectroHub wordmark and
+// ADMIN pill; ~264px sidebar with MAIN / OPERATIONS sections and a filled-blue active item. Below lg the sidebar becomes a drawer
+// (no mobile reference exists, so the Task 01.5 breakpoints decide). Square radius tokens, Poppins.
+
+$header-height: 4rem;
+$sidebar-width: 16.5rem;
+$sidebar-rail: 4.5rem;
+
+.visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.shell { display: grid; grid-template-columns: $sidebar-width minmax(0, 1fr); grid-template-rows: $header-height minmax(0, 1fr);
+  grid-template-areas: 'header header' 'sidebar main'; min-height: 100vh; min-height: 100dvh; background: $color-surface; color: $color-text-primary; }
+.shellCollapsed { grid-template-columns: $sidebar-rail minmax(0, 1fr); }
+
+.skipLink { position: absolute; left: $spacing-4; top: -100px; z-index: $z-tooltip; padding: $spacing-2 $spacing-4; background: $color-primary;
+  color: $color-text-inverse; font-weight: $font-weight-semibold; text-decoration: none;
+  &:focus { top: $spacing-2; outline: $focus-ring-width $focus-ring-style $color-secondary; outline-offset: 2px; } }
+
+// ─── Header ───────────────────────────────────────────────
+.header { grid-area: header; position: sticky; top: 0; z-index: $z-header; display: flex; align-items: center; justify-content: space-between;
+  gap: $spacing-4; height: $header-height; padding: 0 $spacing-6 0 $spacing-4; background: $color-background; border-bottom: 1px solid $color-border; }
+.headerStart, .headerEnd { display: flex; align-items: center; gap: $spacing-2; min-width: 0; }
+.headerEnd { gap: $spacing-3; }
+
+.iconButton { position: relative; display: grid; place-items: center; width: 2.75rem; height: 2.75rem; flex-shrink: 0; border: 1px solid transparent;
+  background: transparent; color: $color-text-secondary; cursor: pointer; transition: background-color $transition-fast, color $transition-fast;
+  svg { width: 20px; height: 20px; }
+  &:hover { background: $color-surface; color: $color-text-primary; }
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
+  &[data-state='open'] { background: $color-surface; color: $color-primary; } }
+.menuButton { display: none; }
+.badge { position: absolute; top: 4px; right: 2px; min-width: 1.15rem; height: 1.15rem; padding: 0 4px; display: grid; place-items: center;
+  background: $color-error; color: $color-text-inverse; font-family: $font-family-mono; font-size: 0.65rem; font-weight: $font-weight-bold; line-height: 1; }
+
+.brand { display: inline-flex; align-items: center; gap: $spacing-3; min-width: 0; color: $color-text-primary; text-decoration: none; padding: $spacing-1;
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
+.brandTile { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; flex-shrink: 0; background: $color-primary; color: $color-text-inverse;
+  svg { width: 18px; height: 18px; } }
+.brandText { font-family: $font-family-heading; font-size: $font-size-xl; font-weight: $font-weight-bold; white-space: nowrap; }
+.adminPill { padding: 2px $spacing-2; background: rgba($color-primary, .1); color: $color-primary; font-size: $font-size-xs; font-weight: $font-weight-semibold;
+  letter-spacing: .06em; text-transform: uppercase; }
+
+.profileButton { display: inline-flex; align-items: center; gap: $spacing-2; min-height: 2.75rem; padding: 0 $spacing-2; border: 1px solid transparent;
+  background: transparent; color: $color-text-primary; font: inherit; font-size: $font-size-sm; font-weight: $font-weight-medium; cursor: pointer;
+  &:hover, &[data-state='open'] { background: $color-surface; }
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
+.avatar { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 50%; background: $color-primary; color: $color-text-inverse;
+  font-size: $font-size-xs; font-weight: $font-weight-semibold; flex-shrink: 0; }
+.profileName { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+// ─── Menus ────────────────────────────────────────────────
+.menu { min-width: 18rem; max-width: calc(100vw - 2rem); }
+.menuLabel { font-size: $font-size-sm; font-weight: $font-weight-semibold; color: $color-text-primary; }
+.menuNote, .menuFoot { margin: 0; padding: $spacing-2 $spacing-3; font-size: $font-size-xs; color: $color-text-secondary; }
+.menuFoot { border-top: 1px solid $color-border; margin-top: $spacing-1; }
+.alertItem { display: flex; align-items: center; gap: $spacing-3; min-height: 2.75rem; color: $color-text-primary; text-decoration: none; }
+.alertIcon { display: grid; place-items: center; width: 2rem; height: 2rem; flex-shrink: 0; border: 1px solid; svg { width: 16px; height: 16px; } }
+.alertError { background: $color-error-background; color: $color-error-foreground; border-color: $color-error-border; }
+.alertWarning { background: $color-warning-background; color: $color-warning-foreground; border-color: $color-warning-border; }
+.alertInfo { background: $color-info-background; color: $color-info-foreground; border-color: $color-info-border; }
+.alertNeutral { background: $color-surface; color: $color-text-secondary; border-color: $color-border; }
+.alertText { flex: 1; font-size: $font-size-sm; }
+.alertCount { font-family: $font-family-mono; font-size: $font-size-sm; font-weight: $font-weight-semibold; }
+.profileLabel { display: grid; gap: 2px; padding-top: $spacing-2; padding-bottom: $spacing-2;
+  strong { font-size: $font-size-sm; color: $color-text-primary; }
+  span { font-size: $font-size-xs; font-weight: $font-weight-regular; color: $color-text-secondary; overflow-wrap: anywhere; } }
+.rolePill { justify-self: start; margin-top: $spacing-1; padding: 1px $spacing-2; background: rgba($color-primary, .1); color: $color-primary !important;
+  font-weight: $font-weight-semibold !important; }
+.menuLink { display: flex; align-items: center; gap: $spacing-2; min-height: 2.5rem; text-decoration: none; color: inherit; svg { width: 16px; height: 16px; } }
+
+// ─── Sidebar ──────────────────────────────────────────────
+.sidebar { grid-area: sidebar; position: sticky; top: $header-height; align-self: start; height: calc(100vh - #{$header-height});
+  height: calc(100dvh - #{$header-height}); overflow-y: auto; padding: $spacing-6 $spacing-4; background: $color-background; border-right: 1px solid $color-border; }
+.shellCollapsed .sidebar { padding: $spacing-6 $spacing-2; }
+.nav { display: grid; gap: $spacing-6; }
+.navSection { display: grid; gap: $spacing-2; }
+.navHeading { margin: 0; padding: 0 $spacing-3; font-size: $font-size-xs; font-weight: $font-weight-semibold; letter-spacing: .08em; text-transform: uppercase;
+  color: $color-text-muted; }
+.navList { display: grid; gap: $spacing-1; margin: 0; padding: 0; list-style: none; }
+.navLink { display: flex; align-items: center; gap: $spacing-3; min-height: 2.75rem; padding: 0 $spacing-3; color: $color-text-secondary; text-decoration: none;
+  font-size: $font-size-sm; font-weight: $font-weight-medium; transition: background-color $transition-fast, color $transition-fast;
+  &:hover { background: rgba($color-primary, .06); color: $color-primary; }
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: -2px; } }
+.navLinkActive { background: $color-primary; color: $color-text-inverse;
+  &:hover { background: $color-primary-dark; color: $color-text-inverse; } }
+.navIcon { width: 20px; height: 20px; flex-shrink: 0; }
+.shellCollapsed .navLink { justify-content: center; padding: 0; }
+
+// ─── Drawer + main ────────────────────────────────────────
+.drawer { padding-top: $spacing-6; }
+.drawerTitle { margin: 0 0 $spacing-2; padding-right: $spacing-10; font-size: $font-size-lg; font-weight: $font-weight-semibold; }
+.main { grid-area: main; min-width: 0; padding: $spacing-8; outline: none;
+  > * { max-width: 120rem; margin-inline: auto; } }
+
+@media (max-width: $breakpoint-lg - 1px) {
+  .shell, .shellCollapsed { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'header' 'main'; }
+  .sidebar, .collapseButton { display: none; }
+  .menuButton { display: grid; }
+  .main { padding: $spacing-6; }
 }
+@media (max-width: $breakpoint-sm - 1px) {
+  .header { padding: 0 $spacing-3 0 $spacing-2; gap: $spacing-2; }
+  .brandText { font-size: $font-size-lg; }
+  .adminPill { display: none; }
+  .profileName { display: none; }
+  .main { padding: $spacing-4; }
+}
+@media (prefers-reduced-motion: reduce) { .iconButton, .navLink { transition: none; } }

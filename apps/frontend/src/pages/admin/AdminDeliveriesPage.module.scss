@@ -1,7 +1,7 @@
 @use '@/styles/abstracts' as *;
 
 // Same shell as Admin Product media: centred column, eyebrow + title, bordered square surfaces.
-.page { width: min(100%, 1120px); margin: 0 auto; display: grid; gap: $spacing-6; min-width: 0; }
+.page { width: 100%; display: grid; gap: $spacing-6; min-width: 0; }
 .header { display: flex; align-items: end; justify-content: space-between; gap: $spacing-4; flex-wrap: wrap;
   h1 { margin: 0 0 $spacing-2; font-size: clamp(1.6rem, 4vw, 2.25rem); color: $color-text-primary; } p { margin: 0; color: $color-text-secondary; } }
 .eyebrow { color: $color-primary !important; font-size: $font-size-xs; font-weight: $font-weight-semibold; letter-spacing: .08em; margin-bottom: $spacing-2 !important; }

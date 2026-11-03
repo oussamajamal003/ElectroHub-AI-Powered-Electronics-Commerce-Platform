@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { Input } from '@/components/ui/Input';
@@ -13,6 +13,10 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function AdminLoginPage() {
   const { login, logout, isAuthenticated, user, isInitializing } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // A deep link that required sign-in returns to that admin page; anything else (or a crafted value) goes to the dashboard.
+  const from = (location.state as { from?: unknown } | null)?.from;
+  const destination = typeof from === 'string' && /^\/admin(\/[A-Za-z0-9._~%-]+)*\/?$/.test(from) && !from.startsWith('/admin/login') ? from : '/admin';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -25,7 +29,7 @@ export function AdminLoginPage() {
 
   // If already authenticated as admin, redirect to dashboard
   if (!isInitializing && isAuthenticated && user?.role === 'ADMIN') {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to={destination} replace />;
   }
 
   const validateEmailField = (val: string) => {
@@ -104,7 +108,7 @@ export function AdminLoginPage() {
         setError('Access denied. Administrator privileges required.');
         return;
       }
-      navigate('/admin', { replace: true });
+      navigate(destination, { replace: true });
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setError(err.message);

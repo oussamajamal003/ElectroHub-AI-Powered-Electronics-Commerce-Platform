@@ -1,23 +1,154 @@
-import { Link, Outlet } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import clsx from 'clsx';
+import { AlertTriangle, Bell, ExternalLink, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, Truck, Zap, ClipboardList } from 'lucide-react';
+import { useAuth } from '@/features/auth/context/AuthContext';
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/Drawer';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/DropdownMenu';
+import { Tooltip } from '@/components/ui/Tooltip';
+import { ADMIN_NAVIGATION, SIDEBAR_PREFERENCE_KEY } from '@/features/admin/shell/navigation';
+import { useAdminAlerts } from '@/features/admin/dashboard/api';
+import { AdminToastProvider } from '@/features/admin/shared/AdminUi';
+import { formatCount, initials } from '@/features/admin/shared/format';
 import styles from './AdminLayout.module.scss';
 
+function readCollapsed() {
+  try { return window.localStorage.getItem(SIDEBAR_PREFERENCE_KEY) === '1'; } catch { return false; }
+}
+
+function Navigation({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
+  return <nav className={styles.nav} aria-label="Admin navigation">
+    {ADMIN_NAVIGATION.map(section => <div key={section.label} className={styles.navSection}>
+      <p className={clsx(styles.navHeading, collapsed && styles.visuallyHidden)}>{section.label}</p>
+      <ul className={styles.navList}>
+        {section.items.map(item => {
+          const Icon = item.icon;
+          const link = <NavLink to={item.to} end={item.end} onClick={onNavigate} aria-label={collapsed ? item.label : undefined}
+            className={({ isActive }) => clsx(styles.navLink, isActive && styles.navLinkActive)}>
+            <Icon className={styles.navIcon} aria-hidden="true" />
+            {!collapsed && <span>{item.label}</span>}
+          </NavLink>;
+          return <li key={item.to}>{collapsed ? <Tooltip content={item.label} side="right" sideOffset={8}>{link}</Tooltip> : link}</li>;
+        })}
+      </ul>
+    </div>)}
+  </nav>;
+}
+
+function AlertsMenu() {
+  const alerts = useAdminAlerts();
+  const data = alerts.data?.data;
+  const attention = data ? data.lowStock + data.outOfStock + data.awaitingFulfillment : 0;
+  const entries = data ? [
+    { to: '/admin/inventory?status=OUT_OF_STOCK', icon: PackageX, label: 'Out of stock', count: data.outOfStock, tone: styles.alertError },
+    { to: '/admin/inventory?status=LOW_STOCK', icon: AlertTriangle, label: 'Low stock', count: data.lowStock, tone: styles.alertWarning },
+    { to: '/admin/orders?status=CONFIRMED&payment=PAID', icon: ClipboardList, label: 'Paid orders awaiting fulfillment', count: data.awaitingFulfillment, tone: styles.alertInfo },
+    { to: '/admin/deliveries?status=OUT_FOR_DELIVERY', icon: Truck, label: 'Out for delivery', count: data.outForDelivery, tone: styles.alertNeutral },
+  ] : [];
+  const label = data ? (attention ? `Alerts: ${attention} items need attention` : 'Alerts: nothing needs attention') : 'Alerts';
+  return <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <button type="button" className={styles.iconButton} aria-label={label}>
+        <Bell aria-hidden="true" />
+        {attention > 0 && <span className={styles.badge} aria-hidden="true">{attention > 99 ? '99+' : attention}</span>}
+      </button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end" sideOffset={8} className={styles.menu}>
+      <DropdownMenuLabel className={styles.menuLabel}>Operational alerts</DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      {alerts.isPending && <p className={styles.menuNote} role="status">Loading alerts…</p>}
+      {alerts.isError && !data && <p className={styles.menuNote} role="alert">Alerts could not be loaded.</p>}
+      {entries.map(entry => <DropdownMenuItem key={entry.label} asChild>
+        <Link to={entry.to} className={styles.alertItem}>
+          <span className={clsx(styles.alertIcon, entry.tone)} aria-hidden="true"><entry.icon /></span>
+          <span className={styles.alertText}>{entry.label}</span>
+          <span className={styles.alertCount}>{formatCount(entry.count)}</span>
+        </Link>
+      </DropdownMenuItem>)}
+      {data && <p className={styles.menuFoot}>Live counts from orders and inventory. Refreshed every minute.</p>}
+    </DropdownMenuContent>
+  </DropdownMenu>;
+}
+
+function ProfileMenu() {
+  const { user, logout } = useAuth();
+  const name = user ? `${user.firstName} ${user.lastName}`.trim() : '';
+  return <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <button type="button" className={styles.profileButton} aria-label={`Account menu for ${name || 'administrator'}`}>
+        <span className={styles.avatar} aria-hidden="true">{initials(name, 'A')}</span>
+        <span className={styles.profileName}>{name || 'Administrator'}</span>
+      </button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end" sideOffset={8} className={styles.menu}>
+      <DropdownMenuLabel className={styles.profileLabel}>
+        <strong>{name || 'Administrator'}</strong>
+        {user?.email && <span>{user.email}</span>}
+        <span className={styles.rolePill}>Administrator</span>
+      </DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem asChild>
+        <a href="/" target="_blank" rel="noopener noreferrer" className={styles.menuLink}><ExternalLink aria-hidden="true" /> View storefront</a>
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem variant="destructive" onSelect={() => { void logout(); }} className={styles.menuLink}>
+        <LogOut aria-hidden="true" /> Sign out
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>;
+}
+
 export function AdminLayout() {
-  return (
-    <div className={styles.shell}>
-      <aside className={styles.sidebar}>
-        <h2 className={styles.brand}>ElectroHub Admin</h2>
-        <nav className={styles.nav} aria-label="Admin navigation">
-          <div>Dashboard</div>
-          <Link to="/admin/products">Products</Link>
-          <Link to="/admin/deliveries">Deliveries</Link>
-          <div>Orders</div>
-          <div>Customers</div>
-        </nav>
+  const location = useLocation();
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(SIDEBAR_PREFERENCE_KEY, collapsed ? '1' : '0'); } catch { /* preference only */ }
+  }, [collapsed]);
+  // A navigation (including back/forward) always closes the mobile drawer.
+  useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
+
+  return <AdminToastProvider>
+    <div className={clsx(styles.shell, collapsed && styles.shellCollapsed)}>
+      <a href="#admin-main" className={styles.skipLink}>Skip to content</a>
+      <header className={styles.header}>
+        <div className={styles.headerStart}>
+          <button type="button" className={clsx(styles.iconButton, styles.menuButton)} onClick={() => setDrawerOpen(true)}
+            aria-label="Open navigation" aria-expanded={drawerOpen} aria-controls="admin-drawer">
+            <Menu aria-hidden="true" />
+          </button>
+          <button type="button" className={clsx(styles.iconButton, styles.collapseButton)} onClick={() => setCollapsed(value => !value)}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-pressed={collapsed}>
+            {collapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
+          </button>
+          <Link to="/admin" className={styles.brand} aria-label="ElectroHub admin — Dashboard">
+            <span className={styles.brandTile} aria-hidden="true"><Zap /></span>
+            <span className={styles.brandText}>ElectroHub</span>
+            <span className={styles.adminPill}>Admin</span>
+          </Link>
+        </div>
+        <div className={styles.headerEnd}>
+          <AlertsMenu />
+          <ProfileMenu />
+        </div>
+      </header>
+
+      <aside className={styles.sidebar} aria-label="Sidebar">
+        <Navigation collapsed={collapsed} />
       </aside>
-      
-      <main className={styles.main}>
+
+      <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <DrawerContent id="admin-drawer" className={styles.drawer}>
+          <DrawerTitle className={styles.drawerTitle}>ElectroHub Admin</DrawerTitle>
+          <DrawerDescription className={styles.visuallyHidden}>Admin console navigation</DrawerDescription>
+          <Navigation onNavigate={() => setDrawerOpen(false)} />
+        </DrawerContent>
+      </Drawer>
+
+      <main id="admin-main" className={styles.main} tabIndex={-1}>
         <Outlet />
       </main>
     </div>
-  );
+  </AdminToastProvider>;
 }

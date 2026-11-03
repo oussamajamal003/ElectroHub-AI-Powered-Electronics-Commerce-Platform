@@ -1,6 +1,6 @@
 @use '@/styles/abstracts' as *;
 
-.page { width: min(100%, 1280px); margin: 0 auto; display: grid; gap: $spacing-6; min-width: 0; }
+.page { width: 100%; display: grid; gap: $spacing-6; min-width: 0; }
 .back { display: inline-flex; align-items: center; gap: $spacing-2; width: fit-content; min-height: 2.75rem; color: $color-text-secondary; text-decoration: none;
   font-size: $font-size-sm; &:hover { color: $color-primary; } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
 .header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: $spacing-4; }
@@ -26,3 +26,7 @@
   th, td { padding: $spacing-3; border-bottom: 1px solid $color-border; text-align: start; vertical-align: top; }
   th { font-weight: $font-weight-semibold; color: $color-text-secondary; white-space: nowrap; }
   td:last-child { white-space: nowrap; } }
+
+.crumbs { display: flex; flex-wrap: wrap; gap: $spacing-2; margin: 0; padding: 0; list-style: none; font-size: $font-size-sm; color: $color-text-secondary;
+  li + li::before { content: '/'; margin-right: $spacing-2; color: $color-text-muted; }
+  a { color: $color-text-secondary; text-decoration: none; &:hover { color: $color-primary; text-decoration: underline; } } }

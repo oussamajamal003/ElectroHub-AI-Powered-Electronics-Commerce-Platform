@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
@@ -10,6 +9,7 @@ import { OrderBadges } from '@/features/orders/OrderBadges';
 import { useAdminDeliveries } from '@/features/delivery/queries';
 import { formatStamp } from '@/features/delivery/presentation';
 import type { AdminDeliveryRow, DeliveryStage } from '@/features/delivery/types';
+import { PageHeader } from '@/features/admin/shared/AdminUi';
 import styles from './AdminDeliveriesPage.module.scss';
 
 const FILTERS: { value: DeliveryStage | 'ALL'; label: string }[] = [
@@ -19,8 +19,19 @@ const FILTERS: { value: DeliveryStage | 'ALL'; label: string }[] = [
 
 /** Task 04.5 minimum admin list: paid, non-cancelled orders and their delivery state. Filtering and paging are validated server-side. */
 export function AdminDeliveriesPage() {
-  const [status, setStatus] = useState<DeliveryStage | 'ALL'>('ALL');
-  const [page, setPage] = useState(1);
+  // Task 05.1: filter and page live in the URL so header alerts and dashboard cards can deep-link (e.g. ?status=OUT_FOR_DELIVERY).
+  const [params, setParams] = useSearchParams();
+  const requested = params.get('status');
+  const status = (FILTERS.some(filter => filter.value === requested && requested !== 'ALL') ? requested : 'ALL') as DeliveryStage | 'ALL';
+  const rawPage = params.get('page');
+  const page = rawPage && /^[1-9]\d{0,2}$/.test(rawPage) ? Number(rawPage) : 1;
+  const setStatus = (value: DeliveryStage | 'ALL') => setParams(value === 'ALL' ? {} : { status: value }, { replace: true });
+  const setPage = (update: (value: number) => number) => setParams(current => {
+    const next = new URLSearchParams(current);
+    const value = update(page);
+    if (value > 1) next.set('page', String(value)); else next.delete('page');
+    return next;
+  }, { replace: true });
   const deliveries = useAdminDeliveries(status, page);
   const rows = deliveries.data?.data ?? [];
   const meta = deliveries.data?.meta;
@@ -37,12 +48,11 @@ export function AdminDeliveriesPage() {
   ];
 
   return <section className={styles.page}>
-    <header className={styles.header}>
-      <div><p className={styles.eyebrow}>FULFILLMENT</p><h1>Deliveries</h1><p>Start tracking and record delivery progress for paid orders.</p></div>
-      {meta && <span className={styles.count} aria-live="polite">{meta.total} {meta.total === 1 ? 'order' : 'orders'}</span>}
-    </header>
+    <PageHeader title="Delivery" crumbs={[{ label: 'Dashboard', to: '/admin' }, { label: 'Delivery' }]}
+      description="Start tracking and record delivery progress for paid orders."
+      actions={meta && <span className={styles.count} aria-live="polite">{meta.total} {meta.total === 1 ? 'order' : 'orders'}</span>} />
     <div className={styles.filters}>
-      <Select label="Order status" options={FILTERS} value={status} onValueChange={value => { setStatus(value as DeliveryStage | 'ALL'); setPage(1); }} />
+      <Select label="Order status" options={FILTERS} value={status} onValueChange={value => setStatus(value as DeliveryStage | 'ALL')} />
     </div>
     {deliveries.isError && <Alert variant="error"><span>{deliveries.data ? 'The list could not be refreshed. Showing the last loaded orders.'
       : 'Deliveries could not be loaded. Check your connection and try again.'}</span>{' '}
