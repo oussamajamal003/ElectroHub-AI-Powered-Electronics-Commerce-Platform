@@ -38,5 +38,6 @@ const pageNumber = (fallback: number, maximum: number) => z.string().regex(/^[1-
 
 export const adminDeliveryListSchema = z.object({
   status: z.enum(['CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED']).optional(),
+  q: z.string().trim().max(100).optional().transform(value => value || undefined),
   page: pageNumber(1, 1000), pageSize: pageNumber(20, 50),
 }).strict();

@@ -2,7 +2,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
-import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { ApiError } from '@/lib/api';
 import { OrderBadges } from '@/features/orders/OrderBadges';
 import { AdminDeliveryUpdatePanel } from '@/features/adminDelivery/AdminDeliveryUpdatePanel';
@@ -11,6 +11,7 @@ import { DeliveryOverviewCard } from '@/features/delivery/components/DeliveryOve
 import { formatStamp, stageOf } from '@/features/delivery/presentation';
 import { useAdminDelivery } from '@/features/delivery/queries';
 import type { AdminDeliveryEvent } from '@/features/delivery/types';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList } from '@/components/ui/Breadcrumb';
 import styles from './AdminDeliveryDetailPage.module.scss';
 
 const EVENT_LABEL: Record<AdminDeliveryEvent['type'], string> = {
@@ -23,10 +24,23 @@ export function AdminDeliveryDetailPage() {
   const { orderReference = '' } = useParams();
   const query = useAdminDelivery(orderReference);
   const snapshot = query.data?.data;
-  const back = <Link className={styles.back} to="/admin/deliveries"><ArrowLeft size={16} aria-hidden="true" />All deliveries</Link>;
+  // Task 05.1: shell breadcrumbs (Dashboard › Delivery › reference) plus the existing back link.
+  const back = <>
+    <Breadcrumb><BreadcrumbList className={styles.crumbs}>
+      <BreadcrumbItem><Link to="/admin">Dashboard</Link></BreadcrumbItem>
+      <BreadcrumbItem><Link to="/admin/deliveries">Delivery</Link></BreadcrumbItem>
+      <BreadcrumbItem><span aria-current="page" className={styles.mono}>{orderReference}</span></BreadcrumbItem>
+    </BreadcrumbList></Breadcrumb>
+    <Link className={styles.back} to="/admin/deliveries"><ArrowLeft size={16} aria-hidden="true" />All deliveries</Link>
+  </>;
 
   if (!snapshot) return <section className={styles.page}>{back}
-    {query.isPending ? <div className={styles.loading}><ElectroHubLoader /></div>
+    {query.isPending ? <div className={styles.layout} aria-busy="true">
+      <span role="status" className={styles.visuallyHidden}>Loading delivery…</span>
+      {/* Same two-column layout as the loaded page: map and timeline on the left, status and actions on the right. */}
+      <div className={styles.card}><Skeleton width="10rem" height="1.25rem" /><Skeleton height="18rem" /><Skeleton width="70%" height="0.875rem" /><Skeleton width="55%" height="0.875rem" /></div>
+      <div className={styles.card}><Skeleton width="8rem" height="1.25rem" /><Skeleton height="2.75rem" /><Skeleton height="2.75rem" /><Skeleton width="60%" height="2.5rem" /></div>
+    </div>
       : <Alert variant="error"><span>{query.error instanceof ApiError && (query.error.status === 404 || query.error.status === 400)
         ? 'This order was not found.' : 'The delivery could not be loaded. Check your connection and try again.'}</span>{' '}
         <Button type="button" size="small" variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}>Retry</Button></Alert>}
@@ -37,6 +51,7 @@ export function AdminDeliveryDetailPage() {
     {back}
     <header className={styles.header}>
       <div className={styles.title}><p className={styles.eyebrow}>DELIVERY</p><h1>{snapshot.orderReference}</h1>
+        <p><Link to={`/admin/orders/${encodeURIComponent(snapshot.orderReference)}`}>View order</Link></p>
         <p>{snapshot.customer.name ?? 'Customer'} · {snapshot.customer.email}</p></div>
       <OrderBadges status={snapshot.status} paymentState={snapshot.paymentState} />
     </header>

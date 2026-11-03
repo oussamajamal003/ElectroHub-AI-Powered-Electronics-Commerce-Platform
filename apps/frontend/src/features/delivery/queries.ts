@@ -39,12 +39,14 @@ export function useDeliverySnapshot(orderReference: string, live = false) {
 
 const adminPath = (orderReference: string) => `/api/admin/orders/${encodeURIComponent(orderReference)}/delivery`;
 
-export function useAdminDeliveries(status: DeliveryStage | 'ALL', page: number, pageSize = 20) {
+export function useAdminDeliveries(status: DeliveryStage | 'ALL', page: number, q = '', pageSize = 20) {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   if (status !== 'ALL') params.set('status', status);
+  if (q) params.set('q', q);
   return useQuery({
-    queryKey: queryKeys.delivery.adminList(status, page),
-    queryFn: ({ signal }) => apiClient<{ data: AdminDeliveryRow[]; meta: { page: number; pageSize: number; total: number; totalPages: number } }>(
+    queryKey: queryKeys.delivery.adminList(status, page, q),
+    queryFn: ({ signal }) => apiClient<{ data: AdminDeliveryRow[]; meta: { page: number; pageSize: number; total: number; totalPages: number;
+      statusCounts?: Partial<Record<DeliveryStage, number>> } }>(
       `/api/admin/deliveries?${params.toString()}`, { signal }),
     staleTime: 15_000, placeholderData: previous => previous,
   });

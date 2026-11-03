@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { AdminLoginPage } from './AdminLoginPage';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { ApiError } from '@/lib/api';
@@ -199,5 +199,24 @@ describe('AdminLoginPage', () => {
     fireEvent.click(submitBtn);
 
     expect(await screen.findByText('Invalid credentials')).toBeInTheDocument();
+  });
+  describe('return path after sign-in', () => {
+    const Landing = () => { const location = useLocation(); return <p>at {location.pathname + location.search}</p>; };
+    const renderSignedIn = (state: unknown) => {
+      (useAuth as any).mockReturnValue({ login: mockLogin, logout: mockLogout, isAuthenticated: true, user: { role: 'ADMIN' }, isInitializing: false });
+      render(<MemoryRouter initialEntries={[{ pathname: '/admin/login', state }]}>
+        <Routes><Route path="/admin/login" element={<AdminLoginPage />} /><Route path="*" element={<Landing />} /></Routes>
+      </MemoryRouter>);
+    };
+
+    it('returns to the deep-linked admin page with its list filters', () => {
+      renderSignedIn({ from: '/admin/orders', search: '?payment=PAID&status=CONFIRMED' });
+      expect(screen.getByText('at /admin/orders?payment=PAID&status=CONFIRMED')).toBeInTheDocument();
+    });
+
+    it('ignores a crafted return path, keeping the dashboard as the destination', () => {
+      renderSignedIn({ from: '//evil.example/admin', search: '?x=1' });
+      expect(screen.getByText('at /admin')).toBeInTheDocument();
+    });
   });
 });

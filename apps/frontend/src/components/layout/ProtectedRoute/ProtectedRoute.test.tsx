@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ProtectedRoute } from './ProtectedRoute';
 import { useAuth } from '@/features/auth/context/AuthContext';
 
@@ -76,6 +76,22 @@ describe('ProtectedRoute', () => {
 
     expect(screen.queryByText('Admin Dashboard Content')).not.toBeInTheDocument();
     expect(screen.getByText('Admin Login Page')).toBeInTheDocument();
+  });
+
+  it('keeps the path and query string of a deep link as separate return-state fields', () => {
+    (useAuth as any).mockReturnValue({ isAuthenticated: false, user: null, isInitializing: false });
+    const Login = () => { const state = useLocation().state as { from?: string; search?: string } | null; return <p>{`${state?.from}|${state?.search}`}</p>; };
+    render(
+      <MemoryRouter initialEntries={['/admin/orders?status=CONFIRMED']}>
+        <Routes>
+          <Route path="/admin/login" element={<Login />} />
+          <Route element={<ProtectedRoute requiredRole="ADMIN" redirectTo="/admin/login" preserveReturnPath />}>
+            <Route path="/admin/orders" element={<div>Orders</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(screen.getByText('/admin/orders|?status=CONFIRMED')).toBeInTheDocument();
   });
 
   it('holds a protected route while a cached identity is still being verified', () => {

@@ -1,10 +1,10 @@
+import { BrandLogo } from '@/components/ui/BrandLogo';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   ShoppingCart,
   Heart,
   LogOut,
-  Zap,
   Search,
   User as UserIcon,
   Menu,
@@ -150,10 +150,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
               </button>
 
               <Link to="/" className={styles.logoLink} aria-label="ElectroHub — Home">
-                <div className={styles.logoIcon} aria-hidden="true">
-                  <Zap size={18} className={styles.zap} />
-                </div>
-                <span className={styles.logoText}>Electro<span className={styles.logoHub}>Hub</span></span>
+                <BrandLogo className={styles.brandLogo} />
               </Link>
             </div>
 

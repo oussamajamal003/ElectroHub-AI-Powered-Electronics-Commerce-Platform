@@ -7,6 +7,7 @@ import { deliveryOrigin, type DeliveryOrigin } from '../config/delivery-map.conf
 import { buildDeliveryMap, MAP_PATH_LIMIT, type CustomerDeliveryMap } from './delivery-map.projection.js';
 import { redactDeliveryForDeletedOwner } from './delivery-privacy.js';
 import { parseOrderReference } from './order.service.js';
+import { orderSearch } from './admin-order.service.js';
 import type { DeliveryUpdateInput } from '../validators/delivery.validator.js';
 import { activeSharedDevSimulationScope } from './delivery-simulation/simulation.config.js';
 
@@ -195,20 +196,25 @@ export class DeliveryService {
   }
 
   /** Paid, non-cancelled orders newest first; payment eligibility is decided from the stored Payment, never from a badge. */
-  async listForAdmin({ status, page, pageSize }: { status?: OrderStatus; page: number; pageSize: number }) {
-    const where: Prisma.OrderWhereInput = { payment: { is: { status: 'SUCCEEDED' } }, status: status ? status : { in: [...FULFILLMENT] } };
-    const [orders, total] = await Promise.all([
+  async listForAdmin({ status, q, page, pageSize }: { status?: OrderStatus; q?: string; page: number; pageSize: number }) {
+    // Status tabs count within the search, so each tab's number matches the rows it selects.
+    const scope: Prisma.OrderWhereInput[] = [{ payment: { is: { status: 'SUCCEEDED' } } }, { status: { in: [...FULFILLMENT] } }];
+    if (q) scope.push(orderSearch(q));
+    const where: Prisma.OrderWhereInput = { AND: status ? [...scope, { status }] : scope };
+    const [orders, total, groups] = await Promise.all([
       this.database.order.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * pageSize, take: pageSize,
-        select: { id: true, status: true, createdAt: true, user: { select: { email: true, firstName: true, lastName: true } },
+        select: { id: true, status: true, createdAt: true, deliveryMethod: true, user: { select: { email: true, firstName: true, lastName: true } },
           delivery: { select: { revision: true, trackingCode: true, updatedAt: true, estimatedAt: true } } } }),
       this.database.order.count({ where }),
+      this.database.order.groupBy({ by: ['status'], where: { AND: scope }, _count: { _all: true } }),
     ]);
+    const statusCounts = Object.fromEntries(groups.map(group => [group.status, group._count._all]));
     return { data: orders.map(order => ({ orderReference: orderReference(order.id), status: order.status, paymentState: 'PAID' as const,
-      createdAt: order.createdAt.toISOString(),
+      createdAt: order.createdAt.toISOString(), deliveryMethod: order.deliveryMethod,
       customer: { name: [order.user.firstName, order.user.lastName].filter(Boolean).join(' ') || null, email: order.user.email },
       delivery: order.delivery ? { revision: order.delivery.revision, trackingReference: order.delivery.trackingCode,
         estimatedAt: iso(order.delivery.estimatedAt), updatedAt: order.delivery.updatedAt.toISOString() } : null })),
-    meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } };
+    meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize), statusCounts } };
   }
 
   /**

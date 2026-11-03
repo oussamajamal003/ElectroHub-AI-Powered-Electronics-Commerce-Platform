@@ -68,8 +68,9 @@ export const Select = forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger
                     value={option.value}
                     disabled={option.disabled}
                     className={clsx(styles.item, square && styles.squareItem)}
+                    title={option.label}
                   >
-                    <SelectPrimitive.ItemText>{option.label}</SelectPrimitive.ItemText>
+                    <SelectPrimitive.ItemText className={styles.itemText}>{option.label}</SelectPrimitive.ItemText>
                     <SelectPrimitive.ItemIndicator className={styles.itemIndicator}>
                       <Check size={16} />
                     </SelectPrimitive.ItemIndicator>

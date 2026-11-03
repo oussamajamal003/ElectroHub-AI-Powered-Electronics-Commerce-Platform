@@ -75,6 +75,7 @@ export interface AdminDeliveryRow {
   status: DeliveryStage;
   paymentState: 'PAID';
   createdAt: string;
+  deliveryMethod: 'STANDARD' | 'EXPRESS' | 'OVERNIGHT';
   customer: { name: string | null; email: string };
   delivery: { revision: number; trackingReference: string | null; estimatedAt: string | null; updatedAt: string } | null;
 }

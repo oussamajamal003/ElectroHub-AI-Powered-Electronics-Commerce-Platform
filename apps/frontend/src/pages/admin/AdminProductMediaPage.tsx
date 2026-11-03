@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ImagePlus, RefreshCw, Star, Trash2, Upload } from 'lucide-react';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
-import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { Input } from '@/components/ui/Input';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
 import { ProductImage } from '@/components/ui/ProductImage';
@@ -199,7 +199,14 @@ export function AdminProductMediaPage() {
     </section>}
     {productQuery.isError && <Alert variant="error">This product could not be found. Return to the catalog and select it again.</Alert>}
     {imagesQuery.isError && <Alert variant="error">Product photos could not be loaded. <Button variant="link" onClick={() => void imagesQuery.refetch()}>Try again</Button></Alert>}
-    {imagesQuery.isPending && images.length === 0 ? <div className={styles.loading}><ElectroHubLoader /></div> : <>
+    {/* First load: photo-card skeletons in the real grid (the full-page loader is only for a browser reload of the whole app). */}
+    {imagesQuery.isPending && images.length === 0 ? <div className={styles.skeletonArea} aria-busy="true">
+      <span role="status" className={styles.visuallyHidden}>Loading product photos…</span>
+      <Skeleton height="84px" />
+      <ul className={styles.grid} aria-hidden="true">{[0, 1, 2].map(key => <li key={key} className={styles.card}>
+        <Skeleton className={styles.skeletonPreview} /><div className={styles.cardBody}><Skeleton width="60%" height="0.875rem" /><Skeleton width="85%" height="2.5rem" /></div>
+      </li>)}</ul>
+    </div> : <>
       {!images.length && !imagesQuery.isError && <div className={styles.empty}>
         <span><ImagePlus size={25} aria-hidden="true" /></span><h2>No product photos yet</h2><p>Add a JPEG, PNG or WebP image to publish the first product photo.</p><Button variant="outline" onClick={() => picker.current?.click()} disabled={!canAddPhotos}><Upload size={17} /> Choose photos</Button>
       </div>}

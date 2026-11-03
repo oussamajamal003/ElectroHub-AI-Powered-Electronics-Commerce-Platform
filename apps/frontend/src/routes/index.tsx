@@ -8,6 +8,7 @@ import { CartProvider } from '@/features/cart/CartProvider';
 import { CustomerLayout } from '@/layouts/CustomerLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { AdminLoginPage } from '@/pages/admin/AdminLoginPage';
+import { AdminPageSkeleton } from '@/features/admin/shared/AdminUi';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute/ProtectedRoute';
 import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
 import { CheckoutDraftSession } from '@/features/checkout/CheckoutDraftSession';
@@ -45,12 +46,23 @@ const ConfirmationPage = lazy(() => import('@/features/checkout/ConfirmationPage
 const PaymentRetryPage = lazy(() => import('@/features/checkout/PaymentRetryPage').then(module => ({ default: module.PaymentRetryPage })));
 const OrderDetailsPage = lazy(() => import('@/features/orders/OrderDetailsPage').then(module => ({ default: module.OrderDetailsPage })));
 const PaymentStatusPage = lazy(() => import('@/features/checkout/PaymentStatusPage').then(module => ({ default: module.PaymentStatusPage })));
-const AdminProductsPage = lazy(() => import('@/pages/admin/AdminProductsPage').then(module => ({ default: module.AdminProductsPage })));
+const AdminDashboardPage = lazy(() => import('@/pages/admin/AdminDashboardPage').then(module => ({ default: module.AdminDashboardPage })));
+const AdminCatalogProductsPage = lazy(() => import('@/pages/admin/AdminCatalogProductsPage').then(module => ({ default: module.AdminCatalogProductsPage })));
+const AdminProductFormPage = lazy(() => import('@/pages/admin/AdminProductFormPage').then(module => ({ default: module.AdminProductFormPage })));
+const AdminCategoriesPage = lazy(() => import('@/pages/admin/AdminCategoriesPage').then(module => ({ default: module.AdminCategoriesPage })));
+const AdminInventoryPage = lazy(() => import('@/pages/admin/AdminInventoryPage').then(module => ({ default: module.AdminInventoryPage })));
+const AdminOrdersPage = lazy(() => import('@/pages/admin/AdminOrdersPage').then(module => ({ default: module.AdminOrdersPage })));
+const AdminOrderDetailPage = lazy(() => import('@/pages/admin/AdminOrderDetailPage').then(module => ({ default: module.AdminOrderDetailPage })));
+const AdminCustomersPage = lazy(() => import('@/pages/admin/AdminCustomersPage').then(module => ({ default: module.AdminCustomersPage })));
+const AdminCustomerDetailPage = lazy(() => import('@/pages/admin/AdminCustomerDetailPage').then(module => ({ default: module.AdminCustomerDetailPage })));
+const AdminNotFoundPage = lazy(() => import('@/pages/admin/AdminNotFoundPage').then(module => ({ default: module.AdminNotFoundPage })));
 const AdminProductMediaPage = lazy(() => import('@/pages/admin/AdminProductMediaPage').then(module => ({ default: module.AdminProductMediaPage })));
 const DeliveryTrackingPage = lazy(() => import('@/features/delivery/DeliveryTrackingPage').then(module => ({ default: module.DeliveryTrackingPage })));
 const AdminDeliveriesPage = lazy(() => import('@/pages/admin/AdminDeliveriesPage').then(module => ({ default: module.AdminDeliveriesPage })));
 const AdminDeliveryDetailPage = lazy(() => import('@/pages/admin/AdminDeliveryDetailPage').then(module => ({ default: module.AdminDeliveryDetailPage })));
 const route = (content: React.ReactNode) => <Suspense fallback={<ElectroHubLoader page />}>{content}</Suspense>;
+// Inside the admin shell a page's code chunk loads behind a page-shaped skeleton; the full-page loader is kept for a whole-app reload.
+const adminRoute = (content: React.ReactNode) => <Suspense fallback={<AdminPageSkeleton />}>{content}</Suspense>;
 
 export function AppRoutes() {
   return (
@@ -95,13 +107,23 @@ export function AppRoutes() {
         <Route path="/admin/login" element={<AdminLoginPage />} />
 
         {/* Admin Protected Routes */}
-        <Route element={<ProtectedRoute requiredRole="ADMIN" redirectTo="/admin/login" />}>
+        {/* Task 05.1: deep links survive sign-in (preserveReturnPath); signing out returns to the admin login, not the storefront. */}
+        <Route element={<ProtectedRoute requiredRole="ADMIN" redirectTo="/admin/login" preserveReturnPath logoutRedirectTo="/admin/login" />}>
           <Route element={<AdminLayout />}>
-            <Route path="/admin" element={<div>Admin Dashboard</div>} />
-            <Route path="/admin/products" element={route(<AdminProductsPage />)} />
-            <Route path="/admin/products/:productId/media" element={route(<AdminProductMediaPage />)} />
-            <Route path="/admin/deliveries" element={route(<AdminDeliveriesPage />)} />
-            <Route path="/admin/deliveries/:orderReference" element={route(<AdminDeliveryDetailPage />)} />
+            <Route path="/admin" element={adminRoute(<AdminDashboardPage />)} />
+            <Route path="/admin/products" element={adminRoute(<AdminCatalogProductsPage />)} />
+            <Route path="/admin/products/new" element={adminRoute(<AdminProductFormPage />)} />
+            <Route path="/admin/products/:productId/edit" element={adminRoute(<AdminProductFormPage />)} />
+            <Route path="/admin/products/:productId/media" element={adminRoute(<AdminProductMediaPage />)} />
+            <Route path="/admin/categories" element={adminRoute(<AdminCategoriesPage />)} />
+            <Route path="/admin/inventory" element={adminRoute(<AdminInventoryPage />)} />
+            <Route path="/admin/orders" element={adminRoute(<AdminOrdersPage />)} />
+            <Route path="/admin/orders/:orderReference" element={adminRoute(<AdminOrderDetailPage />)} />
+            <Route path="/admin/customers" element={adminRoute(<AdminCustomersPage />)} />
+            <Route path="/admin/customers/:userId" element={adminRoute(<AdminCustomerDetailPage />)} />
+            <Route path="/admin/deliveries" element={adminRoute(<AdminDeliveriesPage />)} />
+            <Route path="/admin/deliveries/:orderReference" element={adminRoute(<AdminDeliveryDetailPage />)} />
+            <Route path="/admin/*" element={adminRoute(<AdminNotFoundPage />)} />
           </Route>
         </Route>
 

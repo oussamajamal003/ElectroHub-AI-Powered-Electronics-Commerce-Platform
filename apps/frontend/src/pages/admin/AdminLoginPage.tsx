@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
+import { BrandLogo } from '@/components/ui/BrandLogo';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -13,6 +14,14 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function AdminLoginPage() {
   const { login, logout, isAuthenticated, user, isInitializing } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // A deep link that required sign-in returns to that admin page; anything else (or a crafted value) goes to the dashboard.
+  const { from, search } = (location.state as { from?: unknown; search?: unknown } | null) ?? {};
+  const returnPath = typeof from === 'string' && /^\/admin(\/[A-Za-z0-9._~%-]+)*\/?$/.test(from) && !from.startsWith('/admin/login') ? from : null;
+  // List filters live in the query string; it is only ever applied as the search part of an already-validated /admin path.
+  const destination = returnPath
+    ? { pathname: returnPath, search: typeof search === 'string' && search.startsWith('?') && search.length <= 500 ? search : '' }
+    : '/admin';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -25,7 +34,7 @@ export function AdminLoginPage() {
 
   // If already authenticated as admin, redirect to dashboard
   if (!isInitializing && isAuthenticated && user?.role === 'ADMIN') {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to={destination} replace />;
   }
 
   const validateEmailField = (val: string) => {
@@ -104,7 +113,7 @@ export function AdminLoginPage() {
         setError('Access denied. Administrator privileges required.');
         return;
       }
-      navigate('/admin', { replace: true });
+      navigate(destination, { replace: true });
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -120,7 +129,7 @@ export function AdminLoginPage() {
     <div className={styles.container}>
       <div className={styles.loginCard}>
         <div className={styles.header}>
-          <div className={styles.brand}>ElectroHub</div>
+          <div className={styles.brand}><BrandLogo size="large" /><span className={styles.visuallyHidden}>ElectroHub</span></div>
           <h1 className={styles.title}>Sign In to Admin</h1>
           <p className={styles.description}>Admin Portal</p>
         </div>

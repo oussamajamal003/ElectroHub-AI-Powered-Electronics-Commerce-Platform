@@ -31,6 +31,8 @@ export interface TooltipProps extends React.ComponentPropsWithoutRef<typeof Tool
   content: React.ReactNode;
   children: React.ReactNode;
   sideOffset?: number;
+  /** Preferred side of the trigger (Radix flips it when there is no room). */
+  side?: React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>['side'];
   contentClassName?: string;
   delayDuration?: number;
 }
@@ -39,6 +41,7 @@ export function Tooltip({
   content,
   children,
   sideOffset = 4,
+  side,
   contentClassName,
   delayDuration,
   ...props
@@ -49,7 +52,7 @@ export function Tooltip({
         <TooltipTrigger asChild>
           {children}
         </TooltipTrigger>
-        <TooltipContent sideOffset={sideOffset} className={contentClassName}>
+        <TooltipContent side={side} sideOffset={sideOffset} className={contentClassName}>
           {content}
         </TooltipContent>
       </TooltipRoot>

@@ -109,3 +109,55 @@
   font-family: $font-family-base;
   font-size: $font-size-sm;
 }
+
+.caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.sortButton {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-1;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+
+  &:hover { color: $color-text-primary; }
+
+  &:focus-visible {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
+}
+
+.sortIcon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.sortIdle { opacity: 0.45; }
+
+.skeleton {
+  display: block;
+  height: 0.875rem;
+  width: 70%;
+  background: linear-gradient(90deg, $color-surface 0%, $color-border 50%, $color-surface 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
