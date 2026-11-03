@@ -27,6 +27,14 @@ Still NOT VERIFIED after this round:
 - **F03 live fulfilment step on DEV** (unchanged; see the row).
 - **Access token after sign-out.** Sign-out revokes the refresh token (refresh → 401) and clears the console, but the last access token stays valid until it expires (15 min, stateless JWT). This is the existing auth design, not a 05.1 change.
 
+### Architect re-review of `4c83f53`: history after save (2026-11-03)
+
+- **Reproduced (real Chromium, disposable stack `loopback:50182/electrohub_disposable_delivery_qa_14d41e20`, check `05.1-A2` on `4c83f53`):** open a QA product from `/admin/products`, edit, save (PATCH 200, value persisted), press Back once → **FAIL**, still on `/admin/products/:id/edit`.
+- **Root cause:** `ProductForm` is keyed by `product.updatedAt`, so each save remounts it. The old guard instance had pushed a duplicate history entry and unmounted without removing it; the new instance did not know that entry was a guard entry, so Back only moved onto the identical original entry.
+- **Fix (`useUnsavedChangesGuard.ts`):** the guard entry carries a marker in `history.state`. Whenever the form is clean (after a save, a revert, or a remount from a newer version), the guard removes a marked entry with one Back before anything else runs; `leave()` chains with a removal already in flight instead of starting a second Back. A Forward onto a marked entry is skipped once the form is clean. Unmarked (real) entries are never touched, and no `history.go(n)` is used.
+- **Regression tests:** `useUnsavedChangesGuard.test.tsx` (4 tests: one save → one Back; two saves → one Back; edit after save → Back asks, Cancel stays, Leave exits once; clean form → no prompt). 3 of the 4 fail on the old guard; all pass now.
+- **After the fix (same stack):** Chromium closure run **7/7 passed**, including `05.1-A2` (one save, two saves, edit after save, clean form: all PASS) and the existing guard check `05.1-A` (sidebar, breadcrumb, Discard, Back, Forward, close, one-step Leave, save). Frontend admin tests **75/75** (15 files); `tsc -b`, eslint and `npm run build` exit 0; `git diff --check` clean. The stack was stopped afterwards.
+
 ## 1. Commands actually executed (before PR #44)
 
 | Check | Command | Result |
