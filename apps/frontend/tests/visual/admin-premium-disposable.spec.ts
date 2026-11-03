@@ -151,14 +151,14 @@ test('UX-03: large bold titles on every admin page', async ({ page, request }) =
     await expect(h1).toBeVisible();
     const style = await h1.evaluate(element => { const computed = getComputedStyle(element); return { size: parseFloat(computed.fontSize), weight: Number(computed.fontWeight) }; });
     sizes.push(`${route} ${style.size}px/${style.weight}`);
-    ok &&= style.size >= 32 && style.weight >= 700;
+    ok &&= style.size >= 40 && style.weight >= 700;
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/admin/products');
   const mobile = await page.locator('#admin-main h1').evaluate(element => parseFloat(getComputedStyle(element).fontSize));
   await shot(page, 'ux03-title-390');
-  record('UX-03', 'Titles ≥32px bold at 1440, smaller on phones', `${sizes.join('; ')}; 390px: ${mobile}px`, 'ux03-title-390.png', ok && mobile < 32 ? 'PASS' : 'FAIL');
-  expect(ok && mobile < 32).toBe(true);
+  record('UX-03', 'Titles match the storefront (clamp(2rem, 3vw, 3.5rem), bold): ≥40px at 1440, smaller on phones', `${sizes.join('; ')}; 390px: ${mobile}px`, 'ux03-title-390.png', ok && mobile < 40 ? 'PASS' : 'FAIL');
+  expect(ok && mobile < 40).toBe(true);
 });
 
 test('UX-04/05/22: dropdowns readable at 390/768/1440/1920, long names on one line', async ({ page, request }) => {
@@ -373,10 +373,8 @@ test('UX-12/13/14/19: skeletons instead of spinners; media button not clipped', 
 
   await delay('**/api/admin/catalog/options', 2500);
   await page.goto('/admin/products/new');
-  const loadingPicker = await page.getByRole('button', { name: /^Category/ }).innerText();
-  const pickerDisabled = await page.getByRole('button', { name: /^Category/ }).isDisabled();
-  const submitDisabled = await page.getByRole('button', { name: 'Create draft' }).isDisabled();
-  const typingWorks = await page.getByLabel(/Product name/).isEditable();
+  await expect(page.locator('[aria-busy="true"]').first()).toBeVisible();
+  const newSkeleton = { inputs: await page.locator('#admin-main input').count(), status: await page.getByRole('status').first().innerText() };
   await shot(page, 'ux13-new-options-loading');
   await page.unrouteAll({ behavior: 'ignoreErrors' });
 
@@ -401,12 +399,12 @@ test('UX-12/13/14/19: skeletons instead of spinners; media button not clipped', 
   await shot(page, 'ux19-media-empty');
 
   const ok12 = editSkeleton.inputs === 0 && editSkeleton.loader === 0;
-  const ok13 = /Loading categories/.test(loadingPicker) && pickerDisabled && submitDisabled && typingWorks;
+  const ok13 = newSkeleton.inputs === 0 && /Loading the product form/.test(newSkeleton.status);
   const ok14 = deliverySkeleton.rows === 8 && deliverySkeleton.header > 0 && deliverySkeleton.loader === 0 && deliveryError;
   const ok19 = !clip.clipped;
   record('UX-12', 'Edit product: form-shaped skeleton, no editable inputs, no spinner', `inputs=${editSkeleton.inputs}, loader=${editSkeleton.loader}`, 'ux12-edit-skeleton.png', ok12 ? 'PASS' : 'FAIL');
-  record('UX-13', 'Add product: form usable, pickers disabled with loading text, submit blocked until options load',
-    `picker="${loadingPicker}", picker disabled=${pickerDisabled}, submit disabled=${submitDisabled}, name editable=${typingWorks}`, 'ux13-new-options-loading.png', ok13 ? 'PASS' : 'FAIL');
+  record('UX-13', 'Add product: same form skeleton as Edit until categories/brands load', `inputs=${newSkeleton.inputs}, status="${newSkeleton.status}"`,
+    'ux13-new-options-loading.png', ok13 ? 'PASS' : 'FAIL');
   record('UX-14', 'Delivery: table skeleton (8 rows), no spinner; honest error state', `rows=${deliverySkeleton.rows}, header cells=${deliverySkeleton.header}, loader=${deliverySkeleton.loader}, error row=${deliveryError}`,
     'ux14-delivery-skeleton.png', ok14 ? 'PASS' : 'FAIL');
   record('UX-19', 'Media empty state: Choose photos fully visible', `button ${clip.width}px wide, clipped=${clip.clipped}, inner radius=${clip.radius}`, 'ux19-media-empty.png', ok19 ? 'PASS' : 'FAIL');
@@ -524,4 +522,40 @@ test('UX-22: no horizontal page scroll on the main admin pages at 390/768/1440/1
   }
   record('UX-22', 'Pages fit 390/768/1440/1920 without horizontal scroll', notes.length ? notes.join('; ') : '7 routes × 4 viewports, no overflow', 'ux22-dashboard-*.png', notes.length ? 'FAIL' : 'PASS');
   expect(notes).toEqual([]);
+});
+
+test('PERF: page and filter switching under 300 ms API latency (before/after comparison)', async ({ page, request }) => {
+  const { categories, brands } = await setup(request);
+  const admin = await token(request, accounts!.admin);
+  const drafts = (await (await call(request, admin, 'get', '/api/admin/catalog/products?status=INACTIVE')).json() as { meta: { total: number } }).meta.total;
+  for (let index = drafts; index < 2; index += 1) {
+    expect((await call(request, admin, 'post', '/api/admin/catalog/products', { name: `QA perf draft ${index}`, sku: `QA-PERF-DRAFT-${Date.now()}-${index}`,
+      categoryId: categories.Audio, brandId: brands.Sony, price: '10.00', status: 'INACTIVE', inventory: { quantity: 1, lowStockAt: 0 } })).status()).toBe(201);
+  }
+  await login(page);
+  // Same latency on every API call in both runs, standing in for the round trips to the shared DEV database region.
+  await page.route('**/api/**', async route => { await new Promise(resolve => setTimeout(resolve, 300)); await route.continue().catch(() => undefined); });
+  let requests = 0;
+  page.on('request', r => { if (r.url().includes('/api/admin/catalog/products?')) requests += 1; });
+  await page.goto('/admin/products');
+  const summary = page.locator('nav[aria-label="Product pages"] [aria-live="polite"]');
+  await expect(summary).toContainText('Showing 1–20');
+  // The range summary is rendered from the data on screen, so it changes only when the new page/filter's real rows are shown.
+  const time = async (label: string, act: () => Promise<void>, expected: RegExp) => {
+    const before = requests;
+    const start = Date.now();
+    await act();
+    await expect(summary).toHaveText(expected, { timeout: 15_000 });
+    return `${label} ${Date.now() - start}ms (${requests - before} req)`;
+  };
+  await page.waitForTimeout(1500); // let any background prefetch finish before timing (same in both runs)
+  const steps = [
+    await time('page1→2', () => page.getByRole('button', { name: 'Next' }).click(), /Showing 21–/),
+    await time('page2→1', () => page.getByRole('button', { name: 'Previous' }).click(), /Showing 1–20 /),
+    await time('page1→2 again', () => page.getByRole('button', { name: 'Next' }).click(), /Showing 21–/),
+    await time('chip Unpublished', () => page.getByRole('button', { name: 'Unpublished', exact: true }).click(), /Showing 1–[1-9] of [1-9]$/),
+    await time('chip All', () => page.getByRole('button', { name: 'All', exact: true }).click(), /Showing 1–20 /),
+    await time('chip Unpublished again', () => page.getByRole('button', { name: 'Unpublished', exact: true }).click(), /Showing 1–[1-9] of [1-9]$/),
+  ];
+  record('PERF', 'Products list switching under 300 ms API latency', steps.join('; '), 'timings', 'PASS');
 });

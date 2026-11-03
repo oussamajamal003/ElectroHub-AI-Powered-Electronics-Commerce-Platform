@@ -1,6 +1,7 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
-import { adminKeys, queryString, type ItemResponse, type ListResponse, type Money } from '../shared/api';
+import { useAdminList } from '../shared/useAdminList';
+import { adminKeys, type ItemResponse, type ListResponse, type Money } from '../shared/api';
 import type { OrderStatus, PaymentState } from '../orders/api';
 
 export type CustomerStatus = 'ACTIVE' | 'INACTIVE' | 'DELETED';
@@ -16,12 +17,7 @@ export interface CustomerSummary { total: number; active: number; paidRevenue: M
 export interface CustomerListParams { q?: string; page: number; status?: string; sort: string; order: string }
 
 export function useAdminCustomers(params: CustomerListParams) {
-  const search = queryString({ ...params, pageSize: 20 });
-  return useQuery({
-    queryKey: adminKeys.customerList(search),
-    queryFn: ({ signal }) => apiClient<ListResponse<AdminCustomerRow, { summary: CustomerSummary }>>(`/api/admin/customers${search}`, { signal }),
-    placeholderData: keepPreviousData,
-  });
+  return useAdminList<ListResponse<AdminCustomerRow, { summary: CustomerSummary }>>('/api/admin/customers', adminKeys.customerList, params);
 }
 
 export function useAdminCustomer(userId: string | undefined) {

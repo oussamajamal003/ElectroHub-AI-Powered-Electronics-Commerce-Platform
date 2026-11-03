@@ -1,6 +1,7 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ApiError, apiClient } from '@/lib/api';
-import { adminKeys, errorCode, queryString, type ItemResponse, type ListResponse } from '../shared/api';
+import { useAdminList } from '../shared/useAdminList';
+import { adminKeys, errorCode, type ItemResponse, type ListResponse } from '../shared/api';
 import type { ProductStatus, StockStatus } from '../products/api';
 
 export interface InventoryRow {
@@ -13,12 +14,7 @@ export interface InventoryListParams { q?: string; page: number; status?: string
 export interface InventoryAdjustment { operation: 'RESTOCK' | 'SET'; quantity: number; expectedQuantity: number | null; reason?: string }
 
 export function useAdminInventory(params: InventoryListParams) {
-  const search = queryString({ ...params, pageSize: 20 });
-  return useQuery({
-    queryKey: adminKeys.inventoryList(search),
-    queryFn: ({ signal }) => apiClient<ListResponse<InventoryRow, { summary: InventorySummary }>>(`/api/admin/inventory${search}`, { signal }),
-    placeholderData: keepPreviousData,
-  });
+  return useAdminList<ListResponse<InventoryRow, { summary: InventorySummary }>>('/api/admin/inventory', adminKeys.inventoryList, params);
 }
 
 /** The 409 body carries the row as it is now; screens adopt it so the admin re-decides against real numbers (no blind retry). */

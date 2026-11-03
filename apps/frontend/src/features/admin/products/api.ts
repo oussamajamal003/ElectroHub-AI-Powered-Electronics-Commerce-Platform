@@ -1,6 +1,7 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
-import { adminKeys, queryString, type ItemResponse, type ListResponse } from '../shared/api';
+import { useAdminList } from '../shared/useAdminList';
+import { adminKeys, type ItemResponse, type ListResponse } from '../shared/api';
 
 export type ProductStatus = 'ACTIVE' | 'INACTIVE';
 export type StockStatus = 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
@@ -33,12 +34,7 @@ export interface ProductCreate extends ProductFields { status: ProductStatus; in
 export interface ProductListParams { q?: string; page: number; categoryId?: string; status?: string; stock?: string; sort: string; order: string }
 
 export function useAdminProducts(params: ProductListParams) {
-  const search = queryString({ ...params, pageSize: 20 });
-  return useQuery({
-    queryKey: adminKeys.productList(search),
-    queryFn: ({ signal }) => apiClient<ListResponse<AdminProductRow>>(`/api/admin/catalog/products${search}`, { signal }),
-    placeholderData: keepPreviousData,
-  });
+  return useAdminList<ListResponse<AdminProductRow>>('/api/admin/catalog/products', adminKeys.productList, params);
 }
 
 export function useAdminProduct(productId: string | undefined) {

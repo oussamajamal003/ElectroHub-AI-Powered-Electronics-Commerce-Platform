@@ -1,6 +1,7 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
-import { adminKeys, queryString, type ItemResponse, type ListResponse } from '../shared/api';
+import { useAdminList } from '../shared/useAdminList';
+import { adminKeys, type ItemResponse, type ListResponse } from '../shared/api';
 
 export type OrderStatus = 'AWAITING_CAPTURE' | 'CONFIRMED' | 'PREPARING' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
 export type PaymentState = 'PAID' | 'PENDING' | 'FAILED' | 'REFUNDED' | 'UNPROCESSED';
@@ -25,12 +26,7 @@ export interface AdminOrderDetail {
 export interface OrderListParams { q?: string; page: number; status?: string; payment?: string; customerId?: string; sort: string; order: string }
 
 export function useAdminOrders(params: OrderListParams) {
-  const search = queryString({ ...params, pageSize: 20 });
-  return useQuery({
-    queryKey: adminKeys.orderList(search),
-    queryFn: ({ signal }) => apiClient<ListResponse<AdminOrderRow, { statusCounts: Partial<Record<OrderStatus, number>> }>>(`/api/admin/orders${search}`, { signal }),
-    placeholderData: keepPreviousData,
-  });
+  return useAdminList<ListResponse<AdminOrderRow, { statusCounts: Partial<Record<OrderStatus, number>> }>>('/api/admin/orders', adminKeys.orderList, params);
 }
 
 export function useAdminOrder(orderReference: string | undefined) {
