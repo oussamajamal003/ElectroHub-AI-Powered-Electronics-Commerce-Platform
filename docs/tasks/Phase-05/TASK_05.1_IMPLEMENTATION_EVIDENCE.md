@@ -70,7 +70,7 @@ Full-suite notes (not caused by 05.1):
 | Create Product / Edit product | `/admin/products/new`, `/:id/edit` | 1440-product-new(-errors), 1440-product-edit-qa | Drafts by default. Specifications editor. Stock is changed only through Inventory once the product exists. |
 | Delete product | Archive confirmation | Storybook `ArchiveConfirmation` | Archive or reactivate replaces delete. |
 | Categories page / Add category / Edit category | `/admin/categories` | 1440-categories(-qa) | New categories start hidden. Delete only when the category is empty; otherwise hide. |
-| Inventory page(_page) | `/admin/inventory` | *-inventory, 1440-inventory-adjust | The adjust dialog checks the expected quantity. A "Not tracked" card was added. |
+| Inventory page(_page) | `/admin/inventory` | *-inventory, 1440-inventory-adjust | The adjust dialog checks the expected quantity. A "Not tracked" card and filter were added; each stock filter lists exactly the rows its count counts (PR #44 review fix). |
 | Orders page | `/admin/orders` | *-orders | Payment is a separate read-only column with its own filter. |
 | Order details page | `/admin/orders/:ref` | *-orders-ORD-2069D6ED, 1440-order-detail | Figma's **Mark as Shipped / Mark as Delivered / Cancel Order** buttons are not shipped. Fulfillment steps use the existing 04.5 delivery API (next allowed step only). There is no cancel or refund, and payment is read-only. |
 | Customers page | `/admin/customers` (+ detail) | *-customers(-16113428…) | Detail page with paid spend, orders link, and deactivate/reactivate with confirmation. |
@@ -117,7 +117,7 @@ Shell-wide differences:
 | E04 | PASS | Checkout and compensation still use the unchanged `InventoryService`; no change to those paths. |
 | E05 | PASS | Status is derived by `InventoryService`. The threshold form is unit-covered; **the threshold was not changed live.** |
 | E06 | NOT VERIFIED | The dialog keyboard flow is verified at 1440. The inventory page is verified at 200%, but the dialog itself was not captured at 200%. |
-| F01 | PASS | Live list, status chips with counts, separate payment filter; server pagination ("Page 1 of 4"). |
+| F01 | PASS | Live list, status chips with counts, separate payment filter; server pagination ("Page 1 of 4"). Since the PR #44 review fix, chip counts respect the search, payment and customer filters (unit). |
 | F02 | PASS | Live detail: item snapshot, sanitized payment (status, amount, method), customer, address. |
 | F03 | PASS (component) / NOT VERIFIED (live) | Steps call the existing 04.5 delivery API, whose eligibility and revision tests are unchanged. `AdminOrderDetailPage.test.tsx` covers confirm-then-start, one allowed step with the current revision, reload on 409, no action for cancelled/unpaid/delivered orders and the payment-blocked explanation. No live transition was run, to avoid mutating real DEV orders. |
 | F04 | PASS | Live: no mark-paid, refund or cancel buttons (spec asserts none exist). |
