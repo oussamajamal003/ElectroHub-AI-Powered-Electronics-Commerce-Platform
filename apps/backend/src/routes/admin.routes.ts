@@ -27,6 +27,7 @@ router.post('/admin/catalog/products', writes, c.createProduct);
 router.get('/admin/catalog/products/:id', c.getProduct);
 router.patch('/admin/catalog/products/:id', writes, c.updateProduct);
 router.patch('/admin/catalog/products/:id/status', writes, c.setProductStatus);
+router.delete('/admin/catalog/products/:id', writes, c.deleteProduct);
 
 router.get('/admin/categories', c.listCategories);
 router.post('/admin/categories', writes, c.createCategory);

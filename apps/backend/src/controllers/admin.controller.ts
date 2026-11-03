@@ -61,6 +61,7 @@ export const adminController = {
     const body = parse(statusChangeSchema, req.body);
     return { data: await catalog.setProductStatus(actor(req), id(req), body.status, body.expectedUpdatedAt) };
   }),
+  deleteProduct: action(async (req, res) => { noQuery(req); await catalog.deleteProduct(actor(req), id(req)); res.status(204).end(); }),
   // Categories
   listCategories: action(async req => catalog.listCategories(parse(categoryListSchema, req.query))),
   createCategory: action(async (req, res) => { res.status(201); return { data: await catalog.createCategory(actor(req), parse(categoryCreateSchema, req.body)) }; }),

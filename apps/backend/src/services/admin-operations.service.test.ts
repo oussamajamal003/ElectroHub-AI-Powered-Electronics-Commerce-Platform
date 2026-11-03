@@ -4,7 +4,7 @@ import { AdminInventoryService, stockWhere } from './admin-inventory.service.js'
 import { AdminOrderService } from './admin-order.service.js';
 import { AdminDashboardService } from './admin-dashboard.service.js';
 import { AdminCustomerService } from './admin-customer.service.js';
-import { AdminCatalogService } from './admin-catalog.service.js';
+import { AdminCatalogService, deletion } from './admin-catalog.service.js';
 import type { InventoryService } from './inventory.service.js';
 
 const publisher = vi.hoisted(() => ({ disconnectUser: vi.fn() }));
@@ -20,10 +20,11 @@ const stamp = new Date('2026-11-01T10:00:00.000Z');
 /** A Prisma double whose interactive transaction runs the callback against the same mocks (the row lock is a $queryRaw call). */
 function database() {
   const db = {
-    product: { findUnique: vi.fn(), updateMany: vi.fn(), count: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+    product: { findUnique: vi.fn(), updateMany: vi.fn(), count: vi.fn(), findMany: vi.fn().mockResolvedValue([]), delete: vi.fn(), groupBy: vi.fn().mockResolvedValue([]) },
+    brand: { findMany: vi.fn().mockResolvedValue([]) },
     payment: { groupBy: vi.fn().mockResolvedValue([]) },
     inventory: { create: vi.fn(), update: vi.fn() },
-    category: { delete: vi.fn(), create: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn() },
+    category: { delete: vi.fn(), create: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
     productSpecification: { deleteMany: vi.fn(), createMany: vi.fn() },
     user: { findFirst: vi.fn(), update: vi.fn(), findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) },
     refreshToken: { updateMany: vi.fn() },
@@ -223,5 +224,63 @@ describe('AdminCatalogService safety rules', () => {
     await service.deleteCategory(ADMIN, PRODUCT);
     expect(db.category.delete).toHaveBeenCalledWith({ where: { id: PRODUCT } });
     expect(String(db.$queryRaw.mock.calls[0]![0].join(''))).toContain('FOR UPDATE');
+  });
+});
+
+describe('AdminCatalogService permanent product deletion', () => {
+  const none = { images: 0, orderItems: 0, paymentAttemptItems: 0, cartItems: 0, wishItems: 0, reviews: 0, interactions: 0, recommendationEvents: 0 };
+  let db: ReturnType<typeof database>;
+  let service: AdminCatalogService;
+  beforeEach(() => { db = database(); service = new AdminCatalogService(db as unknown as PrismaClient); });
+
+  it('allows only an unpublished product with no history of any kind', () => {
+    expect(deletion('INACTIVE', none)).toEqual({ deletable: true, deleteBlocker: null });
+    expect(deletion('ACTIVE', none).deletable).toBe(false);
+    for (const key of Object.keys(none) as (keyof typeof none)[]) {
+      expect(deletion('INACTIVE', { ...none, [key]: 1 }).deletable, key).toBe(false);
+    }
+    expect(deletion('INACTIVE', { ...none, orderItems: 3 }).deleteBlocker).toContain('orders');
+  });
+
+  it('deletes an eligible draft under the row lock', async () => {
+    db.$queryRaw.mockResolvedValue([{ id: PRODUCT }]);
+    db.product.findUnique.mockResolvedValue({ status: 'INACTIVE', _count: none });
+    await service.deleteProduct(ADMIN, PRODUCT);
+    expect(String(db.$queryRaw.mock.calls[0]![0].join(''))).toContain('FOR UPDATE');
+    expect(String(db.$queryRaw.mock.calls[0]![0].join(''))).toContain('"isTestFixture" = false');
+    expect(db.product.delete).toHaveBeenCalledWith({ where: { id: PRODUCT } });
+  });
+
+  it('refuses a product that was ever ordered, and a published one, with PRODUCT_IN_USE', async () => {
+    db.$queryRaw.mockResolvedValue([{ id: PRODUCT }]);
+    db.product.findUnique.mockResolvedValue({ status: 'INACTIVE', _count: { ...none, orderItems: 1 } });
+    await expect(service.deleteProduct(ADMIN, PRODUCT)).rejects.toMatchObject({ statusCode: 409, code: 'PRODUCT_IN_USE' });
+    db.product.findUnique.mockResolvedValue({ status: 'ACTIVE', _count: none });
+    await expect(service.deleteProduct(ADMIN, PRODUCT)).rejects.toMatchObject({ statusCode: 409, code: 'PRODUCT_IN_USE' });
+    expect(db.product.delete).not.toHaveBeenCalled();
+  });
+
+  it('treats a missing product or a QA fixture as not found', async () => {
+    db.$queryRaw.mockResolvedValue([]);
+    await expect(service.deleteProduct(ADMIN, PRODUCT)).rejects.toMatchObject({ statusCode: 404 });
+    expect(db.product.delete).not.toHaveBeenCalled();
+  });
+
+  it('reports category/brand pairs from catalog products only (fixtures excluded)', async () => {
+    db.product.groupBy.mockResolvedValue([{ categoryId: PRODUCT, brandId: CUSTOMER, _count: { _all: 4 } }]);
+    const options = await service.options();
+    expect(db.product.groupBy).toHaveBeenCalledWith(expect.objectContaining({ by: ['categoryId', 'brandId'],
+      where: { isTestFixture: false, brandId: { not: null } } }));
+    expect(options.pairs).toEqual([{ categoryId: PRODUCT, brandId: CUSTOMER, products: 4 }]);
+  });
+});
+
+describe('AdminCatalogService fixture-only categories', () => {
+  it('keeps categories whose only products are QA fixtures out of the options list', async () => {
+    const db = database();
+    const service = new AdminCatalogService(db as unknown as PrismaClient);
+    await service.options();
+    expect(db.category.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { OR: [{ products: { none: {} } }, { products: { some: { isTestFixture: false } } }] } }));
   });
 });

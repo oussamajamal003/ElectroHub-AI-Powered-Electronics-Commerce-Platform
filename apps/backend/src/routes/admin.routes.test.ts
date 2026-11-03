@@ -9,7 +9,7 @@ const ids = vi.hoisted(() => ({ admin: '8f2813b4-a388-44d3-b51e-5d4c40386677', p
   customer: '3e7dd3c4-7b2f-4c9b-9f6a-4d0f3b2c1e33', role: 'ADMIN', active: true }));
 const db = vi.hoisted(() => ({ user: { findFirst: vi.fn() } }));
 const catalog = vi.hoisted(() => ({ listProducts: vi.fn(), getProduct: vi.fn(), options: vi.fn(), createProduct: vi.fn(), updateProduct: vi.fn(),
-  setProductStatus: vi.fn(), listCategories: vi.fn(), createCategory: vi.fn(), updateCategory: vi.fn(), setCategoryStatus: vi.fn(), deleteCategory: vi.fn() }));
+  setProductStatus: vi.fn(), listCategories: vi.fn(), createCategory: vi.fn(), updateCategory: vi.fn(), setCategoryStatus: vi.fn(), deleteCategory: vi.fn(), deleteProduct: vi.fn() }));
 const inventory = vi.hoisted(() => ({ list: vi.fn(), adjust: vi.fn(), setThreshold: vi.fn() }));
 const orders = vi.hoisted(() => ({ list: vi.fn(), detail: vi.fn() }));
 const customers = vi.hoisted(() => ({ list: vi.fn(), detail: vi.fn(), setStatus: vi.fn() }));
@@ -56,6 +56,15 @@ describe('admin operations API authorization', () => {
     for (const path of readRoutes) expect((await as(request(app).get(path))).status, path).toBe(403);
     expect((await as(request(app).patch(`/api/admin/customers/${ids.customer}/status`).send({ isActive: false, expectedUpdatedAt: stamp }))).status).toBe(403);
     expect(customers.setStatus).not.toHaveBeenCalled();
+    expect((await as(request(app).delete(`/api/admin/catalog/products/${ids.product}`))).status).toBe(403);
+    expect(catalog.deleteProduct).not.toHaveBeenCalled();
+  });
+
+  it('deletes a product for an ADMIN with 204 and rejects a malformed id with 404', async () => {
+    expect((await request(app).delete(`/api/admin/catalog/products/${ids.product}`)).status).toBe(401);
+    expect((await as(request(app).delete(`/api/admin/catalog/products/${ids.product}`))).status).toBe(204);
+    expect(catalog.deleteProduct).toHaveBeenCalledWith(ids.admin, ids.product);
+    expect((await as(request(app).delete('/api/admin/catalog/products/not-a-uuid'))).status).toBe(404);
   });
 
   it('rejects a deactivated administrator (401)', async () => {

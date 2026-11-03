@@ -11,8 +11,9 @@ import type { categoryCreateSchema, categoryListSchema, categoryUpdateSchema, pr
 
 /**
  * Task 05.1 admin catalog (products + categories). Writes are transactional and optimistic: a stale `expectedUpdatedAt` is a 409,
- * never a silent overwrite. Products are archived (status INACTIVE), never hard-deleted: OrderItem/PaymentAttemptItem reference them
- * with onDelete Restrict and keep their own purchase-time snapshots. QA fixtures (isTestFixture) stay out of admin lists and are read-only.
+ * never a silent overwrite. Products are normally archived (status INACTIVE): OrderItem/PaymentAttemptItem reference them with onDelete
+ * Restrict and keep their own purchase-time snapshots. Permanent deletion exists only for an unpublished product that nothing else has ever
+ * referenced (see `deletion`). QA fixtures (isTestFixture) stay out of admin lists and are read-only.
  */
 type Db = PrismaClient | Prisma.TransactionClient;
 type ProductList = z.infer<typeof productListSchema>;
@@ -22,6 +23,11 @@ type CategoryList = z.infer<typeof categoryListSchema>;
 type CategoryCreate = z.infer<typeof categoryCreateSchema>;
 type CategoryUpdate = z.infer<typeof categoryUpdateSchema>;
 const TX = { maxWait: 10_000, timeout: 20_000 };
+/**
+ * Categories the console manages: empty ones and ones holding at least one real product. A category whose only products are QA fixtures
+ * (isTestFixture) is test scaffolding, hidden like the fixtures themselves; it is never deleted, because fixtures carry commerce history.
+ */
+const managedCategory: Prisma.CategoryWhereInput = { OR: [{ products: { none: {} } }, { products: { some: { isTestFixture: false } } }] };
 const pages = (page: number, pageSize: number, total: number) => ({ page, pageSize, total, totalPages: Math.ceil(total / pageSize) });
 
 const listSelect = {
@@ -29,11 +35,32 @@ const listSelect = {
   category: { select: { id: true, name: true, isActive: true } },
   brand: { select: { id: true, name: true } },
   inventory: { select: { quantity: true, lowStockAt: true, status: true, updatedAt: true } },
-  images: { where: { mediaState: 'PUBLISHED' }, orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }], take: 1,
+  // Published photos are bounded by the media slot limit, so the full list doubles as the published count.
+  images: { where: { mediaState: 'PUBLISHED' }, orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }],
     select: { url: true, altText: true } },
-  _count: { select: { images: { where: { mediaState: 'PUBLISHED' } } } },
+  // Everything that can keep a product alive. `images` counts every photo row, tombstones included (the media journal and image-search
+  // embeddings hang off them).
+  _count: { select: { images: true, orderItems: true, paymentAttemptItems: true, cartItems: true, wishItems: true, reviews: true,
+    interactions: true, recommendationEvents: true } },
 } satisfies Prisma.ProductSelect;
 type ListRow = Prisma.ProductGetPayload<{ select: typeof listSelect }>;
+
+type DependencyCount = ListRow['_count'];
+
+/**
+ * Whether a product may be permanently deleted, and why not. Only an unpublished product with no commerce, customer, media or activity
+ * history qualifies; its inventory row, specifications and recently-viewed entries go with it (owned data, cascaded by the schema).
+ */
+export function deletion(status: ProductStatus, count: DependencyCount) {
+  const blocker = status === 'ACTIVE' ? 'Archive it first so it leaves the storefront.'
+    : count.orderItems || count.paymentAttemptItems ? 'It is on orders or checkouts, which keep their history. Keep it archived.'
+    : count.cartItems || count.wishItems ? 'Customers have it in a cart or wishlist. Keep it archived.'
+    : count.reviews ? 'It has customer reviews. Keep it archived.'
+    : count.images ? 'It has photos or photo history, which image search keeps. Keep it archived.'
+    : count.interactions || count.recommendationEvents ? 'It has storefront activity history. Keep it archived.'
+    : null;
+  return { deletable: blocker === null, deleteBlocker: blocker };
+}
 
 function inventoryProjection(inventory: ListRow['inventory']) {
   if (!inventory) return null;
@@ -45,10 +72,11 @@ export function projectAdminProduct(row: ListRow) {
   return {
     id: row.id, name: row.name, sku: row.sku, slug: row.slug, price: row.price.toFixed(2), compareAtPrice: row.compareAtPrice?.toFixed(2) ?? null,
     currency: 'USD' as const, status: row.status, category: row.category, brand: row.brand,
-    image: row.images[0] ? { url: row.images[0].url, altText: row.images[0].altText } : null, imageCount: row._count.images,
+    image: row.images[0] ? { url: row.images[0].url, altText: row.images[0].altText } : null, imageCount: row.images.length,
     inventory: inventoryProjection(row.inventory),
     // Storefront visibility is derived exactly like publicProductWhere (minus fixture/visibility flags, which admin lists exclude).
     storefrontVisible: row.status === 'ACTIVE' && row.category.isActive,
+    ...deletion(row.status, row._count),
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -84,19 +112,24 @@ export class AdminCatalogService {
     const row = await this.db.product.findUnique({ where: { id: productId }, select: {
       ...listSelect, description: true, modelNumber: true, isTestFixture: true,
       specifications: { orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }], select: { id: true, group: true, name: true, value: true } },
-      _count: { select: { images: { where: { mediaState: 'PUBLISHED' } }, orderItems: true } },
     } });
     if (!row || row.isTestFixture) throw new AppError('Product not found.', 404, 'PRODUCT_NOT_FOUND');
     return { ...projectAdminProduct(row), description: row.description, modelNumber: row.modelNumber, specifications: row.specifications,
       orderLineCount: row._count.orderItems };
   }
 
+  /**
+   * Category and brand choices, plus how many catalog products use each category/brand pair. The pairs are observed facts, not rules:
+   * the form ranks likely matches first, and any active category can still be combined with any brand.
+   */
   async options() {
-    const [categories, brands] = await Promise.all([
-      this.db.category.findMany({ orderBy: [{ name: 'asc' }, { id: 'asc' }], select: { id: true, name: true, isActive: true }, take: 500 }),
+    const [categories, brands, pairs] = await Promise.all([
+      this.db.category.findMany({ where: managedCategory, orderBy: [{ name: 'asc' }, { id: 'asc' }], select: { id: true, name: true, isActive: true }, take: 500 }),
       this.db.brand.findMany({ orderBy: [{ name: 'asc' }, { id: 'asc' }], select: { id: true, name: true }, take: 500 }),
+      this.db.product.groupBy({ by: ['categoryId', 'brandId'], where: { isTestFixture: false, brandId: { not: null } }, _count: { _all: true } }),
     ]);
-    return { categories, brands };
+    return { categories, brands,
+      pairs: pairs.map(pair => ({ categoryId: pair.categoryId, brandId: pair.brandId!, products: pair._count._all })) };
   }
 
   private async assertCategory(tx: Db, categoryId: string, current?: string) {
@@ -177,9 +210,27 @@ export class AdminCatalogService {
     return this.getProduct(productId);
   }
 
+  /** Permanent deletion, re-checked under the product row lock so a concurrent order, cart or photo upload cannot slip in between. */
+  async deleteProduct(actorId: string, productId: string) {
+    await this.db.$transaction(async tx => {
+      const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM products WHERE id = ${productId}::uuid AND "isTestFixture" = false FOR UPDATE`;
+      if (!locked.length) throw new AppError('Product not found.', 404, 'PRODUCT_NOT_FOUND');
+      const row = await tx.product.findUnique({ where: { id: productId }, select: { status: true, _count: listSelect._count } });
+      const { deleteBlocker } = deletion(row!.status, row!._count);
+      if (deleteBlocker) throw new AppError(`This product cannot be deleted. ${deleteBlocker}`, 409, 'PRODUCT_IN_USE');
+      await tx.product.delete({ where: { id: productId } });
+    }, TX).catch(error => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+        throw new AppError('This product cannot be deleted because other records still use it. Keep it archived.', 409, 'PRODUCT_IN_USE');
+      }
+      throw error;
+    });
+    logSafely('info', 'Admin catalog change', { event: 'admin.product.deleted', actorId, productId });
+  }
+
   // ─── Categories ───────────────────────────────────────
   async listCategories(query: CategoryList) {
-    const where: Prisma.CategoryWhereInput = {};
+    const where: Prisma.CategoryWhereInput = { AND: [managedCategory] };
     if (query.q) where.OR = [{ name: { contains: query.q, mode: 'insensitive' } }, { slug: { contains: query.q, mode: 'insensitive' } }];
     if (query.status) where.isActive = query.status === 'ACTIVE';
     const orderBy: Prisma.CategoryOrderByWithRelationInput[] = query.sort === 'products'
@@ -189,8 +240,8 @@ export class AdminCatalogService {
         select: { id: true, name: true, slug: true, description: true, isActive: true, createdAt: true, updatedAt: true,
           _count: { select: { products: { where: { isTestFixture: false } } } } } }),
       this.db.category.count({ where }),
-      this.db.category.count({ where: { isActive: true } }),
-      this.db.category.count({ where: { isActive: false } }),
+      this.db.category.count({ where: { AND: [managedCategory], isActive: true } }),
+      this.db.category.count({ where: { AND: [managedCategory], isActive: false } }),
     ]);
     return { data: rows.map(row => this.projectCategory(row)), meta: { ...pages(query.page, query.pageSize, total), summary: { active, inactive } } };
   }
