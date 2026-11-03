@@ -141,6 +141,62 @@ test('A: unsaved product edits are guarded for links, breadcrumb, Discard, Back,
   expect(ok).toBe(true);
 });
 
+test('A2: saving leaves no extra history entry; one Back returns to the list; edits after a save are guarded again', async ({ page, request }) => {
+  const admin = await token(request, accounts!.admin);
+  const product = await qaProduct(request, admin);
+  await login(page);
+  const list = `/admin/products?q=${product.sku}`;
+  const dialog = page.getByRole('alertdialog').or(page.getByRole('dialog'));
+  const name = page.getByLabel(/Product name/);
+  const saveButton = page.getByRole('button', { name: 'Save changes' });
+  const persisted = async () => (await (await api(request, admin, 'get', `/api/admin/catalog/products/${product.id}`)).json() as { data: { name: string } }).data.name;
+  const open = async () => {
+    await page.goto(list);
+    await page.locator(`a[href="/admin/products/${product.id}/edit"]`).first().click();
+    await expect(name).toBeEditable();
+  };
+  const save = async (value: string) => {
+    await name.fill(value);
+    const saved = page.waitForResponse(r => r.url().includes(`/api/admin/catalog/products/${product.id}`) && r.request().method() === 'PATCH');
+    await saveButton.click();
+    expect((await saved).status()).toBe(200);
+    await expect(saveButton).toBeDisabled(); // refetched: the form remounts on the new updatedAt
+    await expect(name).toHaveValue(value);
+    expect(await persisted()).toBe(value);
+  };
+  const backReachesList = async () => {
+    await page.goBack();
+    await expect(page).toHaveURL(url => url.pathname === '/admin/products', { timeout: 5_000 });
+    await expect(dialog).toHaveCount(0);
+  };
+  const results: string[] = [];
+  const step = async (label: string, run: () => Promise<void>) => {
+    try { await run(); results.push(`${label}: PASS`); } catch (error) { results.push(`${label}: FAIL (still at ${new URL(page.url()).pathname})`); throw error; }
+  };
+  try {
+    await step('one save, one Back → list', async () => { await open(); await save(`${product.name} S1`); await backReachesList(); });
+    await step('two saves, one Back → list', async () => { await open(); await save(`${product.name} S2`); await save(`${product.name} S3`); await backReachesList(); });
+    await step('edit after save → Back asks; Cancel keeps draft; Leave exits once', async () => {
+      await open(); await save(`${product.name} S4`);
+      await name.fill(`${product.name} draft`);
+      await page.goBack();
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await expect(page).toHaveURL(new RegExp(`/admin/products/${product.id}/edit$`));
+      await expect(name).toHaveValue(`${product.name} draft`);
+      await page.goBack();
+      await dialog.getByRole('button', { name: 'Leave page' }).click();
+      await expect(page).toHaveURL(url => url.pathname === '/admin/products', { timeout: 5_000 });
+      expect(await persisted()).toBe(`${product.name} S4`);
+    });
+    await step('clean form → Back without prompt', async () => { await open(); await backReachesList(); });
+  } finally {
+    record(page, { testId: '05.1-A2', route: '/admin/products → /admin/products/:id/edit', action: 'Open from the list, save once / twice / save then edit, press Back once',
+      expected: 'One Back returns to the list after saves; dirty Back asks; Cancel keeps the draft; Leave exits once', actual: results.join('; '),
+      evidence: 'real Chromium history (page.goBack)', result: results.every(line => line.endsWith('PASS')) && results.length === 4 ? 'PASS' : 'FAIL' });
+  }
+});
+
 test('D05: categories dialog at 390 and 768 px', async ({ page }) => {
   await login(page);
   const notes: string[] = [];

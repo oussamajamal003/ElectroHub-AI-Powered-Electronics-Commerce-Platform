@@ -83,7 +83,9 @@ describe('AdminProductFormPage unsaved changes', () => {
     renderForm();
     edit();
     edit('');
-    await back(); // one press: the leftover duplicate entry is skipped automatically
+    // Reverting removes the guard's duplicate entry (one async Back); the admin's own Back comes after that settles.
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    await back();
     expect(dialog()).toBeNull();
     expect(await screen.findByText('Products page')).toBeInTheDocument();
   });

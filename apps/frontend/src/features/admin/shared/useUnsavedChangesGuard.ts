@@ -3,50 +3,64 @@ import { useNavigate } from 'react-router-dom';
 
 type Leave = () => void;
 
+// Marks the guard's own duplicate history entry, so it is never confused with a real one, even by a remounted form.
+const MARK = 'ehUnsavedGuard';
+const onGuardEntry = () => (window.history.state as Record<string, unknown> | null)?.[MARK] === true;
+
 /**
  * Guards unsaved edits under BrowserRouter, which has no data-router useBlocker.
  * - In-app links: clicks are intercepted in the capture phase, before React Router's Link handler runs.
- * - Browser Back: while dirty, the current entry is duplicated (a "sentinel"), so Back first lands on this same page and can be
- *   confirmed; pushing the sentinel also clears the forward stack, so Forward cannot discard edits either.
+ * - Browser Back: while dirty, the current entry is duplicated (a marked "guard entry"), so Back first lands on this same page and can be
+ *   confirmed; pushing it also clears the forward stack, so Forward cannot discard edits either.
  * - Refresh/close: the native beforeunload prompt (browsers do not allow a custom dialog there).
- * `leave(run)` removes the sentinel before running a navigation, so confirmed exits and saves leave no duplicate history entry.
+ * The guard entry exists only while the form is dirty: when the form becomes clean (saved, reverted, or remounted from a newer version)
+ * it is removed, and `leave(run)` removes it before running a navigation, so history never keeps an extra step.
  */
 export function useUnsavedChangesGuard(dirty: boolean) {
   const navigate = useNavigate();
   const [pending, setPending] = useState<{ leave: Leave } | null>(null);
-  const armed = useRef(false);
   const afterPop = useRef<Leave | null>(null);
+  const atGuardEntry = useRef(onGuardEntry());
   // Set once the admin confirms leaving, so a Back that crosses into another document is not asked twice (in-app dialog, then beforeunload).
   const released = useRef(false);
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
 
   const arm = useCallback(() => {
-    if (armed.current) return;
-    window.history.pushState(window.history.state, '', window.location.href);
-    armed.current = true;
+    if (onGuardEntry()) return;
+    window.history.pushState({ ...(window.history.state as object | null), [MARK]: true }, '', window.location.href);
+    atGuardEntry.current = true;
   }, []);
 
+  /** Runs `run` once the guard entry (if this page is on one) has been removed with a single Back. */
   const leave = useCallback((run: Leave) => {
-    if (!armed.current) { run(); return; }
+    if (afterPop.current) { const previous = afterPop.current; afterPop.current = () => { previous(); run(); }; return; }
+    if (!onGuardEntry()) { run(); return; }
     afterPop.current = run;
     window.history.back();
   }, []);
 
-  useEffect(() => { if (dirty) arm(); }, [dirty, arm]);
+  useEffect(() => {
+    if (dirty) arm();
+    else leave(() => undefined);
+  }, [dirty, arm, leave]);
 
   useEffect(() => {
     const onPop = () => {
-      if (afterPop.current) { const run = afterPop.current; afterPop.current = null; armed.current = false; run(); return; }
-      if (!armed.current) return;
-      // Back left the sentinel: the browser is now on this page's original entry.
-      armed.current = false;
-      if (!dirtyRef.current) { window.history.back(); return; }
-      setPending({ leave: () => window.history.back() });
+      const leftGuardEntry = atGuardEntry.current;
+      atGuardEntry.current = onGuardEntry();
+      if (afterPop.current) { const run = afterPop.current; afterPop.current = null; run(); return; }
+      if (atGuardEntry.current) {
+        // Forward onto a guard entry: harmless while dirty; once clean it is skipped.
+        if (dirtyRef.current) setPending(null); else leave(() => undefined);
+        return;
+      }
+      // Back left the guard entry: the browser is on this page's original entry.
+      if (leftGuardEntry && dirtyRef.current) setPending({ leave: () => window.history.back() });
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, []);
+  }, [leave]);
 
   useEffect(() => {
     if (!dirty) return;
