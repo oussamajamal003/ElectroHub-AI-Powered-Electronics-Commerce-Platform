@@ -60,18 +60,64 @@ Chromium run on a disposable stack (`loopback:64645/electrohub_disposable_delive
 | UX-17 | PASS | Linked KPI cards lift with a shadow on hover and keep focus rings; static cards keep the default cursor. |
 | UX-18 | PASS | Shared fixes reach every list: Select, `SearchSelect`, the table busy bar with dimmed rows, `ListEmpty`, pills, and the 36 px titles (UX-03/04/14). |
 | UX-19 | PASS | "Choose photos" is 171 px wide and unclipped. Root cause: `.empty span` also styled the Button's inner span as a 52 px circle; scoped to `> span`. |
-| UX-20 | PASS (partial) | Shared DEV (`pzxekjybdiulzmssalfo`, verified by project list; PROD untouched): see the cleanup record below. |
+| UX-20 | PASS | Shared DEV (`pzxekjybdiulzmssalfo`, verified by project list; PROD untouched): all QA accounts, Stripe-acceptance and email-gate data removed; 1 QA-delivery fixture kept (cleanup record below). |
 | UX-21 | PASS | Reduced motion: the pager jumps instantly; drawer, dialogs and menus have no motion (J05). |
 | UX-22 | PASS | 7 routes × 390/768/1440/1920: no horizontal page scroll; dropdowns inside the viewport. |
 | UX-23 | PASS | 04.3 media page and 04.5 delivery list/detail render; media and delivery APIs unchanged; delivery and route tests pass. |
 | UX-24 | PASS | Product-form history guard: `useUnsavedChangesGuard.test.tsx` 4/4 and Chromium 05.1-A / A2 pass. |
 | UX-25 | PASS | Before/after screenshots reviewed against owner screenshots A–J. |
 
-Shared-DEV cleanup (dry run first; ownership established from repository provenance, never from names alone):
-- **QA 05.1 probe products** (created by `admin-dashboard-live-dev.spec.ts`): 5 found. 4 had no references and were deleted with the same rule as the new endpoint, re-checked inside the `DELETE`. Products went from 235 to 231, with no orphaned inventory or specification rows. 1 kept (`QA-051-2611022142`: photo history).
-- **Test categories** (account-deletion test, EH038 gate, Stripe acceptance): 12 found, 0 deletable; all hold products with orders, payments or fixture history. The 9 holding only protected fixtures are now hidden from admin lists and options. The other 3 hold real orders and stay visible.
-- **Synthetic customers:** 8 accounts with no orders or payments match repo test patterns. They were NOT removed; that needs the owner's go-ahead, because the EH038 gate pairs some of them with its fixtures. 6 accounts with commerce history are preserved.
-- **Future runs:** the live-DEV spec now deletes its own probe product at the end.
+Shared-DEV cleanup on `pzxekjybdiulzmssalfo` (PROD untouched). Every step was a dry run first. Ownership came from repository provenance (test scripts, gates, browser specs), never from names alone. Owner-approved on 2026-11-03, including QA order and payment history.
+- **Pass 1, no history:** 4 QA 05.1 probe products and 11 QA accounts with no orders or payment attempts (auth tests, EH038 strangers, codex-verify, e2e mobile deletion, payment-gate).
+- **Pass 2, with history:** one atomic block whose guards re-checked the dry-run counts. Deleted:
+  - 16 QA accounts: Stripe acceptance, owner `+eh038` aliases, auth test, task04, payment-gate, anonymized deletion-test accounts.
+  - Their 13 orders (with order lines, deliveries and events), 9 payments and 19 payment attempts (with items, Stripe events and payment work).
+  - 8 email-outbox rows and their attempts.
+  - 21 QA products (Stripe acceptance, EH038, deletion-test, payment-gate fixtures and the last probe), with their photos' media journal rows.
+  - Their QA categories.
+- The probe's remaining Storage file was removed first through the app's media storage client, so no object was orphaned.
+- **Result:** 0 QA accounts; products 235 → 208 after pass 3; no orphaned order items, payments, deliveries or inventory. Untouched: 7 seed accounts, and the 24 catalog-reviewer accounts with their reviews (demo catalog content, not QA).
+- **Pass 3, Stripe acceptance and email gates (owner-approved):** removed the last 2 Stripe-acceptance products and their category, plus the 2 acceptance orders, 7 payment attempts, 2 payments and 7 payment-work rows those products had on the owner's DEV customer account. Also removed 8 `IGNORED` Stripe webhook events from the 7–9 Oct acceptance window whose intents match nothing left, and 155 email-delivery logs addressed to QA test accounts. Afterwards: 0 acceptance or email-gate products, categories, accounts, order lines, attempt lines and test email logs; no orphaned order items, payments or attempts.
+- **Kept:** 1 QA-delivery fixture product and its category, which the owner's account orders reference (outside the Stripe-acceptance and email-gate scope).
+- Stripe test-mode objects for the deleted attempts remain in Stripe (test mode only).
+- **Future runs:** the live-DEV spec deletes its own probe product at the end.
+
+### Owner follow-ups (2026-11-03): list performance and UI polish
+
+**Measured root cause.** On shared DEV, `EXPLAIN ANALYZE` puts the product search at 0.55 ms and the spend aggregate at 0.34 ms. Indexes are not the bottleneck; each request's cost is the network round trips to the database region (one for the admin role check, one or two for the list). The client was also refetching every list on each revisit (stale time 0) and dimming cached rows as if they were loading.
+
+**Fix.** `features/admin/shared/useAdminList.ts` is used by the products, categories, inventory, orders and customers lists:
+- Lists stay fresh for 30 s (writes still invalidate them immediately).
+- Previous rows stay on screen while a new state loads; superseded requests are aborted.
+- Once a page is real data, the next and previous pages are prefetched.
+- Rows dim, and the pager disables, only while the previous query's rows stand in (`isPlaceholderData`); silent background refreshes no longer freeze controls.
+- Chips show the selected state at once (2–8 ms).
+- Search debounce is 200 ms.
+
+No backend query or index change was warranted.
+
+**Before/after (disposable stack, 300 ms added to every API call to stand in for DEV round trips; identical scenario; before = `1d54452`):**
+
+| Step | Before | After |
+|---|---|---|
+| Page 1 → 2 (first time) | 919 ms, 1 request | 192–235 ms, 0 requests (prefetched) |
+| Page 2 → 1, page 1 → 2 again | 328–357 ms, 0 requests | 231–346 ms, 0 requests |
+| Unpublished chip (first time) | 939 ms, 1 request | 937–952 ms, 1 request (a real fetch, as expected) |
+| All / Unpublished again | 178–334 ms, 0 requests | 168–349 ms, 0 requests |
+
+Live timing on `localhost:3000` against shared DEV is NOT VERIFIED: this session had no admin sign-in for DEV.
+
+**UI polish:**
+- **Dropdowns:** the Select arrow is spaced and vertically centred.
+- **Pager:** an out-of-range page (for example after deletions) moves to the last page instead of showing "No customers yet".
+- **Product form:** equal-width Save as draft / Publish now buttons with a gap; prices typed as "98" are sent as "98.00" with a readable error message; example placeholders on every field; Add product shows the same skeleton as Edit.
+- **Inventory:** the restock field is labelled "Units to add", with a hint that the units are added to the stock on hand.
+- **Media:** Manage media shows skeleton cards, and admin routes show a page skeleton while their code loads; the full-page loader is only used for a full reload.
+- **Cards:** every card and panel has a hover/focus highlight.
+- **Titles:** page titles match the storefront (`clamp(2rem, 3vw, 3.5rem)`, bold).
+- **Logo:** a shared `BrandLogo` gives the admin header and sign-in the storefront logo.
+
+**Shared-DEV pass 4 (owner-approved):** 24 `catalog-reviewer` demo accounts (with their 320 reviews) and 4 "Test User" / "Test Customer" accounts deleted; none had orders. DEV now has no `.invalid`/`.test` customers and no orphaned reviews.
 
 ## 1. Commands actually executed (before PR #44)
 
