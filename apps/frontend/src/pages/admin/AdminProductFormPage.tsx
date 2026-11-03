@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Image as ImageIcon, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -9,9 +9,10 @@ import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoa
 import {
   useAdminProduct, useCatalogOptions, useCreateProduct, useUpdateProduct, type AdminProduct, type ProductFields, type ProductStatus,
 } from '@/features/admin/products/api';
-import { ActivePill, ButtonLink, PageHeader, QueryProblem, StockPill, useAdminToast } from '@/features/admin/shared/AdminUi';
+import { ActivePill, ButtonLink, ConfirmDialog, PageHeader, QueryProblem, StockPill, useAdminToast } from '@/features/admin/shared/AdminUi';
 import { errorCode, errorMessage, fieldErrors } from '@/features/admin/shared/api';
 import { formatCount, formatDateTime } from '@/features/admin/shared/format';
+import { useUnsavedChangesGuard } from '@/features/admin/shared/useUnsavedChangesGuard';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
 
 const MAX_SPECS = 60;
@@ -96,20 +97,8 @@ function ProductForm({ product, onReload }: { product?: AdminProduct; onReload: 
   const mutation = creating ? create : update;
   const dirty = snapshot(draft) !== snapshot(initial);
 
-  useEffect(() => {
-    if (!dirty || mutation.isSuccess) return;
-    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
-    // BrowserRouter has no useBlocker: in-app links are intercepted in the capture phase, before React Router's Link handler runs.
-    const guardLinks = (event: MouseEvent) => {
-      const link = (event.target as Element | null)?.closest?.('a[href]');
-      if (!(link instanceof HTMLAnchorElement) || link.target === '_blank' || link.origin !== window.location.origin) return;
-      if (link.pathname === window.location.pathname && link.search === window.location.search) return;
-      if (!window.confirm('You have unsaved changes to this product. Leave without saving?')) { event.preventDefault(); event.stopPropagation(); }
-    };
-    window.addEventListener('beforeunload', warn);
-    document.addEventListener('click', guardLinks, true);
-    return () => { window.removeEventListener('beforeunload', warn); document.removeEventListener('click', guardLinks, true); };
-  }, [dirty, mutation.isSuccess]);
+  // A created product moves to its edit page; an edit stays guarded after each save (the saved product becomes the new baseline).
+  const guard = useUnsavedChangesGuard(dirty && !create.isSuccess);
 
   const clientErrors = touched ? validate(draft, creating) : {};
   const errors = { ...fieldErrors(mutation.error), ...clientErrors };
@@ -128,7 +117,7 @@ function ProductForm({ product, onReload }: { product?: AdminProduct; onReload: 
     }
     if (creating) {
       create.mutate({ ...toFields(draft), status: draft.status, inventory: { quantity: Number(draft.quantity), lowStockAt: Number(draft.lowStockAt) } }, {
-        onSuccess: response => { toast(`${response.data.name} was created.`); navigate(`/admin/products/${response.data.id}/edit`, { replace: true }); },
+        onSuccess: response => { toast(`${response.data.name} was created.`); guard.leave(() => navigate(`/admin/products/${response.data.id}/edit`, { replace: true })); },
       });
     } else {
       update.mutate({ ...toFields(draft), expectedUpdatedAt: product.updatedAt }, { onSuccess: () => toast('Product changes saved.') });
@@ -248,5 +237,7 @@ function ProductForm({ product, onReload }: { product?: AdminProduct; onReload: 
         <Button type="submit" isLoading={mutation.isPending} disabled={!creating && !dirty}>{creating ? 'Create product' : 'Save changes'}</Button>
       </div>
     </form>
+    <ConfirmDialog {...guard.dialog} destructive title="Leave without saving?" confirmLabel="Leave page"
+      description={<p>Your changes to this product have not been saved and will be lost.</p>} />
   </div>;
 }

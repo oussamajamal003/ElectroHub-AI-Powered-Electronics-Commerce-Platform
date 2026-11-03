@@ -5,7 +5,7 @@ import { ArrowRight, Boxes, ClipboardList, DollarSign, Package, ShoppingCart, Tr
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { useDashboard, type DashboardOverview } from '@/features/admin/dashboard/api';
 import type { AdminOrderRow } from '@/features/admin/orders/api';
-import { EmptyRows, KpiCard, PageHeader, QueryProblem, StockPill, TableCard } from '@/features/admin/shared/AdminUi';
+import { EmptyRows, ListEmpty, KpiCard, PageHeader, QueryProblem, StockPill, TableCard } from '@/features/admin/shared/AdminUi';
 import { OrderStatusPill, PaymentPill } from '@/features/admin/shared/labels';
 import { ORDER_STATUSES, orderStatusLabel } from '@/features/admin/shared/statusLabels';
 import { formatCount, formatDate, formatDateTime, formatMoney, formatMoneyList, shortReference } from '@/features/admin/shared/format';
@@ -116,7 +116,7 @@ export function AdminDashboardPage() {
         </div>
         <TableCard busy={query.isFetching} label="Recent orders">
           <DataTable caption="Recent orders" data={overview?.recentOrders ?? []} columns={recentColumns} keyExtractor={row => row.orderReference}
-            loadingRows={loading ? 5 : undefined} emptyMessage={<EmptyRows title="No orders yet" hint="Orders appear here as soon as customers check out." />} />
+            loadingRows={loading ? 5 : undefined} emptyMessage={<ListEmpty failed={query.isError && !query.data}><EmptyRows title="No orders yet" hint="Orders appear here as soon as customers check out." /></ListEmpty>} />
         </TableCard>
       </section>
       <div className={styles.stack}>

@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { DollarSign, UserCheck, Users } from 'lucide-react';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { useAdminCustomers, type AdminCustomerRow, type CustomerStatus } from '@/features/admin/customers/api';
-import { EmptyRows, FilterBand, KpiCard, PageHeader, Pager, QueryProblem, StatusPill, TableCard } from '@/features/admin/shared/AdminUi';
+import { EmptyRows, ListEmpty, FilterBand, KpiCard, PageHeader, Pager, QueryProblem, StatusPill, TableCard } from '@/features/admin/shared/AdminUi';
 import { useListParams } from '@/features/admin/shared/useListParams';
 import { formatCount, formatDate, formatMoneyList, initials } from '@/features/admin/shared/format';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
@@ -50,8 +50,8 @@ export function AdminCustomersPage() {
       <TableCard busy={query.isFetching} label="Customers">
         <DataTable caption="Customers" data={query.data?.data ?? []} columns={columns} keyExtractor={row => row.id} sort={list.sort} onSortChange={list.setSort}
           loadingRows={query.isPending ? 8 : undefined}
-          emptyMessage={list.isFiltered ? <EmptyRows title="No customers match these filters" hint="Try a different search or reset the filters." />
-            : <EmptyRows title="No customers yet" hint="Customers appear here after they create an account." />} />
+          emptyMessage={<ListEmpty failed={query.isError && !query.data}>{list.isFiltered ? <EmptyRows title="No customers match these filters" hint="Try a different search or reset the filters." />
+            : <EmptyRows title="No customers yet" hint="Customers appear here after they create an account." />}</ListEmpty>} />
       </TableCard>
       <Pager meta={query.data?.meta} onPage={list.setPage} disabled={query.isFetching} label="Customer pages" />
     </div>

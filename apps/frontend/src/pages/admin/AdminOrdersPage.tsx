@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Select } from '@/components/ui/Select';
 import { useAdminOrders, type AdminOrderRow } from '@/features/admin/orders/api';
-import { EmptyRows, FilterBand, PageHeader, Pager, QueryProblem, TableCard } from '@/features/admin/shared/AdminUi';
+import { EmptyRows, ListEmpty, FilterBand, PageHeader, Pager, QueryProblem, TableCard } from '@/features/admin/shared/AdminUi';
 import { OrderStatusPill, PaymentPill } from '@/features/admin/shared/labels';
 import { ORDER_STATUSES, PAYMENT_STATES, orderStatusLabel, paymentLabel } from '@/features/admin/shared/statusLabels';
 import { useListParams } from '@/features/admin/shared/useListParams';
@@ -50,8 +50,8 @@ export function AdminOrdersPage() {
       <TableCard busy={query.isFetching} label="Orders">
         <DataTable caption="Orders" data={query.data?.data ?? []} columns={columns} keyExtractor={row => row.orderReference} sort={list.sort} onSortChange={list.setSort}
           loadingRows={query.isPending ? 8 : undefined}
-          emptyMessage={list.isFiltered ? <EmptyRows title="No orders match these filters" hint="Try a different search or reset the filters." />
-            : <EmptyRows title="No orders yet" hint="Orders appear here as soon as customers check out." />} />
+          emptyMessage={<ListEmpty failed={query.isError && !query.data}>{list.isFiltered ? <EmptyRows title="No orders match these filters" hint="Try a different search or reset the filters." />
+            : <EmptyRows title="No orders yet" hint="Orders appear here as soon as customers check out." />}</ListEmpty>} />
       </TableCard>
       <Pager meta={query.data?.meta} onPage={list.setPage} disabled={query.isFetching} label="Order pages" />
     </div>

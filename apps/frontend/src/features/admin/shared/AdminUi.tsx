@@ -144,6 +144,11 @@ export function EmptyRows({ title, hint, action }: { title: string; hint?: strin
   return <div className={styles.empty}><strong>{title}</strong>{hint && <span>{hint}</span>}{action}</div>;
 }
 
+/** A failed first load is not an empty list: say the rows could not be loaded (the QueryProblem above offers Retry), never "No … yet". */
+export function ListEmpty({ failed, children }: { failed: boolean; children: ReactNode }) {
+  return failed ? <EmptyRows title="These rows could not be loaded" hint="Use Retry above to try again." /> : <>{children}</>;
+}
+
 // ─── Confirmation dialog ──────────────────────────────────
 export function ConfirmDialog({ open, onOpenChange, title, description, confirmLabel, destructive, pending, error, onConfirm, children }: {
   open: boolean; onOpenChange: (open: boolean) => void; title: string; description: ReactNode; confirmLabel: string; destructive?: boolean;

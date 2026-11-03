@@ -6,7 +6,7 @@ import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
 import { Input } from '@/components/ui/Input';
 import { conflictRow, useAdminInventory, useInventoryMutations, type InventoryRow } from '@/features/admin/inventory/api';
-import { EmptyRows, FilterBand, KpiCard, PageHeader, Pager, QueryProblem, StatusPill, StockPill, TableCard, useAdminToast } from '@/features/admin/shared/AdminUi';
+import { EmptyRows, ListEmpty, FilterBand, KpiCard, PageHeader, Pager, QueryProblem, StatusPill, StockPill, TableCard, useAdminToast } from '@/features/admin/shared/AdminUi';
 import { useListParams } from '@/features/admin/shared/useListParams';
 import { errorMessage, fieldErrors } from '@/features/admin/shared/api';
 import { formatCount, formatDateTime } from '@/features/admin/shared/format';
@@ -143,8 +143,8 @@ export function AdminInventoryPage() {
       <TableCard busy={query.isFetching} label="Inventory">
         <DataTable caption="Inventory" data={query.data?.data ?? []} columns={columns} keyExtractor={row => row.productId} sort={list.sort} onSortChange={list.setSort}
           loadingRows={query.isPending ? 8 : undefined}
-          emptyMessage={list.isFiltered ? <EmptyRows title="No products match these filters" hint="Try a different search or reset the filters." />
-            : <EmptyRows title="No products to stock yet" hint="Products appear here as soon as they are created." />} />
+          emptyMessage={<ListEmpty failed={query.isError && !query.data}>{list.isFiltered ? <EmptyRows title="No products match these filters" hint="Try a different search or reset the filters." />
+            : <EmptyRows title="No products to stock yet" hint="Products appear here as soon as they are created." />}</ListEmpty>} />
       </TableCard>
       <Pager meta={query.data?.meta} onPage={list.setPage} disabled={query.isFetching} label="Inventory pages" />
     </div>

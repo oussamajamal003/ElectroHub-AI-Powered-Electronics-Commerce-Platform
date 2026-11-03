@@ -5,7 +5,7 @@ import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Select } from '@/components/ui/Select';
 import { useAdminProducts, useCatalogOptions, useProductStatus, type AdminProductRow } from '@/features/admin/products/api';
 import {
-  ActivePill, ButtonLink, ConfirmDialog, EmptyRows, FilterBand, PageHeader, Pager, QueryProblem, StatusPill, StockPill, TableCard, useAdminToast,
+  ActivePill, ButtonLink, ConfirmDialog, EmptyRows, ListEmpty, FilterBand, PageHeader, Pager, QueryProblem, StatusPill, StockPill, TableCard, useAdminToast,
 } from '@/features/admin/shared/AdminUi';
 import { useListParams } from '@/features/admin/shared/useListParams';
 import { errorCode, errorMessage } from '@/features/admin/shared/api';
@@ -90,9 +90,9 @@ export function AdminCatalogProductsPage() {
       <TableCard busy={query.isFetching} label="Products">
         <DataTable caption="Catalog products" data={rows} columns={columns} keyExtractor={row => row.id} sort={list.sort} onSortChange={list.setSort}
           loadingRows={query.isPending ? 8 : undefined}
-          emptyMessage={list.isFiltered
+          emptyMessage={<ListEmpty failed={query.isError && !query.data}>{list.isFiltered
             ? <EmptyRows title="No products match these filters" hint="Try a different search or reset the filters." />
-            : <EmptyRows title="No products yet" hint="Add the first product to start selling." />} />
+            : <EmptyRows title="No products yet" hint="Add the first product to start selling." />}</ListEmpty>} />
       </TableCard>
       <Pager meta={query.data?.meta} onPage={list.setPage} disabled={query.isFetching} label="Product pages" />
     </div>

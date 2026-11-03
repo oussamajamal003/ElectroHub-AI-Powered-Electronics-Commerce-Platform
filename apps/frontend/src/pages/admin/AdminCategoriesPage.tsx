@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { useAdminCategories, useCategoryMutations, type AdminCategory } from '@/features/admin/categories/api';
-import { ActivePill, ConfirmDialog, EmptyRows, FilterBand, KpiCard, PageHeader, Pager, QueryProblem, TableCard, useAdminToast } from '@/features/admin/shared/AdminUi';
+import { ActivePill, ConfirmDialog, EmptyRows, ListEmpty, FilterBand, KpiCard, PageHeader, Pager, QueryProblem, TableCard, useAdminToast } from '@/features/admin/shared/AdminUi';
 import { useListParams } from '@/features/admin/shared/useListParams';
 import { errorCode, errorMessage, fieldErrors } from '@/features/admin/shared/api';
 import { formatCount, formatDate } from '@/features/admin/shared/format';
@@ -110,8 +110,8 @@ export function AdminCategoriesPage() {
       <TableCard busy={query.isFetching} label="Categories">
         <DataTable caption="Categories" data={query.data?.data ?? []} columns={columns} keyExtractor={row => row.id} sort={list.sort} onSortChange={list.setSort}
           loadingRows={query.isPending ? 6 : undefined}
-          emptyMessage={list.isFiltered ? <EmptyRows title="No categories match these filters" hint="Try a different search or reset the filters." />
-            : <EmptyRows title="No categories yet" hint="Add a category to start organizing the catalog." />} />
+          emptyMessage={<ListEmpty failed={query.isError && !query.data}>{list.isFiltered ? <EmptyRows title="No categories match these filters" hint="Try a different search or reset the filters." />
+            : <EmptyRows title="No categories yet" hint="Add a category to start organizing the catalog." />}</ListEmpty>} />
       </TableCard>
       <Pager meta={query.data?.meta} onPage={list.setPage} disabled={query.isFetching} label="Category pages" />
     </div>
