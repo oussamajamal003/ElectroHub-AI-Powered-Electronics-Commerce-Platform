@@ -75,7 +75,7 @@ Envelopes:
    - No growth percentages, fake charts or unread counters.
    - An unavailable KPI shows a dash, never a zero.
 9. **Fixtures.** `isTestFixture` products are excluded from admin lists and counts and return 404 for writes.
-10. **Logout and account switch.** `AuthContext.logout()` clears every query, and all admin keys start with `'admin'`. Signing out from an admin route lands on `/admin/login`. A deep link survives sign-in through a validated `/admin/...` return path, including its list filters (query string carried separately and applied only to a validated path). Unsaved product edits are protected on reload/close (`beforeunload`) and on in-app links (capture-phase confirm, since `BrowserRouter` has no `useBlocker`); browser Back is not intercepted.
+10. **Logout and account switch.** `AuthContext.logout()` clears every query, and all admin keys start with `'admin'`. Signing out from an admin route lands on `/admin/login`. A deep link survives sign-in through a validated `/admin/...` return path, including its list filters (query string carried separately and applied only to a validated path). Unsaved product edits are protected by `useUnsavedChangesGuard`. In-app links and browser Back ask in the in-app dialog: `BrowserRouter` has no `useBlocker`, so the guard duplicates the history entry, which also clears the forward stack so Forward cannot discard edits. Reload/close use the native `beforeunload` prompt. Confirming leaves in one step, with no second prompt.
 
 ## 4. Test map
 

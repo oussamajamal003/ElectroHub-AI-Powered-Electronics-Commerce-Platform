@@ -1,11 +1,33 @@
 # Task 05.1 — Implementation evidence (A01–J10)
 
-- **Branch / baseline:** `feature/05.1-admin-dashboard` @ `43d1c57` (`origin/develop`, contains merged 04.7 `3776679`). All 05.1 work is **uncommitted** (owner override: no commit, push, merge or deploy).
+- **Branch / PR:** `feature/05.1-admin-dashboard`, published as [PR #44](https://github.com/oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerce-Platform/pull/44) into `develop` (baseline `43d1c57`, contains merged 04.7 `3776679`). Not merged or deployed.
+- **Review history:** Stage 1 (local source review before publishing): APPROVE, 88/100. Stage 2 (PR #44 code review): 10 findings, all fixed in `fe6ca16`…`a7dfc5b`; CI on `a7dfc5b`: 24/24 checks green (Development CI and Security Audit, push and pull_request). The closure round (§1A) adds the Back/Forward guard, the failed-load table state and the disposable-DB checks; CI for its head is recorded on PR #44.
 - **Environment:** Windows 11. Owner-run backend `:5000` → shared Supabase **DEV** (`pzxekjybdiulzmssalfo`) and Vite `:3000`. Chromium is Playwright's bundled build. Supabase **PROD** (`yepfgjehdstlxbpespun`) was not touched, and no migration exists.
-- **Reviewer:** not yet reviewed (Architect sign-off pending).
+- **Reviewer:** Architect sign-off pending.
 - **Status values:** PASS = evidence exists. FAIL = a known defect. NOT VERIFIED = not exercised. These are never used interchangeably.
 
-## 1. Commands actually executed (final state)
+## 1A. Closure round (2026-11-03): current status
+
+| Check | Command / source | Result |
+|---|---|---|
+| Frontend admin tests | `npx vitest run src/pages/admin src/features/admin src/layouts src/components/layout/ProtectedRoute` | 14 files, **71/71 passed** |
+| Frontend typecheck / lint | `npx tsc -b`, `npx eslint src/features/admin src/pages/admin tests/visual/admin-closure-disposable.spec.ts` | exit 0 / exit 0 |
+| Disposable browser checks | `EH_QA_STACK_STATE=<run>/state.json EH_QA_OUT=… npx playwright test -c playwright.admin-closure-disposable.config.ts` against `node apps/backend/scripts/delivery-qa-stack.cjs` (`loopback:57587/electrohub_disposable_delivery_qa_f7330a02`, backend :5310, Vite :3310; stack stopped afterwards) | **6/6 passed**; one structured record per check (test ID, environment, revision, route, action, expected, actual, evidence, result) in `scratch/qa-05.1/closure/closure-evidence.json` (gitignored, with screenshots) |
+| G03 reconciliation | `npx tsx apps/backend/scripts/admin-spend-reconciliation.ts --customers=5` (read-only; refuses production) on the same disposable DB | **PASS**: 2 customers. One has 15 orders with 12 SUCCEEDED and 1 REFUNDED payment (paid spend USD 4199.88 = 12 × 349.99); the other has 2 orders (USD 699.98). Order counts and last-order dates match |
+
+Defects found and fixed in this round:
+- **Browser Back/Forward discarded unsaved product edits.** `useUnsavedChangesGuard` (`features/admin/shared/useUnsavedChangesGuard.ts`) keeps `BrowserRouter`. While the form is dirty it duplicates the current history entry, so Back lands on the form and asks in the in-app dialog (Cancel focused). Duplicating the entry also clears the forward stack, so Forward cannot discard edits. Links, the breadcrumb and Discard use the same dialog instead of `window.confirm`. Confirmed exits remove the duplicate entry first and creating a product replaces it, so history gains no extra step.
+- **Double prompt when Back left the app's first entry.** After confirming in the dialog, the browser's `beforeunload` prompt also fired, and dismissing it cancelled the navigation. Confirming now releases the unload warning.
+- **Edits after a save were unguarded.** The guard switched off once any save had succeeded; now only a successful *create* switches it off.
+- **Failed list loads claimed the list was empty.** With an error and no data, the table showed "No customers yet" (or the page's equivalent) under the error banner. `ListEmpty` in `AdminUi` now shows "These rows could not be loaded" on the products, categories, inventory, orders and customers lists and on the dashboard's recent orders.
+
+Still NOT VERIFIED after this round:
+- **G03 on shared DEV.** It needs a DEV admin sign-in, and this run had no approved credential source. Owner action, in `apps/backend` with the DEV `.env`: `EH_RECON_API=http://127.0.0.1:5000 EH_RECON_ADMIN_EMAIL=… EH_RECON_ADMIN_PASSWORD=… npx tsx scripts/admin-spend-reconciliation.ts`.
+- **Native Ctrl+'+' zoom.** Automation cannot press browser zoom. E06 ran at the equivalent layout (640×400 CSS px, as Chrome at 200% on a 1280×800 window).
+- **F03 live fulfilment step on DEV** (unchanged; see the row).
+- **Access token after sign-out.** Sign-out revokes the refresh token (refresh → 401) and clears the console, but the last access token stays valid until it expires (15 min, stateless JWT). This is the existing auth design, not a 05.1 change.
+
+## 1. Commands actually executed (before PR #44)
 
 | Check | Command | Result |
 |---|---|---|
@@ -93,7 +115,7 @@ Shell-wide differences:
 | A04 | PASS | §2 table maps every reference file to its route, state and evidence. |
 | A05 | PASS | Implementation plan §2–3: API table, envelopes, authorization, zero migrations. |
 | A06 | PASS | No analytics, settings, invitation or MFA code. Nav has only 05.1 modules (AdminLayout test). |
-| B01 | PASS | Live ADMIN sign-in (HTTP 200, role ADMIN). Logout is the profile-menu `logout()`, unit-tested in `AdminLayout.test.tsx`. **Logout was not clicked in the live run.** |
+| B01 | PASS | Live ADMIN sign-in (HTTP 200, role ADMIN). Closure (disposable): Sign out clicked in the account menu → `/admin/login`, no admin table left, protected route redirects, refresh → 401. The last access token stays valid until it expires (15 min; see §1A). |
 | B02 | PASS | Live: skip link is the first Tab stop and focuses `#admin-main`; the 390 drawer opens, lists modules and closes on navigation. Unit: collapse persistence, active route, collapsed tooltips. |
 | B03 | PASS | Profile menu shows name, email and role (unit). Alert counts come from `/dashboard/alerts`, with an aria-label stating the count (unit + live badge). |
 | B04 | PASS | Breadcrumbs on every page (screenshots); no Figma switcher. |
@@ -110,13 +132,13 @@ Shell-wide differences:
 | D02 | PASS | Live: the add and edit dialogs save; the name field is auto-focused. |
 | D03 | PASS | `CATEGORY_NAME_TAKEN`/`CATEGORY_SLUG_TAKEN` mapping. Slug is immutable. A hidden category refuses activation of its products (unit). New categories start hidden (fixed and confirmed live). |
 | D04 | PASS | Delete only when unused, under a row lock (unit); live delete of the empty QA category; hiding keeps products. |
-| D05 | NOT VERIFIED | Desktop verified live. Category pages at 390/768/zoom were not captured. |
+| D05 | PASS | Desktop verified live. Closure (disposable), Add dialog at 390 and 768: Name focused, empty submit shows the error, dialog inside the viewport, no horizontal scroll, Escape closes and focus returns to the trigger. |
 | E01 | PASS | Live summary cards and SKU search on authoritative rows. |
 | E02 | PASS | Live restock 3→5 and set 5→4 through `InventoryService` under `FOR UPDATE` (unit). |
 | E03 | PASS | Zero restock is refused in the UI (unit) and API (route); stale or resubmitted adjustments return 409 with the current row (unit + live during defect 2); restock of an untracked product is refused. |
 | E04 | PASS | Checkout and compensation still use the unchanged `InventoryService`; no change to those paths. |
 | E05 | PASS | Status is derived by `InventoryService`. The threshold form is unit-covered; **the threshold was not changed live.** |
-| E06 | NOT VERIFIED | The dialog keyboard flow is verified at 1440. The inventory page is verified at 200%, but the dialog itself was not captured at 200%. |
+| E06 | PASS (zoom-equivalent) | Closure (disposable) at 640×400 CSS px (the Chrome 200% layout): the 728 px dialog scrolls inside its modal container; title and Add stock/Close are reachable; focus stays in the dialog; empty and stale submits show their alerts. Native Ctrl+'+' zoom NOT VERIFIED. |
 | F01 | PASS | Live list, status chips with counts, separate payment filter; server pagination ("Page 1 of 4"). Since the PR #44 review fix, chip counts respect the search, payment and customer filters (unit). |
 | F02 | PASS | Live detail: item snapshot, sanitized payment (status, amount, method), customer, address. |
 | F03 | PASS (component) / NOT VERIFIED (live) | Steps call the existing 04.5 delivery API, whose eligibility and revision tests are unchanged. `AdminOrderDetailPage.test.tsx` covers confirm-then-start, one allowed step with the current revision, reload on 409, no action for cancelled/unpaid/delivered orders and the payment-blocked explanation. No live transition was run, to avoid mutating real DEV orders. |
@@ -125,10 +147,10 @@ Shell-wide differences:
 | F06 | PASS | §2; detail at all viewports. |
 | G01 | PASS | Live list (CUSTOMER role only; route tests). |
 | G02 | PASS | Live detail; projection allowlist; deleted accounts are nulled (unit). |
-| G03 | NOT VERIFIED | Definition: SUCCEEDED payments per currency (refunded payments excluded). No independent database reconciliation was run. |
+| G03 | PASS (disposable) / NOT VERIFIED (shared DEV) | `scripts/admin-spend-reconciliation.ts` recomputes spend from individual SUCCEEDED payment rows and compares it with `GET /api/admin/customers/:id`: 2/2 customers match, including one whose refunded payment is excluded. The DEV run needs the owner's admin sign-in (§1A). |
 | G04 | PASS | Lock, refresh-token revocation and socket disconnect; self-change blocked; deleted accounts are never reactivated (unit). Not exercised live, to avoid deactivating a real DEV customer. |
 | G05 | PASS | No role field accepted anywhere (strict schemas, route test). |
-| G06 | NOT VERIFIED | Normal list and detail verified live at all viewports. The empty state is only in Storybook; a large list was not tested. |
+| G06 | PASS | Live list and detail at all viewports. Closure (disposable): a no-match search shows the filtered empty state; `pageSize=1` returns distinct server pages (total 2, 2 pages); a delayed response shows the busy state; HTTP 500 shows the error with a working Retry and no false "No customers yet" (fixed). The disposable data has 2 customers, so large lists were checked through server pagination, not volume. |
 | H01 | PASS | `/admin/deliveries` renders live inside the shell; delivery logic untouched; its tests pass. Realtime not re-exercised. |
 | H02 | PASS | Canonical links: order ↔ delivery (code + screenshot). |
 | H03 | PASS | Live delivery list with the status filter in the URL. |
@@ -143,12 +165,12 @@ Shell-wide differences:
 | J02 | PASS | `admin-operations.service.test.ts` (11 tests) + `inventoryMutations.test.tsx`. |
 | J03 | PASS | Storybook `Admin/Primitives`: header, KPI, filters + table, loading/empty, errors, dialog. Build exit 0 (§4). |
 | J04 | PASS | §2. |
-| J05 | NOT VERIFIED | Keyboard skip link, focus on the first invalid field, all viewports and 200% are verified live. **Reduced motion was not verified in a browser** (CSS `prefers-reduced-motion` rules exist). |
-| J06 | NOT VERIFIED | Browser flows ran on **shared DEV** with tagged QA data, not on a disposable database. No DEV/PROD confusion: PROD was never addressed. |
+| J05 | PASS | Keyboard skip link, focus on the first invalid field, all viewports and 200% verified live. Closure (disposable) with `prefers-reduced-motion: reduce`: drawer, dialog and account menu have no animation or transition longer than 0.01 ms, and content shows without motion. |
+| J06 | PASS | The shared-DEV live run is kept as is. Closure: one admin flow on the disposable stack (`loopback:57587/electrohub_disposable_delivery_qa_f7330a02`). A QA product was created; stock went 10 → 11 through a concurrent write; the stale UI restock was rejected with the conflict alert; the retry persisted 16; a customer token got 403 and the quantity stayed 16. Shared DEV and PROD were not written. |
 | J07 | PASS | §1. |
 | J08 | PASS | No schema change or migration. |
 | J09 | PASS | Commits contain no secrets or QA credentials (checked before push). Screenshots with PII sit in gitignored `scratch/`. The credential runner lives outside the repo, in the session scratchpad. |
-| J10 | NOT VERIFIED | No commit or PR by owner instruction, so no CI run or Architect review yet. |
+| J10 | PARTIALLY VERIFIED | PR #44 is open; CI is 24/24 green on `a7dfc5b`, and the closure head's CI is on the PR. Architect review pending. |
 
 ## 4. Storybook
 
