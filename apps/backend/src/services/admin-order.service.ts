@@ -32,7 +32,7 @@ function paymentWhere(state: PaymentState): Prisma.OrderWhereInput {
   }
 }
 
-/** Search: an order reference (full or a UUID prefix of at least 8 hex chars), or the customer's name/email. */
+/** Search: a complete order reference (ORD-<uuid> or the bare UUID), or the customer's name/email/recipient. */
 export function orderSearch(q: string): Prisma.OrderWhereInput {
   const bare = q.replace(/^ord-/i, '').toLowerCase();
   const or: Prisma.OrderWhereInput[] = [
@@ -68,17 +68,18 @@ export class AdminOrderService {
   constructor(private readonly db: PrismaClient = prisma, private readonly deliveries = new DeliveryService()) {}
 
   async list(query: OrderList) {
-    const and: Prisma.OrderWhereInput[] = [];
-    if (query.q) and.push(orderSearch(query.q));
-    if (query.status) and.push({ status: query.status });
-    if (query.payment) and.push(paymentWhere(query.payment));
-    if (query.customerId) and.push({ userId: query.customerId });
+    // Status chips count within every other active filter (search, payment, customer), so each chip matches the rows it selects.
+    const scope: Prisma.OrderWhereInput[] = [];
+    if (query.q) scope.push(orderSearch(query.q));
+    if (query.payment) scope.push(paymentWhere(query.payment));
+    if (query.customerId) scope.push({ userId: query.customerId });
+    const and = query.status ? [...scope, { status: query.status }] : scope;
     const where: Prisma.OrderWhereInput = and.length ? { AND: and } : {};
     const [rows, total, groups] = await Promise.all([
       this.db.order.findMany({ where, orderBy: [{ [query.sort]: query.order }, { id: 'desc' }], skip: (query.page - 1) * query.pageSize,
         take: query.pageSize, select: listSelect }),
       this.db.order.count({ where }),
-      this.db.order.groupBy({ by: ['status'], _count: { _all: true } }),
+      this.db.order.groupBy({ by: ['status'], where: scope.length ? { AND: scope } : {}, _count: { _all: true } }),
     ]);
     const statusCounts = Object.fromEntries(groups.map(group => [group.status, group._count._all]));
     return { data: rows.map(projectOrderRow), meta: { page: query.page, pageSize: query.pageSize, total,

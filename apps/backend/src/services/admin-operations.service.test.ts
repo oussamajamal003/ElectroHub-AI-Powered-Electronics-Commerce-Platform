@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
-import { AdminInventoryService } from './admin-inventory.service.js';
+import { AdminInventoryService, stockWhere } from './admin-inventory.service.js';
+import { AdminOrderService } from './admin-order.service.js';
+import { AdminDashboardService } from './admin-dashboard.service.js';
 import { AdminCustomerService } from './admin-customer.service.js';
 import { AdminCatalogService } from './admin-catalog.service.js';
 import type { InventoryService } from './inventory.service.js';
@@ -18,13 +20,14 @@ const stamp = new Date('2026-11-01T10:00:00.000Z');
 /** A Prisma double whose interactive transaction runs the callback against the same mocks (the row lock is a $queryRaw call). */
 function database() {
   const db = {
-    product: { findUnique: vi.fn(), updateMany: vi.fn(), count: vi.fn() },
+    product: { findUnique: vi.fn(), updateMany: vi.fn(), count: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+    payment: { groupBy: vi.fn().mockResolvedValue([]) },
     inventory: { create: vi.fn(), update: vi.fn() },
     category: { delete: vi.fn(), create: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn() },
     productSpecification: { deleteMany: vi.fn(), createMany: vi.fn() },
-    user: { findFirst: vi.fn(), update: vi.fn() },
+    user: { findFirst: vi.fn(), update: vi.fn(), findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) },
     refreshToken: { updateMany: vi.fn() },
-    order: { groupBy: vi.fn().mockResolvedValue([]), findMany: vi.fn().mockResolvedValue([]) },
+    order: { groupBy: vi.fn().mockResolvedValue([]), findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) },
     address: { findFirst: vi.fn().mockResolvedValue(null) },
     $queryRaw: vi.fn(), $executeRaw: vi.fn(),
     $transaction: vi.fn(),
@@ -81,6 +84,70 @@ describe('AdminInventoryService.adjust', () => {
     await expect(service.adjust(ADMIN, PRODUCT, { operation: 'RESTOCK', quantity: 2, expectedQuantity: null, reason: undefined }))
       .rejects.toMatchObject({ statusCode: 409, code: 'INVENTORY_NOT_FOUND' });
     expect(db.inventory.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('AdminInventoryService.setThreshold', () => {
+  let db: ReturnType<typeof database>;
+  let service: AdminInventoryService;
+  beforeEach(() => { db = database(); service = new AdminInventoryService(db as unknown as PrismaClient, {} as InventoryService); });
+
+  it('refuses QA fixtures even when they have a stock record, before locking or writing', async () => {
+    db.product.findUnique.mockResolvedValueOnce({ isTestFixture: true });
+    db.$queryRaw.mockResolvedValue([{ quantity: 4, lowStockAt: 5 }]);
+    await expect(service.setThreshold(ADMIN, PRODUCT, 8, 5)).rejects.toMatchObject({ statusCode: 404, code: 'PRODUCT_NOT_FOUND' });
+    expect(db.$queryRaw).not.toHaveBeenCalled();
+    expect(db.inventory.update).not.toHaveBeenCalled();
+  });
+
+  it('reports a write conflict as INVENTORY_CONFLICT with the current row, not a server error', async () => {
+    const { Prisma } = await import('@prisma/client');
+    db.$transaction.mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError('conflict', { code: 'P2034', clientVersion: 'test' }));
+    db.product.findUnique.mockResolvedValue(inventoryRow(4));
+    await expect(service.setThreshold(ADMIN, PRODUCT, 8, 5))
+      .rejects.toMatchObject({ statusCode: 409, code: 'INVENTORY_CONFLICT', current: expect.objectContaining({ quantity: 4 }) });
+  });
+});
+
+describe('admin list filters match their counts', () => {
+  it('keeps untracked products out of OUT_OF_STOCK and gives them their own filter', () => {
+    expect(stockWhere('OUT_OF_STOCK')).toEqual({ inventory: { is: { status: 'OUT_OF_STOCK' } } });
+    expect(stockWhere('UNTRACKED')).toEqual({ inventory: { is: null } });
+  });
+
+  it('counts order status chips within the other active filters, but not within the selected status', async () => {
+    const db = database();
+    db.order.groupBy.mockResolvedValue([{ status: 'CONFIRMED', _count: { _all: 2 } }]);
+    const service = new AdminOrderService(db as unknown as PrismaClient, {} as never);
+    const result = await service.list({ q: undefined, page: 1, pageSize: 20, order: 'desc', sort: 'createdAt', status: 'CONFIRMED', payment: 'PAID', customerId: CUSTOMER });
+    const scope = [{ payment: { is: { status: 'SUCCEEDED' } } }, { userId: CUSTOMER }];
+    expect(db.order.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: { AND: scope } }));
+    expect(db.order.count).toHaveBeenCalledWith({ where: { AND: [...scope, { status: 'CONFIRMED' }] } });
+    expect(result.meta.statusCounts).toEqual({ CONFIRMED: 2 });
+  });
+
+  it('lists anonymized (deleted) accounts under neither the ACTIVE nor the INACTIVE filter', async () => {
+    const db = database();
+    db.$queryRaw.mockResolvedValue([]);
+    await new AdminCustomerService(db as unknown as PrismaClient).list({ q: undefined, page: 1, pageSize: 20, order: 'desc', sort: 'createdAt', status: 'INACTIVE' });
+    expect(db.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { AND: expect.arrayContaining([
+      { isActive: false, NOT: { email: { endsWith: '@deleted.invalid' } } }]) } }));
+  });
+});
+
+describe('AdminDashboardService.overview', () => {
+  it('reads the stock summary once and buckets revenue by the stored UTC day', async () => {
+    const db = database();
+    db.$queryRaw.mockResolvedValue([]);
+    const summary = vi.fn().mockResolvedValue({ inStock: 1, lowStock: 2, outOfStock: 3, untracked: 4 });
+    const service = new AdminDashboardService(db as unknown as PrismaClient, { summary } as unknown as AdminInventoryService, () => stamp);
+    const overview = await service.overview(7);
+    expect(summary).toHaveBeenCalledTimes(1);
+    expect(overview.inventory).toMatchObject({ outOfStock: 3, untracked: 4 });
+    expect(overview.fulfillment).toEqual({ awaitingFulfillment: 0, preparing: 0, outForDelivery: 0 });
+    const sql = String(db.$queryRaw.mock.calls[0]![0].strings.join(''));
+    expect(sql).toContain(`date_trunc('day', "paidAt")`);
+    expect(sql).not.toContain('AT TIME ZONE');
   });
 });
 

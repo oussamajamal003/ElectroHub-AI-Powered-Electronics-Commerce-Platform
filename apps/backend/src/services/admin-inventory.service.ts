@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { deriveStockStatus, InventoryService } from './inventory.service.js';
 import { logSafely } from '../utils/logger.js';
-import type { inventoryAdjustmentSchema, inventoryListSchema } from '../validators/admin.validator.js';
+import type { inventoryAdjustmentSchema, inventoryListSchema, STOCK_FILTERS } from '../validators/admin.validator.js';
 
 /**
  * Task 05.1 admin inventory. Quantities change only through the existing InventoryService (row lock + checked update + status
@@ -14,6 +14,12 @@ import type { inventoryAdjustmentSchema, inventoryListSchema } from '../validato
 type InventoryList = z.infer<typeof inventoryListSchema>;
 type Adjustment = z.infer<typeof inventoryAdjustmentSchema>;
 const TX = { maxWait: 10_000, timeout: 20_000 };
+const isWriteConflict = (error: unknown) => error instanceof Prisma.PrismaClientKnownRequestError && ['P2002', 'P2034'].includes(error.code);
+
+/** Stock filter shared by the inventory and catalog lists; each value selects exactly the rows its summary() count counts. */
+export function stockWhere(filter: (typeof STOCK_FILTERS)[number]): Prisma.ProductWhereInput {
+  return filter === 'UNTRACKED' ? { inventory: { is: null } } : { inventory: { is: { status: filter } } };
+}
 
 const select = {
   id: true, name: true, sku: true, status: true,
@@ -52,8 +58,7 @@ export class AdminInventoryService {
   async list(query: InventoryList) {
     const where: Prisma.ProductWhereInput = { isTestFixture: false };
     if (query.q) where.OR = [{ name: { contains: query.q, mode: 'insensitive' } }, { sku: { contains: query.q, mode: 'insensitive' } }];
-    if (query.status === 'OUT_OF_STOCK') where.AND = [{ OR: [{ inventory: { is: null } }, { inventory: { is: { quantity: 0 } } }] }];
-    else if (query.status) where.inventory = { is: { status: query.status } };
+    if (query.status) Object.assign(where, stockWhere(query.status));
     const orderBy: Prisma.ProductOrderByWithRelationInput[] = query.sort === 'quantity' ? [{ inventory: { quantity: query.order } }, { name: 'asc' }]
       : query.sort === 'updatedAt' ? [{ inventory: { updatedAt: query.order } }, { name: 'asc' }] : [{ [query.sort]: query.order }, { id: 'asc' }];
     const [rows, total, summary] = await Promise.all([
@@ -96,7 +101,7 @@ export class AdminInventoryService {
         : await this.inventory.increaseStock(productId, input.quantity, tx);
       return { from: current.quantity, to: next.quantity };
     }, TX).catch(error => {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && ['P2002', 'P2034'].includes(error.code)) { stale = true; return null; }
+      if (isWriteConflict(error)) { stale = true; return null; }
       throw error;
     });
     if (stale || !outcome) return this.conflict(productId);
@@ -109,16 +114,19 @@ export class AdminInventoryService {
   async setThreshold(actorId: string, productId: string, lowStockAt: number, expectedLowStockAt: number) {
     let stale = false;
     await this.db.$transaction(async tx => {
+      // Fixtures are read-only here too, whether or not they have a stock record.
+      const product = await tx.product.findUnique({ where: { id: productId }, select: { isTestFixture: true } });
+      if (!product || product.isTestFixture) throw new AppError('Product not found.', 404, 'PRODUCT_NOT_FOUND');
       const rows = await tx.$queryRaw<{ quantity: number; lowStockAt: number }[]>(Prisma.sql`
         SELECT "quantity", "lowStockAt" FROM "inventory" WHERE "productId" = ${productId}::uuid FOR UPDATE`);
       const current = rows[0];
-      if (!current) {
-        await this.get(productId, tx);
-        throw new AppError('This product has no stock record yet. Set its quantity first.', 409, 'INVENTORY_NOT_FOUND');
-      }
+      if (!current) throw new AppError('This product has no stock record yet. Set its quantity first.', 409, 'INVENTORY_NOT_FOUND');
       if (current.lowStockAt !== expectedLowStockAt) { stale = true; return; }
       await tx.inventory.update({ where: { productId }, data: { lowStockAt, status: deriveStockStatus(current.quantity, lowStockAt) } });
-    }, TX);
+    }, TX).catch(error => {
+      if (isWriteConflict(error)) { stale = true; return; }
+      throw error;
+    });
     if (stale) return this.conflict(productId);
     logSafely('info', 'Admin inventory change', { event: 'admin.inventory.threshold', actorId, productId, lowStockAt });
     return this.get(productId);

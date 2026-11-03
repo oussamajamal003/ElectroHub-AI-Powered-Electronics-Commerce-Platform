@@ -16,28 +16,29 @@ export class AdminDashboardService {
   constructor(private readonly db: PrismaClient = prisma, private readonly inventory = new AdminInventoryService(),
     private readonly clock: () => Date = () => new Date()) {}
 
+  /** Paid orders waiting at each fulfillment step. */
+  private async fulfillment() {
+    const [awaitingFulfillment, preparing, outForDelivery] = await Promise.all((['CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY'] as const)
+      .map(status => this.db.order.count({ where: { status, payment: { is: { status: 'SUCCEEDED' } } } })));
+    return { awaitingFulfillment, preparing, outForDelivery };
+  }
+
   /** Actionable operational counts shared by the dashboard and the header alerts menu. */
   async alerts() {
-    const [stock, awaitingFulfillment, preparing, outForDelivery] = await Promise.all([
-      this.inventory.summary(),
-      this.db.order.count({ where: { status: 'CONFIRMED', payment: { is: { status: 'SUCCEEDED' } } } }),
-      this.db.order.count({ where: { status: 'PREPARING', payment: { is: { status: 'SUCCEEDED' } } } }),
-      this.db.order.count({ where: { status: 'OUT_FOR_DELIVERY', payment: { is: { status: 'SUCCEEDED' } } } }),
-    ]);
-    return { lowStock: stock.lowStock, outOfStock: stock.outOfStock, awaitingFulfillment, preparing, outForDelivery,
-      generatedAt: this.clock().toISOString() };
+    const [stock, fulfillment] = await Promise.all([this.inventory.summary(), this.fulfillment()]);
+    return { lowStock: stock.lowStock, outOfStock: stock.outOfStock, ...fulfillment, generatedAt: this.clock().toISOString() };
   }
 
   async overview(days: number) {
     const now = this.clock();
     const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
     const since = new Date(today - (days - 1) * DAY);
-    const [revenue, series, statusGroups, ordersInWindow, products, activeProducts, customers, activeCustomers, recent, lowStockRows, alerts, stock] =
+    const [revenue, series, statusGroups, ordersInWindow, products, activeProducts, customers, activeCustomers, recent, lowStockRows, fulfillment, stock] =
       await Promise.all([
         this.db.payment.groupBy({ by: ['currency'], where: { status: 'SUCCEEDED', paidAt: { gte: since } }, _sum: { amount: true },
           _count: { _all: true }, orderBy: { currency: 'asc' } }),
         this.db.$queryRaw<{ day: Date; currency: string; amount: Prisma.Decimal; orders: bigint }[]>(Prisma.sql`
-          SELECT date_trunc('day', "paidAt" AT TIME ZONE 'UTC') AS day, "currency", SUM("amount") AS amount, COUNT(*) AS orders
+          SELECT date_trunc('day', "paidAt") AS day, "currency", SUM("amount") AS amount, COUNT(*) AS orders
           FROM "payments" WHERE "status" = 'SUCCEEDED' AND "paidAt" >= ${since}
           GROUP BY 1, 2 ORDER BY 1 ASC`),
         this.db.order.groupBy({ by: ['status'], _count: { _all: true } }),
@@ -53,7 +54,7 @@ export class AdminDashboardService {
         this.db.product.findMany({ where: { isTestFixture: false, inventory: { is: { status: { in: ['LOW_STOCK', 'OUT_OF_STOCK'] } } } },
           orderBy: [{ inventory: { quantity: 'asc' } }, { name: 'asc' }], take: 5,
           select: { id: true, name: true, sku: true, inventory: { select: { quantity: true, lowStockAt: true } } } }),
-        this.alerts(),
+        this.fulfillment(),
         this.inventory.summary(),
       ]);
     const statusCounts = Object.fromEntries(ORDER_STATUSES.map(status => [status, statusGroups.find(group => group.status === status)?._count._all ?? 0]));
@@ -69,7 +70,7 @@ export class AdminDashboardService {
       inventory: { ...stock, attention: lowStockRows.map(row => ({ productId: row.id, name: row.name, sku: row.sku,
         quantity: row.inventory!.quantity, lowStockAt: row.inventory!.lowStockAt,
         stockStatus: deriveStockStatus(row.inventory!.quantity, row.inventory!.lowStockAt) })) },
-      fulfillment: { awaitingFulfillment: alerts.awaitingFulfillment, preparing: alerts.preparing, outForDelivery: alerts.outForDelivery },
+      fulfillment,
       recentOrders: recent.map(projectOrderRow),
     };
   }

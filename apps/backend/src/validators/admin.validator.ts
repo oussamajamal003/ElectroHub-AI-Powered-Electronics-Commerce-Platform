@@ -17,7 +17,8 @@ export const uuidSchema = z.string().uuid();
 export const expectedUpdatedAt = z.iso.datetime({ offset: true });
 
 // ─── Products ───────────────────────────────────────────
-export const STOCK_FILTERS = ['IN_STOCK', 'LOW_STOCK', 'OUT_OF_STOCK'] as const;
+// UNTRACKED = no stock record (legacy data); it is never folded into OUT_OF_STOCK so each filter matches its own summary count.
+export const STOCK_FILTERS = ['IN_STOCK', 'LOW_STOCK', 'OUT_OF_STOCK', 'UNTRACKED'] as const;
 export const productListSchema = z.object({
   ...listBase,
   categoryId: uuidSchema.optional(),

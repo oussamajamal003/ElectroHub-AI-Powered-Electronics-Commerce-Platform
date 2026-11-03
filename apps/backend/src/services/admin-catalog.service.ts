@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { normalizeSlug } from '../validators/product.validator.js';
 import { deriveStockStatus } from './inventory.service.js';
+import { stockWhere } from './admin-inventory.service.js';
 import { logSafely } from '../utils/logger.js';
 import type { categoryCreateSchema, categoryListSchema, categoryUpdateSchema, productCreateSchema, productListSchema,
   productUpdateSchema } from '../validators/admin.validator.js';
@@ -70,8 +71,7 @@ export class AdminCatalogService {
     if (query.q) where.OR = [{ name: { contains: query.q, mode: 'insensitive' } }, { sku: { contains: query.q, mode: 'insensitive' } }];
     if (query.categoryId) where.categoryId = query.categoryId;
     if (query.status) where.status = query.status;
-    if (query.stock === 'OUT_OF_STOCK') where.AND = [{ OR: [{ inventory: { is: null } }, { inventory: { is: { quantity: 0 } } }] }];
-    else if (query.stock) where.inventory = { is: { status: query.stock } };
+    if (query.stock) Object.assign(where, stockWhere(query.stock));
     const orderBy: Prisma.ProductOrderByWithRelationInput[] = [{ [query.sort]: query.order }, { id: 'asc' }];
     const [rows, total] = await Promise.all([
       this.db.product.findMany({ where, orderBy, skip: (query.page - 1) * query.pageSize, take: query.pageSize, select: listSelect }),
