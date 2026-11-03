@@ -48,9 +48,9 @@ function CategoryDialog({ editing, onClose }: { editing: Editing | null; onClose
           : 'New categories start hidden so you can add products before customers see them.'}
       </DialogDescription>
       <form className={styles.form} onSubmit={submit} noValidate>
-        <Input label="Name" required value={name} maxLength={100} autoFocus fullWidth onChange={event => setName(event.target.value)}
+        <Input label="Name" required placeholder="e.g. Gaming Laptops" value={name} maxLength={100} autoFocus fullWidth onChange={event => setName(event.target.value)}
           error={localError ?? errors.name ?? (conflictCode === 'CATEGORY_NAME_TAKEN' || conflictCode === 'CATEGORY_SLUG_TAKEN' ? errorMessage(mutation.error) : undefined)} />
-        <Textarea label="Description" value={description} maxLength={1000} rows={3} fullWidth helperText={`${description.length}/1000`}
+        <Textarea label="Description" placeholder="Short summary shown on the category page" value={description} maxLength={1000} rows={3} fullWidth helperText={`${description.length}/1000`}
           error={errors.description} onChange={event => setDescription(event.target.value)} />
         {mutation.isError && !errors.name && !conflictCode?.endsWith('_TAKEN') && <p className={uiStyles.dialogError} role="alert">{errorMessage(mutation.error)}</p>}
         <div className={uiStyles.dialogActions}>
@@ -107,13 +107,13 @@ export function AdminCategoriesPage() {
       active={list.filters.status} onChip={value => list.setFilter('status', value)} onReset={list.reset} resetDisabled={!list.isFiltered} />
     {query.isError && <QueryProblem error={query.error} hasData={Boolean(query.data)} onRetry={() => void query.refetch()} retrying={query.isFetching} what="Categories" />}
     <div>
-      <TableCard busy={query.isFetching} label="Categories">
+      <TableCard busy={query.isPlaceholderData} label="Categories">
         <DataTable caption="Categories" data={query.data?.data ?? []} columns={columns} keyExtractor={row => row.id} sort={list.sort} onSortChange={list.setSort}
           loadingRows={query.isPending ? 6 : undefined}
           emptyMessage={<ListEmpty failed={query.isError && !query.data}>{list.isFiltered ? <EmptyRows title="No categories match these filters" hint="Try a different search or reset the filters." />
             : <EmptyRows title="No categories yet" hint="Add a category to start organizing the catalog." />}</ListEmpty>} />
       </TableCard>
-      <Pager meta={query.data?.meta} onPage={list.setPage} disabled={query.isFetching} label="Category pages" />
+      <Pager meta={query.data?.meta} onPage={list.setPage} disabled={query.isPlaceholderData} label="Category pages" />
     </div>
 
     {editing && <CategoryDialog key={editing.mode === 'edit' ? editing.category.id : 'new'} editing={editing} onClose={() => setEditing(null)} />}

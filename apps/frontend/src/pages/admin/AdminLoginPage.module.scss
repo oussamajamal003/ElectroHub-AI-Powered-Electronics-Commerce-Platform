@@ -31,11 +31,9 @@
   align-items: center;
 
   .brand {
-    font-family: $font-family-heading;
-    font-size: $font-size-2xl;
-    font-weight: $font-weight-bold;
-    color: $color-primary;
-    margin-bottom: $spacing-4;
+    display: flex;
+    justify-content: center;
+    margin-bottom: $spacing-5;
   }
 
   .title {
@@ -125,3 +123,5 @@
     padding: $spacing-6 $spacing-4;
   }
 }
+
+.visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

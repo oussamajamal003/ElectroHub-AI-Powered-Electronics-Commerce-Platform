@@ -13,6 +13,10 @@
 .stack { display: grid; gap: $spacing-6; min-width: 0; align-content: start; }
 
 .panel { display: grid; gap: $spacing-4; min-width: 0; padding: $spacing-6; background: $color-background; border: 1px solid $color-border; align-content: start; }
+// Content panels share the card hover/focus cue (no lift: they hold forms and tables).
+.panel { transition: border-color $transition-fast, box-shadow $transition-fast;
+  &:hover, &:focus-within { border-color: rgba($color-primary, .45); box-shadow: $shadow-md; }
+  @media (prefers-reduced-motion: reduce) { transition: none; } }
 .panelFlush { padding: 0; gap: 0; > .panelHeader { padding: $spacing-5 $spacing-6; border-bottom: 1px solid $color-border; } }
 .panelHeader { display: flex; align-items: center; justify-content: space-between; gap: $spacing-3; flex-wrap: wrap; min-width: 0; }
 .panelTitle { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; color: $color-text-primary; }
@@ -66,6 +70,7 @@ td .mono, td .muted { white-space: nowrap; }
 .skeletonHeader { display: grid; gap: $spacing-3; }
 .skeletonField { display: grid; gap: $spacing-2; }
 .filterPicker { flex: 0 1 15rem; min-width: 12rem; }
+.filterSelectTrigger { min-width: 11rem; }
 .formActions { display: flex; gap: $spacing-3; justify-content: flex-end; flex-wrap: wrap; position: sticky; bottom: 0; padding: $spacing-4 0;
   background: linear-gradient(to top, $color-surface 70%, rgba($color-surface, 0)); }
 .formError { margin: 0; padding: $spacing-3 $spacing-4; border: 1px solid $color-error-border; background: $color-error-background; color: $color-error-foreground;
@@ -74,12 +79,13 @@ td .mono, td .muted { white-space: nowrap; }
   font-size: $font-size-sm; }
 .noticeWarning { border-color: $color-warning-border; background: $color-warning-background; color: $color-warning-foreground; }
 .specRow { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: $spacing-3; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) auto; align-items: end; }
-.segmented { display: inline-flex; border: 1px solid $color-border; background: $color-background; }
-.segment { min-height: 2.5rem; padding: 0 $spacing-4; border: 0; background: transparent; color: $color-text-secondary; font: inherit; font-size: $font-size-sm;
+// Equal-width segments: when the control is stretched (product form), no segment absorbs the leftover space.
+.segmented { display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: $spacing-3; }
+.segment { min-height: 2.5rem; padding: 0 $spacing-4; color: $color-text-secondary; font: inherit; font-size: $font-size-sm;
   font-weight: $font-weight-medium; cursor: pointer;
-  & + & { border-left: 1px solid $color-border; }
+  border: 1px solid $color-border; background: $color-background;
   &:hover:not([aria-pressed='true']):not([aria-checked='true']) { background: rgba($color-primary, .06); color: $color-primary; }
-  &[aria-pressed='true'], &[aria-checked='true'] { background: $color-primary; color: $color-text-inverse; font-weight: $font-weight-semibold; }
+  &[aria-pressed='true'], &[aria-checked='true'] { background: $color-primary; border-color: $color-primary; color: $color-text-inverse; font-weight: $font-weight-semibold; }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: 2px; } }
 
 // ─── Detail pages ────────────────────────────────────────

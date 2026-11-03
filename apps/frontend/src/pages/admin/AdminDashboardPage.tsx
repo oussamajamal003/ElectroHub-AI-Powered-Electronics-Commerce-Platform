@@ -149,7 +149,7 @@ export function AdminDashboardPage() {
           <h2 id="recent-title" className={styles.panelTitle}>Recent orders</h2>
           <Link to="/admin/orders" className={styles.panelLink}>All orders <ArrowRight aria-hidden="true" /></Link>
         </div>
-        <TableCard busy={query.isFetching} label="Recent orders">
+        <TableCard busy={query.isPlaceholderData} label="Recent orders">
           <DataTable caption="Recent orders" data={overview?.recentOrders ?? []} columns={recentColumns} keyExtractor={row => row.orderReference}
             loadingRows={loading ? 5 : undefined} emptyMessage={<ListEmpty failed={query.isError && !query.data}><EmptyRows title="No orders yet" hint="Orders appear here as soon as customers check out." /></ListEmpty>} />
         </TableCard>

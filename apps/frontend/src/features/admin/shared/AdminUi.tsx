@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info, RotateCcw, Search, X, XCircle } from 'lucide-react';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList } from '@/components/ui/Breadcrumb';
 import { Button } from '@/components/ui/Button';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
 import { Toast, ToastClose, ToastDescription, ToastProvider, ToastViewport } from '@/components/ui/Toast';
 import { errorMessage, type PageMeta } from './api';
@@ -116,7 +117,10 @@ export function TableCard({ children, busy, label }: { children: ReactNode; busy
 }
 
 export function Pager({ meta, onPage, disabled, label }: { meta: PageMeta | undefined; onPage: (page: number) => void; disabled?: boolean; label: string }) {
-  if (!meta || meta.total === 0) return null;
+  // A page past the end (bookmark, or rows deleted since) moves to the last real page instead of showing an empty list.
+  const beyond = meta && meta.totalPages > 0 && meta.page > meta.totalPages ? meta.totalPages : null;
+  useEffect(() => { if (beyond) onPage(beyond); }, [beyond, onPage]);
+  if (!meta || meta.total === 0 || beyond) return null;
   // The live summary below announces the new range; focus stays on the button so Next can be pressed again.
   const go = (page: number) => { onPage(page); scrollToContentTop(); };
   const start = (meta.page - 1) * meta.pageSize + 1;
@@ -198,3 +202,12 @@ export function AdminToastProvider({ children }: { children: ReactNode }) {
 }
 // eslint-disable-next-line react-refresh/only-export-components
 export const useAdminToast = () => useContext(ToastContext);
+
+/** Neutral admin page placeholder (breadcrumb, title, two content blocks) shown while a page's code loads. */
+export function AdminPageSkeleton() {
+  return <div className={styles.pageSkeleton} aria-busy="true">
+    <span role="status" className={styles.visuallyHidden}>Loading page…</span>
+    <Skeleton width="12rem" height="0.875rem" /><Skeleton width="min(22rem, 70%)" height="2.75rem" /><Skeleton width="min(28rem, 85%)" height="0.875rem" />
+    <Skeleton height="6rem" /><Skeleton height="18rem" />
+  </div>;
+}

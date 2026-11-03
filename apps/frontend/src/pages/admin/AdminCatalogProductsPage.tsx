@@ -102,19 +102,19 @@ export function AdminCatalogProductsPage() {
       <SearchSelect label="Filter by category" hideLabel options={categoryOptions} value={categoryLoaded ? list.filters.categoryId ?? 'ALL' : undefined}
         placeholder={options.data ? 'All categories' : 'Loading categories…'} searchPlaceholder="Search categories" className={styles.filterPicker}
         onValueChange={value => list.setFilter('categoryId', value === 'ALL' ? undefined : value)} />
-      <Select aria-label="Filter by stock" options={STOCK_OPTIONS} value={list.filters.stock ?? 'ALL'} square
+      <Select aria-label="Filter by stock" options={STOCK_OPTIONS} value={list.filters.stock ?? 'ALL'} square triggerClassName={styles.filterSelectTrigger}
         onValueChange={value => list.setFilter('stock', value === 'ALL' ? undefined : value)} />
     </FilterBand>
     {query.isError && <QueryProblem error={query.error} hasData={Boolean(query.data)} onRetry={() => void query.refetch()} retrying={query.isFetching} what="Products" />}
     <div>
-      <TableCard busy={query.isFetching} label="Products">
+      <TableCard busy={query.isPlaceholderData} label="Products">
         <DataTable caption="Catalog products" data={rows} columns={columns} keyExtractor={row => row.id} sort={list.sort} onSortChange={list.setSort}
           loadingRows={query.isPending ? 8 : undefined}
           emptyMessage={<ListEmpty failed={query.isError && !query.data}>{list.isFiltered
             ? <EmptyRows title="No products match these filters" hint="Try a different search or reset the filters." />
             : <EmptyRows title="No products yet" hint="Add the first product to start selling." />}</ListEmpty>} />
       </TableCard>
-      <Pager meta={query.data?.meta} onPage={list.setPage} disabled={query.isFetching} label="Product pages" />
+      <Pager meta={query.data?.meta} onPage={list.setPage} disabled={query.isPlaceholderData} label="Product pages" />
     </div>
     <ConfirmDialog open={Boolean(pending)} onOpenChange={open => { if (!open) setPending(null); }} pending={statusChange.isPending}
       title={activating ? 'Publish product?' : 'Unpublish product?'} confirmLabel={activating ? 'Publish' : 'Unpublish'} destructive={!activating}

@@ -17,7 +17,7 @@ export function normalizeSlug(value: string): string {
     .toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
 }
 
-export const moneySchema = z.string().regex(/^(?:0|[1-9]\d{0,9})\.\d{2}$/);
+export const moneySchema = z.string().regex(/^(?:0|[1-9]\d{0,9})\.\d{2}$/, 'Enter an amount with two decimals, for example 19.99.');
 export const pricingSchema = z.object({
   price: moneySchema,
   compareAtPrice: moneySchema.nullable().optional(),

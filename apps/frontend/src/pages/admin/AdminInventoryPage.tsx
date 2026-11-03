@@ -76,10 +76,11 @@ function AdjustDialog({ row: initialRow, onClose }: { row: InventoryRow; onClose
             onClick={() => setOperation('RESTOCK')}>Add units</button>
           <button type="button" className={styles.segment} aria-pressed={operation === 'SET'} onClick={() => setOperation('SET')}>Set exact count</button>
         </div>
-        <Input label={operation === 'RESTOCK' ? 'Units received' : 'Counted quantity'} inputMode="numeric" value={quantity} autoFocus fullWidth
+        <Input label={operation === 'RESTOCK' ? 'Units to add' : 'Counted quantity'} placeholder={operation === 'RESTOCK' ? 'e.g. 10' : 'e.g. 42'} inputMode="numeric" value={quantity} autoFocus fullWidth
           onChange={event => setQuantity(event.target.value.trim())} error={localError ?? errors.quantity}
-          helperText={resulting !== null ? `Stock after saving: ${formatCount(resulting)}` : undefined} />
-        <Input label="Reason (optional)" value={reason} maxLength={200} fullWidth onChange={event => setReason(event.target.value)}
+          helperText={resulting !== null ? `Stock after saving: ${formatCount(resulting)}`
+            : operation === 'RESTOCK' ? `Added to the ${formatCount(row.quantity ?? 0)} on hand.` : 'Replaces the current stock with the number you counted.'} />
+        <Input label="Reason (optional)" placeholder="e.g. Supplier delivery #1042" value={reason} maxLength={200} fullWidth onChange={event => setReason(event.target.value)}
           helperText="For example: supplier delivery, cycle count. Not shown to customers." error={errors.reason} />
         {adjust.isError && !conflictRow(adjust.error) && !errors.quantity && <p className={uiStyles.dialogError} role="alert">{errorMessage(adjust.error)}</p>}
         <div className={uiStyles.dialogActions}>
@@ -88,7 +89,7 @@ function AdjustDialog({ row: initialRow, onClose }: { row: InventoryRow; onClose
         </div>
       </form>
       {row.lowStockAt !== null && <form className={styles.panel} onSubmit={submitThreshold} noValidate aria-label="Low-stock alert">
-        <Input label="Low-stock alert at" inputMode="numeric" value={lowStockAt} fullWidth onChange={event => setLowStockAt(event.target.value.trim())}
+        <Input label="Low-stock alert at" placeholder="e.g. 5" inputMode="numeric" value={lowStockAt} fullWidth onChange={event => setLowStockAt(event.target.value.trim())}
           helperText="The product shows as low stock at or below this count." error={errors.lowStockAt} />
         {threshold.isError && !conflictRow(threshold.error) && <p className={uiStyles.dialogError} role="alert">{errorMessage(threshold.error)}</p>}
         <div className={uiStyles.dialogActions}>
@@ -140,13 +141,13 @@ export function AdminInventoryPage() {
       active={list.filters.status} onChip={value => list.setFilter('status', value)} onReset={list.reset} resetDisabled={!list.isFiltered} />
     {query.isError && <QueryProblem error={query.error} hasData={Boolean(query.data)} onRetry={() => void query.refetch()} retrying={query.isFetching} what="Inventory" />}
     <div>
-      <TableCard busy={query.isFetching} label="Inventory">
+      <TableCard busy={query.isPlaceholderData} label="Inventory">
         <DataTable caption="Inventory" data={query.data?.data ?? []} columns={columns} keyExtractor={row => row.productId} sort={list.sort} onSortChange={list.setSort}
           loadingRows={query.isPending ? 8 : undefined}
           emptyMessage={<ListEmpty failed={query.isError && !query.data}>{list.isFiltered ? <EmptyRows title="No products match these filters" hint="Try a different search or reset the filters." />
             : <EmptyRows title="No products to stock yet" hint="Products appear here as soon as they are created." />}</ListEmpty>} />
       </TableCard>
-      <Pager meta={query.data?.meta} onPage={list.setPage} disabled={query.isFetching} label="Inventory pages" />
+      <Pager meta={query.data?.meta} onPage={list.setPage} disabled={query.isPlaceholderData} label="Inventory pages" />
     </div>
     {adjusting && <AdjustDialog key={adjusting.productId} row={adjusting} onClose={() => setAdjusting(null)} />}
   </div>;

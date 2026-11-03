@@ -16,7 +16,8 @@ function App({ version, dirty }: { version: number; dirty: boolean }) {
   </Routes></BrowserRouter>;
 }
 
-const settle = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+// Real history traversal is asynchronous; 50 ms keeps it reliable when the suite runs under load.
+const settle = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
 async function start() {
   window.history.replaceState(null, '', '/admin/products');
   window.history.pushState(null, '', '/admin/products/p1/edit');

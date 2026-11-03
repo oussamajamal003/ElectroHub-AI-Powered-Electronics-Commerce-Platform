@@ -45,9 +45,9 @@ function validate(draft: Draft, creating: boolean) {
   if (draft.name.trim().length < 2) errors.name = 'Enter a product name (at least 2 characters).';
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{1,99}$/.test(draft.sku.trim())) errors.sku = 'Use 2–100 letters, numbers, dots, dashes or underscores.';
   if (!draft.categoryId) errors.categoryId = 'Choose a category.';
-  if (!MONEY.test(draft.price.trim()) || Number(draft.price) <= 0) errors.price = 'Enter a price greater than zero, with up to 2 decimals.';
+  if (!MONEY.test(draft.price.trim()) || Number(draft.price) <= 0) errors.price = 'Enter a price greater than zero, for example 98 or 98.50.';
   if (draft.compareAtPrice.trim()) {
-    if (!MONEY.test(draft.compareAtPrice.trim())) errors.compareAtPrice = 'Enter an amount with up to 2 decimals.';
+    if (!MONEY.test(draft.compareAtPrice.trim())) errors.compareAtPrice = 'Enter an amount, for example 120 or 119.99.';
     else if (!errors.price && Number(draft.compareAtPrice) <= Number(draft.price)) errors.compareAtPrice = 'The original price must be higher than the price.';
   }
   if (creating) {
@@ -60,10 +60,13 @@ function validate(draft: Draft, creating: boolean) {
   return errors;
 }
 
+/** The API stores money as "12.30": whole or one-decimal amounts typed by the admin ("98", "12.3") are sent with two decimals. */
+const money = (value: string) => Number(value.trim()).toFixed(2);
+
 function toFields(draft: Draft): ProductFields {
   return {
     name: draft.name.trim(), sku: draft.sku.trim(), description: draft.description.trim() || null, modelNumber: draft.modelNumber.trim() || null,
-    categoryId: draft.categoryId, brandId: draft.brandId || null, price: draft.price.trim(), compareAtPrice: draft.compareAtPrice.trim() || null,
+    categoryId: draft.categoryId, brandId: draft.brandId || null, price: money(draft.price), compareAtPrice: draft.compareAtPrice.trim() ? money(draft.compareAtPrice) : null,
     specifications: draft.specifications.map(({ group, name, value }) => ({ group: group.trim(), name: name.trim(), value: value.trim() })),
   };
 }
@@ -108,13 +111,13 @@ function rankedChoices(catalog: CatalogOptions | undefined, draft: { categoryId:
 }
 
 /** Mirrors the form while the product loads, so nothing editable appears before its data does. */
-function ProductFormSkeleton() {
+function ProductFormSkeleton({ label = 'Loading product…' }: { label?: string }) {
   const field = (key: number) => <div key={key} className={styles.skeletonField}><Skeleton width="7rem" height="0.875rem" /><Skeleton height="2.75rem" /></div>;
   const panel = (key: number, fields: number) => <section key={key} className={styles.panel}>
     <Skeleton width="9rem" height="1.25rem" />{Array.from({ length: fields }, (_, index) => field(index))}
   </section>;
   return <div className={styles.page} aria-busy="true">
-    <span role="status" className={styles.visuallyHidden}>Loading product…</span>
+    <span role="status" className={styles.visuallyHidden}>{label}</span>
     <div className={styles.skeletonHeader}><Skeleton width="14rem" height="0.875rem" /><Skeleton width="min(26rem, 80%)" height="2.5rem" />
       <Skeleton width="min(20rem, 60%)" height="0.875rem" /></div>
     <div className={styles.split}>
@@ -128,6 +131,9 @@ export function AdminProductFormPage() {
   const { productId } = useParams();
   const creating = !productId;
   const product = useAdminProduct(productId);
+  // Same skeleton for Add and Edit: the form appears once its categories/brands (and, when editing, the product) have loaded.
+  const options = useCatalogOptions();
+  if (creating && options.isPending) return <ProductFormSkeleton label="Loading the product form…" />;
   if (!creating && product.isPending) return <ProductFormSkeleton />;
   if (!creating && !product.data) {
     const notFound = (product.error as { status?: number } | null)?.status === 404;
@@ -236,13 +242,13 @@ function ProductForm({ product, onReload }: { product?: AdminProduct; onReload: 
           <section className={styles.panel} aria-labelledby="details-title">
             <h2 id="details-title" className={styles.panelTitle}>Details</h2>
             <div className={styles.fieldGrid}>
-              <Input className={styles.fieldFull} label="Product name" required value={draft.name} maxLength={255} error={errors.name}
+              <Input className={styles.fieldFull} label="Product name" required placeholder="e.g. Sony WH-1000XM5 Wireless Headphones" value={draft.name} maxLength={255} error={errors.name}
                 onChange={event => set('name', event.target.value)} fullWidth />
-              <Input label="SKU" required value={draft.sku} maxLength={100} error={errors.sku} helperText="Stored in upper case. Must be unique."
+              <Input label="SKU" required placeholder="e.g. SONY-WH1000XM5-BLK" value={draft.sku} maxLength={100} error={errors.sku} helperText="Stored in upper case. Must be unique."
                 onChange={event => set('sku', event.target.value)} fullWidth autoCapitalize="characters" spellCheck={false} />
-              <Input label="Model number" value={draft.modelNumber} maxLength={100} error={errors.modelNumber}
+              <Input label="Model number" placeholder="e.g. WH-1000XM5" value={draft.modelNumber} maxLength={100} error={errors.modelNumber}
                 onChange={event => set('modelNumber', event.target.value)} fullWidth />
-              <Textarea className={styles.fieldFull} label="Description" value={draft.description} maxLength={5000} rows={5} error={errors.description}
+              <Textarea className={styles.fieldFull} label="Description" value={draft.description} placeholder="Key features, what is in the box, compatibility…" maxLength={5000} rows={5} error={errors.description}
                 helperText={`${draft.description.length}/5000`} onChange={event => set('description', event.target.value)} fullWidth />
             </div>
           </section>
@@ -258,11 +264,11 @@ function ProductForm({ product, onReload }: { product?: AdminProduct; onReload: 
             {draft.specifications.length === 0 ? <p className={styles.panelHint}>No specifications yet. They appear in the storefront product details.</p>
               : draft.specifications.map((spec, index) => <fieldset key={spec.key} className={styles.specRow}>
                 <legend className={styles.visuallyHidden}>Specification {index + 1}</legend>
-                <Input label="Group" value={spec.group} maxLength={100} onChange={event => setSpec(spec.key, 'group', event.target.value)} fullWidth
+                <Input label="Group" placeholder="e.g. Display" value={spec.group} maxLength={100} onChange={event => setSpec(spec.key, 'group', event.target.value)} fullWidth
                   error={errors[`specifications.${index}.group`] ?? (errors[`specifications.${index}`] && !spec.group.trim() ? 'Required' : undefined)} />
-                <Input label="Name" value={spec.name} maxLength={100} onChange={event => setSpec(spec.key, 'name', event.target.value)} fullWidth
+                <Input label="Name" value={spec.name} placeholder="e.g. Screen size" maxLength={100} onChange={event => setSpec(spec.key, 'name', event.target.value)} fullWidth
                   error={errors[`specifications.${index}.name`] ?? (errors[`specifications.${index}`] && !spec.name.trim() ? 'Required' : undefined)} />
-                <Input label="Value" value={spec.value} maxLength={1000} onChange={event => setSpec(spec.key, 'value', event.target.value)} fullWidth
+                <Input label="Value" placeholder="e.g. 6.1 in" value={spec.value} maxLength={1000} onChange={event => setSpec(spec.key, 'value', event.target.value)} fullWidth
                   error={errors[`specifications.${index}.value`] ?? (errors[`specifications.${index}`] && !spec.value.trim() ? 'Required' : undefined)} />
                 <button type="button" className={`${styles.iconAction} ${styles.iconActionDanger}`} aria-label={`Remove specification ${index + 1}`}
                   onClick={() => set('specifications', draft.specifications.filter(item => item.key !== spec.key))}><Trash2 aria-hidden="true" /></button>
@@ -309,17 +315,17 @@ function ProductForm({ product, onReload }: { product?: AdminProduct; onReload: 
 
           <section className={styles.panel} aria-labelledby="pricing-title">
             <h2 id="pricing-title" className={styles.panelTitle}>Pricing (USD)</h2>
-            <Input label="Price" required inputMode="decimal" value={draft.price} error={errors.price} onChange={event => set('price', event.target.value)} fullWidth />
-            <Input label="Original price" inputMode="decimal" value={draft.compareAtPrice} error={errors.compareAtPrice}
+            <Input label="Price" required placeholder="e.g. 349.99" inputMode="decimal" value={draft.price} error={errors.price} onChange={event => set('price', event.target.value)} fullWidth />
+            <Input label="Original price" placeholder="e.g. 399.99" inputMode="decimal" value={draft.compareAtPrice} error={errors.compareAtPrice}
               helperText="Optional. Shown struck through when higher than the price." onChange={event => set('compareAtPrice', event.target.value)} fullWidth />
           </section>
 
           <section className={styles.panel} aria-labelledby="stock-title">
             <h2 id="stock-title" className={styles.panelTitle}>Inventory</h2>
             {creating ? <>
-              <Input label="Starting stock" inputMode="numeric" value={draft.quantity} error={errors['inventory.quantity']}
+              <Input label="Starting stock" placeholder="e.g. 25" inputMode="numeric" value={draft.quantity} error={errors['inventory.quantity']}
                 onChange={event => set('quantity', event.target.value)} fullWidth />
-              <Input label="Low-stock alert at" inputMode="numeric" value={draft.lowStockAt} error={errors['inventory.lowStockAt']}
+              <Input label="Low-stock alert at" inputMode="numeric" value={draft.lowStockAt} placeholder="e.g. 5" error={errors['inventory.lowStockAt']}
                 onChange={event => set('lowStockAt', event.target.value)} fullWidth />
             </> : <>
               <dl className={styles.details}>

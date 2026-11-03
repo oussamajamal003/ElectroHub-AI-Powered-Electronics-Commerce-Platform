@@ -8,6 +8,7 @@ import { CartProvider } from '@/features/cart/CartProvider';
 import { CustomerLayout } from '@/layouts/CustomerLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { AdminLoginPage } from '@/pages/admin/AdminLoginPage';
+import { AdminPageSkeleton } from '@/features/admin/shared/AdminUi';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute/ProtectedRoute';
 import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
 import { CheckoutDraftSession } from '@/features/checkout/CheckoutDraftSession';
@@ -60,6 +61,8 @@ const DeliveryTrackingPage = lazy(() => import('@/features/delivery/DeliveryTrac
 const AdminDeliveriesPage = lazy(() => import('@/pages/admin/AdminDeliveriesPage').then(module => ({ default: module.AdminDeliveriesPage })));
 const AdminDeliveryDetailPage = lazy(() => import('@/pages/admin/AdminDeliveryDetailPage').then(module => ({ default: module.AdminDeliveryDetailPage })));
 const route = (content: React.ReactNode) => <Suspense fallback={<ElectroHubLoader page />}>{content}</Suspense>;
+// Inside the admin shell a page's code chunk loads behind a page-shaped skeleton; the full-page loader is kept for a whole-app reload.
+const adminRoute = (content: React.ReactNode) => <Suspense fallback={<AdminPageSkeleton />}>{content}</Suspense>;
 
 export function AppRoutes() {
   return (
@@ -107,20 +110,20 @@ export function AppRoutes() {
         {/* Task 05.1: deep links survive sign-in (preserveReturnPath); signing out returns to the admin login, not the storefront. */}
         <Route element={<ProtectedRoute requiredRole="ADMIN" redirectTo="/admin/login" preserveReturnPath logoutRedirectTo="/admin/login" />}>
           <Route element={<AdminLayout />}>
-            <Route path="/admin" element={route(<AdminDashboardPage />)} />
-            <Route path="/admin/products" element={route(<AdminCatalogProductsPage />)} />
-            <Route path="/admin/products/new" element={route(<AdminProductFormPage />)} />
-            <Route path="/admin/products/:productId/edit" element={route(<AdminProductFormPage />)} />
-            <Route path="/admin/products/:productId/media" element={route(<AdminProductMediaPage />)} />
-            <Route path="/admin/categories" element={route(<AdminCategoriesPage />)} />
-            <Route path="/admin/inventory" element={route(<AdminInventoryPage />)} />
-            <Route path="/admin/orders" element={route(<AdminOrdersPage />)} />
-            <Route path="/admin/orders/:orderReference" element={route(<AdminOrderDetailPage />)} />
-            <Route path="/admin/customers" element={route(<AdminCustomersPage />)} />
-            <Route path="/admin/customers/:userId" element={route(<AdminCustomerDetailPage />)} />
-            <Route path="/admin/deliveries" element={route(<AdminDeliveriesPage />)} />
-            <Route path="/admin/deliveries/:orderReference" element={route(<AdminDeliveryDetailPage />)} />
-            <Route path="/admin/*" element={route(<AdminNotFoundPage />)} />
+            <Route path="/admin" element={adminRoute(<AdminDashboardPage />)} />
+            <Route path="/admin/products" element={adminRoute(<AdminCatalogProductsPage />)} />
+            <Route path="/admin/products/new" element={adminRoute(<AdminProductFormPage />)} />
+            <Route path="/admin/products/:productId/edit" element={adminRoute(<AdminProductFormPage />)} />
+            <Route path="/admin/products/:productId/media" element={adminRoute(<AdminProductMediaPage />)} />
+            <Route path="/admin/categories" element={adminRoute(<AdminCategoriesPage />)} />
+            <Route path="/admin/inventory" element={adminRoute(<AdminInventoryPage />)} />
+            <Route path="/admin/orders" element={adminRoute(<AdminOrdersPage />)} />
+            <Route path="/admin/orders/:orderReference" element={adminRoute(<AdminOrderDetailPage />)} />
+            <Route path="/admin/customers" element={adminRoute(<AdminCustomersPage />)} />
+            <Route path="/admin/customers/:userId" element={adminRoute(<AdminCustomerDetailPage />)} />
+            <Route path="/admin/deliveries" element={adminRoute(<AdminDeliveriesPage />)} />
+            <Route path="/admin/deliveries/:orderReference" element={adminRoute(<AdminDeliveryDetailPage />)} />
+            <Route path="/admin/*" element={adminRoute(<AdminNotFoundPage />)} />
           </Route>
         </Route>
 

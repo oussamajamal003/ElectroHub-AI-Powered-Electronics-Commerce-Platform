@@ -61,15 +61,15 @@ export function AdminDeliveriesPage() {
       : 'Deliveries could not be loaded. Check your connection and try again.'}</span>{' '}
       <Button type="button" variant="outline" size="small" disabled={deliveries.isFetching} onClick={() => void deliveries.refetch()}>Retry</Button></Alert>}
     {/* Same convention as the other admin lists: the table frame renders at once with skeleton rows, and earlier rows stay during refetches. */}
-    <div className={styles.table} aria-busy={deliveries.isFetching || undefined}>
+    <div className={styles.table} aria-busy={deliveries.isPlaceholderData || undefined}>
       <DataTable caption="Deliveries" data={rows} columns={columns} keyExtractor={row => row.orderReference} loadingRows={deliveries.isPending ? 8 : undefined}
         emptyMessage={<ListEmpty failed={deliveries.isError && !deliveries.data}>
           <EmptyRows title={status === 'ALL' ? 'No paid orders are waiting for delivery tracking.' : 'No paid orders have this status.'} /></ListEmpty>} />
     </div>
     {meta && meta.totalPages > 1 && <nav className={styles.pagination} aria-label="Delivery result pages">
-      <Button type="button" variant="outline" size="small" disabled={page <= 1 || deliveries.isFetching} onClick={() => setPage(value => Math.max(1, value - 1))}>Previous</Button>
+      <Button type="button" variant="outline" size="small" disabled={page <= 1 || deliveries.isPlaceholderData} onClick={() => setPage(value => Math.max(1, value - 1))}>Previous</Button>
       <span aria-live="polite">Page {meta.page} of {meta.totalPages}</span>
-      <Button type="button" variant="outline" size="small" disabled={page >= meta.totalPages || deliveries.isFetching} onClick={() => setPage(value => value + 1)}>Next</Button>
+      <Button type="button" variant="outline" size="small" disabled={page >= meta.totalPages || deliveries.isPlaceholderData} onClick={() => setPage(value => value + 1)}>Next</Button>
     </nav>}
   </section>;
 }

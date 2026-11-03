@@ -37,9 +37,6 @@ $sidebar-rail: 4.5rem;
 
 .brand { display: inline-flex; align-items: center; gap: $spacing-3; min-width: 0; color: $color-text-primary; text-decoration: none; padding: $spacing-1;
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
-.brandTile { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; flex-shrink: 0; background: $color-primary; color: $color-text-inverse;
-  svg { width: 18px; height: 18px; } }
-.brandText { font-family: $font-family-heading; font-size: $font-size-xl; font-weight: $font-weight-bold; white-space: nowrap; }
 .adminPill { padding: 2px $spacing-2; background: rgba($color-primary, .1); color: $color-primary; font-size: $font-size-xs; font-weight: $font-weight-semibold;
   letter-spacing: .06em; text-transform: uppercase; }
 
@@ -114,8 +111,7 @@ $sidebar-rail: 4.5rem;
 }
 @media (max-width: $breakpoint-sm - 1px) {
   .header { padding: 0 $spacing-3 0 $spacing-2; gap: $spacing-2; }
-  .brandText { font-size: $font-size-lg; }
-  .adminPill { display: none; }
+    .adminPill { display: none; }
   .main { padding: $spacing-4; }
 }
 @media (prefers-reduced-motion: reduce) { .iconButton, .navLink, .collapseButton, .avatar { transition: none; } }

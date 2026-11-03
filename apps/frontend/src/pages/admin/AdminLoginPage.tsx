@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
+import { BrandLogo } from '@/components/ui/BrandLogo';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -128,7 +129,7 @@ export function AdminLoginPage() {
     <div className={styles.container}>
       <div className={styles.loginCard}>
         <div className={styles.header}>
-          <div className={styles.brand}>ElectroHub</div>
+          <div className={styles.brand}><BrandLogo size="large" /><span className={styles.visuallyHidden}>ElectroHub</span></div>
           <h1 className={styles.title}>Sign In to Admin</h1>
           <p className={styles.description}>Admin Portal</p>
         </div>

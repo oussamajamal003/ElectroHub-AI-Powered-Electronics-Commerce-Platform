@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useMatch } from 'react-router-dom';
 import clsx from 'clsx';
-import { AlertTriangle, Bell, ExternalLink, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, Truck, Zap, ClipboardList } from 'lucide-react';
+import { AlertTriangle, Bell, ExternalLink, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, Truck, ClipboardList } from 'lucide-react';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/Drawer';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/DropdownMenu';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { BrandLogo } from '@/components/ui/BrandLogo';
 import { ADMIN_NAVIGATION, SIDEBAR_PREFERENCE_KEY, type AdminNavItem } from '@/features/admin/shell/navigation';
 import { useAdminAlerts } from '@/features/admin/dashboard/api';
 import { AdminToastProvider, ConfirmDialog } from '@/features/admin/shared/AdminUi';
@@ -146,8 +147,7 @@ export function AdminLayout() {
             <Menu aria-hidden="true" />
           </button>
           <Link to="/admin" className={styles.brand} aria-label="ElectroHub admin — Dashboard">
-            <span className={styles.brandTile} aria-hidden="true"><Zap /></span>
-            <span className={styles.brandText}>ElectroHub</span>
+            <BrandLogo />
             <span className={styles.adminPill}>Admin</span>
           </Link>
         </div>

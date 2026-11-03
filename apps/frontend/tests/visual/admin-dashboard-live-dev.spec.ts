@@ -204,7 +204,7 @@ test('admin console: every route, responsive shell, QA catalog/inventory flow, r
   await expect(stockRow).toContainText('3');
   await stockRow.getByRole('button', { name: `Adjust stock for ${tag} Probe` }).click();
   let dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Units received').fill('2');
+  await dialog.getByLabel('Units to add').fill('2');
   await expect(dialog).toContainText('Stock after saving: 5');
   await shot(page, info, '1440-inventory-adjust');
   await dialog.getByRole('button', { name: 'Add stock' }).click();

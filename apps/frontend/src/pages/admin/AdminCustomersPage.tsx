@@ -47,13 +47,13 @@ export function AdminCustomersPage() {
       active={list.filters.status} onChip={value => list.setFilter('status', value)} onReset={list.reset} resetDisabled={!list.isFiltered} />
     {query.isError && <QueryProblem error={query.error} hasData={Boolean(query.data)} onRetry={() => void query.refetch()} retrying={query.isFetching} what="Customers" />}
     <div>
-      <TableCard busy={query.isFetching} label="Customers">
+      <TableCard busy={query.isPlaceholderData} label="Customers">
         <DataTable caption="Customers" data={query.data?.data ?? []} columns={columns} keyExtractor={row => row.id} sort={list.sort} onSortChange={list.setSort}
           loadingRows={query.isPending ? 8 : undefined}
           emptyMessage={<ListEmpty failed={query.isError && !query.data}>{list.isFiltered ? <EmptyRows title="No customers match these filters" hint="Try a different search or reset the filters." />
             : <EmptyRows title="No customers yet" hint="Customers appear here after they create an account." />}</ListEmpty>} />
       </TableCard>
-      <Pager meta={query.data?.meta} onPage={list.setPage} disabled={query.isFetching} label="Customer pages" />
+      <Pager meta={query.data?.meta} onPage={list.setPage} disabled={query.isPlaceholderData} label="Customer pages" />
     </div>
   </div>;
 }

@@ -179,11 +179,23 @@ describe('AdminProductFormPage catalog choices and publishing', () => {
     expect(create.mutate).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'INACTIVE' }), expect.anything());
   });
 
-  it('keeps submit disabled until categories and brands have loaded', () => {
+  it('sends whole-number prices with two decimals (98 → 98.00), as the API requires', () => {
+    renderNew();
+    fireEvent.change(screen.getByLabelText(/Product name/), { target: { value: 'Price Probe' } });
+    fireEvent.change(screen.getByLabelText(/^SKU/), { target: { value: 'QA-PRICE-1' } });
+    fireEvent.change(screen.getByLabelText(/^Price/), { target: { value: '98' } });
+    fireEvent.change(screen.getByLabelText(/^Original price/), { target: { value: '100.5' } });
+    pick(/^Category/, 'Audio');
+    fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
+    expect(create.mutate).toHaveBeenCalledWith(expect.objectContaining({ price: '98.00', compareAtPrice: '100.50' }), expect.anything());
+  });
+
+  it('shows the form skeleton until categories and brands have loaded', () => {
     vi.mocked(useCatalogOptions).mockReturnValue({ data: undefined, isPending: true } as never);
     renderNew();
-    expect(screen.getByRole('button', { name: 'Create draft' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /^Category/ })).toHaveTextContent('Loading categories…');
+    expect(screen.getByRole('status')).toHaveTextContent('Loading the product form…');
+    expect(screen.queryByRole('button', { name: 'Create draft' })).toBeNull();
+    expect(screen.queryByLabelText(/Product name/)).toBeNull();
   });
 });
 

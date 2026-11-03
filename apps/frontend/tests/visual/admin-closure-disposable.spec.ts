@@ -246,7 +246,7 @@ test('E06 + J06: inventory adjustment at 200% zoom-equivalent, persisted on the 
   await page.getByRole('button', { name: /Adjust stock for/ }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Adjust stock' });
   await expect(dialog).toBeVisible();
-  const input = dialog.getByLabel('Units received');
+  const input = dialog.getByLabel('Units to add');
   await expect(input).toBeFocused();
   await dialog.getByRole('button', { name: 'Add stock' }).click();
   await expect(dialog.getByText('Enter at least 1 unit to add.')).toBeVisible();

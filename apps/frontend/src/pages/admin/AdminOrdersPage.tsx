@@ -47,13 +47,13 @@ export function AdminOrdersPage() {
       to={`/admin/customers/${list.filters.customerId}`}>View customer</Link></p>}
     {query.isError && <QueryProblem error={query.error} hasData={Boolean(query.data)} onRetry={() => void query.refetch()} retrying={query.isFetching} what="Orders" />}
     <div>
-      <TableCard busy={query.isFetching} label="Orders">
+      <TableCard busy={query.isPlaceholderData} label="Orders">
         <DataTable caption="Orders" data={query.data?.data ?? []} columns={columns} keyExtractor={row => row.orderReference} sort={list.sort} onSortChange={list.setSort}
           loadingRows={query.isPending ? 8 : undefined}
           emptyMessage={<ListEmpty failed={query.isError && !query.data}>{list.isFiltered ? <EmptyRows title="No orders match these filters" hint="Try a different search or reset the filters." />
             : <EmptyRows title="No orders yet" hint="Orders appear here as soon as customers check out." />}</ListEmpty>} />
       </TableCard>
-      <Pager meta={query.data?.meta} onPage={list.setPage} disabled={query.isFetching} label="Order pages" />
+      <Pager meta={query.data?.meta} onPage={list.setPage} disabled={query.isPlaceholderData} label="Order pages" />
     </div>
   </div>;
 }
