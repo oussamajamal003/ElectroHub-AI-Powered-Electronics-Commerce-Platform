@@ -5,13 +5,25 @@ import { ArrowRight, Boxes, ClipboardList, DollarSign, Package, ShoppingCart, Tr
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { useDashboard, type DashboardOverview } from '@/features/admin/dashboard/api';
 import type { AdminOrderRow } from '@/features/admin/orders/api';
-import { EmptyRows, ListEmpty, KpiCard, PageHeader, QueryProblem, StockPill, TableCard } from '@/features/admin/shared/AdminUi';
+import { EmptyRows, ListEmpty, KpiCard, type KpiTrendValue, PageHeader, QueryProblem, StockPill, TableCard } from '@/features/admin/shared/AdminUi';
 import { OrderStatusPill, PaymentPill } from '@/features/admin/shared/labels';
 import { ORDER_STATUSES, orderStatusLabel } from '@/features/admin/shared/statusLabels';
 import { formatCount, formatDate, formatDateTime, formatMoney, formatMoneyList, shortReference } from '@/features/admin/shared/format';
+import { Skeleton } from '@/components/ui/Skeleton';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
 
 const WINDOWS = [7, 30, 90] as const;
+
+/** Counts trend: "+N today". Revenue trend: the main currency only, since currencies are never summed together. */
+const PERIOD: Record<number, string> = { 7: 'last week', 30: 'last month', 90: 'previous 90 days' };
+function countTrend(count: { current: number; previous: number; today: number }, days: number): KpiTrendValue {
+  return { current: count.current, previous: count.previous, today: `+${formatCount(count.today)}`, period: PERIOD[days] ?? `previous ${days} days` };
+}
+function revenueTrend(overview: DashboardOverview): KpiTrendValue | undefined {
+  const row = overview.trends.revenue.find(item => item.currency === overview.revenue[0]?.currency) ?? overview.trends.revenue[0];
+  return row ? { current: Number(row.current), previous: Number(row.previous), today: `+${formatMoney(row.today, row.currency)}`,
+    period: PERIOD[overview.window.days] ?? `previous ${overview.window.days} days` } : undefined;
+}
 
 /** Real daily revenue for one currency, with empty days filled as zero so the axis is honest about quiet days. */
 function RevenueChart({ overview }: { overview: DashboardOverview }) {
@@ -68,6 +80,21 @@ function RevenueChart({ overview }: { overview: DashboardOverview }) {
   </div>;
 }
 
+/** Chart-shaped placeholder: the four stats, the scale, uneven bars and the date axis, so the panel keeps its size while loading. */
+const SKELETON_BARS = [38, 62, 45, 80, 30, 55, 70, 42, 90, 50, 35, 66, 48, 75, 58, 40, 85, 52, 64, 44];
+function RevenueChartSkeleton() {
+  return <div className={styles.chart} aria-busy="true" aria-label="Loading paid revenue">
+    <div className={styles.chartStats}>{[0, 1, 2, 3].map(index => <div key={index}><Skeleton width="5rem" height="0.75rem" /><Skeleton width="7rem" height="1.25rem" /></div>)}</div>
+    <div className={styles.chartFrame}>
+      <div className={styles.chartScale} aria-hidden="true">{[0, 1, 2].map(index => <Skeleton key={index} width="2rem" height="0.75rem" />)}</div>
+      <div className={styles.bars} aria-hidden="true">
+        {SKELETON_BARS.map((height, index) => <span key={index} style={{ flex: 1, height: `${height}%`, display: 'flex' }}><Skeleton width="100%" height="100%" /></span>)}
+      </div>
+    </div>
+    <div className={styles.chartAxis} aria-hidden="true">{[0, 1, 2].map(index => <Skeleton key={index} width="3.5rem" height="0.75rem" />)}</div>
+  </div>;
+}
+
 /** Rounds the axis maximum up to 1, 2 or 5 × 10ⁿ so the scale labels are readable round numbers. */
 function niceCeiling(value: number) {
   if (value <= 0) return 0;
@@ -106,17 +133,17 @@ export function AdminDashboardPage() {
 
     <section className={styles.kpiGrid} aria-label="Key figures">
       <KpiCard label="Paid revenue" tone="success" icon={<DollarSign />} loading={loading}
-        value={overview ? formatMoneyList(overview.revenue) : null}
+        value={overview ? formatMoneyList(overview.revenue) : null} trend={overview && revenueTrend(overview)}
         hint={overview ? `${formatCount(overview.revenue.reduce((sum, row) => sum + row.payments, 0))} successful payments · refunded payments excluded` : undefined} />
       <KpiCard label="Orders" tone="primary" icon={<ShoppingCart />} loading={loading} to="/admin/orders"
-        value={overview ? formatCount(overview.orders.inWindow) : null}
+        value={overview ? formatCount(overview.orders.inWindow) : null} trend={overview && countTrend(overview.trends.orders, overview.window.days)}
         hint={overview ? `${formatCount(overview.orders.total)} orders all time` : undefined} />
       <KpiCard label="Sellable products" tone="info" icon={<Package />} loading={loading} to="/admin/products?status=ACTIVE"
-        value={overview ? formatCount(overview.products.sellable) : null}
-        hint={overview ? `of ${formatCount(overview.products.total)} catalog products` : undefined} />
+        value={overview ? formatCount(overview.products.sellable) : null} trend={overview && countTrend(overview.trends.products, overview.window.days)}
+        hint={overview ? `of ${formatCount(overview.products.total)} catalog products · ${formatCount(overview.trends.products.current)} added in ${overview.window.days} days` : undefined} />
       <KpiCard label="Active customers" tone="neutral" icon={<Users />} loading={loading} to="/admin/customers"
-        value={overview ? formatCount(overview.customers.active) : null}
-        hint={overview ? `${formatCount(overview.customers.total)} customer accounts` : undefined} />
+        value={overview ? formatCount(overview.customers.active) : null} trend={overview && countTrend(overview.trends.customers, overview.window.days)}
+        hint={overview ? `${formatCount(overview.customers.total)} customer accounts · ${formatCount(overview.trends.customers.current)} joined in ${overview.window.days} days` : undefined} />
     </section>
 
     <div className={styles.split}>
@@ -125,7 +152,7 @@ export function AdminDashboardPage() {
           <h2 id="revenue-title" className={styles.panelTitle}>Paid revenue by day</h2>
           <span className={styles.panelHint}>Successful payments by payment date</span>
         </div>
-        {overview ? <RevenueChart overview={overview} /> : <div className={styles.bars} aria-hidden="true" />}
+        {overview ? <RevenueChart overview={overview} /> : <RevenueChartSkeleton />}
       </section>
       <section className={styles.panel} aria-labelledby="fulfillment-title">
         <div className={styles.panelHeader}>

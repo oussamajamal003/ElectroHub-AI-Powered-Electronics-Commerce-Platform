@@ -7,7 +7,7 @@
 .title { min-width: 0; h1 { margin: 0 0 $spacing-2; font-family: $font-family-mono; font-size: clamp(1.1rem, 2.4vw, 1.6rem); overflow-wrap: anywhere; }
   p { margin: 0; color: $color-text-secondary; overflow-wrap: anywhere; } }
 .eyebrow { color: $color-primary !important; font-family: $font-family-base; font-size: $font-size-xs; font-weight: $font-weight-semibold; letter-spacing: .08em; margin-bottom: $spacing-2 !important; }
-.loading { display: grid; place-items: center; min-height: 40vh; }
+.visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .layout { display: grid; gap: $spacing-6; align-items: start; @include respond-to(xl) { grid-template-columns: minmax(0, 1.4fr) minmax(20rem, 1fr); } }
 .main, .aside { display: grid; gap: $spacing-6; min-width: 0; }
 .aside { @include respond-to(xl) { position: sticky; top: $spacing-4; } }

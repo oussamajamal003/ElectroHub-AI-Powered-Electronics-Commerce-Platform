@@ -50,7 +50,7 @@ function CategoryDialog({ editing, onClose }: { editing: Editing | null; onClose
       <form className={styles.form} onSubmit={submit} noValidate>
         <Input label="Name" required placeholder="e.g. Gaming Laptops" value={name} maxLength={100} autoFocus fullWidth onChange={event => setName(event.target.value)}
           error={localError ?? errors.name ?? (conflictCode === 'CATEGORY_NAME_TAKEN' || conflictCode === 'CATEGORY_SLUG_TAKEN' ? errorMessage(mutation.error) : undefined)} />
-        <Textarea label="Description" placeholder="Short summary shown on the category page" value={description} maxLength={1000} rows={3} fullWidth helperText={`${description.length}/1000`}
+        <Textarea label="Description (optional)" placeholder="Short summary shown on the category page" value={description} maxLength={1000} rows={3} fullWidth helperText={`${description.length}/1000`}
           error={errors.description} onChange={event => setDescription(event.target.value)} />
         {mutation.isError && !errors.name && !conflictCode?.endsWith('_TAKEN') && <p className={uiStyles.dialogError} role="alert">{errorMessage(mutation.error)}</p>}
         <div className={uiStyles.dialogActions}>

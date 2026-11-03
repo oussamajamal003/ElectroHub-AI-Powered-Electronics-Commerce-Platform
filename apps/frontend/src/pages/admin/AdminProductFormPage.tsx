@@ -246,9 +246,9 @@ function ProductForm({ product, onReload }: { product?: AdminProduct; onReload: 
                 onChange={event => set('name', event.target.value)} fullWidth />
               <Input label="SKU" required placeholder="e.g. SONY-WH1000XM5-BLK" value={draft.sku} maxLength={100} error={errors.sku} helperText="Stored in upper case. Must be unique."
                 onChange={event => set('sku', event.target.value)} fullWidth autoCapitalize="characters" spellCheck={false} />
-              <Input label="Model number" placeholder="e.g. WH-1000XM5" value={draft.modelNumber} maxLength={100} error={errors.modelNumber}
+              <Input label="Model number (optional)" placeholder="e.g. WH-1000XM5" value={draft.modelNumber} maxLength={100} error={errors.modelNumber}
                 onChange={event => set('modelNumber', event.target.value)} fullWidth />
-              <Textarea className={styles.fieldFull} label="Description" value={draft.description} placeholder="Key features, what is in the box, compatibility…" maxLength={5000} rows={5} error={errors.description}
+              <Textarea className={styles.fieldFull} label="Description (optional)" value={draft.description} placeholder="Key features, what is in the box, compatibility…" maxLength={5000} rows={5} error={errors.description}
                 helperText={`${draft.description.length}/5000`} onChange={event => set('description', event.target.value)} fullWidth />
             </div>
           </section>
@@ -283,7 +283,7 @@ function ProductForm({ product, onReload }: { product?: AdminProduct; onReload: 
             <SearchSelect label="Category" required options={categoryOptions} value={draft.categoryId || undefined} onValueChange={chooseCategory}
               placeholder={catalog ? 'Choose a category' : 'Loading categories…'} searchPlaceholder="Search categories" disabled={!catalog}
               error={errors.categoryId} helperText={suggestion} fullWidth />
-            <SearchSelect label="Brand" options={brandOptions} value={draft.brandId || 'NONE'} onValueChange={chooseBrand}
+            <SearchSelect label="Brand (optional)" options={brandOptions} value={draft.brandId || 'NONE'} onValueChange={chooseBrand}
               placeholder={catalog ? 'No brand' : 'Loading brands…'} searchPlaceholder="Search brands" disabled={!catalog} error={errors.brandId} fullWidth />
             {creating ? <div className={styles.field} role="radiogroup" aria-labelledby="publish-label">
               <span id="publish-label" className={styles.fieldLabel}>Storefront</span>
@@ -316,7 +316,7 @@ function ProductForm({ product, onReload }: { product?: AdminProduct; onReload: 
           <section className={styles.panel} aria-labelledby="pricing-title">
             <h2 id="pricing-title" className={styles.panelTitle}>Pricing (USD)</h2>
             <Input label="Price" required placeholder="e.g. 349.99" inputMode="decimal" value={draft.price} error={errors.price} onChange={event => set('price', event.target.value)} fullWidth />
-            <Input label="Original price" placeholder="e.g. 399.99" inputMode="decimal" value={draft.compareAtPrice} error={errors.compareAtPrice}
+            <Input label="Original price (optional)" placeholder="e.g. 399.99" inputMode="decimal" value={draft.compareAtPrice} error={errors.compareAtPrice}
               helperText="Optional. Shown struck through when higher than the price." onChange={event => set('compareAtPrice', event.target.value)} fullWidth />
           </section>
 

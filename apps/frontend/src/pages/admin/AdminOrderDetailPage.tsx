@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, Check, ImageOff, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { useAdminDeliveryMutations } from '@/features/delivery/queries';
 import { useAdminOrder, type AdminOrderDetail } from '@/features/admin/orders/api';
 import { ActivePill, ButtonLink, ConfirmDialog, PageHeader, QueryProblem, StatusPill, useAdminToast } from '@/features/admin/shared/AdminUi';
@@ -85,7 +85,20 @@ export function AdminOrderDetailPage() {
   const crumbs = [{ label: 'Dashboard', to: '/admin' }, { label: 'Orders', to: '/admin/orders' }, { label: order?.orderReference ?? 'Order' }];
 
   if (!order) {
-    if (query.isPending) return <div className={styles.page}><ElectroHubLoader /></div>;
+    // Same shape as the loaded page (fulfillment and items left; payment, customer and address right) so nothing jumps when data arrives.
+    if (query.isPending) return <div className={styles.page} aria-busy="true">
+      <span role="status" className={styles.visuallyHidden}>Loading order…</span>
+      <div className={styles.pageHeaderSkeleton}><Skeleton width="12rem" height="0.875rem" /><Skeleton width="22rem" height="2.5rem" /><Skeleton width="18rem" height="1rem" /></div>
+      <div className={styles.split}>
+        <div className={styles.stack}>
+          <div className={styles.panel}><Skeleton width="8rem" height="1.25rem" /><Skeleton height="3rem" /><Skeleton width="60%" height="0.875rem" /><Skeleton width="40%" height="2.5rem" /></div>
+          <div className={styles.panel}><Skeleton width="5rem" height="1.25rem" />{[0, 1, 2].map(index => <Skeleton key={index} height="3.5rem" />)}<Skeleton width="50%" height="1rem" /></div>
+        </div>
+        <div className={styles.stack}>
+          {[0, 1, 2].map(index => <div key={index} className={styles.panel}><Skeleton width="7rem" height="1.25rem" /><Skeleton width="80%" height="0.875rem" /><Skeleton width="65%" height="0.875rem" /></div>)}
+        </div>
+      </div>
+    </div>;
     const status = (query.error as { status?: number } | null)?.status;
     return <div className={styles.page}>
       <PageHeader title={status === 404 || status === 400 ? 'Order not found' : 'Order unavailable'} crumbs={crumbs} />

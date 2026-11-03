@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
 import clsx from 'clsx';
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info, RotateCcw, Search, X, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info, Minus, RotateCcw, Search, TrendingDown, TrendingUp, X, XCircle } from 'lucide-react';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList } from '@/components/ui/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -80,8 +80,22 @@ export function FilterBand({ search, onSearch, placeholder, searchLabel, chips, 
 // ─── KPI card ─────────────────────────────────────────────
 export type Tone = 'neutral' | 'success' | 'warning' | 'error' | 'info' | 'primary';
 /** `value === null` renders a skeleton (still loading) or a dash (unavailable): never a misleading zero. */
-export function KpiCard({ label, value, tone = 'neutral', icon, hint, to, loading, centered }: {
-  label: string; value: ReactNode | null; tone?: Tone; icon?: ReactNode; hint?: ReactNode; to?: string; loading?: boolean; centered?: boolean;
+/** Change against the previous period plus what was added today. No previous value means there is nothing to compare with. */
+export interface KpiTrendValue { current: number; previous: number; today: ReactNode; period: string }
+function KpiTrend({ trend }: { trend: KpiTrendValue }) {
+  const change = trend.previous > 0 ? ((trend.current - trend.previous) / trend.previous) * 100 : null;
+  const direction = change === null ? (trend.current > 0 ? 'up' : 'flat') : change > 0.05 ? 'up' : change < -0.05 ? 'down' : 'flat';
+  const Icon = direction === 'up' ? TrendingUp : direction === 'down' ? TrendingDown : Minus;
+  const percent = change === null ? (trend.current > 0 ? 'New' : '0%') : `${change > 0 ? '+' : ''}${change.toFixed(Math.abs(change) < 10 ? 1 : 0)}%`;
+  return <span className={styles.kpiTrend}>
+    <span className={clsx(styles.kpiChange, styles[`change-${direction}`])} title={`Compared with the ${trend.period}`}>
+      <Icon aria-hidden="true" />{percent}<span className={styles.kpiMuted}>vs {trend.period}</span></span>
+    <span className={styles.kpiToday}>{trend.today} today</span>
+  </span>;
+}
+
+export function KpiCard({ label, value, tone = 'neutral', icon, hint, trend, to, loading, centered }: {
+  label: string; value: ReactNode | null; tone?: Tone; icon?: ReactNode; hint?: ReactNode; trend?: KpiTrendValue; to?: string; loading?: boolean; centered?: boolean;
 }) {
   const body = <>
     <div className={styles.kpiTop}>
@@ -91,6 +105,7 @@ export function KpiCard({ label, value, tone = 'neutral', icon, hint, to, loadin
     <strong className={clsx(styles.kpiValue, styles[`text-${tone}`])}>
       {loading ? <span className={styles.kpiSkeleton} aria-label="Loading" /> : value ?? <span aria-label="Unavailable">—</span>}
     </strong>
+    {trend && !loading && <KpiTrend trend={trend} />}
     {hint && <span className={styles.kpiHint}>{hint}</span>}
   </>;
   return to ? <Link to={to} className={clsx(styles.kpi, styles.kpiLink, centered && styles.kpiCentered)}>{body}</Link>

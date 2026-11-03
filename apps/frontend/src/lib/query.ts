@@ -27,7 +27,7 @@ export const queryKeys = {
   delivery: { snapshot: (userId: string, reference: string) => ['delivery', 'snapshot', userId, reference] as const,
     adminAll: ['delivery', 'admin'] as const,
     admin: (reference: string) => ['delivery', 'admin', 'detail', reference] as const,
-    adminList: (status: string, page: number) => ['delivery', 'admin', 'list', status, page] as const },
+    adminList: (status: string, page: number, q = '') => ['delivery', 'admin', 'list', status, page, q] as const },
   wishlist: { all: ['wishlist'] as const, current: (userId: string) => ['wishlist', 'current', userId] as const,
     guest: (ids: string) => ['wishlist', 'guest', ids] as const },
   cart: { all: ['cart'] as const, current: (userId: string) => ['cart', 'current', userId] as const,

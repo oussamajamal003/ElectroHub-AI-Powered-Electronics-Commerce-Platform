@@ -24,6 +24,7 @@ function database() {
     brand: { findMany: vi.fn().mockResolvedValue([]) },
     payment: { groupBy: vi.fn().mockResolvedValue([]) },
     inventory: { create: vi.fn(), update: vi.fn() },
+    orderItem: { groupBy: vi.fn().mockResolvedValue([]) },
     category: { delete: vi.fn(), create: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
     productSpecification: { deleteMany: vi.fn(), createMany: vi.fn() },
     user: { findFirst: vi.fn(), update: vi.fn(), findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) },

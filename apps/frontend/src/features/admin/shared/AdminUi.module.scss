@@ -72,6 +72,13 @@
 .kpiValue { font-family: $font-family-base; font-size: clamp(1.6rem, 1.2rem + 1vw, 2.125rem); font-weight: $font-weight-bold; letter-spacing: -.01em;
   font-variant-numeric: tabular-nums; color: $color-text-primary; line-height: 1.15; overflow-wrap: anywhere; min-height: 2.4rem; }
 .kpiHint { color: $color-text-secondary; font-size: $font-size-xs; }
+.kpiTrend { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: $spacing-1 $spacing-3; font-size: $font-size-xs; }
+.kpiChange { display: inline-flex; align-items: center; gap: $spacing-1; font-weight: 600; svg { width: 0.875rem; height: 0.875rem; flex: none; } }
+.kpiMuted { color: $color-text-secondary; font-weight: 400; }
+.kpiToday { color: $color-text-secondary; font-weight: 500; }
+.change-up { color: $color-success-foreground; }
+.change-down { color: $color-error-foreground; }
+.change-flat { color: $color-text-secondary; }
 .kpiSkeleton { display: inline-block; width: 5rem; height: 1.5rem; vertical-align: middle; background: linear-gradient(90deg, $color-surface, $color-border, $color-surface);
   background-size: 200% 100%; animation: shimmer 1.4s ease-in-out infinite; @media (prefers-reduced-motion: reduce) { animation: none; } }
 @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }

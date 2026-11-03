@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { DataTable, type Column } from '@/components/ui/DataTable';
-import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { useAdminCustomer, useCustomerStatus, type AdminCustomerDetail } from '@/features/admin/customers/api';
 import { ButtonLink, ConfirmDialog, EmptyRows, KpiCard, PageHeader, QueryProblem, TableCard, useAdminToast } from '@/features/admin/shared/AdminUi';
@@ -26,7 +26,18 @@ export function AdminCustomerDetailPage() {
   const crumbs = [{ label: 'Dashboard', to: '/admin' }, { label: 'Customers', to: '/admin/customers' }, { label: customer?.name ?? 'Customer' }];
 
   if (!customer) {
-    if (query.isPending) return <div className={styles.page}><ElectroHubLoader /></div>;
+    // Same shape as the loaded page (header, three activity cards, recent orders beside the account panel).
+    if (query.isPending) return <div className={styles.page} aria-busy="true">
+      <span role="status" className={styles.visuallyHidden}>Loading customer…</span>
+      <div className={styles.pageHeaderSkeleton}><Skeleton width="12rem" height="0.875rem" /><Skeleton width="20rem" height="2.5rem" /><Skeleton width="16rem" height="1rem" /></div>
+      <div className={`${styles.kpiGrid} ${styles.kpiGrid3}`}>
+        {[0, 1, 2].map(index => <div key={index} className={styles.panel}><Skeleton width="7rem" height="0.875rem" /><Skeleton width="5rem" height="1.75rem" /></div>)}
+      </div>
+      <div className={styles.split}>
+        <div className={styles.panel}><Skeleton width="8rem" height="1.25rem" />{[0, 1, 2, 3].map(index => <Skeleton key={index} height="2.75rem" />)}</div>
+        <div className={styles.panel}><Skeleton width="6rem" height="1.25rem" /><Skeleton width="80%" height="0.875rem" /><Skeleton width="65%" height="0.875rem" /><Skeleton width="50%" height="2.5rem" /></div>
+      </div>
+    </div>;
     const status = (query.error as { status?: number } | null)?.status;
     return <div className={styles.page}>
       <PageHeader title={status === 404 ? 'Customer not found' : 'Customer unavailable'} crumbs={crumbs} />

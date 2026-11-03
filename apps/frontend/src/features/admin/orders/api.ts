@@ -4,7 +4,7 @@ import { useAdminList } from '../shared/useAdminList';
 import { adminKeys, type ItemResponse, type ListResponse } from '../shared/api';
 
 export type OrderStatus = 'AWAITING_CAPTURE' | 'CONFIRMED' | 'PREPARING' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
-export type PaymentState = 'PAID' | 'PENDING' | 'FAILED' | 'REFUNDED' | 'UNPROCESSED';
+export type PaymentState = 'PAID' | 'PROCESSING' | 'PENDING' | 'FAILED' | 'REFUNDED' | 'UNPROCESSED';
 
 export interface AdminOrderRow {
   orderReference: string; status: OrderStatus; paymentState: PaymentState; total: string; currency: string; createdAt: string;

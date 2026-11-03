@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { Eye } from 'lucide-react';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Select } from '@/components/ui/Select';
 import { useAdminOrders, type AdminOrderRow } from '@/features/admin/orders/api';
@@ -16,6 +17,7 @@ const DEFAULT_SORT = { key: 'createdAt', order: 'desc' } as const;
 const PAYMENT_OPTIONS = [{ value: 'ALL', label: 'Any payment' }, ...PAYMENT_STATES.map(state => ({ value: state, label: paymentLabel[state]! }))];
 
 export function AdminOrdersPage() {
+  const navigate = useNavigate();
   const list = useListParams({ filters: FILTERS, sortKeys: SORT_KEYS, defaultSort: DEFAULT_SORT });
   const query = useAdminOrders({ q: list.q, page: list.page, ...list.filters, sort: list.sort.key, order: list.sort.order });
   const counts = query.data?.meta.statusCounts;
@@ -32,6 +34,9 @@ export function AdminOrdersPage() {
     { key: 'payment', title: 'Payment', render: row => <PaymentPill state={row.paymentState} /> },
     { key: 'status', title: 'Status', render: row => <OrderStatusPill status={row.status} /> },
     { key: 'date', title: 'Placed', sortKey: 'createdAt', render: row => <span className={styles.muted}>{formatDateTime(row.createdAt)}</span> },
+    { key: 'actions', title: 'Actions', align: 'right', render: row => <span className={styles.rowActions}>
+      <Link className={styles.iconAction} to={`/admin/orders/${encodeURIComponent(row.orderReference)}`} aria-label={`View order ${shortReference(row.orderReference)}`}
+        title="View order"><Eye aria-hidden="true" /></Link></span> },
   ];
 
   return <div className={styles.page}>
@@ -48,7 +53,7 @@ export function AdminOrdersPage() {
     {query.isError && <QueryProblem error={query.error} hasData={Boolean(query.data)} onRetry={() => void query.refetch()} retrying={query.isFetching} what="Orders" />}
     <div>
       <TableCard busy={query.isPlaceholderData} label="Orders">
-        <DataTable caption="Orders" data={query.data?.data ?? []} columns={columns} keyExtractor={row => row.orderReference} sort={list.sort} onSortChange={list.setSort}
+        <DataTable onRowClick={row => navigate(`/admin/orders/${encodeURIComponent(row.orderReference)}`)} caption="Orders" data={query.data?.data ?? []} columns={columns} keyExtractor={row => row.orderReference} sort={list.sort} onSortChange={list.setSort}
           loadingRows={query.isPending ? 8 : undefined}
           emptyMessage={<ListEmpty failed={query.isError && !query.data}>{list.isFiltered ? <EmptyRows title="No orders match these filters" hint="Try a different search or reset the filters." />
             : <EmptyRows title="No orders yet" hint="Orders appear here as soon as customers check out." />}</ListEmpty>} />

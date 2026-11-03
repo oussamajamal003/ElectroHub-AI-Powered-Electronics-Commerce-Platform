@@ -66,7 +66,7 @@ export function AdminCatalogProductsPage() {
     { key: 'price', title: 'Price', sortKey: 'price', align: 'right', render: row => <span className={styles.money}>{formatMoney(row.price, row.currency)}
       {row.compareAtPrice && <span className={styles.strike}>{formatMoney(row.compareAtPrice, row.currency)}</span>}</span> },
     { key: 'stock', title: 'Stock', render: row => <span className={styles.tags}><StockPill status={row.inventory?.status ?? null} />
-      {row.inventory && <span className={styles.mono}>{formatCount(row.inventory.quantity)}</span>}</span> },
+      {row.inventory && <span className={styles.mono}>{formatCount(row.inventory.quantity)} available</span>}</span> },
     { key: 'status', title: 'Status', render: row => <ActivePill active={row.status === 'ACTIVE'} activeLabel="Published" inactiveLabel="Unpublished" /> },
     { key: 'updated', title: 'Updated', sortKey: 'updatedAt', render: row => <span className={styles.muted}>{formatDate(row.updatedAt)}</span> },
     { key: 'actions', title: 'Actions', align: 'right', render: row => <span className={styles.rowActions}>

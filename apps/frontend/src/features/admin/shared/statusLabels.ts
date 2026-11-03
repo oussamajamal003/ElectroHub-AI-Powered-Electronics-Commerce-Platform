@@ -9,9 +9,9 @@ export const orderStatusTone: Record<string, Tone> = {
   AWAITING_CAPTURE: 'warning', CONFIRMED: 'info', PREPARING: 'primary', OUT_FOR_DELIVERY: 'primary', DELIVERED: 'success', CANCELLED: 'neutral',
 };
 export const paymentLabel: Record<string, string> = {
-  PAID: 'Paid', PENDING: 'Pending', FAILED: 'Failed', REFUNDED: 'Refunded', UNPROCESSED: 'Not started',
+  PAID: 'Paid', PROCESSING: 'Processing', PENDING: 'Pending', FAILED: 'Failed', REFUNDED: 'Refunded', UNPROCESSED: 'Not started',
 };
-export const paymentTone: Record<string, Tone> = { PAID: 'success', PENDING: 'warning', FAILED: 'error', REFUNDED: 'neutral', UNPROCESSED: 'neutral' };
+export const paymentTone: Record<string, Tone> = { PAID: 'success', PROCESSING: 'info', PENDING: 'warning', FAILED: 'error', REFUNDED: 'neutral', UNPROCESSED: 'neutral' };
 
 export const ORDER_STATUSES = ['AWAITING_CAPTURE', 'CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'] as const;
-export const PAYMENT_STATES = ['PAID', 'PENDING', 'FAILED', 'REFUNDED', 'UNPROCESSED'] as const;
+export const PAYMENT_STATES = ['PAID', 'PROCESSING', 'PENDING', 'FAILED', 'REFUNDED', 'UNPROCESSED'] as const;

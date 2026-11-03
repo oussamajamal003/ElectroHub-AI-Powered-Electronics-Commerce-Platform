@@ -2,7 +2,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
-import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { ApiError } from '@/lib/api';
 import { OrderBadges } from '@/features/orders/OrderBadges';
 import { AdminDeliveryUpdatePanel } from '@/features/adminDelivery/AdminDeliveryUpdatePanel';
@@ -35,7 +35,12 @@ export function AdminDeliveryDetailPage() {
   </>;
 
   if (!snapshot) return <section className={styles.page}>{back}
-    {query.isPending ? <div className={styles.loading}><ElectroHubLoader /></div>
+    {query.isPending ? <div className={styles.layout} aria-busy="true">
+      <span role="status" className={styles.visuallyHidden}>Loading delivery…</span>
+      {/* Same two-column layout as the loaded page: map and timeline on the left, status and actions on the right. */}
+      <div className={styles.card}><Skeleton width="10rem" height="1.25rem" /><Skeleton height="18rem" /><Skeleton width="70%" height="0.875rem" /><Skeleton width="55%" height="0.875rem" /></div>
+      <div className={styles.card}><Skeleton width="8rem" height="1.25rem" /><Skeleton height="2.75rem" /><Skeleton height="2.75rem" /><Skeleton width="60%" height="2.5rem" /></div>
+    </div>
       : <Alert variant="error"><span>{query.error instanceof ApiError && (query.error.status === 404 || query.error.status === 400)
         ? 'This order was not found.' : 'The delivery could not be loaded. Check your connection and try again.'}</span>{' '}
         <Button type="button" size="small" variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}>Retry</Button></Alert>}

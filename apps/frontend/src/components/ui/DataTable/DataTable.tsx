@@ -100,7 +100,8 @@ export function DataTable<T>({
               <tr 
                 key={keyExtractor(item)} 
                 className={`${styles.tr} ${onRowClick ? styles.clickable : ''}`}
-                onClick={() => onRowClick?.(item)}
+                // Links and buttons inside a clickable row keep their own action instead of also triggering the row.
+                onClick={event => { if (!(event.target as HTMLElement).closest('a, button, input, select, textarea, label')) onRowClick?.(item); }}
               >
                 {columns.map((col) => (
                   <td 

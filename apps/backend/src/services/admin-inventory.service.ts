@@ -29,17 +29,28 @@ const select = {
 } satisfies Prisma.ProductSelect;
 type Row = Prisma.ProductGetPayload<{ select: typeof select }>;
 
-function project(row: Row) {
+function project(row: Row, held = 0) {
   const inventory = row.inventory;
   return {
     productId: row.id, name: row.name, sku: row.sku, productStatus: row.status, category: row.category,
     image: row.images[0] ?? null,
-    quantity: inventory?.quantity ?? null, lowStockAt: inventory?.lowStockAt ?? null,
+    quantity: inventory?.quantity ?? null, held, lowStockAt: inventory?.lowStockAt ?? null,
     stockStatus: inventory ? deriveStockStatus(inventory.quantity, inventory.lowStockAt) : null,
     // Physical stock and sellability are independent: a stocked product in an archived product/category is still not purchasable.
     purchasable: Boolean(inventory && inventory.quantity > 0 && row.status === 'ACTIVE' && row.category.isActive),
     updatedAt: inventory?.updatedAt.toISOString() ?? null,
   };
+}
+
+/**
+ * Units taken out of stock by orders whose payment is still processing (AWAITING_CAPTURE). They become sold when the payment succeeds,
+ * or return to stock when it fails or the order is cancelled (payment compensation restores them).
+ */
+async function heldUnits(db: PrismaClient | Prisma.TransactionClient, productIds: string[]) {
+  if (!productIds.length) return new Map<string, number>();
+  const groups = await db.orderItem.groupBy({ by: ['productId'], where: { productId: { in: productIds }, order: { status: 'AWAITING_CAPTURE' } },
+    _sum: { quantity: true } });
+  return new Map(groups.map(group => [group.productId, group._sum.quantity ?? 0]));
 }
 
 export class AdminInventoryService {
@@ -66,13 +77,14 @@ export class AdminInventoryService {
       this.db.product.count({ where }),
       this.summary(),
     ]);
-    return { data: rows.map(project), meta: { page: query.page, pageSize: query.pageSize, total, totalPages: Math.ceil(total / query.pageSize), summary } };
+    const held = await heldUnits(this.db, rows.map(row => row.id));
+    return { data: rows.map(row => project(row, held.get(row.id))), meta: { page: query.page, pageSize: query.pageSize, total, totalPages: Math.ceil(total / query.pageSize), summary } };
   }
 
   async get(productId: string, db: PrismaClient | Prisma.TransactionClient = this.db) {
     const row = await db.product.findUnique({ where: { id: productId }, select: { ...select, isTestFixture: true } });
     if (!row || row.isTestFixture) throw new AppError('Product not found.', 404, 'PRODUCT_NOT_FOUND');
-    return project(row);
+    return project(row, (await heldUnits(db, [row.id])).get(row.id));
   }
 
   private async conflict(productId: string): Promise<never> {

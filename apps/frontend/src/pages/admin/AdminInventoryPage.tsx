@@ -29,18 +29,24 @@ function AdjustDialog({ row: initialRow, onClose }: { row: InventoryRow; onClose
   const [localError, setLocalError] = useState<string | null>(null);
   const busy = adjust.isPending || threshold.isPending;
 
+  // Add/remove takes a signed whole number (e.g. 10 or -3). A removal is sent as an absolute count guarded by the quantity on screen,
+  // so a concurrent order still causes a conflict instead of a wrong total.
   const amount = Number(quantity);
-  const validAmount = /^\d{1,7}$/.test(quantity) && amount <= MAX_STOCK && (operation === 'SET' || amount >= 1);
+  const validAmount = operation === 'RESTOCK' ? /^-?\d{1,7}$/.test(quantity) && amount !== 0 && Math.abs(amount) <= MAX_STOCK
+    : /^\d{1,7}$/.test(quantity) && amount <= MAX_STOCK;
   const resulting = validAmount ? (operation === 'RESTOCK' ? (row.quantity ?? 0) + amount : amount) : null;
 
   const submitAdjust = (event: FormEvent) => {
     event.preventDefault();
-    if (!validAmount || (resulting !== null && resulting > MAX_STOCK)) {
-      setLocalError(operation === 'RESTOCK' ? 'Enter at least 1 unit to add.' : `Enter a whole number from 0 to ${formatCount(MAX_STOCK)}.`);
+    if (!validAmount || resulting === null || resulting > MAX_STOCK || resulting < 0) {
+      setLocalError(operation !== 'RESTOCK' ? `Enter a whole number from 0 to ${formatCount(MAX_STOCK)}.`
+        : resulting !== null && resulting < 0 ? `You can remove at most ${formatCount(row.quantity ?? 0)} units.`
+        : 'Enter a whole number, for example 10 to add or -3 to remove.');
       return;
     }
     setLocalError(null);
-    adjust.mutate({ productId: row.productId, operation, quantity: amount, expectedQuantity: row.quantity, reason: reason.trim() || undefined }, {
+    const removing = operation === 'RESTOCK' && amount < 0;
+    adjust.mutate({ productId: row.productId, operation: removing ? 'SET' : operation, quantity: removing ? resulting : amount, expectedQuantity: row.quantity, reason: reason.trim() || undefined }, {
       onSuccess: response => { toast(`${row.name}: stock is now ${formatCount(response.data.quantity ?? 0)}.`); onClose(); },
       onError: error => { const current = conflictRow(error); if (current) setRow(current); },
     });
@@ -64,7 +70,7 @@ function AdjustDialog({ row: initialRow, onClose }: { row: InventoryRow; onClose
       <DialogTitle className={uiStyles.dialogTitle}>Adjust stock</DialogTitle>
       <DialogDescription asChild><div className={uiStyles.dialogBody}>
         <p><strong>{row.name}</strong> <span className={styles.mono}>{row.sku}</span></p>
-        <p>On hand now: <strong className={styles.money}>{row.quantity === null ? 'not tracked' : formatCount(row.quantity)}</strong>
+        <p>In stock now: <strong className={styles.money}>{row.quantity === null ? 'not tracked' : formatCount(row.quantity)}</strong>
           {row.updatedAt && <> · last change {formatDateTime(row.updatedAt)}</>}</p>
       </div></DialogDescription>
       {conflictRow(error) && <p className={styles.noticeWarning + ' ' + styles.notice} role="alert">
@@ -73,19 +79,20 @@ function AdjustDialog({ row: initialRow, onClose }: { row: InventoryRow; onClose
       <form className={styles.form} onSubmit={submitAdjust} noValidate>
         <div className={styles.segmented} role="group" aria-label="Adjustment type">
           <button type="button" className={styles.segment} aria-pressed={operation === 'RESTOCK'} disabled={row.quantity === null}
-            onClick={() => setOperation('RESTOCK')}>Add units</button>
+            onClick={() => setOperation('RESTOCK')}>Add / remove units</button>
           <button type="button" className={styles.segment} aria-pressed={operation === 'SET'} onClick={() => setOperation('SET')}>Set exact count</button>
         </div>
-        <Input label={operation === 'RESTOCK' ? 'Units to add' : 'Counted quantity'} placeholder={operation === 'RESTOCK' ? 'e.g. 10' : 'e.g. 42'} inputMode="numeric" value={quantity} autoFocus fullWidth
-          onChange={event => setQuantity(event.target.value.trim())} error={localError ?? errors.quantity}
+        <Input type="number" step={1} min={operation === 'RESTOCK' ? -(row.quantity ?? 0) : 0} max={MAX_STOCK} label={operation === 'RESTOCK' ? 'Units to add or remove' : 'Counted quantity'}
+          placeholder={operation === 'RESTOCK' ? 'e.g. 10 or -3' : 'e.g. 42'} value={quantity} autoFocus fullWidth
+          onChange={event => { setQuantity(event.target.value.trim()); setLocalError(null); }} error={localError ?? errors.quantity}
           helperText={resulting !== null ? `Stock after saving: ${formatCount(resulting)}`
-            : operation === 'RESTOCK' ? `Added to the ${formatCount(row.quantity ?? 0)} on hand.` : 'Replaces the current stock with the number you counted.'} />
+            : operation === 'RESTOCK' ? `A positive number adds to the ${formatCount(row.quantity ?? 0)} in stock; a negative number removes.` : 'Replaces the current stock with the number you counted.'} />
         <Input label="Reason (optional)" placeholder="e.g. Supplier delivery #1042" value={reason} maxLength={200} fullWidth onChange={event => setReason(event.target.value)}
           helperText="For example: supplier delivery, cycle count. Not shown to customers." error={errors.reason} />
         {adjust.isError && !conflictRow(adjust.error) && !errors.quantity && <p className={uiStyles.dialogError} role="alert">{errorMessage(adjust.error)}</p>}
         <div className={uiStyles.dialogActions}>
           <Button type="button" variant="outline" onClick={onClose} disabled={busy}>Close</Button>
-          <Button type="submit" isLoading={adjust.isPending} disabled={threshold.isPending}>{operation === 'RESTOCK' ? 'Add stock' : 'Set stock'}</Button>
+          <Button type="submit" isLoading={adjust.isPending} disabled={threshold.isPending}>{operation === 'SET' ? 'Set stock' : amount < 0 ? 'Remove stock' : 'Add stock'}</Button>
         </div>
       </form>
       {row.lowStockAt !== null && <form className={styles.panel} onSubmit={submitThreshold} noValidate aria-label="Low-stock alert">
@@ -110,13 +117,16 @@ export function AdminInventoryPage() {
     { key: 'name', title: 'Product', sortKey: 'name', render: row => <span className={styles.cellMain}>
       {row.image ? <img className={styles.thumb} src={row.image.url} alt="" loading="lazy" />
         : <span className={`${styles.thumb} ${styles.thumbEmpty}`} aria-hidden="true"><ImageOff /></span>}
-      <span className={styles.cellText}><Link className={styles.rowLink} to={`/admin/products/${row.productId}/edit`}><strong>{row.name}</strong></Link>
-        <span>{row.category.name}</span></span>
+      <span className={styles.cellText}><Link className={styles.rowLink} to={`/admin/products/${row.productId}/edit`}><strong>{row.name}</strong></Link></span>
     </span> },
     { key: 'sku', title: 'SKU', sortKey: 'sku', render: row => <span className={styles.mono}>{row.sku}</span> },
-    { key: 'quantity', title: 'On hand', sortKey: 'quantity', align: 'right', render: row => <span className={styles.money}>{row.quantity === null ? '—' : formatCount(row.quantity)}</span> },
+    { key: 'category', title: 'Category', render: row => <span className={row.category.isActive ? undefined : styles.muted}>{row.category.name}</span> },
+    // Same number the storefront offers as available (inventory quantity), shown with its unit so it reads as a count, not a code.
+    { key: 'quantity', title: 'Stock', sortKey: 'quantity', align: 'right', render: row => row.quantity === null ? <span className={styles.muted}>Not tracked</span>
+      : <span className={styles.cellText}><span className={styles.money}>{formatCount(row.quantity)} <span className={styles.muted}>available</span></span>
+        {row.held ? <span title="In orders whose payment is still processing. Sold if the payment succeeds, back in stock if it fails.">{formatCount(row.held)} held</span> : null}</span> },
     { key: 'threshold', title: 'Alert at', align: 'right', render: row => <span className={styles.mono}>{row.lowStockAt === null ? '—' : formatCount(row.lowStockAt)}</span> },
-    { key: 'status', title: 'Stock', render: row => <StockPill status={row.stockStatus} /> },
+    { key: 'status', title: 'Status', render: row => <StockPill status={row.stockStatus} /> },
     { key: 'sellable', title: 'Sellable', render: row => row.purchasable ? <StatusPill tone="success" icon={false}>Yes</StatusPill>
       : <StatusPill tone="neutral" icon={false}>{row.productStatus !== 'ACTIVE' ? 'Archived' : !row.category.isActive ? 'Hidden category' : 'No'}</StatusPill> },
     { key: 'updated', title: 'Last change', sortKey: 'updatedAt', render: row => <span className={styles.muted}>{row.updatedAt ? formatDateTime(row.updatedAt) : '—'}</span> },

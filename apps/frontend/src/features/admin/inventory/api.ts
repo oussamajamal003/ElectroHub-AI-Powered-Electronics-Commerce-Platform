@@ -6,7 +6,7 @@ import type { ProductStatus, StockStatus } from '../products/api';
 
 export interface InventoryRow {
   productId: string; name: string; sku: string; productStatus: ProductStatus; category: { id: string; name: string; isActive: boolean };
-  image: { url: string; altText: string | null } | null; quantity: number | null; lowStockAt: number | null; stockStatus: StockStatus | null;
+  image: { url: string; altText: string | null } | null; quantity: number | null; held?: number; lowStockAt: number | null; stockStatus: StockStatus | null;
   purchasable: boolean; updatedAt: string | null;
 }
 export interface InventorySummary { inStock: number; lowStock: number; outOfStock: number; untracked: number }

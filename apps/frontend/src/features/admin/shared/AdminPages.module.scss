@@ -3,6 +3,7 @@
 // Task 05.1 page layouts shared by every admin module (dashboard, catalog, inventory, orders, customers).
 
 .visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.pageHeaderSkeleton { display: grid; gap: $spacing-3; }
 .page { display: grid; gap: $spacing-6; min-width: 0; align-content: start;
   // Grid items default to min-width: auto; without this a wide table or chip strip widens the page instead of scrolling inside its card.
   > * { min-width: 0; } }

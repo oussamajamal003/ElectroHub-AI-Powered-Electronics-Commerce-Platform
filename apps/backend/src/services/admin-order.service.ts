@@ -19,7 +19,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Same projection as customer Order Details and Delivery: PAID only for a stored SUCCEEDED payment. */
 export function paymentState(status: PaymentStatus | null | undefined): PaymentState {
-  return !status ? 'UNPROCESSED' : status === 'SUCCEEDED' ? 'PAID' : status === 'REFUNDED' ? 'REFUNDED' : status === 'FAILED' ? 'FAILED' : 'PENDING';
+  return !status ? 'UNPROCESSED' : status === 'SUCCEEDED' ? 'PAID' : status === 'REFUNDED' ? 'REFUNDED' : status === 'FAILED' ? 'FAILED'
+    : status === 'PROCESSING' ? 'PROCESSING' : 'PENDING';
 }
 
 function paymentWhere(state: PaymentState): Prisma.OrderWhereInput {
@@ -28,7 +29,8 @@ function paymentWhere(state: PaymentState): Prisma.OrderWhereInput {
     case 'PAID': return { payment: { is: { status: 'SUCCEEDED' } } };
     case 'REFUNDED': return { payment: { is: { status: 'REFUNDED' } } };
     case 'FAILED': return { payment: { is: { status: 'FAILED' } } };
-    case 'PENDING': return { payment: { is: { status: { in: ['PENDING', 'PROCESSING'] } } } };
+    case 'PROCESSING': return { payment: { is: { status: 'PROCESSING' } } };
+    case 'PENDING': return { payment: { is: { status: 'PENDING' } } };
   }
 }
 

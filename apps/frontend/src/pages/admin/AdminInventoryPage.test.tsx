@@ -27,7 +27,7 @@ describe('AdminInventoryPage', () => {
     expect(screen.getByRole('button', { name: /Low stock\s*1/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Adjust stock for QA Probe Headphones' }));
     const dialog = screen.getByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Units to add'), { target: { value: '6' } });
+    fireEvent.change(within(dialog).getByLabelText('Units to add or remove'), { target: { value: '6' } });
     expect(within(dialog).getByText('Stock after saving: 10')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add stock' }));
     expect(adjust.mutate).toHaveBeenCalledWith(expect.objectContaining({ operation: 'RESTOCK', quantity: 6, expectedQuantity: 4 }), expect.anything());
@@ -42,7 +42,7 @@ describe('AdminInventoryPage', () => {
     render(<MemoryRouter><AdminInventoryPage /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: 'Adjust stock for QA Probe Headphones' }));
     const dialog = screen.getByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Units to add'), { target: { value: '6' } });
+    fireEvent.change(within(dialog).getByLabelText('Units to add or remove'), { target: { value: '6' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add stock' }));
     await waitFor(() => expect(within(dialog).getByText('Stock after saving: 7')).toBeInTheDocument());
     adjust.mutate.mockReset();
@@ -54,9 +54,24 @@ describe('AdminInventoryPage', () => {
     render(<MemoryRouter><AdminInventoryPage /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: 'Adjust stock for QA Probe Headphones' }));
     const dialog = screen.getByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Units to add'), { target: { value: '0' } });
+    fireEvent.change(within(dialog).getByLabelText('Units to add or remove'), { target: { value: '0' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add stock' }));
     expect(adjust.mutate).not.toHaveBeenCalled();
-    expect(within(dialog).getByText('Enter at least 1 unit to add.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Enter a whole number, for example 10 to add or -3 to remove.')).toBeInTheDocument();
+  });
+
+  it('removes units as a guarded absolute count and refuses removing more than is in stock', () => {
+    render(<MemoryRouter><AdminInventoryPage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'Adjust stock for QA Probe Headphones' }));
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByLabelText('Units to add or remove');
+    fireEvent.change(input, { target: { value: '-5' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove stock' }));
+    expect(adjust.mutate).not.toHaveBeenCalled();
+    expect(within(dialog).getByText('You can remove at most 4 units.')).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: '-3' } });
+    expect(within(dialog).getByText('Stock after saving: 1')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove stock' }));
+    expect(adjust.mutate).toHaveBeenCalledWith(expect.objectContaining({ operation: 'SET', quantity: 1, expectedQuantity: 4 }), expect.anything());
   });
 });

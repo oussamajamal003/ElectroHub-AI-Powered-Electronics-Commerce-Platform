@@ -99,7 +99,7 @@ export const inventoryThresholdSchema = z.object({
 }).strict();
 
 // ─── Orders ─────────────────────────────────────────────
-export const PAYMENT_STATES = ['PAID', 'PENDING', 'FAILED', 'REFUNDED', 'UNPROCESSED'] as const;
+export const PAYMENT_STATES = ['PAID', 'PROCESSING', 'PENDING', 'FAILED', 'REFUNDED', 'UNPROCESSED'] as const;
 export const orderListSchema = z.object({
   ...listBase,
   status: z.enum(['AWAITING_CAPTURE', 'CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED']).optional(),
