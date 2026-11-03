@@ -35,6 +35,44 @@ Still NOT VERIFIED after this round:
 - **Regression tests:** `useUnsavedChangesGuard.test.tsx` (4 tests: one save → one Back; two saves → one Back; edit after save → Back asks, Cancel stays, Leave exits once; clean form → no prompt). 3 of the 4 fail on the old guard; all pass now.
 - **After the fix (same stack):** Chromium closure run **7/7 passed**, including `05.1-A2` (one save, two saves, edit after save, clean form: all PASS) and the existing guard check `05.1-A` (sidebar, breadcrumb, Discard, Back, Forward, close, one-step Leave, save). Frontend admin tests **75/75** (15 files); `tsc -b`, eslint and `npm run build` exit 0; `git diff --check` clean. The stack was stopped afterwards.
 
+### Premium UI/UX refinement (owner screenshots A–J, 2026-11-03)
+
+Chromium run on a disposable stack (`loopback:64645/electrohub_disposable_delivery_qa_29df3bdf`; four synthetic brands inserted; stack stopped afterwards): `npx playwright test -c playwright.admin-closure-disposable.config.ts` → closure spec 7/7 and premium spec 10/10. Evidence: one record per item in `scratch/qa-05.1/final-evidence/` (gitignored, with screenshots, all reviewed).
+
+| ID | Result | Evidence |
+|---|---|---|
+| UX-01 | PASS | Collapse control on the MAIN heading row, inside the sidebar (not the header). |
+| UX-02 | PASS | Rail links 56×48 px, 22 px icons, centred (0 px offset); the state survives reload and navigation. Root cause: Radix Tooltip's Slot stringified NavLink's className callback, so the rail was unstyled. |
+| UX-03 | PASS | Every admin page title is 36 px/700 at 1440 (28 px at 390). |
+| UX-04 | PASS | Stock, category, form category/brand and delivery-status popups at 390/768/1440/1920: every option one line (44 px), every popup inside the viewport. |
+| UX-05 | PASS | A 55-character category name stays on one line with an ellipsis, keeps its full name in `title`, and is found and chosen by keyboard search. |
+| UX-06 | PASS | Pager Next on products and inventory: the title settles 84–133 px from the top (header 64 px); the live range updates; Back restores the URL. |
+| UX-07 | PASS (measured) | Chip selected in 2–8 ms (was 85–190 ms; it now marks itself before the URL transition). One request per filter state; returning to a cached filter shows rows at once. One search request per input, 291–514 ms after the last key (200 ms debounce + dev-build render; varies with machine load). Shared-DEV timings NOT measured. |
+| UX-08 | PASS | Apple ranks Smartphones (10) and Laptops (4) first and leaves the category to the admin; Sony (one category) fills Audio with a note. A brand with no products is accepted. |
+| UX-09 | PASS | Publish now → POST 201 `ACTIVE`; storefront `GET /api/products/:slug` → 200. |
+| UX-10 | PASS | Save as draft → POST 201 `INACTIVE`; storefront → 404; admin shows Unpublished. |
+| UX-11 | PASS | Unused draft: DELETE 204, then 404. Product in a customer's cart: the button is `aria-disabled` with its reason; a forced DELETE → 409 `PRODUCT_IN_USE`; a customer token → 403; the product still exists. |
+| UX-12 | PASS | Edit product shows a form-shaped skeleton (no inputs, no spinner). |
+| UX-13 | PASS | Add product: fields usable at once; pickers disabled with "Loading categories…"; submit blocked until options load. |
+| UX-14 | PASS | Delivery: 8 skeleton rows under the real table header, no spinner; a failed load says the rows could not be loaded. |
+| UX-15 | PASS | Header shows the avatar only; name, email and actions are in its menu. |
+| UX-16 | PASS | Sign out asks first; Cancel keeps the session; Confirm → `/admin/login` and refresh → 401. |
+| UX-17 | PASS | Linked KPI cards lift with a shadow on hover and keep focus rings; static cards keep the default cursor. |
+| UX-18 | PASS | Shared fixes reach every list: Select, `SearchSelect`, the table busy bar with dimmed rows, `ListEmpty`, pills, and the 36 px titles (UX-03/04/14). |
+| UX-19 | PASS | "Choose photos" is 171 px wide and unclipped. Root cause: `.empty span` also styled the Button's inner span as a 52 px circle; scoped to `> span`. |
+| UX-20 | PASS (partial) | Shared DEV (`pzxekjybdiulzmssalfo`, verified by project list; PROD untouched): see the cleanup record below. |
+| UX-21 | PASS | Reduced motion: the pager jumps instantly; drawer, dialogs and menus have no motion (J05). |
+| UX-22 | PASS | 7 routes × 390/768/1440/1920: no horizontal page scroll; dropdowns inside the viewport. |
+| UX-23 | PASS | 04.3 media page and 04.5 delivery list/detail render; media and delivery APIs unchanged; delivery and route tests pass. |
+| UX-24 | PASS | Product-form history guard: `useUnsavedChangesGuard.test.tsx` 4/4 and Chromium 05.1-A / A2 pass. |
+| UX-25 | PASS | Before/after screenshots reviewed against owner screenshots A–J. |
+
+Shared-DEV cleanup (dry run first; ownership established from repository provenance, never from names alone):
+- **QA 05.1 probe products** (created by `admin-dashboard-live-dev.spec.ts`): 5 found. 4 had no references and were deleted with the same rule as the new endpoint, re-checked inside the `DELETE`. Products went from 235 to 231, with no orphaned inventory or specification rows. 1 kept (`QA-051-2611022142`: photo history).
+- **Test categories** (account-deletion test, EH038 gate, Stripe acceptance): 12 found, 0 deletable; all hold products with orders, payments or fixture history. The 9 holding only protected fixtures are now hidden from admin lists and options. The other 3 hold real orders and stay visible.
+- **Synthetic customers:** 8 accounts with no orders or payments match repo test patterns. They were NOT removed; that needs the owner's go-ahead, because the EH038 gate pairs some of them with its fixtures. 6 accounts with commerce history are preserved.
+- **Future runs:** the live-DEV spec now deletes its own probe product at the end.
+
 ## 1. Commands actually executed (before PR #44)
 
 | Check | Command | Result |

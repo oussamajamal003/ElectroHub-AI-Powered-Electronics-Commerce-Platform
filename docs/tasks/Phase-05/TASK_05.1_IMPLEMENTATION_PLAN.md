@@ -27,10 +27,11 @@ Owner override for this run: **no commit, no push, no merge, no deploy**. Every 
 |---|---|---|
 | GET | `/api/admin/dashboard/overview?days=7\|30\|90` | KPIs, revenue series, orders by status, stock attention, recent orders |
 | GET | `/api/admin/dashboard/alerts` | Header alert counts |
-| GET | `/api/admin/catalog/options` | Categories (with `isActive`) + brands for forms |
+| GET | `/api/admin/catalog/options` | Categories (with `isActive`) + brands + `pairs` (product count per category/brand, fixtures excluded) for forms |
 | GET/POST | `/api/admin/catalog/products` | List (q, status, stock, categoryId, sort, page) / create (draft by default + inventory row) |
 | GET/PATCH | `/api/admin/catalog/products/:id` | Detail with specifications / update (`expectedUpdatedAt`) |
-| PATCH | `/api/admin/catalog/products/:id/status` | Archive (INACTIVE) / reactivate |
+| PATCH | `/api/admin/catalog/products/:id/status` | Unpublish (INACTIVE) / publish (ACTIVE) |
+| DELETE | `/api/admin/catalog/products/:id` | Permanent delete, only for an unpublished product with no orders, checkouts, carts, wishlists, reviews, photo rows or activity history; re-checked under `FOR UPDATE` (409 `PRODUCT_IN_USE`) |
 | GET/POST | `/api/admin/categories` | List with product counts + summary / create (hidden by default) |
 | PATCH | `/api/admin/categories/:id`, `/:id/status` | Edit (slug immutable) / show-hide |
 | DELETE | `/api/admin/categories/:id` | Only when no product references it (409 `CATEGORY_IN_USE`) |
@@ -102,3 +103,12 @@ Envelopes:
 - **Header search.** The Figma header shows a global search field. No global admin search API exists in 05.1, so the field is omitted rather than shipped inert. Each module has its own working search in its filter band.
 - **Mobile.** There are no admin mobile references, so the shell uses the existing breakpoints: below `lg` the sidebar becomes the shared right-side Drawer, and below `sm` the profile name and ADMIN pill are hidden.
 - **Legacy media picker.** `pages/admin/AdminProductsPage.tsx` (the 04.3 media-only picker) is no longer routed, because `/admin/products` is now the full catalog table and every row links to `/admin/products/:id/media`. The file and its tests are kept unchanged for Architect disposition.
+- **Premium refinement (owner screenshots, 2026-11-03).**
+  - *Dropdowns.* The shared Select popup was locked to the trigger width, so options wrapped one word per line. It is now at least the trigger width, as wide as its longest option, and capped at 28rem and the space beside the trigger; options stay on one line with an ellipsis and the full label in `title`. Long, growing lists (category and brand in the product form, the category filter) use the new `SearchSelect`: a search field over a listbox (combobox pattern with `aria-activedescendant`), groups, hints, disabled items, flipping up and sizing to the available side.
+  - *Category/brand relationship.* Ranking only, from observed catalog pairs: a chosen brand lists the categories it already uses first (with product counts), a chosen category lists its common brands first. A brand fills an empty category only when exactly one active category holds its products, with a visible note. No restriction: any active category with any brand, including a first product for a new brand.
+  - *Publishing wording.* `ACTIVE`/`INACTIVE` read as Published/Unpublished everywhere (list pill, chips, row action, edit page), matching "Save as draft / Publish now". The edit page gains Publish/Unpublish (blocked while there are unsaved edits, because a status change remounts the form).
+  - *Deletion.* Archive stays the default. Permanent deletion exists only under the rule above; the list shows it as an `aria-disabled` action whose reason is announced and shown, never as a disguised archive.
+  - *Shell.* The collapse control moved to the MAIN heading row (centred at the top of the rail when collapsed). The rail was unstyled because Radix Tooltip's Slot stringified NavLink's className callback; `NavItem` now resolves the active class with `useMatch`. The header shows the avatar only; Sign out asks for confirmation.
+  - *Lists.* Pager clicks scroll the page title back into view below the sticky header (instant under reduced motion); refetches dim the previous rows under a progress bar instead of passing them off as current; the search debounce is 250 ms. Delivery uses table skeleton rows instead of the full-page loader.
+  - *Figures.* KPI values use Poppins with tabular digits (monospace stays for SKUs and references). The revenue chart adds total, daily average, best day, days with sales, a rounded scale and a hover/arrow-key day readout, all from the existing overview data.
+  - *Test scaffolding.* Categories whose only products are QA fixtures are hidden from admin category lists and options, like the fixtures; they are never deleted because the fixtures carry commerce history.
