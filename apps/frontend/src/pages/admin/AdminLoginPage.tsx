@@ -15,8 +15,12 @@ export function AdminLoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   // A deep link that required sign-in returns to that admin page; anything else (or a crafted value) goes to the dashboard.
-  const from = (location.state as { from?: unknown } | null)?.from;
-  const destination = typeof from === 'string' && /^\/admin(\/[A-Za-z0-9._~%-]+)*\/?$/.test(from) && !from.startsWith('/admin/login') ? from : '/admin';
+  const { from, search } = (location.state as { from?: unknown; search?: unknown } | null) ?? {};
+  const returnPath = typeof from === 'string' && /^\/admin(\/[A-Za-z0-9._~%-]+)*\/?$/.test(from) && !from.startsWith('/admin/login') ? from : null;
+  // List filters live in the query string; it is only ever applied as the search part of an already-validated /admin path.
+  const destination = returnPath
+    ? { pathname: returnPath, search: typeof search === 'string' && search.startsWith('?') && search.length <= 500 ? search : '' }
+    : '/admin';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);

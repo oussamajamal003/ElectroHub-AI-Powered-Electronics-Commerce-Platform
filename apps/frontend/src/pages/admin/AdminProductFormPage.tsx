@@ -99,8 +99,16 @@ function ProductForm({ product, onReload }: { product?: AdminProduct; onReload: 
   useEffect(() => {
     if (!dirty || mutation.isSuccess) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+    // BrowserRouter has no useBlocker: in-app links are intercepted in the capture phase, before React Router's Link handler runs.
+    const guardLinks = (event: MouseEvent) => {
+      const link = (event.target as Element | null)?.closest?.('a[href]');
+      if (!(link instanceof HTMLAnchorElement) || link.target === '_blank' || link.origin !== window.location.origin) return;
+      if (link.pathname === window.location.pathname && link.search === window.location.search) return;
+      if (!window.confirm('You have unsaved changes to this product. Leave without saving?')) { event.preventDefault(); event.stopPropagation(); }
+    };
     window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
+    document.addEventListener('click', guardLinks, true);
+    return () => { window.removeEventListener('beforeunload', warn); document.removeEventListener('click', guardLinks, true); };
   }, [dirty, mutation.isSuccess]);
 
   const clientErrors = touched ? validate(draft, creating) : {};

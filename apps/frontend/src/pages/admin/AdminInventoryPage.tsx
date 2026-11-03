@@ -13,7 +13,7 @@ import { formatCount, formatDateTime } from '@/features/admin/shared/format';
 import uiStyles from '@/features/admin/shared/AdminUi.module.scss';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
 
-const FILTERS = { status: ['IN_STOCK', 'LOW_STOCK', 'OUT_OF_STOCK'] } as const;
+const FILTERS = { status: ['IN_STOCK', 'LOW_STOCK', 'OUT_OF_STOCK', 'UNTRACKED'] } as const;
 const SORT_KEYS = ['name', 'quantity', 'updatedAt', 'sku'] as const;
 const DEFAULT_SORT = { key: 'quantity', order: 'asc' } as const;
 const MAX_STOCK = 1_000_000;
@@ -131,11 +131,12 @@ export function AdminInventoryPage() {
       <KpiCard label="Low stock" tone="warning" icon={<AlertTriangle />} loading={!summary} value={summary ? formatCount(summary.lowStock) : null} to="/admin/inventory?status=LOW_STOCK" />
       <KpiCard label="Out of stock" tone="error" icon={<XCircle />} loading={!summary} value={summary ? formatCount(summary.outOfStock) : null} to="/admin/inventory?status=OUT_OF_STOCK" />
       <KpiCard label="Not tracked" tone="neutral" icon={<PackageX />} loading={!summary} value={summary ? formatCount(summary.untracked) : null}
-        hint="Products without a stock record (cannot be sold)" />
+        hint="Products without a stock record (cannot be sold)" to="/admin/inventory?status=UNTRACKED" />
     </section>
     <FilterBand search={list.search} onSearch={list.setSearch} placeholder="Search by product or SKU" searchLabel="Search inventory"
       chips={[{ value: undefined, label: 'All' }, { value: 'IN_STOCK', label: 'In stock', count: summary?.inStock },
-        { value: 'LOW_STOCK', label: 'Low stock', count: summary?.lowStock }, { value: 'OUT_OF_STOCK', label: 'Out of stock', count: summary?.outOfStock }]}
+        { value: 'LOW_STOCK', label: 'Low stock', count: summary?.lowStock }, { value: 'OUT_OF_STOCK', label: 'Out of stock', count: summary?.outOfStock },
+        { value: 'UNTRACKED', label: 'Not tracked', count: summary?.untracked }]}
       active={list.filters.status} onChip={value => list.setFilter('status', value)} onReset={list.reset} resetDisabled={!list.isFiltered} />
     {query.isError && <QueryProblem error={query.error} hasData={Boolean(query.data)} onRetry={() => void query.refetch()} retrying={query.isFetching} what="Inventory" />}
     <div>

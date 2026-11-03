@@ -14,12 +14,12 @@ import styles from '@/features/admin/shared/AdminPages.module.scss';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const FILTERS = {
-  status: ['ACTIVE', 'INACTIVE'], stock: ['IN_STOCK', 'LOW_STOCK', 'OUT_OF_STOCK'], categoryId: (value: string) => UUID.test(value),
+  status: ['ACTIVE', 'INACTIVE'], stock: ['IN_STOCK', 'LOW_STOCK', 'OUT_OF_STOCK', 'UNTRACKED'], categoryId: (value: string) => UUID.test(value),
 } as const;
 const SORT_KEYS = ['name', 'price', 'createdAt', 'updatedAt', 'sku'] as const;
 const DEFAULT_SORT = { key: 'updatedAt', order: 'desc' } as const;
 const STOCK_OPTIONS = [{ value: 'ALL', label: 'Any stock' }, { value: 'IN_STOCK', label: 'In stock' }, { value: 'LOW_STOCK', label: 'Low stock' },
-  { value: 'OUT_OF_STOCK', label: 'Out of stock' }];
+  { value: 'OUT_OF_STOCK', label: 'Out of stock' }, { value: 'UNTRACKED', label: 'Not tracked' }];
 
 export function AdminCatalogProductsPage() {
   const list = useListParams({ filters: FILTERS, sortKeys: SORT_KEYS, defaultSort: DEFAULT_SORT });

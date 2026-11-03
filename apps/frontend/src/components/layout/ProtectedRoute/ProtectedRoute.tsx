@@ -22,7 +22,8 @@ export function ProtectedRoute({ requiredRole, redirectTo = '/', requireVerified
   if (!isAuthenticated || !user) {
     // Explicit sign-out lands on `logoutRedirectTo` (public Home by default); only a guest arriving at a protected URL follows `redirectTo` and keeps a return path.
     if (isLoggingOut) return <Navigate to={logoutRedirectTo} replace />;
-    return <Navigate to={redirectTo} replace state={preserveReturnPath ? { from: location.pathname } : undefined} />;
+    // `search` travels separately so path-only consumers (customer return paths) are unaffected; the admin login restores filters from it.
+    return <Navigate to={redirectTo} replace state={preserveReturnPath ? { from: location.pathname, search: location.search } : undefined} />;
   }
 
   if (requiredRole && user.role !== requiredRole) {
