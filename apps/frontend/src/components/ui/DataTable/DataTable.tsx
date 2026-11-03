@@ -1,4 +1,4 @@
-import { MoreHorizontal } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, MoreHorizontal } from 'lucide-react';
 import styles from './DataTable.module.scss';
 
 export interface Column<T> {
@@ -7,7 +7,11 @@ export interface Column<T> {
   render?: (item: T) => React.ReactNode;
   align?: 'left' | 'center' | 'right';
   width?: string;
+  /** Server sort key; when set and `onSortChange` is provided the header becomes a sort button with aria-sort. */
+  sortKey?: string;
 }
+
+export interface DataTableSort { key: string; order: 'asc' | 'desc' }
 
 export interface DataTableProps<T> {
   data: T[];
@@ -15,8 +19,13 @@ export interface DataTableProps<T> {
   keyExtractor: (item: T) => string | number;
   onRowClick?: (item: T) => void;
   onActionClick?: (item: T, event: React.MouseEvent) => void;
-  emptyMessage?: string;
+  emptyMessage?: React.ReactNode;
   className?: string;
+  caption?: string;
+  sort?: DataTableSort;
+  onSortChange?: (sort: DataTableSort) => void;
+  /** Renders this many skeleton rows instead of data (first load only: never a false empty state). */
+  loadingRows?: number;
 }
 
 export function DataTable<T>({
@@ -27,10 +36,17 @@ export function DataTable<T>({
   onActionClick,
   emptyMessage = 'No data available',
   className = '',
+  caption,
+  sort,
+  onSortChange,
+  loadingRows,
 }: DataTableProps<T>) {
+  const ariaSort = (col: Column<T>) => !col.sortKey || !onSortChange ? undefined
+    : sort?.key === col.sortKey ? (sort.order === 'asc' ? 'ascending' : 'descending') : 'none';
   return (
     <div className={`${styles.tableContainer} ${className}`} data-testid="data-table">
       <table className={styles.table}>
+        {caption && <caption className={styles.caption}>{caption}</caption>}
         <thead>
           <tr>
             {columns.map((col) => (
@@ -39,8 +55,20 @@ export function DataTable<T>({
                 className={`${styles.th} ${col.align ? styles[`align-${col.align}`] : ''}`}
                 style={{ width: col.width }}
                 scope="col"
+                aria-sort={ariaSort(col)}
               >
-                {col.title}
+                {col.sortKey && onSortChange ? (
+                  <button
+                    type="button"
+                    className={styles.sortButton}
+                    onClick={() => onSortChange({ key: col.sortKey!, order: sort?.key === col.sortKey && sort?.order === 'asc' ? 'desc' : 'asc' })}
+                  >
+                    {col.title}
+                    {sort?.key === col.sortKey
+                      ? (sort.order === 'asc' ? <ArrowUp className={styles.sortIcon} aria-hidden="true" /> : <ArrowDown className={styles.sortIcon} aria-hidden="true" />)
+                      : <ArrowUpDown className={`${styles.sortIcon} ${styles.sortIdle}`} aria-hidden="true" />}
+                  </button>
+                ) : col.title}
               </th>
             ))}
             {onActionClick && (
@@ -51,7 +79,14 @@ export function DataTable<T>({
           </tr>
         </thead>
         <tbody>
-          {data.length === 0 ? (
+          {loadingRows ? (
+            Array.from({ length: loadingRows }, (_, row) => (
+              <tr key={`skeleton-${row}`} className={styles.tr} aria-hidden="true">
+                {columns.map(col => <td key={col.key} className={styles.td}><span className={styles.skeleton} /></td>)}
+                {onActionClick && <td className={styles.td} />}
+              </tr>
+            ))
+          ) : data.length === 0 ? (
             <tr>
               <td 
                 colSpan={columns.length + (onActionClick ? 1 : 0)} 
