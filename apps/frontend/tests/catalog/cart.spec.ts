@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { noSavedPurchases, refreshedSession } from '../../src/test/e2eApiFixtures';
 
 const productId = '8f2813b4-a388-44d3-b51e-5d4c40386677';
 const product = { id: productId, name: 'Apple iPhone 15 Pro', slug: 'apple-iphone-15-pro',
@@ -113,6 +114,7 @@ test('authenticated Cart retries a failed guest merge without losing saved items
   await page.route('**/api/auth/refresh', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'browser-test-token' }) }));
   await page.route('**/api/auth/me', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ user }) }));
   await page.route('**/api/cart', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify(cart(2)) }));
+  await page.route('**/api/checkout/payment-attempts', route => route.fulfill({ json: noSavedPurchases }));
   let mergeAttempts = 0;
   await page.route('**/api/cart/reconcile', route => {
     mergeAttempts++;
@@ -126,7 +128,7 @@ test('authenticated Cart retries a failed guest merge without losing saved items
   await expect(page.getByRole('link', { name: 'Cart, 3 items' })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('electrohub.cart.v1'))).toBeNull();
   expect(mergeAttempts).toBe(2);
-  await expect(page.getByRole('button', { name: 'Proceed to Checkout' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Proceed to Checkout' })).toBeEnabled();
 });
 
 test('Cart skeleton keeps item and summary geometry across responsive widths', async ({ page }) => {
@@ -169,7 +171,7 @@ test('Product Details quantity adds to guest Cart without resetting the gallery'
   await page.setViewportSize({ width: 1920, height: 900 });
   await page.route('**/api/auth/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
   await page.route('**/api/products/apple-iphone-15-pro', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: {
-    ...product, sku: 'IPHONE-15-PRO', modelNumber: 'A2848', availableQuantity: 5,
+    ...product, sku: 'IPHONE-15-PRO', modelNumber: 'A2848', availableQuantity: 5, purchasable: true,
     images: [product.primaryImage, { id: 'image-2', url: '/images/catalog/variety/apple-phone-generic-02.jpg', altText: 'iPhone alternate view', sortOrder: 1, isPrimary: false }],
     specifications: [],
   } }) }));
@@ -213,7 +215,7 @@ test('low stock can be corrected and an out-of-stock line stays removable', asyn
   await expect(page.getByRole('button', { name: 'Sign in to Checkout' })).toBeEnabled();
   outOfStock = true;
   await page.reload();
-  await expect(page.getByText('Out of stock. Remove this item to continue.')).toBeVisible();
+  await expect(page.getByText('Out of stock. Reduce quantity or remove this item to continue.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign in to Checkout' })).toBeDisabled();
   await page.getByRole('button', { name: 'Remove Apple iPhone 15 Pro from cart' }).click();
   await expect(page.getByRole('heading', { name: 'Your cart is empty' })).toBeVisible();
@@ -387,8 +389,11 @@ test('authenticated Cart survives refresh and does not become the guest Cart on 
 test('committed reconciliation survives a failed response without a stale saved-item error', async ({ page }) => {
   const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4', email: 'cart-customer@example.invalid', firstName: 'Cart', lastName: 'Customer', role: 'CUSTOMER' };
   await page.addInitScript(productId => localStorage.setItem('electrohub.cart.v1', JSON.stringify({ version: 1, items: [{ productId, quantity: 3 }] })), productId);
-  await page.route('**/api/auth/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
-  await page.route('**/api/auth/login', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'browser-test-token', user }) }));
+  let signedIn = false;
+  await page.route('**/api/auth/refresh', route => signedIn ? route.fulfill({ json: refreshedSession(user) })
+    : route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
+  await page.route('**/api/auth/login', route => { signedIn = true; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'browser-test-token', user }) }); });
+  await page.route('**/api/checkout/payment-attempts', route => route.fulfill({ json: noSavedPurchases }));
   let serverQuantity = 2;
   await page.route('**/api/cart/validate', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify(cartResponse(3)) }));
   await page.route('**/api/cart', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify(cartResponse(serverQuantity)) }));
@@ -411,8 +416,11 @@ test('guest Checkout intent signs in, reconciles, and returns only to Cart', asy
   const guestOnlyId = '41f516ae-8385-4dcb-9a85-90b5dc9fe363';
   const serverOnlyId = '53d67cc1-cced-45e2-88a9-c54d5860122b';
   await page.addInitScript(({ productId, guestOnlyId }) => localStorage.setItem('electrohub.cart.v1', JSON.stringify({ version: 1, items: [{ productId, quantity: 9 }, { productId: guestOnlyId, quantity: 1 }] })), { productId, guestOnlyId });
-  await page.route('**/api/auth/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
-  await page.route('**/api/auth/login', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'browser-test-token', user }) }));
+  let signedIn = false;
+  await page.route('**/api/auth/refresh', route => signedIn ? route.fulfill({ json: refreshedSession(user) })
+    : route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
+  await page.route('**/api/auth/login', route => { signedIn = true; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'browser-test-token', user }) }); });
+  await page.route('**/api/checkout/payment-attempts', route => route.fulfill({ json: noSavedPurchases }));
   const line = (id: string, quantity: number, name: string, slug: string, price: string) => ({ id: `line-${id}`, productId: id, quantity,
     product: { slug, name, category: 'Phones', price, image: product.primaryImage }, availableQuantity: 20, availability: 'AVAILABLE', lineTotal: (Number(price) * quantity).toFixed(2) });
   const response = (items: ReturnType<typeof line>[]) => {
@@ -456,7 +464,7 @@ test('guest Checkout intent signs in, reconciles, and returns only to Cart', asy
   expect(reconciliations).toBe(1);
   expect(requestOrder).toEqual(['server', 'reconcile']);
   expect(await page.evaluate(() => localStorage.getItem('electrohub.cart.v1'))).toBeNull();
-  await expect(page.getByRole('button', { name: 'Proceed to Checkout' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Proceed to Checkout' })).toBeEnabled();
 });
 
 test('Cart controls remain keyboard-operable with reduced motion', async ({ page }) => {

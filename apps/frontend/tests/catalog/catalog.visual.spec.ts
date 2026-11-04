@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cachedUserKey, refreshedSession } from '../../src/test/e2eApiFixtures';
 
 const filename = fileURLToPath(import.meta.url);
 const dataset = JSON.parse(readFileSync(path.resolve(path.dirname(filename), '../../../backend/prisma/data/products.json'), 'utf8')) as {
@@ -19,6 +20,7 @@ let controlledCatalogFailure: { attempts: number; failing: boolean } | null = nu
 type FixtureReview = { id: string; rating: number; body: string; createdAt: string; updatedAt: string; author: { displayName: string } };
 let reviewFixture: { mode: 'empty' | 'populated' | 'lifecycle'; own: FixtureReview | null; entries: FixtureReview[]; productSlug: string; writeCount: number } | null = null;
 let authenticatedFixture = false;
+const reviewer = { id: 'local-customer', role: 'CUSTOMER', firstName: 'Local', lastName: 'Reviewer', email: 'reviewer@example.test' };
 let delayedSearchQuery = '';
 let delayedProductRequest: { slug: string; release: () => void } | null = null;
 let delayedProductRequestEntered = false;
@@ -40,6 +42,8 @@ const summaries = dataset.products.map((product, index) => ({
   averageRating: index % 5 === 0 ? null : (3.5 + index % 3 / 2).toFixed(1),
   reviewCount: index % 5 === 0 ? 0 : 3 + index * 2,
   currency: 'USD', availability: product.quantity > 0 ? 'AVAILABLE' : 'UNAVAILABLE',
+  // Matches the API for an active product with no stock; available products keep their existing fixture shape.
+  ...(product.quantity > 0 ? {} : { stockStatus: 'OUT_OF_STOCK' as const }),
   category: { id: product.categorySlug, name: category(product.categorySlug).name, slug: product.categorySlug },
   brand: { id: product.brandSlug, name: brand(product.brandSlug).name, slug: product.brandSlug },
   primaryImage: { id: `image-${index}`, url: `/images/catalog/${product.categorySlug}${productViewBySlug.get(product.slug) ? '-detail' : ''}.jpg`,
@@ -60,7 +64,9 @@ test.beforeEach(async ({ page }) => {
     const pathname = requestUrl.pathname;
     if (!pathname.startsWith('/api/')) return route.continue();
     const respond = (payload: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(payload) });
-    if (pathname === '/api/auth/me' && authenticatedFixture) return respond({ user: { id: 'local-customer', role: 'CUSTOMER', firstName: 'Local', lastName: 'Reviewer', email: 'reviewer@example.test' } });
+    // Session restore is refresh-first; the cached identity hint is seeded by the authenticated tests.
+    if (pathname === '/api/auth/refresh' && authenticatedFixture) return respond(refreshedSession(reviewer));
+    if (pathname === '/api/auth/me' && authenticatedFixture) return respond({ user: reviewer });
     if (pathname.startsWith('/api/auth/')) return respond({ error: { code: 'UNAUTHENTICATED', message: 'Unauthenticated' } }, 401);
     if (pathname === '/api/categories') return respond({ data: dataset.categories.map(item => ({ ...item,
       imageUrl: `/images/catalog/${item.slug}.jpg`,
@@ -283,18 +289,19 @@ test('empty and populated public review states render with bounded pagination', 
   await page.getByRole('tab', { name: /Reviews/ }).click();
   await expect(page.getByText('Fixture review 1', { exact: true })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Reviews (11)' })).toBeVisible();
-  await expect(page.getByText('★ 4.8 (11 reviews)')).toBeVisible();
+  await expect(page.getByText('★ 4.8 out of 5 · 11 reviews')).toBeVisible();
   await expect(page.getByText('Page 1 of 2')).toBeVisible();
   await page.getByRole('button', { name: 'Next' }).click();
   await expect(page.getByText('Fixture review 11')).toBeVisible();
   await expect(page.getByText('Fixture review 1', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('★ 4.8 (11 reviews)')).toBeVisible();
+  await expect(page.getByText('★ 4.8 out of 5 · 11 reviews')).toBeVisible();
   await page.getByRole('button', { name: 'Previous' }).click();
   await expect(page.getByText('Fixture review 1', { exact: true })).toBeVisible();
 });
 
 test('authenticated customer can create, update and delete only their own review', async ({ page }) => {
   authenticatedFixture = true;
+  await page.addInitScript(([key, user]) => sessionStorage.setItem(key, JSON.stringify(user)), [cachedUserKey, reviewer] as const);
   const fixture = { mode: 'lifecycle' as const, own: null as FixtureReview | null, entries: [] as FixtureReview[], productSlug: dataset.products[0].slug, writeCount: 0 };
   reviewFixture = fixture;
   await page.goto(`/products/${fixture.productSlug}`);
@@ -340,7 +347,8 @@ test('combined live Search, filters, sort, reset and browser history stay synchr
   await expect(page.getByRole('link', { name: 'Samsung Galaxy S24 256GB' }).first()).toBeVisible();
   await expect(page.getByRole('link', { name: /wireless/i })).toHaveCount(0);
   await page.getByRole('button', { name: /Filters/ }).click();
-  await page.getByRole('group', { name: 'Category' }).getByRole('button', { name: 'Smartphones' }).click();
+  await page.getByRole('combobox', { name: 'Category' }).click();
+  await page.getByRole('option', { name: 'Smartphones' }).click();
   await page.getByRole('combobox', { name: 'Brand' }).click();
   await page.getByRole('option', { name: 'Samsung' }).click();
   await page.getByRole('combobox', { name: 'Availability' }).click();
@@ -369,12 +377,13 @@ test('combined live Search, filters, sort, reset and browser history stay synchr
   await expect(page).toHaveURL(/q=galaxy/);
 });
 
-test('availability is explicit and no purchase controls are shown', async ({ page }) => {
+test('availability is explicit and out-of-stock products cannot be added to the Cart', async ({ page }) => {
   await page.goto('/products');
   await expect(page.getByText('In stock').first()).toBeVisible();
   await page.getByRole('navigation', { name: 'Search result pages' }).getByRole('button', { name: 'Go to next page' }).click();
-  await expect(page.getByText('Out of stock').first()).toBeVisible();
-  await expect(page.getByRole('button', { name: /Add to cart|Buy now/i })).toHaveCount(0);
+  const outOfStock = page.getByTestId('product-card').filter({ hasText: 'Out of stock' }).first();
+  await expect(outOfStock).toBeVisible();
+  await expect(outOfStock.getByRole('button', { name: /to cart/ })).toBeDisabled();
 });
 
 test('ProductCard shows its alternate image on hover without a hover-time request', async ({ page }) => {
@@ -396,6 +405,7 @@ test('ProductCard shows its alternate image on hover without a hover-time reques
 test('Review updates preserve the Product Gallery and reduced motion remains usable', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   authenticatedFixture = true;
+  await page.addInitScript(([key, user]) => sessionStorage.setItem(key, JSON.stringify(user)), [cachedUserKey, reviewer] as const);
   const fixture: FixtureReview = { id: 'existing-own-review', rating: 5, body: 'Existing review content', createdAt: '2026-09-01T10:00:00.000Z', updatedAt: '2026-09-01T10:00:00.000Z', author: { displayName: 'You' } };
   reviewFixture = { mode: 'lifecycle', own: fixture, entries: [fixture], productSlug: dataset.products[0].slug, writeCount: 0 };
   await page.goto(`/products/${dataset.products[0].slug}`);
