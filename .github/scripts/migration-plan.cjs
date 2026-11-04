@@ -8,7 +8,7 @@
  * `pre` fails closed unless ALL hold:
  *   1. every database URL targets the single explicitly selected Supabase project ref;
  *   2. the Prisma ledger has no failed / rolled-back / unfinished row;
- *   3. every applied migration matches the raw checkout SHA-256 or one of two content-pinned LF/CRLF records;
+ *   3. every applied migration matches the raw checkout SHA-256 or one of four content-pinned LF/CRLF records;
  *   4. pending migrations are derived from the local directory minus applied ledger rows and none sorts
  *      before an already-applied migration; manual DEV additionally requires exact ordered approval, while PROD
  *      requires every discovered pending migration to pass the non-destructive SQL gate.
@@ -34,6 +34,12 @@ const LEGACY_LINE_ENDING_CHECKSUMS = Object.freeze({
   '20261012120000_payment_purchase_ownership': Object.freeze({
     canonicalSha256: 'a45372e2e25895345b7499e6d7d82b852e75a1a5e29b03b8b1fcf53a0f8cc310',
     crlfSha256: '0cf4bc6b88a2222b47e691100364b0e961b5bb20b61149dfb759b651ef177ff8',
+  }),
+  // DEV ledger checksum is the CRLF form of the only Git blob of this file (147e73c), applied from a Windows checkout;
+  // the SQL text is otherwise identical.
+  '20261031000000_delivery_tracking': Object.freeze({
+    canonicalSha256: 'ca953ac4583460abb8b0fbc4a8e23bdc6e6fdd1b8e0970edf7f6bb9cdb5cafba',
+    crlfSha256: '06db3a71dc137d284dc19307edc7a7d8145cbb33d2286e2cb1226ce3258e8077',
   }),
   // PROD ledger checksum reproduced exactly from the only Git blob of this file (f3934ed) as UTF-8 BOM + CRLF;
   // the SQL text is otherwise identical. Only that single ledger value is accepted for this migration.

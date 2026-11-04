@@ -142,6 +142,26 @@ test('live DEV payment migration bytes reproduce the exact approved LF and CRLF 
   );
 });
 
+test('live DEV delivery tracking ledger is accepted only as the pinned CRLF form of the Git blob', () => {
+  const repoRoot = path.resolve(__dirname, '../..');
+  const name = '20261031000000_delivery_tracking';
+  const migrationPath = `apps/backend/prisma/migrations/${name}/migration.sql`;
+  const expected = plan.LEGACY_LINE_ENDING_CHECKSUMS[name];
+  const canonicalGit = plan.migrationChecksumMetadata(execFileSync('git', ['cat-file', 'blob', `HEAD:${migrationPath}`], { cwd: repoRoot }));
+  const local = plan.localMigrations(path.join(repoRoot, 'apps/backend/prisma/migrations')).find((migration) => migration.name === name);
+  const row = (checksum) => ({ name, checksum, finished: true, rolledBack: false });
+  // Platform-neutral: a Linux (LF) checkout of the Git blob, as CI and the protected workflow see it.
+  const canonicalLf = { name, sha256: canonicalGit.sha256, canonicalSha256: canonicalGit.sha256, crlfSha256: canonicalGit.crlfSha256, lineEnding: 'LF' };
+
+  assert.ok(expected && local);
+  assert.equal(canonicalGit.sha256, expected.canonicalSha256);
+  assert.equal(canonicalGit.crlfSha256, expected.crlfSha256);
+  assert.equal(local.canonicalSha256, expected.canonicalSha256);
+  assert.deepEqual(plan.planMigrations([canonicalLf], [row(expected.crlfSha256)]), { pending: [], problems: [] });
+  assert.match(plan.planMigrations([canonicalLf], [row(canonicalGit.bomCrlfSha256)]).problems.join(), /checksum mismatch/);
+  assert.match(plan.planMigrations([{ ...canonicalLf, canonicalSha256: sha(9) }], [row(expected.crlfSha256)]).problems.join(), /checksum mismatch/);
+});
+
 test('compareApproved requires the exact ordered pending set', () => {
   const a = '20261013000000_refresh_token_rotation_lineage';
   const b = '20261014000000_other';
