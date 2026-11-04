@@ -32,6 +32,35 @@ describe('CustomerScrollRestoration', () => {
     await waitFor(() => expect(scrollY).toBe(0));
   });
 
+  it('ignores scrolling while a navigation is pending so Back restores the position the page was left at', async () => {
+    let scrollY = 0;
+    vi.stubGlobal('scrollTo', (_x: number, y: number) => { scrollY = y; Object.defineProperty(window, 'scrollY', { configurable: true, value: y }); });
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: scrollY });
+    window.requestAnimationFrame = callback => window.setTimeout(() => callback(performance.now()), 0);
+    window.cancelAnimationFrame = handle => window.clearTimeout(handle);
+    const router = createMemoryRouter([
+      { path: '/scroll-test-pending', element: <ScrollControls /> },
+      { path: '/account', element: <ScrollControls /> },
+    ], { initialEntries: ['/scroll-test-pending'] });
+    render(<RouterProvider router={router} />);
+    await waitFor(() => expect(scrollY).toBe(0));
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 1867 });
+    fireEvent.scroll(window);
+    try {
+      // BrowserRouter pushes the next entry ({ usr, key, idx }) at once, while a lazy route keeps this page on screen.
+      window.history.replaceState({ usr: null, key: 'pending-next-entry', idx: 1 }, '');
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 1419 });
+      fireEvent.scroll(window);
+      fireEvent.click(screen.getByRole('link', { name: 'Open account' }));
+      await waitFor(() => expect(router.state.location.pathname).toBe('/account'));
+    } finally {
+      window.history.replaceState(null, '');
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/scroll-test-pending'));
+    await waitFor(() => expect(scrollY).toBe(1867));
+  });
+
   it('glides to the top on page-number navigation instead of jumping', async () => {
     const scrollTo = vi.fn();
     vi.stubGlobal('scrollTo', scrollTo);

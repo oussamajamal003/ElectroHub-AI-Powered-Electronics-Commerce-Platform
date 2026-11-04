@@ -16,6 +16,13 @@ const setWindowScroll = (y: number) => {
   }
 };
 
+/** BrowserRouter stores the entry key in history.state; without one (memory routers, the initial entry) every entry counts as current. */
+const isCurrentHistoryEntry = (key: string) => {
+  const state: unknown = window.history.state;
+  const entryKey = state !== null && typeof state === 'object' ? (state as { key?: unknown }).key : undefined;
+  return typeof entryKey !== 'string' || entryKey === key;
+};
+
 const scrollToTopSmoothly = () => {
   const reduceMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   try {
@@ -48,25 +55,30 @@ export function CustomerScrollRestoration() {
     const position = navigationType === 'POP'
       ? positions.get(location.key) ?? routePositions.get(routeKey(location.pathname, location.search))
       : undefined;
+    // A navigation that is still pending (e.g. a lazy route downloading) has already moved the browser to the next history
+    // entry while this page is on screen; scrolling in that window must not overwrite the position saved for this page.
+    const remember = () => {
+      if (!isCurrentHistoryEntry(location.key)) return;
+      positions.set(location.key, window.scrollY);
+      routePositions.set(routeKey(location.pathname, location.search), window.scrollY);
+    };
     if (paymentRoute) {
       setWindowScroll(0);
       frame = window.requestAnimationFrame(() => {
-        if (!cancelled) setWindowScroll(0);
+        if (!cancelled) { setWindowScroll(0); remember(); }
       });
     } else if (position !== undefined) {
       frame = window.requestAnimationFrame(() => {
-        if (!cancelled) setWindowScroll(position);
+        if (!cancelled) { setWindowScroll(position); remember(); }
       });
     } else if (smoothTop && navigationType !== 'POP') {
       scrollToTopSmoothly();
     } else if (firstVisit || navigationType === 'PUSH') {
       setWindowScroll(0);
     }
+    // Record the settled position now, so a page that is never scrolled keeps it after the cleanup below stops recording.
+    if (position === undefined) remember();
 
-    const remember = () => {
-      positions.set(location.key, window.scrollY);
-      routePositions.set(routeKey(location.pathname, location.search), window.scrollY);
-    };
     window.addEventListener('scroll', remember, { passive: true });
     return () => {
       cancelled = true;
