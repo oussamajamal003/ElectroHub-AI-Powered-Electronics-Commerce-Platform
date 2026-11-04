@@ -5,7 +5,6 @@ import type { User } from './types';
 const userCacheKey = 'electrohub:cached-user';
 let prepared: Promise<User> | null = null;
 let restorePromise: Promise<User> | null = null;
-let tokenReady = false;
 
 export function readCachedUser(): User | null {
   try {
@@ -22,17 +21,14 @@ export function readCachedUser(): User | null {
 }
 
 function startRestore(): Promise<User> {
-  tokenReady = false;
   return (async () => {
     const { accessToken, user: refreshed } = await authApi.refreshSession();
     setAccessToken(accessToken);
-    tokenReady = true;
-    window.dispatchEvent(new Event('electrohub:session-token-ready'));
     // The rotation response carries the same identity /me returns; older servers omit it, so /me stays the fallback.
     if (refreshed && typeof refreshed.id === 'string' && typeof refreshed.email === 'string') return refreshed;
     const { user } = await authApi.getCurrentUser();
     return user;
-  })().catch(error => { tokenReady = false; throw error; });
+  })();
 }
 
 // Start only for an existing identity hint. It authorizes nothing: refresh and
@@ -41,10 +37,6 @@ export function preloadSessionRestore(): void {
   if (!readCachedUser() || prepared || restorePromise) return;
   prepared = startRestore();
   void prepared.catch(() => undefined);
-}
-
-export function isRestoreTokenReady(): boolean {
-  return tokenReady && Boolean(prepared || restorePromise);
 }
 
 export function restoreSession(): Promise<User> {
