@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { cachedUserKey, refreshedSession } from '../../src/test/e2eApiFixtures';
 
 for (const width of [390, 768, 1440, 1920]) {
   test(`benefits and company motion at ${width}px`, async ({ page }) => {
@@ -10,11 +11,11 @@ for (const width of [390, 768, 1440, 1920]) {
     await expect(banner.getByText('Free Delivery')).toBeAttached();
     await expect(banner.getByText('2-Year Warranty')).toBeAttached();
     await expect(banner.getByText('24/7 Support')).toBeAttached();
-    await expect(banner.locator(':scope > div')).toHaveClass(/pending/);
+    await expect(banner.locator(':scope > div')).toHaveClass(/benefitsPending/);
     await banner.scrollIntoViewIfNeeded();
-    await expect(banner.locator(':scope > div')).toHaveClass(/visible/);
+    await expect(banner.locator(':scope > div')).toHaveClass(/benefitsVisible/);
     await page.waitForTimeout(700);
-    await expect(banner.locator(':scope > div')).not.toHaveClass(/pending/);
+    await expect(banner.locator(':scope > div')).not.toHaveClass(/benefitsPending/);
     const columnsLayout = await columns.evaluateAll(items => items.map(item => {
       const rect = item.getBoundingClientRect();
       return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -50,9 +51,11 @@ test('reduced motion keeps benefits static', async ({ page }) => {
 
 test('mobile sign-out closes navigation and sends one logout request', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
-  await page.route('**/api/auth/me', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: {
-    id: 'demo', firstName: 'Demo', lastName: 'User', email: 'demo@example.com', role: 'CUSTOMER',
-  } }) }));
+  const user = { id: 'demo', firstName: 'Demo', lastName: 'User', email: 'demo@example.com', role: 'CUSTOMER' };
+  // Session restore is refresh-first and only runs for a cached identity hint.
+  await page.addInitScript(([key, cached]) => sessionStorage.setItem(key, JSON.stringify(cached)), [cachedUserKey, user] as const);
+  await page.route('**/api/auth/refresh', route => route.fulfill({ json: refreshedSession(user) }));
+  await page.route('**/api/auth/me', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user }) }));
   let logoutRequests = 0;
   await page.route('**/api/auth/logout', route => {
     logoutRequests += 1;
@@ -61,10 +64,12 @@ test('mobile sign-out closes navigation and sends one logout request', async ({ 
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: 'Open navigation menu' }).click();
   await expect(page.getByRole('navigation', { name: 'Mobile Navigation' }).getByRole('link', { name: 'Orders' })).toBeVisible();
-  await page.getByRole('navigation', { name: 'Mobile Navigation' }).getByRole('button', { name: 'Sign Out' }).click();
-  await expect(page.getByRole('navigation', { name: 'Mobile Navigation' })).toHaveCount(0);
+  // Sign Out lives in the account menu (the mobile navigation has never had its own); signing out closes the open drawer.
+  await page.getByRole('button', { name: 'Account menu for Demo User' }).click();
+  await page.getByRole('menuitem', { name: 'Sign Out' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Sign Out' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Mobile Navigation' })).toHaveCount(0);
   await expect(page.getByRole('banner').getByRole('link', { name: 'Orders' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Account' })).toBeVisible();
   expect(logoutRequests).toBe(1);

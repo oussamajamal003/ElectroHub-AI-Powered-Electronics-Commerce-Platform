@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { wishlistProduct } from '../../src/features/wishlist/fixtures';
+import { emptyCartRecommendations } from '../../src/test/e2eApiFixtures';
 
 const productId = wishlistProduct.id;
 test.beforeEach(async ({ page }) => {
@@ -31,6 +32,7 @@ async function inventoryHarness(page: Page, initial = 6, cartQuantity = 0) {
       const totalQuantity = input.reduce((sum, item) => sum + item.quantity, 0);
       return send({ data: { items, totalQuantity, subtotal: (Number(wishlistProduct.price) * totalQuantity).toFixed(2), total: (Number(wishlistProduct.price) * totalQuantity).toFixed(2), shipping: '0.00', currency: 'USD', canCheckout: items.length > 0 && items.every(item => item.availability === 'AVAILABLE') } });
     }
+    if (url.pathname === '/api/recommendations/cart') return send(emptyCartRecommendations);
     if (url.pathname.endsWith('/reviews')) return send({ data: [], meta: { page: 1, pageSize: 10, total: 0, totalPages: 0 } });
     if (url.pathname === `/api/products/${wishlistProduct.slug}`) return send({ data: { ...summary(), sku: 'TEST', modelNumber: null, images: [wishlistProduct.primaryImage, { ...wishlistProduct.primaryImage, id: 'alternate', url: '/images/catalog/variety/apple-phone-generic-02.jpg', altText: 'Alternate phone view', isPrimary: false }], specifications: [] } });
     if (url.pathname === '/api/search/products' || url.pathname === '/api/products' || url.pathname === '/api/products/deals') return send({ data: [summary()], meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 } });
@@ -211,7 +213,7 @@ test('N: slow background stock refresh preserves content and selected gallery im
   const api = await inventoryHarness(page, 6);
   await page.goto(`/products/${wishlistProduct.slug}`);
   await expect(page.getByRole('heading', { name: wishlistProduct.name, exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: 'View Alternate phone view' }).click();
+  await page.getByRole('tab', { name: `View ${wishlistProduct.name} — image 2` }).click();
   const increase = page.getByRole('button', { name: /Increase quantity/ });
   for (let index = 0; index < 4; index++) await increase.click();
   api.setStock(3);
@@ -225,11 +227,11 @@ test('N: slow background stock refresh preserves content and selected gallery im
   await requested;
   await expect(page.getByRole('heading', { name: wishlistProduct.name, exact: true })).toBeVisible();
   await expect(page.getByRole('status', { name: 'Loading product details' })).toHaveCount(0);
-  await expect(page.getByRole('tab', { name: 'View Alternate phone view' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: `View ${wishlistProduct.name} — image 2` })).toHaveAttribute('aria-selected', 'true');
   release();
   await expect(page.getByText('Only 3 left')).toBeVisible();
   await expect(page.locator('[aria-live="polite"]').filter({ hasText: /^1$/ })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'View Alternate phone view' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: `View ${wishlistProduct.name} — image 2` })).toHaveAttribute('aria-selected', 'true');
 });
 
 test('P–Q: Cart and Wishlist intents leave stock presentation unchanged and issue no stock writes (intercepted API)', async ({ page }) => {

@@ -27,7 +27,7 @@ async function harness(page: Page, options: { signedIn?: boolean; serverIds?: st
   const holdWishlist = () => { wishlistGate = new Promise<void>(resolve => { releaseWishlist = resolve; }); };
   if (options.delayWishlist) holdWishlist();
   const productsGate = options.delayProducts ? new Promise<void>(resolve => { releaseProducts = resolve; }) : Promise.resolve();
-  const products = [options.outOfStock ? { ...first, availability: 'UNAVAILABLE' } : first, second, third];
+  const products = [options.outOfStock ? { ...first, availability: 'UNAVAILABLE', stockStatus: 'OUT_OF_STOCK' } : first, second, third];
   const hydrate = (productIds: string[]) => ({ data: { items: productIds.map(productId => ({ productId,
     product: products.find(product => product.id === productId) ?? null,
     availability: !products.some(product => product.id === productId) ? 'UNAVAILABLE' : options.outOfStock && productId === first.id ? 'OUT_OF_STOCK' : 'AVAILABLE' })), totalItems: productIds.length } });
@@ -529,7 +529,7 @@ test('products loading grid fills responsive columns and cards reuse rating aggr
     expect(columnCount, `skeleton columns at ${width}px`).toBe(expectedColumns);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
-  state.releaseProducts(); await expect(page.getByTestId('product-card')).toHaveCount(2);
+  state.releaseProducts(); await expect(page.getByTestId('product-card')).toHaveCount(3);
   await expect(page.getByRole('img', { name: 'Rated 4.9 out of 5.' }).first()).toBeVisible();
   expect(await state.reviewRequests()).toBe(0);
 });

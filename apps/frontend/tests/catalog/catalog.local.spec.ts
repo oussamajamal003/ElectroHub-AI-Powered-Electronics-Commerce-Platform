@@ -56,8 +56,8 @@ test('real customer catalog, guest Orders, and responsive layout', async ({ page
 
   // Verify Search Page
   await page.goto('/search');
-  await expect(page.getByRole('heading', { name: 'Search' })).toBeVisible();
-  await expect(page.getByText('Find laptops, phones, audio, and more.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Search', exact: true })).toBeVisible();
+  await expect(page.getByText('Search by name, brand or category — or find products from a photo.')).toBeVisible();
   for (const width of [390, 768, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -75,12 +75,14 @@ test('real customer catalog, guest Orders, and responsive layout', async ({ page
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(page.getByRole('navigation', { name: 'Browse categories' })).toHaveCount(0);
   await page.getByRole('button', { name: /Filters/ }).click();
-  await expect(page.getByRole('group', { name: 'Category' })).toBeVisible();
-  expect(await page.getByRole('group', { name: 'Category' }).getByRole('button').count()).toBeGreaterThan(1);
+  // Category is a dropdown since the discovery toolbar redesign; it must offer real categories from the API.
+  await page.getByRole('combobox', { name: 'Category' }).click();
+  expect(await page.getByRole('option').count()).toBeGreaterThan(1);
+  await page.keyboard.press('Escape');
   await expect(page.getByText('Brand', { exact: true })).toBeVisible();
   await expect(page.getByText('Filters are temporarily unavailable')).toHaveCount(0);
   await page.getByRole('button', { name: /Filters/ }).click();
-  await expect(page.getByText('Sort by', { exact: true })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Sort by' })).toBeVisible();
 
   const productLink = page.locator('[data-testid="product-card"] h3 a').nth(6);
   await productLink.scrollIntoViewIfNeeded();
