@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cachedUserKey, refreshedSession } from '../../src/test/e2eApiFixtures';
+import { cachedUserKey, emptyCart, emptyWishlist, refreshedSession } from '../../src/test/e2eApiFixtures';
 
 const filename = fileURLToPath(import.meta.url);
 const dataset = JSON.parse(readFileSync(path.resolve(path.dirname(filename), '../../../backend/prisma/data/products.json'), 'utf8')) as {
@@ -67,6 +67,9 @@ test.beforeEach(async ({ page }) => {
     // Session restore is refresh-first; the cached identity hint is seeded by the authenticated tests.
     if (pathname === '/api/auth/refresh' && authenticatedFixture) return respond(refreshedSession(reviewer));
     if (pathname === '/api/auth/me' && authenticatedFixture) return respond({ user: reviewer });
+    // Signed-in providers read the customer's Cart and Wishlist; the generic fallback below is not their contract.
+    if (pathname === '/api/wishlist' && authenticatedFixture) return respond(emptyWishlist);
+    if (pathname === '/api/cart' && authenticatedFixture) return respond(emptyCart);
     if (pathname.startsWith('/api/auth/')) return respond({ error: { code: 'UNAUTHENTICATED', message: 'Unauthenticated' } }, 401);
     if (pathname === '/api/categories') return respond({ data: dataset.categories.map(item => ({ ...item,
       imageUrl: `/images/catalog/${item.slug}.jpg`,
@@ -310,14 +313,14 @@ test('authenticated customer can create, update and delete only their own review
   await page.getByRole('button', { name: 'Post review' }).click();
   await expect(page.getByRole('article').getByText('My first local review')).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Reviews (1)' })).toBeVisible();
-  await expect(page.getByText('★ 5.0 (1 reviews)')).toBeVisible();
+  await expect(page.getByText('★ 5.0 out of 5 · 1 review')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Edit your review' })).toBeVisible();
   await page.getByRole('combobox', { name: 'Rating' }).click();
   await page.getByRole('option', { name: '4 stars' }).click();
   await page.getByLabel('Your review').fill('Updated local review');
   await page.getByRole('button', { name: 'Update review' }).click();
   await expect(page.getByRole('article').getByText('Updated local review')).toBeVisible();
-  await expect(page.getByText('★ 4.0 (1 reviews)')).toBeVisible();
+  await expect(page.getByText('★ 4.0 out of 5 · 1 review')).toBeVisible();
   expect(fixture.writeCount).toBe(2);
   fixture.entries.unshift({ id: 'other-customer-review', rating: 2, body: 'Another customer review',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), author: { displayName: 'Another customer' } });

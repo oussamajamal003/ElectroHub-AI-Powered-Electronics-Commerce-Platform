@@ -390,10 +390,6 @@ test('reconciliation response immediately displays server two plus one unique gu
   expect(await page.evaluate(() => localStorage.getItem('electrohub.wishlist.v1'))).toBeNull();
   expect(state.wishlistReads()).toBe(0);
 });
-// Wall-clock render budget (documented runs: 12–27 ms). CPU contention on shared runners can push one sample past 100 ms;
-// a real regression still fails every attempt, while a retried pass is reported as flaky instead of silently passing.
-test.describe('provider render timing budget', () => {
-test.describe.configure({ retries: 2 });
 test('authenticated refresh renders cards and both badges directly from resolved provider state', async ({ page }) => {
   const state = await harness(page, { signedIn: true, serverIds: [first.id, second.id, third.id], delayWishlist: true, cartQuantity: 2 });
   await page.addInitScript(cachedUser => {
@@ -427,10 +423,9 @@ test('authenticated refresh renders cards and both badges directly from resolved
     .map(entry => { const resource = entry as PerformanceResourceTiming; return [new URL(entry.name).pathname, { responseEnd: resource.responseEnd, duration: resource.duration }]; })));
   const wishlistRenderDelay = times.cards - network['/api/wishlist'].responseEnd;
   const cartBadgeDelay = times.cartBadge - network['/api/cart'].responseEnd;
-  console.log('Wishlist refresh timings (ms)', { ...times, network, wishlistRenderDelay, cartBadgeDelay });
   expect(wishlistRenderDelay).toBeLessThan(100);
   expect(cartBadgeDelay).toBeLessThan(100);
-});
+  console.log('Wishlist refresh timings (ms)', { ...times, network, wishlistRenderDelay, cartBadgeDelay });
 });
 test('Wishlist refresh overlaps Cart and Wishlist reads with auth verification instead of serializing them', async ({ page }) => {
   const state = await harness(page, { signedIn: true, serverIds: [first.id, second.id], delayWishlist: true, cartQuantity: 2, delayUserVerification: true });
