@@ -427,21 +427,28 @@ test('authenticated refresh renders cards and both badges directly from resolved
   expect(cartBadgeDelay).toBeLessThan(100);
   console.log('Wishlist refresh timings (ms)', { ...times, network, wishlistRenderDelay, cartBadgeDelay });
 });
-test('Wishlist refresh overlaps Cart and Wishlist reads with auth verification instead of serializing them', async ({ page }) => {
+// Task 03.6 deliberately starts protected Cart/Wishlist reads only after identity verification (WishlistProvider.test.tsx).
+test('Wishlist refresh holds Cart and Wishlist reads until auth verification, then reads each once', async ({ page }) => {
   const state = await harness(page, { signedIn: true, serverIds: [first.id, second.id], delayWishlist: true, cartQuantity: 2, delayUserVerification: true });
   await page.addInitScript(cachedUser => {
     sessionStorage.setItem('electrohub:cached-user', JSON.stringify(cachedUser));
     sessionStorage.setItem(`electrohub.wishlist.auth-count.v1:${cachedUser.id}`, '2');
   }, user);
+  const verification = page.waitForRequest(request => new URL(request.url()).pathname === '/api/auth/me');
   await page.goto('/wishlist', { waitUntil: 'domcontentloaded' });
+  await verification;
+  await expect(page.getByTestId('product-skeleton')).toHaveCount(2);
+  // An absence assertion needs a bounded window: give any premature read time to be issued.
+  await page.waitForTimeout(500);
+  expect(state.wishlistReads()).toBe(0);
+  expect(state.cartReads()).toBe(0);
+  await expect(page.getByTestId('product-card')).toHaveCount(0);
+  await expect(page.locator('header').getByRole('link', { name: 'Wishlist (2)', exact: true })).toHaveCount(0);
+  state.releaseUserVerification();
   await expect.poll(() => state.wishlistReads()).toBe(1);
   await expect.poll(() => state.cartReads()).toBe(1);
   await expect(page.getByTestId('product-skeleton')).toHaveCount(2);
   state.releaseWishlist();
-  await page.waitForResponse(response => new URL(response.url()).pathname === '/api/wishlist');
-  await expect(page.getByTestId('product-card')).toHaveCount(0);
-  await expect(page.locator('header').getByRole('link', { name: 'Wishlist (2)', exact: true })).toHaveCount(0);
-  state.releaseUserVerification();
   await expect(page.getByTestId('product-card')).toHaveCount(2);
   await expect(page.getByTestId('product-skeleton')).toHaveCount(0);
   await expect(page.locator('header').getByRole('link', { name: 'Wishlist (2)', exact: true })).toBeVisible();
@@ -644,7 +651,7 @@ for (const mode of ['guest', 'authenticated'] as const) {
   }
 }
 
-test('early auth bootstrap shares refresh and holds commerce data until ownership verification', async ({ page }) => {
+test('early auth bootstrap shares one refresh and starts commerce reads only after ownership verification', async ({ page }) => {
   const state = await harness(page, { signedIn: true, serverIds: [first.id], cartQuantity: 2, delayWishlist: true, delayUserVerification: true });
   await page.addInitScript(cachedUser => {
     sessionStorage.setItem('electrohub:cached-user', JSON.stringify(cachedUser));
@@ -652,14 +659,19 @@ test('early auth bootstrap shares refresh and holds commerce data until ownershi
   }, user);
   const refreshes: string[] = [];
   page.on('request', request => { if (new URL(request.url()).pathname === '/api/auth/refresh') refreshes.push(request.url()); });
+  const verification = page.waitForRequest(request => new URL(request.url()).pathname === '/api/auth/me');
   await page.goto('/wishlist', { waitUntil: 'domcontentloaded' });
-  await expect.poll(() => state.wishlistReads()).toBe(1);
-  await expect.poll(() => state.cartReads()).toBe(1);
+  await verification;
   await expect(page.getByTestId('product-skeleton')).toHaveCount(1);
-  state.releaseWishlist();
-  await expect(page.getByTestId('product-card')).toHaveCount(0);
+  await page.waitForTimeout(500);
+  expect(state.wishlistReads()).toBe(0);
+  expect(state.cartReads()).toBe(0);
   await expect(page.locator('header').getByRole('link', { name: 'Wishlist (1)', exact: true })).toHaveCount(0);
   state.releaseUserVerification();
+  await expect.poll(() => state.wishlistReads()).toBe(1);
+  await expect.poll(() => state.cartReads()).toBe(1);
+  await expect(page.getByTestId('product-card')).toHaveCount(0);
+  state.releaseWishlist();
   await expect(page.getByTestId('product-card')).toHaveCount(1);
   await expect(page.locator('header').getByRole('link', { name: 'Wishlist (1)', exact: true })).toBeVisible();
   await expect(page.locator('header').getByRole('link', { name: 'Cart, 2 items', exact: true })).toBeVisible();

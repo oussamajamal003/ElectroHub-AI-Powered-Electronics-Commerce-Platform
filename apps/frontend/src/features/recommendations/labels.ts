@@ -8,7 +8,8 @@ export interface RailCopy { title: string; description: string }
  * "Frequently Bought Together" only for real co-purchases. Returns null for a section that must be hidden.
  */
 export function railCopy(section: RecommendationSection): RailCopy | null {
-  if (section.items.length === 0) return null;
+  // Runtime guard: a malformed response (not an object, or without an items array) hides the rail instead of throwing.
+  if (typeof section !== 'object' || section === null || !Array.isArray(section.items) || section.items.length === 0) return null;
   switch (section.strategy) {
     case 'EMBEDDING_SIMILARITY':
       return { title: 'Similar Products', description: 'Products that look alike, matched by our image model.' };

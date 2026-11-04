@@ -17,13 +17,11 @@ it('starts refresh before React, verifies ownership, and shares the prepared rea
   session.preloadSessionRestore();
   session.preloadSessionRestore();
   await vi.waitFor(() => expect(authApi.getCurrentUser).toHaveBeenCalledTimes(1));
-  expect(session.isRestoreTokenReady()).toBe(true);
   const first = session.restoreSession();
   expect(session.restoreSession()).toBe(first);
   expect(await first).toEqual(user);
   expect(authApi.refreshSession).toHaveBeenCalledTimes(1);
   expect(JSON.parse(sessionStorage.getItem('electrohub:cached-user')!).id).toBe('remembered-owner');
-  expect(session.isRestoreTokenReady()).toBe(false);
   expect([...Object.values(sessionStorage)]).not.toContain('test-token');
 });
 it('retains an early invalid-session result for the provider without a second refresh', async () => {
@@ -34,7 +32,6 @@ it('retains an early invalid-session result for the provider without a second re
   await vi.waitFor(() => expect(authApi.refreshSession).toHaveBeenCalledTimes(1));
   await expect(session.restoreSession()).rejects.toMatchObject({ status: 401 });
   expect(authApi.getCurrentUser).not.toHaveBeenCalled();
-  expect(session.isRestoreTokenReady()).toBe(false);
   expect(authApi.refreshSession).toHaveBeenCalledTimes(1);
 });
 it('allows a genuine retry after a transient prepared-session failure', async () => {

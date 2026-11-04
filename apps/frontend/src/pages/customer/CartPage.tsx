@@ -1,5 +1,5 @@
 import { PendingPurchases, usePaymentPurchases } from '@/features/checkout/PaymentPurchases';
-import { useEffect, useState, type ReactNode } from 'react';
+import { Component, useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -24,6 +24,13 @@ export function CartSuggestions({ productIds }: { productIds: string[] }) {
   // the server confirms products for the current cart.
   const section = suggestions.data?.data;
   return <RecommendationSectionRail id="cart-bought-together-title" section={section} />;
+}
+
+/** Optional suggestions must never take the Cart down: a render failure hides only the rail (React still logs the error). */
+class SuggestionsBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() { return this.state.failed ? null : this.props.children; }
 }
 
 function money(value: string) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value)); }
@@ -105,5 +112,5 @@ export function CartPage() {
   const pending = purchases.data?.data.some(item => item.pending) ?? false;
   const productIds = cart.data?.items.map(item => item.productId) ?? [];
   return <CartPageContent cart={{ ...cart, isLoading: cart.isLoading || !cart.data?.items.length && !cart.isGuest && purchases.isLoading }} hasPendingPurchases={pending} pendingPurchases={!cart.isGuest ? <PendingPurchases /> : undefined}
-    suggestions={productIds.length > 0 ? <CartSuggestions productIds={productIds} /> : undefined} />;
+    suggestions={productIds.length > 0 ? <SuggestionsBoundary key={productIds.join(',')}><CartSuggestions productIds={productIds} /></SuggestionsBoundary> : undefined} />;
 }
