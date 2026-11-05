@@ -94,6 +94,23 @@ export function useProductStatus() {
   });
 }
 
+export interface BulkStatusItem { id: string; expectedUpdatedAt: string }
+export type BulkOutcome = 'UPDATED' | 'UNCHANGED' | 'CONFLICT' | 'NOT_FOUND' | 'REJECTED';
+export interface BulkStatusResult { id: string; outcome: BulkOutcome; message: string }
+export interface BulkStatusSummary { updated: number; unchanged: number; conflict: number; notFound: number; rejected: number }
+export interface BulkStatusResponse { results: BulkStatusResult[]; summary: BulkStatusSummary }
+
+/** Bounded archive/reactivate of selected rows. The server applies each row independently and reports per-item outcomes. */
+export function useBulkProductStatus() {
+  const settle = useCatalogInvalidation();
+  return useMutation({
+    mutationFn: ({ status, items }: { status: ProductStatus; items: BulkStatusItem[] }) =>
+      apiClient<ItemResponse<BulkStatusResponse>>('/api/admin/catalog/products/bulk-status', { method: 'POST', data: { status, items } }),
+    // Settled, not succeeded: rows may have changed even when the request failed part-way, so the lists always refresh.
+    onSettled: () => settle(),
+  });
+}
+
 export function useDeleteProduct() {
   const client = useQueryClient();
   const settle = useCatalogInvalidation();

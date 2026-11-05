@@ -12,6 +12,12 @@ import { logSafely } from '../utils/logger.js';
 import type { DocumentSourceOrder } from '../services/order-document.domain.js';
 import { ORDER_ID, USER_ID, paidOrder, withPayment } from '../services/__tests__/order-document.fixtures.js';
 import { JWT_SECRET, generateAccessToken } from '../utils/jwt.js';
+// Task 05.2: requireAuth honours an ADMIN identity only through a live MFA-assured session; these suites test role boundaries, so every
+// token carries a session id and the session lookup reports it live (session assurance itself is proven in admin-security suites).
+const TEST_ADMIN_SESSION = '5a1e2c3d-4b5f-4a6b-8c7d-9e0f1a2b3c4d';
+vi.mock('../services/admin-session.js', () => ({ touchAdminSession: vi.fn(),
+  findActiveAdminSession: vi.fn(async (familyId: string) => ({ familyId, mfaMethod: 'TOTP', mfaVerifiedAt: new Date(), stepUpAt: null, lastSeenAt: new Date() })) }));
+
 
 // Task 03.9 document route contract tests. Persistence is mocked (no database). The binary path uses a real RenderPool worker;
 // failure and concurrency paths use a fake pool. These prove route/auth/validation/header/ownership behavior, not PostgreSQL semantics.
@@ -84,7 +90,7 @@ function buildApp({ pool = realPool, ready = () => true, unavailableCause, fileL
   return app;
 }
 
-const bearer = (userId = USER_ID, role = 'CUSTOMER') => `Bearer ${generateAccessToken({ userId, role })}`;
+const bearer = (userId = USER_ID, role = 'CUSTOMER') => `Bearer ${generateAccessToken({ userId, role, sessionId: TEST_ADMIN_SESSION })}`;
 const expiredBearer = () => {
   const now = Math.floor(Date.now() / 1000);
   return `Bearer ${jwt.sign({ userId: USER_ID, role: 'CUSTOMER', iat: now - 3600, exp: now - 60 }, JWT_SECRET, { algorithm: 'HS256' })}`;

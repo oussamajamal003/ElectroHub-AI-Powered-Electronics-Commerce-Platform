@@ -3,6 +3,7 @@ import type { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { deriveStockStatus, InventoryService } from './inventory.service.js';
+import { AdminNotificationService } from './admin-notification.service.js';
 import { logSafely } from '../utils/logger.js';
 import type { inventoryAdjustmentSchema, inventoryListSchema, STOCK_FILTERS } from '../validators/admin.validator.js';
 
@@ -54,7 +55,8 @@ async function heldUnits(db: PrismaClient | Prisma.TransactionClient, productIds
 }
 
 export class AdminInventoryService {
-  constructor(private readonly db: PrismaClient = prisma, private readonly inventory = new InventoryService()) {}
+  constructor(private readonly db: PrismaClient = prisma, private readonly inventory = new InventoryService(),
+    private readonly notifier = new AdminNotificationService(db)) {}
 
   /** One grouped query over the stored status column InventoryService maintains on every write. */
   async summary() {
@@ -106,12 +108,12 @@ export class AdminInventoryService {
         // A product without a stock record (legacy data) can be given one by an absolute correction only.
         if (input.operation !== 'SET') throw new AppError('Set an absolute quantity to start tracking this product’s stock.', 409, 'INVENTORY_NOT_FOUND');
         await tx.inventory.create({ data: { productId, quantity: input.quantity, lowStockAt: 5, status: deriveStockStatus(input.quantity, 5) } });
-        return { from: null, to: input.quantity };
+        return { from: null, to: input.quantity, status: deriveStockStatus(input.quantity, 5), previousStatus: null };
       }
       const next = input.operation === 'SET'
         ? await this.inventory.setStock(productId, input.quantity, tx)
         : await this.inventory.increaseStock(productId, input.quantity, tx);
-      return { from: current.quantity, to: next.quantity };
+      return { from: current.quantity, to: next.quantity, status: next.status, previousStatus: deriveStockStatus(current.quantity, current.lowStockAt) };
     }, TX).catch(error => {
       if (isWriteConflict(error)) { stale = true; return null; }
       throw error;
@@ -120,7 +122,12 @@ export class AdminInventoryService {
     // Operational audit: identifiers and quantities only; the free-text reason length is recorded, not its content.
     logSafely('info', 'Admin inventory change', { event: 'admin.inventory.adjusted', actorId, productId, operation: input.operation,
       from: outcome.from, to: outcome.to, reasonProvided: Boolean(input.reason) });
-    return this.get(productId);
+    const after = await this.get(productId);
+    // Only a transition INTO low or out of stock notifies; the email is fire-and-forget after commit.
+    if ((outcome.status === 'LOW_STOCK' || outcome.status === 'OUT_OF_STOCK') && outcome.status !== outcome.previousStatus) {
+      this.notifier.notifyLowStock({ productName: after.name, status: outcome.status, quantity: outcome.to });
+    }
+    return after;
   }
 
   async setThreshold(actorId: string, productId: string, lowStockAt: number, expectedLowStockAt: number) {

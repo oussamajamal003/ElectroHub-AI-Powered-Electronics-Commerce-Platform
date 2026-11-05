@@ -6,6 +6,12 @@ import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../utils/hash.js';
 import { User, RefreshToken } from '@prisma/client';
 
+// Task 05.2: ADMIN logins are delegated to the MFA service (covered by its own suites); here we only assert the hand-off.
+vi.mock('../admin-mfa.service.js', () => ({
+  adminMfaService: { startLogin: vi.fn().mockResolvedValue({ requiresMfa: true, mfaToken: 'restricted-transaction-token', enrollmentRequired: false,
+    expiresAt: new Date(), factors: { totp: true, passkey: false, recoveryCode: true } }) },
+}));
+
 // Mock the prisma client
 vi.mock('../../lib/prisma.js', () => ({
   prisma: {
@@ -44,6 +50,10 @@ vi.mock('../../lib/prisma.js', () => ({
     },
     securityEvent: {
       create: vi.fn(),
+    },
+    adminSession: {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
     $executeRaw: vi.fn().mockResolvedValue(1),
     $queryRaw: vi.fn().mockResolvedValue([]),
@@ -137,7 +147,7 @@ describe('AuthService', () => {
       vi.mocked(prisma.refreshToken.create).mockResolvedValueOnce({} as unknown as RefreshToken);
 
       const result = await authService.login('test@example.com', passwordPlain);
-      if ('requiresVerification' in result) throw new Error('Expected success');
+      if (!('accessToken' in result)) throw new Error('Expected success');
 
       expect(result.accessToken).toBeDefined();
       expect(result.refreshToken).toBeDefined();
@@ -194,7 +204,7 @@ describe('AuthService', () => {
       await expect(authService.login('unknown@electrohub.com', 'password123')).rejects.toThrow('Invalid credentials');
     });
 
-    it('should login valid ADMIN successfully with role ADMIN', async () => {
+    it('returns only a restricted MFA transaction for a valid ADMIN password (no tokens, no session)', async () => {
       const passwordPlain = 'admin123!';
       const passwordHashed = await hashPassword(passwordPlain);
       
@@ -212,16 +222,12 @@ describe('AuthService', () => {
         role: { id: 'role-admin', name: 'ADMIN', description: '', createdAt: new Date(), updatedAt: new Date() }
       } as unknown as User);
 
-      // Account re-read under the lifecycle lock when the session is issued
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({ passwordHash: passwordHashed, isActive: true, roleId: 'role-admin', emailVerifiedAt: new Date() } as unknown as User);
-      vi.mocked(prisma.refreshToken.create).mockResolvedValueOnce({} as unknown as RefreshToken);
-
       const result = await authService.login('admin@electrohub.com', passwordPlain);
-      if ('requiresVerification' in result) throw new Error('Expected success');
 
-      expect(result.accessToken).toBeDefined();
-      expect(result.user?.role).toBe('ADMIN');
-      expect(result.user?.email).toBe('admin@electrohub.com');
+      expect(result).toMatchObject({ requiresMfa: true, mfaToken: 'restricted-transaction-token' });
+      expect('accessToken' in result).toBe(false);
+      expect('refreshToken' in result).toBe(false);
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
     });
 
     it('registration unconditionally assigns CUSTOMER role server-side', async () => {

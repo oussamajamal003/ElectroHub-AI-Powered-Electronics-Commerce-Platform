@@ -94,6 +94,13 @@ const envSchema = z.object({
   BREVO_SENDER_EMAIL: z.string().email().optional(),
   BREVO_SENDER_NAME: z.string().optional().default('ElectroHub'),
   OTP_HASH_SECRET: z.string().optional(),
+  // Task 05.2 administrator MFA. Key ring "1:<base64 32 bytes>[,2:<...>]"; missing/invalid keys fail closed at use, never at boot,
+  // so customer traffic is unaffected while administrator MFA refuses to operate.
+  ADMIN_MFA_ENCRYPTION_KEYS: z.string().optional(),
+  ADMIN_MFA_ACTIVE_KEY_VERSION: z.coerce.number().int().positive().optional(),
+  WEBAUTHN_RP_ID: z.string().optional(),
+  WEBAUTHN_RP_NAME: z.string().optional(),
+  WEBAUTHN_ORIGIN: z.string().url().optional(),
 }).superRefine((data, ctx) => {
   if (data.NODE_ENV === 'production') {
     if (!data.BREVO_API_KEY) {

@@ -28,28 +28,20 @@ describe('Admin Seed Authentication Integration Tests', () => {
     }
   }, 15000);
 
-  it('2. Backend login succeeds for all 5 seeded admin accounts with admin123!', async () => {
+  // Task 05.2: a correct administrator password opens only a restricted MFA transaction (or, for a factor-less account without an
+  // operator enrollment window, is refused) — it never returns an access token or a refresh cookie.
+  it('2. A correct seeded admin password never yields a session without the second factor', async () => {
     await Promise.all(
       adminEmails.map(async (email) => {
         const response = await request(app)
           .post('/api/auth/login')
           .send({ email, password });
 
-        expect(response.status).toBe(200);
-        expect(response.body.user).toBeDefined();
-        expect(response.body.user.email).toBe(email);
-        expect(response.body.user.role).toBe('ADMIN');
-        expect(response.body.accessToken).toBeDefined();
-
-        // Test /api/auth/me using the returned accessToken
-        const meResponse = await request(app)
-          .get('/api/auth/me')
-          .set('Authorization', `Bearer ${response.body.accessToken}`);
-
-        expect(meResponse.status).toBe(200);
-        expect(meResponse.body.user).toBeDefined();
-        expect(meResponse.body.user.email).toBe(email);
-        expect(meResponse.body.user.role).toBe('ADMIN');
+        expect([200, 403]).toContain(response.status);
+        if (response.status === 200) expect(response.body.requiresMfa).toBe(true);
+        else expect(response.body.error.code).toBe('ENROLLMENT_NOT_AUTHORIZED');
+        expect(response.body.accessToken).toBeUndefined();
+        expect(response.headers['set-cookie']).toBeUndefined();
       })
     );
   }, 60000);

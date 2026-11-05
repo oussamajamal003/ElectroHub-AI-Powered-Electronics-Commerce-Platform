@@ -112,6 +112,13 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       return res.status(403).json(result);
     }
 
+    // Task 05.2: an ADMIN password opens only a restricted MFA transaction — no cookie, no access token.
+    if ('requiresMfa' in result) {
+      logger.info('AUTH_LOGIN_MFA_REQUIRED', { enrollmentRequired: result.enrollmentRequired });
+      res.set('Cache-Control', 'no-store');
+      return res.status(200).json(result);
+    }
+
     if (!('accessToken' in result) || !result.refreshToken || !result.user) {
       throw new Error('Invalid login result state');
     }

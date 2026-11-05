@@ -1,0 +1,171 @@
+@use '@/styles/abstracts' as *;
+
+// Shared admin security primitives: OTP entry, TOTP enrollment, recovery codes, step-up dialog. Tokens only.
+
+.otpField {
+  input {
+    font-family: $font-family-mono;
+    font-size: $font-size-xl;
+    letter-spacing: .45em;
+    text-align: center;
+    padding-left: $spacing-4;
+  }
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.enrollment {
+  display: grid;
+  gap: $spacing-4;
+  min-width: 0;
+}
+
+.qrRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: $spacing-5;
+  align-items: start;
+}
+
+.qrFrame {
+  display: grid;
+  place-items: center;
+  width: 12.5rem;
+  height: 12.5rem;
+  background: #ffffff;
+  border: 1px solid $color-border;
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+  text-align: center;
+  padding: $spacing-2;
+
+  img {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+  }
+}
+
+.secretBlock {
+  display: grid;
+  gap: $spacing-2;
+  min-width: 0;
+}
+
+.secretLabel {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+}
+
+.secret {
+  font-family: $font-family-mono;
+  font-size: $font-size-base;
+  letter-spacing: .08em;
+  color: $color-text-primary;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  padding: $spacing-3 $spacing-4;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.secretHint {
+  margin: 0;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+}
+
+.copyButton {
+  justify-self: start;
+}
+
+.codesGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $spacing-2 $spacing-4;
+  margin: 0;
+  padding: $spacing-4;
+  list-style: none;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  font-family: $font-family-mono;
+  font-size: $font-size-base;
+  color: $color-text-primary;
+  letter-spacing: .06em;
+}
+
+.codesActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-2;
+}
+
+.checkRow {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-3;
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  cursor: pointer;
+
+  input {
+    margin-top: 3px;
+    width: 1.125rem;
+    height: 1.125rem;
+    accent-color: $color-primary;
+  }
+
+  &:focus-within {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
+}
+
+.dialogBody {
+  display: grid;
+  gap: $spacing-4;
+  min-width: 0;
+  max-height: min(70vh, 40rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.note {
+  margin: 0;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.methodPanel {
+  display: grid;
+  gap: $spacing-4;
+  min-width: 0;
+}
+
+@media (max-width: $breakpoint-sm - 1px) {
+  .qrRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .qrFrame {
+    width: min(12.5rem, 100%);
+    height: auto;
+    aspect-ratio: 1;
+  }
+
+  .codesGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checkRow {
+    transition: none;
+  }
+}

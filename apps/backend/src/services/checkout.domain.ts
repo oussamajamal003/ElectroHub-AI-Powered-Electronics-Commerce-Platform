@@ -2,13 +2,11 @@ import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AppError } from '../middleware/errorHandler.js';
+import { SHIPPING_CATALOG, currentShippingSnapshot, isSeedShippingSnapshot, shippingQuoteFor, type ShippingSnapshot } from './shipping-config.js';
 
 export const DELIVERY_VERSION = '03.5-v1';
-export const deliveryMethods = [
-  { id: 'STANDARD', label: 'Standard Delivery', price: '0.00', minDays: 5, maxDays: 7, estimate: '5–7 business days' },
-  { id: 'EXPRESS', label: 'Express Delivery', price: '9.99', minDays: 2, maxDays: 3, estimate: '2–3 business days' },
-  { id: 'OVERNIGHT', label: 'Overnight Delivery', price: '19.99', minDays: 1, maxDays: 1, estimate: 'Next business day' },
-] as const;
+/** Static catalog (labels, day ranges, seed prices). Live prices and enablement come from the ShippingSnapshot, not from here. */
+export const deliveryMethods = SHIPPING_CATALOG;
 const required = (max: number, min = 1) => z.string().trim().min(min).max(max);
 const optional = (max: number) => z.string().trim().max(max).optional();
 export const shippingSchema = z.object({
@@ -37,9 +35,19 @@ export function requestHash(request: CheckoutRequest) {
   if (request.scope === 'BUY_NOW' && request.buyNow) base.push('BUY_NOW', request.buyNow.productId, request.buyNow.quantity);
   return createHash('sha256').update(JSON.stringify(base)).digest('hex');
 }
-export function cartRevision(cartId: string, items: { productId: string; quantity: number; product: { price: string } | null }[]) {
-  return createHash('sha256').update(JSON.stringify([DELIVERY_VERSION, deliveryMethods.map(method => [method.id, method.price, method.minDays, method.maxDays]), cartId, items.map(item =>
-    [item.productId, item.quantity, item.product?.price ?? null]).sort((a, b) => String(a[0]).localeCompare(String(b[0])))] )).digest('hex');
+/**
+ * Cart/checkout revision. For the seed shipping snapshot the hash input is exactly the Task 03.5 input, so existing revisions
+ * stay valid across the deploy. Any non-seed configuration (a disabled method or a free-shipping threshold) appends its terms,
+ * so a configuration change alters the revision and stale quotes take the existing CHECKOUT_CHANGED path.
+ */
+export function cartRevision(cartId: string, items: { productId: string; quantity: number; product: { price: string } | null }[],
+  shipping: ShippingSnapshot = currentShippingSnapshot()) {
+  const input: unknown[] = [DELIVERY_VERSION, shipping.methods.map(method => [method.id, method.price, method.minDays, method.maxDays]), cartId, items.map(item =>
+    [item.productId, item.quantity, item.product?.price ?? null]).sort((a, b) => String(a[0]).localeCompare(String(b[0])))];
+  if (!isSeedShippingSnapshot(shipping)) {
+    input.push(['SHIPPING_SETTINGS', shipping.methods.map(method => [method.id, method.enabled]), shipping.freeShippingThreshold]);
+  }
+  return createHash('sha256').update(JSON.stringify(input)).digest('hex');
 }
 export function checkoutTotals(subtotal: string, shipping: string) {
   const value = new Prisma.Decimal(subtotal); const cost = new Prisma.Decimal(shipping); const total = value.plus(cost);
@@ -53,12 +61,15 @@ export function checkoutTotals(subtotal: string, shipping: string) {
  * `delivery` is null when the saved method no longer exists; `totals` is null unless the revision matches and the method exists.
  */
 export function savedPurchaseTerms(input: { scopeId: string; expectedRevision: string; deliveryMethod: string;
-  lines: readonly { productId: string; quantity: number; price: Prisma.Decimal | string }[] }) {
+  lines: readonly { productId: string; quantity: number; price: Prisma.Decimal | string }[]; shipping?: ShippingSnapshot }) {
+  const shipping = input.shipping ?? currentShippingSnapshot();
   let subtotal = new Prisma.Decimal(0);
   for (const line of input.lines) subtotal = subtotal.plus(new Prisma.Decimal(line.price).mul(line.quantity));
   const revisionMatches = cartRevision(input.scopeId, input.lines.map(line => ({ productId: line.productId, quantity: line.quantity,
-    product: { price: new Prisma.Decimal(line.price).toFixed(2) } }))) === input.expectedRevision;
-  const delivery = deliveryMethods.find(method => method.id === input.deliveryMethod) ?? null;
+    product: { price: new Prisma.Decimal(line.price).toFixed(2) } })), shipping) === input.expectedRevision;
+  // A disabled or unknown method has no delivery terms (the existing CHECKOUT_INVALID_DELIVERY path). The price is the effective one
+  // for this subtotal (free Standard at or above the threshold).
+  const delivery = shippingQuoteFor(input.deliveryMethod, subtotal.toFixed(2), shipping);
   // Totals only after the revision matches, preserving order commit's error precedence
   // (revision → delivery → totals); checkoutTotals may itself throw CHECKOUT_TOTAL_INVALID.
   const totals = revisionMatches && delivery ? checkoutTotals(subtotal.toFixed(2), delivery.price) : null;

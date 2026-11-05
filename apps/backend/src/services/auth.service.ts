@@ -5,6 +5,8 @@ import { hashPassword, verifyPassword } from '../utils/hash.js';
 import { otpService, OtpVerificationError, OTP_CONFIG } from './otp.service.js';
 import { emailService } from './email.service.js';
 import { OtpPurpose, SecurityEventType, User, Role } from '@prisma/client';
+import type { AdminSessionAssurance } from '../repositories/auth.repository.js';
+import { adminMfaService } from './admin-mfa.service.js';
 import { logger } from '../utils/logger.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
@@ -100,6 +102,9 @@ export class AuthService {
       };
     }
 
+    // Task 05.2: a correct ADMIN password only opens a restricted, single-use MFA transaction; never a session or a token.
+    if (user.role.name === 'ADMIN') return adminMfaService.startLogin(user);
+
     return this.createSession(user);
   }
 
@@ -137,16 +142,28 @@ export class AuthService {
     return this.createSession(user);
   }
 
-  private async createSession(user: User & { role: Role }) {
+  /**
+   * Task 05.2: the only way to mint an administrator session — called by AdminMfaService after a verified second factor.
+   */
+  async createAssuredAdminSession(user: User & { role: Role }, assurance: AdminSessionAssurance) {
+    if (user.role.name !== 'ADMIN') throw new Error('Invalid credentials');
+    return this.createSession(user, assurance);
+  }
+
+  private async createSession(user: User & { role: Role }, adminAssurance?: AdminSessionAssurance) {
+    // Fail closed: no code path may issue an ADMIN session without a verified second factor (and none a CUSTOMER one with it).
+    if ((user.role.name === 'ADMIN') !== Boolean(adminAssurance)) throw new Error('Invalid credentials');
     const refreshToken = crypto.randomBytes(64).toString('hex');
     // Re-validates the account under the lifecycle lock: a password change, reset, deactivation or role change
     // that committed after this user was read (and its credentials verified) must not yield a surviving session.
-    const issued = await this.repository.createSessionRefreshToken(user, crypto.createHash('sha256').update(refreshToken).digest('hex'), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    const issued = await this.repository.createSessionRefreshToken(user, crypto.createHash('sha256').update(refreshToken).digest('hex'), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), adminAssurance);
     if (!issued) {
       throw new Error('Invalid credentials');
     }
     return {
-      accessToken: generateAccessToken({ userId: user.id, role: user.role.name }),
+      accessToken: generateAccessToken(adminAssurance
+        ? { userId: user.id, role: user.role.name, sessionId: issued.familyId }
+        : { userId: user.id, role: user.role.name }),
       refreshToken,
       user: {
         id: user.id,
@@ -205,17 +222,23 @@ export class AuthService {
     }
 
     const roleName = user.role?.name ?? 'CUSTOMER';
-    const payload: JwtPayload = {
-      userId: user.id,
-      role: roleName,
-    };
+    const isAdmin = roleName === 'ADMIN';
+    // Task 05.2: an ADMIN family refreshes only while its MFA-assured AdminSession lives. A legacy (pre-MFA) admin family has none:
+    // it is revoked here, which is the enforced cutover — there is no grandfathered password-only administrator session.
+    if (isAdmin && !await this.repository.hasAdminSession(storedToken.familyId, user.id)) {
+      await this.repository.revokeRefreshTokenFamily(tokenHash);
+      throw new AppError('Your administrator session has ended. Sign in again.', 401, 'ADMIN_SESSION_INVALID');
+    }
+    const payload: JwtPayload = isAdmin
+      ? { userId: user.id, role: roleName, sessionId: storedToken.familyId }
+      : { userId: user.id, role: roleName };
     const newAccessToken = generateAccessToken(payload);
 
     const newRawRefreshToken = crypto.randomBytes(64).toString('hex');
     const newTokenHash = crypto.createHash('sha256').update(newRawRefreshToken).digest('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    const rotated = await this.repository.rotateRefreshToken(user.id, tokenHash, newTokenHash, expiresAt);
+    const rotated = await this.repository.rotateRefreshToken(user.id, tokenHash, newTokenHash, expiresAt, isAdmin);
     if (!rotated) {
       // Rotation lost the atomic race. The loser gets no token (see above): 409 while the session family is alive, 401 once it is not.
       if (await this.repository.hasActiveFamilyToken(tokenHash)) {

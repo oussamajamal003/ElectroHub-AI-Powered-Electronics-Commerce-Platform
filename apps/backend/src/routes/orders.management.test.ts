@@ -5,6 +5,12 @@ import { Prisma } from '@prisma/client';
 import checkoutRoutes from './checkout.routes.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { generateAccessToken } from '../utils/jwt.js';
+// Task 05.2: requireAuth honours an ADMIN identity only through a live MFA-assured session; these suites test role boundaries, so every
+// token carries a session id and the session lookup reports it live (session assurance itself is proven in admin-security suites).
+const TEST_ADMIN_SESSION = '5a1e2c3d-4b5f-4a6b-8c7d-9e0f1a2b3c4d';
+vi.mock('../services/admin-session.js', () => ({ touchAdminSession: vi.fn(),
+  findActiveAdminSession: vi.fn(async (familyId: string) => ({ familyId, mfaMethod: 'TOTP', mfaVerifiedAt: new Date(), stepUpAt: null, lastSeenAt: new Date() })) }));
+
 
 // Task 03.7 contract tests with mocked persistence: they prove route/auth/DTO/predicate behavior,
 // not real PostgreSQL semantics (see orders.management.live.test.ts for the opt-in DEV gate).
@@ -17,7 +23,7 @@ vi.mock('../lib/prisma.js', () => ({ prisma: db }));
 vi.mock('../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, logSafely: vi.fn() }));
 
 const app = express(); app.use(express.json()); app.use('/api', checkoutRoutes); app.use(errorHandler);
-const token = (userId = ids.a) => generateAccessToken({ userId, role: 'CUSTOMER' });
+const token = (userId = ids.a) => generateAccessToken({ userId, role: 'CUSTOMER', sessionId: TEST_ADMIN_SESSION });
 const get = (path: string, userId = ids.a) => request(app).get(path).auth(token(userId), { type: 'bearer' });
 const reference = `ORD-${ids.order.toUpperCase()}`;
 

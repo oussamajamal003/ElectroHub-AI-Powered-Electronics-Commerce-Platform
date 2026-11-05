@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useMatch } from 'react-router-dom';
 import clsx from 'clsx';
-import { AlertTriangle, Bell, ExternalLink, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, Truck, ClipboardList } from 'lucide-react';
+import { AlertTriangle, Bell, ExternalLink, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, Truck, ClipboardList, UserRound, ShieldCheck, MonitorSmartphone } from 'lucide-react';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/Drawer';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/DropdownMenu';
@@ -111,6 +111,17 @@ function ProfileMenu() {
         {user?.email && <span>{user.email}</span>}
         <span className={styles.rolePill}>Administrator</span>
       </DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      {/* Task 05.2 personal account destinations (per administrator; store-wide configuration lives under Settings). */}
+      <DropdownMenuItem asChild>
+        <Link to="/admin/profile" className={styles.menuLink}><UserRound aria-hidden="true" /> My profile</Link>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link to="/admin/profile/security" className={styles.menuLink}><ShieldCheck aria-hidden="true" /> Security</Link>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link to="/admin/profile/sessions" className={styles.menuLink}><MonitorSmartphone aria-hidden="true" /> Sessions &amp; login history</Link>
+      </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem asChild>
         <a href="/" target="_blank" rel="noopener noreferrer" className={styles.menuLink}><ExternalLink aria-hidden="true" /> View storefront</a>

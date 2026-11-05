@@ -1,5 +1,7 @@
 import { apiClient, setAccessToken } from '@/lib/api';
-import { User, LoginCredentials, RegisterData, AuthResponse } from '../types';
+import { User, LoginCredentials, RegisterData, AuthResponse, AdminMfaRequired, isAdminMfaRequired } from '../types';
+
+export type LoginResult = VerificationResponse | AdminMfaRequired;
 
 export interface VerifyEmailData {
   email: string;
@@ -43,11 +45,13 @@ export const authApi = {
     const response = await apiClient<{ accessToken: string }>('/api/auth/google/link', { method: 'POST', data: { password } });
     setAccessToken(response.accessToken);
   },
-  login: async (credentials: LoginCredentials): Promise<VerificationResponse> => {
-    const response = await apiClient<VerificationResponse>('/api/auth/login', {
+  login: async (credentials: LoginCredentials): Promise<LoginResult> => {
+    const response = await apiClient<LoginResult>('/api/auth/login', {
       method: 'POST',
       data: credentials,
     });
+    // An administrator's password proof returns a restricted MFA challenge and no token: nothing is stored until the second factor passes.
+    if (isAdminMfaRequired(response)) return response;
     if (response.accessToken) {
       setAccessToken(response.accessToken);
     }

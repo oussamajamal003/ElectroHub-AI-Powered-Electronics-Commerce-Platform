@@ -19,7 +19,7 @@ const auth = (id: string | null, isLoggingOut = false, isSessionVerified = true)
   const customer = { id: id ?? 'owner', role: 'CUSTOMER', email: 'wishlist@example.invalid', firstName: 'Wish', lastName: 'Customer' };
   vi.mocked(useAuth).mockReturnValue({ isAuthenticated: Boolean(id), isSessionVerified, isLoggingOut,
     isLoading: false, isInitializing: false, rememberedUser: null, sessionUnavailable: false, retrySession: vi.fn(),
-    finishLogoutTransition: vi.fn(), clearSession: vi.fn(), finishGoogle: async () => undefined,
+    finishLogoutTransition: vi.fn(), clearSession: vi.fn(), completeAdminSession: vi.fn(), finishGoogle: async () => undefined,
     login: async () => ({}), register: async () => ({}), verifyEmail: async () => ({}),
     updateProfile: async () => ({}), verifyEmailChange: async () => customer, logout: async () => undefined,
     user: id ? customer : null });

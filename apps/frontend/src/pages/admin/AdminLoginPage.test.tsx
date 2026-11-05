@@ -28,6 +28,7 @@ describe('AdminLoginPage', () => {
     (useAuth as any).mockReturnValue({
       login: mockLogin,
       logout: mockLogout,
+      completeAdminSession: vi.fn(),
       isAuthenticated: false,
       user: null,
       isInitializing: false,
@@ -50,7 +51,7 @@ describe('AdminLoginPage', () => {
     expect(screen.getByText('Admin Portal')).toBeInTheDocument();
     expect(screen.getByLabelText(/Email Address/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Password/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Forgot Password\?/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Forgot Password/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Sign In/i })).toBeInTheDocument();
   });
 
@@ -125,11 +126,14 @@ describe('AdminLoginPage', () => {
 
   it('submits successfully with valid ADMIN credentials', async () => {
     mockLogin.mockResolvedValueOnce({
+      accessToken: 'test-access-token',
+      user: {
       id: 'admin-1',
       email: 'admin@electrohub.com',
       firstName: 'Admin',
       lastName: 'ElectroHub',
       role: 'ADMIN',
+      },
     });
     renderComponent();
 
@@ -154,11 +158,14 @@ describe('AdminLoginPage', () => {
 
   it('denies admin access when valid CUSTOMER credentials are used', async () => {
     mockLogin.mockResolvedValueOnce({
+      accessToken: 'test-customer-token',
+      user: {
       id: 'cust-1',
       email: 'customer@electrohub.com',
       firstName: 'Customer',
       lastName: 'User',
       role: 'CUSTOMER',
+      },
     });
     renderComponent();
 
@@ -200,6 +207,25 @@ describe('AdminLoginPage', () => {
 
     expect(await screen.findByText('Invalid credentials')).toBeInTheDocument();
   });
+  it('moves a verified password to the second-factor step without signing in', async () => {
+    mockLogin.mockResolvedValueOnce({
+      requiresMfa: true,
+      mfaToken: 'challenge-token-1234567890',
+      expiresAt: new Date(Date.now() + 300000).toISOString(),
+      factors: { totp: true, passkey: false, recoveryCode: true },
+      enrollmentRequired: false,
+    });
+    renderComponent();
+
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'admin@electrohub.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password/i), { target: { value: 'AdminPassword123!' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Sign In$/i }));
+
+    expect(await screen.findByRole('heading', { name: "Verify it's you" })).toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockLogout).not.toHaveBeenCalled();
+  });
+
   describe('return path after sign-in', () => {
     const Landing = () => { const location = useLocation(); return <p>at {location.pathname + location.search}</p>; };
     const renderSignedIn = (state: unknown) => {

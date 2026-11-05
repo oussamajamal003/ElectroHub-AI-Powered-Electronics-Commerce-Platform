@@ -1,0 +1,54 @@
+@use '@/styles/abstracts' as *;
+
+.page { display: flex; flex-direction: column; gap: $spacing-6; min-width: 0; }
+.tabs { flex-wrap: wrap; }
+.panel { display: flex; flex-direction: column; gap: $spacing-4; min-width: 0; }
+.toolbar {
+  display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: $spacing-4;
+}
+.toolbarActions { display: flex; flex-wrap: wrap; align-items: end; gap: $spacing-3; }
+.sectionTitle { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; color: $color-text-primary; }
+.help { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; }
+.muted { color: $color-text-muted; font-size: $font-size-sm; }
+.error { margin: 0; color: $color-error-foreground; font-size: $font-size-sm; }
+.field {
+  display: flex; flex-direction: column; gap: $spacing-1; min-width: 0;
+  font-size: $font-size-sm; font-weight: $font-weight-medium; color: $color-text-primary;
+}
+.input, .select {
+  min-height: 44px; padding: $spacing-2 $spacing-3; border: 1px solid $color-border; border-radius: $radius-md;
+  background: $color-background; color: $color-text-primary; font: inherit;
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
+}
+.checkLabel {
+  display: inline-flex; align-items: center; gap: $spacing-2; min-height: 44px; font-size: $font-size-sm; color: $color-text-primary;
+  input { width: 20px; height: 20px; accent-color: $color-primary; }
+}
+.kpis {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: $spacing-4;
+  @include respond-to(lg) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.tableScroll {
+  // Narrow screens scroll the table inside its card instead of widening the page; focusable so keyboard users can scroll it.
+  overflow-x: auto; max-width: 100%;
+  &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; }
+}
+.table {
+  width: 100%; min-width: 560px; border-collapse: collapse; font-size: $font-size-sm;
+  th, td { padding: $spacing-3; border-bottom: 1px solid $color-border; text-align: left; vertical-align: top; }
+  th { color: $color-text-secondary; font-weight: $font-weight-semibold; }
+}
+.actionsCell { white-space: nowrap; }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: $spacing-3; }
+.form { display: flex; flex-direction: column; gap: $spacing-4; }
+.sectionRow {
+  display: grid; grid-template-columns: minmax(0, 2fr) auto minmax(0, 1fr) auto; align-items: end; gap: $spacing-4;
+  padding: $spacing-4; border: 1px solid $color-border; border-radius: $radius-lg;
+  @media (max-width: 768px) { grid-template-columns: minmax(0, 1fr); }
+}
+.sectionName { display: flex; flex-direction: column; align-items: flex-start; gap: $spacing-2; }
+.previewSection { display: flex; flex-direction: column; gap: $spacing-2; }
+.previewList { margin: 0; padding-left: $spacing-5; display: grid; gap: $spacing-2; }
+.visuallyHidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}

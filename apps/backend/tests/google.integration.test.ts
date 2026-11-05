@@ -73,13 +73,17 @@ describe('Google OAuth ownership and sessions', () => {
     expect('accessToken' in login).toBe(true);
   }, 60000);
 
-  it('rejects admin Google sessions while preserving admin password login', async () => {
+  it('rejects admin Google sessions; an admin password opens only the MFA step', async () => {
     // Roles are not created by migrations; a fresh (CI) database has none until something provisions them.
     const role = await prisma.role.upsert({ where: { name: 'ADMIN' }, create: { name: 'ADMIN' }, update: {} });
     const admin = await prisma.user.create({ data: { email: emails[2], firstName: 'Admin', lastName: 'Test', passwordHash: await hashPassword(password), emailVerifiedAt: new Date(), roleId: role.id, oauthAccounts: { create: { provider: 'GOOGLE', providerAccountId: `admin-${marker}`, providerEmail: emails[2] } } } });
     await expect(service.signIn({ ...identity, sub: `admin-${marker}`, email: emails[2] })).rejects.toMatchObject({ code: 'GOOGLE_ACCOUNT_UNAVAILABLE' });
-    const login = await new AuthService().login(admin.email, password);
-    expect('user' in login && login.user?.role).toBe('ADMIN');
+    // Task 05.2: the admin password is still a valid primary proof, but it opens only the MFA step (or, for a factor-less admin
+    // without an operator enrollment window, is refused) — never a session.
+    const login = await new AuthService().login(admin.email, password).catch((error: { code?: string }) => error);
+    if ('code' in login && login.code) expect(login.code).toBe('ENROLLMENT_NOT_AUTHORIZED');
+    else expect(login).toMatchObject({ requiresMfa: true });
+    expect('accessToken' in login).toBe(false);
   }, 30000);
 
   it('validates browser state, provider failure and cancellation without provider details', async () => {

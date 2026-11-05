@@ -124,4 +124,77 @@
   }
 }
 
+.stepHeader {
+  display: grid;
+  gap: $spacing-2;
+  text-align: left;
+}
+
+.stepTitle {
+  font-family: $font-family-heading;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  margin: 0;
+}
+
+.stepText {
+  margin: 0;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.textButton {
+  align-self: center;
+  background: none;
+  border: none;
+  padding: $spacing-2;
+  color: $color-primary;
+  font-size: $font-size-sm;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.textLink {
+  align-self: center;
+  color: $color-primary;
+  font-size: $font-size-sm;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
+}
+
+.nameRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $spacing-4;
+  min-width: 0;
+}
+
+@media (max-width: $breakpoint-sm) {
+  .nameRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import crypto from 'crypto';
-import { Prisma, User, Role, RefreshToken, SecurityEventType, OtpPurpose } from '@prisma/client';
+import { Prisma, User, Role, RefreshToken, SecurityEventType, OtpPurpose, AdminMfaMethod } from '@prisma/client';
 
 /**
  * Serializes every operation that changes a user's refresh-token lifecycle (session issuance, rotation,
@@ -22,6 +22,18 @@ export async function lockUserTokenLifecycle(transaction: Prisma.TransactionClie
  * while the committed account still matches it.
  */
 export type SessionAuthorizationSnapshot = Pick<User, 'id' | 'passwordHash' | 'isActive' | 'roleId'>;
+
+/** Task 05.2: the verified second factor an administrator session is being issued on (sanitized request metadata only). */
+export interface AdminSessionAssurance {
+  method: AdminMfaMethod;
+  userAgent?: string | null;
+  ipAddress?: string | null;
+}
+
+/** Task 05.2: mark matching administrator sessions revoked (the access check also requires a live refresh family). */
+export async function revokeAdminSessions(transaction: Prisma.TransactionClient, where: { userId: string; familyId?: string }, reason: string) {
+  await transaction.adminSession.updateMany({ where: { ...where, revokedAt: null }, data: { revokedAt: new Date(), revokedReason: reason } });
+}
 
 export class AuthRepository {
   /**
@@ -109,6 +121,7 @@ export class AuthRepository {
         where: { userId },
         data: { isRevoked: true, expiresAt: new Date(0) },
       });
+      await revokeAdminSessions(transaction, { userId }, 'PASSWORD_CHANGED');
       await transaction.securityEvent.create({ data: { userId, type: eventType } });
     }, { timeout: 15000 });
   }
@@ -191,6 +204,7 @@ export class AuthRepository {
         where: { userId },
         data: { isRevoked: true, expiresAt: new Date(0) },
       });
+      await revokeAdminSessions(transaction, { userId }, 'PASSWORD_RESET');
       await transaction.securityEvent.create({ data: { userId, type: SecurityEventType.PASSWORD_RESET } });
       return true;
     }, { timeout: 15000 });
@@ -226,7 +240,8 @@ export class AuthRepository {
   async createSessionRefreshToken(
     authorized: SessionAuthorizationSnapshot,
     tokenHash: string,
-    expiresAt: Date
+    expiresAt: Date,
+    adminAssurance?: AdminSessionAssurance
   ): Promise<RefreshToken | null> {
     return prisma.$transaction(async (transaction) => {
       await lockUserTokenLifecycle(transaction, authorized.id);
@@ -245,10 +260,31 @@ export class AuthRepository {
         return null;
       }
 
-      return transaction.refreshToken.create({
+      const token = await transaction.refreshToken.create({
         data: { userId: authorized.id, tokenHash, expiresAt, familyId: crypto.randomUUID() },
       });
+      // Task 05.2: an ADMIN family is only ever created together with its MFA-assured AdminSession, in this transaction (the
+      // unchanged roleId above guarantees the role AuthService.createSession matched against the assurance is still current).
+      if (adminAssurance) {
+        const now = new Date();
+        await transaction.adminSession.create({
+          data: {
+            familyId: token.familyId, userId: authorized.id, mfaMethod: adminAssurance.method, mfaVerifiedAt: now, lastSeenAt: now,
+            userAgent: adminAssurance.userAgent?.slice(0, 300) ?? null, ipAddress: adminAssurance.ipAddress ?? null,
+          },
+        });
+        await transaction.securityEvent.create({
+          data: { userId: authorized.id, type: SecurityEventType.LOGIN_SUCCESS, ipAddress: adminAssurance.ipAddress ?? null,
+            userAgent: adminAssurance.userAgent?.slice(0, 1000) ?? null },
+        });
+      }
+      return token;
     }, { timeout: 10000 });
+  }
+
+  /** Task 05.2: an unrevoked AdminSession exists for this refresh family. */
+  async hasAdminSession(familyId: string, userId: string): Promise<boolean> {
+    return Boolean(await prisma.adminSession.findFirst({ where: { familyId, userId, revokedAt: null }, select: { familyId: true } }));
   }
 
   /**
@@ -368,6 +404,7 @@ export class AuthRepository {
         where: { userId: token.userId, familyId: current.familyId },
         data: { isRevoked: true, expiresAt: new Date(0) },
       });
+      await revokeAdminSessions(transaction, { userId: token.userId, familyId: current.familyId }, 'LOGOUT');
     }, { timeout: 10000 });
     // Task 04.7: the owner lets logout drop that account's live delivery sockets.
     return token.userId;
@@ -379,7 +416,7 @@ export class AuthRepository {
    * commit or roll back together; errors propagate unchanged and nothing outside PostgreSQL is mutated.
    * Returns false (having written nothing) when the old token is no longer eligible.
    */
-  async rotateRefreshToken(userId: string, oldTokenHash: string, newTokenHash: string, expiresAt: Date): Promise<boolean> {
+  async rotateRefreshToken(userId: string, oldTokenHash: string, newTokenHash: string, expiresAt: Date, requireAdminSession = false): Promise<boolean> {
     return prisma.$transaction(async (transaction) => {
       await lockUserTokenLifecycle(transaction, userId);
 
@@ -389,6 +426,11 @@ export class AuthRepository {
         select: { id: true, familyId: true },
       });
       if (!current) return false;
+      // Task 05.2: an administrator family rotates only while its MFA-assured AdminSession is unrevoked (checked under the lock
+      // every revocation takes, so a concurrent revoke cannot be outrun).
+      if (requireAdminSession && !await transaction.adminSession.findFirst({
+        where: { familyId: current.familyId, userId, revokedAt: null }, select: { familyId: true },
+      })) return false;
 
       const revoked = await transaction.refreshToken.updateMany({
         where: { id: current.id, isRevoked: false, expiresAt: { gt: now } },
@@ -415,6 +457,7 @@ export class AuthRepository {
         where: { userId },
         data: { isRevoked: true, expiresAt: new Date(0) },
       });
+      await revokeAdminSessions(transaction, { userId }, 'ALL_SESSIONS_REVOKED');
     }, { timeout: 10000 });
   }
 }

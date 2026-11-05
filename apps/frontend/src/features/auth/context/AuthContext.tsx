@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, LoginCredentials, RegisterData } from '../types';
-import { authApi, VerificationResponse } from '../api/auth';
+import { User, LoginCredentials, RegisterData, isAdminMfaRequired } from '../types';
+import { authApi, VerificationResponse, LoginResult } from '../api/auth';
 import { ApiError, setAccessToken } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { readCachedUser, restoreSession } from '../sessionRestore';
@@ -20,7 +20,10 @@ interface AuthContextValue extends AuthState {
   isLoggingOut: boolean;
   rememberedUser: Pick<User, 'firstName' | 'lastName'> | null;
   finishGoogle: () => Promise<void>;
-  login: (credentials: LoginCredentials) => Promise<VerificationResponse>;
+  /** Customer sign-in establishes the session. An administrator's password proof returns `requiresMfa` and establishes nothing. */
+  login: (credentials: LoginCredentials) => Promise<LoginResult>;
+  /** Establishes an administrator session after the MFA challenge, enrollment or invitation acceptance succeeded. */
+  completeAdminSession: (session: { accessToken: string; user: User }) => void;
   register: (data: RegisterData) => Promise<VerificationResponse>;
   verifyEmail: (data: { email: string; code: string }) => Promise<VerificationResponse>;
   logout: () => Promise<void>;
@@ -168,26 +171,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('electrohub:session-expired', clearExpiredSession);
   }, [queryClient]);
 
-  const login = async (credentials: LoginCredentials): Promise<VerificationResponse> => {
+  const establishSession = (authenticatedUser: User) => {
+    queryClient.clear();
+    setSessionVerified(true);
+    remember(authenticatedUser);
+    setState((prev) => ({
+      ...prev,
+      user: authenticatedUser,
+      isAuthenticated: true,
+      isInitializing: false,
+    }));
+  };
+
+  const login = async (credentials: LoginCredentials): Promise<LoginResult> => {
     setState((prev) => ({ ...prev, isLoading: true }));
     try {
       const response = await authApi.login(credentials);
+      // Restricted administrator challenge: no session, no cache changes; the caller drives the second factor.
+      if (isAdminMfaRequired(response)) return response;
       const authenticatedUser = response.user;
       if (authenticatedUser) {
-        queryClient.clear();
-        setSessionVerified(true);
-        remember(authenticatedUser);
-        setState((prev) => ({
-          ...prev,
-          user: authenticatedUser,
-          isAuthenticated: true,
-          isInitializing: false,
-        }));
+        establishSession(authenticatedUser);
       }
       return response;
     } finally {
       setState((prev) => ({ ...prev, isLoading: false }));
     }
+  };
+
+  const completeAdminSession = (session: { accessToken: string; user: User }) => {
+    // Same token storage and cache boundary as a successful password login (authApi.login stores the token in the same way).
+    setAccessToken(session.accessToken);
+    establishSession(session.user);
   };
 
   const register = async (data: RegisterData) => {
@@ -283,7 +298,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, isSessionVerified, sessionUnavailable, retrySession, isLoggingOut, rememberedUser, login, register, verifyEmail, logout, finishLogoutTransition, clearSession, updateProfile, verifyEmailChange, finishGoogle }}>
+    <AuthContext.Provider value={{ ...state, isSessionVerified, sessionUnavailable, retrySession, isLoggingOut, rememberedUser, login, completeAdminSession, register, verifyEmail, logout, finishLogoutTransition, clearSession, updateProfile, verifyEmailChange, finishGoogle }}>
       {children}
     </AuthContext.Provider>
   );

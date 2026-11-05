@@ -27,6 +27,14 @@ function safeMessage(status: number) {
   return 'Request failed. Please try again.';
 }
 
+/** Task 05.2: an administrator session that was revoked, expired or lost its MFA assurance ends the session like any other 401. */
+const ADMIN_SESSION_INVALID = 'ADMIN_SESSION_INVALID';
+function errorCodeOf(payload: unknown): string | undefined {
+  const error = payload && typeof payload === 'object' ? (payload as Record<string, unknown>).error : undefined;
+  const structured = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+  return typeof structured.code === 'string' ? structured.code : undefined;
+}
+
 async function readResponse<T>(response: Response): Promise<T> {
   if (response.status === 204 || response.status === 205) return undefined as T;
   const contentType = response.headers.get('content-type') ?? '';
@@ -36,6 +44,10 @@ async function readResponse<T>(response: Response): Promise<T> {
     const error = body.error;
     const structured = error && typeof error === 'object' ? error as Record<string, unknown> : {};
     const code = typeof structured.code === 'string' ? structured.code : undefined;
+    if (response.status === 401 && code === ADMIN_SESSION_INVALID) {
+      setAccessToken(null);
+      notifySessionExpired();
+    }
     const candidate = typeof structured.message === 'string' ? structured.message :
       typeof error === 'string' ? error : typeof body.message === 'string' ? body.message : undefined;
     const safe = response.status < 500 && candidate && !/(prisma|sql|stack|\\|\/users\/|database|certificate|secret)/i.test(candidate);
@@ -150,7 +162,9 @@ async function send(endpoint: string, options: FetchOptions, extra: RequestInit 
   let response: Response;
   try {
     response = url.split('?')[0] === '/api/auth/refresh' ? await fetchRefresh(url, config) : await fetch(url, config);
-    if (response.status === 401 && !/\/api\/auth\/(me|refresh|login|logout)(?:\?|$)/.test(url)) {
+    // Pre-auth administrator endpoints answer 401 for wrong or expired challenges: those are never a reason to refresh the session.
+    if (response.status === 401 && !/\/api\/auth\/(me|refresh|login|logout)(?:\?|$)|\/api\/auth\/admin\//.test(url)
+      && errorCodeOf(await response.clone().json().catch(() => null)) !== ADMIN_SESSION_INVALID) {
       if (options.signal?.aborted) throw new DOMException('The user aborted a request.', 'AbortError');
       const token = await refreshSession();
       if (options.signal?.aborted) throw new DOMException('The user aborted a request.', 'AbortError');

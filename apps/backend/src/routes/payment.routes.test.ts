@@ -9,6 +9,17 @@ import { paymentService, PaymentSetupBlockedError } from '../services/payment.se
 import { requestId } from '../middleware/requestId.js';
 import { logger } from '../utils/logger.js';
 import { sanitize } from '../utils/logger.js';
+// Task 05.2: delivery terms come from the shipping snapshot; the mocked Prisma here has no settings tables, so serve the seed snapshot.
+vi.mock('../services/shipping-config.js', async original => {
+  const actual = await original<typeof import('../services/shipping-config.js')>();
+  return { ...actual, loadShippingConfig: vi.fn(async () => actual.currentShippingSnapshot()) };
+});
+// Task 05.2: requireAuth honours an ADMIN identity only through a live MFA-assured session; these suites test role boundaries, so every
+// token carries a session id and the session lookup reports it live (session assurance itself is proven in admin-security suites).
+const TEST_ADMIN_SESSION = '5a1e2c3d-4b5f-4a6b-8c7d-9e0f1a2b3c4d';
+vi.mock('../services/admin-session.js', () => ({ touchAdminSession: vi.fn(),
+  findActiveAdminSession: vi.fn(async (familyId: string) => ({ familyId, mfaMethod: 'TOTP', mfaVerifiedAt: new Date(), stepUpAt: null, lastSeenAt: new Date() })) }));
+
 
 const ids = vi.hoisted(() => ({ user: '11111111-1111-4111-8111-111111111111', attempt: '22222222-2222-4222-8222-222222222222',
   cart: '33333333-3333-4333-8333-333333333333', product: '44444444-4444-4444-8444-444444444444' }));
@@ -22,7 +33,7 @@ vi.mock('../services/cart.service.js', () => ({ MAX_CART_LINES: 50, MAX_CART_QUA
   currentCart: async () => ({ data: { revision: 'a'.repeat(64), subtotal: '19.99', items: [{ productId: ids.product, quantity: 1 }], canCheckout: true },
     products: new Map([[ids.product, { price: new Prisma.Decimal('19.99'), name: 'Snapshot Product', sku: 'SNAPSHOT', images: [{ url: '/image.jpg' }] }]]) }) }));
 const app = express(); app.use(requestId); app.use(express.json()); app.use('/api', routes); app.use(errorHandler);
-const token = (role = 'CUSTOMER') => generateAccessToken({ userId: ids.user, role });
+const token = (role = 'CUSTOMER') => generateAccessToken({ userId: ids.user, role, sessionId: TEST_ADMIN_SESSION });
 const body = { shipping: { recipient: 'Test Customer', line1: '123 Test Street', city: 'Test City', postalCode: '12345', country: 'United States', phone: '+1 555 010 2000' },
   deliveryMethod: 'STANDARD', paymentMethod: 'CARD', expectedRevision: 'a'.repeat(64) };
 const post = (value: object = body, key = ids.attempt) => request(app).post('/api/checkout/payment-attempts').auth(token(), { type: 'bearer' }).set('Idempotency-Key', key).send(value);

@@ -1,0 +1,93 @@
+@use '@/styles/abstracts' as *;
+
+// Task 05.2 administrator analytics. Shared page layout, KPI and table surfaces come from AdminPages / AdminUi.
+
+.toolbar { display: grid; gap: $spacing-3; min-width: 0; }
+
+.periodGroup { display: inline-flex; flex-wrap: wrap; gap: $spacing-1; padding: $spacing-1; width: fit-content; max-width: 100%;
+  background: $color-surface; border: 1px solid $color-border; border-radius: $radius-lg; }
+
+.periodOption { min-height: 2.5rem; padding: 0 $spacing-4; border: 1px solid transparent; border-radius: $radius-md;
+  background: transparent; color: $color-text-secondary; font: inherit; font-size: $font-size-sm; font-weight: $font-weight-medium; cursor: pointer;
+  transition: background-color $transition-fast, color $transition-fast;
+  &:hover { color: $color-text-primary; background: $color-surface; }
+  &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { transition: none; } }
+
+.periodOptionActive, .periodOptionActive:hover { background: $color-primary; color: $color-text-inverse; }
+
+.windowNote { margin: 0; font-size: $font-size-xs; color: $color-text-muted; }
+
+.panel { display: grid; align-content: start; gap: $spacing-4; min-width: 0; padding: $spacing-6; background: $color-background;
+  border: 1px solid $color-border; border-radius: $radius-lg; }
+
+.panelHeader { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: $spacing-3; min-width: 0; }
+.panelHeading { display: grid; gap: $spacing-1; min-width: 0; }
+.panelTitle { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; color: $color-text-primary; }
+.panelHint { margin: 0; font-size: $font-size-sm; color: $color-text-secondary; overflow-wrap: anywhere; }
+
+.skeleton { display: grid; gap: $spacing-3;
+  span { display: block; height: 1rem; border-radius: $radius-sm; background: $color-surface; }
+  span:first-child { height: 3.5rem; }
+  @media (prefers-reduced-motion: no-preference) { span { animation: pulse 1.6s ease-in-out infinite; } }
+  @media (prefers-reduced-motion: reduce) { span { animation: none; } } }
+@keyframes pulse { 50% { opacity: .5; } }
+
+.muted { color: $color-text-secondary; }
+.growth { display: inline-flex; align-items: center; gap: $spacing-1; font-size: $font-size-xs; font-weight: $font-weight-medium; }
+.up { color: $color-success-foreground; }
+.down { color: $color-error-foreground; }
+
+.kpis { display: grid; gap: $spacing-4; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0;
+  @media (min-width: 1024px) { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.subsection { display: grid; gap: $spacing-3; min-width: 0; }
+.subsectionTitle { margin: 0; font-size: $font-size-base; font-weight: $font-weight-semibold; color: $color-text-primary; }
+
+.drill { display: inline-flex; align-items: center; gap: $spacing-1; color: $color-primary; font-size: $font-size-sm;
+  font-weight: $font-weight-medium; text-decoration: none; min-height: 2.5rem;
+  &:hover { text-decoration: underline; }
+  &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; border-radius: $radius-sm; } }
+
+.twoColumn { display: grid; gap: $spacing-6; grid-template-columns: minmax(0, 1fr); min-width: 0;
+  @media (min-width: 1024px) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Products and categories carry four non-wrapping columns each: side by side only where both fit without in-card scrolling. */
+.twoColumnWide { @media (min-width: 1024px) and (max-width: 1599px) { grid-template-columns: minmax(0, 1fr); } }
+
+// Revenue chart: decorative SVG plus focusable point buttons placed by percentage, so keyboard users can reach each period.
+.chart { display: grid; gap: $spacing-2; min-width: 0; }
+.chartFrame { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: $spacing-3; min-width: 0; }
+.yAxis { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; font-family: $font-family-mono;
+  font-size: $font-size-xs; color: $color-text-muted; white-space: nowrap; }
+.plot { position: relative; min-width: 0; height: 12rem; }
+.svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.baseline { stroke: $color-border; stroke-width: 1; }
+.bar2 { fill: rgba($color-primary, .25); transition: fill $transition-fast; }
+.bar2Active { fill: $color-primary; }
+@media (prefers-reduced-motion: reduce) { .bar2 { transition: none; } }
+/* Invisible full-height hit column over each bar with paid orders: hover/focus highlights the bar and fills the readout. */
+.point { position: absolute; padding: 0; border: 0; background: transparent; cursor: pointer;
+  &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; } }
+.pointActive { background: rgba($color-primary, .04); }
+.xAxis { display: flex; justify-content: space-between; padding-left: 3.5rem; font-size: $font-size-xs; color: $color-text-muted; gap: $spacing-2; }
+.readout { margin: 0; min-height: 1.25rem; font-size: $font-size-sm; color: $color-text-secondary; }
+
+.bars { display: grid; gap: $spacing-2; min-width: 0; }
+.barTrack { display: flex; align-items: flex-end; gap: 2px; height: 7rem; min-width: 0; }
+.bar { flex: 1 1 0; min-width: 2px; background: $color-primary; border-radius: 2px 2px 0 0; opacity: .85; }
+
+.statRow { display: grid; gap: $spacing-4; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0;
+  @media (min-width: 1024px) { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); } }
+.stat { display: grid; gap: $spacing-1; min-width: 0; margin: 0;
+  dt { font-size: $font-size-xs; color: $color-text-secondary; }
+  dd { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; color: $color-text-primary; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; } }
+.statNote { margin: 0; font-size: $font-size-xs; color: $color-text-muted; overflow-wrap: anywhere; }
+.coverage { margin: 0; font-size: $font-size-sm; color: $color-text-secondary; overflow-wrap: anywhere; }
+
+.statusList { display: grid; gap: 0; margin: 0; padding: 0; list-style: none;
+  li { display: flex; align-items: center; justify-content: space-between; gap: $spacing-3; min-height: 2.75rem;
+    border-bottom: 1px solid $color-border; }
+  li:last-child { border-bottom: 0; }
+  strong { font-variant-numeric: tabular-nums; color: $color-text-primary; } }
+
+.productCell { display: inline-flex; flex-wrap: wrap; align-items: center; gap: $spacing-2; min-width: 0; overflow-wrap: anywhere; }

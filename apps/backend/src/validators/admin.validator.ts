@@ -66,6 +66,21 @@ export const productUpdateSchema = z.object({
 
 export const statusChangeSchema = z.object({ status: z.enum(['ACTIVE', 'INACTIVE']), expectedUpdatedAt }).strict();
 
+/** Bounded bulk archive/reactivate: each row carries the version the admin saw. Ids are compared case-insensitively (UUIDs are). */
+export const MAX_BULK_PRODUCTS = 50;
+export const bulkStatusSchema = z.object({
+  status: z.enum(['ACTIVE', 'INACTIVE']),
+  items: z.array(z.object({ id: uuidSchema.transform(value => value.toLowerCase()), expectedUpdatedAt }).strict())
+    .min(1).max(MAX_BULK_PRODUCTS)
+    .superRefine((items, context) => {
+      const seen = new Set<string>();
+      items.forEach((item, index) => {
+        if (seen.has(item.id)) context.addIssue({ code: 'custom', message: 'Each product can be selected only once.', path: [index, 'id'] });
+        seen.add(item.id);
+      });
+    }),
+}).strict();
+
 // ─── Categories ─────────────────────────────────────────
 export const categoryListSchema = z.object({
   ...listBase,

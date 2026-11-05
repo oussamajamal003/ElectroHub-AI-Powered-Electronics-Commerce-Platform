@@ -1,0 +1,28 @@
+@use '@/styles/abstracts' as *;
+
+// Page-scoped selection strip and bulk result for the catalog products table. It sits in normal flow above the table (never sticky),
+// so it cannot be hidden under the sticky admin header at any width.
+
+.selectionBar { display: flex; flex-wrap: wrap; align-items: center; gap: $spacing-3; padding: $spacing-3 $spacing-4;
+  border-bottom: 1px solid $color-border; }
+.selectionText { margin: 0; flex: 1 1 12rem; min-width: 0; color: $color-text-secondary; font-size: $font-size-sm; }
+.selectionActions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: $spacing-3; }
+.actionItem { display: grid; justify-items: start; gap: $spacing-1; }
+.reason { color: $color-text-secondary; font-size: $font-size-xs; max-width: 22rem; }
+.bulkNames { margin: 0; padding-left: $spacing-5; max-height: 12rem; overflow: auto; font-size: $font-size-sm; }
+
+.bulkReport { display: grid; gap: $spacing-2; padding: $spacing-4; border: 1px solid $color-success-border; background: $color-success-background;
+  color: $color-text-primary; }
+.bulkReportHead { display: flex; align-items: center; justify-content: space-between; gap: $spacing-3; flex-wrap: wrap; }
+.bulkReportTitle { margin: 0; font-size: $font-size-base; font-weight: $font-weight-semibold; }
+.bulkReportText { margin: 0; font-size: $font-size-sm; }
+.bulkFailures { display: grid; gap: $spacing-1; margin: 0; padding-left: $spacing-5; font-size: $font-size-sm; color: $color-error-foreground; }
+
+@media (max-width: $breakpoint-md - 1px) {
+  .selectionBar { padding: $spacing-3; }
+  .selectionText { flex-basis: 100%; }
+  .selectionActions { width: 100%; }
+  .actionItem { flex: 1 1 10rem; }
+  // Touch targets stay at least 44px tall on phones.
+  .selectionActions button { min-height: 44px; }
+}

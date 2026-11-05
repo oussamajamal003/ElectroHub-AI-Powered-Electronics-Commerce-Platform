@@ -17,7 +17,8 @@ import { ApiError } from '@/lib/api';
 import { OtpVerification } from '@/components/ui/OtpVerification';
 import { X } from 'lucide-react';
 
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { isAdminMfaRequired } from '../types';
 import { customerReturnPath } from '../returnPath';
 
 export type AuthModalMode = 'login' | 'register' | 'verify' | 'changeVerificationEmail' | 'forgot' | 'resetVerify' | 'resetNew' | 'resetSuccess' | 'googleLink';
@@ -107,6 +108,8 @@ export function AuthModal({
   const [loginPasswordError, setLoginPasswordError] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginSuccess, setLoginSuccess] = useState('');
+  // An administrator password proof never signs in here: the customer dialog points to the Admin Portal instead.
+  const [adminPortalRequired, setAdminPortalRequired] = useState(false);
 
   // Register form state
   const [registerData, setRegisterData] = useState({
@@ -292,6 +295,7 @@ export function AuthModal({
 
     setLoginSubmitted(true);
     setLoginError('');
+    setAdminPortalRequired(false);
     setLoginTouched({ email: true, password: true });
     const emailErr = validateLoginEmail(loginEmail);
     const passErr = validateLoginPassword(loginPassword);
@@ -304,7 +308,12 @@ export function AuthModal({
     setIsLoading(true);
 
     try {
-      await login({ email: loginEmail.trim(), password: loginPassword });
+      const result = await login({ email: loginEmail.trim(), password: loginPassword });
+      if (isAdminMfaRequired(result)) {
+        setLoginPassword('');
+        setAdminPortalRequired(true);
+        return;
+      }
       onAuthenticated?.();
       onOpenChange(false);
       setLoginEmail('');
@@ -807,6 +816,11 @@ export function AuthModal({
             {loginError && (
               <Alert variant="error" className={styles.alert}>
                 {loginError}
+              </Alert>
+            )}
+            {adminPortalRequired && (
+              <Alert variant="info" className={styles.alert}>
+                Administrator accounts sign in through the Admin Portal. <Link to="/admin/login">Go to the Admin Portal</Link>
               </Alert>
             )}
 

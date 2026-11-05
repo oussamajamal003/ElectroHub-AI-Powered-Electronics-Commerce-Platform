@@ -7,6 +7,8 @@ import { buyNowProjection, purchaseItemsProjection, currentCart, MAX_CART_LINES,
 import { lockCart, lockCartForUser } from './cart.lock.js';
 import { checkoutRequestSchema, attemptSchema, buyNowScopeId, checkoutTotals, deliveryMethods, isBuyNowRequest, requestHash, savedAmountsMatch, savedPurchaseTerms } from './checkout.domain.js';
 import { InventoryService } from './inventory.service.js';
+import { loadShippingConfig, shippingQuoteFor, type ShippingSnapshot } from './shipping-config.js';
+import { adminNotifications } from './admin-notification.service.js';
 import { OrderService } from './order.service.js';
 import { stripeProvider } from './stripe.provider.js';
 import { ATTEMPT_LIFETIME_MS, SUBMITTED_ABANDON_GRACE_MS, WORK_LEASE_MS, MAX_PAYMENT_RETRIES, TERMINAL_PAYMENT_STATES,
@@ -138,11 +140,11 @@ const setupBlocker = (attempt: Pick<Attempt, 'id' | 'state' | 'orderId' | 'provi
  */
 function assertSavedTermsCurrent(userId: string,
   saved: Pick<Attempt, 'request' | 'cartId' | 'total' | 'shippingCost' | 'amountCents'>,
-  items: readonly { productId: string; quantity: number; unitPrice: Prisma.Decimal }[]) {
+  items: readonly { productId: string; quantity: number; unitPrice: Prisma.Decimal }[], shipping: ShippingSnapshot) {
   const request = checkoutRequestSchema.safeParse(saved.request);
   const scopeId = request.success ? (request.data.scope === 'BUY_NOW' ? buyNowScopeId(userId) : saved.cartId) : null;
   const terms = request.success && scopeId ? savedPurchaseTerms({ scopeId, expectedRevision: request.data.expectedRevision,
-    deliveryMethod: request.data.deliveryMethod, lines: items.map(item => ({ productId: item.productId, quantity: item.quantity, price: item.unitPrice })) }) : null;
+    deliveryMethod: request.data.deliveryMethod, lines: items.map(item => ({ productId: item.productId, quantity: item.quantity, price: item.unitPrice })), shipping }) : null;
   if (!terms?.revisionMatches || !terms.totals || !savedAmountsMatch(terms.totals, saved) || cents(terms.totals.total) !== saved.amountCents) {
     throw new AppError('Saved purchase delivery terms or pricing changed. Nothing was charged.', 409, 'CHECKOUT_CHANGED');
   }
@@ -329,7 +331,7 @@ export class PaymentService {
       throw new AppError('Saved purchase availability or pricing changed. Contact support before retrying.', 409, 'CHECKOUT_CHANGED');
     }
     // Delivery terms are revalidated BEFORE card confirmation, with the same rules order commit applies afterwards.
-    assertSavedTermsCurrent(userId, attempt, attempt.items);
+    assertSavedTermsCurrent(userId, attempt, attempt.items, await loadShippingConfig(this.database));
     // A concurrent resume of the same attempt (another instance or tab) commits first and aborts this
     // snapshot. The retry re-reads eligibility under the locks; the only write is the idempotent lifetime extension.
     // A routine recovery lease (worker or poll-driven reconcile; several seconds against DEV) is waited out like submit does; refusing on it left
@@ -349,7 +351,7 @@ export class PaymentService {
             throw new AppError('Payment recovery is running.', 409, 'PAYMENT_RECOVERY_PENDING');
           }
           // Re-checked under the locks immediately before the only permitted write; a mismatch writes nothing.
-          assertSavedTermsCurrent(userId, latest, attempt.items);
+          assertSavedTermsCurrent(userId, latest, attempt.items, await loadShippingConfig(tx));
           const data: Prisma.PaymentAttemptUpdateInput = { expiresAt: new Date(Date.now() + ATTEMPT_LIFETIME_MS) };
           if (intent.status === 'requires_payment_method' && intent.declined && latest.state === 'AWAITING_INPUT') {
             data.state = 'DECLINED';
@@ -371,7 +373,8 @@ export class PaymentService {
     const savedMethod = typeof savedRequest === 'object' && savedRequest !== null && !Array.isArray(savedRequest) && 'deliveryMethod' in savedRequest ? savedRequest.deliveryMethod : undefined;
     const selectedDelivery = deliveryMethods.find(method => method.id === savedMethod);
     return { ...(await this.status(userId, id)), clientSecret: intent.clientSecret, request: attempt.request,
-      delivery: selectedDelivery ? { label: selectedDelivery.label, estimate: selectedDelivery.estimate, price: selectedDelivery.price } : null,
+      // Task 05.2: prices are configurable, so the price shown is the attempt's own immutable saved amount, never the catalog seed.
+      delivery: selectedDelivery ? { label: selectedDelivery.label, estimate: selectedDelivery.estimate, price: new Prisma.Decimal(attempt.shippingCost).toFixed(2) } : null,
       items: attempt.items.map(item => ({ name: item.productName, quantity: item.quantity, imageUrl: item.imageUrl })), replayed: true };
   }
 
@@ -622,7 +625,9 @@ export class PaymentService {
           const current = await paymentOperation('purchase_snapshot', 'database', () => buyNow ? buyNowProjection(userId, buyNow, tx) : currentCart(userId, tx));
           if (!current.data.items.length || !current.data.canCheckout) throw new AppError('Review product availability in Cart.', 409, 'CHECKOUT_INVALID_CART');
           if (current.data.revision !== request.expectedRevision) throw new AppError('Your cart changed. Review it again.', 409, 'CHECKOUT_CHANGED');
-          const delivery = deliveryMethods.find(method => method.id === request.deliveryMethod);
+          // Quote from the configured snapshot: a disabled method has no quote (400), and STANDARD is free at/above the threshold.
+          const shipping = await loadShippingConfig(tx);
+          const delivery = shippingQuoteFor(request.deliveryMethod, current.data.subtotal, shipping);
           if (!delivery) throw new AppError('Choose a delivery method.', 400, 'CHECKOUT_INVALID_DELIVERY');
           const totals = checkoutTotals(current.data.subtotal, delivery.price);
           transactionStage = 'attempt_create';
@@ -1047,11 +1052,14 @@ export class PaymentService {
   private async markPaid(attempt: Attempt, token: string, intent: ProviderIntent) {
     verifyBinding(attempt, intent);
     if (intent.status !== 'succeeded' || intent.received !== attempt.amountCents) throw new AppError('Payment is pending.', 409, 'PAYMENT_PENDING');
+    let firstPaidOrderId: string | null = null;
     const emails = await this.fenced(attempt.id, token, async (tx, latest) => {
       if (!latest.orderId || latest.compensatedAt || latest.refundId) throw new AppError('Payment requires recovery.', 409, 'PAYMENT_RECOVERY_PENDING');
       // A replayed finalization keeps the first successful payment time (it is also the email events' occurredAt).
       const prior = await tx.payment.findUnique({ where: { orderId: latest.orderId }, select: { paidAt: true, status: true } });
       const paidAt = prior?.status === 'SUCCEEDED' && prior.paidAt ? prior.paidAt : new Date();
+      // Only the first successful transition notifies administrators; a replayed finalization does not.
+      firstPaidOrderId = prior?.status === 'SUCCEEDED' ? null : latest.orderId;
       await tx.payment.update({ where: { orderId: latest.orderId }, data: { status: 'SUCCEEDED', paidAt, failureReason: null,
         cardBrand: intent.card?.brand ?? null, cardLast4: intent.card?.last4 ?? null } });
       await tx.order.update({ where: { id: latest.orderId }, data: { status: 'CONFIRMED' } });
@@ -1061,6 +1069,8 @@ export class PaymentService {
       return enqueuePaymentSucceeded(tx, { orderId: latest.orderId, paidAt, card: intent.card });
     });
     logCreatedEvents(emails);
+    // After commit only: fire-and-forget, cannot change or fail the payment outcome.
+    if (firstPaidOrderId) adminNotifications.notifyOrderPaid(firstPaidOrderId);
     logSafely('info', 'Captured payment persisted.', { event: 'payment.outcome.persisted', attemptId: attempt.id,
       providerIntentId: intent.id, orderId: attempt.orderId, state: 'PAID', leaseId: token,
       workerInstanceId: logContext.getStore()?.workerInstanceId ?? null,
