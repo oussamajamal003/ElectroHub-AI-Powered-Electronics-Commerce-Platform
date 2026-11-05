@@ -84,6 +84,36 @@ describe('central API client', () => {
       window.removeEventListener('electrohub:session-expired', onExpired);
     } finally { vi.useRealTimers(); }
   });
+  it('reuses the replacement token when an older request returns 401 after the shared refresh finishes', async () => {
+    setAccessToken('expired');
+    let release: ((response: Response) => void) | undefined;
+    let refreshCalls = 0;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
+      if (url === '/api/auth/refresh') { refreshCalls++; return json(200, { accessToken: 'fresh' }); }
+      if ((init.headers as Headers).get('Authorization') === 'Bearer fresh') return json(200, { data: url });
+      if (url === '/api/slow') return new Promise<Response>(resolve => { release = resolve; });
+      return json(401, { error: 'Expired' });
+    }));
+    const slow = apiClient('/api/slow');
+    await expect(apiClient('/api/fast')).resolves.toEqual({ data: '/api/fast' });
+    release?.(json(401, { error: 'Expired' }));
+    await expect(slow).resolves.toEqual({ data: '/api/slow' });
+    expect(refreshCalls).toBe(1);
+  });
+  it('does not refresh a revoked administrator session and retains the structured error', async () => {
+    setAccessToken('revoked');
+    const fetchMock = vi.fn().mockResolvedValue(json(401, { error: { code: 'ADMIN_SESSION_INVALID', message: 'Sign in again.' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const expired = vi.fn();
+    window.addEventListener('electrohub:session-expired', expired);
+    try {
+      await expect(apiClient('/api/admin/me/profile')).rejects.toMatchObject({ status: 401, code: 'ADMIN_SESSION_INVALID' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(expired).toHaveBeenCalledTimes(1);
+      await apiClient('/api/public').catch(() => undefined);
+      expect((fetchMock.mock.calls[1]?.[1]?.headers as Headers).has('Authorization')).toBe(false);
+    } finally { window.removeEventListener('electrohub:session-expired', expired); }
+  });
   it('stops retrying a 409 refresh after a bounded number of attempts and surfaces it without signing out', async () => {
     vi.useFakeTimers();
     try {

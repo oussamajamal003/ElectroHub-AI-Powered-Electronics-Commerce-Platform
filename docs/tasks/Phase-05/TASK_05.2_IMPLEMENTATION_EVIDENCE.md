@@ -139,3 +139,11 @@ that incorrectly treated every newer checked-in migration as already applied. Th
 cutover and explicitly asserts that applying a later migration still makes the older gap unsafe. Migration ordering enforcement is unchanged.
 `node --test .github/scripts/ci-safety.test.cjs`: 26 passed; `node .github/scripts/check-workflow-policy.cjs`: passed.
 The owner explicitly requested automatic CI fixes; subsequent status must be checked on the pushed correction SHA.
+
+On `ff641fb`, remote backend CI passed (2,059 passed, 154 skipped), and the migration, policy, security-audit, typecheck, lint and build
+jobs passed. Frontend CI exposed a real refresh race: inspecting cloned 401 streams could delay a second response beyond completion of
+the shared refresh, causing another rotation. The transport now parses each JSON body once and retains that payload for final error
+handling, then reuses a replacement token if rotation completed after the original request was sent. ADMIN_SESSION_INVALID still ends
+the session without refreshing. A delayed-401 regression failed before the correction (two refreshes instead of one), then passed;
+API JSON/binary, admin auth-context and login suites: 52 passed. Bounded 409 retry and cancellation assertions remain intact.
+Frontend typecheck, lint (four existing warnings) and production build also passed after the transport correction.

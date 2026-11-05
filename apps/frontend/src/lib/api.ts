@@ -35,10 +35,21 @@ function errorCodeOf(payload: unknown): string | undefined {
   return typeof structured.code === 'string' ? structured.code : undefined;
 }
 
+// Inspect a 401 without teeing its stream. The final error reader reuses the same parsed body.
+const jsonPayloads = new WeakMap<Response, Promise<unknown>>();
+function jsonPayload(response: Response): Promise<unknown> {
+  let payload = jsonPayloads.get(response);
+  if (!payload) {
+    payload = (response.headers.get('content-type') ?? '').includes('application/json')
+      ? response.json().catch(() => null) : Promise.resolve(null);
+    jsonPayloads.set(response, payload);
+  }
+  return payload;
+}
+
 async function readResponse<T>(response: Response): Promise<T> {
   if (response.status === 204 || response.status === 205) return undefined as T;
-  const contentType = response.headers.get('content-type') ?? '';
-  const payload: unknown = contentType.includes('application/json') ? await response.json().catch(() => null) : null;
+  const payload = await jsonPayload(response);
   if (!response.ok) {
     const body = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
     const error = body.error;
@@ -154,7 +165,8 @@ async function send(endpoint: string, options: FetchOptions, extra: RequestInit 
   const { data, ...requestOptions } = options;
   const headers = new Headers(options.headers);
   if (data !== undefined && !(data instanceof FormData)) headers.set('Content-Type', 'application/json');
-  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+  const requestToken = accessToken;
+  if (requestToken) headers.set('Authorization', `Bearer ${requestToken}`);
   const privateCollection = /^\/api\/(?:cart|wishlist|auth\/me)(?:\/|\?|$)/.test(url);
   const config: RequestInit = { ...requestOptions, headers, credentials: 'include',
     ...(privateCollection ? { cache: 'no-store' as const } : {}), ...extra };
@@ -164,9 +176,10 @@ async function send(endpoint: string, options: FetchOptions, extra: RequestInit 
     response = url.split('?')[0] === '/api/auth/refresh' ? await fetchRefresh(url, config) : await fetch(url, config);
     // Pre-auth administrator endpoints answer 401 for wrong or expired challenges: those are never a reason to refresh the session.
     if (response.status === 401 && !/\/api\/auth\/(me|refresh|login|logout)(?:\?|$)|\/api\/auth\/admin\//.test(url)
-      && errorCodeOf(await response.clone().json().catch(() => null)) !== ADMIN_SESSION_INVALID) {
+      && errorCodeOf(await jsonPayload(response)) !== ADMIN_SESSION_INVALID) {
       if (options.signal?.aborted) throw new DOMException('The user aborted a request.', 'AbortError');
-      const token = await refreshSession();
+      // A slow 401 may arrive after another request has already completed the shared rotation.
+      const token = accessToken && accessToken !== requestToken ? accessToken : await refreshSession();
       if (options.signal?.aborted) throw new DOMException('The user aborted a request.', 'AbortError');
       if (!token) throw new ApiError(401, safeMessage(401));
       headers.set('Authorization', `Bearer ${token}`);
