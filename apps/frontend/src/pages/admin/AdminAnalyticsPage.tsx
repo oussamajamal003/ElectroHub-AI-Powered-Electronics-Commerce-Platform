@@ -17,7 +17,7 @@ import local from './AdminAnalyticsPage.module.scss';
 
 const PERIOD_LABEL: Record<AnalyticsPeriod, string> = { '7d': '7 days', '30d': '30 days', '90d': '90 days', '12m': '12 months' };
 const PREVIOUS_LABEL: Record<AnalyticsPeriod, string> = { '7d': 'previous 7 days', '30d': 'previous 30 days', '90d': 'previous 90 days', '12m': 'previous 12 months' };
-const CRUMBS: Crumb[] = [{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Analytics' }];
+const CRUMBS: Crumb[] = [{ label: 'Dashboard', to: '/admin' }, { label: 'Analytics' }];
 
 const isPeriod = (value: string | null): value is AnalyticsPeriod => (ANALYTICS_PERIODS as readonly string[]).includes(value ?? '');
 const percentText = (value: number | null) => value === null ? 'Not available' : `${(value * 100).toFixed(1)}%`;

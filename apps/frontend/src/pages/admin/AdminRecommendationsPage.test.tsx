@@ -8,16 +8,28 @@ import {
   type SectionConfig,
 } from '@/features/admin/recommendations/api';
 import { AdminRecommendationsPage } from './AdminRecommendationsPage';
+import { useAdminProducts } from '@/features/admin/products/api';
 
 vi.mock('@/features/admin/recommendations/api', async importOriginal => ({
   ...await importOriginal<object>(),
   useRecommendationOverview: vi.fn(), useRecommendationConfigurations: vi.fn(), useFeaturedPins: vi.fn(),
   useRecommendationMutations: vi.fn(), useRecommendationPreview: vi.fn(),
 }));
+vi.mock('@/features/admin/products/api', async importOriginal => ({ ...await importOriginal<object>(), useAdminProducts: vi.fn() }));
 
 const home: SectionConfig = { surface: 'home', mode: 'POPULAR_PRODUCTS', enabled: true, itemLimit: 12, defaultLimit: 4, maxLimit: 12, version: 3, updatedAt: null, configured: true };
 const cart: SectionConfig = { surface: 'cart', mode: 'FREQUENTLY_BOUGHT_TOGETHER', enabled: true, itemLimit: 6, defaultLimit: 4, maxLimit: 12, version: 1, updatedAt: null, configured: true };
 const PRODUCT = '1c5bb1a2-5f0e-4f7a-9d4e-2b8d1f0a9c11';
+const eligibleProduct = { id: PRODUCT, name: 'QA Probe Headphones', sku: 'QA-PROBE', slug: 'qa-probe-headphones', price: '19.99', compareAtPrice: null,
+  currency: 'USD', status: 'ACTIVE', category: { id: 'category-1', name: 'Audio', isActive: true }, brand: null,
+  image: null, imageCount: 0, inventory: { quantity: 5, lowStockAt: 1, status: 'IN_STOCK', updatedAt: '2026-11-05T00:00:00.000Z' },
+  storefrontVisible: true, createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-05T00:00:00.000Z', deletable: false, deleteBlocker: null };
+const lowStockProduct = { ...eligibleProduct, id: '2c5bb1a2-5f0e-4f7a-9d4e-2b8d1f0a9c12', name: 'Low Stock Camera', sku: 'LOW-CAMERA',
+  inventory: { quantity: 1, lowStockAt: 2, status: 'LOW_STOCK', updatedAt: '2026-11-05T00:00:00.000Z' } };
+const outOfStockProduct = { ...eligibleProduct, id: '3c5bb1a2-5f0e-4f7a-9d4e-2b8d1f0a9c13', name: 'Out of Stock Camera', sku: 'OUT-CAMERA',
+  inventory: { quantity: 0, lowStockAt: 2, status: 'OUT_OF_STOCK', updatedAt: '2026-11-05T00:00:00.000Z' } };
+const pin = { id: 'pin-1', productId: PRODUCT, surface: 'home' as const, position: 2, startsAt: null, endsAt: null, enabled: true, version: 7,
+  state: 'ACTIVE' as const, eligible: true, product: { id: PRODUCT, name: 'QA Probe Headphones', slug: 'qa-probe-headphones', sku: 'QA-PROBE' } };
 
 const saveSection = { mutate: vi.fn(), isPending: false, isError: false, error: null as unknown };
 const createPin = { mutate: vi.fn(), isPending: false, isError: false, error: null as unknown };
@@ -37,6 +49,7 @@ function renderPage(path = '/admin/recommendations') {
 }
 
 beforeEach(() => {
+  vi.unstubAllEnvs();
   vi.clearAllMocks();
   for (const mutation of [saveSection, createPin, updatePin, deletePin]) { mutation.isPending = false; mutation.isError = false; mutation.error = null; }
   vi.mocked(useRecommendationOverview).mockReturnValue({ data: { period: '30d', since: '2026-10-06T00:00:00.000Z',
@@ -47,6 +60,7 @@ beforeEach(() => {
   vi.mocked(useFeaturedPins).mockReturnValue({ data: { data: [], meta: { maxPerSurface: 8 } }, isPending: false, isError: false, refetch: vi.fn() } as never);
   vi.mocked(useRecommendationPreview).mockReturnValue({ data: undefined, isFetching: false, isError: false, refetch: vi.fn() } as never);
   vi.mocked(useRecommendationMutations).mockReturnValue({ saveSection, createPin, updatePin, deletePin } as never);
+  vi.mocked(useAdminProducts).mockReturnValue({ data: { data: [eligibleProduct], meta: { page: 1, totalPages: 1, total: 1, pageSize: 20 } }, isPending: false, isError: false } as never);
 });
 
 describe('AdminRecommendationsPage', () => {
@@ -92,21 +106,49 @@ describe('AdminRecommendationsPage', () => {
     expect(within(row).getByRole('alert')).toHaveTextContent('Enter a whole number from 1 to 12.');
   });
 
-  it('validates the pin dialog locally: a malformed product ID and an end before the start are refused', async () => {
+  it('requires choosing a listed eligible product and validates the pin window', async () => {
     renderPage('/admin/recommendations?tab=featured');
     fireEvent.click(screen.getByRole('button', { name: 'Add featured product' }));
     const dialog = screen.getByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Product ID'), { target: { value: 'not-a-uuid' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add featured product' }));
     expect(createPin.mutate).not.toHaveBeenCalled();
-    expect(within(dialog).getByText('Enter the product ID (a UUID) from the product page.')).toBeInTheDocument();
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Choose an eligible product.');
 
-    fireEvent.change(within(dialog).getByLabelText('Product ID'), { target: { value: PRODUCT } });
+    await userEvent.setup().click(within(dialog).getByRole('button', { name: /Eligible product/ }));
+    await userEvent.setup().click(await screen.findByRole('option', { name: /QA Probe Headphones/ }));
     fireEvent.change(within(dialog).getByLabelText('Starts (optional)'), { target: { value: '2026-11-06T10:00' } });
     fireEvent.change(within(dialog).getByLabelText('Ends (optional)'), { target: { value: '2026-11-05T10:00' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add featured product' }));
     expect(createPin.mutate).not.toHaveBeenCalled();
     expect(within(dialog).getByText('The end must be after the start.')).toBeInTheDocument();
+  });
+
+  it('offers purchasable low-stock products but omits products with zero quantity', async () => {
+    vi.mocked(useAdminProducts).mockReturnValue({ data: { data: [lowStockProduct, outOfStockProduct], meta: { page: 1, totalPages: 1, total: 2, pageSize: 20 } }, isPending: false, isError: false } as never);
+    renderPage('/admin/recommendations?tab=featured');
+    fireEvent.click(screen.getByRole('button', { name: 'Add featured product' }));
+    const dialog = screen.getByRole('dialog');
+    await userEvent.setup().click(within(dialog).getByRole('button', { name: /Eligible product/ }));
+    expect(await screen.findByRole('option', { name: /Low Stock Camera/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Out of Stock Camera/ })).not.toBeInTheDocument();
+    expect(useAdminProducts).toHaveBeenCalledWith(expect.objectContaining({ status: 'ACTIVE', page: 1 }));
+    expect(vi.mocked(useAdminProducts).mock.calls.every(([params]) => !('stock' in params))).toBe(true);
+  });
+
+  it('keeps products beyond the first catalog page discoverable', async () => {
+    vi.mocked(useAdminProducts).mockImplementation((params) => ({
+      data: { data: params.page === 1 ? [eligibleProduct] : [lowStockProduct], meta: { page: params.page, totalPages: 2, total: 21, pageSize: 20 } },
+      isPending: false, isFetching: false, isError: false,
+    } as never));
+    renderPage('/admin/recommendations?tab=featured');
+    fireEvent.click(screen.getByRole('button', { name: 'Add featured product' }));
+    const dialog = screen.getByRole('dialog');
+    await userEvent.setup().click(within(dialog).getByRole('button', { name: /Eligible product/ }));
+    expect(await screen.findByRole('option', { name: /QA Probe Headphones/ })).toBeInTheDocument();
+    await userEvent.setup().click(within(dialog).getByRole('button', { name: 'Next products' }));
+    await userEvent.setup().click(within(dialog).getByRole('button', { name: /Eligible product/ }));
+    expect(await screen.findByRole('option', { name: /Low Stock Camera/ })).toBeInTheDocument();
+    expect(useAdminProducts).toHaveBeenCalledWith(expect.objectContaining({ page: 2 }));
   });
 
   it('shows the server reason when a pin is refused, for example the placement is full', async () => {
@@ -116,10 +158,74 @@ describe('AdminRecommendationsPage', () => {
     renderPage('/admin/recommendations?tab=featured');
     fireEvent.click(screen.getByRole('button', { name: 'Add featured product' }));
     const dialog = screen.getByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Product ID'), { target: { value: PRODUCT.toUpperCase() } });
+    await userEvent.setup().click(within(dialog).getByRole('button', { name: /Eligible product/ }));
+    await userEvent.setup().click(await screen.findByRole('option', { name: /QA Probe Headphones/ }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add featured product' }));
     expect(createPin.mutate).toHaveBeenCalledWith(expect.objectContaining({ productId: PRODUCT, surface: 'home', position: 0 }), expect.anything());
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('This placement already has the maximum of 8 featured products.');
+  });
+
+  it('edits a pin schedule, position and enabled state using the row version', async () => {
+    vi.mocked(useFeaturedPins).mockReturnValue({ data: { data: [pin], meta: { maxPerSurface: 8 } }, isPending: false, isError: false } as never);
+    renderPage('/admin/recommendations?tab=featured');
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Edit featured QA Probe Headphones' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Position (0 is first)'), { target: { value: '4' } });
+    fireEvent.change(within(dialog).getByLabelText('Starts (optional)'), { target: { value: '2026-11-06T10:00' } });
+    fireEvent.change(within(dialog).getByLabelText('Ends (optional)'), { target: { value: '2026-11-10T10:00' } });
+    fireEvent.click(within(dialog).getByLabelText('Active'));
+    fireEvent.submit(dialog.querySelector('form')!);
+
+    expect(updatePin.mutate).toHaveBeenCalledWith({ id: 'pin-1', expectedVersion: 7, position: 4,
+      startsAt: new Date('2026-11-06T10:00').toISOString(), endsAt: new Date('2026-11-10T10:00').toISOString(), enabled: false }, expect.anything());
+  });
+
+  it('preserves exact stored schedule timestamps for a position-only edit in a non-UTC timezone', async () => {
+    vi.stubEnv('TZ', 'America/Los_Angeles');
+    const scheduledPin = { ...pin, startsAt: '2026-11-05T18:00:37.456Z', endsAt: '2026-11-12T18:30:45.789Z' };
+    vi.mocked(useFeaturedPins).mockReturnValue({ data: { data: [scheduledPin], meta: { maxPerSurface: 8 } }, isPending: false, isError: false } as never);
+    renderPage('/admin/recommendations?tab=featured');
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Edit featured QA Probe Headphones' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByLabelText('Starts (optional)')).toHaveValue('2026-11-05T10:00');
+    expect(within(dialog).getByLabelText('Ends (optional)')).toHaveValue('2026-11-12T10:30');
+    fireEvent.change(within(dialog).getByLabelText('Position (0 is first)'), { target: { value: '3' } });
+    fireEvent.submit(dialog.querySelector('form')!);
+
+    expect(updatePin.mutate).toHaveBeenCalledWith({ id: 'pin-1', expectedVersion: 7, position: 3, enabled: true }, expect.anything());
+  });
+
+  it('resets the edit draft when reopened and uses the refreshed pin version and values', async () => {
+    vi.mocked(useFeaturedPins).mockReturnValue({ data: { data: [pin], meta: { maxPerSurface: 8 } }, isPending: false, isError: false } as never);
+    const view = renderPage('/admin/recommendations?tab=featured');
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Edit featured QA Probe Headphones' }));
+    let dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Position (0 is first)'), { target: { value: '4' } });
+    await userEvent.setup().click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    const latestPin = { ...pin, position: 5, version: 8, enabled: false, startsAt: '2026-11-08T12:00:00.000Z' };
+    vi.mocked(useFeaturedPins).mockReturnValue({ data: { data: [latestPin], meta: { maxPerSurface: 8 } }, isPending: false, isError: false } as never);
+    view.rerender(<MemoryRouter initialEntries={['/admin/recommendations?tab=featured']}><AdminRecommendationsPage /><LocationProbe /></MemoryRouter>);
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Edit featured QA Probe Headphones' }));
+    dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByLabelText('Position (0 is first)')).toHaveValue('5');
+    expect(within(dialog).getByLabelText('Active')).not.toBeChecked();
+    fireEvent.change(within(dialog).getByLabelText('Position (0 is first)'), { target: { value: '6' } });
+    fireEvent.submit(dialog.querySelector('form')!);
+    expect(updatePin.mutate).toHaveBeenCalledWith({ id: 'pin-1', expectedVersion: 8, position: 6, enabled: false }, expect.anything());
+  });
+
+  it('does not send an edit with an invalid schedule', async () => {
+    vi.mocked(useFeaturedPins).mockReturnValue({ data: { data: [pin], meta: { maxPerSurface: 8 } }, isPending: false, isError: false } as never);
+    renderPage('/admin/recommendations?tab=featured');
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Edit featured QA Probe Headphones' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Starts (optional)'), { target: { value: '2026-11-10T10:00' } });
+    fireEvent.change(within(dialog).getByLabelText('Ends (optional)'), { target: { value: '2026-11-09T10:00' } });
+    fireEvent.submit(dialog.querySelector('form')!);
+    expect(updatePin.mutate).not.toHaveBeenCalled();
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('The end must be after the start.');
   });
 
   it('labels a preview result that was pinned and never reports it as recorded', () => {

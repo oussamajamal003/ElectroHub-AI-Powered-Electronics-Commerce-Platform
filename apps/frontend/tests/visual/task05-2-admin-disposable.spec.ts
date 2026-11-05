@@ -29,10 +29,38 @@ async function capture(page: Page, name: string, widths = [1440]) {
     await page.setViewportSize({ width, height: width < 800 ? 900 : 1000 });
     await page.waitForTimeout(250);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    expect(overflow, `${name} @${width}px has horizontal page overflow`).toBeLessThanOrEqual(0);
+    const overflowDetails = overflow > 0 ? await page.evaluate(() => {
+      const overflowingElements = Array.from(document.querySelectorAll('body *')).map(element => {
+        const rect = element.getBoundingClientRect();
+        return { tag: element.tagName, id: element.id, className: typeof element.className === 'string' ? element.className : '',
+          right: Math.round(rect.right), width: Math.round(rect.width) };
+      }).filter(element => element.right > window.innerWidth + 1).sort((a, b) => b.right - a.right).slice(0, 8);
+      const tableAncestors = Array.from((function* () {
+        let element = document.querySelector('table') as HTMLElement | null;
+        while (element) { yield element; element = element.parentElement; }
+      })()).map(element => {
+        const rect = element.getBoundingClientRect(); const style = getComputedStyle(element);
+        return { tag: element.tagName, className: typeof element.className === 'string' ? element.className : '', right: Math.round(rect.right),
+          width: Math.round(rect.width), clientWidth: element.clientWidth, scrollWidth: element.scrollWidth, minWidth: style.minWidth,
+          overflowX: style.overflowX, display: style.display };
+      });
+      return { overflowingElements, tableAncestors, bodyWidth: document.body.scrollWidth, documentWidth: document.documentElement.scrollWidth };
+    }) : null;
+    expect(overflow, `${name} @${width}px has horizontal page overflow: ${JSON.stringify(overflowDetails)}`).toBeLessThanOrEqual(0);
     await page.screenshot({ path: path.join(shots, `${name}-${width}.png`), fullPage: true });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
+}
+async function verifyIfPrompted(page: Page, secret: string, completedText: string) {
+  const dialog = page.getByRole('dialog', { name: "Confirm it's you" });
+  const completed = page.getByRole('region', { name: /Notifications/ }).getByText(completedText, { exact: true });
+  const needsStepUp = await Promise.race([
+    dialog.waitFor({ state: 'visible', timeout: 20_000 }).then(() => true, () => false),
+    completed.waitFor({ state: 'visible', timeout: 20_000 }).then(() => false, () => false),
+  ]);
+  if (!needsStepUp) return;
+  await dialog.getByLabel('6-digit code').fill(totp(secret));
+  await dialog.getByRole('button', { name: 'Verify' }).click();
 }
 
 test.describe.serial('Task 05.2 admin journeys (disposable)', () => {
@@ -57,7 +85,6 @@ test.describe.serial('Task 05.2 admin journeys (disposable)', () => {
     await page.getByRole('button', { name: 'Set up authenticator app' }).click();
     secret = (await page.locator('code[aria-labelledby="totp-secret-label"]').innerText()).replace(/\s/g, '');
     expect(secret).toMatch(/^[A-Z2-7]{32}$/);
-    await capture(page, 'enrollment', [390, 1440]);
     await page.getByLabel('Code from your app').fill('000000');
     await page.getByRole('button', { name: 'Confirm and continue' }).click();
     await expect(page.getByText(/isn.t right/i)).toBeVisible();
@@ -65,7 +92,6 @@ test.describe.serial('Task 05.2 admin journeys (disposable)', () => {
     await page.getByRole('button', { name: 'Confirm and continue' }).click();
     await expect(page.getByRole('list', { name: 'Recovery codes' })).toBeVisible();
     await expect(page.getByRole('list', { name: 'Recovery codes' }).getByRole('listitem')).toHaveCount(10);
-    await capture(page, 'recovery-codes', [1440]);
     const continueButton = page.getByRole('button', { name: 'I have saved my codes, continue' });
     await expect(continueButton).toBeDisabled();
     await page.getByLabel('I have saved these codes somewhere safe.').check();
@@ -95,8 +121,116 @@ test.describe.serial('Task 05.2 admin journeys (disposable)', () => {
       await expect(page.getByRole('heading', { level: 1 }).first()).toHaveText(heading);
       await page.waitForLoadState('networkidle');
       await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: 20_000 });
-      await capture(page, name, ['analytics', 'settings-store', 'recommendations-overview', 'security', 'administrators', 'products'].includes(name) ? [390, 768, 1440, 1920] : [1440]);
+      await capture(page, name, ['analytics', 'settings-store', 'recommendations-overview', 'security', 'administrators', 'products'].includes(name)
+        ? [390, 768, 1440, 1920] : name === 'recommendations-featured' ? [390, 529, 768, 1440, 1920] : [1440]);
     }
+  });
+
+  test('E2E-09 synthetic invitation create, resend and revoke; keyboard dismissal works with reduced motion', async () => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
+    await page.goto('/admin/settings/administrators');
+    await page.getByRole('button', { name: 'Invite administrator' }).click();
+    const inviteDialog = page.getByRole('dialog');
+    await expect(inviteDialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(inviteDialog).toBeHidden();
+
+    await page.getByRole('button', { name: 'Invite administrator' }).click();
+    await inviteDialog.getByLabel('Email address').fill('created-by-browser@qa.invalid');
+    await inviteDialog.getByRole('button', { name: 'Send invitation' }).click();
+    await verifyIfPrompted(page, secret, 'Invitation sent.');
+    await expect(inviteDialog).toBeHidden();
+    await expect(page.getByRole('region', { name: /Notifications/ }).getByText('Invitation sent.', { exact: true })).toBeVisible();
+    const createdRow = page.getByRole('row').filter({ hasText: 'created-by-browser@qa.invalid' });
+    await expect(createdRow).toBeVisible();
+
+    // Resend an older synthetic invitation that is outside the server cooldown; revoke the new row. E2E-06's token stays untouched.
+    await page.getByRole('button', { name: 'Resend invitation to resendable@qa.invalid' }).click();
+    await verifyIfPrompted(page, secret, 'Invitation sent again.');
+    await expect(page.getByRole('region', { name: /Notifications/ }).getByText('Invitation sent again.', { exact: true })).toBeVisible();
+
+    await createdRow.getByRole('button', { name: 'Revoke invitation to created-by-browser@qa.invalid' }).click();
+    const revokeDialog = page.getByRole('dialog', { name: 'Revoke this invitation?' });
+    await expect(revokeDialog).toBeVisible();
+    await revokeDialog.getByRole('button', { name: 'Revoke invitation' }).click();
+    await verifyIfPrompted(page, secret, 'Invitation revoked.');
+    await expect(revokeDialog).toBeHidden();
+    await expect(page.getByRole('region', { name: /Notifications/ }).getByText('Invitation revoked.', { exact: true })).toBeVisible();
+    await page.getByRole('combobox', { name: 'Status' }).click();
+    await page.getByRole('option', { name: 'Revoked' }).click();
+    await expect(createdRow).toContainText('Revoked');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+  });
+
+  test('E2E-10 featured pin search/select, add/edit, pause/resume and remove use synthetic catalog data', async () => {
+    await page.goto('/admin/recommendations?tab=featured');
+    await page.getByRole('button', { name: 'Add featured product' }).click();
+    const addDialog = page.getByRole('dialog', { name: 'Add featured product' });
+    await addDialog.getByLabel('Search products').fill('Aurora Noise-Cancelling Headphones');
+    const eligibleProduct = addDialog.getByRole('button', { name: /Eligible product/ });
+    await expect(eligibleProduct).toBeEnabled();
+    await eligibleProduct.click();
+    await addDialog.getByRole('option', { name: /Aurora Noise-Cancelling Headphones/ }).click();
+    await addDialog.getByLabel('Placement').selectOption('home');
+    await addDialog.getByRole('button', { name: 'Add featured product' }).click();
+    await expect(addDialog).toBeHidden();
+    const pinRow = page.getByRole('row').filter({ hasText: 'Aurora Noise-Cancelling Headphones' });
+    await expect(pinRow).toContainText('Home');
+    await expect(pinRow).toContainText('Active');
+
+    await pinRow.getByRole('button', { name: 'Edit featured Aurora Noise-Cancelling Headphones' }).click();
+    const editDialog = page.getByRole('dialog', { name: 'Edit featured product' });
+    await editDialog.getByLabel('Position (0 is first)').fill('1');
+    await editDialog.getByRole('button', { name: 'Save changes' }).click();
+    await expect(editDialog).toBeHidden();
+    await expect(pinRow.locator('td').nth(2)).toHaveText('1');
+
+    await pinRow.getByRole('button', { name: 'Pause featured Aurora Noise-Cancelling Headphones' }).click();
+    await expect(pinRow).toContainText('Paused');
+    await pinRow.getByRole('button', { name: 'Resume featured Aurora Noise-Cancelling Headphones' }).click();
+    await expect(pinRow).toContainText('Active');
+    await pinRow.getByRole('button', { name: 'Remove featured Aurora Noise-Cancelling Headphones' }).click();
+    const removeDialog = page.getByRole('dialog', { name: 'Remove Aurora Noise-Cancelling Headphones from featured?' });
+    await removeDialog.getByRole('button', { name: 'Remove', exact: true }).click();
+    await expect(pinRow).toHaveCount(0);
+  });
+
+  test('E2E-11 bulk archive commits eligible product and reports a stale synthetic row', async () => {
+    await page.goto('/admin/products');
+    const productsResponsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/api/admin/catalog/products' &&
+      response.request().method() === 'GET');
+    await page.reload(); // Observe the authenticated app request; a raw fetch would omit the in-memory bearer token.
+    const productsResponse = await productsResponsePromise;
+    const productsPayload = await productsResponse.json() as { data?: Array<{ id: string; name: string }>; meta?: unknown; error?: { code?: string; message?: string } };
+    const responseEvidence = `status=${productsResponse.status()} keys=${Object.keys(productsPayload).sort().join(',')} error=${productsPayload.error?.code ?? 'none'}`;
+    expect(productsResponse.status(), responseEvidence).toBe(200);
+    expect(Array.isArray(productsPayload.data), responseEvidence).toBe(true);
+    expect(productsPayload.meta, responseEvidence).toBeTruthy();
+    const namesById = new Map(productsPayload.data!.map(row => [row.id, row.name]));
+    const aurora = page.getByRole('checkbox', { name: 'Select Aurora Noise-Cancelling Headphones' });
+    const pulse = page.getByRole('checkbox', { name: 'Select Pulse Wireless Earbuds' });
+    await aurora.click();
+    await pulse.click();
+    await page.getByRole('group', { name: 'Actions for selected products' }).getByRole('button', { name: 'Archive' }).click();
+    const confirm = page.getByRole('dialog', { name: 'Archive 2 products?' });
+    await expect(confirm).toBeVisible();
+
+    // Make Pulse stale at the API boundary. The request still reaches the disposable backend, which archives Aurora and returns a
+    // real per-product CONFLICT for Pulse; no production or shared development data is involved.
+    await page.route('**/api/admin/catalog/products/bulk-status', async route => {
+      const body = route.request().postDataJSON() as { status: string; items: Array<{ id: string; expectedUpdatedAt: string }> };
+      const pulseItem = body.items.find(item => namesById.get(item.id) === 'Pulse Wireless Earbuds');
+      if (!pulseItem) throw new Error('Pulse fixture was not in the bulk request.');
+      pulseItem.expectedUpdatedAt = '2000-01-01T00:00:00.000Z';
+      await route.continue({ postData: JSON.stringify(body) });
+    });
+    await confirm.getByRole('button', { name: 'Archive', exact: true }).click();
+    const report = page.getByRole('region', { name: 'Bulk update result' });
+    await expect(report.getByRole('status')).toContainText('1 product archived. 1 product could not be changed.');
+    await expect(report).toContainText('Pulse Wireless Earbuds');
+    await expect(report).toContainText('changed since you opened it');
+    await expect(page.getByRole('group', { name: 'Actions for selected products' })).toHaveCount(0);
   });
 
   test('E2E-08 Store settings persist through reload; shipping change is visible in the example quote and restored', async () => {

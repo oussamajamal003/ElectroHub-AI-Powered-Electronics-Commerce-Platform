@@ -85,7 +85,7 @@ export function buildShippingSnapshot(
  * Reads the singleton and the method rows without a transaction. Every administrator write bumps the singleton version in the same
  * transaction as the method rows, so a version that is unchanged across the reads proves they were one committed configuration.
  */
-async function readShippingSnapshot(client: ShippingConfigClient): Promise<ShippingSnapshot> {
+export async function readShippingSnapshot(client: ShippingConfigClient): Promise<ShippingSnapshot> {
   const settingsSelect = { version: true, freeShippingThreshold: true } as const;
   for (let attempt = 1; attempt <= 3; attempt++) {
     const before = await client.shippingSettings.findUnique({ where: { id: 'default' }, select: settingsSelect });

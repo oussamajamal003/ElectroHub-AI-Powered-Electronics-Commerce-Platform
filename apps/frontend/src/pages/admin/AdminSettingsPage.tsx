@@ -88,7 +88,7 @@ export function AdminSettingsPage() {
 
   /** Refetches one query, then remounts its form from the fresh values (local edits are discarded by the administrator's choice). */
   const reloadKey = useCallback(async (key: readonly unknown[]) => {
-    await client.refetchQueries({ queryKey: key, exact: true });
+    await client.refetchQueries({ queryKey: key, exact: true }, { throwOnError: true });
     bump();
   }, [client, bump]);
 

@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { startAuthentication } from '@simplewebauthn/browser';
+import { browserSupportsWebAuthn, startAuthentication } from '@simplewebauthn/browser';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -24,6 +24,7 @@ type Method = 'totp' | 'recovery' | 'passkey';
  * issues a short-lived step-up assurance and the caller then retries. Nothing here is stored beyond the open dialog.
  */
 export function StepUpDialog({ open, onOpenChange, onVerified }: StepUpDialogProps) {
+  const passkeysSupported = browserSupportsWebAuthn();
   const [method, setMethod] = useState<Method>('totp');
   const [code, setCode] = useState('');
   const [recovery, setRecovery] = useState('');
@@ -116,10 +117,10 @@ export function StepUpDialog({ open, onOpenChange, onVerified }: StepUpDialogPro
                 <Button type="button" onClick={verifyRecovery} isLoading={pending}>Verify</Button>
               </TabsContent>
               <TabsContent value="passkey" className={styles.methodPanel}>
-                <PasskeySupportNotice />
+                <PasskeySupportNotice supported={passkeysSupported} />
                 <p className={styles.note}>Use the passkey registered on this account. Your browser or device will ask you to confirm.</p>
                 {error && <p role="alert" className={styles.note}>{error}</p>}
-                <Button type="button" onClick={verifyPasskey} isLoading={pending}>Use passkey</Button>
+                <Button type="button" onClick={verifyPasskey} isLoading={pending} disabled={!passkeysSupported}>Use passkey</Button>
               </TabsContent>
             </Tabs>
           </div>

@@ -76,18 +76,22 @@ export class AdminTeamService {
     return { data: rows.map(row => invitationDto(row, now)), meta: { page: input.page, pageSize: input.pageSize, total, totalPages: Math.max(1, Math.ceil(total / input.pageSize)) } };
   }
 
-  private async deliver(invitationId: string, to: string, token: string, inviterId: string, expiresAt: Date) {
+  private async deliver(invitationId: string, to: string, token: string, tokenHash: string, inviterId: string, expiresAt: Date) {
     const inviter = await prisma.user.findUnique({ where: { id: inviterId }, select: { firstName: true, lastName: true } });
     const sent = await sendAdminInvitationEmail({ to, token, expiresAt, inviterName: inviter ? `${inviter.firstName} ${inviter.lastName}`.trim() : null });
-    const updated = await prisma.adminInvitation.update({ where: { id: invitationId },
-      data: { deliveryStatus: sent ? AdminInvitationDelivery.SENT : AdminInvitationDelivery.FAILED, lastSentAt: new Date(), sendCount: { increment: 1 } },
+    // A slow provider completion must not overwrite delivery status for a newer token generation.
+    await prisma.adminInvitation.updateMany({ where: { id: invitationId, tokenHash },
+      data: { deliveryStatus: sent ? AdminInvitationDelivery.SENT : AdminInvitationDelivery.FAILED, lastSentAt: new Date(), sendCount: { increment: 1 } } });
+    const updated = await prisma.adminInvitation.findUnique({ where: { id: invitationId },
       include: { invitedBy: { select: { firstName: true, lastName: true } } } });
+    if (!updated) throw new AppError('Invitation not found.', 404, 'NOT_FOUND');
     return invitationDto(updated);
   }
 
   async createInvitation(actor: Actor, input: { email: string; grantManageAdmins: boolean }) {
     const email = normalizeEmail(input.email);
     const token = randomToken();
+    const tokenHash = sha256Hex(token);
     const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
     const invitation = await prisma.$transaction(async tx => {
       const actorSecurity = await tx.adminAccountSecurity.findUnique({ where: { userId: actor.userId }, select: { isOwner: true } });
@@ -103,8 +107,8 @@ export class AdminTeamService {
       }
       // An expired pending invitation is closed (kept as history) so the one-pending-per-email index admits the new one.
       if (pending) await tx.adminInvitation.update({ where: { id: pending.id }, data: { status: AdminInvitationStatus.REVOKED, revokedAt: new Date() } });
-      const created = await tx.adminInvitation.create({ data: { email, tokenHash: sha256Hex(token), invitedById: actor.userId, expiresAt,
-        grantManageAdmins: input.grantManageAdmins } });
+      const created = await tx.adminInvitation.create({ data: { email, tokenHash, invitedById: actor.userId, expiresAt,
+        grantManageAdmins: input.grantManageAdmins, lastSentAt: new Date() } });
       await recordAdminAudit({ actorId: actor.userId, action: 'ADMIN_INVITATION_CREATED', resourceType: 'admin_invitation', resourceId: created.id,
         outcome: 'SUCCESS', details: { grantManageAdmins: input.grantManageAdmins }, requestId: actor.requestId }, tx);
       return created;
@@ -115,11 +119,12 @@ export class AdminTeamService {
       throw error;
     });
     // Provider call outside the transaction; a failed send is recorded as FAILED and can be resent — no privilege is created by it.
-    return this.deliver(invitation.id, email, token, actor.userId, expiresAt);
+    return this.deliver(invitation.id, email, token, tokenHash, actor.userId, expiresAt);
   }
 
   async resendInvitation(actor: Actor, id: string) {
     const token = randomToken();
+    const tokenHash = sha256Hex(token);
     const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
     const invitation = await prisma.$transaction(async tx => {
       const rows = await tx.$queryRaw<{ id: string; status: AdminInvitationStatus; lastSentAt: Date | null; email: string }[]>`
@@ -130,13 +135,15 @@ export class AdminTeamService {
       if (row.lastSentAt && Date.now() - row.lastSentAt.getTime() < RESEND_COOLDOWN_MS) {
         throw new AppError('This invitation was sent moments ago. Wait a minute before resending.', 429, 'RESEND_COOLDOWN');
       }
-      // The replacement token invalidates the previous link atomically.
-      await tx.adminInvitation.update({ where: { id }, data: { tokenHash: sha256Hex(token), expiresAt, deliveryStatus: AdminInvitationDelivery.PENDING } });
+      // Reserve the cooldown with the token replacement, before calling the email provider. Since the row is locked, a
+      // concurrent resend sees this timestamp and cannot replace the token while the first email is still being sent.
+      await tx.adminInvitation.update({ where: { id }, data: { tokenHash, expiresAt,
+        deliveryStatus: AdminInvitationDelivery.PENDING, lastSentAt: new Date() } });
       await recordAdminAudit({ actorId: actor.userId, action: 'ADMIN_INVITATION_RESENT', resourceType: 'admin_invitation', resourceId: id, outcome: 'SUCCESS',
         requestId: actor.requestId }, tx);
       return row;
     });
-    return this.deliver(invitation.id, invitation.email, token, actor.userId, expiresAt);
+    return this.deliver(invitation.id, invitation.email, token, tokenHash, actor.userId, expiresAt);
   }
 
   async revokeInvitation(actor: Actor, id: string) {
@@ -201,6 +208,9 @@ export class AdminTeamService {
         select: { id: true, isActive: true, adminSecurity: { select: { isOwner: true, canManageAdmins: true } } } });
       if (!target) throw new AppError('Administrator not found.', 404, 'NOT_FOUND');
       if (input.isActive === false && target.adminSecurity?.isOwner) {
+        // Per-user lifecycle locks do not serialize changes to different owners. Share one transaction lock before
+        // counting so concurrent requests cannot both observe the same last-two-owner state.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('admin_owner_lifecycle'), 0)`;
         const activeOwners = await tx.adminAccountSecurity.count({ where: { isOwner: true, user: { isActive: true } } });
         if (activeOwners <= 1) throw new AppError('The last active owner cannot be deactivated.', 409, 'LAST_OWNER');
       }

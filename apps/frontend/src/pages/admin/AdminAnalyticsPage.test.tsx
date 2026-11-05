@@ -54,6 +54,10 @@ beforeEach(() => {
 });
 
 describe('AdminAnalyticsPage', () => {
+  it('links the Dashboard breadcrumb to the admin dashboard route', () => {
+    renderPage();
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/admin');
+  });
   it('shows a skeleton with busy regions while every report is loading, not zeros', () => {
     mockHooks(Object.fromEntries(Object.keys(hooks).map(name => [name, loading()])));
     renderPage();

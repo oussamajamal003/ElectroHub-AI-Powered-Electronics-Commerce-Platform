@@ -1,8 +1,9 @@
 # Task 05.2 — Implementation Evidence
 
-Single evidence record for Task 05.2 (decisions and contracts: `TASK_05.2_IMPLEMENTATION_PLAN.md`; ADR-011). Everything below was
-executed in this working tree on 2026-11-05 on base `581726eff055db1dca4778c6e17ce86228509a1f` (`develop`), **uncommitted** — no commit,
-push, PR, merge, deploy or PROD access happened. "Disposable" = fresh loopback PostgreSQL 18 cluster per run (no pgvector: the four
+Single evidence record for Task 05.2 (decisions and contracts: `TASK_05.2_IMPLEMENTATION_PLAN.md`; ADR-011). The initial execution
+on 2026-11-05 used base `581726eff055db1dca4778c6e17ce86228509a1f` (`develop`); later corrections were committed and pushed to draft
+PR #49. The historical results below are dated by their sections; they are not assertions about every later revision. No merge,
+production deployment or production migration was performed. "Disposable" = fresh loopback PostgreSQL 18 cluster per run (no pgvector: the four
 vector migrations are skipped and logged, exactly as `scripts/recommendation-fbt-pg.cjs` does).
 
 ## Commands and results
@@ -58,7 +59,7 @@ the payment-mutation gate refuses them by design; they pass on the disposable cl
 | E01–E02 passkeys | PASS (virtual authenticator) | browser registration + passkey sign-in with Chromium virtual authenticator; physical device NOT VERIFIED |
 | E03–E07 sessions/history/profile | PASS | revocation ends access+refresh (API); two sessions listed in browser; password change revokes all; last factor 409 |
 | F01–F06 settings/shipping/notifications | PASS | nav; store save+reload (browser); shipping changes new quotes, revision changes, history untouched, 409 on stale version (disposable); maintenance/digest omitted |
-| F07–F08 settings visual/states | PARTIAL | four tabs captured; Store/Shipping compared with references; 200 % real browser zoom NOT VERIFIED; settings Storybook stories not written |
+| F07–F08 settings visual/states | PARTIAL | four tabs captured; Store/Shipping compared with references; Settings stories cover requested form states; 200 % real browser zoom NOT VERIFIED |
 | G01–G09 recommendations | PASS | pin featured/dedupe/archive/expiry/preview-no-events on real PG; config 409; FastAPI outage fallback covered by existing suites |
 | G10 recommendations UI | PARTIAL | all four tabs captured and overflow-checked; pin dialog not driven in the browser |
 | H01–H08 analytics pipeline | PASS | signed image-search selection, dedupe, no image/identity columns, consent-only attribution, server-authoritative outcomes |
@@ -67,21 +68,22 @@ the payment-mutation gate refuses them by design; they pass on the disposable cl
 | J01–J03 bulk | PASS (API/unit) | per-item outcomes, bounded, shared policy; browser selection only rendered, not executed |
 | J04–J10 UX/a11y/perf | PARTIAL | overflow checks at 4 widths on 14 pages, keyboardable radiogroup/tabs, lazy chunks; real 200 % zoom, reduced-motion and screen-reader passes NOT VERIFIED |
 | K01–K08, K10 | PARTIAL | commands above; security/financial paths and lane diffs inspected. Full independent review of every changed file is not certified; browser/a11y gaps remain as recorded. |
-| K09 CI on PR head, K11 release, K12 Architect | PENDING EXTERNAL STAGE | no commit/push/PR by instruction |
+| K09 CI on PR head, K11 release, K12 Architect | PARTIAL | PR #49 exists and earlier head CI passed; release and independent final approval remain separate gates. Check the current PR head for current CI. |
 
 ## Live DEV status and the remaining operator step
 
-DEV has the migration and the local backend runs this branch. Five seeded DEV administrators exist, **no owner, none enrolled**, so the
-console is intentionally closed until an operator runs (from `apps/backend`, DEV only):
+At the initial handoff DEV had the migration but no owner or enrolled administrator. The owner later reported running the two commands
+below. A subsequent read-only DEV check confirmed the owner has team-management permission and one active TOTP factor. The owner reports
+completing enrollment and storing recovery codes privately. The commands are retained for operator history, not a request to repeat bootstrap:
 
 ```
 npx tsx scripts/admin-security.ts grant-owner admin@electrohub.com --confirm-target=pzxekjybdiulzmssalfo
 npx tsx scripts/admin-security.ts authorize-enrollment admin@electrohub.com --hours=24 --confirm-target=pzxekjybdiulzmssalfo
 ```
 
-The agent did not run these: the permission system classified granting an owner on the shared environment as a permission grant. Until
-then, authenticated admin journeys on DEV are NOT VERIFIED (they are verified on the disposable stack). Authenticated customer journeys on
-DEV are NOT VERIFIED (customer credentials in `.env` were not read).
+The agent did not run these operator commands. The owner reports successfully accessing the dashboard, but independent authenticated
+admin browser journeys on DEV remain NOT VERIFIED because the desktop browser connection failed. A separate customer browser login succeeded on DEV; it did not verify the full
+customer recommendation, consent, and image-search journey. Sign-in may write authentication challenge or security-event records.
 
 ## Owner-authorized review corrections (2026-11-05)
 
@@ -147,3 +149,78 @@ handling, then reuses a replacement token if rotation completed after the origin
 the session without refreshing. A delayed-401 regression failed before the correction (two refreshes instead of one), then passed;
 API JSON/binary, admin auth-context and login suites: 52 passed. Bounded 409 retry and cancellation assertions remain intact.
 Frontend typecheck, lint (four existing warnings) and production build also passed after the transport correction.
+
+### Focused closure pass (working tree based on PR head `fdf36f8`)
+
+- **ANA-03:** last-click selection is per purchased item, ordered by event time then interaction UUID. Disposable PostgreSQL
+  `admin-features.admin-pg.integration.test.ts` verifies the selected stored interaction, absent consent, expiry, failed/refunded
+  payments and deduplicated purchase totals; the security/business suite passed 20/20 with four documented pgvector skips.
+- **C01–C05:** invitation creation and resend reserve cooldown before delivery; completion is fenced by token hash. The focused
+  service tests reproduce concurrent resend and cover initial-send overlap, stale completion and retry after failure.
+- **F07:** a failed conflict reload now preserves the draft and exposes retry. `AdminSettingsPage.test.tsx` passed 20/20; 13 Settings
+  stories use production forms and synthetic API responses and passed focused local Chromium checks.
+- **I10:** Analytics Dashboard breadcrumb points to the actual `/admin` route; page tests passed 12/12. Unsupported WebAuthn actions
+  are disabled in login and step-up, with 14 focused tests passing.
+- **K01:** disposable browser frontend uses a strict port and is never reused. An occupied port caused the suite to fail before tests;
+  on a fresh disposable stack all six existing browser journeys passed, including virtual passkey and four-width overflow checks.
+- **K09:** CI migration verification now asserts a second `migrate deploy` is a no-op on the guarded disposable database. Local
+  workflow policy and safety tests passed (26/26); the actual assertion awaits CI on the new pushed head.
+- **Focused final checks:** root `npm run typecheck`, `npm run lint`, and `npm run build` passed; frontend lint has four Fast Refresh
+  warnings, and the builds retain existing Sass division and chunk-size warnings. `npm run build-storybook` passed; 13 Settings
+  stories passed the focused Chromium interaction checks. `npm run test:frontend` passed **1238/1238** (149 files).
+- **Full backend suite limitation:** `npm run test:backend` was attempted once and failed **679 tests**, passed 1293, skipped 36;
+  32 suites could not load (73 failed, 81 passed, 5 skipped files overall). The local default runner has missing/unavailable
+  integration dependencies and logging/database environment (including unloaded integration suites and timeouts). The focused
+  security/business disposable PostgreSQL suite passed 20/20, and earlier GitHub backend CI on `fdf36f8` passed 2059/2059 with
+  154 skipped. The final pushed SHA still requires new CI.
+- **Expanded disposable browser:** 9/9 passed: owner TOTP enrollment and recovery acknowledgement on synthetic disposable identity,
+  page routes and 390/768/1440/1920 overflow, invitation create/resend/revoke, pin search/add/edit/pause/remove, partial bulk archive,
+  settings save/reload, virtual passkey, session revocation, invitation acceptance, and logout. Recovery/enrollment screenshots were
+  removed and the reusable browser spec no longer captures them.
+- **DEV:** read-only project identity `pzxekjybdiulzmssalfo`; all 30 Prisma ledger entries are finished, none rolled back. Owner is
+  enrolled with one active TOTP factor. The owner reports accessing the dashboard and privately saving recovery codes; independent
+  browser verification of that session is NOT VERIFIED because the computer-use native pipe could not connect after recovery.
+  Customer browser login returned HTTP 200 and displayed the authenticated account menu; further customer actions were not verified.
+- **A04/K06:** all seven task screenshot references were visually opened and compared with prior disposable captures. Login keeps a
+  centered form but moves the brand inside the card; settings uses structured address fields, a fixed currency and only implemented
+  preferences; analytics uses truthful data/tables instead of the prototype's illustrative session duration. These captures are not
+  a claim of exact pixel parity. Actual 200% browser zoom, manual screen reader and physical passkey remain unverified.
+
+### Owner MFA addendum and final acceptance evidence
+
+The owner corrected the account mismatch: the earlier screenshot showed the expected fail-closed `ENROLLMENT_NOT_AUTHORIZED` response
+for `admin1@electrohub.com`. It is not evidence of an MFA bypass or implementation defect. The authorized owner account is
+`admin@electrohub.com` on shared DEV identity `pzxekjybdiulzmssalfo`. The owner reports that enrollment completed and the authenticator,
+recovery codes, and dashboard access are in place; secrets and one-time codes were not requested or recorded. No bootstrap was repeated
+and no additional administrator was authorized. A read-only database check previously confirmed the project identity, completed
+migration ledger and one active TOTP factor.
+
+| Acceptance ID | Route/action and environment | Expected / actual | Status and evidence |
+|---|---|---|---|
+| D01 | `/admin/login`, shared DEV, wrong account `admin1@electrohub.com` | Non-authorized account is denied; screenshot shows `ENROLLMENT_NOT_AUTHORIZED` | PASS for fail-closed denial; user attachment in this task |
+| D02 | `/admin/login` → MFA enrollment → dashboard, shared DEV, owner account | Owner reports successful private enrollment and dashboard access; agent did not obtain browser DOM/network evidence because the connected desktop browser channel was unavailable | NOT VERIFIED by agent; owner report plus read-only DEV identity/factor check |
+| D03 | Password-only admin login, disposable PostgreSQL + local Playwright | Password alone cannot enter; TOTP/recovery acknowledgment gates the dashboard | PASS; `apps/frontend/tests/visual/task05-2-admin-disposable.spec.ts`, 9/9 final run |
+| ANA-03 | Analytics conversion, disposable PostgreSQL | Latest consented same-product click before each paid item wins deterministically; no-consent, expiry, failed and refunded payments do not attribute | PASS; `apps/backend/src/services/admin-features.admin-pg.integration.test.ts`, stored-fact assertions in `node scripts/admin-security-pg.cjs` (24/24) |
+| C07/G10/J01 | Invitation, featured-product and bulk dialogs, local browser + disposable PostgreSQL | Create/resend/revoke; pin search/add/edit/status/remove; real bulk selection and partial result | PASS; Playwright disposable suite (9/9) |
+| F01–F08 | Settings Store/Shipping/Notifications, Storybook with synthetic API boundary; browser flows against disposable API | Real production forms render requested populated/dirty/validation/pending/success/failure/conflict states; save/reload and shipping quote remain consistent | PASS; 13 Settings stories, `npm run build-storybook` succeeded; browser suite 9/9 |
+| J04/K06 | Responsive behavior, local Playwright | CSS widths 390, 529, 768, 1440 and 1920 have no horizontal page overflow on tested pages; reduced-motion and Escape behavior exercised | PASS for listed widths and automated reduced-motion/Escape checks; final screenshots under `apps/frontend/test-results/task05-2-disposable/screens/` |
+| J04 | Actual browser zoom at 200%, local browser | Must use native browser zoom and inspect layout after the overflow correction | NOT VERIFIED post-fix; browser automation did not change native zoom, so viewport/device scale was not treated as proof |
+| K01 | Changed-file source/diff coverage, PR branch diff against `origin/develop` | Every changed path read and reconciled across backend, frontend and supporting lanes | PASS; 190/190 paths, no remaining material findings after fixing the recovery-dialog accessible title |
+| K09 | Migration deploy repeat/no-op, disposable CI database | Second `prisma migrate deploy` reports no pending migrations | PENDING final CI on the pushed SHA; workflow assertion added, not claimed as locally verified |
+| K12 | Independent Architect decision, final pushed SHA | Explicit score and Approve/Request Changes/Reject after reviewing the final SHA | PENDING independent review; no approval is inferred from lane coverage |
+
+The final disposable Playwright run passed 9/9, including invitation dialogs, featured-product edit/pin actions, bulk archive partial
+result, settings save/reload, virtual WebAuthn, session revocation, logout/protected-route rejection, keyboard Escape and automated
+reduced-motion behavior. Chromium virtual-authenticator coverage is not physical-passkey hardware QA. Actual 200% zoom after the final
+CSS correction and a manual screen-reader pass remain NOT VERIFIED. The Figma Make references were compared by screenshot content;
+two settings filenames are transposed relative to the task table, so comparisons used the visible Store/Shipping/Notifications content.
+Differences recorded above are intentional implementation choices; pixel parity is not asserted.
+
+Final local checks on the closure worktree: root typecheck PASS; root lint PASS with four Fast Refresh warnings; root frontend/backend
+build PASS; Settings Storybook build PASS (existing Sass division and chunk-size warnings). The full frontend suite ended with 91
+passing files, 58 failed suites, and one failed test; isolated routing, HomePage and Tooltip rerun passed 8/8. The full backend suite
+ended with 72 failed files, 82 passed, 5 skipped; 674 tests failed, 1300 passed, 36 skipped, 7 errors. The primary integration load
+error was `DATABASE_TEST_TARGET_REQUIRED`; affected integration suites did not load under the local default environment. These full
+suite results are failures and are not represented as green. Focused disposable PostgreSQL business/security coverage passed 24/24,
+and focused frontend regressions passed as recorded above. No shared DEV writes, production access, migration, merge or deployment
+occurred during this closure pass. CI and Architect status must be attached to the exact final pushed PR SHA before an approval claim.

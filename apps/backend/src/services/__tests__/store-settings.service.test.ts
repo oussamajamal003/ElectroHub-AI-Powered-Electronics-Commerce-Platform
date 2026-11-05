@@ -182,6 +182,30 @@ describe('updateShipping', () => {
   });
 });
 
+describe('getShipping', () => {
+  it('retries if the settings version changes between the singleton and method-row reads', async () => {
+    const updatedRows = [
+      { method: 'STANDARD', enabled: true, price: new Prisma.Decimal('0.00') },
+      { method: 'EXPRESS', enabled: false, price: new Prisma.Decimal('12.50') },
+      { method: 'OVERNIGHT', enabled: true, price: new Prisma.Decimal('19.99') },
+    ];
+    db.shippingSettings.findUnique
+      .mockResolvedValueOnce({ version: 1, freeShippingThreshold: null })
+      .mockResolvedValueOnce({ version: 2, freeShippingThreshold: new Prisma.Decimal('100.00') })
+      .mockResolvedValueOnce({ version: 2, freeShippingThreshold: new Prisma.Decimal('100.00') })
+      .mockResolvedValueOnce({ version: 2, freeShippingThreshold: new Prisma.Decimal('100.00') });
+    db.shippingMethodSetting.findMany.mockResolvedValueOnce(sharedShippingRows).mockResolvedValueOnce(updatedRows);
+
+    const result = await service.getShipping();
+
+    expect(result.version).toBe(2);
+    expect(result.freeShippingThreshold).toBe('100.00');
+    expect(result.methods.find(method => method.method === 'EXPRESS')).toMatchObject({ enabled: false, price: '12.50' });
+    expect(db.shippingSettings.findUnique).toHaveBeenCalledTimes(4);
+    expect(db.shippingMethodSetting.findMany).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('previewShipping', () => {
   it('returns the quote rows the checkout would produce for the subtotal, with the threshold applied to STANDARD only', async () => {
     db.shippingSettings.findUnique.mockResolvedValue({ version: 1, freeShippingThreshold: new Prisma.Decimal('50') });

@@ -3,7 +3,8 @@ import { expect, test } from '@playwright/test';
 /**
  * Task 05.2 live smoke against the developer's running localhost:3000 (local Express → identity-verified shared DEV). Read-only
  * except one sign-in attempt with the seed-file DEV administrator (apps/backend/prisma/seed.ts defaults), which must stop at the MFA
- * gate: before an owner/operator authorizes enrollment, a correct password yields no session (fail closed). No data is written.
+ * gate: before an owner/operator authorizes enrollment, a correct password yields no session (fail closed). The login attempt may
+ * write a short-lived MFA challenge or a security event to shared DEV; it does not create an authenticated session or change business data.
  */
 test.use({ baseURL: process.env.E2E_LIVE_BASE_URL ?? 'http://localhost:3000', trace: 'off', video: 'off', screenshot: 'off' });
 

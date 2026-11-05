@@ -190,11 +190,14 @@ describe('featured pins', () => {
     expect(db.featuredProductPin.updateMany).not.toHaveBeenCalled();
   });
 
-  it('deletes with a version guard and reports 404 for an unknown pin', async () => {
+  it('requires a matching version to delete and reports 404 for an unknown pin', async () => {
     db.featuredProductPin.findUnique.mockResolvedValue(null);
-    await expect(new RecommendationAdminService().deletePin(PIN, ACTOR)).rejects.toMatchObject({ statusCode: 404, code: 'PIN_NOT_FOUND' });
+    await expect(new RecommendationAdminService().deletePin(PIN, ACTOR, 2)).rejects.toMatchObject({ statusCode: 404, code: 'PIN_NOT_FOUND' });
 
     db.featuredProductPin.findUnique.mockResolvedValue(pinRow({ version: 2 }));
+    await expect(new RecommendationAdminService().deletePin(PIN, ACTOR, 1)).rejects.toMatchObject({ statusCode: 409, code: 'VERSION_CONFLICT' });
+    expect(db.featuredProductPin.deleteMany).not.toHaveBeenCalled();
+
     db.featuredProductPin.deleteMany.mockResolvedValue({ count: 1 });
     await new RecommendationAdminService().deletePin(PIN, ACTOR, 2);
     expect(db.featuredProductPin.deleteMany).toHaveBeenCalledWith({ where: { id: PIN, version: 2 } });

@@ -229,11 +229,11 @@ export class RecommendationAdminService {
     return this.pinView(row, now);
   }
 
-  async deletePin(id: string, actor: RecommendationActor, expectedVersion?: number) {
+  async deletePin(id: string, actor: RecommendationActor, expectedVersion: number) {
     await prisma.$transaction(async tx => {
       const current = await tx.featuredProductPin.findUnique({ where: { id } });
       if (!current) throw new AppError('Pinned product not found.', 404, 'PIN_NOT_FOUND');
-      if (expectedVersion !== undefined && expectedVersion !== current.version) {
+      if (expectedVersion !== current.version) {
         throw versionConflict('This pin changed since you loaded it. Reload to see its current state.');
       }
       const result = await tx.featuredProductPin.deleteMany({ where: { id, version: current.version } });

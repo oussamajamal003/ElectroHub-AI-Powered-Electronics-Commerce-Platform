@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { recordAdminAudit } from './admin-audit.js';
 import { SHIPPING_CATALOG, SHIPPING_PRICE_MAX, buildShippingSnapshot, invalidateShippingConfig, loadShippingConfig, shippingQuotes,
-  type ShippingMethodId, type ShippingSnapshot } from './shipping-config.js';
+  readShippingSnapshot, type ShippingMethodId, type ShippingSnapshot } from './shipping-config.js';
 
 /**
  * Task 05.2 administrator settings: store profile and shipping configuration. Every write is a versioned compare-and-set
@@ -157,11 +157,7 @@ export class StoreSettingsService {
   }
 
   async getShipping(): Promise<ShippingView> {
-    const [settings, rows] = await Promise.all([
-      this.db.shippingSettings.findUnique({ where: { id: STORE_ID }, select: { version: true, freeShippingThreshold: true } }),
-      this.db.shippingMethodSetting.findMany({ select: { method: true, enabled: true, price: true } }),
-    ]);
-    return viewOf(buildShippingSnapshot(settings, rows));
+    return viewOf(await readShippingSnapshot(this.db));
   }
 
   async updateShipping(actorId: string, input: unknown, requestId?: string | null): Promise<ShippingView> {

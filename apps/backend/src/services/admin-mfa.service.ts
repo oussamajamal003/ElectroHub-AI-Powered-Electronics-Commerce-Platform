@@ -76,26 +76,32 @@ export class AdminMfaService {
 
   // ── Login: primary proof already verified by AuthService.login ───────────
   async startLogin(user: AdminUser) {
-    const [factors, security] = await Promise.all([
-      this.factorSummary(user.id),
-      prisma.adminAccountSecurity.findUnique({ where: { userId: user.id }, select: { enrollmentAllowedUntil: true } }),
-    ]);
-    const enrollmentRequired = factors.totp + factors.passkeys === 0;
-    if (enrollmentRequired && !(security?.enrollmentAllowedUntil && security.enrollmentAllowedUntil > new Date())) {
-      await securityEvent(SecurityEventType.ADMIN_MFA_CHALLENGE_FAILED, user.id);
-      throw new AppError('Two-step verification must be authorised by an owner before this account can sign in.', 403, 'ENROLLMENT_NOT_AUTHORIZED');
-    }
     const mfaToken = randomToken();
     const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MS);
-    await prisma.$transaction(async tx => {
+    const state = await prisma.$transaction(async tx => {
+      await lockUserTokenLifecycle(tx, user.id);
+      const currentUser = await tx.user.findUnique({ where: { id: user.id }, include: { role: true } });
+      if (!currentUser || !currentUser.isActive || currentUser.role.name !== 'ADMIN' ||
+        credentialFingerprint(currentUser.passwordHash) !== credentialFingerprint(user.passwordHash)) throw challengeInvalid();
+      const [factors, security] = await Promise.all([
+        this.factorSummary(user.id, tx),
+        tx.adminAccountSecurity.findUnique({ where: { userId: user.id }, select: { enrollmentAllowedUntil: true } }),
+      ]);
+      const enrollmentRequired = factors.totp + factors.passkeys === 0;
+      if (enrollmentRequired && !(security?.enrollmentAllowedUntil && security.enrollmentAllowedUntil > new Date())) {
+        await securityEvent(SecurityEventType.ADMIN_MFA_CHALLENGE_FAILED, user.id, undefined, tx);
+        return { denied: true as const };
+      }
       // A new sign-in attempt supersedes any earlier unfinished one: attempts cannot be multiplied by parallel challenges.
       await tx.adminAuthChallenge.updateMany({ where: { userId: user.id, purpose: AdminChallengePurpose.LOGIN, consumedAt: null }, data: { consumedAt: new Date() } });
       await tx.adminAuthChallenge.create({ data: { tokenHash: sha256Hex(mfaToken), userId: user.id, purpose: AdminChallengePurpose.LOGIN,
-        credentialFingerprint: credentialFingerprint(user.passwordHash), expiresAt, maxAttempts: CHALLENGE_MAX_ATTEMPTS } });
+        credentialFingerprint: credentialFingerprint(currentUser.passwordHash), expiresAt, maxAttempts: CHALLENGE_MAX_ATTEMPTS } });
+      return { denied: false as const, enrollmentRequired, factors };
     });
+    if (state.denied) throw new AppError('Two-step verification must be authorised by an owner before this account can sign in.', 403, 'ENROLLMENT_NOT_AUTHORIZED');
     return {
-      requiresMfa: true as const, mfaToken, expiresAt, enrollmentRequired,
-      factors: { totp: factors.totp > 0, passkey: factors.passkeys > 0, recoveryCode: factors.recoveryCodes > 0 },
+      requiresMfa: true as const, mfaToken, expiresAt, enrollmentRequired: state.enrollmentRequired,
+      factors: { totp: state.factors.totp > 0, passkey: state.factors.passkeys > 0, recoveryCode: state.factors.recoveryCodes > 0 },
     };
   }
 
@@ -243,9 +249,9 @@ export class AdminMfaService {
     return this.createPendingTotp(challenge.userId, challenge.user.email, 'Authenticator app');
   }
 
-  private async assertEnrollmentAllowed(userId: string) {
-    const [summary, security] = await Promise.all([this.factorSummary(userId),
-      prisma.adminAccountSecurity.findUnique({ where: { userId }, select: { enrollmentAllowedUntil: true } })]);
+  private async assertEnrollmentAllowed(userId: string, client: Prisma.TransactionClient = prisma) {
+    const [summary, security] = await Promise.all([this.factorSummary(userId, client),
+      client.adminAccountSecurity.findUnique({ where: { userId }, select: { enrollmentAllowedUntil: true } })]);
     if (summary.totp + summary.passkeys > 0) throw new AppError('Two-step verification is already set up for this account.', 409, 'ALREADY_ENROLLED');
     if (!(security?.enrollmentAllowedUntil && security.enrollmentAllowedUntil > new Date())) {
       throw new AppError('Two-step verification must be authorised by an owner before this account can sign in.', 403, 'ENROLLMENT_NOT_AUTHORIZED');
@@ -277,19 +283,29 @@ export class AdminMfaService {
 
   async confirmLoginEnrollment(mfaToken: string, factorId: string, code: string, meta?: RequestMeta) {
     const challenge = await this.loginChallenge(mfaToken);
-    await this.assertEnrollmentAllowed(challenge.userId);
-    const codes = await prisma.$transaction(async tx => {
+    const result = await prisma.$transaction(async tx => {
       await lockUserTokenLifecycle(tx, challenge.userId);
+      // Password changes and account deactivation use the same lifecycle lock. Re-read both sides of the proof
+      // after acquiring it so a challenge validated just before a credential change cannot enroll stale proof.
+      const [user, currentChallenge] = await Promise.all([
+        tx.user.findUnique({ where: { id: challenge.userId }, include: { role: true } }),
+        tx.adminAuthChallenge.findUnique({ where: { id: challenge.id } }),
+      ]);
+      if (!user || !user.isActive || user.role.name !== 'ADMIN' || !currentChallenge || currentChallenge.purpose !== AdminChallengePurpose.LOGIN ||
+        currentChallenge.consumedAt || currentChallenge.expiresAt <= new Date() || currentChallenge.attempts >= currentChallenge.maxAttempts ||
+        currentChallenge.credentialFingerprint !== credentialFingerprint(user.passwordHash) ||
+        currentChallenge.credentialFingerprint !== challenge.credentialFingerprint) throw challengeInvalid();
+      await this.assertEnrollmentAllowed(challenge.userId, tx);
       if (!await this.activatePendingTotp(tx, challenge.userId, factorId, code)) return null;
       await this.consume(tx, challenge.id);
       await tx.adminAccountSecurity.upsert({ where: { userId: challenge.userId },
         create: { userId: challenge.userId, mfaEnrolledAt: new Date() }, update: { mfaEnrolledAt: new Date(), enrollmentAllowedUntil: null } });
       await securityEvent(SecurityEventType.ADMIN_MFA_ENROLLED, challenge.userId, meta, tx);
-      return this.replaceRecoveryCodes(tx, challenge.userId);
+      return { codes: await this.replaceRecoveryCodes(tx, challenge.userId), user };
     });
-    if (!codes) return this.failAttempt(challenge.id, challenge.userId, meta);
-    const session = await this.issue(challenge.user, AdminMfaMethod.TOTP, meta);
-    return { ...session, recoveryCodes: codes };
+    if (!result) return this.failAttempt(challenge.id, challenge.userId, meta);
+    const session = await this.issue(result.user, AdminMfaMethod.TOTP, meta);
+    return { ...session, recoveryCodes: result.codes };
   }
 
   private async replaceRecoveryCodes(tx: Prisma.TransactionClient, userId: string): Promise<string[]> {

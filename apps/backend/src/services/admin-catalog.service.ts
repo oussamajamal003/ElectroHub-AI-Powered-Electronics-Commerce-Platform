@@ -229,28 +229,37 @@ export class AdminCatalogService {
 
   /**
    * Bounded batch archive/reactivate. Each row runs the same policy in its own short transaction, so one failing row never rolls back
-   * another and no long lock is held. Results are per item; one sanitized audit row summarizes the batch.
+   * another and no long lock is held. A successful product write and its item audit commit together; one additional sanitized audit row
+   * summarizes the batch.
    */
   async bulkSetProductStatus(actorId: string, status: ProductStatus, items: z.infer<typeof bulkStatusSchema>['items']) {
     const results: BulkProductResult[] = [];
-    for (const item of items) results.push(await this.bulkStatusItem(status, item.id, item.expectedUpdatedAt));
+    for (const item of items) results.push(await this.bulkStatusItem(actorId, status, item.id, item.expectedUpdatedAt));
     const summary = { updated: 0, unchanged: 0, conflict: 0, notFound: 0, rejected: 0 };
     for (const result of results) summary[BULK_SUMMARY_KEY[result.outcome]] += 1;
     const failed = summary.conflict + summary.notFound + summary.rejected > 0;
-    // The rows are already committed: a failed summary audit must not turn their truthful per-item result into a 500.
+    // Product changes already have durable per-item audit rows from their own transactions. Keep the batch summary supplementary so a
+    // transient summary-write failure cannot leave successful mutations unaudited or falsify their truthful per-item results.
     try {
       await recordAdminAudit({ actorId, action: 'PRODUCT_BULK_STATUS', resourceType: 'product', outcome: failed ? 'PARTIAL' : 'SUCCESS',
         details: { status, counts: summary, ids: items.map(item => item.id) } });
     } catch {
-      logSafely('error', 'Admin bulk status audit failed', { event: 'admin.product.bulk_status_audit_failed', actorId });
+      logSafely('warn', 'Admin bulk status summary audit failed; item audits remain durable', { event: 'admin.product.bulk_status_summary_audit_failed', actorId });
     }
     logSafely('info', 'Admin catalog change', { event: 'admin.product.bulk_status', actorId, status, ...summary });
     return { results, summary };
   }
 
-  private async bulkStatusItem(status: ProductStatus, productId: string, expected: string): Promise<BulkProductResult> {
+  private async bulkStatusItem(actorId: string, status: ProductStatus, productId: string, expected: string): Promise<BulkProductResult> {
     try {
-      const outcome = await this.db.$transaction(tx => this.applyProductStatus(tx, productId, status, expected), TX);
+      const outcome = await this.db.$transaction(async tx => {
+        const result = await this.applyProductStatus(tx, productId, status, expected);
+        if (result === 'UPDATED') {
+          await recordAdminAudit({ actorId, action: 'PRODUCT_BULK_STATUS_ITEM', resourceType: 'product', resourceId: productId,
+            outcome: 'SUCCESS', details: { status } }, tx);
+        }
+        return result;
+      }, TX);
       if (outcome === 'UNCHANGED') return { id: productId, outcome: 'UNCHANGED', message: 'Already in this state.' };
       return { id: productId, outcome: 'UPDATED', message: status === 'ACTIVE' ? 'Reactivated.' : 'Archived.' };
     } catch (error) {

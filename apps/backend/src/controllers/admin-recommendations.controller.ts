@@ -53,7 +53,7 @@ const featuredPatch = z.object({
   enabled: z.boolean().optional(),
 }).strict().refine(value => Object.keys(value).some(key => key !== 'expectedVersion'), { message: 'Choose a change to save.' });
 
-const featuredDelete = z.object({ expectedVersion: z.coerce.number().int().min(0).optional() }).strict();
+const featuredDelete = z.object({ expectedVersion: z.coerce.number().int().min(0) }).strict();
 
 const idParam = z.string().uuid().transform(value => value.toLowerCase());
 

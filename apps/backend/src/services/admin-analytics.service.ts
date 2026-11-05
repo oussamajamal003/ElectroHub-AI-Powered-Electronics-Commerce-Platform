@@ -89,6 +89,25 @@ const paidPayments = (range: AnalyticsRange) => Prisma.sql`
   FROM "payments" p
   WHERE p."status" = 'SUCCEEDED' AND p."paidAt" >= ${range.start} AND p."paidAt" < ${range.end}`;
 
+/** One most recent qualifying click per purchased order item; equal timestamps break ties by interaction id. */
+export const recommendationAttributions = (range: AnalyticsRange) => Prisma.sql`
+  WITH paid AS (${paidPayments(range)})
+  SELECT paid."orderId" AS "orderId", paid."currency" AS currency, paid."amount" AS amount,
+    oi."id" AS "itemId", latest."id" AS "interactionId"
+  FROM paid
+  JOIN "orders" o ON o."id" = paid."orderId"
+  JOIN "recommendation_preferences" rp ON rp."userId" = o."userId" AND rp."personalizationEnabled" = true
+  JOIN "order_items" oi ON oi."orderId" = o."id"
+  JOIN LATERAL (
+    SELECT pi."id"
+    FROM "product_interactions" pi
+    WHERE pi."userId" = o."userId" AND pi."productId" = oi."productId"
+      AND pi."eventType" = 'RECOMMENDATION_CLICK'
+      AND pi."occurredAt" <= o."createdAt" AND pi."occurredAt" >= o."createdAt" - INTERVAL '7 days'
+    ORDER BY pi."occurredAt" DESC, pi."id" DESC
+    LIMIT 1
+  ) latest ON true`;
+
 /** Bucket label in UTC. `column` is one of two fixed, server-owned column references (never request input). */
 const bucketExpression = (granularity: Granularity, column: '"paidAt"' | 'u."createdAt"') =>
   Prisma.raw(`to_char(date_trunc('${BUCKET_SQL[granularity].unit}', ${column}), '${BUCKET_SQL[granularity].format}')`);
@@ -288,17 +307,7 @@ export class AdminAnalyticsService {
         GROUP BY "surface", "mode", "strategy", "eventType"
         LIMIT 500`),
       this.db.$queryRaw<{ currency: string; orders: bigint | number; items: bigint | number; revenue: Prisma.Decimal }[]>(Prisma.sql`
-        WITH paid AS (${paidPayments(window.current)}),
-        attributed AS (
-          SELECT DISTINCT paid."orderId" AS "orderId", paid."currency" AS currency, paid."amount" AS amount, oi."id" AS "itemId"
-          FROM paid
-          JOIN "orders" o ON o."id" = paid."orderId"
-          JOIN "recommendation_preferences" rp ON rp."userId" = o."userId" AND rp."personalizationEnabled" = true
-          JOIN "order_items" oi ON oi."orderId" = o."id"
-          JOIN "product_interactions" pi ON pi."userId" = o."userId" AND pi."productId" = oi."productId"
-            AND pi."eventType" = 'RECOMMENDATION_CLICK'
-            AND pi."occurredAt" <= o."createdAt" AND pi."occurredAt" >= o."createdAt" - INTERVAL '7 days'
-        ),
+        WITH attributed AS (${recommendationAttributions(window.current)}),
         attributed_orders AS (SELECT DISTINCT "orderId", currency, amount FROM attributed)
         SELECT ao.currency AS currency, COUNT(*) AS orders, COALESCE(SUM(ao.amount), 0) AS revenue,
           (SELECT COUNT(DISTINCT a2."itemId") FROM attributed a2 WHERE a2.currency = ao.currency) AS items
@@ -331,7 +340,7 @@ export class AdminAnalyticsService {
       impressions: 'Recommendation impressions recorded for the window (one per batch, product and event type). Requests and admin previews are not impressions.',
       clicks: 'Recommendation clicks recorded for the window, deduplicated per batch and product.',
       ctr: 'Clicks divided by impressions for the same window. Null when there are no impressions.',
-      conversion: 'Distinct paid, non-refunded orders in the window whose customer, with personalization still enabled, clicked a recommendation for the same product within 7 days before the order was created. Last-click, consenting signed-in customers only; anonymous and non-consenting purchases are not attributed.',
+      conversion: 'Distinct paid, non-refunded orders in the window whose customer, with personalization still enabled, clicked a recommendation for the same product within 7 days before the order was created. The most recent qualifying click per order item is selected, with interaction ID breaking timestamp ties. Consenting signed-in customers only; anonymous and non-consenting purchases are not attributed.',
     });
   }
 

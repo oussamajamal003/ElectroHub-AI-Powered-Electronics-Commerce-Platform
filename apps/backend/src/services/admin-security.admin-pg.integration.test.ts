@@ -9,6 +9,7 @@ import { base32Decode, hotp, totpStep } from './admin-crypto.js';
 import { AuthService } from './auth.service.js';
 import { env } from '../config/env.js';
 import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
+import { adminMfaService } from './admin-mfa.service.js';
 
 /**
  * Task 05.2 administrator security against a real, freshly migrated, disposable PostgreSQL through the real Express stack (run only by
@@ -149,6 +150,23 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     for (const recovery of confirm.body.recoveryCodes as string[]) expect(digests.some(row => row.codeHash.includes(recovery.replace(/-/g, '')))).toBe(false);
   });
 
+  it('D08: a password change after challenge lookup prevents stale proof from committing enrollment', async () => {
+    const user = await createUser('ADMIN');
+    const login = await api().post('/api/auth/login', { email: user.email, password: PASSWORD });
+    const start = await api().post('/api/auth/admin/mfa/enrollment/start', { mfaToken: login.body.mfaToken });
+    const staleChallenge = await prisma.adminAuthChallenge.findFirstOrThrow({ where: { userId: user.id, purpose: 'LOGIN', consumedAt: null },
+      include: { user: { include: { role: true } } } });
+    await new AuthService().changePassword(user.id, PASSWORD, `${PASSWORD}!`);
+    const lookup = vi.spyOn(prisma.adminAuthChallenge, 'findUnique').mockResolvedValueOnce(staleChallenge);
+    try {
+      await expect(adminMfaService.confirmLoginEnrollment(login.body.mfaToken, start.body.factorId, code(start.body.secret)))
+        .rejects.toMatchObject({ code: 'MFA_CHALLENGE_INVALID' });
+    } finally { lookup.mockRestore(); }
+    expect(await prisma.adminMfaFactor.count({ where: { userId: user.id, verifiedAt: { not: null }, disabledAt: null } })).toBe(0);
+    expect(await prisma.adminRecoveryCode.count({ where: { userId: user.id, revokedAt: null } })).toBe(0);
+    expect(await prisma.adminAuthChallenge.count({ where: { userId: user.id, consumedAt: null } })).toBe(1);
+  });
+
   it('D04/SEC-06: a TOTP code is single-use per time step, concurrent use succeeds once, and refresh keeps MFA assurance', async () => {
     const admin = await enrolledAdmin();
     // The enrollment consumed the current step: replaying it is refused.
@@ -163,6 +181,18 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     const rotated = await api().post('/api/auth/refresh', undefined, undefined, refreshCookie(session));
     expect(rotated.status).toBe(200);
     expect((await api().get('/api/admin/catalog/products', rotated.body.accessToken)).status).toBe(200);
+  });
+
+  it('D09: concurrent password sign-ins leave only the newest MFA challenge usable', async () => {
+    const admin = await enrolledAdmin();
+    const logins = await Promise.all([1, 2].map(() => api().post('/api/auth/login', { email: admin.user.email, password: PASSWORD })));
+    expect(logins.map(result => result.status)).toEqual([200, 200]);
+    expect(await prisma.adminAuthChallenge.count({ where: { userId: admin.user.id, purpose: 'LOGIN', consumedAt: null } })).toBe(1);
+
+    const verifications = await Promise.all(logins.map(result => api().post('/api/auth/admin/mfa/totp/verify', {
+      mfaToken: result.body.mfaToken, code: code(admin.secret, 1),
+    })));
+    expect(verifications.map(result => result.status).sort()).toEqual([200, 401]);
   });
 
   it('D07/SEC-05: wrong codes are bounded per transaction and an exhausted transaction cannot be revived by a correct code', async () => {
@@ -328,5 +358,18 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     expect((await api().patch(`/api/admin/administrators/${target.user.id}/access`, { isActive: false }, owner.accessToken)).status).toBe(200);
     expect((await api().get('/api/admin/me/profile', target.accessToken)).status).toBe(401);
     expect((await api().post('/api/auth/refresh', undefined, undefined, target.cookie)).status).toBe(401);
+  });
+
+  it('SEC-10: concurrent deactivation of the last two owners leaves one active owner', async () => {
+    // Earlier integration cases intentionally leave synthetic owners behind; isolate this invariant to two owners.
+    await prisma.adminAccountSecurity.updateMany({ where: { isOwner: true }, data: { isOwner: false } });
+    const first = await enrolledAdmin({ owner: true });
+    const second = await enrolledAdmin({ owner: true });
+    const responses = await Promise.all([
+      api().patch(`/api/admin/administrators/${second.user.id}/access`, { isActive: false }, first.accessToken),
+      api().patch(`/api/admin/administrators/${first.user.id}/access`, { isActive: false }, second.accessToken),
+    ]);
+    expect(responses.filter(response => response.status === 200)).toHaveLength(1);
+    expect(await prisma.adminAccountSecurity.count({ where: { isOwner: true, user: { isActive: true } } })).toBe(1);
   });
 });

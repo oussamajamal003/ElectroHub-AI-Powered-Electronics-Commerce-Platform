@@ -266,6 +266,7 @@ export function AdminSecurityPage() {
 
     <Dialog open={open?.kind === 'codes'} onOpenChange={(next) => { if (!next) setOpen(null); }}>
       {open?.kind === 'codes' && <DialogContent>
+        <DialogTitle className={styles.visuallyHidden}>Recovery codes</DialogTitle>
         <DialogDescription asChild>
           <div>
             <RecoveryCodesReveal codes={open.codes} onConfirmed={() => { setOpen(null); toast('New recovery codes created.'); }} />

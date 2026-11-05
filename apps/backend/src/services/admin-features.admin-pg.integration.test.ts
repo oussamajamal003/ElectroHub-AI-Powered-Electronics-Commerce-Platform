@@ -1,18 +1,20 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '../lib/prisma.js';
-import { AdminAnalyticsService } from './admin-analytics.service.js';
+import { AdminAnalyticsService, recommendationAttributions } from './admin-analytics.service.js';
 import { storeSettings } from './store-settings.service.js';
 import { CheckoutService } from './checkout.service.js';
 import { invalidateShippingConfig } from './shipping-config.js';
 import { RecommendationAdminService } from './recommendation-admin.service.js';
 import { recommendationService } from './recommendation.service.js';
 import { issueImpressionToken } from './recommendation-token.js';
+import { AdminCatalogService } from './admin-catalog.service.js';
 
 /**
  * Task 05.2 business behaviour on a real, freshly migrated disposable PostgreSQL (run only by scripts/admin-security-pg.cjs):
  * analytics reconcile to seeded authoritative rows (ANA-01..05), shipping settings drive new checkout quotes without touching history
- * (COM-01), and featured pins obey eligibility, expiry and preview isolation (REC-02/03). Assertions on shared aggregates use deltas.
+ * (COM-01), featured pins obey eligibility, expiry and preview isolation (REC-02/03), and bulk status writes persist item audits (CAT-01).
+ * Assertions on shared aggregates use deltas.
  */
 const suffix = randomUUID().slice(0, 8);
 const actor = { userId: randomUUID() };
@@ -99,6 +101,37 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     expect(after.data.conversion.model).toBe('LAST_CLICK_7D_CONSENTED');
   });
 
+  it('ANA-03 selects the deterministic latest same-product click per paid item, excluding absent consent, failed/refunded and expired clicks', async () => {
+    const baseline = await analytics.recommendations('30d');
+    const optedIn = await customer('lastclick');
+    const noConsent = await customer('no-consent');
+    const expired = await customer('expired');
+    await prisma.recommendationPreference.createMany({ data: [optedIn, expired].map(userId => ({ userId, personalizationEnabled: true, consentedAt: new Date() })) });
+    const latestTime = new Date(Date.now() - 60_000);
+    const latestIds = ['00000000-0000-4000-8000-000000000001', 'ffffffff-ffff-4fff-8fff-ffffffffffff'];
+    await prisma.productInteraction.createMany({ data: [
+      { userId: optedIn, productId: ids.p1!, eventType: 'RECOMMENDATION_CLICK', surface: 'home', idempotencyKey: `lc-old-${suffix}`, occurredAt: new Date(latestTime.getTime() - 60_000) },
+      ...latestIds.map((id, index) => ({ id, userId: optedIn, productId: ids.p1!, eventType: 'RECOMMENDATION_CLICK', surface: 'home', idempotencyKey: `lc-tie-${index}-${suffix}`, occurredAt: latestTime })),
+      { userId: noConsent, productId: ids.p1!, eventType: 'RECOMMENDATION_CLICK', surface: 'home', idempotencyKey: `lc-no-consent-${suffix}`, occurredAt: latestTime },
+      { userId: expired, productId: ids.p1!, eventType: 'RECOMMENDATION_CLICK', surface: 'home', idempotencyKey: `lc-expired-${suffix}`, occurredAt: new Date(Date.now() - 8 * day) },
+    ] });
+    const purchase = await paidOrder(optedIn, [{ productId: ids.p1!, quantity: 3, unitPrice: '50.00' }], { status: 'SUCCEEDED', paidAt: new Date(), amount: '150.00' });
+    const excluded = await Promise.all([
+      paidOrder(noConsent, [{ productId: ids.p1!, quantity: 1, unitPrice: '50.00' }], { status: 'SUCCEEDED', paidAt: new Date(), amount: '50.00' }),
+      paidOrder(expired, [{ productId: ids.p1!, quantity: 1, unitPrice: '50.00' }], { status: 'SUCCEEDED', paidAt: new Date(), amount: '50.00' }),
+      paidOrder(optedIn, [{ productId: ids.p1!, quantity: 1, unitPrice: '50.00' }], { status: 'FAILED', paidAt: null, amount: '50.00' }),
+      paidOrder(optedIn, [{ productId: ids.p1!, quantity: 1, unitPrice: '50.00' }], { status: 'REFUNDED', paidAt: new Date(), amount: '50.00' }),
+    ]);
+    const rows = await prisma.$queryRaw<{ orderId: string; itemId: string; interactionId: string }[]>(recommendationAttributions({ start: new Date(Date.now() - 30 * day), end: new Date(Date.now() + day) }));
+    expect(rows.filter(row => row.orderId === purchase)).toMatchObject([{ interactionId: latestIds[1] }]);
+    expect(rows.filter(row => excluded.includes(row.orderId))).toHaveLength(0);
+    const after = await analytics.recommendations('30d');
+    expect(after.data.conversion.attributedOrders - baseline.data.conversion.attributedOrders).toBe(1);
+    expect(after.data.conversion.attributedOrderItems - baseline.data.conversion.attributedOrderItems).toBe(1);
+    const usd = (result: typeof after) => Number(result.data.conversion.attributedRevenue.find(row => row.currency === 'USD')?.amount ?? 0);
+    expect(usd(after) - usd(baseline)).toBe(150);
+  });
+
   it('ANA-04 image-search activity is measured from server events with no image or identity columns', async () => {
     const correlation = randomUUID();
     await prisma.analyticsEvent.createMany({ data: [
@@ -118,6 +151,22 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
   it('ANA-05 categories are labelled as current-catalog classification', async () => {
     const categories = await analytics.categories('30d');
     expect(JSON.stringify(categories)).toContain('CURRENT_CATALOG_CATEGORY');
+  });
+
+  it('CAT-01 bulk status changes commit only with their per-product audit and retain the batch summary', async () => {
+    const targetId = await product('Bulk Audit', '19.00');
+    const current = await prisma.product.findUniqueOrThrow({ where: { id: targetId }, select: { updatedAt: true } });
+    const result = await new AdminCatalogService().bulkSetProductStatus(actor.userId, 'INACTIVE', [
+      { id: targetId, expectedUpdatedAt: current.updatedAt.toISOString() },
+    ]);
+
+    expect(result.results).toMatchObject([{ id: targetId, outcome: 'UPDATED' }]);
+    expect(await prisma.product.findUniqueOrThrow({ where: { id: targetId }, select: { status: true } })).toEqual({ status: 'INACTIVE' });
+    expect(await prisma.adminAuditLog.findMany({ where: { actorId: actor.userId, action: 'PRODUCT_BULK_STATUS_ITEM', resourceId: targetId },
+      select: { outcome: true, details: true } })).toEqual([{ outcome: 'SUCCESS', details: { status: 'INACTIVE' } }]);
+    expect(await prisma.adminAuditLog.findMany({ where: { actorId: actor.userId, action: 'PRODUCT_BULK_STATUS', outcome: 'SUCCESS' },
+      select: { details: true } })).toEqual([expect.objectContaining({ details: expect.objectContaining({ status: 'INACTIVE', counts: { updated: 1,
+        unchanged: 0, conflict: 0, notFound: 0, rejected: 0 } }) })]);
   });
 
   it('COM-01 shipping settings change NEW checkout quotes and the revision, never historical order amounts; stale versions conflict', async () => {

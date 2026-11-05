@@ -101,7 +101,7 @@
 
 // ─── Table surface ────────────────────────────────────────
 // While a newer page/filter loads, the previous rows stay (no empty flash) but dim under a thin progress bar, so they never pass for current.
-.tableCard { position: relative; display: grid; min-width: 0; background: $color-background;
+.tableCard { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; overflow-x: clip; background: $color-background;
   &[aria-busy='true'] { tbody { opacity: .55; transition: opacity 120ms linear; }
     &::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; z-index: 2;
       background: linear-gradient(90deg, transparent, $color-primary, transparent) 0 0 / 40% 100% no-repeat, rgba($color-primary, .15);

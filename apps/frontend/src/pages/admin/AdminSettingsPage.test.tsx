@@ -67,7 +67,7 @@ function renderPage(path = '/admin/settings') {
     </MemoryRouter>
   </QueryClientProvider>;
   const result = render(content());
-  return { ...result, refresh: () => result.rerender(content()) };
+  return { ...result, client, refresh: () => result.rerender(content()) };
 }
 
 /**
@@ -139,6 +139,20 @@ describe('store section', () => {
     expect(within(banner).getByRole('button', { name: 'Reload latest values' })).toBeInTheDocument();
     expect(screen.getByLabelText('Store name')).toHaveValue('Northwind');
     expect(screen.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
+  });
+
+  it('keeps the draft and offers retry when reloading after a conflict fails', async () => {
+    storeSave.mockRejectedValueOnce(new ApiError(409, 'changed', { error: { code: 'VERSION_CONFLICT', message: 'changed' } }, 'VERSION_CONFLICT'));
+    const { client } = renderPage();
+    vi.spyOn(client, 'refetchQueries').mockImplementation(async (_filters, options) => {
+      if (options?.throwOnError) throw new Error('network unavailable');
+    });
+    setValue(screen.getByLabelText('Store name'), 'Unsaved draft');
+    submit('Save Changes');
+    fireEvent.click(await screen.findByRole('button', { name: 'Reload latest values' }));
+    expect(await screen.findByText(/could not reload the latest values/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Store name')).toHaveValue('Unsaved draft');
+    expect(screen.getByRole('button', { name: 'Reload latest values' })).toBeEnabled();
   });
 
   it('shows a server validation message beside the field it belongs to', async () => {

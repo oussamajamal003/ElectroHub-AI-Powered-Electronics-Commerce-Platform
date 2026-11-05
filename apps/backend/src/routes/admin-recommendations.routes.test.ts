@@ -176,6 +176,10 @@ describe('admin recommendation routes', () => {
     expect(noChange.status).toBe(400);
 
     service.deletePin.mockResolvedValue(undefined);
+    const missingVersion = await as(request(app).delete(`/api/admin/recommendations/featured/${ids.pin}`));
+    expect(missingVersion.status).toBe(400);
+    expect(service.deletePin).not.toHaveBeenCalled();
+
     const deleted = await as(request(app).delete(`/api/admin/recommendations/featured/${ids.pin}?expectedVersion=2`));
     expect(deleted.status).toBe(204);
     expect(service.deletePin).toHaveBeenCalledWith(ids.pin, expect.objectContaining({ userId: ids.admin }), 2);

@@ -103,18 +103,33 @@ describe('AdminCatalogService.bulkSetProductStatus', () => {
     expect(results[0]).toMatchObject({ outcome: 'CONFLICT' });
   });
 
-  it('writes exactly one sanitized audit row: SUCCESS when everything applied, PARTIAL when any item failed', async () => {
+  it('writes a transaction-bound item audit plus one sanitized summary: SUCCESS when everything applied, PARTIAL on failures', async () => {
     db.product.findUnique.mockResolvedValueOnce(row('ACTIVE'));
     db.product.updateMany.mockResolvedValueOnce({ count: 1 });
     await service.bulkSetProductStatus(ADMIN, 'INACTIVE', [{ id: A, expectedUpdatedAt: stamp }]);
-    expect(audit.recordAdminAudit).toHaveBeenCalledTimes(1);
-    expect(audit.recordAdminAudit).toHaveBeenCalledWith({ actorId: ADMIN, action: 'PRODUCT_BULK_STATUS', resourceType: 'product', outcome: 'SUCCESS',
+    expect(audit.recordAdminAudit).toHaveBeenCalledTimes(2);
+    expect(audit.recordAdminAudit).toHaveBeenNthCalledWith(1, { actorId: ADMIN, action: 'PRODUCT_BULK_STATUS_ITEM', resourceType: 'product', resourceId: A,
+      outcome: 'SUCCESS', details: { status: 'INACTIVE' } }, db);
+    expect(audit.recordAdminAudit).toHaveBeenNthCalledWith(2, { actorId: ADMIN, action: 'PRODUCT_BULK_STATUS', resourceType: 'product', outcome: 'SUCCESS',
       details: { status: 'INACTIVE', counts: { updated: 1, unchanged: 0, conflict: 0, notFound: 0, rejected: 0 }, ids: [A] } });
 
     audit.recordAdminAudit.mockClear();
     db.product.findUnique.mockResolvedValueOnce(null);
     await service.bulkSetProductStatus(ADMIN, 'INACTIVE', [{ id: B, expectedUpdatedAt: stamp }]);
     expect(audit.recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'PARTIAL' }));
+  });
+
+  it('rejects an item when its transactional audit insert fails, so the product write rolls back with it', async () => {
+    db.product.findUnique.mockResolvedValueOnce(row('ACTIVE'));
+    db.product.updateMany.mockResolvedValueOnce({ count: 1 });
+    audit.recordAdminAudit.mockRejectedValueOnce(new Error('audit database unavailable'));
+
+    const { results, summary } = await service.bulkSetProductStatus(ADMIN, 'INACTIVE', [{ id: A, expectedUpdatedAt: stamp }]);
+
+    expect(results).toEqual([{ id: A, outcome: 'REJECTED', message: 'This product could not be changed. Try again.' }]);
+    expect(summary).toMatchObject({ updated: 0, rejected: 1 });
+    expect(audit.recordAdminAudit).toHaveBeenNthCalledWith(1, expect.objectContaining({ action: 'PRODUCT_BULK_STATUS_ITEM', resourceId: A }), db);
+    expect(audit.recordAdminAudit).toHaveBeenNthCalledWith(2, expect.objectContaining({ action: 'PRODUCT_BULK_STATUS', outcome: 'PARTIAL' }));
   });
 
   it('keeps the single-item endpoint behaviour: a stale archive still raises PRODUCT_CONFLICT and writes no audit row', async () => {

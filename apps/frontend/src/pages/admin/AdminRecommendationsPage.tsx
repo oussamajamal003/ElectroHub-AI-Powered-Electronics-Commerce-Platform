@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
 import { Input } from '@/components/ui/Input';
+import { SearchSelect } from '@/components/ui/SearchSelect';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import {
   ConfirmDialog, EmptyRows, KpiCard, PageHeader, QueryProblem, StatusPill, TableCard, useAdminToast, type Tone,
@@ -14,6 +15,7 @@ import {
   type FeaturedPin, type PinState, type RecommendationPeriod, type RecommendationSectionMode, type RecommendationSurfaceKey, type SectionConfig,
 } from '@/features/admin/recommendations/api';
 import { railCopy } from '@/features/recommendations/labels';
+import { useAdminProducts } from '@/features/admin/products/api';
 import styles from './AdminRecommendationsPage.module.scss';
 
 const TABS = ['overview', 'strategies', 'featured', 'preview'] as const;
@@ -30,6 +32,12 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CRUMBS = [{ label: 'Dashboard', to: '/admin' }, { label: 'Recommendations' }];
 const percent = (value: number | null) => value === null ? 'No data yet' : `${(value * 100).toFixed(1)}%`;
 const toIso = (value: string) => value ? new Date(value).toISOString() : null;
+const toDateTimeLocal = (value: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+};
 const STALE_MESSAGE = 'This changed since you loaded it. Reload to see the latest version, then try again.';
 
 function staleOrMessage(error: unknown, fallback: string) {
@@ -130,6 +138,8 @@ function StrategiesPanel() {
 function PinDialog({ open, onOpenChange, surface }: { open: boolean; onOpenChange: (open: boolean) => void; surface: RecommendationSurfaceKey | undefined }) {
   const { createPin } = useRecommendationMutations();
   const toast = useAdminToast();
+  const [productSearch, setProductSearch] = useState('');
+  const [productPage, setProductPage] = useState(1);
   const [productId, setProductId] = useState('');
   const [pinSurface, setPinSurface] = useState<RecommendationSurfaceKey>(surface ?? 'home');
   const [position, setPosition] = useState('0');
@@ -138,10 +148,14 @@ function PinDialog({ open, onOpenChange, surface }: { open: boolean; onOpenChang
   const [enabled, setEnabled] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
+  // Filter by physical quantity below rather than catalog stock status: LOW_STOCK remains purchasable while quantity is positive.
+  const products = useAdminProducts({ q: productSearch.trim() || undefined, page: productPage, status: 'ACTIVE', sort: 'name', order: 'asc' });
+  const eligibleProducts = (products.data?.data ?? []).filter(product => product.storefrontVisible && product.category.isActive && (product.inventory?.quantity ?? 0) > 0);
+  const productOptions = eligibleProducts.map(product => ({ value: product.id, label: `${product.name} · ${product.sku}` }));
 
   const validate = () => {
     const next: Record<string, string> = {};
-    if (!UUID.test(productId.trim())) next.productId = 'Enter the product ID (a UUID) from the product page.';
+    if (!productId) next.productId = 'Choose an eligible product.';
     const pos = Number(position);
     if (!/^\d{1,2}$/.test(position) || pos > 99) next.position = 'Enter a whole number from 0 to 99.';
     if (startsAt && endsAt && new Date(endsAt) <= new Date(startsAt)) next.endsAt = 'The end must be after the start.';
@@ -153,7 +167,7 @@ function PinDialog({ open, onOpenChange, surface }: { open: boolean; onOpenChang
     event.preventDefault();
     setServerError(null);
     if (!validate()) return;
-    createPin.mutate({ productId: productId.trim().toLowerCase(), surface: pinSurface, position: Number(position),
+    createPin.mutate({ productId, surface: pinSurface, position: Number(position),
       startsAt: toIso(startsAt), endsAt: toIso(endsAt), enabled }, {
       onSuccess: () => { toast('Featured product added.'); onOpenChange(false); },
       onError: error => setServerError(errorMessage(error, 'Could not add this product.')),
@@ -165,9 +179,16 @@ function PinDialog({ open, onOpenChange, surface }: { open: boolean; onOpenChang
       <DialogTitle>Add featured product</DialogTitle>
       <DialogDescription>Only products that are active, visible and in stock can be featured.</DialogDescription>
       <form onSubmit={submit} noValidate className={styles.form}>
-        <label className={styles.field}>Product ID
-          <Input value={productId} onChange={event => setProductId(event.target.value)} aria-invalid={errors.productId ? true : undefined} aria-describedby="pin-product-error" />
-        </label>
+        <Input label="Search products" value={productSearch} onChange={event => { setProductSearch(event.target.value); setProductPage(1); }} placeholder="Search by name or SKU" />
+        <SearchSelect label="Eligible product" value={productId || undefined} onValueChange={value => { setProductId(value); setErrors(current => ({ ...current, productId: '' })); }}
+          options={productOptions} placeholder={products.isPending ? 'Loading products…' : 'Choose a product'} searchPlaceholder="Filter loaded products"
+          emptyText={products.isError ? 'Products could not be loaded' : 'No eligible products in these results. Search by name or SKU, or browse another page.'} error={errors.productId} disabled={products.isFetching || productOptions.length === 0}
+          helperText="Only active, visible products with stock are listed. Search by name or SKU to find products beyond this page." />
+        {products.data?.meta && products.data.meta.totalPages > 1 && <div className={styles.actions} aria-label="Product result pages">
+          <Button type="button" variant="outline" size="small" disabled={productPage <= 1 || products.isFetching} onClick={() => setProductPage(page => page - 1)}>Previous products</Button>
+          <span className={styles.help}>Page {products.data.meta.page} of {products.data.meta.totalPages}</span>
+          <Button type="button" variant="outline" size="small" disabled={productPage >= products.data.meta.totalPages || products.isFetching} onClick={() => setProductPage(page => page + 1)}>Next products</Button>
+        </div>}
         {errors.productId && <p id="pin-product-error" role="alert" className={styles.error}>{errors.productId}</p>}
         <label className={styles.field}>Placement
           <select value={pinSurface} onChange={event => setPinSurface(event.target.value as RecommendationSurfaceKey)} className={styles.select}>
@@ -196,10 +217,73 @@ function PinDialog({ open, onOpenChange, surface }: { open: boolean; onOpenChang
   </Dialog>;
 }
 
+function PinEditDialog({ pin, open, onOpenChange }: { pin: FeaturedPin; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { updatePin } = useRecommendationMutations();
+  const toast = useAdminToast();
+  const [position, setPosition] = useState(String(pin.position));
+  const [startsAt, setStartsAt] = useState(() => toDateTimeLocal(pin.startsAt));
+  const [endsAt, setEndsAt] = useState(() => toDateTimeLocal(pin.endsAt));
+  const [enabled, setEnabled] = useState(pin.enabled);
+  const [error, setError] = useState<string | null>(null);
+
+  // The row stays mounted while its dialog is closed; every open must reflect the latest pin version, not an old draft.
+  useEffect(() => {
+    if (!open) return;
+    setPosition(String(pin.position));
+    setStartsAt(toDateTimeLocal(pin.startsAt));
+    setEndsAt(toDateTimeLocal(pin.endsAt));
+    setEnabled(pin.enabled);
+    setError(null);
+  }, [open, pin]);
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const nextPosition = Number(position);
+    if (!/^\d{1,2}$/.test(position) || nextPosition > 99) { setError('Enter a whole number from 0 to 99.'); return; }
+    if (startsAt && endsAt && new Date(endsAt) <= new Date(startsAt)) { setError('The end must be after the start.'); return; }
+    setError(null);
+    const startUnchanged = startsAt === toDateTimeLocal(pin.startsAt);
+    const endUnchanged = endsAt === toDateTimeLocal(pin.endsAt);
+    updatePin.mutate({ id: pin.id, expectedVersion: pin.version, position: nextPosition, enabled,
+      ...(startUnchanged ? {} : { startsAt: toIso(startsAt) }),
+      ...(endUnchanged ? {} : { endsAt: toIso(endsAt) }),
+    }, {
+      onSuccess: () => { toast('Featured placement updated.'); onOpenChange(false); },
+      onError: failure => setError(staleOrMessage(failure, 'Could not update this placement.')),
+    });
+  };
+
+  return <Dialog open={open} onOpenChange={onOpenChange}>
+    <DialogContent>
+      <DialogTitle>Edit featured product</DialogTitle>
+      <DialogDescription>Update when this product appears, its position, or whether the placement is active.</DialogDescription>
+      <form onSubmit={submit} noValidate className={styles.form}>
+        <p className={styles.help}>{pin.product?.name ?? 'Product'} · {SURFACE_LABEL[pin.surface]}</p>
+        <label className={styles.field}>Position (0 is first)
+          <Input inputMode="numeric" value={position} onChange={event => setPosition(event.target.value)} aria-invalid={Boolean(error) || undefined} />
+        </label>
+        <label className={styles.field}>Starts (optional)
+          <input type="datetime-local" value={startsAt} onChange={event => setStartsAt(event.target.value)} className={styles.input} />
+        </label>
+        <label className={styles.field}>Ends (optional)
+          <input type="datetime-local" value={endsAt} onChange={event => setEndsAt(event.target.value)} className={styles.input} />
+        </label>
+        <label className={styles.checkLabel}><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} /> Active</label>
+        {error && <p role="alert" className={styles.error}>{error}</p>}
+        <div className={styles.actions}>
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={updatePin.isPending}>Cancel</Button>
+          <Button type="submit" disabled={updatePin.isPending}>{updatePin.isPending ? 'Saving…' : 'Save changes'}</Button>
+        </div>
+      </form>
+    </DialogContent>
+  </Dialog>;
+}
+
 function FeaturedRow({ pin }: { pin: FeaturedPin }) {
   const { updatePin, deletePin } = useRecommendationMutations();
   const toast = useAdminToast();
   const [confirming, setConfirming] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const name = pin.product?.name ?? 'Product';
 
@@ -222,7 +306,9 @@ function FeaturedRow({ pin }: { pin: FeaturedPin }) {
     <td className={styles.actionsCell}>
       <Button variant="ghost" size="small" onClick={toggle} disabled={updatePin.isPending}
         aria-label={`${pin.enabled ? 'Pause' : 'Resume'} featured ${name}`}>{pin.enabled ? 'Pause' : 'Resume'}</Button>
+      <Button variant="ghost" size="small" onClick={() => setEditing(true)} aria-label={`Edit featured ${name}`}>Edit</Button>
       <Button variant="ghost" size="small" onClick={() => setConfirming(true)} aria-label={`Remove featured ${name}`}>Remove</Button>
+      <PinEditDialog pin={pin} open={editing} onOpenChange={setEditing} />
       <ConfirmDialog open={confirming} onOpenChange={setConfirming} title={`Remove ${name} from featured?`}
         description="The product stays in the store; it just stops being featured here." confirmLabel="Remove" destructive
         pending={deletePin.isPending} error={deletePin.isError ? errorMessage(deletePin.error) : undefined} onConfirm={remove}>

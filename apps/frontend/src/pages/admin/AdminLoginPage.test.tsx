@@ -1,10 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { BrowserRouter, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { AdminLoginPage } from './AdminLoginPage';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { ApiError } from '@/lib/api';
+
+const { mockStartAuthentication } = vi.hoisted(() => ({ mockStartAuthentication: vi.fn() }));
+vi.mock('@simplewebauthn/browser', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@simplewebauthn/browser')>();
+  return { ...actual, browserSupportsWebAuthn: () => false, startAuthentication: (...args: unknown[]) => mockStartAuthentication(...args) };
+});
 
 vi.mock('@/features/auth/context/AuthContext', () => ({
   useAuth: vi.fn(),
@@ -224,6 +231,29 @@ describe('AdminLoginPage', () => {
     expect(await screen.findByRole('heading', { name: "Verify it's you" })).toBeInTheDocument();
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(mockLogout).not.toHaveBeenCalled();
+  });
+
+  it('keeps passkey sign-in unavailable when the browser does not support WebAuthn', async () => {
+    mockLogin.mockResolvedValueOnce({
+      requiresMfa: true,
+      mfaToken: 'challenge-token-1234567890',
+      expiresAt: new Date(Date.now() + 300000).toISOString(),
+      factors: { totp: true, passkey: true, recoveryCode: true },
+      enrollmentRequired: false,
+    });
+    renderComponent();
+
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'admin@electrohub.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password/i), { target: { value: 'AdminPassword123!' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Sign In$/i }));
+    await screen.findByRole('heading', { name: "Verify it's you" });
+
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Passkey' }));
+    const passkeyButton = await screen.findByRole('button', { name: 'Use passkey' });
+    expect(passkeyButton).toBeDisabled();
+    expect(passkeyButton.closest('[role="tabpanel"]')).toHaveTextContent(/Passkeys are not available in this browser/);
+    fireEvent.click(passkeyButton);
+    expect(mockStartAuthentication).not.toHaveBeenCalled();
   });
 
   describe('return path after sign-in', () => {

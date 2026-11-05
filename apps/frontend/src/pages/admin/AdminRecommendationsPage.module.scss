@@ -30,7 +30,7 @@
 }
 .tableScroll {
   // Narrow screens scroll the table inside its card instead of widening the page; focusable so keyboard users can scroll it.
-  overflow-x: auto; max-width: 100%;
+  width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; overflow-x: auto;
   &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; }
 }
 .table {

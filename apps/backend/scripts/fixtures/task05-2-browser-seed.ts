@@ -70,6 +70,10 @@ async function main() {
   const invitationToken = `qa-invitation-${randomUUID()}`;
   await prisma.adminInvitation.create({ data: { email: 'newhire@qa.invalid', tokenHash: createHash('sha256').update(invitationToken).digest('hex'), invitedById: owner.id,
     expiresAt: new Date(Date.now() + 3 * day), deliveryStatus: 'SENT', sendCount: 1, lastSentAt: new Date() } });
+  // A separate pending row is old enough to exercise resend without weakening the production cooldown. Its token is never issued to a browser.
+  const resendToken = `qa-resend-${randomUUID()}`;
+  await prisma.adminInvitation.create({ data: { email: 'resendable@qa.invalid', tokenHash: createHash('sha256').update(resendToken).digest('hex'), invitedById: owner.id,
+    expiresAt: new Date(Date.now() + 3 * day), deliveryStatus: 'SENT', sendCount: 1, lastSentAt: new Date(Date.now() - 2 * 60_000) } });
   writeFileSync(out, JSON.stringify({ ownerEmail: owner.email, staffEmail: staff.email, customerEmail: customers[0].email, password, invitationToken }, null, 2));
 }
 

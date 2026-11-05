@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
-import { startAuthentication } from '@simplewebauthn/browser';
+import { browserSupportsWebAuthn, startAuthentication } from '@simplewebauthn/browser';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { isAdminMfaRequired, type AdminMfaRequired } from '@/features/auth/types';
@@ -64,6 +64,7 @@ export function AdminLoginPage() {
   const [touched, setTouched] = useState({ email: false, password: false });
   const [submitted, setSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const passkeysSupported = browserSupportsWebAuthn();
 
   // Tick once a second while a challenge is open so the countdown and expiry stay accurate.
   useEffect(() => {
@@ -356,9 +357,9 @@ export function AdminLoginPage() {
                 )}
                 {availableMethods.includes('passkey') && (
                   <TabsContent value="passkey" className={styles.form}>
-                    <PasskeySupportNotice />
+                    <PasskeySupportNotice supported={passkeysSupported} />
                     {challengeError && <Alert variant="error">{challengeError}</Alert>}
-                    <Button type="button" onClick={verifyPasskey} isLoading={challengePending}>Use passkey</Button>
+                    <Button type="button" onClick={verifyPasskey} isLoading={challengePending} disabled={!passkeysSupported}>Use passkey</Button>
                   </TabsContent>
                 )}
                 {availableMethods.includes('recovery') && (
