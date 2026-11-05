@@ -131,3 +131,11 @@ An initial restricted browser run was stopped because its frontend was unreachab
 Full-suite results remain recorded as failures despite successful isolated reruns. The separate metrics-database target was not changed
 or written to. Shared DEV provisioning, PROD migrations, deployment and merge were not performed in this finalization run.
 Actual remote CI and review status belong to the draft PR's exact head; this document does not assert them before execution.
+
+### PR CI correction
+
+Draft PR #49 was created against `develop`. The first remote migration-policy failure exposed a historical delivery-migration fixture
+that incorrectly treated every newer checked-in migration as already applied. The fixture now reconstructs the checkout at that delivery
+cutover and explicitly asserts that applying a later migration still makes the older gap unsafe. Migration ordering enforcement is unchanged.
+`node --test .github/scripts/ci-safety.test.cjs`: 26 passed; `node .github/scripts/check-workflow-policy.cjs`: passed.
+The owner explicitly requested automatic CI fixes; subsequent status must be checked on the pushed correction SHA.
