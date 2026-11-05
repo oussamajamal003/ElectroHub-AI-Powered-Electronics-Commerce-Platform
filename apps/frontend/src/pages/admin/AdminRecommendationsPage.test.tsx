@@ -64,6 +64,33 @@ beforeEach(() => {
 });
 
 describe('AdminRecommendationsPage', () => {
+  it('keeps icon tabs named and navigable with the Radix arrow-key pattern', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const overviewTab = screen.getByRole('tab', { name: 'Overview' });
+    expect(overviewTab.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    await user.click(overviewTab);
+    await user.keyboard('{ArrowRight}');
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Strategies' })).toHaveAttribute('aria-selected', 'true'));
+    expect(screen.getByRole('tab', { name: 'Strategies' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('location')).toHaveTextContent('?tab=strategies');
+  });
+
+  it('shows content-shaped loading states for each management section', async () => {
+    vi.mocked(useRecommendationOverview).mockReturnValue({ data: undefined, isPending: true, isError: false, refetch: vi.fn() } as never);
+    vi.mocked(useRecommendationConfigurations).mockReturnValue({ data: undefined, isPending: true, isError: false, refetch: vi.fn() } as never);
+    vi.mocked(useFeaturedPins).mockReturnValue({ data: undefined, isPending: true, isError: false, refetch: vi.fn() } as never);
+    vi.mocked(useRecommendationPreview).mockReturnValue({ data: undefined, isFetching: true, isError: false, refetch: vi.fn() } as never);
+    renderPage();
+    expect(screen.getByRole('status', { name: 'Loading recommendation performance' })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Strategies' }));
+    expect(screen.getByRole('status', { name: 'Loading strategy settings' })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Featured' }));
+    expect(screen.getByRole('status', { name: 'Loading featured products' })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Preview' }));
+    expect(screen.getByRole('status', { name: 'Loading recommendation preview' })).toBeInTheDocument();
+  });
+
   it('shows the overview by default and keeps the active tab in the URL', async () => {
     renderPage();
     expect(screen.getByText('Performance')).toBeInTheDocument();
@@ -232,11 +259,12 @@ describe('AdminRecommendationsPage', () => {
     vi.mocked(useRecommendationPreview).mockReturnValue({ isFetching: false, isError: false, refetch: vi.fn(), data: { recorded: false, context: null, sections: [{
       mode: 'POPULAR_PRODUCTS', surface: 'home', strategy: 'MERCHANDISED_PIN', isPersonalized: false, isFallback: true, fallbackReason: 'NO_MEASURED_DEMAND',
       modelVersion: null, embeddingVersion: null, algorithmVersion: 'merchandised-pin-v1', context: null, impressionToken: null,
-      items: [{ rank: 1, featured: true, product: { id: PRODUCT, name: 'QA Probe Headphones' } }],
+      items: [{ rank: 1, featured: true, product: { id: PRODUCT, name: 'QA Probe Headphones', price: '19.99', currency: 'USD', category: { name: 'Audio' } } }],
     }] } } as never);
     renderPage('/admin/recommendations?tab=preview');
     expect(screen.getByRole('heading', { name: 'Featured' })).toBeInTheDocument();
     expect(screen.getByText('QA Probe Headphones').closest('li')).toHaveTextContent('Featured');
+    expect(screen.getByText('$19.99')).toBeInTheDocument();
     expect(screen.getByText(/Previews are not recorded as impressions or clicks/)).toBeInTheDocument();
   });
 });

@@ -7,6 +7,7 @@ import { useAdminToast } from '@/features/admin/shared/AdminUi';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
 import { isVersionConflict, useUpdateStoreSettings, type StoreProfile } from '../api';
 import { SettingsConflictNotice } from './SettingsConflictNotice';
+import settingsStyles from './SettingsForms.module.scss';
 
 /** Editable text state: nullable server fields are held as '' and sent as '' (the server stores '' as null). */
 type Draft = Record<'storeName' | 'supportEmail' | 'supportPhone' | 'addressLine1' | 'addressLine2' | 'city' | 'region' | 'postalCode' | 'country' | 'timezone', string>;
@@ -86,6 +87,7 @@ export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload }:
     {conflict && <SettingsConflictNotice subject="settings" onReload={onReload} />}
     {formError && <p className={styles.formError} role="alert">{formError}</p>}
     <div className={styles.fieldGrid}>
+      <h3 className={settingsStyles.groupHeading}>Store and contact</h3>
       <Input label="Store name" value={draft.storeName} onChange={event => update('storeName', event.target.value)} error={errors.storeName}
         maxLength={120} fullWidth autoComplete="organization" />
       <Input label="Store email" type="email" value={draft.supportEmail} onChange={event => update('supportEmail', event.target.value)}
@@ -96,6 +98,7 @@ export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload }:
         <span className={styles.fieldLabel}>Currency</span>
         <span className={styles.fieldHelp} data-testid="store-currency">USD – US Dollar (fixed)</span>
       </div>
+      <h3 className={settingsStyles.groupHeading}>Address and locale</h3>
       <Input label="Address line 1" value={draft.addressLine1} onChange={event => update('addressLine1', event.target.value)}
         error={errors.addressLine1} maxLength={255} fullWidth autoComplete="address-line1" />
       <Input label="Address line 2" value={draft.addressLine2} onChange={event => update('addressLine2', event.target.value)}
@@ -113,7 +116,7 @@ export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload }:
           error={errors.timezone} fullWidth aria-label="Time zone" />
       </div>
     </div>
-    <div className={styles.formActions}>
+    <div className={`${styles.formActions} ${settingsStyles.formActions}`}>
       <Button type="submit" isLoading={save.isPending} disabled={!dirty || save.isPending || conflict}>Save Changes</Button>
     </div>
   </form>;

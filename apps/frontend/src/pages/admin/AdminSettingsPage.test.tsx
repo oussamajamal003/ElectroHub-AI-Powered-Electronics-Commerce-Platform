@@ -92,6 +92,12 @@ beforeEach(() => {
 });
 
 describe('store section', () => {
+  it('announces the loading state without exposing decorative placeholder controls', () => {
+    vi.mocked(useStoreSettings).mockReturnValue(query(undefined, { isPending: true }) as unknown as Hook<typeof useStoreSettings>);
+    renderPage();
+    expect(screen.getByRole('status', { name: 'Loading store settings' })).toHaveAttribute('aria-busy', 'true');
+    expect(screen.queryByRole('button', { name: 'Save Changes' })).not.toBeInTheDocument();
+  });
   it('keeps the original draft version when a background refetch brings newer store settings', async () => {
     const page = renderPage();
     setValue(screen.getByLabelText('Store name'), 'My edited name');

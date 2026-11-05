@@ -60,8 +60,15 @@ describe('AdminAnalyticsPage', () => {
   });
   it('shows a skeleton with busy regions while every report is loading, not zeros', () => {
     mockHooks(Object.fromEntries(Object.keys(hooks).map(name => [name, loading()])));
-    renderPage();
+    const { container } = renderPage();
     expect(screen.getByRole('region', { name: 'Overview' })).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByTestId('analytics-overview-skeleton')).toBeInTheDocument();
+    expect(screen.getByTestId('analytics-products-skeleton')).toBeInTheDocument();
+    expect(screen.getByTestId('analytics-categories-skeleton')).toBeInTheDocument();
+    expect(screen.getByTestId('analytics-image-search-skeleton')).toBeInTheDocument();
+    expect(screen.getByTestId('analytics-inventory-skeleton')).toBeInTheDocument();
+    expect(screen.getByTestId('analytics-deliveries-skeleton')).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="analytics-products-skeleton"]')?.children.length).toBe(1);
     expect(screen.queryByText('Paid revenue')).not.toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
   });
@@ -95,6 +102,59 @@ describe('AdminAnalyticsPage', () => {
     expect(screen.getByRole('img', { name: /Revenue over time in USD\. Peak \$310\.50/ })).toBeInTheDocument();
     const table = screen.getByRole('table', { name: 'Revenue per day in USD' });
     expect(within(table).getAllByRole('row')).toHaveLength((fx.overviewFixture.data.revenueSeries.byCurrency[0]?.points.length ?? 0) + 1);
+  });
+
+  it('shows a ranked product view with truthful comparison bars and product edit links', () => {
+    renderPage();
+    const section = screen.getByRole('region', { name: 'Top products' });
+    expect(within(section).getByRole('list', { name: 'Top products ranked by units sold' })).toBeInTheDocument();
+    expect(within(section).getByRole('link', { name: 'Studio Monitor Headphones' })).toHaveAttribute('href', '/admin/products/p-1/edit');
+    expect(within(section).getByRole('table', { name: 'Top products ranked by units sold' })).toBeInTheDocument();
+    expect(within(section).getAllByText(/units · .* orders/)).toHaveLength(fx.productsFixture.data.byUnits.length);
+  });
+
+  it('shows category revenue comparisons without combining currencies', () => {
+    renderPage();
+    const section = screen.getByRole('region', { name: 'Revenue by category' });
+    expect(within(section).getByRole('table', { name: 'Paid revenue by current catalog category' })).toBeInTheDocument();
+    expect(within(section).getByRole('link', { name: 'Audio' })).toHaveAttribute('href', '/admin/products?categoryId=c-1');
+    expect(within(section).getAllByRole('img').length).toBeGreaterThan(0);
+    expect(within(section).getByRole('img', { name: /Audio:.*70/ }).firstElementChild).toHaveStyle({ width: '70%' });
+    expect(within(section).getByRole('img', { name: /Peripherals:.*30/ }).firstElementChild).toHaveStyle({ width: '30%' });
+  });
+
+  it('shows recommendation attribution item count and all available breakdowns', () => {
+    const data = structuredClone(fx.recommendationsFixture);
+    data.data.breakdown.byMode = [{ mode: 'PERSONALIZED', impressions: 700, clicks: 58, ctr: 58 / 700 }];
+    data.data.breakdown.byStrategy = [{ strategy: 'POPULAR', impressions: 500, clicks: 38, ctr: 38 / 500 }];
+    mockHooks({ recommendations: ready(data) });
+    renderPage();
+    const section = screen.getByRole('region', { name: 'Recommendations' });
+    expect(within(section).getByText('Attributed order items')).toBeInTheDocument();
+    expect(within(section).getByText('4')).toBeInTheDocument();
+    expect(within(section).getByRole('table', { name: 'Recommendations by mode' })).toBeInTheDocument();
+    expect(within(section).getByRole('table', { name: 'Recommendations by strategy' })).toBeInTheDocument();
+    expect(within(section).getByText('$240.00')).toBeInTheDocument();
+  });
+
+  it('derives image-search outcomes from completed, no-result and failed counts', () => {
+    renderPage();
+    const section = screen.getByRole('region', { name: 'Image search' });
+    expect(within(section).getAllByText('Completed with results')).toHaveLength(2);
+    expect(within(section).getAllByText('44').length).toBeGreaterThan(0);
+    expect(within(section).getByRole('img', { name: 'Failed: 2 of 52 searches' })).toBeInTheDocument();
+  });
+
+  it('shows proportion bars and status-filter links for inventory and delivery states', () => {
+    renderPage();
+    const inventorySection = screen.getByRole('region', { name: 'Inventory status' });
+    expect(within(inventorySection).getByText('Each bar is a share of 42 tracked products.')).toBeInTheDocument();
+    expect(within(inventorySection).getByRole('img', { name: 'Low stock: 9 of 42 tracked products' })).toBeInTheDocument();
+    expect(within(inventorySection).getByRole('link', { name: 'Low stock' })).toHaveAttribute('href', '/admin/inventory?status=LOW_STOCK');
+    const deliveriesSection = screen.getByRole('region', { name: 'Deliveries' });
+    expect(within(deliveriesSection).getByText('Each bar is a share of 22 current delivery statuses.')).toBeInTheDocument();
+    expect(within(deliveriesSection).getByRole('img', { name: 'Out for delivery: 2 of 22 current delivery statuses' })).toBeInTheDocument();
+    expect(within(deliveriesSection).getByRole('link', { name: 'Out for delivery' })).toHaveAttribute('href', '/admin/deliveries?status=OUT_FOR_DELIVERY');
   });
 
   it('shows honest empty states when nothing was paid or recorded in the period', () => {

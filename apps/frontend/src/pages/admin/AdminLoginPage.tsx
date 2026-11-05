@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Navigate, useLocation } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Fingerprint, KeyRound, Smartphone } from 'lucide-react';
 import { browserSupportsWebAuthn, startAuthentication } from '@simplewebauthn/browser';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { useAuth } from '@/features/auth/context/AuthContext';
@@ -343,10 +343,10 @@ export function AdminLoginPage() {
               </p>
             </div>
             <Tabs value={method} onValueChange={(next) => { setMethod(next as Method); setChallengeError(''); }}>
-                <TabsList aria-label="Second factor">
-                  {availableMethods.includes('totp') && <TabsTrigger value="totp">Authenticator app</TabsTrigger>}
-                  {availableMethods.includes('passkey') && <TabsTrigger value="passkey">Passkey</TabsTrigger>}
-                  {availableMethods.includes('recovery') && <TabsTrigger value="recovery">Recovery code</TabsTrigger>}
+                <TabsList aria-label="Second factor" className={styles.methodSelector}>
+                  {availableMethods.includes('totp') && <TabsTrigger value="totp" className={styles.methodOption}><Smartphone aria-hidden="true" /><span>Authenticator app</span></TabsTrigger>}
+                  {availableMethods.includes('passkey') && <TabsTrigger value="passkey" className={styles.methodOption}><Fingerprint aria-hidden="true" /><span>Passkey</span></TabsTrigger>}
+                  {availableMethods.includes('recovery') && <TabsTrigger value="recovery" className={styles.methodOption}><KeyRound aria-hidden="true" /><span>Recovery code</span></TabsTrigger>}
                 </TabsList>
                 {availableMethods.includes('totp') && (
                   <TabsContent value="totp" className={styles.form}>

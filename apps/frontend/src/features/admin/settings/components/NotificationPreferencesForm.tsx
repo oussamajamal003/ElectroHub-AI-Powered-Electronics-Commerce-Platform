@@ -77,7 +77,7 @@ export function NotificationPreferencesForm({ preferences, onDirtyChange, onSave
       {errors.orderPaid && <p className={styles.fieldError}>{errors.orderPaid}</p>}
       {errors.lowStock && <p className={styles.fieldError}>{errors.lowStock}</p>}
     </fieldset>
-    <div className={styles.formActions}>
+    <div className={`${styles.formActions} ${settingsStyles.formActions}`}>
       <Button type="submit" isLoading={save.isPending} disabled={!dirty || save.isPending || conflict}>Save Preferences</Button>
     </div>
   </form>;

@@ -14,7 +14,13 @@ describe('StepUpDialog passkey support', () => {
 
   it('disables passkey verification and explains the browser limitation when WebAuthn is unavailable', async () => {
     render(<StepUpDialog open onOpenChange={vi.fn()} onVerified={vi.fn()} />);
-    await userEvent.setup().click(screen.getByRole('tab', { name: 'Passkey' }));
+    const authenticatorTab = screen.getByRole('tab', { name: 'Authenticator app' });
+    expect(authenticatorTab).toHaveAttribute('aria-selected', 'true');
+    authenticatorTab.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Recovery code' })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Passkey' })).toHaveAttribute('aria-selected', 'true');
     const passkeyButton = screen.getByRole('button', { name: 'Use passkey' });
     expect(passkeyButton).toBeDisabled();
     expect(passkeyButton.closest('[role="tabpanel"]')).toHaveTextContent(/Passkeys are not available in this browser/);

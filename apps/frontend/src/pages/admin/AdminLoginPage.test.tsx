@@ -233,6 +233,34 @@ describe('AdminLoginPage', () => {
     expect(mockLogout).not.toHaveBeenCalled();
   });
 
+  it('presents MFA methods as a keyboard-operable selector without changing the initial method', async () => {
+    mockLogin.mockResolvedValueOnce({
+      requiresMfa: true,
+      mfaToken: 'challenge-token-1234567890',
+      expiresAt: new Date(Date.now() + 300000).toISOString(),
+      factors: { totp: true, passkey: true, recoveryCode: true },
+      enrollmentRequired: false,
+    });
+    renderComponent();
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'admin@electrohub.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password/i), { target: { value: 'AdminPassword123!' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Sign In$/i }));
+
+    const authenticatorTab = await screen.findByRole('tab', { name: 'Authenticator app' });
+    const passkeyTab = screen.getByRole('tab', { name: 'Passkey' });
+    const recoveryTab = screen.getByRole('tab', { name: 'Recovery code' });
+    expect(authenticatorTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByLabelText('6-digit code')).toHaveAttribute('autocomplete', 'one-time-code');
+
+    authenticatorTab.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(passkeyTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: 'Use passkey' })).toBeInTheDocument();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(recoveryTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByLabelText('Recovery code', { selector: 'input' })).toBeInTheDocument();
+  });
+
   it('keeps passkey sign-in unavailable when the browser does not support WebAuthn', async () => {
     mockLogin.mockResolvedValueOnce({
       requiresMfa: true,

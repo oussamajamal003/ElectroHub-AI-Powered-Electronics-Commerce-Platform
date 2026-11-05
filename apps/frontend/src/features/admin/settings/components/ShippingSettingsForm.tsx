@@ -117,7 +117,7 @@ export function ShippingSettingsForm({ view, onDirtyChange, onSaved, onReload }:
         {rowError(index, 'enabled') && <span className={styles.fieldError}>{rowError(index, 'enabled')}</span>}
       </label>)}
     </fieldset>
-    <div className={styles.formActions}>
+    <div className={`${styles.formActions} ${settingsStyles.formActions}`}>
       <Button type="submit" isLoading={save.isPending} disabled={!dirty || save.isPending || conflict}>Save Shipping</Button>
     </div>
   </form>;

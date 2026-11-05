@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react';
+import { Fingerprint, KeyRound, Smartphone } from 'lucide-react';
 import { browserSupportsWebAuthn, startAuthentication } from '@simplewebauthn/browser';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
@@ -102,10 +103,10 @@ export function StepUpDialog({ open, onOpenChange, onVerified }: StepUpDialogPro
           <div className={styles.dialogBody}>
             <p className={styles.note}>This change needs a fresh verification. Choose how to confirm.</p>
             <Tabs value={method} onValueChange={(next) => { setMethod(next as Method); setError(''); }}>
-              <TabsList aria-label="Verification method">
-                <TabsTrigger value="totp">Authenticator app</TabsTrigger>
-                <TabsTrigger value="recovery">Recovery code</TabsTrigger>
-                <TabsTrigger value="passkey">Passkey</TabsTrigger>
+              <TabsList aria-label="Verification method" className={styles.methodSelector}>
+                <TabsTrigger value="totp" className={styles.methodOption}><Smartphone aria-hidden="true" /><span>Authenticator app</span></TabsTrigger>
+                <TabsTrigger value="recovery" className={styles.methodOption}><KeyRound aria-hidden="true" /><span>Recovery code</span></TabsTrigger>
+                <TabsTrigger value="passkey" className={styles.methodOption}><Fingerprint aria-hidden="true" /><span>Passkey</span></TabsTrigger>
               </TabsList>
               <TabsContent value="totp" className={styles.methodPanel}>
                 <OtpCodeInput id="step-up-code" label="6-digit code" value={code} onChange={setCode} error={error || undefined} disabled={pending} autoFocus />

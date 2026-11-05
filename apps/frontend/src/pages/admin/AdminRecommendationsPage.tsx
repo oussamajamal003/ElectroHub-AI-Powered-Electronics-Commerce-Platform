@@ -1,15 +1,17 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { BarChart3, Eye, SlidersHorizontal, Star } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
 import { Input } from '@/components/ui/Input';
 import { SearchSelect } from '@/components/ui/SearchSelect';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import {
   ConfirmDialog, EmptyRows, KpiCard, PageHeader, QueryProblem, StatusPill, TableCard, useAdminToast, type Tone,
 } from '@/features/admin/shared/AdminUi';
 import { errorCode, errorMessage } from '@/features/admin/shared/api';
-import { formatCount, formatDateTime } from '@/features/admin/shared/format';
+import { formatCount, formatDateTime, formatMoney } from '@/features/admin/shared/format';
 import {
   useFeaturedPins, useRecommendationConfigurations, useRecommendationMutations, useRecommendationOverview, useRecommendationPreview,
   type FeaturedPin, type PinState, type RecommendationPeriod, type RecommendationSectionMode, type RecommendationSurfaceKey, type SectionConfig,
@@ -40,6 +42,28 @@ const toDateTimeLocal = (value: string | null) => {
 };
 const STALE_MESSAGE = 'This changed since you loaded it. Reload to see the latest version, then try again.';
 
+function LoadingFrame({ label, children }: { label: string; children: ReactNode }) {
+  return <div className={styles.loadingFrame} role="status" aria-label={`Loading ${label}`} aria-busy="true">{children}</div>;
+}
+
+function OverviewSkeleton() {
+  return <LoadingFrame label="recommendation performance"><div className={styles.kpis}>
+    {Array.from({ length: 4 }, (_, index) => <div className={styles.kpiPlaceholder} key={index}><Skeleton width="42%" height={13} /><Skeleton width="58%" height={27} /><Skeleton width="70%" height={12} /></div>)}
+  </div><div className={styles.chartSkeleton}><Skeleton width="38%" height={18} />{Array.from({ length: 4 }, (_, index) => <div className={styles.breakdownPlaceholder} key={index}><Skeleton width="18%" height={14} /><Skeleton width="24%" height={14} /><Skeleton width="100%" height={8} /></div>)}</div></LoadingFrame>;
+}
+
+function StrategiesSkeleton() {
+  return <LoadingFrame label="strategy settings"><div className={styles.strategySkeletonList}>{[0, 1, 2].map(item => <div className={styles.strategyPlaceholder} key={item}><Skeleton width="30%" height={16} /><Skeleton width="48%" height={12} /><div className={styles.strategyPlaceholderControls}><Skeleton width={42} height={24} /><Skeleton width="22%" height={40} /><Skeleton width={104} height={40} /></div></div>)}</div></LoadingFrame>;
+}
+
+function FeaturedSkeleton() {
+  return <LoadingFrame label="featured products"><div className={styles.featuredSkeleton}>{[0, 1, 2].map(item => <div className={styles.featuredPlaceholder} key={item}><Skeleton width={42} height={42} /><div><Skeleton width="52%" height={15} /><Skeleton width="30%" height={12} /></div><Skeleton width="24%" height={14} /><Skeleton width="20%" height={26} /></div>)}</div></LoadingFrame>;
+}
+
+function PreviewSkeleton() {
+  return <LoadingFrame label="recommendation preview"><div className={styles.previewSkeleton}><Skeleton width="32%" height={18} /><Skeleton width="55%" height={13} /><div className={styles.previewSkeletonCards}>{[0, 1, 2, 3].map(item => <div className={styles.previewSkeletonCard} key={item}><Skeleton width="100%" height={112} /><Skeleton width="76%" height={14} /><Skeleton width="34%" height={13} /></div>)}</div></div></LoadingFrame>;
+}
+
 function staleOrMessage(error: unknown, fallback: string) {
   return errorCode(error) === 'VERSION_CONFLICT' ? STALE_MESSAGE : errorMessage(error, fallback);
 }
@@ -58,13 +82,13 @@ function OverviewPanel() {
       </label>
     </div>
     {overview.isError && !data && <QueryProblem error={overview.error} hasData={false} onRetry={() => void overview.refetch()} what="recommendation performance" />}
-    {overview.isPending && <p role="status">Loading performance…</p>}
+    {overview.isPending && !data && <OverviewSkeleton />}
     {data && <>
       <div className={styles.kpis}>
         <KpiCard label="Impressions" value={formatCount(data.totals.impressions)} hint="Shown to shoppers" />
         <KpiCard label="Clicks" value={formatCount(data.totals.clicks)} hint="Opened from a recommendation" />
         <KpiCard label="Click-through" value={percent(data.totals.ctr)} hint="Clicks ÷ impressions" />
-        <KpiCard label="Fallback share" value={percent(data.totals.fallbackShare)} tone={(data.totals.fallbackShare ?? 0) > 0.5 ? 'warning' : 'neutral'}
+        <KpiCard label="Fallback share" value={percent(data.totals.fallbackShare)} tone={data.totals.fallbackShare !== null && data.totals.fallbackShare > 0.5 ? 'warning' : 'neutral'}
           hint="Results without measured demand" />
       </div>
       <TableCard label="Performance by strategy">
@@ -75,7 +99,7 @@ function OverviewPanel() {
             {data.breakdown.length === 0 && <tr><td colSpan={6}><EmptyRows title="No recommendations were shown in this period" hint="Results appear here once shoppers see a rail." /></td></tr>}
             {data.breakdown.map(row => <tr key={`${row.surface}-${row.mode}-${row.strategy}`}>
               <td>{SURFACE_LABEL[row.surface]}</td><td>{MODE_LABEL[row.mode]}</td>
-              <td>{row.strategy.replace(/_/g, ' ').toLowerCase()}{row.fallback && <StatusPill tone="warning" icon={false}> fallback</StatusPill>}</td>
+              <td><span className={styles.strategyLabel}>{row.strategy.replace(/_/g, ' ').toLowerCase()}{row.fallback && <StatusPill tone="warning" icon={false}>fallback</StatusPill>}</span><span className={styles.performanceTrack} aria-hidden="true"><span style={{ width: `${data.totals.impressions ? Math.max(4, row.impressions / data.totals.impressions * 100) : 0}%` }} /></span></td>
               <td>{formatCount(row.impressions)}</td><td>{formatCount(row.clicks)}</td><td>{percent(row.ctr)}</td>
             </tr>)}
           </tbody>
@@ -111,6 +135,7 @@ function SectionRow({ config }: { config: SectionConfig }) {
   return <form onSubmit={submit} className={styles.sectionRow} aria-label={label}>
     <div className={styles.sectionName}>
       <strong>{label}</strong>
+      <span className={styles.modePurpose}>{config.mode === 'POPULAR_PRODUCTS' ? 'Highlights products with measured shopper demand.' : config.mode === 'RECOMMENDED_FOR_YOU' ? 'Personalized picks for eligible shoppers.' : config.mode === 'SIMILAR_PRODUCTS' ? 'Related products for the current product.' : config.mode === 'YOU_MAY_ALSO_LIKE' ? 'Additional product suggestions.' : 'Products commonly purchased together.'}</span>
       <StatusPill tone={config.enabled ? 'success' : 'neutral'} icon={false}>{config.enabled ? 'On' : 'Off'}</StatusPill>
     </div>
     <label className={styles.checkLabel}><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} /> Show this section</label>
@@ -130,7 +155,7 @@ function StrategiesPanel() {
     <h2 id="strategies-heading" className={styles.sectionTitle}>Strategies</h2>
     <p className={styles.help}>Turn a section off or limit how many items it shows. Changes apply to the storefront within about 30 seconds.</p>
     {configurations.isError && !configurations.data && <QueryProblem error={configurations.error} hasData={false} onRetry={() => void configurations.refetch()} what="section settings" />}
-    {configurations.isPending && <p role="status">Loading sections…</p>}
+    {configurations.isPending && !configurations.data && <StrategiesSkeleton />}
     {configurations.data?.map(config => <SectionRow key={`${config.surface}-${config.mode}-${config.version}`} config={config} />)}
   </section>;
 }
@@ -297,7 +322,7 @@ function FeaturedRow({ pin }: { pin: FeaturedPin }) {
   });
 
   return <tr>
-    <td>{name}{pin.product && <span className={styles.muted}> · {pin.product.sku}</span>}</td>
+    <td><div className={styles.productIdentity}><span className={styles.productMark} aria-hidden="true">{name.slice(0, 1).toLocaleUpperCase()}</span><span><strong>{name}</strong>{pin.product && <span className={styles.muted}>{pin.product.sku}</span>}</span></div></td>
     <td>{SURFACE_LABEL[pin.surface]}</td>
     <td>{pin.position}</td>
     <td>{pin.startsAt ? formatDateTime(pin.startsAt) : 'Now'} to {pin.endsAt ? formatDateTime(pin.endsAt) : 'no end'}</td>
@@ -339,7 +364,7 @@ function FeaturedPanel() {
     </div>
     <p className={styles.help}>Up to {max} featured products per placement. Pins appear first in their rail and are labelled Featured.</p>
     {pins.isError && !pins.data && <QueryProblem error={pins.error} hasData={false} onRetry={() => void pins.refetch()} what="featured products" />}
-    {pins.isPending && <p role="status">Loading featured products…</p>}
+    {pins.isPending && !pins.data && <FeaturedSkeleton />}
     {pins.data && <TableCard label="Featured products">
       <div className={styles.tableScroll} role="region" aria-label="Scrollable table" tabIndex={0}><table className={styles.table}>
         <thead><tr><th scope="col">Product</th><th scope="col">Placement</th><th scope="col">Position</th><th scope="col">Window</th><th scope="col">Status</th><th scope="col"><span className={styles.visuallyHidden}>Actions</span></th></tr></thead>
@@ -395,7 +420,7 @@ function PreviewPanel() {
       <Button type="submit">Run preview</Button>
     </form>
     {error && <p role="alert" className={styles.error}>{error}</p>}
-    {preview.isFetching && <p role="status">Loading preview…</p>}
+    {preview.isFetching && !preview.data && <PreviewSkeleton />}
     {preview.isError && <QueryProblem error={preview.error} hasData={false} onRetry={() => void preview.refetch()} what="the preview" />}
     {preview.data && preview.data.sections.length === 0 && <EmptyRows title="No section is shown here" hint="The section may be turned off, or there is no data yet." />}
     {preview.data?.sections.map(section => {
@@ -403,9 +428,13 @@ function PreviewPanel() {
       return <div key={`${section.surface}-${section.mode}`} className={styles.previewSection}>
         <h3 className={styles.sectionTitle}>{copy?.title ?? MODE_LABEL[section.mode as RecommendationSectionMode] ?? section.mode}</h3>
         <p className={styles.help}>Strategy: {section.strategy.replace(/_/g, ' ').toLowerCase()}{section.fallbackReason ? ` (fallback: ${section.fallbackReason.replace(/_/g, ' ').toLowerCase()})` : ''}</p>
-        <ol className={styles.previewList}>
-          {section.items.map(item => <li key={item.product.id}>{item.product.name}{item.featured && <StatusPill tone="primary" icon={false}> Featured</StatusPill>}</li>)}
-        </ol>
+        <ul className={styles.previewProducts}>
+          {section.items.map(item => <li key={item.product.id} className={styles.previewProduct}>
+            {item.product.primaryImage?.url ? <img className={styles.previewImage} src={item.product.primaryImage.url} alt={item.product.primaryImage.altText ?? ''} /> : <span className={styles.previewImageFallback} aria-hidden="true">{item.product.name.slice(0, 1).toLocaleUpperCase()}</span>}
+            <span className={styles.previewProductInfo}><strong>{item.product.name}</strong>{item.product.category?.name && <span>{item.product.category.name}</span>}{item.product.price != null && <strong className={styles.previewPrice}>{formatMoney(item.product.price, item.product.currency)}</strong>}</span>
+            {item.featured && <StatusPill tone="primary" icon={false}>Featured</StatusPill>}
+          </li>)}
+        </ul>
       </div>;
     })}
   </section>;
@@ -426,10 +455,10 @@ export function AdminRecommendationsPage() {
       crumbs={CRUMBS} />
     <Tabs value={tab} onValueChange={setTab}>
       <TabsList aria-label="Recommendation management sections" className={styles.tabs}>
-        <TabsTrigger value="overview">Overview</TabsTrigger>
-        <TabsTrigger value="strategies">Strategies</TabsTrigger>
-        <TabsTrigger value="featured">Featured</TabsTrigger>
-        <TabsTrigger value="preview">Preview</TabsTrigger>
+        <TabsTrigger value="overview" className={styles.tab}><BarChart3 aria-hidden="true" focusable="false" /><span>Overview</span></TabsTrigger>
+        <TabsTrigger value="strategies" className={styles.tab}><SlidersHorizontal aria-hidden="true" focusable="false" /><span>Strategies</span></TabsTrigger>
+        <TabsTrigger value="featured" className={styles.tab}><Star aria-hidden="true" focusable="false" /><span>Featured</span></TabsTrigger>
+        <TabsTrigger value="preview" className={styles.tab}><Eye aria-hidden="true" focusable="false" /><span>Preview</span></TabsTrigger>
       </TabsList>
       <TabsContent value="overview"><OverviewPanel /></TabsContent>
       <TabsContent value="strategies"><StrategiesPanel /></TabsContent>

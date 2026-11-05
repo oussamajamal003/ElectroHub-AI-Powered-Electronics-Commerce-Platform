@@ -224,3 +224,35 @@ error was `DATABASE_TEST_TARGET_REQUIRED`; affected integration suites did not l
 suite results are failures and are not represented as green. Focused disposable PostgreSQL business/security coverage passed 24/24,
 and focused frontend regressions passed as recorded above. No shared DEV writes, production access, migration, merge or deployment
 occurred during this closure pass. CI and Architect status must be attached to the exact final pushed PR SHA before an approval claim.
+
+### Premium admin refinement — 2026-11-05
+
+- Analytics now presents ranked products, per-currency category shares, customer acquisition and repeat-buyer context,
+  recommendation attribution and breakdowns, image-search outcomes, inventory proportions and delivery status counts using
+  the existing API values. Recommendation management has icon-led tabs, content-shaped loading states and real preview products.
+  Settings has grouped store fields, dirty feedback and form-shaped loading states. Login and step-up MFA selectors use matching,
+  keyboard-operable method cards; their authentication flows remain unchanged.
+- On a local disposable stack, `npm run test:visual:task05-2` passed 9/9, including 390/768/1440/1920 CSS-pixel overflow checks,
+  synthetic settings persistence, pin and invitation workflows, virtual WebAuthn and logout. Screenshots in
+  `apps/frontend/test-results/task05-2-disposable/screens/` were inspected for Analytics, Recommendations, Shipping and login MFA.
+  A 390px synthetic Storybook screenshot of the step-up dialog was also inspected at `apps/frontend/test-results/step-up-story-mobile.png`.
+  The first run exposed horizontal overflow from accessible tables, and a Shipping screenshot showed a sticky action covering
+  options; both were corrected and the affected browser suite passed. Category bars now use the API's per-currency share.
+- Focused frontend tests, typecheck, lint, build and Storybook build passed; lint has four existing Fast Refresh warnings and builds
+  report existing Sass/bundle warnings. The browser and local checks ran with concurrent workspace edits subsequently committed
+  separately, so they are evidence of that working tree and do not alone certify the final commit. Native 200% browser zoom and the complete
+  authenticated shared-DEV journey remain NOT VERIFIED. No production write or deployment was performed.
+
+| Refinement acceptance | Status | Evidence / remaining scope |
+|---|---|---|
+| UI-01–UI-07 Analytics sections | PARTIAL | Production Analytics page and focused tests cover source-backed values and rankings; disposable screenshots inspected. Complete tooltip and per-section interaction coverage is not established. |
+| UI-08 Recommendations | PARTIAL | Recommendation page tests and disposable pin journey pass; preview, loading and tab stories exist. Full browser coverage of every loading/error/preview state remains open. |
+| UI-09 Settings | PARTIAL | Settings tests and disposable save/reload pass; Store, Shipping and Notifications skeleton stories exist. Team page uses its own loading UI. |
+| UI-10–UI-14 MFA | PARTIAL | Login and step-up selectors, OTP tests and virtual passkey journey pass; step-up Storybook screenshot inspected. Browser cancellation/timeout and every error/expiry state were not all rerun. |
+| UI-15–UI-17 Skeletons | PARTIAL | Analytics and Recommendation sections and three data-loading Settings forms have section-shaped placeholders; the Settings Administrators tab is a direct link and has no request/loading state. |
+| UI-18–UI-19 Refetch and feedback | PARTIAL | Existing React Query data retained during background refresh; focused tests cover selected loading/error/empty cases, not every partial failure. |
+| UI-20–UI-21 Responsive and accessibility | PARTIAL | Disposable Playwright exercised 390/768/1440/1920 page overflow, reduced motion and Escape; focused tests cover Radix arrow navigation. Native 200% zoom and manual screen reader remain unverified. |
+| UI-22 Clipping and pending | PARTIAL | Tested page overflow and two visual defects corrected; no claim that every pending/error state was inspected. |
+| UI-23 Visual references | PARTIAL | Analytics, Settings and login reference images and selected rendered screenshots inspected; no reference exists for every new section and exact pixel parity is not claimed. |
+| UI-24 Storybook and tests | PARTIAL | Storybook build, focused tests and disposable Playwright pass; the full requested story/state matrix is not independently exercised. |
+| UI-25 Contracts | PARTIAL | No backend or authentication protocol changes in this refinement; focused tests and disposable journeys pass, but this is not a full security or finance audit. |

@@ -13,8 +13,40 @@ function seededClient(reports: Record<string, unknown>) {
   return client;
 }
 
-function Seeded({ reports, children }: { reports: Record<string, unknown>; children: ReactNode }) {
-  const [client] = useState(() => seededClient(reports));
+function loadingClient() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  for (const endpoint of ['overview', 'products', 'categories', 'inventory', 'recommendations', 'image-search', 'deliveries', 'customers']) {
+    const queryKey = analyticsKeys.report(endpoint, '30d');
+    const query = client.getQueryCache().build(client, {
+      queryKey,
+      queryFn: () => new Promise<never>(() => {}),
+    });
+    void query.fetch();
+  }
+  return client;
+}
+
+function partialErrorClient() {
+  const client = seededClient(populated);
+  const queryKey = analyticsKeys.report('categories', '30d');
+  client.setQueryDefaults(queryKey, { retryOnMount: false });
+  const query = client.getQueryCache().build(client, {
+    queryKey,
+    queryFn: () => Promise.reject(new Error('Synthetic category report failure')),
+  });
+  query.setState({
+    ...query.state,
+    data: undefined,
+    error: new Error('Synthetic category report failure'),
+    errorUpdatedAt: Date.now(),
+    status: 'error',
+    fetchStatus: 'idle',
+  });
+  return client;
+}
+
+function Seeded({ reports, children, clientFactory = () => seededClient(reports) }: { reports: Record<string, unknown>; children: ReactNode; clientFactory?: () => QueryClient }) {
+  const [client] = useState(clientFactory);
   return <QueryClientProvider client={client}>
     <MemoryRouter initialEntries={['/admin/analytics?period=30d']}>{children}</MemoryRouter>
   </QueryClientProvider>;
@@ -34,6 +66,22 @@ const empty = {
   'image-search': { ...fx.imageSearchFixture, data: { ...fx.imageSearchFixture.data, requests: 0, trackingSince: null } },
 };
 
+const longLabels = {
+  ...populated,
+  products: {
+    ...fx.productsFixture,
+    data: { ...fx.productsFixture.data, byUnits: fx.productsFixture.data.byUnits.map((row, index) => ({ ...row, name: index === 0 ? 'Professional Noise Cancelling Studio Monitor Headphones with Extended Warranty' : row.name })) },
+  },
+  categories: {
+    ...fx.categoriesFixture,
+    data: { ...fx.categoriesFixture.data, categories: fx.categoriesFixture.data.categories.map((row, index) => ({ ...row, name: index === 0 ? 'Professional Audio and Studio Monitoring Equipment' : row.name })) },
+  },
+  recommendations: {
+    ...fx.recommendationsFixture,
+    data: { ...fx.recommendationsFixture.data, breakdown: { ...fx.recommendationsFixture.data.breakdown, bySurface: [{ surface: 'Personalized recommendations on the product detail page', impressions: 800, clicks: 60, ctr: 0.075 }] } },
+  },
+};
+
 const meta = {
   title: 'Admin/Analytics',
   component: AdminAnalyticsPage,
@@ -49,4 +97,16 @@ export const Populated: Story = {
 
 export const NoActivity: Story = {
   render: () => <Seeded reports={empty}><AdminAnalyticsPage /></Seeded>,
+};
+
+export const AllSectionsLoading: Story = {
+  render: () => <Seeded reports={{}} clientFactory={loadingClient}><AdminAnalyticsPage /></Seeded>,
+};
+
+export const PartialReportError: Story = {
+  render: () => <Seeded reports={populated} clientFactory={partialErrorClient}><AdminAnalyticsPage /></Seeded>,
+};
+
+export const LongLabels: Story = {
+  render: () => <Seeded reports={longLabels}><AdminAnalyticsPage /></Seeded>,
 };

@@ -13,4 +13,24 @@
 .tabs {
   flex-wrap: wrap;
   max-width: 100%;
+  gap: $spacing-1;
+  padding: $spacing-1;
+  border: 1px solid $color-border;
+  background: $color-surface;
+
+  button {
+    gap: $spacing-2;
+    margin: 0;
+    border-bottom: 2px solid transparent;
+    font-weight: $font-weight-medium;
+
+    &[data-state='active'] {
+      background: $color-background;
+      border-bottom-color: $color-primary;
+      color: $color-primary;
+      font-weight: $font-weight-semibold;
+    }
+  }
 }
+
+.dirty { margin: $spacing-3 0 0; color: $color-warning-foreground; font-size: $font-size-sm; }

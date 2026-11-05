@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { Bell, Store, Truck, Users } from 'lucide-react';
 import { ConfirmDialog, ButtonLink, PageHeader, QueryProblem } from '@/features/admin/shared/AdminUi';
 import { useUnsavedChangesGuard } from '@/features/admin/shared/useUnsavedChangesGuard';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
@@ -11,6 +11,7 @@ import { StoreSettingsForm } from '@/features/admin/settings/components/StoreSet
 import { NotificationPreferencesForm } from '@/features/admin/settings/components/NotificationPreferencesForm';
 import { ShippingSettingsForm } from '@/features/admin/settings/components/ShippingSettingsForm';
 import { ShippingPreviewPanel } from '@/features/admin/settings/components/ShippingPreviewPanel';
+import { SettingsSkeleton } from '@/features/admin/settings/components/SettingsSkeleton';
 import {
   adminSettingsKeys, useNotificationPreferences, useShippingSettings, useStoreSettings,
 } from '@/features/admin/settings/api';
@@ -21,6 +22,7 @@ type Tab = (typeof TABS)[number];
 const parseTab = (value: string | null): Tab => TABS.find(tab => tab === value) ?? 'store';
 
 const TAB_LABEL: Record<Tab, string> = { store: 'Store', notifications: 'Notifications', shipping: 'Shipping', administrators: 'Administrators' };
+const TAB_ICON = { store: Store, notifications: Bell, shipping: Truck, administrators: Users };
 
 interface TabProps {
   /** Changes when the form must start again from saved values (after a save or a reload). */
@@ -32,31 +34,34 @@ interface TabProps {
 
 function StoreTab({ generation, onDirtyChange, onSaved, onReload }: TabProps) {
   const query = useStoreSettings();
-  if (query.isPending) return <Skeleton height={320} aria-label="Loading store settings" />;
+  if (query.isPending) return <SettingsSkeleton section="store" />;
   if (!query.data) return <QueryProblem error={query.error} hasData={false} onRetry={() => void query.refetch()} retrying={query.isFetching} what="store settings" />;
   return <section className={styles.panel} aria-labelledby="store-settings-title">
     <h2 id="store-settings-title" className={styles.panelTitle}>Store Information</h2>
+    <p className={styles.panelHint}>Manage the details customers use to identify and contact your store.</p>
     <StoreSettingsForm key={generation} profile={query.data} onDirtyChange={onDirtyChange} onSaved={onSaved} onReload={onReload} />
   </section>;
 }
 
 function NotificationsTab({ generation, onDirtyChange, onSaved, onReload }: TabProps) {
   const query = useNotificationPreferences();
-  if (query.isPending) return <Skeleton height={240} aria-label="Loading notification preferences" />;
+  if (query.isPending) return <SettingsSkeleton section="notifications" />;
   if (!query.data) return <QueryProblem error={query.error} hasData={false} onRetry={() => void query.refetch()} retrying={query.isFetching} what="notification preferences" />;
   return <section className={styles.panel} aria-labelledby="notification-settings-title">
     <h2 id="notification-settings-title" className={styles.panelTitle}>Notification Preferences</h2>
+    <p className={styles.panelHint}>Choose which operational updates you receive by email.</p>
     <NotificationPreferencesForm key={generation} preferences={query.data} onDirtyChange={onDirtyChange} onSaved={onSaved} onReload={onReload} />
   </section>;
 }
 
 function ShippingTab({ generation, onDirtyChange, onSaved, onReload }: TabProps) {
   const query = useShippingSettings();
-  if (query.isPending) return <Skeleton height={420} aria-label="Loading shipping settings" />;
+  if (query.isPending) return <SettingsSkeleton section="shipping" />;
   if (!query.data) return <QueryProblem error={query.error} hasData={false} onRetry={() => void query.refetch()} retrying={query.isFetching} what="shipping settings" />;
   return <div className={pageStyles.stack}>
     <section className={styles.panel} aria-labelledby="shipping-settings-title">
       <h2 id="shipping-settings-title" className={styles.panelTitle}>Shipping Settings</h2>
+      <p className={styles.panelHint}>Set delivery rates and the options available at checkout.</p>
       <ShippingSettingsForm key={generation} view={query.data} onDirtyChange={onDirtyChange} onSaved={onSaved} onReload={onReload} />
     </section>
     <ShippingPreviewPanel />
@@ -120,8 +125,9 @@ export function AdminSettingsPage() {
     <PageHeader title="Settings" description="Store details, notification preferences and shipping rates." />
     <Tabs value={active} onValueChange={requestTab}>
       <TabsList aria-label="Settings sections" className={pageStyles.tabs}>
-        {TABS.map(tab => <TabsTrigger key={tab} value={tab}>{TAB_LABEL[tab]}</TabsTrigger>)}
+        {TABS.map(tab => { const Icon = TAB_ICON[tab]; return <TabsTrigger key={tab} value={tab}><Icon size={16} aria-hidden="true" />{TAB_LABEL[tab]}</TabsTrigger>; })}
       </TabsList>
+      {dirty && <p className={pageStyles.dirty} role="status">You have unsaved changes.</p>}
       <TabsContent value="store">
         <StoreTab {...common} onReload={reloadFor('store')} />
       </TabsContent>

@@ -33,6 +33,23 @@
   min-width: 0;
 }
 
+.groupHeading {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-bottom: $spacing-2;
+  border-bottom: 1px solid $color-border;
+  color: $color-text-primary;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+}
+
+// Keep form actions after the fields so they do not obscure delivery options on short screens.
+.formActions {
+  position: static;
+  border-top: 1px solid $color-border;
+  background: transparent;
+}
+
 .quoteForm {
   display: grid;
   grid-template-columns: minmax(0, 14rem) auto;
