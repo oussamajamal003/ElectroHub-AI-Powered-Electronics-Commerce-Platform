@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { ApiError } from '@/lib/api';
+import { useAuth } from '@/features/auth/context/AuthContext';
 import { useAdminProfile, useUpdateAdminProfile, type AdminProfile } from '@/features/admin/security/api';
 import { AdminPageSkeleton, ButtonLink, PageHeader, QueryProblem, StatusPill, useAdminToast } from '@/features/admin/shared/AdminUi';
 import { fieldErrors } from '@/features/admin/shared/api';
@@ -25,6 +26,7 @@ export function AdminProfilePage() {
 /** Mounted once the profile is loaded, so the form starts from the saved values; a successful save updates the baseline. */
 function ProfileContent({ profile }: { profile: AdminProfile }) {
   const save = useUpdateAdminProfile();
+  const { updateUserNames } = useAuth();
   const toast = useAdminToast();
   const [firstName, setFirstName] = useState(profile.firstName);
   const [lastName, setLastName] = useState(profile.lastName);
@@ -56,7 +58,8 @@ function ProfileContent({ profile }: { profile: AdminProfile }) {
     setFormError('');
     if (Object.keys(local).length) return;
     try {
-      await save.mutateAsync({ firstName: nextFirst, lastName: nextLast });
+      const updated = await save.mutateAsync({ firstName: nextFirst, lastName: nextLast });
+      updateUserNames(profile.id, { firstName: updated.firstName, lastName: updated.lastName });
       toast('Profile saved.');
     } catch (err) {
       if (err instanceof ApiError && err.code === 'VERSION_CONFLICT') {

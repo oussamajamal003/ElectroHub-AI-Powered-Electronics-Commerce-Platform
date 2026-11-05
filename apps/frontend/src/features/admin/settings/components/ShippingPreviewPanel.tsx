@@ -30,7 +30,7 @@ export function ShippingPreviewPanel() {
       <h2 id="shipping-preview-title" className={styles.panelTitle}>Check quotes</h2>
     </div>
     <p className={styles.panelHint}>Shows what checkout would charge for a subtotal, using the saved rates and threshold.</p>
-    <form className={styles.actionsStart} onSubmit={check} noValidate aria-label="Quote preview">
+    <form className={settingsStyles.quoteForm} onSubmit={check} noValidate aria-label="Quote preview">
       <Input label="Cart subtotal ($)" inputMode="decimal" value={input} placeholder="49.99" maxLength={10}
         error={input && !valid ? 'Enter a subtotal such as 49.99.' : undefined}
         onChange={event => { setInput(event.target.value); setSubtotal(null); }} />

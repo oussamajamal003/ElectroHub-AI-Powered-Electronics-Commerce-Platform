@@ -22,6 +22,12 @@ function Controls() {
     })}>Sign in</button>
     <button onClick={() => auth.completeAdminSession({ accessToken: 'synthetic-access-token', user: admin })}>Complete admin session</button>
     <span data-testid="auth-state">{auth.isAuthenticated ? 'AUTHENTICATED' : 'UNAUTHENTICATED'}</span>
+    <span data-testid="auth-identity">{auth.user ? `${auth.user.firstName} ${auth.user.lastName}` : ''}</span>
+    <span data-testid="auth-account">{auth.user ? `${auth.user.email} ${auth.user.role}` : ''}</span>
+    <span data-testid="remembered-identity">{auth.rememberedUser ? `${auth.rememberedUser.firstName} ${auth.rememberedUser.lastName}` : ''}</span>
+    <button onClick={() => auth.updateUserNames('admin-1', { firstName: 'Grace', lastName: 'Hopper' })}>Update profile names</button>
+    <button onClick={() => auth.updateUserNames('different-admin', { firstName: 'Wrong', lastName: 'Account' })}>Apply stale profile names</button>
+    <button onClick={auth.clearSession}>Clear session</button>
   </>;
 }
 
@@ -59,5 +65,44 @@ describe('AuthContext administrator sign-in', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Complete admin session' }));
 
     expect(await screen.findByText('AUTHENTICATED')).toBeInTheDocument();
+  });
+
+  it('updates the authenticated and remembered names after an admin profile save', async () => {
+    renderProvider();
+    await waitFor(() => expect(screen.getByTestId('auth-state')).toHaveTextContent('UNAUTHENTICATED'));
+    fireEvent.click(screen.getByRole('button', { name: 'Complete admin session' }));
+    expect(await screen.findByTestId('auth-identity')).toHaveTextContent('Ada Admin');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Update profile names' }));
+
+    expect(screen.getByTestId('auth-identity')).toHaveTextContent('Grace Hopper');
+    expect(screen.getByTestId('remembered-identity')).toHaveTextContent('Grace Hopper');
+    expect(screen.getByTestId('auth-account')).toHaveTextContent('admin@electrohub.example ADMIN');
+  });
+
+  it('does not restore remembered identity when a profile save completes after logout', async () => {
+    renderProvider();
+    await waitFor(() => expect(screen.getByTestId('auth-state')).toHaveTextContent('UNAUTHENTICATED'));
+    fireEvent.click(screen.getByRole('button', { name: 'Complete admin session' }));
+    expect(await screen.findByTestId('auth-identity')).toHaveTextContent('Ada Admin');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear session' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update profile names' }));
+
+    expect(screen.getByTestId('auth-state')).toHaveTextContent('UNAUTHENTICATED');
+    expect(screen.getByTestId('auth-identity')).toBeEmptyDOMElement();
+    expect(screen.getByTestId('remembered-identity')).toBeEmptyDOMElement();
+  });
+
+  it('does not apply a saved profile response to a different authenticated account', async () => {
+    renderProvider();
+    await waitFor(() => expect(screen.getByTestId('auth-state')).toHaveTextContent('UNAUTHENTICATED'));
+    fireEvent.click(screen.getByRole('button', { name: 'Complete admin session' }));
+    expect(await screen.findByTestId('auth-identity')).toHaveTextContent('Ada Admin');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply stale profile names' }));
+
+    expect(screen.getByTestId('auth-identity')).toHaveTextContent('Ada Admin');
+    expect(screen.getByTestId('remembered-identity')).toHaveTextContent('Ada Admin');
   });
 });

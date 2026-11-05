@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { User, LoginCredentials, RegisterData, isAdminMfaRequired } from '../types';
 import { authApi, VerificationResponse, LoginResult } from '../api/auth';
 import { ApiError, setAccessToken } from '@/lib/api';
@@ -29,6 +29,8 @@ interface AuthContextValue extends AuthState {
   logout: () => Promise<void>;
   finishLogoutTransition: () => void;
   clearSession: () => void;
+  /** Updates the authenticated identity after a role-specific profile API succeeds. */
+  updateUserNames: (expectedUserId: string, names: Pick<User, 'firstName' | 'lastName'>) => void;
   updateProfile: (data: { firstName?: string; lastName?: string; email?: string }) => Promise<VerificationResponse>;
   verifyEmailChange: (code: string) => Promise<User>;
 }
@@ -101,6 +103,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [restoreEpoch, setRestoreEpoch] = useState(0);
   const [isLoggingOut, setLoggingOut] = useState(false);
   const [rememberedUser, setRememberedUser] = useState<HeaderIdentity | null>(readHeaderIdentity);
+  const [state, setState] = useState<AuthState>(getInitialAuthState);
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const remember = (user: User) => {
     saveCachedUser(user);
     setRememberedUser(saveHeaderIdentity(user));
@@ -110,8 +115,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     removeHeaderIdentity();
     setRememberedUser(null);
   };
-  const [state, setState] = useState<AuthState>(getInitialAuthState);
-
   useEffect(() => {
     let mounted = true;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -267,6 +270,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ user: null, isAuthenticated: false, isLoading: false, isInitializing: false });
   };
 
+  const updateUserNames = (expectedUserId: string, names: Pick<User, 'firstName' | 'lastName'>) => {
+    const currentUser = stateRef.current.user;
+    if (!currentUser || currentUser.id !== expectedUserId) return;
+    const user = { ...currentUser, ...names };
+    remember(user);
+    setState(previous => previous.user?.id === expectedUserId
+      ? { ...previous, user: { ...previous.user, ...names } }
+      : previous);
+  };
+
   const updateProfile = async (data: { firstName?: string; lastName?: string; email?: string }) => {
     setState((prev) => ({ ...prev, isLoading: true }));
     try {
@@ -298,7 +311,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, isSessionVerified, sessionUnavailable, retrySession, isLoggingOut, rememberedUser, login, completeAdminSession, register, verifyEmail, logout, finishLogoutTransition, clearSession, updateProfile, verifyEmailChange, finishGoogle }}>
+    <AuthContext.Provider value={{ ...state, isSessionVerified, sessionUnavailable, retrySession, isLoggingOut, rememberedUser, login, completeAdminSession, register, verifyEmail, logout, finishLogoutTransition, clearSession, updateUserNames, updateProfile, verifyEmailChange, finishGoogle }}>
       {children}
     </AuthContext.Provider>
   );

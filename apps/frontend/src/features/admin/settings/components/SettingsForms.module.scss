@@ -33,6 +33,24 @@
   min-width: 0;
 }
 
+.quoteForm {
+  display: grid;
+  grid-template-columns: minmax(0, 14rem) auto;
+  justify-content: start;
+  align-items: start;
+  gap: $spacing-2;
+
+  > button {
+    // Match the input below its label, including when a validation message appears.
+    margin-top: calc(#{$font-size-sm} * #{$line-height-normal} + #{$spacing-2});
+  }
+
+  @media (max-width: 360px) {
+    grid-template-columns: minmax(0, 1fr);
+    > button { margin-top: 0; justify-self: start; }
+  }
+}
+
 .previewList {
   display: grid;
   gap: 0;

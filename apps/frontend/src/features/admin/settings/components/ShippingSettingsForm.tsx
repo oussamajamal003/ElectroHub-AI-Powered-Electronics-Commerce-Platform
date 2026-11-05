@@ -96,7 +96,7 @@ export function ShippingSettingsForm({ view, onDirtyChange, onSaved, onReload }:
       <div className={styles.fieldFull}>
         <Input label="Free Shipping Threshold ($)" value={draft.threshold} disabled={!draft.thresholdOn} inputMode="decimal" fullWidth
           placeholder="50.00" error={errors.freeShippingThreshold}
-          helperText="Applies to Standard delivery only. A subtotal at or above this amount ships Standard for free."
+          helperText="Applies to Standard delivery only. Enable Standard delivery and save these settings to offer it free at or above this subtotal."
           onChange={event => { setDraft(current => ({ ...current, threshold: event.target.value })); clearError('freeShippingThreshold'); }} />
       </div>
       {view.methods.map((entry, index) => <div key={entry.method} className={styles.fieldFull}>
