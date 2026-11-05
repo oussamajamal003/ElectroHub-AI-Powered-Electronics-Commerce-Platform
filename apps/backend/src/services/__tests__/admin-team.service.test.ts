@@ -1,11 +1,11 @@
-import { AdminInvitationDelivery, AdminInvitationStatus } from '@prisma/client';
+import { AdminInvitationDelivery, AdminInvitationStatus, Prisma } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => {
   const row: Record<string, unknown> = {};
   let transactionTail = Promise.resolve();
   const invitation = {
-    findFirst: vi.fn(async () => null),
+    findFirst: vi.fn(async (): Promise<unknown> => null),
     create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
       Object.assign(row, { id: 'invite-id', status: AdminInvitationStatus.PENDING, ...data });
       return { ...row };
@@ -30,7 +30,7 @@ const state = vi.hoisted(() => {
     adminAccountSecurity: { findUnique: vi.fn(async () => ({ isOwner: false })) },
     user: {
       findUnique: vi.fn(async () => ({ firstName: 'Owner', lastName: 'Admin' })),
-      findFirst: vi.fn(async () => null),
+      findFirst: vi.fn(async (): Promise<unknown> => null),
     },
     $queryRaw: vi.fn(async () => [{ id: 'invite-id', status: AdminInvitationStatus.PENDING,
       lastSentAt: row.lastSentAt ?? null, email: 'invitee@example.com' }]),
@@ -144,5 +144,53 @@ describe('AdminTeamService.resendInvitation', () => {
     expect(email.sendAdminInvitationEmail).toHaveBeenCalledTimes(1);
     finishFirst(true);
     await creating;
+  });
+});
+
+describe('AdminTeamService.createInvitation collisions', () => {
+  const owner = { userId: 'owner-id' };
+  const db = state.db as { user: { findFirst: ReturnType<typeof vi.fn> } };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    state.reset();
+    for (const key of Object.keys(state.row)) delete state.row[key];
+    state.invitation.findFirst.mockResolvedValue(null);
+    db.user.findFirst.mockResolvedValue(null);
+    email.sendAdminInvitationEmail.mockResolvedValue(true);
+  });
+
+  it.each([['an existing CUSTOMER'], ['an existing ADMIN'], ['an unverified CUSTOMER'], ['an address held as a pending email change']])(
+    'rejects %s with ACCOUNT_EXISTS and creates no invitation, whatever the role', async () => {
+      db.user.findFirst.mockResolvedValue({ id: 'existing-user' });
+      await expect(new AdminTeamService().createInvitation(owner, { email: 'person@example.com', grantManageAdmins: false }))
+        .rejects.toMatchObject({ statusCode: 409, code: 'ACCOUNT_EXISTS' });
+      expect(state.invitation.create).not.toHaveBeenCalled();
+      expect(email.sendAdminInvitationEmail).not.toHaveBeenCalled();
+    });
+
+  it('matches the normalized address against both the account email and a pending email change', async () => {
+    db.user.findFirst.mockResolvedValue({ id: 'existing-user' });
+    await expect(new AdminTeamService().createInvitation(owner, { email: '  Person@Example.COM ', grantManageAdmins: false })).rejects.toBeInstanceOf(AppError);
+    expect(db.user.findFirst).toHaveBeenCalledWith({ where: { OR: [{ email: 'person@example.com' }, { pendingEmail: 'person@example.com' }] }, select: { id: true } });
+  });
+
+  it('keeps a live pending invitation distinct from an account collision', async () => {
+    state.invitation.findFirst.mockResolvedValue({ id: 'pending-id', expiresAt: new Date(Date.now() + 60_000) });
+    await expect(new AdminTeamService().createInvitation(owner, { email: 'person@example.com', grantManageAdmins: false }))
+      .rejects.toMatchObject({ statusCode: 409, code: 'INVITATION_EXISTS' });
+    expect(state.invitation.create).not.toHaveBeenCalled();
+  });
+
+  it('closes an expired pending invitation as history and issues a new one', async () => {
+    state.invitation.findFirst.mockResolvedValue({ id: 'expired-id', expiresAt: new Date(Date.now() - 60_000) });
+    await new AdminTeamService().createInvitation(owner, { email: 'person@example.com', grantManageAdmins: false });
+    expect(state.invitation.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'expired-id' }, data: expect.objectContaining({ status: AdminInvitationStatus.REVOKED }) }));
+    expect(state.invitation.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a concurrent invitation race (unique violation) as INVITATION_EXISTS', async () => {
+    state.invitation.create.mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError('unique', { code: 'P2002', clientVersion: 'test' }));
+    await expect(new AdminTeamService().createInvitation(owner, { email: 'person@example.com', grantManageAdmins: false }))
+      .rejects.toMatchObject({ statusCode: 409, code: 'INVITATION_EXISTS' });
   });
 });

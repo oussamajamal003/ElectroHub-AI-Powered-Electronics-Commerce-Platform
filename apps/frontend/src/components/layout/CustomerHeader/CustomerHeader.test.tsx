@@ -465,4 +465,48 @@ describe('CustomerHeader', () => {
     expect(screen.getByRole('link', { name: 'Wishlist' })).toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
   });
+  // ── Role-aware account menu ────────────────────────────────
+  const session = (role: string, isInitializing = false) => vi.mocked(useAuth).mockReturnValue({
+    user: isInitializing ? null : { id: '1', firstName: 'Ada', lastName: 'Min', email: 'ada@example.com', role },
+    rememberedUser: { firstName: 'Ada', lastName: 'Min' },
+    isAuthenticated: !isInitializing, isInitializing, login: vi.fn(), logout: mockLogout,
+  } as any);
+
+  it('never opens a role menu from a remembered identity while the session is unverified', () => {
+    session('ADMIN', true);
+    renderWithRouter(<CustomerHeader />);
+    const trigger = screen.getByRole('button', { name: 'Account menu for Ada Min' });
+    expect(trigger).toBeDisabled();
+    fireEvent.click(trigger);
+    expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
+    expect(screen.queryByText('Administrator')).not.toBeInTheDocument();
+  });
+
+  it('shows administrators an admin menu without customer-only destinations or controls', async () => {
+    session('ADMIN');
+    renderWithRouter(<CustomerHeader />);
+    expect(screen.queryByRole('link', { name: /^Cart/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^Wishlist/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Orders' })).not.toBeInTheDocument();
+    const trigger = screen.getByRole('button', { name: 'Account menu for Ada Min' });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    expect(await screen.findByText('Administrator')).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Admin Console' })).toHaveAttribute('href', '/admin');
+    expect(screen.getByRole('menuitem', { name: 'Admin Profile' })).toHaveAttribute('href', '/admin/profile');
+    expect(screen.getByRole('menuitem', { name: 'Sign Out' })).toBeInTheDocument();
+    for (const name of ['My Account', 'My Profile', 'My Orders']) expect(screen.queryByRole('menuitem', { name })).not.toBeInTheDocument();
+  });
+
+  it('keeps the customer menu and controls unchanged', async () => {
+    session('CUSTOMER');
+    renderWithRouter(<CustomerHeader />);
+    expect(screen.getByRole('link', { name: /^Cart/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Wishlist/ })).toBeInTheDocument();
+    const trigger = screen.getByRole('button', { name: 'Account menu for Ada Min' });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    for (const name of ['My Account', 'My Profile', 'My Orders', 'Sign Out']) expect(await screen.findByRole('menuitem', { name })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Admin Console' })).not.toBeInTheDocument();
+  });
 });

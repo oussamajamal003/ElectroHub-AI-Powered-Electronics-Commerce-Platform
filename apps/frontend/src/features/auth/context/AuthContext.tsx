@@ -174,6 +174,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('electrohub:session-expired', clearExpiredSession);
   }, [queryClient]);
 
+  // One browser identity is shared by every tab of this origin. When another tab signs out or switches account, the cached
+  // identity key changes: this tab drops its in-memory token and private cache instead of showing a stale session, or reloads
+  // to restore the new one. Only the key's change is observed; no token or identity is exchanged between tabs.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== userCacheKey || event.storageArea !== localStorage) return;
+      const current = stateRef.current.user;
+      if (!event.newValue) {
+        if (!current) return;
+        setAccessToken(null);
+        queryClient.clear();
+        setState({ user: null, isAuthenticated: false, isLoading: false, isInitializing: false });
+        setSessionVerified(true);
+        return;
+      }
+      const incoming = readCachedUser();
+      if (current && incoming && (incoming.id !== current.id || incoming.role !== current.role)) window.location.reload();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [queryClient]);
+
   const establishSession = (authenticatedUser: User) => {
     queryClient.clear();
     setSessionVerified(true);

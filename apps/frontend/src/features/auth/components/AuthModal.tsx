@@ -820,7 +820,7 @@ export function AuthModal({
             )}
             {adminPortalRequired && (
               <Alert variant="info" className={styles.alert}>
-                Administrator accounts sign in through the Admin Portal. <Link to="/admin/login">Go to the Admin Portal</Link>
+                This account is an administrator account. Continue through the Admin Portal to complete secure sign-in. <Link to="/admin/login">Go to Admin Portal</Link>
               </Alert>
             )}
 

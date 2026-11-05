@@ -13,8 +13,8 @@ import {
   useAdminProfile, useAdministrators, useCreateInvitation, useInvitations, useResendInvitation, useRevokeInvitation,
   useUpdateAdministratorAccess, type AdminInvitation, type AdministratorSummary, type InvitationDelivery, type InvitationStatus,
 } from '@/features/admin/security/api';
-import { describeAdminAuthError } from '@/features/admin/security/errors';
-import { isStepUpCancelled, useStepUp } from '@/features/admin/security/useStepUp';
+import { teamFailure } from './teamFailure';
+import { useStepUp } from '@/features/admin/security/useStepUp';
 import {
   ConfirmDialog, EmptyRows, ListEmpty, PageHeader, Pager, QueryProblem, StatusPill, TableCard, useAdminToast,
 } from '@/features/admin/shared/AdminUi';
@@ -41,22 +41,6 @@ const DELIVERY_LABELS: Record<InvitationDelivery, string> = {
   SENT: 'Sent',
   FAILED: 'Delivery failed',
 };
-
-/** Team-specific copy for the failures an administrator can act on. Anything else falls back to the shared mapper. */
-function teamFailure(error: unknown): string | null {
-  if (isStepUpCancelled(error)) return null;
-  if (error instanceof ApiError) {
-    switch (error.code) {
-      case 'LAST_OWNER': return 'At least one active owner must remain.';
-      case 'SELF_CHANGE': return 'You cannot change your own access from this list.';
-      case 'INVITATION_EXISTS': return 'A pending invitation for this address already exists.';
-      case 'ACCOUNT_EXISTS': return 'An administrator account already uses this address.';
-      case 'CAPABILITY_REQUIRED': return 'Managing administrators requires additional access. Ask an owner.';
-      default: break;
-    }
-  }
-  return describeAdminAuthError(error, 'team').message;
-}
 
 interface PendingAccessChange {
   row: AdministratorSummary;
