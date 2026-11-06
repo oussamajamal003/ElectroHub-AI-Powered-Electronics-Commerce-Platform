@@ -256,3 +256,70 @@ occurred during this closure pass. CI and Architect status must be attached to t
 | UI-23 Visual references | PARTIAL | Analytics, Settings and login reference images and selected rendered screenshots inspected; no reference exists for every new section and exact pixel parity is not claimed. |
 | UI-24 Storybook and tests | PARTIAL | Storybook build, focused tests and disposable Playwright pass; the full requested story/state matrix is not independently exercised. |
 | UI-25 Contracts | PARTIAL | No backend or authentication protocol changes in this refinement; focused tests and disposable journeys pass, but this is not a full security or finance audit. |
+
+### Owner follow-ups — 2026-11-06
+
+- **Admin sign-in 500 (fixed, `a552622`).** The MFA login transaction took 7.7 s against the remote DEV pooler, past Prisma's 5 s
+  interactive-transaction default, so it expired midway. Every `AdminMfaService` transaction now has a 15 s budget (the same as
+  `AuthRepository`). Reproduced and confirmed with a rolled-back call on DEV; no row was written.
+- **Admin password minimum lowered to 8 (owner decision).** `admin-security.controller.ts` and `AdminInvitePage` now agree on 8
+  characters; uppercase, lowercase and a number are still required, and MFA is still mandatory. The invite form shows each rule
+  problem as a live field error and clears server errors on edit.
+- **Customer analytics.** Customer growth (running total and per-day/month sign-ups), Repeat customers (ring), Avg. orders per
+  customer (`ordersPerCustomer`, new) and Avg. session duration (`sessions`, new) on `GET /api/admin/analytics/customers`.
+  Repeat buyers now count distinct paid orders, matching their documented definition (previously counted payments).
+- **Storefront session telemetry (supersedes the earlier "no session duration" decision; owner-requested).** `POST
+  /api/analytics/events` accepts `storefront.session` with a random per-tab UUID (sessionStorage) and the tab's visible time in ms
+  (0–4 h, strict schema, existing 60/min/IP limit). Stored in the existing `analytics_events` table (no migration) as one row per
+  tab, upserted to the largest reported total. No account, cookie, URL or IP is stored; the 400-day retention purge applies.
+  Sessions under 1 s are ignored in the average. Like any anonymous client metric, it can be inflated by a scripted client within
+  the rate limit; it is a trend indicator, not an audited figure.
+- **Admin UI.** Breakdown bars use a shared, colour-blind-checked 8-slot palette (`features/admin/shared/chartColors.ts`) with
+  state colours for stock and image-search outcomes; navigating to another admin page starts at its top.
+- Verification: backend analytics/events/admin tests and the full frontend suite (154 files, 1266 tests) passed locally;
+  typecheck and lint clean apart from existing Fast Refresh warnings. Visual QA: NOT VERIFIED (no browser session with an
+  admin sign-in in this pass). No production write or deployment.
+- Correction to the follow-ups above: the shared administrator transaction budget is now `{ maxWait: 10 s, timeout: 30 s }`
+  (`apps/backend/src/lib/transaction-options.ts`) for MFA, team (invitation accept) and account transactions. On DEV seven
+  read round trips measured 13.3 s, so 15 s was not enough for invitation acceptance (which failed with a 500 and rolled back).
+
+### Addendum — Admin Profile: Change Password and Danger Zone (2026-11-06)
+
+**Backend** (no migration; additive endpoints under the existing `adminGuard`: DB ADMIN role + live MFA session + no-store):
+- `POST /api/admin/me/password` (`requireStepUp`, 5 per 15 min per admin): strict body; administrator password policy; reuses
+  `AuthService.changePassword` (bcrypt verification, hashing, every refresh family and AdminSession revoked under the token-lifecycle
+  lock, `PASSWORD_CHANGED` security event, notification email); adds `ADMIN_PASSWORD_CHANGED` audit, drops sockets, clears the
+  refresh cookie. Rejects reuse of the current password. `POST /api/auth/change-password` now refuses ADMIN tokens
+  (`ADMIN_ENDPOINT_REQUIRED`), so the step-up cannot be bypassed through the shared route.
+- `POST /api/admin/me/delete` (`requireStepUp`, same limiter): `{ currentPassword, confirmation: "DELETE" }`, strict (no target id).
+  Password verified outside the transaction, re-checked inside it. Under the user's token-lifecycle lock (and, for an Owner, the
+  shared `admin_owner_lifecycle` advisory lock with an in-transaction count of other active Owners) the account is anonymized and
+  disabled in place (`deleted-admin-<id>@deleted.invalid`, no password, inactive), never row-deleted, so orders, inventory, delivery
+  and audit foreign keys stay intact. Refresh families and admin sessions revoked; MFA factors, recovery codes, passkeys, OTP/reset
+  tokens and OAuth links deleted; open challenges consumed; pending invitations this admin sent revoked; capabilities cleared
+  (nothing transferred). `ACCOUNT_DELETED` security event and `ADMIN_ACCOUNT_DELETED` audit kept. Sockets dropped after commit.
+  Errors: `INVALID_CURRENT_PASSWORD` 400, `STEP_UP_REQUIRED` 403, `LAST_OWNER` 409, `ACCOUNT_INACTIVE` 409, `ACCOUNT_CHANGED` 409.
+- Profile adds advisory `deletion: { allowed, reason: 'LAST_OWNER' | null }`.
+
+**Frontend:** Profile order Personal details → Role and access → Change password → Security → Danger Zone. Change Password
+reuses `PasswordInput` and the shared admin password rules (`features/admin/security/passwordPolicy.ts`), live field errors,
+single submission, `useStepUp` retry. Danger Zone dialog: identity, consequences, current password, exact `DELETE`, step-up;
+destructive button disabled until valid; Escape closes and focus returns to the trigger; failures keep the session. After
+either action the client clears auth state and private caches and opens `/admin/login` with fixed-copy notices.
+
+**Verification (local):**
+- Disposable PostgreSQL (`node scripts/admin-security-pg.cjs`): 29/29, including PW-01 (step-up, wrong password, policy,
+  all sessions and refresh revoked, audit/security events, old password refused), DEL-01 (non-owner deletion, strict body, no
+  cross-account id, history kept, login/refresh/access refused), DEL-02 (last Owner blocked; with a co-Owner allowed after
+  step-up; no ownership transfer), DEL-03 (two Owners deleting concurrently → exactly one succeeds, one active Owner remains),
+  DEL-04 (customer change-password unchanged; admin endpoints refuse customers).
+- Backend focused tests 302 passed (6 suites need a test database target and did not run); `tsc` build passed.
+- Frontend: full suite 155 files / 1283 tests; typecheck, lint (existing Fast Refresh warnings only) and production build passed.
+- Playwright on fresh disposable stacks (`npm run test:visual:task05-2-account`): 4/4 — last-Owner block, live validation,
+  show/hide, step-up dialog with a real TOTP and real retried change, every session ended, old password refused; invited
+  admin deletes self (keyboard Enter, Escape/focus return), post-deletion login/refresh/protected route refused. Screenshots at
+  390/768/1440/1920 and a 720 px reflow (200%-equivalent) were inspected; a sticky action bar covering the confirm field and
+  missing list bullets were found and fixed, then re-captured.
+- Limits: the browser step-up dialog was triggered by answering the first password request with the server's `STEP_UP_REQUIRED`
+  body (a fresh sign-in is inside the 10-minute window); server enforcement itself is proven by PW-01/DEL-02. Native 200% browser
+  zoom: NOT VERIFIED (headless). Customer deletion integration suite runs in CI only. No shared DEV or PROD deletion was performed.

@@ -284,6 +284,35 @@ describe('AdminLoginPage', () => {
     expect(mockStartAuthentication).not.toHaveBeenCalled();
   });
 
+  describe('notice after the profile ended every session', () => {
+    const renderSignedOut = (state: unknown) => {
+      (useAuth as any).mockReturnValue({ login: mockLogin, logout: mockLogout, isAuthenticated: false, user: null, isInitializing: false });
+      render(<MemoryRouter initialEntries={[{ pathname: '/admin/login', state }]}><Routes><Route path="/admin/login" element={<AdminLoginPage />} /></Routes></MemoryRouter>);
+    };
+
+    it('explains a password change and an account deletion with fixed copy', () => {
+      renderSignedOut({ notice: 'PASSWORD_CHANGED' });
+      expect(screen.getByRole('status')).toHaveTextContent('Your password was changed and every session was signed out.');
+    });
+
+    it('confirms a deletion and never renders text supplied through navigation state', () => {
+      renderSignedOut({ notice: 'ACCOUNT_DELETED' });
+      expect(screen.getByRole('status')).toHaveTextContent('Your administrator account was deleted and every session was signed out.');
+    });
+
+    it('shows a notice handed over through session storage once (the route guard may replace navigation state)', () => {
+      window.sessionStorage.setItem('eh.admin-sign-in-notice', 'PASSWORD_CHANGED');
+      renderSignedOut(null);
+      expect(screen.getByRole('status')).toHaveTextContent('Your password was changed');
+      expect(window.sessionStorage.getItem('eh.admin-sign-in-notice')).toBeNull();
+    });
+
+    it('ignores an unknown notice', () => {
+      renderSignedOut({ notice: '<img src=x onerror=alert(1)>' });
+      expect(screen.queryByRole('status')).toBeNull();
+    });
+  });
+
   describe('return path after sign-in', () => {
     const Landing = () => { const location = useLocation(); return <p>at {location.pathname + location.search}</p>; };
     const renderSignedIn = (state: unknown) => {

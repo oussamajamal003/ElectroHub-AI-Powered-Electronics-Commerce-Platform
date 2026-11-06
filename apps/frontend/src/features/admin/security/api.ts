@@ -24,6 +24,8 @@ export interface AdminProfile {
   role: string;
   emailVerified: boolean;
   capabilities: AdminCapabilities;
+  /** Advisory: the server re-checks inside the deletion transaction. LAST_OWNER blocks self-deletion until another Owner exists. */
+  deletion?: { allowed: boolean; reason: 'LAST_OWNER' | null };
 }
 export interface TotpFactorSummary { id: string; label: string; createdAt: string; lastUsedAt: string | null }
 export interface PasskeySummary { id: string; label: string; createdAt: string; lastUsedAt: string | null }
@@ -145,6 +147,12 @@ export const adminSecurityApi = {
   revokeSession: (id: string) => apiClient<void>(`${ME}/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   revokeOtherSessions: () => apiClient<void>(`${ME}/sessions/revoke-others`, { method: 'POST' }),
   loginHistory: (page: number) => apiClient<ListResponse<LoginHistoryEvent>>(`${ME}/login-history${queryString({ page })}`),
+
+  /** Both end every session, this one included: the caller must clear local auth state and send the administrator to sign in. */
+  changePassword: (body: { currentPassword: string; newPassword: string }) =>
+    enveloped<{ changed: true; signInRequired: true }>(`${ME}/password`, { method: 'POST', data: body }),
+  deleteAccount: (body: { currentPassword: string; confirmation: 'DELETE' }) =>
+    enveloped<{ deleted: true }>(`${ME}/delete`, { method: 'POST', data: body }),
 };
 
 // ─── Team ─────────────────────────────────────────────────

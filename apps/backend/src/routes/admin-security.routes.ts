@@ -18,6 +18,8 @@ const mfaLimiter = limiter(30, 15 * 60 * 1000);
 const inviteLimiter = limiter(20, 15 * 60 * 1000);
 const stepUpLimiter = limiter(10, 15 * 60 * 1000, req => req.user!.userId);
 const writes = limiter(30, 60 * 1000, req => req.user!.userId);
+// Password proof on change-password and self-deletion: keep guessing slow even inside a valid step-up window.
+const credentialWrites = limiter(5, 15 * 60 * 1000, req => req.user!.userId);
 
 export const preAuthRouter = Router();
 preAuthRouter.post('/admin/mfa/totp/verify', mfaLimiter, c.verifyTotp);
@@ -50,6 +52,8 @@ adminSecurityRouter.get('/admin/me/sessions', c.sessions);
 adminSecurityRouter.delete('/admin/me/sessions/:id', writes, c.revokeSession);
 adminSecurityRouter.post('/admin/me/sessions/revoke-others', writes, requireStepUp, c.revokeOtherSessions);
 adminSecurityRouter.get('/admin/me/login-history', c.loginHistory);
+adminSecurityRouter.post('/admin/me/password', credentialWrites, requireStepUp, c.changePassword);
+adminSecurityRouter.post('/admin/me/delete', credentialWrites, requireStepUp, c.deleteAccount);
 
 const manageAdmins = requireAdminCapability('MANAGE_ADMINS');
 adminSecurityRouter.get('/admin/administrators', manageAdmins, c.administrators);

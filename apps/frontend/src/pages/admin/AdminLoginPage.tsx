@@ -15,6 +15,7 @@ import { describeAdminAuthError } from '@/features/admin/security/errors';
 import { AdminEnrollmentFlow } from '@/features/admin/security/components/AdminEnrollmentFlow';
 import { OtpCodeInput } from '@/features/admin/security/components/OtpCodeInput';
 import { PasskeySupportNotice } from '@/features/admin/security/components/PasskeySupportNotice';
+import { SIGN_IN_NOTICE_KEY } from '@/features/admin/security/components/AdminAccountSections';
 import styles from './AdminLoginPage.module.scss';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -41,7 +42,20 @@ export function AdminLoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   // A deep link that required sign-in returns to that admin page; anything else (or a crafted value) goes to the dashboard.
-  const { from, search } = (location.state as { from?: unknown; search?: unknown } | null) ?? {};
+  const { from, search, notice: stateNotice } = (location.state as { from?: unknown; search?: unknown; notice?: unknown } | null) ?? {};
+  // Set by the profile just before it ends every session; read once so a later visit does not repeat it.
+  const [storedNotice] = useState<string | null>(() => {
+    try {
+      const value = window.sessionStorage.getItem(SIGN_IN_NOTICE_KEY);
+      window.sessionStorage.removeItem(SIGN_IN_NOTICE_KEY);
+      return value;
+    } catch { return null; }
+  });
+  const notice = stateNotice ?? storedNotice;
+  // Fixed copy keyed by a known value: navigation state never supplies text that is rendered.
+  const signInNotice = notice === 'PASSWORD_CHANGED'
+    ? 'Your password was changed and every session was signed out. Sign in with your new password and two-step verification.'
+    : notice === 'ACCOUNT_DELETED' ? 'Your administrator account was deleted and every session was signed out.' : null;
   const returnPath = typeof from === 'string' && /^\/admin(\/[A-Za-z0-9._~%-]+)*\/?$/.test(from) && !from.startsWith('/admin/login') ? from : null;
   // List filters live in the query string; it is only ever applied as the search part of an already-validated /admin path.
   const destination = returnPath
@@ -273,6 +287,11 @@ export function AdminLoginPage() {
         {error && (
           <Alert variant="error" className={styles.alert}>
             {error}
+          </Alert>
+        )}
+        {!error && stage === 'credentials' && signInNotice && (
+          <Alert variant={notice === 'ACCOUNT_DELETED' ? 'info' : 'success'} className={styles.alert} role="status">
+            {signInNotice}
           </Alert>
         )}
 

@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { z, ZodError } from 'zod';
-import { setRefreshCookie } from './auth.controller.js';
+import { clearRefreshCookie, setRefreshCookie } from './auth.controller.js';
 import { adminMfaService, maskIp, type RequestMeta } from '../services/admin-mfa.service.js';
 import { adminTeamService } from '../services/admin-team.service.js';
 import { adminAccountService } from '../services/admin-account.service.js';
@@ -19,6 +19,7 @@ const totpCode = z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code.');
 const recoveryCode = z.string().trim().min(12).max(20);
 const name = z.string().trim().min(1).max(100);
 const label = z.string().trim().min(1).max(60);
+const currentPassword = z.string().min(1, 'Enter your current password.').max(128);
 const password = z.string().min(8, 'Use at least 8 characters.').max(128)
   .regex(/[a-z]/, 'Add a lowercase letter.').regex(/[A-Z]/, 'Add an uppercase letter.').regex(/\d/, 'Add a number.');
 // WebAuthn JSON is verified cryptographically by @simplewebauthn/server; only its outer size/shape is bounded here.
@@ -153,6 +154,20 @@ export const adminSecurityController = {
     }
     await adminAccountService.revokeSession(userId(req), familyId, 'REVOKED_BY_USER', meta(req));
     res.json({ data: { revoked: true, current: familyId === session(req).familyId } });
+  }),
+  changePassword: handle(async (req, res) => {
+    const body = z.object({ currentPassword, newPassword: password }).strict().parse(req.body);
+    await adminAccountService.changePassword(userId(req), body, req.id);
+    // Every session, this one included, is revoked: drop the refresh cookie so the browser cannot try to restore it.
+    clearRefreshCookie(res);
+    res.json({ data: { changed: true, signInRequired: true } });
+  }),
+  deleteAccount: handle(async (req, res) => {
+    const body = z.object({ currentPassword, confirmation: z.literal('DELETE', { message: 'Type DELETE to confirm.' }) })
+      .strict().parse(req.body);
+    await adminAccountService.deleteSelf(userId(req), body.currentPassword, meta(req), req.id);
+    clearRefreshCookie(res);
+    res.json({ data: { deleted: true } });
   }),
   revokeOtherSessions: handle(async (req, res) => {
     res.json({ data: await adminAccountService.revokeOtherSessions(userId(req), session(req).familyId, meta(req)) });

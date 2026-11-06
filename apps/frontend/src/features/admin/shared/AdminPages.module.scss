@@ -74,6 +74,8 @@ td .mono, td .muted { white-space: nowrap; }
 .filterSelectTrigger { min-width: 11rem; }
 .formActions { display: flex; gap: $spacing-3; justify-content: flex-end; flex-wrap: wrap; position: sticky; bottom: 0; padding: $spacing-4 0;
   background: linear-gradient(to top, $color-surface 70%, rgba($color-surface, 0)); }
+// Short forms and dialogs: the sticky footer would pin over their own fields, so their actions stay in the flow.
+.formActionsStatic { position: static; padding: $spacing-2 0 0; background: none; }
 .formError { margin: 0; padding: $spacing-3 $spacing-4; border: 1px solid $color-error-border; background: $color-error-background; color: $color-error-foreground;
   font-size: $font-size-sm; }
 .notice { margin: 0; padding: $spacing-3 $spacing-4; border: 1px solid $color-info-border; background: $color-info-background; color: $color-info-foreground;
@@ -158,3 +160,14 @@ td .mono, td .muted { white-space: nowrap; }
 @media (max-width: $breakpoint-sm - 1px) {
   .kpiGrid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Admin profile Danger Zone: restrained (error border and title only), never a filled red block. */
+.dangerPanel { border-color: $color-error-border;
+  &:hover, &:focus-within { border-color: $color-error; box-shadow: $shadow-md; } }
+.dangerTitle { color: $color-error-foreground; }
+.dangerDialog { max-width: 34rem; background: $color-background; }
+.dangerDialogTitle { display: flex; align-items: center; gap: $spacing-2; margin: 0; padding-right: $spacing-8; font-size: $font-size-xl;
+  font-weight: $font-weight-semibold; color: $color-text-primary;
+  svg { flex: none; width: 1.25rem; height: 1.25rem; color: $color-error; } }
+.dangerList { display: grid; gap: $spacing-2; margin: 0; padding-left: $spacing-5; list-style: disc; color: $color-text-secondary; font-size: $font-size-sm;
+  line-height: $line-height-normal; }

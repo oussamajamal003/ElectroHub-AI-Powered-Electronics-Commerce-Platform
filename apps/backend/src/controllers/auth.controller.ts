@@ -424,6 +424,11 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
+    // Task 05.2: administrators change their password at /api/admin/me/password, which requires a recent MFA step-up. This shared
+    // route must not become a way around it.
+    if (req.user?.role === 'ADMIN') {
+      return res.status(403).json({ error: 'Administrators change their password from the admin console.', code: 'ADMIN_ENDPOINT_REQUIRED' });
+    }
     const data = changePasswordSchema.parse(req.body);
     await authService.changePassword(userId, data.currentPassword, data.newPassword);
 

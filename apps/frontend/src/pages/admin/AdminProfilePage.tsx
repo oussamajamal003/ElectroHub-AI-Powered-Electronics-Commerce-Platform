@@ -9,6 +9,7 @@ import { useAuth } from '@/features/auth/context/AuthContext';
 import { useAdminProfile, useUpdateAdminProfile, type AdminProfile } from '@/features/admin/security/api';
 import { AdminPageSkeleton, ButtonLink, PageHeader, QueryProblem, StatusPill, useAdminToast } from '@/features/admin/shared/AdminUi';
 import { fieldErrors } from '@/features/admin/shared/api';
+import { ChangePasswordSection, DangerZoneSection } from '@/features/admin/security/components/AdminAccountSections';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
 
 export function AdminProfilePage() {
@@ -74,6 +75,7 @@ function ProfileContent({ profile }: { profile: AdminProfile }) {
     }
   };
 
+  // Reading order: Personal details → Role and access → Change password → Security → Danger Zone (rows of two, Danger Zone full width).
   return <>
     <div className={styles.split}>
       <section className={styles.panel} aria-labelledby="profile-details-title">
@@ -98,37 +100,41 @@ function ProfileContent({ profile }: { profile: AdminProfile }) {
         </form>
       </section>
 
-      <div className={styles.stack}>
-        <section className={styles.panel} aria-labelledby="profile-access-title">
-          <div className={styles.panelHeader}>
-            <h2 id="profile-access-title" className={styles.panelTitle}>Role and access</h2>
-          </div>
-          <dl className={styles.details}>
-            <dt>Role</dt>
-            <dd><StatusPill tone="primary" icon={false}>Administrator</StatusPill></dd>
-            <dt>Capabilities</dt>
-            <dd>
-              {access.length
-                ? <span className={styles.tags}>{access.map(label => <StatusPill key={label} tone="info" icon={false}>{label}</StatusPill>)}</span>
-                : <span className={styles.muted}>Standard administrator</span>}
-            </dd>
-          </dl>
-        </section>
-
-        <section className={styles.panel} aria-labelledby="profile-links-title">
-          <div className={styles.panelHeader}>
-            <h2 id="profile-links-title" className={styles.panelTitle}>Security</h2>
-          </div>
-          <p className={styles.panelHint}>Manage how you sign in and where you are signed in.</p>
-          <div className={styles.actionsStart}>
-            <ButtonLink to="/admin/profile/security" variant="outline"><ShieldCheck aria-hidden="true" /> Security</ButtonLink>
-            <ButtonLink to="/admin/profile/sessions" variant="outline"><KeyRound aria-hidden="true" /> Sessions and login history</ButtonLink>
-          </div>
-          <p className={styles.panelHint}>
-            Changes to your sign-in methods ask you to confirm it is you. <Link className={styles.panelLink} to="/admin">Back to dashboard</Link>
-          </p>
-        </section>
-      </div>
+      <section className={styles.panel} aria-labelledby="profile-access-title">
+        <div className={styles.panelHeader}>
+          <h2 id="profile-access-title" className={styles.panelTitle}>Role and access</h2>
+        </div>
+        <dl className={styles.details}>
+          <dt>Role</dt>
+          <dd><StatusPill tone="primary" icon={false}>Administrator</StatusPill></dd>
+          <dt>Capabilities</dt>
+          <dd>
+            {access.length
+              ? <span className={styles.tags}>{access.map(label => <StatusPill key={label} tone="info" icon={false}>{label}</StatusPill>)}</span>
+              : <span className={styles.muted}>Standard administrator</span>}
+          </dd>
+        </dl>
+      </section>
     </div>
+
+    <div className={styles.split}>
+      <ChangePasswordSection />
+
+      <section className={styles.panel} aria-labelledby="profile-links-title">
+        <div className={styles.panelHeader}>
+          <h2 id="profile-links-title" className={styles.panelTitle}>Security</h2>
+        </div>
+        <p className={styles.panelHint}>Manage how you sign in and where you are signed in.</p>
+        <div className={styles.actionsStart}>
+          <ButtonLink to="/admin/profile/security" variant="outline"><ShieldCheck aria-hidden="true" /> Security</ButtonLink>
+          <ButtonLink to="/admin/profile/sessions" variant="outline"><KeyRound aria-hidden="true" /> Sessions and login history</ButtonLink>
+        </div>
+        <p className={styles.panelHint}>
+          Changes to your sign-in methods ask you to confirm it is you. <Link className={styles.panelLink} to="/admin">Back to dashboard</Link>
+        </p>
+      </section>
+    </div>
+
+    <DangerZoneSection profile={profile} />
   </>;
 }
