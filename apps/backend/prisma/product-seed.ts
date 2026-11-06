@@ -150,7 +150,7 @@ export const productDataset = validateProductDataset({
   products: curatedProducts,
 });
 
-/** True only for a verified disposable database (loopback URLs named electrohub_disposable*/electrohub_ci*). */
+/** True only for a verified disposable database (loopback URLs whose database name starts with electrohub_disposable or electrohub_ci). */
 export function isDisposableSeedTarget(configuration: NodeJS.ProcessEnv): boolean {
   return resolvePaymentIsolation({ ...configuration, NODE_ENV: 'development', npm_lifecycle_event: undefined }).target === 'disposable';
 }
