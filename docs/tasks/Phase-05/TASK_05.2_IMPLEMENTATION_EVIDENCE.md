@@ -323,3 +323,12 @@ either action the client clears auth state and private caches and opens `/admin/
 - Limits: the browser step-up dialog was triggered by answering the first password request with the server's `STEP_UP_REQUIRED`
   body (a fresh sign-in is inside the 10-minute window); server enforcement itself is proven by PW-01/DEL-02. Native 200% browser
   zoom: NOT VERIFIED (headless). Customer deletion integration suite runs in CI only. No shared DEV or PROD deletion was performed.
+
+## Existing administrator MFA activation (commit c935f3c)
+
+- Flow: Owner (with step-up) authorizes → single-use, hashed, 30-minute fragment link by Brevo email → unique new password → mandatory TOTP + recovery codes → admin session. Redemption issues no session, revokes old refresh/admin sessions and challenges, and only then opens a 30-minute enrollment window. Enrolled accounts are never eligible. Migration `20261106000000_admin_mfa_activation` (new table, enum, partial unique index for one PENDING row per user).
+- Seed safety: seeding only creates missing administrators; the shared fallback password is used only on disposable targets; no password, active, Owner or MFA state of an existing account is touched (SEED-01).
+- Disposable PostgreSQL: `node scripts/admin-security-pg.cjs` → 31 tests passed (ACT-01..14 incl. concurrent Owners/redeems, replay, old password dead; SEED-01).
+- Disposable browser stack: `test:visual:task05-2-activation` → 5 passed (ACT-UI-01..05) at 390/768/1440/1920 with overflow assertions, dialog focus restoration, honest delivery-failure state, redeem + enrollment, replay invalid, login message for an unactivated admin.
+- Local: backend `tsc --noEmit` and eslint clean; frontend `tsc -b`, eslint (0 errors), `vite build` OK; focused vitest 300/300 on re-run (one earlier run showed 2 timing failures under load that did not reproduce).
+- NOT VERIFIED / not done: the migration is NOT applied to shared DEV (`pzxekjybdiulzmssalfo`) and no real activation was sent; admin1–admin4 untouched, no Owner granted; PROD untouched. Real Brevo delivery not exercised (no provider on the disposable stack).
