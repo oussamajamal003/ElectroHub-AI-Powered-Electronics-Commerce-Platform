@@ -5,6 +5,7 @@ import {
 } from '@simplewebauthn/server';
 import { AdminChallengePurpose, AdminMfaMethod, Prisma, SecurityEventType, type Role, type User } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
+import { ADMIN_AUTH_TX } from '../lib/transaction-options.js';
 import { env } from '../config/env.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { lockUserTokenLifecycle } from '../repositories/auth.repository.js';
@@ -30,12 +31,6 @@ type AdminUser = User & { role: Role };
 const challengeInvalid = () => new AppError('Your sign-in attempt expired or is no longer valid. Start again.', 401, 'MFA_CHALLENGE_INVALID');
 const codeInvalid = (attemptsRemaining: number) =>
   Object.assign(new AppError('That code is not valid. Check it and try again.', 401, 'MFA_CODE_INVALID'), { attemptsRemaining });
-
-/**
- * Every MFA transaction takes the user's token-lifecycle lock and then makes several sequential round trips; against the remote DEV
- * pooler that exceeds Prisma's 5 s default, the transaction expires midway and sign-in fails with a 500. Same budget as AuthRepository.
- */
-const ADMIN_AUTH_TX = { timeout: 15000 } as const;
 
 export const credentialFingerprint = (passwordHash: string | null) => sha256Hex(`admin-credential:${passwordHash ?? ''}`);
 

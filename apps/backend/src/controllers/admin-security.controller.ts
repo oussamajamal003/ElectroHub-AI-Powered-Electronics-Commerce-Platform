@@ -19,7 +19,7 @@ const totpCode = z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code.');
 const recoveryCode = z.string().trim().min(12).max(20);
 const name = z.string().trim().min(1).max(100);
 const label = z.string().trim().min(1).max(60);
-const password = z.string().min(12, 'Use at least 12 characters.').max(128)
+const password = z.string().min(8, 'Use at least 8 characters.').max(128)
   .regex(/[a-z]/, 'Add a lowercase letter.').regex(/[A-Z]/, 'Add an uppercase letter.').regex(/\d/, 'Add a number.');
 // WebAuthn JSON is verified cryptographically by @simplewebauthn/server; only its outer size/shape is bounded here.
 const webauthnResponse = z.object({ id: z.string().min(1).max(1024), rawId: z.string().min(1).max(1024), type: z.literal('public-key'),

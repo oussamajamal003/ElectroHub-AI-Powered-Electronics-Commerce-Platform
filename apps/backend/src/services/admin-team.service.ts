@@ -1,5 +1,6 @@
 import { AdminInvitationDelivery, AdminInvitationStatus, Prisma, type AdminInvitation } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
+import { ADMIN_AUTH_TX } from '../lib/transaction-options.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { hashPassword } from '../utils/hash.js';
 import { lockUserTokenLifecycle, revokeAdminSessions } from '../repositories/auth.repository.js';
@@ -112,7 +113,7 @@ export class AdminTeamService {
       await recordAdminAudit({ actorId: actor.userId, action: 'ADMIN_INVITATION_CREATED', resourceType: 'admin_invitation', resourceId: created.id,
         outcome: 'SUCCESS', details: { grantManageAdmins: input.grantManageAdmins }, requestId: actor.requestId }, tx);
       return created;
-    }).catch(error => {
+    }, ADMIN_AUTH_TX).catch(error => {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new AppError('An invitation is already pending for this email. Resend it instead.', 409, 'INVITATION_EXISTS');
       }
@@ -142,7 +143,7 @@ export class AdminTeamService {
       await recordAdminAudit({ actorId: actor.userId, action: 'ADMIN_INVITATION_RESENT', resourceType: 'admin_invitation', resourceId: id, outcome: 'SUCCESS',
         requestId: actor.requestId }, tx);
       return row;
-    });
+    }, ADMIN_AUTH_TX);
     return this.deliver(invitation.id, invitation.email, token, tokenHash, actor.userId, expiresAt);
   }
 
@@ -158,7 +159,7 @@ export class AdminTeamService {
       }
       const row = await tx.adminInvitation.findUniqueOrThrow({ where: { id }, include: { invitedBy: { select: { firstName: true, lastName: true } } } });
       return invitationDto(row);
-    });
+    }, ADMIN_AUTH_TX);
   }
 
   // ── Public, token-bound ──────────────────────────────────────────────────
@@ -193,7 +194,7 @@ export class AdminTeamService {
       await recordAdminAudit({ actorId: created.id, action: 'ADMIN_INVITATION_ACCEPTED', resourceType: 'admin_invitation', resourceId: invitation.id,
         outcome: 'SUCCESS', details: { invitedById: invitation.invitedById } }, tx);
       return { created, invitedById: invitation.invitedById };
-    });
+    }, ADMIN_AUTH_TX);
     // After commit, fire-and-forget; governed by the inviter's "invitation accepted" preference.
     adminNotifications.notifyInvitationAccepted(invitedById);
     // No session yet: the new administrator continues straight into mandatory first-factor enrollment.
@@ -228,7 +229,7 @@ export class AdminTeamService {
       await recordAdminAudit({ actorId: actor.userId, action: 'ADMIN_ACCESS_CHANGED', resourceType: 'admin_user', resourceId: targetId, outcome: 'SUCCESS',
         details: { isActive: input.isActive ?? null, canManageAdmins: input.canManageAdmins ?? null }, requestId: actor.requestId }, tx);
       return tx.user.findUniqueOrThrow({ where: { id: targetId }, select: { id: true, isActive: true, adminSecurity: { select: { isOwner: true, canManageAdmins: true } } } });
-    });
+    }, ADMIN_AUTH_TX);
     if (input.isActive === false) DeliveryPublisher.disconnectUser(targetId, 'LOGOUT');
     return { id: result.id, isActive: result.isActive, isOwner: result.adminSecurity?.isOwner ?? false, canManageAdmins: result.adminSecurity?.canManageAdmins ?? false };
   }

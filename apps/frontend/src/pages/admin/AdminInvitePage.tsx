@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { Button } from '@/components/ui/Button';
@@ -11,9 +11,9 @@ import { describeAdminAuthError } from '@/features/admin/security/errors';
 import { AdminEnrollmentFlow } from '@/features/admin/security/components/AdminEnrollmentFlow';
 import { ApiError } from '@/lib/api';
 import { fieldErrors as serverFieldErrors } from '@/features/admin/shared/api';
+import { STRONG_PASSWORD, passwordHint } from '@/features/admin/security/passwordPolicy';
 import styles from './AdminLoginPage.module.scss';
 
-export const MIN_ADMIN_PASSWORD_LENGTH = 12;
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{16,256}$/;
 
 /**
@@ -26,14 +26,20 @@ export function readInvitationToken(hash: string): string | null {
   return token && TOKEN_PATTERN.test(token) ? token : null;
 }
 
-/** Plain-language strength guidance. The server enforces the real policy; this only helps the administrator choose. */
-export function passwordHint(password: string): string {
-  if (!password) return `Use ${MIN_ADMIN_PASSWORD_LENGTH} to 128 characters, including uppercase, lowercase and a number.`;
-  if (password.length < MIN_ADMIN_PASSWORD_LENGTH) return `${MIN_ADMIN_PASSWORD_LENGTH - password.length} more characters needed.`;
-  if (password.length > 128) return 'Use no more than 128 characters.';
-  const missing = [[/[a-z]/, 'a lowercase letter'], [/[A-Z]/, 'an uppercase letter'], [/\d/, 'a number']] as const;
-  const needed = missing.filter(([pattern]) => !pattern.test(password)).map(([, label]) => label);
-  return needed.length ? `Add ${needed.join(' and ')}.` : 'Strong password.';
+
+type InviteField = 'firstName' | 'lastName' | 'password' | 'confirmPassword';
+type FieldErrors = Partial<Record<InviteField, string>>;
+
+/** Every client-side rule in one place, so the live messages and the submit check can never disagree. */
+function inviteProblems(values: Record<InviteField, string>): FieldErrors {
+  const problems: FieldErrors = {};
+  if (!values.firstName.trim()) problems.firstName = 'Enter your first name.';
+  if (!values.lastName.trim()) problems.lastName = 'Enter your last name.';
+  const hint = passwordHint(values.password);
+  if (hint !== STRONG_PASSWORD) problems.password = hint;
+  if (!values.confirmPassword) problems.confirmPassword = 'Confirm your password.';
+  else if (values.confirmPassword !== values.password) problems.confirmPassword = 'The passwords do not match.';
+  return problems;
 }
 
 type Preview =
@@ -60,7 +66,10 @@ export function AdminInvitePage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [formError, setFormError] = useState('');
-  const [fieldErrors, setFieldErrors] = useState<{ firstName?: string; lastName?: string; password?: string; confirmPassword?: string }>({});
+  // Server (or submit-time) errors, shown until that field is edited again.
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  // Fields the administrator has typed in: their rule problems show live, as an error, on every keystroke.
+  const [touched, setTouched] = useState<Partial<Record<InviteField, boolean>>>({});
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -86,15 +95,24 @@ export function AdminInvitePage() {
     return () => { active = false; };
   }, [token, attempt]);
 
+  const problems = inviteProblems({ firstName, lastName, password, confirmPassword });
+  const errorFor = (field: InviteField) => fieldErrors[field] ?? (touched[field] ? problems[field] : undefined);
+
+  // Editing a field drops its stale server error and starts live validation for it.
+  const edit = (field: InviteField, set: (value: string) => void) => (event: ChangeEvent<HTMLInputElement>) => {
+    set(event.target.value);
+    setTouched(current => current[field] ? current : { ...current, [field]: true });
+    setFieldErrors(current => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  };
+
   const validate = () => {
-    const next: typeof fieldErrors = {};
-    if (!firstName.trim()) next.firstName = 'Enter your first name.';
-    if (!lastName.trim()) next.lastName = 'Enter your last name.';
-    if (password.length < MIN_ADMIN_PASSWORD_LENGTH) next.password = `Use at least ${MIN_ADMIN_PASSWORD_LENGTH} characters.`;
-    else if (password.length > 128 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password)) next.password = passwordHint(password);
-    if (confirmPassword !== password) next.confirmPassword = 'The passwords do not match.';
-    setFieldErrors(next);
-    return Object.keys(next).length === 0;
+    setTouched({ firstName: true, lastName: true, password: true, confirmPassword: true });
+    return Object.keys(problems).length === 0;
   };
 
   const accept = async (event: FormEvent) => {
@@ -175,15 +193,15 @@ export function AdminInvitePage() {
         <Input id="invite-email" name="email" label="Email address" type="email" value={preview.email} readOnly fullWidth autoComplete="email"
           helperText="This invitation is for this address." />
         <div className={styles.nameRow}>
-          <Input id="invite-first-name" name="firstName" label="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)}
-            error={fieldErrors.firstName} autoComplete="given-name" maxLength={100} fullWidth disabled={pending} />
-          <Input id="invite-last-name" name="lastName" label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)}
-            error={fieldErrors.lastName} autoComplete="family-name" maxLength={100} fullWidth disabled={pending} />
+          <Input id="invite-first-name" name="firstName" label="First name" value={firstName} onChange={edit('firstName', setFirstName)}
+            error={errorFor('firstName')} autoComplete="given-name" maxLength={100} fullWidth disabled={pending} />
+          <Input id="invite-last-name" name="lastName" label="Last name" value={lastName} onChange={edit('lastName', setLastName)}
+            error={errorFor('lastName')} autoComplete="family-name" maxLength={100} fullWidth disabled={pending} />
         </div>
-        <PasswordInput id="invite-password" name="password" label="Create a password" value={password} onChange={(e) => setPassword(e.target.value)}
-          error={fieldErrors.password} helperText={passwordHint(password)} autoComplete="new-password" fullWidth disabled={pending} />
+        <PasswordInput id="invite-password" name="password" label="Create a password" value={password} onChange={edit('password', setPassword)}
+          error={errorFor('password')} helperText={passwordHint(password)} autoComplete="new-password" fullWidth disabled={pending} />
         <PasswordInput id="invite-confirm-password" name="confirmPassword" label="Confirm password" value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)} error={fieldErrors.confirmPassword} autoComplete="new-password" fullWidth disabled={pending} />
+          onChange={edit('confirmPassword', setConfirmPassword)} error={errorFor('confirmPassword')} autoComplete="new-password" fullWidth disabled={pending} />
         <Button type="submit" className={styles.submitButton} isLoading={pending}>Create my account</Button>
       </form>
     );

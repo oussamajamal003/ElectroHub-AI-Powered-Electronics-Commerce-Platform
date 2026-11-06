@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { AdminInvitePage, MIN_ADMIN_PASSWORD_LENGTH, passwordHint, readInvitationToken } from './AdminInvitePage';
+import { AdminInvitePage, readInvitationToken } from './AdminInvitePage';
+import { MIN_ADMIN_PASSWORD_LENGTH, passwordHint } from '@/features/admin/security/passwordPolicy';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { adminAuthApi } from '@/features/admin/security/api';
 import { ApiError } from '@/lib/api';
@@ -80,5 +81,32 @@ describe('AdminInvitePage', () => {
     await fillForm('Correct-Horse-9-Battery');
     await waitFor(() => expect(screen.getByText('Choose a different password.')).toBeInTheDocument());
     expect(screen.getByLabelText('Create a password')).toHaveAttribute('aria-invalid', 'true');
+    // Typing again drops the stale server error at once; the live rule problem replaces it as the field's error.
+    const field = screen.getByLabelText('Create a password');
+    fireEvent.change(field, { target: { value: 'Abc1' } });
+    expect(screen.queryByText('Choose a different password.')).toBeNull();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByText(`${MIN_ADMIN_PASSWORD_LENGTH - 4} more characters needed.`)).toBeInTheDocument();
+  });
+
+  it('shows each rule problem as an error while typing, and clears it once met', async () => {
+    window.history.replaceState(null, '', '/admin/invite#token=abcdefghijklmnop1234');
+    vi.mocked(adminAuthApi.previewInvitation).mockResolvedValue({ email: 'invitee@qa.invalid', expiresAt: '2026-11-06T00:00:00Z' });
+    render(<MemoryRouter><AdminInvitePage /></MemoryRouter>);
+    const field = await screen.findByLabelText('Create a password');
+    fireEvent.change(field, { target: { value: 'lowercase123' } });
+    expect(screen.getByText('Add an uppercase letter.')).toBeInTheDocument();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    fireEvent.change(field, { target: { value: 'Lowercase123' } });
+    expect(field).not.toHaveAttribute('aria-invalid', 'true');
+    const confirm = screen.getByLabelText('Confirm password');
+    fireEvent.change(confirm, { target: { value: 'Lowercase12' } });
+    expect(screen.getByText('The passwords do not match.')).toBeInTheDocument();
+    fireEvent.change(confirm, { target: { value: 'Lowercase123' } });
+    expect(screen.queryByText('The passwords do not match.')).toBeNull();
+    const first = screen.getByLabelText('First name');
+    fireEvent.change(first, { target: { value: 'A' } });
+    fireEvent.change(first, { target: { value: '' } });
+    expect(screen.getByText('Enter your first name.')).toBeInTheDocument();
   });
 });
