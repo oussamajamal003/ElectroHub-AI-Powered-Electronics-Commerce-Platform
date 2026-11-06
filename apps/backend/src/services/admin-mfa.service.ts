@@ -31,6 +31,12 @@ const challengeInvalid = () => new AppError('Your sign-in attempt expired or is 
 const codeInvalid = (attemptsRemaining: number) =>
   Object.assign(new AppError('That code is not valid. Check it and try again.', 401, 'MFA_CODE_INVALID'), { attemptsRemaining });
 
+/**
+ * Every MFA transaction takes the user's token-lifecycle lock and then makes several sequential round trips; against the remote DEV
+ * pooler that exceeds Prisma's 5 s default, the transaction expires midway and sign-in fails with a 500. Same budget as AuthRepository.
+ */
+const ADMIN_AUTH_TX = { timeout: 15000 } as const;
+
 export const credentialFingerprint = (passwordHash: string | null) => sha256Hex(`admin-credential:${passwordHash ?? ''}`);
 
 /** Truncate to a network prefix: enough to recognise "same office / different country", never a full address. */
@@ -97,7 +103,7 @@ export class AdminMfaService {
       await tx.adminAuthChallenge.create({ data: { tokenHash: sha256Hex(mfaToken), userId: user.id, purpose: AdminChallengePurpose.LOGIN,
         credentialFingerprint: credentialFingerprint(currentUser.passwordHash), expiresAt, maxAttempts: CHALLENGE_MAX_ATTEMPTS } });
       return { denied: false as const, enrollmentRequired, factors };
-    });
+    }, ADMIN_AUTH_TX);
     if (state.denied) throw new AppError('Two-step verification must be authorised by an owner before this account can sign in.', 403, 'ENROLLMENT_NOT_AUTHORIZED');
     return {
       requiresMfa: true as const, mfaToken, expiresAt, enrollmentRequired: state.enrollmentRequired,
@@ -168,7 +174,7 @@ export class AdminMfaService {
       if (!await this.acceptTotp(tx, challenge.userId, code)) return false;
       await this.consume(tx, challenge.id);
       return true;
-    });
+    }, ADMIN_AUTH_TX);
     if (!ok) return this.failAttempt(challenge.id, challenge.userId, meta);
     return this.issue(challenge.user, AdminMfaMethod.TOTP, meta);
   }
@@ -180,7 +186,7 @@ export class AdminMfaService {
       await this.consume(tx, challenge.id);
       await securityEvent(SecurityEventType.ADMIN_RECOVERY_CODE_USED, challenge.userId, meta, tx);
       return true;
-    });
+    }, ADMIN_AUTH_TX);
     if (!ok) return this.failAttempt(challenge.id, challenge.userId, meta);
     return this.issue(challenge.user, AdminMfaMethod.RECOVERY_CODE, meta);
   }
@@ -239,7 +245,7 @@ export class AdminMfaService {
       if (advanced.count !== 1) return false;
       await onAccepted(tx);
       return true;
-    });
+    }, ADMIN_AUTH_TX);
   }
 
   // ── First-factor enrollment inside a LOGIN transaction ───────────────────
@@ -266,7 +272,7 @@ export class AdminMfaService {
       // Abandoned enrollments are not history: they never protected anything and are replaced.
       await tx.adminMfaFactor.deleteMany({ where: { userId, verifiedAt: null } });
       await tx.adminMfaFactor.create({ data: { id: factorId, userId, label, secretCiphertext: sealed.ciphertext, keyVersion: sealed.keyVersion } });
-    });
+    }, ADMIN_AUTH_TX);
     const secretBase32 = base32Encode(secret);
     return { factorId, otpauthUri: otpauthUri(secretBase32, email), secret: secretBase32 };
   }
@@ -302,7 +308,7 @@ export class AdminMfaService {
         create: { userId: challenge.userId, mfaEnrolledAt: new Date() }, update: { mfaEnrolledAt: new Date(), enrollmentAllowedUntil: null } });
       await securityEvent(SecurityEventType.ADMIN_MFA_ENROLLED, challenge.userId, meta, tx);
       return { codes: await this.replaceRecoveryCodes(tx, challenge.userId), user };
-    });
+    }, ADMIN_AUTH_TX);
     if (!result) return this.failAttempt(challenge.id, challenge.userId, meta);
     const session = await this.issue(result.user, AdminMfaMethod.TOTP, meta);
     return { ...session, recoveryCodes: result.codes };
@@ -330,7 +336,7 @@ export class AdminMfaService {
       if (method === 'RECOVERY_CODE') await securityEvent(SecurityEventType.ADMIN_RECOVERY_CODE_USED, userId, meta, tx);
       await this.markStepUp(tx, userId, familyId, meta);
       return true;
-    });
+    }, ADMIN_AUTH_TX);
     if (!ok) {
       await securityEvent(SecurityEventType.ADMIN_MFA_CHALLENGE_FAILED, userId, meta);
       throw new AppError('That code is not valid. Check it and try again.', 401, 'MFA_CODE_INVALID');
@@ -343,7 +349,7 @@ export class AdminMfaService {
       await tx.adminAuthChallenge.updateMany({ where: { userId, sessionFamilyId: familyId, purpose, consumedAt: null }, data: { consumedAt: new Date() } });
       await tx.adminAuthChallenge.create({ data: { tokenHash: sha256Hex(randomToken()), userId, purpose, sessionFamilyId: familyId, webauthnChallenge,
         credentialFingerprint: credentialFingerprint(fingerprintSource), expiresAt: new Date(Date.now() + CHALLENGE_TTL_MS), maxAttempts: 1 } });
-    });
+    }, ADMIN_AUTH_TX);
   }
 
   private async liveSessionChallenge(userId: string, familyId: string, purpose: AdminChallengePurpose) {
@@ -405,7 +411,7 @@ export class AdminMfaService {
       // An administrator who has never had recovery codes gets a first batch with the first factor.
       const hasCodes = await tx.adminRecoveryCode.count({ where: { userId, revokedAt: null } });
       return { recoveryCodes: hasCodes === 0 ? await this.replaceRecoveryCodes(tx, userId) : null };
-    });
+    }, ADMIN_AUTH_TX);
     if (!result) throw new AppError('That code is not valid. Check it and try again.', 401, 'MFA_CODE_INVALID');
     return result;
   }
@@ -426,7 +432,7 @@ export class AdminMfaService {
       if (factor.verifiedAt) await this.assertNotLastFactor(tx, userId);
       await tx.adminMfaFactor.update({ where: { id: factor.id }, data: { disabledAt: new Date() } });
       await securityEvent(SecurityEventType.ADMIN_MFA_DISABLED, userId, meta, tx);
-    });
+    }, ADMIN_AUTH_TX);
   }
 
   async regenerateRecoveryCodes(userId: string, meta?: RequestMeta) {
@@ -435,7 +441,7 @@ export class AdminMfaService {
       const codes = await this.replaceRecoveryCodes(tx, userId);
       await securityEvent(SecurityEventType.ADMIN_RECOVERY_CODES_REGENERATED, userId, meta, tx);
       return { codes };
-    });
+    }, ADMIN_AUTH_TX);
   }
 
   async passkeyRegistrationOptions(user: { id: string; email: string; firstName: string; lastName: string; passwordHash: string | null }, familyId: string) {
@@ -480,7 +486,7 @@ export class AdminMfaService {
       await tx.adminAccountSecurity.upsert({ where: { userId }, create: { userId, mfaEnrolledAt: new Date() }, update: {} });
       await securityEvent(SecurityEventType.ADMIN_PASSKEY_ADDED, userId, meta, tx);
       return created;
-    });
+    }, ADMIN_AUTH_TX);
   }
 
   async renamePasskey(userId: string, id: string, label: string) {
@@ -496,7 +502,7 @@ export class AdminMfaService {
       await this.assertNotLastFactor(tx, userId);
       await tx.adminWebAuthnCredential.update({ where: { id }, data: { revokedAt: new Date() } });
       await securityEvent(SecurityEventType.ADMIN_PASSKEY_REMOVED, userId, meta, tx);
-    });
+    }, ADMIN_AUTH_TX);
   }
 }
 
