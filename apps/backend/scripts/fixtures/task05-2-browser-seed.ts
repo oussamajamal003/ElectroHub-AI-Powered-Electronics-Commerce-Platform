@@ -74,7 +74,17 @@ async function main() {
   const resendToken = `qa-resend-${randomUUID()}`;
   await prisma.adminInvitation.create({ data: { email: 'resendable@qa.invalid', tokenHash: createHash('sha256').update(resendToken).digest('hex'), invitedById: owner.id,
     expiresAt: new Date(Date.now() + 3 * day), deliveryStatus: 'SENT', sendCount: 1, lastSentAt: new Date(Date.now() - 2 * 60_000) } });
-  writeFileSync(out, JSON.stringify({ ownerEmail: owner.email, staffEmail: staff.email, customerEmail: customers[0].email, password, invitationToken }, null, 2));
+  // Existing factor-less administrators (no MFA, no enrollment window), as left behind by development seeding.
+  const legacy = async (email: string, firstName: string) => prisma.user.create({ data: { email, passwordHash, firstName, lastName: 'Legacy', roleId: adminRole.id, emailVerifiedAt: new Date() } });
+  await legacy('legacy-delivery@qa.invalid', 'Dana');
+  const linked = await legacy('legacy-linked@qa.invalid', 'Lee');
+  await legacy('legacy-unactivated@qa.invalid', 'Uma');
+  // A pending Owner-authorized activation whose single-use token exists only in the git-ignored credentials file.
+  const activationToken = `qa-activation-${randomUUID()}`;
+  await prisma.adminMfaActivation.create({ data: { userId: linked.id, authorizedById: owner.id, email: linked.email, tokenHash: createHash('sha256').update(activationToken).digest('hex'),
+    expiresAt: new Date(Date.now() + 25 * 60_000), deliveryStatus: 'SENT', sendCount: 1, lastSentAt: new Date() } });
+  writeFileSync(out, JSON.stringify({ ownerEmail: owner.email, staffEmail: staff.email, customerEmail: customers[0].email, password, invitationToken,
+    activationToken, legacyDeliveryEmail: 'legacy-delivery@qa.invalid', legacyLinkedEmail: linked.email, legacyUnactivatedEmail: 'legacy-unactivated@qa.invalid' }, null, 2));
 }
 
 main().then(() => prisma.$disconnect()).catch(async error => { console.error(error instanceof Error ? error.message : 'seed failed'); await prisma.$disconnect(); process.exit(1); });

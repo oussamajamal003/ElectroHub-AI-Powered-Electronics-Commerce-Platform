@@ -44,3 +44,39 @@ export async function sendAdminInvitationEmail(input: { to: string; token: strin
   logger.error('ADMIN_INVITATION_DELIVERY_FAILED', { deliveryId: delivery.id });
   return false;
 }
+
+export function activationLink(token: string): string {
+  return `${(env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '')}/admin/activate#token=${encodeURIComponent(token)}`;
+}
+
+/** Existing-administrator activation email. Same fragment-only link and ledger rules as the invitation email. */
+export async function sendAdminActivationEmail(input: { to: string; token: string; ownerName: string | null; expiresAt: Date },
+  provider: BrevoProvider = brevoProvider): Promise<boolean> {
+  const delivery = await prisma.emailDelivery.create({ data: { type: EmailType.ADMIN_ACTIVATION, recipient: input.to, status: EmailDeliveryStatus.QUEUED, provider: 'BREVO' } });
+  const link = activationLink(input.token);
+  const owner = input.ownerName ? escapeHtml(input.ownerName) : 'An ElectroHub owner';
+  const expires = input.expiresAt.toUTCString();
+  const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Activate your ElectroHub administrator account</title></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;margin:0;padding:24px;color:#0f172a">
+<div style="max-width:480px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;padding:32px">
+<div style="font-size:22px;font-weight:700;color:#2563eb;text-align:center;margin-bottom:24px">ElectroHub</div>
+<h1 style="font-size:20px;font-weight:600;margin:0 0 12px;text-align:center">Activate your administrator account</h1>
+<p style="font-size:14px;line-height:1.6;color:#475569">${owner} authorized two-step verification for your administrator account. Choose a new password and set up an authenticator app to continue. Your previous password stops working once you finish this step.</p>
+<p style="text-align:center;margin:24px 0"><a href="${escapeHtml(link)}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;font-weight:600;display:inline-block">Activate account</a></p>
+<p style="font-size:13px;color:#64748b">This single-use link expires on ${escapeHtml(expires)}. If you were not expecting it, ignore this email and tell an owner.</p>
+</div></body></html>`;
+  const textContent = `Activate your ElectroHub administrator account\n\n${input.ownerName ?? 'An ElectroHub owner'} authorized two-step verification for your administrator account.\nActivate: ${link}\n\nThis single-use link expires on ${expires}. If you were not expecting it, ignore this email and tell an owner.`;
+  try {
+    const result = await provider.sendTransactionalEmail({ to: input.to, subject: 'Activate your ElectroHub administrator account', htmlContent, textContent, tags: [EmailType.ADMIN_ACTIVATION] });
+    if (result.success && result.messageId) {
+      await prisma.emailDelivery.update({ where: { id: delivery.id }, data: { status: EmailDeliveryStatus.SENT, providerMessageId: result.messageId, sentAt: new Date() } });
+      return true;
+    }
+    await prisma.emailDelivery.update({ where: { id: delivery.id }, data: { status: EmailDeliveryStatus.FAILED, failureReason: 'Email provider delivery failed', failedAt: new Date() } });
+  } catch {
+    await prisma.emailDelivery.update({ where: { id: delivery.id }, data: { status: EmailDeliveryStatus.FAILED, failureReason: 'Email provider delivery failed', failedAt: new Date() } })
+      .catch(() => undefined);
+  }
+  logger.error('ADMIN_ACTIVATION_DELIVERY_FAILED', { deliveryId: delivery.id });
+  return false;
+}

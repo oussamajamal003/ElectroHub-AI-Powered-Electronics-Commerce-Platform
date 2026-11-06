@@ -60,6 +60,10 @@ export interface AdministratorSummary {
   isOwner: boolean;
   canManageAdmins: boolean;
   mfaEnrolled: boolean;
+  /** The live activation for a factor-less administrator (PENDING, or EXPIRED once its link lapsed), else null. */
+  mfaActivation: AdminActivation | null;
+  /** End of the short first-factor window after a redeemed activation; null when no window is open. */
+  enrollmentAuthorizedUntil: string | null;
   isSelf: boolean;
   lastLoginAt: string | null;
 }
@@ -74,6 +78,15 @@ export interface AdminInvitation {
   expiresAt: string;
   createdAt: string;
 }
+export interface AdminActivation {
+  id: string;
+  status: 'PENDING' | 'EXPIRED' | 'REDEEMED' | 'REVOKED';
+  deliveryStatus: InvitationDelivery;
+  expiresAt: string;
+  lastSentAt: string | null;
+  sendCount: number;
+}
+export interface AdminActivationPreview { email: string; firstName: string; lastName: string; expiresAt: string }
 export type StepUpMethod = 'TOTP' | 'RECOVERY_CODE';
 
 // ─── Query keys ───────────────────────────────────────────
@@ -109,6 +122,10 @@ export const adminAuthApi = {
     apiClient<{ email: string; expiresAt: string }>(`${PRE_AUTH}/invitations/preview`, { method: 'POST', data: body }),
   acceptInvitation: (body: { token: string; firstName: string; lastName: string; password: string }) =>
     apiClient<AdminMfaRequired>(`${PRE_AUTH}/invitations/accept`, { method: 'POST', data: body }),
+  previewActivation: (body: { token: string }) =>
+    apiClient<AdminActivationPreview>(`${PRE_AUTH}/activation/preview`, { method: 'POST', data: body }),
+  redeemActivation: (body: { token: string; password: string }) =>
+    apiClient<AdminMfaRequired>(`${PRE_AUTH}/activation/redeem`, { method: 'POST', data: body }),
 };
 
 // ─── Self-service (MFA-assured session) ───────────────────
@@ -167,6 +184,9 @@ export const adminTeamApi = {
     enveloped<AdminInvitation>(`${TEAM}/invitations`, { method: 'POST', data: body }),
   resendInvitation: (id: string) => enveloped<AdminInvitation>(`${TEAM}/invitations/${encodeURIComponent(id)}/resend`, { method: 'POST' }),
   revokeInvitation: (id: string) => enveloped<AdminInvitation>(`${TEAM}/invitations/${encodeURIComponent(id)}/revoke`, { method: 'POST' }),
+  requestActivation: (id: string) => enveloped<AdminActivation>(`${TEAM}/administrators/${encodeURIComponent(id)}/mfa-activation`, { method: 'POST' }),
+  resendActivation: (id: string) => enveloped<AdminActivation>(`${TEAM}/administrators/${encodeURIComponent(id)}/mfa-activation/resend`, { method: 'POST' }),
+  revokeActivation: (id: string) => enveloped<AdminActivation>(`${TEAM}/administrators/${encodeURIComponent(id)}/mfa-activation/revoke`, { method: 'POST' }),
 };
 
 /** Creates a passkey: server options, the browser ceremony, then the server verifies and stores the credential. */
@@ -231,3 +251,6 @@ export const useUpdateAdministratorAccess = () => useNamespaceMutation(adminTeam
 export const useCreateInvitation = () => useNamespaceMutation(adminTeamKeys.all, (body: { email: string; grantManageAdmins: boolean }) => adminTeamApi.createInvitation(body));
 export const useResendInvitation = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.resendInvitation(id));
 export const useRevokeInvitation = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.revokeInvitation(id));
+export const useRequestActivation = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.requestActivation(id));
+export const useResendActivation = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.resendActivation(id));
+export const useRevokeActivation = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.revokeActivation(id));

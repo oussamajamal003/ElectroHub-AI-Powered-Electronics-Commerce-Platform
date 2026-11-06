@@ -6,7 +6,7 @@ export interface AdminAuthFailure {
   restart: boolean;
 }
 
-export type AdminAuthContext = 'totp' | 'recovery' | 'passkey' | 'enrollment' | 'invitation' | 'session' | 'team';
+export type AdminAuthContext = 'totp' | 'recovery' | 'passkey' | 'enrollment' | 'invitation' | 'activation' | 'session' | 'team';
 
 /**
  * Maps administrator authentication failures to truthful, non-enumerating copy. Messages never reveal whether an account or invitation
@@ -32,9 +32,13 @@ export function describeAdminAuthError(error: unknown, context: AdminAuthContext
         restart: false,
       };
     case 'ENROLLMENT_NOT_AUTHORIZED':
-      return { message: 'Two-step verification must be authorised by an owner before you can sign in.', restart: true };
+      return { message: 'Your administrator account needs to be activated. Ask an Owner to send you a secure activation link.', restart: true };
     case 'ALREADY_ENROLLED':
       return { message: 'This account already has two-step verification. Start again to sign in.', restart: true };
+    case 'ACTIVATION_UNAVAILABLE':
+      return { message: 'This activation link is invalid, expired or already used. Ask an Owner to send you a new one.', restart: false };
+    case 'PASSWORD_REUSED':
+      return { message: 'Choose a password you have not used before.', restart: false };
     case 'NO_PASSKEY':
       return { message: 'No passkey is registered for this account. Use an authenticator app or a recovery code.', restart: false };
     case 'INVITATION_UNAVAILABLE':
@@ -44,6 +48,6 @@ export function describeAdminAuthError(error: unknown, context: AdminAuthContext
       break;
   }
   if (error.status >= 500) return { message: 'Something went wrong. Please try again later.', restart: false };
-  if (context === 'invitation' && error.status === 400) return { message: 'Check the highlighted details and try again.', restart: false };
+  if ((context === 'invitation' || context === 'activation') && error.status === 400) return { message: 'Check the highlighted details and try again.', restart: false };
   return { message: error.message || 'Something went wrong. Please try again.', restart: false };
 }

@@ -10,6 +10,7 @@ import { sendAdminInvitationEmail } from './admin-invitation-email.js';
 import { adminMfaService, INVITE_ENROLLMENT_WINDOW_MS } from './admin-mfa.service.js';
 import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
 import { adminNotifications } from './admin-notification.service.js';
+import { activationDto } from './admin-activation.service.js';
 
 /**
  * Task 05.2 invitation-only administrator onboarding and team management. The ADMIN role is only ever assigned here, by the server,
@@ -44,13 +45,15 @@ export class AdminTeamService {
       prisma.user.count({ where }),
       prisma.user.findMany({ where, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], skip: (input.page - 1) * input.pageSize, take: input.pageSize,
         select: { id: true, email: true, firstName: true, lastName: true, isActive: true, createdAt: true,
-          adminSecurity: { select: { isOwner: true, canManageAdmins: true, mfaEnrolledAt: true } } } }),
+          adminSecurity: { select: { isOwner: true, canManageAdmins: true, mfaEnrolledAt: true, enrollmentAllowedUntil: true } } } }),
     ]);
     const ids = users.map(user => user.id);
-    const [totp, passkeys, logins] = ids.length === 0 ? [[], [], []] : await Promise.all([
+    const [totp, passkeys, logins, activations] = ids.length === 0 ? [[], [], [], []] : await Promise.all([
       prisma.adminMfaFactor.groupBy({ by: ['userId'], where: { userId: { in: ids }, verifiedAt: { not: null }, disabledAt: null }, _count: { _all: true } }),
       prisma.adminWebAuthnCredential.groupBy({ by: ['userId'], where: { userId: { in: ids }, revokedAt: null }, _count: { _all: true } }),
       prisma.securityEvent.groupBy({ by: ['userId'], where: { userId: { in: ids }, type: 'LOGIN_SUCCESS' }, _max: { createdAt: true } }),
+      // The live activation per administrator (at most one PENDING row; expiry is derived).
+      prisma.adminMfaActivation.findMany({ where: { userId: { in: ids }, status: 'PENDING' } }),
     ]);
     const count = (rows: { userId: string | null; _count: { _all: number } }[], id: string) => rows.find(row => row.userId === id)?._count._all ?? 0;
     return {
@@ -59,6 +62,8 @@ export class AdminTeamService {
         isSelf: user.id === input.actorId,
         isOwner: user.adminSecurity?.isOwner ?? false, canManageAdmins: user.adminSecurity?.canManageAdmins ?? false,
         mfaEnrolled: count(totp, user.id) + count(passkeys, user.id) > 0,
+        mfaActivation: (() => { const row = activations.find(item => item.userId === user.id); return row ? activationDto(row) : null; })(),
+        enrollmentAuthorizedUntil: user.adminSecurity?.enrollmentAllowedUntil && user.adminSecurity.enrollmentAllowedUntil > new Date() ? user.adminSecurity.enrollmentAllowedUntil : null,
         lastLoginAt: logins.find(row => row.userId === user.id)?._max.createdAt ?? null,
       })),
       meta: { page: input.page, pageSize: input.pageSize, total, totalPages: Math.max(1, Math.ceil(total / input.pageSize)) },

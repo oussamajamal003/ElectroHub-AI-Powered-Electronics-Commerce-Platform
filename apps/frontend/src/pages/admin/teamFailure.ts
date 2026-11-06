@@ -11,6 +11,10 @@ export function teamFailure(error: unknown): string | null {
       case 'SELF_CHANGE': return 'You cannot change your own access from this list.';
       case 'INVITATION_EXISTS': return 'A pending invitation for this address already exists. Use Resend in the invitations list instead of inviting again.';
       case 'ACCOUNT_EXISTS': return 'An ElectroHub account already uses this email address. To invite this person as an administrator, use a different email address. Existing customer accounts cannot be converted through an invitation.';
+      case 'ACTIVATION_PENDING': return 'An activation link is already pending for this administrator. Use Resend or Revoke instead.';
+      case 'ALREADY_ENROLLED': return 'This administrator already has two-step verification. Lost factors follow the separate recovery procedure.';
+      case 'ACCOUNT_INACTIVE': return 'This administrator account is deactivated. Reactivate it before sending an activation link.';
+      case 'RESEND_COOLDOWN': return 'The link was sent moments ago. Wait a minute before resending.';
       case 'CAPABILITY_REQUIRED': return 'Managing administrators requires additional access. Ask an owner.';
       default: break;
     }

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
@@ -10,11 +10,13 @@ import { Switch } from '@/components/ui/Switch';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
 import { ApiError } from '@/lib/api';
 import {
-  useAdminProfile, useAdministrators, useCreateInvitation, useInvitations, useResendInvitation, useRevokeInvitation,
+  useAdminProfile, useAdministrators, useCreateInvitation, useInvitations, useRequestActivation, useResendActivation, useResendInvitation,
+  useRevokeActivation, useRevokeInvitation,
   useUpdateAdministratorAccess, type AdminInvitation, type AdministratorSummary, type InvitationDelivery, type InvitationStatus,
 } from '@/features/admin/security/api';
 import { teamFailure } from './teamFailure';
 import { useStepUp } from '@/features/admin/security/useStepUp';
+import { twoStepStatus } from '@/features/admin/security/twoStepStatus';
 import {
   ConfirmDialog, EmptyRows, ListEmpty, PageHeader, Pager, QueryProblem, StatusPill, TableCard, useAdminToast,
 } from '@/features/admin/shared/AdminUi';
@@ -65,9 +67,16 @@ export function AdminAdministratorsPage() {
   const createInvitation = useCreateInvitation();
   const resendInvitation = useResendInvitation();
   const revokeInvitation = useRevokeInvitation();
+  const requestActivation = useRequestActivation();
+  const resendActivation = useResendActivation();
+  const revokeActivation = useRevokeActivation();
 
   const [accessChange, setAccessChange] = useState<PendingAccessChange | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<AdminInvitation | null>(null);
+  const [activateTarget, setActivateTarget] = useState<AdministratorSummary | null>(null);
+  // The dialog is opened from a table button, not a Radix trigger, so the opener is remembered to hand focus back on close.
+  const activateOpener = useRef<HTMLElement | null>(null);
+  const [revokeActivationTarget, setRevokeActivationTarget] = useState<AdministratorSummary | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
@@ -164,6 +173,51 @@ export function AdminAdministratorsPage() {
     }
   };
 
+  const confirmActivation = async () => {
+    if (!activateTarget || busy) return;
+    setBusy(true);
+    setDialogError(null);
+    try {
+      const activation = await runWithStepUp(() => requestActivation.mutateAsync(activateTarget.id));
+      setActivateTarget(null);
+      if (activation.deliveryStatus === 'FAILED') setRowError(`The activation link for ${activateTarget.email} was created but the email could not be delivered. Use Resend to retry.`);
+      else toast('Activation link sent.');
+    } catch (error) {
+      const message = teamFailure(error);
+      if (message) setDialogError(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doResendActivation = async (row: AdministratorSummary) => {
+    setRowError(null);
+    try {
+      const activation = await runWithStepUp(() => resendActivation.mutateAsync(row.id));
+      if (activation.deliveryStatus === 'FAILED') setRowError(`The activation link for ${row.email} could not be delivered. Try again shortly.`);
+      else toast('Activation link sent again.');
+    } catch (error) {
+      const message = teamFailure(error);
+      if (message) setRowError(message);
+    }
+  };
+
+  const confirmRevokeActivation = async () => {
+    if (!revokeActivationTarget) return;
+    setBusy(true);
+    setDialogError(null);
+    try {
+      await runWithStepUp(() => revokeActivation.mutateAsync(revokeActivationTarget.id));
+      setRevokeActivationTarget(null);
+      toast('Activation revoked.');
+    } catch (error) {
+      const message = teamFailure(error);
+      if (message) setDialogError(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const adminColumns: Column<AdministratorSummary>[] = [
     { key: 'name', title: 'Administrator', render: row => <span className={styles.cellText}>
       <strong>{`${row.firstName} ${row.lastName}`.trim() || row.email}</strong>
@@ -175,9 +229,21 @@ export function AdminAdministratorsPage() {
       {!row.isOwner && !row.canManageAdmins && <span className={styles.muted}>Administrator</span>}
       {row.isSelf && <StatusPill tone="neutral" icon={false}>You</StatusPill>}
     </span> },
-    { key: 'mfa', title: 'Two-step', render: row => row.mfaEnrolled
-      ? <StatusPill tone="success">Enabled</StatusPill>
-      : <StatusPill tone="warning">Not set up</StatusPill> },
+    { key: 'mfa', title: 'Two-step', render: row => {
+      const status = twoStepStatus(row);
+      return <span className={styles.cellText}>
+        <StatusPill tone={status.tone}>{row.mfaEnrolled ? 'Two-step verification enabled' : status.label}</StatusPill>
+        {status.detail && <span>{status.detail}</span>}
+        {isOwner && !row.isSelf && (status.action !== 'none' || status.canRevoke) && <span className={styles.rowActions}>
+          {status.action === 'activate' && <Button type="button" variant="outline" size="small" disabled={busy}
+            onClick={(event) => { activateOpener.current = event.currentTarget; setDialogError(null); setActivateTarget(row); }} aria-label={`Activate account for ${row.email}`}>Activate account</Button>}
+          {status.action === 'resend' && <Button type="button" variant="outline" size="small" disabled={busy}
+            onClick={() => void doResendActivation(row)} aria-label={`Resend activation link to ${row.email}`}>Resend</Button>}
+          {status.canRevoke && <Button type="button" variant="outline" size="small" disabled={busy}
+            onClick={() => { setDialogError(null); setRevokeActivationTarget(row); }} aria-label={`Revoke activation for ${row.email}`}>Revoke</Button>}
+        </span>}
+      </span>;
+    } },
     { key: 'lastLogin', title: 'Last sign-in', render: row => row.lastLoginAt ? formatDateTime(row.lastLoginAt) : 'Never' },
     { key: 'active', title: 'Active', render: row => isOwner
       ? <Switch aria-label={`Active access for ${row.email}`} checked={row.isActive} disabled={row.isSelf || busy}
@@ -208,11 +274,19 @@ export function AdminAdministratorsPage() {
   ];
 
   if (profile.isPending) {
-    return <div className={styles.page}><PageHeader title="Administrators" crumbs={[{ label: 'Dashboard', to: '/admin' }, { label: 'Settings' }, { label: 'Administrators' }]} /></div>;
+    return <div className={styles.page}>
+      <PageHeader title="Administrators" crumbs={[{ label: 'Dashboard', to: '/admin' }, { label: 'Settings', to: '/admin/settings' }, { label: 'Administrators' }]}
+        description="Who can use the admin console, and invitations for new administrators." />
+      <div role="status" aria-label="Loading administrators" aria-busy="true">
+        <TableCard busy label="Administrators">
+          <DataTable<AdministratorSummary> caption="Administrators" data={[]} columns={adminColumns} keyExtractor={row => row.id} loadingRows={4} />
+        </TableCard>
+      </div>
+    </div>;
   }
 
   return <div className={styles.page}>
-    <PageHeader title="Administrators" crumbs={[{ label: 'Dashboard', to: '/admin' }, { label: 'Settings' }, { label: 'Administrators' }]}
+    <PageHeader title="Administrators" crumbs={[{ label: 'Dashboard', to: '/admin' }, { label: 'Settings', to: '/admin/settings' }, { label: 'Administrators' }]}
       description="Who can use the admin console, and invitations for new administrators."
       actions={canManage && !readOnly ? <Button type="button" onClick={openInvite}>Invite administrator</Button> : undefined} />
 
@@ -277,6 +351,36 @@ export function AdminAdministratorsPage() {
     <ConfirmDialog open={revokeTarget !== null} onOpenChange={(next) => { if (!next && !busy) setRevokeTarget(null); }}
       title="Revoke this invitation?" description={`The link sent to ${revokeTarget?.email ?? 'this address'} will stop working.`}
       confirmLabel="Revoke invitation" destructive pending={busy} error={dialogError} onConfirm={() => void confirmRevoke()} />
+
+    <Dialog open={activateTarget !== null} onOpenChange={(next) => { if (!next && !busy) setActivateTarget(null); }}>
+      <DialogContent onCloseAutoFocus={(event) => {
+        const opener = activateOpener.current;
+        if (opener?.isConnected) { event.preventDefault(); opener.focus(); }
+      }}>
+        <DialogTitle>Authorize administrator activation</DialogTitle>
+        <DialogDescription asChild>
+          <div className={styles.form}>
+            <p className={styles.panelHint}>Send a secure, one-time activation link to this administrator. They must verify their identity, create a new password and set up two-step verification before accessing the Admin Console.</p>
+            {dialogError && <Alert variant="error">{dialogError}</Alert>}
+            <dl className={styles.cellText}>
+              <div><dt>Administrator</dt><dd><strong>{`${activateTarget?.firstName ?? ''} ${activateTarget?.lastName ?? ''}`.trim() || activateTarget?.email}</strong></dd></div>
+              <div><dt>Email</dt><dd>{activateTarget?.email}</dd></div>
+              <div><dt>Two-step verification</dt><dd>Not set up</dd></div>
+              <div><dt>Link expires</dt><dd>30 minutes after it is sent</dd></div>
+            </dl>
+            <Alert variant="warning">Activation grants privileged administrative access once two-step verification is set up. Only continue if you have confirmed this person controls this email address.</Alert>
+            <div className={styles.formActions}>
+              <Button type="button" variant="outline" onClick={() => setActivateTarget(null)} disabled={busy}>Cancel</Button>
+              <Button type="button" onClick={() => void confirmActivation()} isLoading={busy}>Send activation link</Button>
+            </div>
+          </div>
+        </DialogDescription>
+      </DialogContent>
+    </Dialog>
+
+    <ConfirmDialog open={revokeActivationTarget !== null} onOpenChange={(next) => { if (!next && !busy) setRevokeActivationTarget(null); }}
+      title="Revoke this activation?" description={`The activation link sent to ${revokeActivationTarget?.email ?? 'this administrator'} will stop working.`}
+      confirmLabel="Revoke activation" destructive pending={busy} error={dialogError} onConfirm={() => void confirmRevokeActivation()} />
 
     <Dialog open={inviteOpen} onOpenChange={(next) => { if (!busy) setInviteOpen(next); }}>
       <DialogContent>

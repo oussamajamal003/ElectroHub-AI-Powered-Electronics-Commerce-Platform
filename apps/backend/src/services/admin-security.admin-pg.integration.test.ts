@@ -10,15 +10,18 @@ import { AuthService } from './auth.service.js';
 import { env } from '../config/env.js';
 import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
 import { adminMfaService } from './admin-mfa.service.js';
+import { seedAdministrators } from '../utils/admin-seed.js';
 
 /**
  * Task 05.2 administrator security against a real, freshly migrated, disposable PostgreSQL through the real Express stack (run only by
  * scripts/admin-security-pg.cjs). Synthetic *.invalid identities; the invitation email provider is replaced by a capture.
  */
-const { sentInvitations } = vi.hoisted(() => ({ sentInvitations: [] as { to: string; token: string }[] }));
+const { sentInvitations, sentActivations } = vi.hoisted(() => ({ sentInvitations: [] as { to: string; token: string }[], sentActivations: [] as { to: string; token: string }[] }));
 vi.mock('./admin-invitation-email.js', () => ({
   sendAdminInvitationEmail: vi.fn(async (input: { to: string; token: string }) => { sentInvitations.push({ to: input.to, token: input.token }); return true; }),
   invitationLink: (token: string) => `http://localhost:3000/admin/invite#token=${token}`,
+  sendAdminActivationEmail: vi.fn(async (input: { to: string; token: string }) => { sentActivations.push({ to: input.to, token: input.token }); return true; }),
+  activationLink: (token: string) => `http://localhost:3000/admin/activate#token=${token}`,
 }));
 
 
@@ -494,5 +497,141 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     expect(again.body.accessToken).toBeDefined();
     expect((await api().post('/api/admin/me/password', { currentPassword: `${PASSWORD}!`, newPassword: 'Another-Pass-9-Word' }, again.body.accessToken)).status).toBe(403);
     expect((await api().post('/api/admin/me/delete', { currentPassword: `${PASSWORD}!`, confirmation: 'DELETE' }, again.body.accessToken)).status).toBe(403);
+  });
+
+  it('ACT-01..ACT-14: Owner-authorized activation of an existing factor-less administrator (hashed, single-use, password rotated before enrollment)', async () => {
+    const owner = await enrolledAdmin({ owner: true });
+    const manager = await enrolledAdmin({ manage: true });
+    const customer = await createUser('CUSTOMER');
+    const customerLogin = await api().post('/api/auth/login', { email: customer.email, password: PASSWORD });
+    const legacy = await createUser('ADMIN', { enrollWindow: false });
+    const url = `/api/admin/administrators/${legacy.id}/mfa-activation`;
+
+    // The shared/legacy password alone can never open enrollment.
+    const refused = await api().post('/api/auth/login', { email: legacy.email, password: PASSWORD });
+    expect(refused.status).toBe(403);
+    expect(refused.body.error.code).toBe('ENROLLMENT_NOT_AUTHORIZED');
+
+    // Authorization: unauthenticated, customer, administrator-management without Owner, and Owner without a fresh step-up.
+    expect((await api().post(url, undefined)).status).toBe(401);
+    expect((await api().post(url, undefined, customerLogin.body.accessToken)).status).toBe(403);
+    const asManager = await api().post(url, undefined, manager.accessToken);
+    expect(asManager.status).toBe(403);
+    expect(asManager.body.error.code).toBe('CAPABILITY_REQUIRED');
+    expect((await api().get(url, manager.accessToken)).status).toBe(403);
+    await prisma.adminSession.updateMany({ where: { userId: owner.user.id }, data: { mfaVerifiedAt: new Date(Date.now() - 20 * 60_000), stepUpAt: null } });
+    const noStepUp = await api().post(url, undefined, owner.accessToken);
+    expect(noStepUp.status).toBe(403);
+    expect(noStepUp.body.error.code).toBe('STEP_UP_REQUIRED');
+    expect((await api().post('/api/admin/me/security/step-up', { method: 'TOTP', code: code(owner.secret, 1) }, owner.accessToken)).status).toBe(200);
+
+    // Ineligible targets: an enrolled administrator, an unknown id, a customer, a deactivated administrator.
+    const enrolledTarget = await api().post(`/api/admin/administrators/${manager.user.id}/mfa-activation`, undefined, owner.accessToken);
+    expect(enrolledTarget.status).toBe(409);
+    expect(enrolledTarget.body.error.code).toBe('ALREADY_ENROLLED');
+    expect((await api().post(`/api/admin/administrators/${randomUUID()}/mfa-activation`, undefined, owner.accessToken)).status).toBe(404);
+    expect((await api().post(`/api/admin/administrators/${customer.id}/mfa-activation`, undefined, owner.accessToken)).status).toBe(404);
+    const inactive = await createUser('ADMIN', { enrollWindow: false });
+    await prisma.user.update({ where: { id: inactive.id }, data: { isActive: false } });
+    expect((await api().post(`/api/admin/administrators/${inactive.id}/mfa-activation`, undefined, owner.accessToken)).body.error.code).toBe('ACCOUNT_INACTIVE');
+
+    // Request: concurrent Owners and repeated clicks produce exactly one activation; the token is emailed, hashed, never returned.
+    const second = await enrolledAdmin({ owner: true });
+    const requests = await Promise.all([owner, second, owner].map(actor => api().post(url, undefined, actor.accessToken)));
+    expect(requests.map(response => response.status).sort()).toEqual([201, 409, 409]);
+    const created = requests.find(response => response.status === 201)!;
+    expect(created.body.data).toMatchObject({ status: 'PENDING', deliveryStatus: 'SENT' });
+    expect(JSON.stringify(created.body)).not.toMatch(/token/i);
+    const first = sentActivations.filter(item => item.to === legacy.email).at(-1)!;
+    expect(sentActivations.filter(item => item.to === legacy.email)).toHaveLength(1);
+    const stored = await prisma.adminMfaActivation.findFirstOrThrow({ where: { userId: legacy.id } });
+    expect(stored.tokenHash).not.toBe(first.token);
+    expect(stored.tokenHash).toMatch(/^[0-9a-f]{64}$/);
+    expect((await api().get(url, owner.accessToken)).body.data).toMatchObject({ status: 'PENDING' });
+    // Requesting the link does not open enrollment: the old password is still refused.
+    expect((await api().post('/api/auth/login', { email: legacy.email, password: PASSWORD })).body.error.code).toBe('ENROLLMENT_NOT_AUTHORIZED');
+
+    // Resend replaces the digest (old link dead) after the cooldown; revoke kills the link; a new request is then allowed.
+    expect((await api().post(`${url}/resend`, undefined, owner.accessToken)).body.error.code).toBe('RESEND_COOLDOWN');
+    await prisma.adminMfaActivation.update({ where: { id: stored.id }, data: { lastSentAt: new Date(Date.now() - 120_000) } });
+    expect((await api().post(`${url}/resend`, undefined, owner.accessToken)).status).toBe(200);
+    const resent = sentActivations.filter(item => item.to === legacy.email).at(-1)!;
+    expect(resent.token).not.toBe(first.token);
+    expect((await api().post('/api/auth/admin/activation/preview', { token: first.token })).status).toBe(410);
+    expect((await api().post('/api/auth/admin/activation/preview', { token: resent.token })).body).toMatchObject({ email: legacy.email });
+    expect((await api().post(`${url}/revoke`, undefined, owner.accessToken)).body.data.status).toBe('REVOKED');
+    expect((await api().post('/api/auth/admin/activation/redeem', { token: resent.token, password: 'Fresh-Unique-9-Secret' })).status).toBe(410);
+    expect((await api().post(url, undefined, owner.accessToken)).status).toBe(201);
+    const live = sentActivations.filter(item => item.to === legacy.email).at(-1)!;
+
+    // Expiry is enforced, and an expired activation is closed and replaced by a new request.
+    await prisma.adminMfaActivation.updateMany({ where: { userId: legacy.id, status: 'PENDING' }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    expect((await api().post('/api/auth/admin/activation/redeem', { token: live.token, password: 'Fresh-Unique-9-Secret' })).status).toBe(410);
+    expect((await api().get(url, owner.accessToken)).body.data.status).toBe('EXPIRED');
+    expect((await api().post(url, undefined, owner.accessToken)).status).toBe(201);
+    const token = sentActivations.filter(item => item.to === legacy.email).at(-1)!.token;
+
+    // Redemption: strict validation; a reused password is refused without consuming the token.
+    expect((await api().post('/api/auth/admin/activation/redeem', { token, password: 'weak' })).status).toBe(400);
+    expect((await api().post('/api/auth/admin/activation/redeem', { token, password: PASSWORD, role: 'ADMIN' })).status).toBe(400);
+    const reused = await api().post('/api/auth/admin/activation/redeem', { token, password: PASSWORD });
+    expect(reused.status).toBe(422);
+    expect(reused.body.error.code).toBe('PASSWORD_REUSED');
+
+    // Concurrent redemption has exactly one winner; no session or cookie is issued.
+    const NEW_PASSWORD = 'Fresh-Unique-9-Secret';
+    const redemptions = await Promise.all([1, 2].map(() => api().post('/api/auth/admin/activation/redeem', { token, password: NEW_PASSWORD })));
+    expect(redemptions.map(response => response.status).sort()).toEqual([200, 410]);
+    const winner = redemptions.find(response => response.status === 200)!;
+    expect(winner.body).toMatchObject({ requiresMfa: true, enrollmentRequired: true });
+    expect(winner.body.accessToken).toBeUndefined();
+    expect(refreshCookie(winner)).toBeUndefined();
+    expect(await prisma.refreshToken.count({ where: { userId: legacy.id, isRevoked: false } })).toBe(0);
+    expect(await prisma.adminMfaActivation.count({ where: { userId: legacy.id, status: 'REDEEMED' } })).toBe(1);
+
+    // The previous password is dead; the new one only opens a restricted enrollment challenge; TOTP proof is still mandatory.
+    expect((await api().post('/api/auth/login', { email: legacy.email, password: PASSWORD })).status).toBe(401);
+    const login = await api().post('/api/auth/login', { email: legacy.email, password: NEW_PASSWORD });
+    expect(login.body).toMatchObject({ requiresMfa: true, enrollmentRequired: true });
+    expect(login.body.accessToken).toBeUndefined();
+    const start = await api().post('/api/auth/admin/mfa/enrollment/start', { mfaToken: login.body.mfaToken });
+    expect(start.status).toBe(200);
+    expect((await api().post('/api/auth/admin/mfa/enrollment/confirm', { mfaToken: login.body.mfaToken, factorId: start.body.factorId, code: '000000' })).status).toBe(401);
+    const confirmed = await api().post('/api/auth/admin/mfa/enrollment/confirm', { mfaToken: login.body.mfaToken, factorId: start.body.factorId, code: code(start.body.secret) });
+    expect(confirmed.status).toBe(200);
+    expect(confirmed.body.recoveryCodes).toHaveLength(10);
+    const security = await prisma.adminAccountSecurity.findUniqueOrThrow({ where: { userId: legacy.id } });
+    expect(security).toMatchObject({ isOwner: false, canManageAdmins: false, enrollmentAllowedUntil: null });
+    expect(security.mfaEnrolledAt).not.toBeNull();
+
+    // Replay, repeat requests and the Owner list after completion.
+    expect((await api().post('/api/auth/admin/activation/redeem', { token, password: 'Another-Unique-9-Pass' })).status).toBe(410);
+    expect((await api().post(url, undefined, owner.accessToken)).body.error.code).toBe('ALREADY_ENROLLED');
+    const list = await api().get('/api/admin/administrators?pageSize=50', owner.accessToken);
+    expect(list.body.data.find((row: { id: string }) => row.id === legacy.id)).toMatchObject({ mfaEnrolled: true, mfaActivation: null, isOwner: false, canManageAdmins: false });
+    expect(await prisma.user.count({ where: { email: legacy.email } })).toBe(1);
+    const signInAgain = await api().post('/api/auth/login', { email: legacy.email, password: NEW_PASSWORD });
+    expect((await api().post('/api/auth/admin/mfa/totp/verify', { mfaToken: signInAgain.body.mfaToken, code: code(start.body.secret, 1) })).status).toBe(200);
+  });
+
+  it('SEED-01: re-running the administrator seed never resets a password, reactivates, or alters role/owner/MFA state', async () => {
+    const adminRoleId = await roleId('ADMIN');
+    const email = 'admin1@electrohub.com';
+    await prisma.user.deleteMany({ where: { email } });
+    const first = await seedAdministrators(prisma, { adminRoleId, passwordFor: () => 'Seed-Fallback-9-Password' });
+    expect(first).toContain(email);
+    const seeded = await prisma.user.findUniqueOrThrow({ where: { email } });
+    expect(await prisma.adminAccountSecurity.count({ where: { userId: seeded.id } })).toBe(0); // no enrollment window, no owner
+    // The account is later activated by an Owner (rotated password), deactivated, and given owner-adjacent state.
+    const rotated = await hashPassword('Rotated-Unique-9-Secret');
+    await prisma.user.update({ where: { id: seeded.id }, data: { passwordHash: rotated, isActive: false } });
+    await prisma.adminAccountSecurity.create({ data: { userId: seeded.id, canManageAdmins: false, mfaEnrolledAt: new Date() } });
+    const second = await seedAdministrators(prisma, { adminRoleId, passwordFor: () => 'Seed-Fallback-9-Password' });
+    expect(second).not.toContain(email);
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: seeded.id } });
+    expect(after.passwordHash).toBe(rotated);
+    expect(after.isActive).toBe(false);
+    expect(after.roleId).toBe(adminRoleId);
+    expect(await prisma.adminAccountSecurity.findUniqueOrThrow({ where: { userId: seeded.id } })).toMatchObject({ isOwner: false, canManageAdmins: false, enrollmentAllowedUntil: null });
   });
 });

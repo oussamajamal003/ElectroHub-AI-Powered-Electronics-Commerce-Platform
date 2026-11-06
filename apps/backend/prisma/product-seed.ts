@@ -150,6 +150,11 @@ export const productDataset = validateProductDataset({
   products: curatedProducts,
 });
 
+/** True only for a verified disposable database (loopback URLs named electrohub_disposable*/electrohub_ci*). */
+export function isDisposableSeedTarget(configuration: NodeJS.ProcessEnv): boolean {
+  return resolvePaymentIsolation({ ...configuration, NODE_ENV: 'development', npm_lifecycle_event: undefined }).target === 'disposable';
+}
+
 export function assertDevSeedTarget(configuration: NodeJS.ProcessEnv) {
   if (!['development', 'test'].includes(configuration.NODE_ENV ?? '')) {
     throw new Error('Product seed requires an explicit development or test environment.');

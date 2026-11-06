@@ -3,6 +3,7 @@ import { z, ZodError } from 'zod';
 import { clearRefreshCookie, setRefreshCookie } from './auth.controller.js';
 import { adminMfaService, maskIp, type RequestMeta } from '../services/admin-mfa.service.js';
 import { adminTeamService } from '../services/admin-team.service.js';
+import { adminActivationService } from '../services/admin-activation.service.js';
 import { adminAccountService } from '../services/admin-account.service.js';
 import { hasRecentStepUp } from '../services/admin-session.js';
 import { prisma } from '../lib/prisma.js';
@@ -89,6 +90,15 @@ export const adminSecurityController = {
   invitationAccept: handle(async (req, res) => {
     const body = z.object({ token: z.string().min(20).max(200), firstName: name, lastName: name, password }).strict().parse(req.body);
     res.set('Cache-Control', 'no-store').status(201).json(await adminTeamService.acceptInvitation(body));
+  }),
+
+  activationPreview: handle(async (req, res) => {
+    const body = z.object({ token: z.string().min(20).max(200) }).strict().parse(req.body);
+    res.set('Cache-Control', 'no-store').json(await adminActivationService.preview(body.token));
+  }),
+  activationRedeem: handle(async (req, res) => {
+    const body = z.object({ token: z.string().min(20).max(200), password }).strict().parse(req.body);
+    res.set('Cache-Control', 'no-store').status(200).json(await adminActivationService.redeem(body));
   }),
 
   // ── Self-service (MFA-assured) ─────────────────────────────────────────
@@ -195,6 +205,16 @@ export const adminSecurityController = {
   }),
   revokeInvitation: handle(async (req, res) => {
     res.json({ data: await adminTeamService.revokeInvitation({ userId: userId(req), requestId: req.id }, z.string().uuid().parse(req.params.id)) });
+  }),
+  requestActivation: handle(async (req, res) => {
+    res.status(201).json({ data: await adminActivationService.request({ userId: userId(req), requestId: req.id }, z.string().uuid().parse(req.params.id)) });
+  }),
+  activationState: handle(async (req, res) => { res.json({ data: await adminActivationService.state(z.string().uuid().parse(req.params.id)) }); }),
+  resendActivation: handle(async (req, res) => {
+    res.json({ data: await adminActivationService.resend({ userId: userId(req), requestId: req.id }, z.string().uuid().parse(req.params.id)) });
+  }),
+  revokeActivation: handle(async (req, res) => {
+    res.json({ data: await adminActivationService.revoke({ userId: userId(req), requestId: req.id }, z.string().uuid().parse(req.params.id)) });
   }),
   setAccess: handle(async (req, res) => {
     const body = z.object({ isActive: z.boolean().optional(), canManageAdmins: z.boolean().optional() }).strict()

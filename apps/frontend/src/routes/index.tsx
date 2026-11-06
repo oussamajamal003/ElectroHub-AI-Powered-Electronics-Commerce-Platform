@@ -69,6 +69,7 @@ const AdminProfilePage = lazy(() => import('@/pages/admin/AdminProfilePage').the
 const AdminSecurityPage = lazy(() => import('@/pages/admin/AdminSecurityPage').then(module => ({ default: module.AdminSecurityPage })));
 const AdminSessionsPage = lazy(() => import('@/pages/admin/AdminSessionsPage').then(module => ({ default: module.AdminSessionsPage })));
 const AdminInvitePage = lazy(() => import('@/pages/admin/AdminInvitePage').then(module => ({ default: module.AdminInvitePage })));
+const AdminActivatePage = lazy(() => import('@/pages/admin/AdminActivatePage').then(module => ({ default: module.AdminActivatePage })));
 const route = (content: React.ReactNode) => <Suspense fallback={<ElectroHubLoader page />}>{content}</Suspense>;
 // Inside the admin shell a page's code chunk loads behind a page-shaped skeleton; the full-page loader is kept for a whole-app reload.
 const adminRoute = (content: React.ReactNode) => <Suspense fallback={<AdminPageSkeleton />}>{content}</Suspense>;
@@ -116,6 +117,7 @@ export function AppRoutes() {
         <Route path="/admin/login" element={<Suspense fallback={null}><AdminLoginPage /></Suspense>} />
         {/* Task 05.2: invitation acceptance is token-bound (URL fragment) and continues into mandatory MFA enrollment. */}
         <Route path="/admin/invite" element={<Suspense fallback={null}><AdminInvitePage /></Suspense>} />
+        <Route path="/admin/activate" element={<Suspense fallback={null}><AdminActivatePage /></Suspense>} />
 
         {/* Admin Protected Routes */}
         {/* Task 05.1: deep links survive sign-in (preserveReturnPath); signing out returns to the admin login, not the storefront. */}

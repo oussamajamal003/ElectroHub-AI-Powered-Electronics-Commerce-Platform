@@ -30,6 +30,8 @@ preAuthRouter.post('/admin/mfa/enrollment/start', mfaLimiter, c.enrollmentStart)
 preAuthRouter.post('/admin/mfa/enrollment/confirm', mfaLimiter, c.enrollmentConfirm);
 preAuthRouter.post('/admin/invitations/preview', inviteLimiter, c.invitationPreview);
 preAuthRouter.post('/admin/invitations/accept', inviteLimiter, c.invitationAccept);
+preAuthRouter.post('/admin/activation/preview', inviteLimiter, c.activationPreview);
+preAuthRouter.post('/admin/activation/redeem', inviteLimiter, c.activationRedeem);
 
 export const adminSecurityRouter = Router();
 adminSecurityRouter.use(['/admin/me', '/admin/administrators', '/admin/invitations'], ...adminGuard);
@@ -58,6 +60,11 @@ adminSecurityRouter.post('/admin/me/delete', credentialWrites, requireStepUp, c.
 const manageAdmins = requireAdminCapability('MANAGE_ADMINS');
 adminSecurityRouter.get('/admin/administrators', manageAdmins, c.administrators);
 adminSecurityRouter.patch('/admin/administrators/:id/access', writes, requireAdminCapability('OWNER'), requireStepUp, c.setAccess);
+const owner = requireAdminCapability('OWNER');
+adminSecurityRouter.get('/admin/administrators/:id/mfa-activation', owner, c.activationState);
+adminSecurityRouter.post('/admin/administrators/:id/mfa-activation', writes, owner, requireStepUp, c.requestActivation);
+adminSecurityRouter.post('/admin/administrators/:id/mfa-activation/resend', writes, owner, requireStepUp, c.resendActivation);
+adminSecurityRouter.post('/admin/administrators/:id/mfa-activation/revoke', writes, owner, requireStepUp, c.revokeActivation);
 adminSecurityRouter.get('/admin/invitations', manageAdmins, c.invitations);
 adminSecurityRouter.post('/admin/invitations', writes, manageAdmins, requireStepUp, c.createInvitation);
 adminSecurityRouter.post('/admin/invitations/:id/resend', writes, manageAdmins, requireStepUp, c.resendInvitation);

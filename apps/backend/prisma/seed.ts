@@ -15,7 +15,9 @@
  */
 
 import { UserRole } from '@prisma/client';
-import { assertDevSeedTarget, seedProductDataset } from './product-seed';
+import { assertDevSeedTarget, isDisposableSeedTarget, seedProductDataset } from './product-seed';
+import { randomBytes } from 'node:crypto';
+import { seedAdministrators } from '../src/utils/admin-seed';
 import { seedReviewDataset } from './review-seed';
 import bcrypt from 'bcrypt';
 import { prisma } from '../src/lib/prisma';
@@ -36,7 +38,10 @@ assertDevSeedTarget(process.env);
 // Never log passwords or password hashes.
 
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@electrohub.com').toLowerCase().trim();
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123!';
+// A public fallback password is only ever acceptable inside a verified disposable database. Shared DEV administrators are created with an
+// unguessable password nobody holds, so they cannot sign in until an Owner activates them (email proof + new password + MFA).
+const DISPOSABLE_TARGET = isDisposableSeedTarget(process.env);
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (DISPOSABLE_TARGET ? 'admin123!' : randomBytes(24).toString('base64url'));
 const CUSTOMER_EMAIL = (process.env.CUSTOMER_EMAIL || 'customer@electrohub.com').toLowerCase().trim();
 const CUSTOMER_PASSWORD = process.env.CUSTOMER_PASSWORD || 'customer123!';
 
@@ -81,39 +86,12 @@ async function main() {
 
   // 2. Users (Bcrypt hashed)
   console.log('  → Users');
-  const adminEmails = [
-    'admin@electrohub.com',
-    'admin1@electrohub.com',
-    'admin2@electrohub.com',
-    'admin3@electrohub.com',
-    'admin4@electrohub.com',
-  ];
-
-  for (let i = 0; i < adminEmails.length; i++) {
-    const email = adminEmails[i];
-    const password = process.env[`ADMIN${i === 0 ? '' : i}_PASSWORD`] || ADMIN_PASSWORD;
-    const passwordHash = await bcrypt.hash(password, 12);
-    const firstName = i === 0 ? 'Admin' : `Admin${i}`;
-    const adminUser = await prisma.user.upsert({
-      where: { email },
-      update: {
-        passwordHash,
-        roleId: adminRole.id,
-        isActive: true,
-        emailVerifiedAt: new Date(),
-      },
-      create: {
-        email,
-        passwordHash,
-        firstName,
-        lastName: 'ElectroHub',
-        isActive: true,
-        emailVerifiedAt: new Date(),
-        roleId: adminRole.id,
-      },
-    });
-    console.log(`    ✓ Admin: ${email} (${adminUser.id})`);
-  }
+  // Existing administrators are never modified (see src/utils/admin-seed.ts).
+  const createdAdmins = await seedAdministrators(prisma, {
+    adminRoleId: adminRole.id,
+    passwordFor: index => process.env[`ADMIN${index === 0 ? '' : index}_PASSWORD`] || ADMIN_PASSWORD,
+  });
+  console.log(`    ✓ Administrators: ${createdAdmins.length} created, existing accounts left untouched`);
 
   const customerPasswordHash = await bcrypt.hash(CUSTOMER_PASSWORD, 12);
   const customerUser = await prisma.user.upsert({
