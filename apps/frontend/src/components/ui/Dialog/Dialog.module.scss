@@ -34,6 +34,11 @@
   flex-direction: column;
   gap: $spacing-4;
   margin: auto;
+  // A tall dialog scrolls inside itself. Radix's scroll lock only lets the dialog content scroll, so the container's overflow
+  // never receives the wheel or touch gesture; the content must own its scrolling.
+  max-height: calc(100dvh - #{2 * $spacing-4});
+  overflow-y: auto;
+  overscroll-behavior: contain;
 
   &:focus-visible {
     outline: $focus-ring-width $focus-ring-style $focus-ring-color;

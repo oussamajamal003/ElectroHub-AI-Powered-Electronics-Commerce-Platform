@@ -440,7 +440,7 @@ export class AdminAnalyticsService {
   async customers(period: AnalyticsPeriod) {
     const now = this.clock();
     const window = resolveAnalyticsWindow(period, now);
-    const [newCurrent, newPrevious, series, repeatAll, repeatWindow] = await Promise.all([
+    const [newCurrent, newPrevious, series, repeatAll, repeatWindow, sessionsCurrent, sessionsPrevious] = await Promise.all([
       this.newCustomers(window.current), this.newCustomers(window.previous),
       this.db.$queryRaw<CustomerBucketRow[]>(Prisma.sql`
         SELECT ${bucketExpression(window.granularity, 'u."createdAt"')} AS bucket, COUNT(*) AS count
@@ -450,6 +450,7 @@ export class AdminAnalyticsService {
         GROUP BY 1 ORDER BY 1 ASC`),
       this.repeatCounts(),
       this.repeatCounts({ start: window.current.start, end: window.current.end }),
+      this.sessionStats(window.current), this.sessionStats(window.previous),
     ]);
     const keys = bucketKeys(window.current, window.granularity);
     const current = toNumber(newCurrent[0]?.count);
@@ -462,26 +463,45 @@ export class AdminAnalyticsService {
         allTime: { repeatCustomers: repeatAll.repeat, payingCustomers: repeatAll.paying, rate: ratio(repeatAll.repeat, repeatAll.paying) },
         inWindow: { repeatCustomers: repeatWindow.repeat, payingCustomers: repeatWindow.paying, rate: ratio(repeatWindow.repeat, repeatWindow.paying) },
       },
+      ordersPerCustomer: { paidOrders: repeatWindow.orders, payingCustomers: repeatWindow.paying, average: ratio(repeatWindow.orders, repeatWindow.paying) },
+      sessions: {
+        count: sessionsCurrent.count, averageMs: sessionsCurrent.averageMs, previousAverageMs: sessionsPrevious.averageMs,
+        growth: sessionsCurrent.averageMs === null || sessionsPrevious.averageMs === null ? null
+          : growthRate(sessionsCurrent.averageMs, sessionsPrevious.averageMs),
+        trackingSince: sessionsCurrent.trackingSince,
+      },
     }, {
       newCustomers: 'Customer accounts created inside the window by createdAt. Admin accounts and anonymized deleted accounts are excluded.',
       registrations: 'Registrations per UTC day (7d/30d/90d) or month (12m). Empty buckets are zero.',
       repeatBuyers: 'A paying customer is a user with at least one SUCCEEDED payment. A repeat customer has two or more SUCCEEDED paid orders. allTime counts every paid order; inWindow counts only orders paid inside the window. rate = repeat / paying customers.',
+      sessions: 'Storefront sessions that started inside the window. A session is one browser tab; its duration is the time the tab was visible, capped at 4 hours. Sessions under 1 second are ignored. Not linked to accounts.',
+      ordersPerCustomer: 'Orders with a SUCCEEDED payment inside the window divided by the customers who paid for them in the window. Null when nobody paid.',
     });
+  }
+
+  private async sessionStats(range: AnalyticsRange) {
+    const rows = await this.db.$queryRaw<{ count: bigint | number; average: number | string | null; since: Date | null }[]>(Prisma.sql`
+      SELECT COUNT(*) FILTER (WHERE "occurredAt" >= ${range.start} AND "occurredAt" < ${range.end}) AS count,
+        AVG("durationMs") FILTER (WHERE "occurredAt" >= ${range.start} AND "occurredAt" < ${range.end}) AS average,
+        MIN("occurredAt") AS since
+      FROM "analytics_events"
+      WHERE "type" = 'storefront.session' AND "durationMs" >= 1000`);
+    return { count: toNumber(rows[0]?.count), averageMs: roundedOrNull(rows[0]?.average), trackingSince: rows[0]?.since ?? null };
   }
 
   private async repeatCounts(range?: AnalyticsRange) {
     const condition = range
       ? Prisma.sql` AND p."paidAt" >= ${range.start} AND p."paidAt" < ${range.end}`
       : Prisma.empty;
-    const rows = await this.db.$queryRaw<{ repeat: bigint | number; paying: bigint | number }[]>(Prisma.sql`
-      SELECT COUNT(*) FILTER (WHERE t.n >= 2) AS repeat, COUNT(*) AS paying
+    const rows = await this.db.$queryRaw<{ repeat: bigint | number; paying: bigint | number; orders: bigint | number | string }[]>(Prisma.sql`
+      SELECT COUNT(*) FILTER (WHERE t.n >= 2) AS repeat, COUNT(*) AS paying, COALESCE(SUM(t.n), 0) AS orders
       FROM (
-        SELECT o."userId" AS "userId", COUNT(*) AS n
+        SELECT o."userId" AS "userId", COUNT(DISTINCT o."id") AS n
         FROM "payments" p JOIN "orders" o ON o."id" = p."orderId"
         WHERE p."status" = 'SUCCEEDED'${condition}
         GROUP BY o."userId"
       ) t`);
-    return { repeat: toNumber(rows[0]?.repeat), paying: toNumber(rows[0]?.paying) };
+    return { repeat: toNumber(rows[0]?.repeat), paying: toNumber(rows[0]?.paying), orders: toNumber(rows[0]?.orders) };
   }
 }
 

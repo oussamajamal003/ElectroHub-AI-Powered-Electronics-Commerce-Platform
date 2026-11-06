@@ -47,6 +47,15 @@ describe('AdminLayout shell', () => {
     expect(within(screen.getByRole('navigation', { name: 'Admin navigation' })).getByRole('link', { name: 'Orders' })).toBeInTheDocument();
   });
 
+  it('opens another admin page at its top', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    renderAt('/admin/analytics');
+    scrollTo.mockClear();
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Admin navigation' })).getByRole('link', { name: 'Products' }));
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'instant' });
+    scrollTo.mockRestore();
+  });
+
   const openSignOut = async () => {
     const trigger = screen.getByRole('button', { name: 'Account menu for Ada Admin' });
     expect(trigger).not.toHaveTextContent('Ada Admin'); // avatar only: the name lives in the menu

@@ -3,8 +3,8 @@ import rateLimit from 'express-rate-limit';
 import { analyticsEventsController } from '../controllers/analytics-events.controller.js';
 
 /**
- * Task 05.2 public event ingestion (guest-allowed, like image search). Mounted at /api; the only accepted type is
- * `image_search.result_selected` with a server-signed token. Rate limited per IP.
+ * Task 05.2 public event ingestion (guest-allowed, like image search). Mounted at /api; accepted types are
+ * `image_search.result_selected` (with a server-signed token) and `storefront.session` (anonymous visible time). Rate limited per IP.
  */
 const router = Router();
 

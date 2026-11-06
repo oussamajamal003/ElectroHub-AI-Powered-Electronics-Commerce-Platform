@@ -220,7 +220,8 @@ describe('customers', () => {
       'AS bucket, COUNT(*) AS count': [{ bucket: '2026-11-04', count: 3n }],
       'roles" r ON r."id" = u."roleId"': [{ count: 1n }],
       'COUNT(*) FILTER (WHERE t.n >= 2)': () => (repeat++ === 0
-        ? [{ repeat: 4n, paying: 10n }] : [{ repeat: 1n, paying: 4n }]),
+        ? [{ repeat: 4n, paying: 10n, orders: 17n }] : [{ repeat: 1n, paying: 4n, orders: 6n }]),
+      "'storefront.session'": [{ count: 0n, average: null, since: null }],
     }).customers('7d');
     expect(result.data.newCustomers).toEqual({ current: 1, previous: 1, growth: 0 });
     expect(result.data.registrations.buckets.find(bucket => bucket.bucket === '2026-11-04')).toEqual({ bucket: '2026-11-04', count: 3 });
@@ -229,14 +230,32 @@ describe('customers', () => {
       inWindow: { repeatCustomers: 1, payingCustomers: 4, rate: 0.25 },
     });
     expect(result.meta.definitions.repeatBuyers).toContain('two or more SUCCEEDED paid orders');
+    // Orders per customer uses the in-window counts only: 6 paid orders from 4 paying customers.
+    expect(result.data.ordersPerCustomer).toEqual({ paidOrders: 6, payingCustomers: 4, average: 1.5 });
   });
 
-  it('never returns a session-duration figure', async () => {
+  it('reports session duration only from recorded storefront sessions, with change vs the previous window', async () => {
+    let call = 0;
     const result = await service({
       'AS bucket, COUNT(*) AS count': [],
       'roles" r ON r."id" = u."roleId"': [{ count: 0n }],
-      'COUNT(*) FILTER (WHERE t.n >= 2)': [{ repeat: 0n, paying: 0n }],
+      'COUNT(*) FILTER (WHERE t.n >= 2)': [{ repeat: 0n, paying: 0n, orders: 0n }],
+      "'storefront.session'": () => (call++ === 0
+        ? [{ count: 12n, average: D('272400.4'), since: new Date('2026-11-01T00:00:00Z') }]
+        : [{ count: 8n, average: D('227000'), since: new Date('2026-11-01T00:00:00Z') }]),
+    }).customers('7d');
+    expect(result.data.sessions).toEqual({ count: 12, averageMs: 272400, previousAverageMs: 227000, growth: 0.2,
+      trackingSince: new Date('2026-11-01T00:00:00Z') });
+    expect(result.meta.definitions.sessions).toContain('time the tab was visible');
+  });
+
+  it('has no session average (not zero) before any session is recorded', async () => {
+    const result = await service({
+      'AS bucket, COUNT(*) AS count': [],
+      'roles" r ON r."id" = u."roleId"': [{ count: 0n }],
+      'COUNT(*) FILTER (WHERE t.n >= 2)': [{ repeat: 0n, paying: 0n, orders: 0n }],
+      "'storefront.session'": [{ count: 0n, average: null, since: null }],
     }).customers('90d');
-    expect(JSON.stringify(result)).not.toMatch(/session/i);
+    expect(result.data.sessions).toEqual({ count: 0, averageMs: null, previousAverageMs: null, growth: null, trackingSince: null });
   });
 });

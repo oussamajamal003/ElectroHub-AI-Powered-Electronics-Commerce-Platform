@@ -100,6 +100,10 @@ export interface CustomersData {
     allTime: RepeatBuyers;
     inWindow: RepeatBuyers;
   };
+  /** Orders paid inside the window ÷ customers who paid in it; average is null when nobody paid. */
+  ordersPerCustomer: { paidOrders: number; payingCustomers: number; average: number | null };
+  /** Storefront tab sessions (visible time). averageMs is null until a session is recorded in the window. */
+  sessions: { count: number; averageMs: number | null; previousAverageMs: number | null; growth: number | null; trackingSince: string | null };
 }
 export interface RepeatBuyers { repeatCustomers: number; payingCustomers: number; rate: number | null }
 

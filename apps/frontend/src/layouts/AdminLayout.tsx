@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation, useMatch } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useMatch, useNavigationType } from 'react-router-dom';
 import clsx from 'clsx';
 import { AlertTriangle, Bell, ExternalLink, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, Truck, ClipboardList, UserRound, ShieldCheck, MonitorSmartphone } from 'lucide-react';
 import { useAuth } from '@/features/auth/context/AuthContext';
@@ -147,6 +147,13 @@ export function AdminLayout() {
   }, [collapsed]);
   // A navigation (including back/forward) always closes the mobile drawer.
   useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
+  // Opening another admin page (a link, a drill-down, the sidebar) starts at its top. Back/forward keep the browser's position, and
+  // query-only changes on the same page (filters, pager) are left to the page itself.
+  const navigationType = useNavigationType();
+  useLayoutEffect(() => {
+    if (navigationType !== 'POP') window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   return <AdminToastProvider>
     <div className={clsx(styles.shell, collapsed && styles.shellCollapsed)}>

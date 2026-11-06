@@ -9,9 +9,11 @@ import { CustomerScrollRestoration } from './CustomerScrollRestoration';
 import { usePaymentLock } from '@/features/checkout/PaymentLockContext';
 import { DiscoveryProvider } from '@/features/search/discovery/DiscoveryProvider';
 import { ShopFooterLinks } from './ShopFooterLinks';
+import { useStorefrontSession } from '@/features/analytics/useStorefrontSession';
 
 export function CustomerLayout() {
   const { isLocked } = usePaymentLock();
+  useStorefrontSession();
 
   return (
     <DiscoveryProvider disabled={isLocked}>

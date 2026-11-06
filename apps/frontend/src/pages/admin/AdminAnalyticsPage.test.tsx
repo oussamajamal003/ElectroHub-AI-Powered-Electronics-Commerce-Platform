@@ -58,6 +58,17 @@ describe('AdminAnalyticsPage', () => {
     renderPage();
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/admin');
   });
+  it('shows customer growth, repeat customers and orders per customer from the customers report', () => {
+    renderPage();
+    const growth = screen.getByRole('region', { name: 'Customer growth' });
+    expect(within(growth).getByText('14')).toBeInTheDocument();
+    expect(within(growth).getByRole('img', { name: /Running total of new customers/ })).toBeInTheDocument();
+    const repeat = screen.getByRole('region', { name: 'Repeat customers' });
+    expect(within(repeat).getByRole('img', { name: /Repeat purchase rate 35(\.0)?%: 7 of 20 paying customers/ })).toBeInTheDocument();
+    const orders = screen.getByRole('region', { name: 'Avg. orders per customer' });
+    expect(within(orders).getByText('1.33')).toBeInTheDocument();
+    expect(within(orders).getByText('12 paid orders from 9 paying customers in this period.')).toBeInTheDocument();
+  });
   it('shows a skeleton with busy regions while every report is loading, not zeros', () => {
     mockHooks(Object.fromEntries(Object.keys(hooks).map(name => [name, loading()])));
     const { container } = renderPage();
@@ -81,7 +92,7 @@ describe('AdminAnalyticsPage', () => {
     expect(screen.getByText(/\+0\.1% vs previous 30 days/)).toBeInTheDocument();
     expect(screen.getAllByText('No prior data').length).toBeGreaterThan(0);
     expect(screen.getAllByText('35.0%').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Tracking started/)).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Image search' })).getByText(/Tracking started/)).toBeInTheDocument();
   });
 
   it('formats a negative fractional growth value as a percentage', () => {
@@ -92,9 +103,20 @@ describe('AdminAnalyticsPage', () => {
     expect(screen.getByText(/-25% vs previous 30 days/)).toBeInTheDocument();
   });
 
-  it('does not show any session-duration metric', () => {
+  it('shows the measured average session duration with its change and sample size', () => {
     renderPage();
-    expect(screen.queryByText(/session/i)).not.toBeInTheDocument();
+    const card = screen.getByRole('region', { name: 'Avg. session duration' });
+    expect(within(card).getByText('4m 32s')).toBeInTheDocument();
+    expect(within(card).getByText('Average visible time across 48 storefront sessions in this period.')).toBeInTheDocument();
+  });
+
+  it('says no sessions were recorded instead of showing a zero duration', () => {
+    mockHooks({ customers: ready({ ...fixtures.customers, data: { ...fixtures.customers.data,
+      sessions: { count: 0, averageMs: null, previousAverageMs: null, growth: null, trackingSince: null } } }) });
+    renderPage();
+    const card = screen.getByRole('region', { name: 'Avg. session duration' });
+    expect(within(card).getByText('No storefront sessions recorded in this period')).toBeInTheDocument();
+    expect(within(card).queryByText(/0s/)).toBeNull();
   });
 
   it('gives the revenue chart a text summary and a complete data table for screen readers', () => {

@@ -10,6 +10,7 @@ import { OrderStatusPill, PaymentPill } from '@/features/admin/shared/labels';
 import { ORDER_STATUSES, orderStatusLabel } from '@/features/admin/shared/statusLabels';
 import { formatCount, formatDate, formatDateTime, formatMoney, formatMoneyList, shortReference } from '@/features/admin/shared/format';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { seriesColor } from '@/features/admin/shared/chartColors';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
 
 const WINDOWS = [7, 30, 90] as const;
@@ -185,12 +186,12 @@ export function AdminDashboardPage() {
         <section className={styles.panel} aria-labelledby="status-title">
           <h2 id="status-title" className={styles.panelTitle}>Orders by status</h2>
           {overview ? <ul className={styles.statusList}>
-            {ORDER_STATUSES.map(status => {
+            {ORDER_STATUSES.map((status, index) => {
               const count = overview.orders.byStatus[status] ?? 0;
               return <li key={status} className={styles.statusRow}>
-                <Link className={styles.rowLink} to={`/admin/orders?status=${status}`}>{orderStatusLabel[status]}</Link>
+                <Link className={styles.rowLink} to={`/admin/orders?status=${status}`}><span className={styles.legendDot} style={{ background: seriesColor(index) }} aria-hidden="true" />{orderStatusLabel[status]}</Link>
                 <span className={styles.money}>{formatCount(count)}</span>
-                <span className={styles.meter} aria-hidden="true"><span style={{ width: overview.orders.total ? `${(count / overview.orders.total) * 100}%` : 0 }} /></span>
+                <span className={styles.meter} aria-hidden="true"><span style={{ width: overview.orders.total ? `${(count / overview.orders.total) * 100}%` : 0, background: seriesColor(index) }} /></span>
               </li>;
             })}
           </ul> : <p className={styles.panelHint} role="status">Loading…</p>}

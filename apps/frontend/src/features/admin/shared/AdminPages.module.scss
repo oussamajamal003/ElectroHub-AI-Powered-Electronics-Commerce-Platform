@@ -137,6 +137,7 @@ td .mono, td .muted { white-space: nowrap; }
 .statusRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: $spacing-2; align-items: center; font-size: $font-size-sm; }
 .meter { grid-column: 1 / -1; height: 6px; background: $color-surface; border: 1px solid $color-border; overflow: hidden;
   span { display: block; height: 100%; background: $color-primary; } }
+.legendDot { display: inline-block; flex: none; width: .625rem; height: .625rem; margin-right: $spacing-2; border-radius: $radius-full; vertical-align: middle; }
 .windowSwitch { display: inline-flex; }
 
 .notFound { display: grid; justify-items: start; gap: $spacing-3; padding: $spacing-10 $spacing-6; background: $color-background; border: 1px solid $color-border;

@@ -97,4 +97,6 @@ export const customersFixture = envelope<CustomersData>({
     allTime: { repeatCustomers: 7, payingCustomers: 20, rate: 0.35 },
     inWindow: { repeatCustomers: 2, payingCustomers: 9, rate: 0.2222 },
   },
+  ordersPerCustomer: { paidOrders: 12, payingCustomers: 9, average: 1.3333 },
+  sessions: { count: 48, averageMs: 272000, previousAverageMs: 240000, growth: 0.1333, trackingSince: '2026-11-01T00:00:00.000Z' },
 });

@@ -3,7 +3,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { issueAnalyticsToken } from '../services/analytics-token.js';
 
-const db = vi.hoisted(() => ({ analyticsEvent: { createMany: vi.fn() } }));
+const db = vi.hoisted(() => ({ analyticsEvent: { createMany: vi.fn() }, $executeRaw: vi.fn() }));
 const logger = vi.hoisted(() => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn() }));
 vi.mock('../lib/prisma.js', () => ({ prisma: db }));
 vi.mock('../utils/logger.js', () => ({ logger, logSafely: vi.fn() }));
@@ -24,6 +24,7 @@ const body = (overrides: Record<string, unknown> = {}) => ({ type: 'image_search
 beforeEach(() => {
   vi.clearAllMocks();
   db.analyticsEvent.createMany.mockResolvedValue({ count: 1 });
+  db.$executeRaw.mockResolvedValue(1);
 });
 
 describe('POST /api/analytics/events', () => {
@@ -80,6 +81,33 @@ describe('POST /api/analytics/events', () => {
     expect(response.status).toBe(503);
     expect(response.body).toEqual({ error: { code: 'ANALYTICS_UNAVAILABLE', message: expect.any(String) } });
     expect(JSON.stringify(response.body)).not.toContain('db.internal');
+  });
+
+  describe('storefront.session', () => {
+    const SESSION = '0b7c4f1e-9a2d-4c3b-8e5f-6a7b8c9d0e1f';
+    const session = (overrides: Record<string, unknown> = {}) => ({ type: 'storefront.session', sessionId: SESSION, visibleMs: 272_400, ...overrides });
+
+    it('records a tab session keyed by its random id, keeping the largest reported total', async () => {
+      const response = await request(app).post('/api/analytics/events').send(session());
+      expect(response.status).toBe(202);
+      const sql = db.$executeRaw.mock.calls[0]![0] as { strings: string[]; values: unknown[] };
+      expect(sql.strings.join('?')).toContain('ON CONFLICT ("idempotencyKey") DO UPDATE SET "durationMs" = GREATEST(');
+      expect(sql.values).toEqual(expect.arrayContaining(['storefront.session', SESSION, 272_400, `ses:${SESSION}`]));
+    });
+
+    it('rejects identities, URLs, out-of-range durations and non-uuid ids without writing', async () => {
+      for (const bad of [{ userId: P1 }, { path: '/account' }, { visibleMs: -1 }, { visibleMs: 4 * 3_600_000 + 1 }, { visibleMs: 1.5 }, { sessionId: 'abc' }]) {
+        expect((await request(app).post('/api/analytics/events').send(session(bad))).status, JSON.stringify(bad)).toBe(400);
+      }
+      expect(db.$executeRaw).not.toHaveBeenCalled();
+    });
+
+    it('answers 503 without details when storage fails', async () => {
+      db.$executeRaw.mockRejectedValue(new Error('connection refused at 10.0.0.1'));
+      const response = await request(app).post('/api/analytics/events').send(session());
+      expect(response.status).toBe(503);
+      expect(JSON.stringify(response.body)).not.toContain('10.0.0.1');
+    });
   });
 
   it('limits ingestion to 60 requests per minute per client', async () => {

@@ -12,6 +12,7 @@ import {
 } from '@/features/admin/analytics/api';
 import { ActivePill, EmptyRows, KpiCard, PageHeader, QueryProblem, TableCard, type Crumb } from '@/features/admin/shared/AdminUi';
 import { formatCount, formatDate, formatDateTime, formatMoney } from '@/features/admin/shared/format';
+import { STATE_COLOR, seriesColor } from '@/features/admin/shared/chartColors';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
 import local from './AdminAnalyticsPage.module.scss';
 
@@ -39,7 +40,10 @@ function SectionSkeleton({ kind }: { kind: string }) {
     overview: <><div className={local.skeletonKpis}>{Array.from({ length: 4 }, (_, index) => <span key={index} />)}</div><div className={local.skeletonChart}><span /></div></>,
     products: <div className={local.skeletonRows}>{Array.from({ length: 4 }, (_, index) => <span key={index} />)}</div>,
     categories: <div className={local.skeletonBars}>{Array.from({ length: 5 }, (_, index) => <span key={index} />)}</div>,
-    customers: <><div className={local.skeletonKpis}>{Array.from({ length: 3 }, (_, index) => <span key={index} />)}</div><div className={local.skeletonChart}><span /></div></>,
+    'customer-growth': <><span className={local.skeletonWide} /><div className={local.skeletonChart}><span /></div></>,
+    'repeat-customers': <><span className={local.skeletonDonut} /><span className={local.skeletonWide} /></>,
+    'orders-per-customer': <><span className={local.skeletonWide} /><span className={local.skeletonWide} /></>,
+    'session-duration': <><span className={local.skeletonWide} /><span className={local.skeletonWide} /></>,
     recommendations: <><div className={local.skeletonKpis}>{Array.from({ length: 4 }, (_, index) => <span key={index} />)}</div><div className={local.skeletonRows}>{Array.from({ length: 3 }, (_, index) => <span key={index} />)}</div></>,
     'image-search': <><div className={local.skeletonKpis}>{Array.from({ length: 4 }, (_, index) => <span key={index} />)}</div><div className={local.skeletonBars}>{Array.from({ length: 3 }, (_, index) => <span key={index} />)}</div></>,
     inventory: <><span className={local.skeletonWide} /><div className={local.skeletonRows}>{Array.from({ length: 3 }, (_, index) => <span key={index} />)}</div></>,
@@ -132,6 +136,10 @@ function RevenueChart({ points, currency, granularity }: {
   </div>;
 }
 
+function Stat({ label, value, note }: { label: string; value: ReactNode; note?: ReactNode }) {
+  return <div className={local.stat}><dt>{label}</dt><dd>{value}</dd>{note && <p className={local.statNote}>{note}</p>}</div>;
+}
+
 function BarSeries({ rows, caption }: { rows: { bucket: string; count: number }[]; caption: string }) {
   const max = Math.max(1, ...rows.map(row => row.count));
   return <div className={local.bars}>
@@ -145,22 +153,106 @@ function BarSeries({ rows, caption }: { rows: { bucket: string; count: number }[
   </div>;
 }
 
-function Stat({ label, value, note }: { label: string; value: ReactNode; note?: ReactNode }) {
-  return <div className={local.stat}><dt>{label}</dt><dd>{value}</dd>{note && <p className={local.statNote}>{note}</p>}</div>;
+/** Running total of new customer accounts across the window, drawn as one area so the slope reads as the growth rate. */
+function CustomerGrowth({ data, period }: { data: CustomersData; period: AnalyticsPeriod }) {
+  const monthly = data.registrations.granularity === 'MONTH';
+  let running = 0;
+  const points = data.registrations.buckets.map(row => ({ bucket: row.bucket, count: row.count, total: (running += row.count) }));
+  const width = 300;
+  const height = 96;
+  const max = Math.max(1, running);
+  const x = (index: number) => points.length < 2 ? width / 2 : (index / (points.length - 1)) * width;
+  const y = (total: number) => height - 4 - (total / max) * (height - 8);
+  const line = points.map((point, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)},${y(point.total).toFixed(1)}`).join(' ');
+  return <div className={local.miniCard}>
+    <p className={local.bigFigure}>{formatCount(data.newCustomers.current)}<span>new customers</span></p>
+    <Growth growth={data.newCustomers.growth} period={period} />
+    {running > 0
+      ? <div className={local.growthCharts}>
+        <div className={local.subsection}>
+          <h3 className={local.subsectionTitle}>Running total</h3>
+          <svg className={local.growthChart} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img"
+            aria-label={`Running total of new customers: ${formatCount(running)} by the end of the period`}>
+            <path d={`${line} L${x(points.length - 1).toFixed(1)},${height} L${x(0).toFixed(1)},${height} Z`} className={local.growthArea} />
+            <path d={line} className={local.growthLine} vectorEffect="non-scaling-stroke" />
+          </svg>
+        </div>
+        <div className={local.subsection}>
+          <h3 className={local.subsectionTitle}>New customers per {monthly ? 'month' : 'day'}</h3>
+          <BarSeries rows={data.registrations.buckets} caption="New customers per bucket" />
+        </div>
+      </div>
+      : <EmptyRows title="No new customers in this period" />}
+    <div className={styles.visuallyHidden}><table>
+      <caption>New customers per {monthly ? 'month' : 'day'}, with running total</caption>
+      <thead><tr><th scope="col">{monthly ? 'Month' : 'Day'}</th><th scope="col">New</th><th scope="col">Running total</th></tr></thead>
+      <tbody>{points.map(point => <tr key={point.bucket}><th scope="row">{point.bucket}</th><td>{formatCount(point.count)}</td><td>{formatCount(point.total)}</td></tr>)}</tbody>
+    </table></div>
+  </div>;
+}
+
+/** Share of paying customers with two or more paid orders, as a ring with the rate written in its centre. */
+function RepeatCustomers({ data }: { data: CustomersData }) {
+  const { allTime, inWindow } = data.repeatBuyers;
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
+  return <div className={local.miniCard}>
+    <div className={local.donut} role="img"
+      aria-label={`Repeat purchase rate ${percentText(allTime.rate)}: ${formatCount(allTime.repeatCustomers)} of ${formatCount(allTime.payingCustomers)} paying customers`}>
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r={radius} className={local.donutTrack} />
+        {(allTime.rate ?? 0) > 0 && <circle cx="50" cy="50" r={radius} className={local.donutValue} transform="rotate(-90 50 50)"
+          strokeDasharray={`${((allTime.rate ?? 0) * circumference).toFixed(2)} ${circumference.toFixed(2)}`} />}
+      </svg>
+      <strong>{percentText(allTime.rate)}</strong>
+    </div>
+    <p className={local.coverage}>Repeat purchase rate, all time: {formatCount(allTime.repeatCustomers)} of {formatCount(allTime.payingCustomers)} paying customers.</p>
+    <p className={local.statNote}>In this period: {percentText(inWindow.rate)} ({formatCount(inWindow.repeatCustomers)} of {formatCount(inWindow.payingCustomers)}).</p>
+  </div>;
+}
+
+function OrdersPerCustomer({ data }: { data: CustomersData }) {
+  const { average, paidOrders, payingCustomers } = data.ordersPerCustomer;
+  return <div className={local.miniCard}>
+    <p className={local.bigFigure}>{average === null ? '—' : average.toFixed(2)}<span>orders per customer</span></p>
+    <p className={local.coverage}>{average === null ? 'No paid orders in this period.'
+      : `${formatCount(paidOrders)} paid orders from ${formatCount(payingCustomers)} paying customers in this period.`}</p>
+  </div>;
+}
+
+/** "4m 32s" / "45s" / "1h 05m": whole seconds, no fake precision. */
+function formatDuration(ms: number) {
+  const seconds = Math.round(ms / 1000);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours) return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+  return minutes ? `${minutes}m ${String(seconds % 60).padStart(2, '0')}s` : `${seconds}s`;
+}
+
+function SessionDuration({ data, period }: { data: CustomersData; period: AnalyticsPeriod }) {
+  const { averageMs, count, growth, trackingSince } = data.sessions;
+  if (averageMs === null) return <EmptyRows title="No storefront sessions recorded in this period"
+    hint={trackingSince ? `Tracking started ${formatDate(trackingSince)}.` : 'Figures appear once shoppers browse the storefront.'} />;
+  return <div className={local.miniCard}>
+    <p className={local.bigFigure}>{formatDuration(averageMs)}<span>avg. session duration</span></p>
+    <Growth growth={growth} period={period} />
+    <p className={local.coverage}>Average visible time across {formatCount(count)} storefront {count === 1 ? 'session' : 'sessions'} in this period.</p>
+    {trackingSince && <p className={local.statNote}>Tracking started {formatDate(trackingSince)}; earlier periods are not comparable.</p>}
+  </div>;
 }
 
 function StatusBreakdown({ rows, total, denominator }: {
-  rows: { label: string; to: string; count: number }[]; total: number; denominator: string;
+  rows: { label: string; to: string; count: number; color?: string }[]; total: number; denominator: string;
 }) {
   return <>
     <p className={local.statusNote}>Each bar is a share of {formatCount(total)} {denominator}.</p>
     <ul className={local.statusList}>
-      {rows.map(row => {
+      {rows.map((row, index) => {
         const share = total > 0 ? row.count / total : 0;
         return <li key={row.label}>
-          <Link className={local.drill} to={row.to}>{row.label}</Link><strong>{formatCount(row.count)}</strong>
+          <Link className={local.drill} to={row.to}><span className={local.legendDot} style={{ background: row.color ?? seriesColor(index) }} aria-hidden="true" />{row.label}</Link><strong>{formatCount(row.count)}</strong>
           <span className={local.statusTrack} role="img" aria-label={`${row.label}: ${formatCount(row.count)} of ${formatCount(total)} ${denominator}`}>
-            <span className={local.statusFill} style={{ width: `${share * 100}%` }} />
+            <span className={local.statusFill} style={{ width: `${share * 100}%`, background: row.color ?? seriesColor(index) }} />
           </span>
         </li>;
       })}
@@ -184,7 +276,7 @@ function TopProducts({ rows }: { rows: ProductRow[] }) {
         <span className={local.productPlaceholder} aria-hidden="true">{row.name.trim().charAt(0).toUpperCase() || <Package size={18} />}</span>
         <span className={local.productDetails}>
           <Link className={local.productName} to={`/admin/products/${encodeURIComponent(row.productId)}/edit`}>{row.name}</Link>
-          <span className={local.productBarTrack} aria-hidden="true"><span className={local.productBar} style={{ width: `${Math.max(row.units > 0 ? 2 : 0, (row.units / maxUnits) * 100)}%` }} /></span>
+          <span className={local.productBarTrack} aria-hidden="true"><span className={local.productBar} style={{ width: `${Math.max(row.units > 0 ? 2 : 0, (row.units / maxUnits) * 100)}%`, background: seriesColor(index) }} /></span>
           <span className={local.productMeta}>{formatCount(row.units)} units · {formatCount(row.orders)} orders</span>
         </span>
         <strong className={local.productAmount}>{formatMoney(row.amount, row.currency)}</strong>
@@ -203,15 +295,15 @@ function TopProducts({ rows }: { rows: ProductRow[] }) {
 
 function CategoryContribution({ data }: { data: CategoriesData }) {
   return <div className={local.categoryList}>
-    {data.categories.map(row => {
+    {data.categories.map((row, index) => {
       const width = row.share === null ? 0 : Math.max(0, Math.min(100, row.share * 100));
       return <div className={local.categoryRow} key={`${row.categoryId}:${row.currency}`}>
         <div className={local.categoryHeading}>
-        <Link to={`/admin/products?categoryId=${encodeURIComponent(row.categoryId)}`} className={local.categoryName}>{row.name}</Link>
+        <Link to={`/admin/products?categoryId=${encodeURIComponent(row.categoryId)}`} className={local.categoryName}><span className={local.legendDot} style={{ background: seriesColor(index) }} aria-hidden="true" />{row.name}</Link>
           <strong className={local.categoryAmount}>{formatMoney(row.amount, row.currency)}</strong>
         </div>
         <div className={local.categoryTrack} role="img" aria-label={`${row.name}: ${formatMoney(row.amount, row.currency)}${row.share === null ? '' : `, ${percentText(row.share)} of ${row.currency} revenue`}`}>
-          <span className={local.categoryFill} style={{ width: `${width}%` }} />
+          <span className={local.categoryFill} style={{ width: `${width}%`, background: seriesColor(index) }} />
         </div>
         <div className={local.categoryMeta}><span>{formatCount(row.units)} units</span><span>{percentText(row.share)} share</span></div>
       </div>;
@@ -318,74 +410,19 @@ export function AdminAnalyticsPage() {
       </Section>
     </div>
 
-    <div className={local.twoColumn}>
-      <Section id="customers" title="Customers" hint="New accounts by creation date. Repeat buyers have two or more paid orders." query={customers}>
-        {(data: CustomersData) => <>
-          <div className={local.statRow}>
-            <Stat label="New customers" value={formatCount(data.newCustomers.current)} note={<Growth growth={data.newCustomers.growth} period={period} />} />
-            <Stat label="Repeat buyers, all time" value={percentText(data.repeatBuyers.allTime.rate)}
-              note={`${formatCount(data.repeatBuyers.allTime.repeatCustomers)} of ${formatCount(data.repeatBuyers.allTime.payingCustomers)} paying customers`} />
-            <Stat label="Repeat buyers in period" value={percentText(data.repeatBuyers.inWindow.rate)}
-              note={`${formatCount(data.repeatBuyers.inWindow.repeatCustomers)} of ${formatCount(data.repeatBuyers.inWindow.payingCustomers)} paying customers in period`} />
-          </div>
-          <div className={local.subsection}>
-            <h3 className={local.subsectionTitle}>New customers per {data.registrations.granularity === 'MONTH' ? 'month' : 'day'}</h3>
-            {data.registrations.buckets.some(row => row.count > 0)
-              ? <BarSeries rows={data.registrations.buckets} caption="New customers per bucket" />
-              : <EmptyRows title="No new customers in this period" />}
-          </div>
-        </>}
-      </Section>
+    <Section id="customer-growth" title="Customer growth" hint="New customer accounts by creation date: the running total and each day's (or month's) sign-ups." query={customers}>
+      {(data: CustomersData) => <CustomerGrowth data={data} period={period} />}
+    </Section>
 
-      <Section id="recommendations" title="Recommendations" hint="Impressions and clicks recorded for the period, with last-click conversion for consenting customers." query={recommendations}>
-        {(data: RecommendationsData) => <>
-          <div className={local.statRow}>
-            <Stat label="Impressions" value={formatCount(data.impressions)} />
-            <Stat label="Clicks" value={formatCount(data.clicks)} />
-            <Stat label="Click-through rate" value={percentText(data.ctr)} />
-            <Stat label="Attributed orders" value={formatCount(data.conversion.attributedOrders)}
-              note="7-day, last-click attribution for consenting signed-in customers" />
-            <Stat label="Attributed order items" value={formatCount(data.conversion.attributedOrderItems)} />
-          </div>
-          {data.conversion.attributedRevenue.length > 0
-            ? <div className={local.currencyRevenue} aria-label="Attributed revenue by currency">
-              <strong>Attributed revenue</strong>
-              {data.conversion.attributedRevenue.map(row => <div className={local.currencyRevenueRow} key={row.currency}><span>{row.currency}</span><strong>{formatMoney(row.amount, row.currency)}</strong></div>)}
-            </div>
-            : <p className={local.coverage}>No attributed revenue in this period.</p>}
-          <p className={local.coverage}>Conversion counts orders from signed-in customers who opted in to personalization and clicked the same product within 7 days before ordering. Other purchases are not attributed.</p>
-          {data.breakdown.bySurface.length === 0 && data.breakdown.byMode.length === 0 && data.breakdown.byStrategy.length === 0
-            ? <EmptyRows title="No recommendation activity in this period" />
-            : <div className={local.breakdownGrid}>
-              {data.breakdown.bySurface.length > 0 && <TableCard label="Recommendations by surface">
-                <DataTable caption="Recommendations by surface" data={data.breakdown.bySurface} keyExtractor={row => row.surface}
-                  columns={[
-                    { key: 'surface', title: 'Surface', render: row => row.surface },
-                    { key: 'impressions', title: 'Impressions', align: 'right', render: row => formatCount(row.impressions) },
-                    { key: 'clicks', title: 'Clicks', align: 'right', render: row => formatCount(row.clicks) },
-                    { key: 'ctr', title: 'CTR', align: 'right', render: row => percentText(row.ctr) },
-                  ]} />
-              </TableCard>}
-              {data.breakdown.byMode.length > 0 && <TableCard label="Recommendations by mode">
-                <DataTable caption="Recommendations by mode" data={data.breakdown.byMode} keyExtractor={row => row.mode}
-                  columns={[
-                    { key: 'mode', title: 'Mode', render: row => row.mode },
-                    { key: 'impressions', title: 'Impressions', align: 'right', render: row => formatCount(row.impressions) },
-                    { key: 'clicks', title: 'Clicks', align: 'right', render: row => formatCount(row.clicks) },
-                    { key: 'ctr', title: 'CTR', align: 'right', render: row => percentText(row.ctr) },
-                  ]} />
-              </TableCard>}
-              {data.breakdown.byStrategy.length > 0 && <TableCard label="Recommendations by strategy">
-                <DataTable caption="Recommendations by strategy" data={data.breakdown.byStrategy} keyExtractor={row => row.strategy}
-                  columns={[
-                    { key: 'strategy', title: 'Strategy', render: row => row.strategy },
-                    { key: 'impressions', title: 'Impressions', align: 'right', render: row => formatCount(row.impressions) },
-                    { key: 'clicks', title: 'Clicks', align: 'right', render: row => formatCount(row.clicks) },
-                    { key: 'ctr', title: 'CTR', align: 'right', render: row => percentText(row.ctr) },
-                  ]} />
-              </TableCard>}
-            </div>}
-        </>}
+    <div className={local.threeColumn}>
+      <Section id="repeat-customers" title="Repeat customers" hint="Paying customers with two or more paid orders." query={customers}>
+        {(data: CustomersData) => <RepeatCustomers data={data} />}
+      </Section>
+      <Section id="orders-per-customer" title="Avg. orders per customer" hint="Paid orders divided by the customers who paid in the period." query={customers}>
+        {(data: CustomersData) => <OrdersPerCustomer data={data} />}
+      </Section>
+      <Section id="session-duration" title="Avg. session duration" hint="Time a storefront tab was visible, per tab. Not linked to accounts." query={customers}>
+        {(data: CustomersData) => <SessionDuration data={data} period={period} />}
       </Section>
     </div>
 
@@ -422,13 +459,64 @@ export function AdminAnalyticsPage() {
         {(data: InventoryData) => <>
           <p className={local.coverage}>{formatCount(data.trackedProducts)} tracked products. Untracked products are not counted.</p>
           <StatusBreakdown total={data.trackedProducts} denominator="tracked products" rows={[
-            { label: 'In stock', count: data.byStatus.IN_STOCK, to: '/admin/inventory?status=IN_STOCK' },
-            { label: 'Low stock', count: data.byStatus.LOW_STOCK, to: '/admin/inventory?status=LOW_STOCK' },
-            { label: 'Out of stock', count: data.byStatus.OUT_OF_STOCK, to: '/admin/inventory?status=OUT_OF_STOCK' },
+            { label: 'In stock', count: data.byStatus.IN_STOCK, to: '/admin/inventory?status=IN_STOCK', color: STATE_COLOR.good },
+            { label: 'Low stock', count: data.byStatus.LOW_STOCK, to: '/admin/inventory?status=LOW_STOCK', color: STATE_COLOR.warning },
+            { label: 'Out of stock', count: data.byStatus.OUT_OF_STOCK, to: '/admin/inventory?status=OUT_OF_STOCK', color: STATE_COLOR.critical },
           ]} />
         </>}
       </Section>
     </div>
+
+    <Section id="recommendations" title="Recommendations" hint="Impressions and clicks recorded for the period, with last-click conversion for consenting customers." query={recommendations}>
+      {(data: RecommendationsData) => <>
+        <div className={local.statRow}>
+          <Stat label="Impressions" value={formatCount(data.impressions)} />
+          <Stat label="Clicks" value={formatCount(data.clicks)} />
+          <Stat label="Click-through rate" value={percentText(data.ctr)} />
+          <Stat label="Attributed orders" value={formatCount(data.conversion.attributedOrders)}
+            note="7-day, last-click attribution for consenting signed-in customers" />
+          <Stat label="Attributed order items" value={formatCount(data.conversion.attributedOrderItems)} />
+        </div>
+        {data.conversion.attributedRevenue.length > 0
+          ? <div className={local.currencyRevenue} aria-label="Attributed revenue by currency">
+            <strong>Attributed revenue</strong>
+            {data.conversion.attributedRevenue.map(row => <div className={local.currencyRevenueRow} key={row.currency}><span>{row.currency}</span><strong>{formatMoney(row.amount, row.currency)}</strong></div>)}
+          </div>
+          : <p className={local.coverage}>No attributed revenue in this period.</p>}
+        <p className={local.coverage}>Conversion counts orders from signed-in customers who opted in to personalization and clicked the same product within 7 days before ordering. Other purchases are not attributed.</p>
+        {data.breakdown.bySurface.length === 0 && data.breakdown.byMode.length === 0 && data.breakdown.byStrategy.length === 0
+          ? <EmptyRows title="No recommendation activity in this period" />
+          : <div className={local.breakdownGrid}>
+            {data.breakdown.bySurface.length > 0 && <TableCard label="Recommendations by surface">
+              <DataTable caption="Recommendations by surface" data={data.breakdown.bySurface} keyExtractor={row => row.surface}
+                columns={[
+                  { key: 'surface', title: 'Surface', render: row => row.surface },
+                  { key: 'impressions', title: 'Impressions', align: 'right', render: row => formatCount(row.impressions) },
+                  { key: 'clicks', title: 'Clicks', align: 'right', render: row => formatCount(row.clicks) },
+                  { key: 'ctr', title: 'CTR', align: 'right', render: row => percentText(row.ctr) },
+                ]} />
+            </TableCard>}
+            {data.breakdown.byMode.length > 0 && <TableCard label="Recommendations by mode">
+              <DataTable caption="Recommendations by mode" data={data.breakdown.byMode} keyExtractor={row => row.mode}
+                columns={[
+                  { key: 'mode', title: 'Mode', render: row => row.mode },
+                  { key: 'impressions', title: 'Impressions', align: 'right', render: row => formatCount(row.impressions) },
+                  { key: 'clicks', title: 'Clicks', align: 'right', render: row => formatCount(row.clicks) },
+                  { key: 'ctr', title: 'CTR', align: 'right', render: row => percentText(row.ctr) },
+                ]} />
+            </TableCard>}
+            {data.breakdown.byStrategy.length > 0 && <TableCard label="Recommendations by strategy">
+              <DataTable caption="Recommendations by strategy" data={data.breakdown.byStrategy} keyExtractor={row => row.strategy}
+                columns={[
+                  { key: 'strategy', title: 'Strategy', render: row => row.strategy },
+                  { key: 'impressions', title: 'Impressions', align: 'right', render: row => formatCount(row.impressions) },
+                  { key: 'clicks', title: 'Clicks', align: 'right', render: row => formatCount(row.clicks) },
+                  { key: 'ctr', title: 'CTR', align: 'right', render: row => percentText(row.ctr) },
+                ]} />
+            </TableCard>}
+          </div>}
+      </>}
+    </Section>
 
     <Section id="deliveries" title="Deliveries" hint="Active deliveries are the current state. Delivered counts use the delivery time within the period." query={deliveries}>
       {(data: DeliveriesData) => <>
