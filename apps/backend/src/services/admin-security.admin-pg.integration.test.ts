@@ -973,6 +973,112 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     });
   });
 
+  describe('RECREATE reusing a deleted administrator email creates a completely new security identity', () => {
+    const del = (admin: { accessToken: string }) => api().post('/api/admin/me/delete', { currentPassword: PASSWORD, confirmation: 'DELETE' }, admin.accessToken);
+
+    /** Delete `old` (an enrolled administrator), then invite the same address as `inviter` and accept + enroll MFA. */
+    async function recreate(old: Awaited<ReturnType<typeof enrolledAdmin>>, inviter: { accessToken: string }, body: object) {
+      const email = old.user.email;
+      expect((await del(old)).status).toBe(200);
+      const invite = await api().post('/api/admin/invitations', { email, ...body }, inviter.accessToken);
+      expect(invite.status).toBe(201);
+      const token = sentInvitations.at(-1)!.token;
+      const accepted = await api().post('/api/auth/admin/invitations/accept', { token, firstName: 'Fresh', lastName: 'Person', password: PASSWORD });
+      expect(accepted.status).toBe(201);
+      const client = api();
+      const start = await client.post('/api/auth/admin/mfa/enrollment/start', { mfaToken: accepted.body.mfaToken });
+      const confirm = await client.post('/api/auth/admin/mfa/enrollment/confirm', { mfaToken: accepted.body.mfaToken, factorId: start.body.factorId, code: code(start.body.secret) });
+      expect(confirm.status).toBe(200);
+      const fresh = await prisma.user.findUniqueOrThrow({ where: { email } });
+      return { email, fresh, secret: start.body.secret as string, accessToken: confirm.body.accessToken as string, recoveryCodes: confirm.body.recoveryCodes as string[] };
+    }
+    const security = (id: string) => prisma.adminAccountSecurity.findUniqueOrThrow({ where: { userId: id }, select: { isOwner: true, canManageAdmins: true } });
+
+    it('RECREATE-01: a deleted manager (with MFA) is recreated without the permission; the old identity stays anonymized, inactive and audited', async () => {
+      const inviter = await enrolledAdmin({ owner: true });
+      const old = await enrolledAdmin({ manage: true });
+      const oldFactors = await prisma.adminMfaFactor.findMany({ where: { userId: old.user.id }, select: { id: true } });
+      expect(oldFactors.length).toBeGreaterThan(0);
+      const oldProfile = await api().get('/api/admin/me/profile', old.accessToken);
+      expect(oldProfile.status).toBe(200);
+      const next = await recreate(old, inviter, {}); // grantManageAdmins omitted → backend default
+      // New identity.
+      expect(next.fresh.id).not.toBe(old.user.id);
+      expect(next.fresh.isActive).toBe(true);
+      expect(await security(next.fresh.id)).toEqual({ isOwner: false, canManageAdmins: false });
+      const newFactors = await prisma.adminMfaFactor.findMany({ where: { userId: next.fresh.id }, select: { id: true } });
+      expect(newFactors).toHaveLength(1);
+      expect(oldFactors.map(row => row.id)).not.toContain(newFactors[0]!.id);
+      expect(next.secret).not.toBe(old.secret);
+      expect(next.recoveryCodes.filter(codeValue => old.recoveryCodes.includes(codeValue))).toHaveLength(0);
+      // Old sessions and tokens are dead; the old secret and recovery codes do not sign into the new account.
+      expect((await api().get('/api/admin/me/profile', old.accessToken)).status).toBe(401);
+      expect((await api().post('/api/auth/refresh', {}, undefined, old.cookie)).status).toBe(401);
+      const login = await api().post('/api/auth/login', { email: next.email, password: PASSWORD });
+      expect((await api().post('/api/auth/admin/mfa/totp/verify', { mfaToken: login.body.mfaToken, code: code(old.secret, 2) })).status).toBe(401);
+      expect((await api().post('/api/auth/admin/mfa/recovery/verify', { mfaToken: login.body.mfaToken, code: old.recoveryCodes[0] })).status).toBe(401);
+      // The new administrator is a standard one: no management access.
+      expect((await api().get('/api/admin/me/profile', next.accessToken)).status).toBe(200);
+      expect((await api().get('/api/admin/invitations', next.accessToken)).status).toBe(403);
+      // The previous record: same row, anonymized, inactive, credential-free, still tied to its original audit trail.
+      const previous = await prisma.user.findUniqueOrThrow({ where: { id: old.user.id }, select: { email: true, isActive: true, passwordHash: true } });
+      expect(previous).toEqual({ email: `deleted-admin-${old.user.id}@deleted.invalid`, isActive: false, passwordHash: null });
+      expect(await security(old.user.id)).toEqual({ isOwner: false, canManageAdmins: false });
+      expect(await prisma.adminMfaFactor.count({ where: { userId: old.user.id } })).toBe(0);
+      expect(await prisma.adminRecoveryCode.count({ where: { userId: old.user.id } })).toBe(0);
+      expect(await prisma.adminWebAuthnCredential.count({ where: { userId: old.user.id } })).toBe(0);
+      expect(await prisma.adminAuditLog.count({ where: { actorId: old.user.id, action: 'ADMIN_ACCOUNT_DELETED' } })).toBe(1);
+      expect(await prisma.adminAuditLog.count({ where: { actorId: next.fresh.id, action: 'ADMIN_ACCOUNT_DELETED' } })).toBe(0);
+      expect((await api().patch(`/api/admin/administrators/${old.user.id}/access`, { isActive: true }, inviter.accessToken)).status).toBe(404);
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: old.user.id } })).isActive).toBe(false);
+    });
+
+    it('RECREATE-02: an explicit Owner grant gives Manages admins to the new account only; a deleted Owner never returns as Owner', async () => {
+      const inviter = await enrolledAdmin({ owner: true });
+      const oldManager = await enrolledAdmin({ manage: true });
+      const granted = await recreate(oldManager, inviter, { grantManageAdmins: true });
+      expect(granted.fresh.id).not.toBe(oldManager.user.id);
+      expect(await security(granted.fresh.id)).toEqual({ isOwner: false, canManageAdmins: true });
+      expect((await api().get('/api/admin/invitations', granted.accessToken)).status).toBe(200);
+      expect((await api().post('/api/admin/administrators/deletion-notice/acknowledge', { through: new Date().toISOString() }, granted.accessToken)).status).toBe(403); // not an Owner
+
+      // A former Owner (another Owner remains) is deleted, then recreated with no grant and then with the grant: never Owner.
+      const oldOwner = await enrolledAdmin({ owner: true });
+      const plain = await recreate(oldOwner, inviter, {});
+      expect(await security(plain.fresh.id)).toEqual({ isOwner: false, canManageAdmins: false });
+      const ownerId = plain.fresh.id;
+      expect((await del({ accessToken: plain.accessToken })).status).toBe(200);
+      const anotherOwner = await enrolledAdmin({ owner: true });
+      const withGrant = await recreate(await enrolledAdmin({ owner: true }), anotherOwner, { grantManageAdmins: true });
+      expect(await security(withGrant.fresh.id)).toEqual({ isOwner: false, canManageAdmins: true });
+      expect((await api().post('/api/admin/me/ownership-transfer-and-delete', { successorId: ownerId, currentPassword: PASSWORD, confirmation: 'DELETE' }, withGrant.accessToken)).status).toBe(403);
+    });
+
+    it('RECREATE-03: the backend defaults grantManageAdmins to false and only an Owner may set it', async () => {
+      const owner = await enrolledAdmin({ owner: true });
+      const manager = await enrolledAdmin({ manage: true });
+      const bare = `bare-${randomUUID().slice(0, 8)}@qa.invalid`;
+      expect((await api().post('/api/admin/invitations', { email: bare }, owner.accessToken)).status).toBe(201);
+      expect((await prisma.adminInvitation.findFirstOrThrow({ where: { email: bare } })).grantManageAdmins).toBe(false);
+      const refused = await api().post('/api/admin/invitations', { email: `deny-${randomUUID().slice(0, 8)}@qa.invalid`, grantManageAdmins: true }, manager.accessToken);
+      expect(refused.status).toBe(403);
+      expect(refused.body.error.code).toBe('CAPABILITY_REQUIRED');
+      // Non-boolean or unknown fields cannot smuggle a grant in.
+      for (const body of [{ grantManageAdmins: 'true' }, { grantManageAdmins: 1 }, { isOwner: true }, { canManageAdmins: true }, { role: 'ADMIN' }]) {
+        expect((await api().post('/api/admin/invitations', { email: `bad-${randomUUID().slice(0, 8)}@qa.invalid`, ...body }, owner.accessToken)).status).toBe(400);
+      }
+      // A stale grant on an old invitation row for the address cannot attach to a later account: grants come from the accepted invitation only.
+      const email = `stale-${randomUUID().slice(0, 8)}@qa.invalid`;
+      await prisma.adminInvitation.create({ data: { email, tokenHash: randomBytes(32).toString('hex'), invitedById: owner.user.id, expiresAt: new Date(Date.now() - 1000),
+        status: 'REVOKED', revokedAt: new Date(), grantManageAdmins: true } });
+      expect((await api().post('/api/admin/invitations', { email }, owner.accessToken)).status).toBe(201);
+      const token = sentInvitations.at(-1)!.token;
+      expect((await api().post('/api/auth/admin/invitations/accept', { token, firstName: 'No', lastName: 'Grant', password: PASSWORD })).status).toBe(201);
+      const created = await prisma.user.findUniqueOrThrow({ where: { email } });
+      expect(await security(created.id)).toEqual({ isOwner: false, canManageAdmins: false });
+    });
+  });
+
   describe('DELN administrator deletion confirmation email', () => {
     const sink: Array<{ to: string; subject: string; htmlContent: string; textContent?: string }> = [];
     let send: ReturnType<typeof vi.spyOn>;

@@ -563,3 +563,18 @@ Verification: `admin-signin-keyboard.spec.ts` passed 5/5 with actual keyboard ev
   co-purchases, admin seed) were not run locally; payment/Stripe suites pass locally once the disposable-target environment is set
   (`DATABASE_URL`/`DIRECT_URL` database `electrohub_ci_*`, `STRIPE_SECRET_KEY=sk_test_*`): 2056 passed.
 - Not verified: native 200% zoom (headless); shared DEV and PROD untouched.
+
+### Administrator email reuse creates a new security identity
+
+Inspection found no defect, so no product code changed. Deletion anonymizes the row and frees the address; the invitation is created with
+`grantManageAdmins` defaulting to `false` in the backend schema (only an Owner may set it, non-boolean and unknown fields are rejected);
+acceptance always inserts a new `users` row and a new `admin_account_security` row whose `canManageAdmins` comes only from that
+invitation. Nothing is looked up by email in old rows.
+
+Disposable PostgreSQL (RECREATE-01..03, harness 65/65): the recreated account has a new id, a new factor, a new secret and new recovery
+codes; the old access token and refresh cookie are rejected; the old secret and old recovery codes fail on the new account; it is a
+standard administrator (no management access) when nothing is selected, and has Manages admins and never Owner only with an explicit
+Owner selection; a deleted Owner or manager is never restored; the old row stays anonymized, inactive, credential-free, with its single
+`ADMIN_ACCOUNT_DELETED` audit row, and cannot be reactivated; a stale revoked invitation row with a grant cannot attach to a later account.
+One unrelated analytics test (ANA-02/03) failed once in a middle run and passed on rerun (flaky, not touched by this change).
+Also: the Owner deletion notice now closes immediately on click (server acknowledgement in the background; it returns if that fails).

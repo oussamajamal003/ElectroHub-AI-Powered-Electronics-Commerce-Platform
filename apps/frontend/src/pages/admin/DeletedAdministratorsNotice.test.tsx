@@ -32,6 +32,18 @@ describe('DeletedAdministratorsNotice', () => {
     await waitFor(() => expect(screen.queryByText('Administrator account deleted')).not.toBeInTheDocument());
   });
 
+  it('closes immediately on click without waiting for the server, and returns if the acknowledgement fails', async () => {
+    let release: (value: unknown) => void = () => undefined;
+    api.mockImplementation((async (endpoint: string) => {
+      if (String(endpoint).endsWith('/acknowledge')) return new Promise(resolve => { release = resolve; });
+      return { data: { count: 1, through: '2026-11-07T20:00:00.001Z' } };
+    }) as never);
+    renderNotice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Dismiss notice' }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument(); // gone before the acknowledgement resolves
+    release({ data: { acknowledged: true } });
+  });
+
   it('shows a single banner with a count for several deletions', async () => {
     reply({ count: 3, through: '2026-11-07T20:00:00.001Z' });
     renderNotice();
