@@ -282,6 +282,9 @@ export class RefreshTokenModelDb {
       oAuthAccount: { findFirst: async () => null },
       // Task 05.2: the model holds CUSTOMER accounts only, so no administrator session ever exists here.
       adminSession: { updateMany: async () => ({ count: 0 }), findFirst: async () => null },
+      // Task 05.2: password reset also closes recovery/OTP challenges; the model holds none.
+      adminAuthChallenge: { updateMany: async () => ({ count: 0 }) },
+      otpChallenge: { updateMany: async () => ({ count: 0 }) },
       passwordResetToken: {
         updateMany: async ({ where }: Args) => {
           const matching = this.resetTokens.filter((token) => matches(token as unknown as Row, where));
