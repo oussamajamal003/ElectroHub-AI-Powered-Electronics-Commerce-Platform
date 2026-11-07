@@ -259,6 +259,10 @@ describe('AdminLoginPage', () => {
     await userEvent.keyboard('{ArrowRight}');
     expect(recoveryTab).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByLabelText('Recovery code', { selector: 'input' })).toBeInTheDocument();
+    await userEvent.keyboard('{Home}');
+    expect(authenticatorTab).toHaveFocus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(passkeyTab).toHaveFocus();
   });
 
   it('keeps passkey sign-in unavailable when the browser does not support WebAuthn', async () => {

@@ -385,3 +385,25 @@ enrolled, non-Owner rows, with a confirmation explaining the authority; the list
 - Limits: browser step-up dialogs were triggered by answering the first request with the server's `STEP_UP_REQUIRED` shape (fresh
   sign-ins are inside the 10-minute window); server enforcement is proven by OWN-01/OWN-03. Native 200% zoom: NOT VERIFIED (headless).
   Shared DEV (`pzxekjybdiulzmssalfo`) and PROD were not touched; no seeded admin was promoted; real Brevo delivery not exercised.
+
+## Focused authentication keyboard correction — 2026-11-07
+
+Environment: isolated Chromium + Vite `localhost:3200` → local Express `127.0.0.1:5200` → fresh loopback PostgreSQL from `apps/backend/scripts/task05-2-browser-stack.cjs`. Synthetic QA accounts only; shared DEV and PROD were not accessed. Branch: `feature/05.2-admin-advanced-features`; final revision is the enclosing commit / PR HEAD.
+
+Reproduced causes and corrections: login/step-up TOTP and recovery inputs had no owning form (Enter sent zero requests); added native forms and submit buttons. Remounted OTP autofocus stole focus from Radix tabs; initial focus now belongs to the selected tab. Controlled dialogs without a Radix Trigger lost their opener, including React-autofocus inputs; shared dialogs now preserve the pre-mount opener and caller overrides. Disabled verification controls lost focus after failure/cancellation; verification flows restore it only when focus fell to the body. Wrapped WebAuthn cancellation errors and invalid-signature responses now get method-appropriate, privacy-safe guidance. Dialog motion honors reduced-motion preferences. No backend security policy was changed.
+
+| Acceptance | Actual result | Evidence |
+| --- | --- | --- |
+| AUTH-K01 | PASS: password Enter; enrollment Space/Enter; recovery-code acknowledgment required | `auth-keyboard-disposable.spec.ts`, first scenario |
+| AUTH-K02 | PASS: TOTP Enter validation at 390/768/1440; Backspace/arrows; successful server TOTP and recovery sign-in | same scenario |
+| AUTH-K03 | PASS: Tab/Shift+Tab containment, Escape/opener return; real recovery-code step-up; scroll/overflow at 390/768/1440 | same scenario; `test-results/auth-keyboard/step-up-{390,768,1440}.png` |
+| AUTH-K04 | PASS: real virtual-authenticator registration and password + keyboard passkey sign-in, server signature verification, authenticator counter increment, dashboard, UI logout/protected-route denial | same scenario |
+| AUTH-K05 | PASS: rejected signature reaches real backend; retry succeeds; repeated Enter/Space sends one options request; cancellation/network errors release pending state and restore focus | same scenario; cancellation is an injected browser `NotAllowedError`, network failure is injected; no successful authentication was mocked |
+| AUTH-K06 | PASS: unsupported WebAuthn disabled; Home/End/left/right tab focus; expired client countdown restarts sign-in | second scenario; clock advances only the browser, not server expiry |
+| AUTH-K07 | PASS: customer password Enter; visibility button Space/Enter | third scenario |
+| AUTH-K08 | PASS: real invitation and activation acceptance by Enter; clipboard OTP paste/enrollment; password/deletion required-confirmation safeguards and dialog Escape/focus return | fourth/fifth scenarios; completed destructive operations reuse earlier unchanged evidence |
+| AUTH-K09 | PASS: axe scan of rendered MFA region has zero violations; reduced-motion browser context; representative mobile/desktop screenshots inspected | first scenario; `test-results/auth-keyboard/mfa-passkey-1440.png` |
+
+Executed checks: focused Vitest suite 76/76, then final error-copy regression 9/9 (77 distinct focused cases total); focused Chromium campaign 5/5; frontend typecheck, lint (zero errors, three pre-existing Fast Refresh warnings), production build; `git diff --check`. Reproduce browser campaign from a fresh disposable stack with `npx playwright test -c playwright.auth-keyboard.config.ts` in `apps/frontend`; on this host set `PLAYWRIGHT_BROWSERS_PATH=C:/Users/ouss0/AppData/Local/ms-playwright`. Browser traces/videos and automatic failure screenshots are disabled. Evidence screenshots contain synthetic validation input only.
+
+Limits: native 200% browser zoom, manual screen-reader QA, physical passkeys and native OS cancellation UI were not verified by this headless campaign. Browser cancellation recovery was fault-injected; successful WebAuthn registration/sign-in and rejected-signature checks used real cryptography. Separate ownership-transfer work was present in the working tree; its full lifecycle is documented in its own evidence. Remote CI must be verified on the final pushed SHA.

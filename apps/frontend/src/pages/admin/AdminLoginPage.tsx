@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { ApiError } from '@/lib/api';
 import { adminAuthApi, type AdminSessionResponse } from '@/features/admin/security/api';
 import { describeAdminAuthError } from '@/features/admin/security/errors';
+import { useVerificationFocus } from '@/features/admin/security/useVerificationFocus';
 import { AdminEnrollmentFlow } from '@/features/admin/security/components/AdminEnrollmentFlow';
 import { OtpCodeInput } from '@/features/admin/security/components/OtpCodeInput';
 import { PasskeySupportNotice } from '@/features/admin/security/components/PasskeySupportNotice';
@@ -70,6 +71,7 @@ export function AdminLoginPage() {
   const [recoveryCode, setRecoveryCode] = useState('');
   const [challengeError, setChallengeError] = useState('');
   const [challengePending, setChallengePending] = useState(false);
+  const rememberVerificationFocus = useVerificationFocus(challengePending);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -230,6 +232,7 @@ export function AdminLoginPage() {
     const value = isRecovery ? recoveryCode.trim() : code;
     if (!isRecovery && value.length !== 6) { setChallengeError('Enter the 6-digit code from your authenticator app.'); return; }
     if (isRecovery && !value) { setChallengeError('Enter one of your recovery codes.'); return; }
+    rememberVerificationFocus();
     setChallengePending(true);
     setChallengeError('');
     try {
@@ -252,6 +255,7 @@ export function AdminLoginPage() {
 
   const verifyPasskey = async () => {
     if (!challenge || challengePending || expired) return;
+    rememberVerificationFocus();
     setChallengePending(true);
     setChallengeError('');
     try {
@@ -364,15 +368,17 @@ export function AdminLoginPage() {
             </div>
             <Tabs value={method} onValueChange={(next) => { setMethod(next as Method); setChallengeError(''); }}>
                 <TabsList aria-label="Second factor" className={styles.methodSelector}>
-                  {availableMethods.includes('totp') && <TabsTrigger value="totp" className={styles.methodOption}><Smartphone aria-hidden="true" /><span>Authenticator app</span></TabsTrigger>}
-                  {availableMethods.includes('passkey') && <TabsTrigger value="passkey" className={styles.methodOption}><Fingerprint aria-hidden="true" /><span>Passkey</span></TabsTrigger>}
-                  {availableMethods.includes('recovery') && <TabsTrigger value="recovery" className={styles.methodOption}><KeyRound aria-hidden="true" /><span>Recovery code</span></TabsTrigger>}
+                  {availableMethods.includes('totp') && <TabsTrigger value="totp" autoFocus className={styles.methodOption}><Smartphone aria-hidden="true" /><span>Authenticator app</span></TabsTrigger>}
+                  {availableMethods.includes('passkey') && <TabsTrigger value="passkey" autoFocus={!challenge.factors.totp} className={styles.methodOption}><Fingerprint aria-hidden="true" /><span>Passkey</span></TabsTrigger>}
+                  {availableMethods.includes('recovery') && <TabsTrigger value="recovery" autoFocus={!challenge.factors.totp && !challenge.factors.passkey} className={styles.methodOption}><KeyRound aria-hidden="true" /><span>Recovery code</span></TabsTrigger>}
                 </TabsList>
                 {availableMethods.includes('totp') && (
-                  <TabsContent value="totp" className={styles.form}>
+                  <TabsContent value="totp" asChild>
+                    <form className={styles.form} noValidate onSubmit={(event) => { event.preventDefault(); void verifyCode(); }}>
                     <OtpCodeInput id="admin-totp-code" label="6-digit code" value={code} onChange={setCode} error={challengeError || undefined}
-                      disabled={challengePending} autoFocus />
-                    <Button type="button" onClick={verifyCode} isLoading={challengePending}>Verify and sign in</Button>
+                      disabled={challengePending} />
+                    <Button type="submit" isLoading={challengePending}>Verify and sign in</Button>
+                    </form>
                   </TabsContent>
                 )}
                 {availableMethods.includes('passkey') && (
@@ -383,11 +389,13 @@ export function AdminLoginPage() {
                   </TabsContent>
                 )}
                 {availableMethods.includes('recovery') && (
-                  <TabsContent value="recovery" className={styles.form}>
+                  <TabsContent value="recovery" asChild>
+                    <form className={styles.form} noValidate onSubmit={(event) => { event.preventDefault(); void verifyCode(); }}>
                     <Input id="admin-recovery-code" name="recoveryCode" label="Recovery code" autoComplete="off" spellCheck={false}
                       value={recoveryCode} onChange={(e) => setRecoveryCode(e.target.value)} error={challengeError || undefined}
                       disabled={challengePending} fullWidth />
-                    <Button type="button" onClick={verifyCode} isLoading={challengePending}>Verify and sign in</Button>
+                    <Button type="submit" isLoading={challengePending}>Verify and sign in</Button>
+                    </form>
                   </TabsContent>
                 )}
             </Tabs>

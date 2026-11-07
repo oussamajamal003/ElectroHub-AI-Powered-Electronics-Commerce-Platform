@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { WebAuthnError } from '@simplewebauthn/browser';
 import { ApiError } from '@/lib/api';
 import { describeAdminAuthError } from './errors';
 
@@ -27,5 +28,23 @@ describe('describeAdminAuthError', () => {
 
   it('reports connectivity separately from server failures', () => {
     expect(describeAdminAuthError(new ApiError(0, 'network'), 'totp').message).toBe('Unable to connect. Check your connection and try again.');
+  });
+
+  it.each(['NotAllowedError', 'AbortError'])('recognizes wrapped WebAuthn %s without exposing device details', name => {
+    const error = new WebAuthnError({ message: 'private device detail',
+      code: name === 'AbortError' ? 'ERROR_CEREMONY_ABORTED' : 'ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY',
+      cause: new DOMException('private device detail', name) });
+    expect(describeAdminAuthError(error, 'passkey')).toEqual({
+      message: 'The passkey prompt was cancelled or timed out. Try again, or use another method.', restart: false,
+    });
+  });
+
+  it('does not describe unrelated request aborts as passkey cancellation', () => {
+    expect(describeAdminAuthError(new DOMException('request aborted', 'AbortError'), 'totp').message).toBe('Something went wrong. Please try again.');
+  });
+  it('explains rejected passkey signatures without asking for an authenticator code', () => {
+    expect(describeAdminAuthError(new ApiError(401, 'invalid', undefined, 'MFA_CODE_INVALID'), 'passkey')).toEqual({
+      message: 'That passkey could not be verified. Try again, or use another method.', restart: false,
+    });
   });
 });

@@ -3,6 +3,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { adminAuthApi, type AdminEnrollmentConfirmation, type AdminSessionResponse, type AdminTotpEnrollment } from '../api';
 import { describeAdminAuthError } from '../errors';
+import { useVerificationFocus } from '../useVerificationFocus';
 import { OtpCodeInput } from './OtpCodeInput';
 import { RecoveryCodesReveal } from './RecoveryCodesReveal';
 import { TotpEnrollment } from './TotpEnrollment';
@@ -31,6 +32,7 @@ export function AdminEnrollmentFlow({ mfaToken, onComplete, onChallengeLost }: A
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
+  const rememberVerificationFocus = useVerificationFocus(pending);
 
   const handleFailure = (err: unknown) => {
     const failure = describeAdminAuthError(err, 'enrollment');
@@ -39,6 +41,8 @@ export function AdminEnrollmentFlow({ mfaToken, onComplete, onChallengeLost }: A
   };
 
   const startSetup = async () => {
+    if (pending) return;
+    rememberVerificationFocus();
     setPending(true);
     setError('');
     try {
@@ -53,7 +57,9 @@ export function AdminEnrollmentFlow({ mfaToken, onComplete, onChallengeLost }: A
   };
 
   const confirmSetup = async (enrollment: AdminTotpEnrollment) => {
+    if (pending) return;
     if (code.length !== 6) { setError('Enter the 6-digit code from your authenticator app.'); return; }
+    rememberVerificationFocus();
     setPending(true);
     setError('');
     try {

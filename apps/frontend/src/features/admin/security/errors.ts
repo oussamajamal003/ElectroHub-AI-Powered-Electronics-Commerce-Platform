@@ -13,7 +13,8 @@ export type AdminAuthContext = 'totp' | 'recovery' | 'passkey' | 'enrollment' | 
  * exists, never echo server internals and never include the submitted secret.
  */
 export function describeAdminAuthError(error: unknown, context: AdminAuthContext): AdminAuthFailure {
-  if (error instanceof DOMException && error.name === 'NotAllowedError') {
+  // SimpleWebAuthn wraps DOMExceptions in an Error while preserving their name.
+  if (context === 'passkey' && (error instanceof DOMException || error instanceof Error) && (error.name === 'NotAllowedError' || error.name === 'AbortError')) {
     return { message: 'The passkey prompt was cancelled or timed out. Try again, or use another method.', restart: false };
   }
   if (!(error instanceof ApiError)) return { message: 'Something went wrong. Please try again.', restart: false };
@@ -26,7 +27,9 @@ export function describeAdminAuthError(error: unknown, context: AdminAuthContext
       return { message: 'Your sign-in attempt expired. Start again.', restart: true };
     case 'MFA_CODE_INVALID':
       return {
-        message: context === 'recovery'
+        message: context === 'passkey'
+          ? 'That passkey could not be verified. Try again, or use another method.'
+          : context === 'recovery'
           ? 'That recovery code is not valid or has already been used.'
           : "That code isn't right. Check your authenticator app and try again.",
         restart: false,

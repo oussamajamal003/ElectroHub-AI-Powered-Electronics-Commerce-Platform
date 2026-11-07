@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { adminSecurityApi } from '../api';
 import { describeAdminAuthError } from '../errors';
+import { useVerificationFocus } from '../useVerificationFocus';
 import { OtpCodeInput } from './OtpCodeInput';
 import { PasskeySupportNotice } from './PasskeySupportNotice';
 import styles from './AdminSecurity.module.scss';
@@ -31,6 +32,7 @@ export function StepUpDialog({ open, onOpenChange, onVerified }: StepUpDialogPro
   const [recovery, setRecovery] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
+  const rememberVerificationFocus = useVerificationFocus(pending);
   const recoveryId = useId();
 
   useEffect(() => {
@@ -50,7 +52,9 @@ export function StepUpDialog({ open, onOpenChange, onVerified }: StepUpDialogPro
   };
 
   const verifyTotp = async () => {
+    if (pending) return;
     if (code.length !== 6) { setError('Enter the 6-digit code from your authenticator app.'); return; }
+    rememberVerificationFocus();
     setPending(true);
     setError('');
     try {
@@ -65,8 +69,10 @@ export function StepUpDialog({ open, onOpenChange, onVerified }: StepUpDialogPro
   };
 
   const verifyRecovery = async () => {
+    if (pending) return;
     const trimmed = recovery.trim();
     if (!trimmed) { setError('Enter one of your recovery codes.'); return; }
+    rememberVerificationFocus();
     setPending(true);
     setError('');
     try {
@@ -81,6 +87,8 @@ export function StepUpDialog({ open, onOpenChange, onVerified }: StepUpDialogPro
   };
 
   const verifyPasskey = async () => {
+    if (pending || !passkeysSupported) return;
+    rememberVerificationFocus();
     setPending(true);
     setError('');
     try {
@@ -99,23 +107,26 @@ export function StepUpDialog({ open, onOpenChange, onVerified }: StepUpDialogPro
     <Dialog open={open} onOpenChange={(next) => { if (!pending) onOpenChange(next); }}>
       <DialogContent>
         <DialogTitle>Confirm it's you</DialogTitle>
-        <DialogDescription asChild>
+        <DialogDescription>This change needs a fresh verification. Choose how to confirm.</DialogDescription>
           <div className={styles.dialogBody}>
-            <p className={styles.note}>This change needs a fresh verification. Choose how to confirm.</p>
             <Tabs value={method} onValueChange={(next) => { setMethod(next as Method); setError(''); }}>
               <TabsList aria-label="Verification method" className={styles.methodSelector}>
-                <TabsTrigger value="totp" className={styles.methodOption}><Smartphone aria-hidden="true" /><span>Authenticator app</span></TabsTrigger>
+                <TabsTrigger value="totp" autoFocus className={styles.methodOption}><Smartphone aria-hidden="true" /><span>Authenticator app</span></TabsTrigger>
                 <TabsTrigger value="recovery" className={styles.methodOption}><KeyRound aria-hidden="true" /><span>Recovery code</span></TabsTrigger>
                 <TabsTrigger value="passkey" className={styles.methodOption}><Fingerprint aria-hidden="true" /><span>Passkey</span></TabsTrigger>
               </TabsList>
-              <TabsContent value="totp" className={styles.methodPanel}>
-                <OtpCodeInput id="step-up-code" label="6-digit code" value={code} onChange={setCode} error={error || undefined} disabled={pending} autoFocus />
-                <Button type="button" onClick={verifyTotp} isLoading={pending}>Verify</Button>
+              <TabsContent value="totp" asChild>
+                <form className={styles.methodPanel} noValidate onSubmit={(event) => { event.preventDefault(); void verifyTotp(); }}>
+                <OtpCodeInput id="step-up-code" label="6-digit code" value={code} onChange={setCode} error={error || undefined} disabled={pending} />
+                <Button type="submit" isLoading={pending}>Verify</Button>
+                </form>
               </TabsContent>
-              <TabsContent value="recovery" className={styles.methodPanel}>
+              <TabsContent value="recovery" asChild>
+                <form className={styles.methodPanel} noValidate onSubmit={(event) => { event.preventDefault(); void verifyRecovery(); }}>
                 <Input id={recoveryId} name="recoveryCode" label="Recovery code" autoComplete="off" spellCheck={false} value={recovery}
                   onChange={(event) => setRecovery(event.target.value)} error={error || undefined} disabled={pending} fullWidth />
-                <Button type="button" onClick={verifyRecovery} isLoading={pending}>Verify</Button>
+                <Button type="submit" isLoading={pending}>Verify</Button>
+                </form>
               </TabsContent>
               <TabsContent value="passkey" className={styles.methodPanel}>
                 <PasskeySupportNotice supported={passkeysSupported} />
@@ -125,7 +136,6 @@ export function StepUpDialog({ open, onOpenChange, onVerified }: StepUpDialogPro
               </TabsContent>
             </Tabs>
           </div>
-        </DialogDescription>
       </DialogContent>
     </Dialog>
   );
