@@ -10,6 +10,7 @@ import {
   useStoreSettings, useUpdateStoreSettings, useShippingSettings, useUpdateShippingSettings, useNotificationPreferences,
   useUpdateNotificationPreferences, useShippingPreview,
 } from '@/features/admin/settings/api';
+import { useAdminProfile } from '@/features/admin/security/api';
 
 // The hooks are mocked (no network). The pure helpers (conflict detection, envelope types) stay real.
 vi.mock('@/features/admin/settings/api', async importOriginal => ({
@@ -22,6 +23,14 @@ vi.mock('@/features/admin/settings/api', async importOriginal => ({
   useUpdateNotificationPreferences: vi.fn(),
   useShippingPreview: vi.fn(),
 }));
+
+// Capabilities decide whether the Administrators section is offered; most tests run as an Owner.
+vi.mock('@/features/admin/security/api', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/features/admin/security/api')>()),
+  useAdminProfile: vi.fn(),
+}));
+const asAdministrator = (capabilities: { isOwner: boolean; canManageAdmins: boolean }) =>
+  vi.mocked(useAdminProfile).mockReturnValue({ data: { capabilities } } as unknown as ReturnType<typeof useAdminProfile>);
 
 const profile = {
   storeName: 'ElectroHub', supportEmail: 'hello@electrohub.com', supportPhone: '+1 555 000 0000', addressLine1: '123 Commerce Street',
@@ -79,6 +88,7 @@ const submit = (name: string) => fireEvent.click(screen.getByRole('button', { na
 
 beforeEach(() => {
   vi.clearAllMocks();
+  asAdministrator({ isOwner: true, canManageAdmins: true });
   storeSave = vi.fn().mockResolvedValue({ ...profile, version: 5 });
   shippingSave = vi.fn().mockResolvedValue(shipping);
   prefsSave = vi.fn().mockResolvedValue({ ...preferences, version: 4 });
@@ -211,6 +221,27 @@ describe('tabs and the URL', () => {
     renderPage();
     await user.click(screen.getByRole('tab', { name: 'Administrators' }));
     expect(await screen.findByRole('link', { name: 'Manage administrators' })).toHaveAttribute('href', '/admin/settings/administrators');
+  });
+
+  it('offers the Administrators section to an administrator manager who is not an Owner', () => {
+    asAdministrator({ isOwner: false, canManageAdmins: true });
+    renderPage();
+    expect(screen.getByRole('tab', { name: 'Administrators' })).toBeInTheDocument();
+  });
+
+  it('hides the Administrators section from an administrator without management access, even via ?tab=administrators', () => {
+    asAdministrator({ isOwner: false, canManageAdmins: false });
+    renderPage('/admin/settings?tab=administrators');
+    expect(screen.queryByRole('tab', { name: 'Administrators' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('tab')).toHaveLength(3);
+    expect(screen.queryByRole('link', { name: 'Manage administrators' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Store Information' })).toBeInTheDocument();
+  });
+
+  it('does not offer the Administrators section while capabilities are still unknown', () => {
+    vi.mocked(useAdminProfile).mockReturnValue({ data: undefined } as unknown as ReturnType<typeof useAdminProfile>);
+    renderPage();
+    expect(screen.queryByRole('tab', { name: 'Administrators' })).not.toBeInTheDocument();
   });
 
   it('asks before leaving a tab with unsaved changes, and keeps them when the administrator cancels', async () => {

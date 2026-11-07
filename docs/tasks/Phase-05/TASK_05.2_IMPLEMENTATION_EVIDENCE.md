@@ -578,3 +578,43 @@ Owner selection; a deleted Owner or manager is never restored; the old row stays
 `ADMIN_ACCOUNT_DELETED` audit row, and cannot be reactivated; a stale revoked invitation row with a grant cannot attach to a later account.
 One unrelated analytics test (ANA-02/03) failed once in a middle run and passed on rerun (flaky, not touched by this change).
 Also: the Owner deletion notice now closes immediately on click (server acknowledgement in the background; it returns if that fails).
+
+## Administrators page access for non-managers (2026-11-07)
+
+- Problem: a regular ADMIN (neither Owner nor `canManageAdmins`) opening `/admin/settings/administrators` got the server's correct
+  `403 CAPABILITY_REQUIRED`, but the page showed a misleading "You can see the administrator team…" notice and an empty table.
+- Rule (client mirror of the server's `MANAGE_ADMINS`): `canAccessAdministrators = isOwner || canManageAdmins`, read from the existing
+  `GET /api/admin/me/profile` capabilities (no new permission state). The backend authorization is unchanged and stays authoritative.
+- Navigation: the admin sidebar has no Administrators item (Administration → Settings only); the console's entry point is the
+  Settings **Administrators** tab and its "Manage administrators" link. That tab is now offered only to Owners and managers, also
+  hidden while capabilities are unknown, and `?tab=administrators` falls back to Store for everyone else.
+- Route: `/admin/settings/administrators` renders `AdministratorsAccessGate`. While capabilities load it shows the neutral page
+  skeleton. A denied administrator gets **Access Restricted** ("You don't have permission to view or manage administrator accounts.
+  Contact an Owner if you need access.", primary **Back to Dashboard** → `/admin`, focus moved to the heading). The team page, and
+  with it every administrator/invitation request, is never mounted, so no protected data is requested. A failure to load the
+  capabilities (network/server) is an error with Retry, never Access Restricted.
+- Mid-session: any `403 CAPABILITY_REQUIRED` from a query or mutation re-reads the capabilities, and the page itself swaps to Access
+  Restricted on a refused team request. The misleading read-only notice and the empty read-only table were removed. A 500 from the
+  team list remains the existing list error state.
+
+**Verification (local, actually run):**
+- Frontend focused: `AdministratorsAccessGate.test.tsx` 7/7 (plain admin: restricted, focused heading, no team requests, Back to
+  Dashboard; loading without team requests; manager normal page; Owner full page; mid-session 403 → restricted and capabilities
+  re-read; capabilities network failure → error and Retry; team 500 → list error). `AdminSettingsPage.test.tsx` 28/28 (tab for an
+  Owner and a manager; hidden for a plain admin, also via `?tab=`; hidden while unknown). Existing Administrators tests pass.
+- Full suite: 1344/1347. The 3 failures are the known load-sensitive unsaved-changes-guard tests (`AdminProductFormPage`,
+  `useUnsavedChangesGuard`); an earlier full run had one different such failure in `AdminSettingsPage` store. All of them pass on
+  re-runs alone (47/47 twice). `tsc -b` passes; eslint 0 errors (3 existing warnings in untouched files); `vite build` passes.
+- Playwright on a fresh disposable stack (`TASK05_2_API_PORT=5204 TASK05_2_FRONTEND_PORT=3204 node scripts/task05-2-browser-stack.cjs`,
+  `npm run test:visual:task05-2-administrators-access`): 4/4, twice on fresh stacks.
+  - ACC-UI-01: plain ADMIN sees no Administrators tab or link (also via `?tab=`); the direct URL shows Access Restricted with a
+    focused heading; zero `/api/admin/administrators|invitations` requests from the browser; the same session still gets 403
+    `CAPABILITY_REQUIRED` from both endpoints; Tab reaches Back to Dashboard with a visible focus ring, and Enter goes to `/admin`.
+  - ACC-UI-02: Owner gets the entry and the full page.
+  - ACC-UI-03: the Owner grants management, and the manager gets the normal page (Invite, no Owner actions). The Owner then removes
+    management, and the manager's next invitation filter is refused by the real server. Access Restricted replaces the page, and
+    Settings no longer offers the tab.
+  - ACC-UI-04: capabilities request aborted → "Your administrator permissions could not be loaded." with Retry; a team-list 500
+    (browser-injected) → the list error, not Access Restricted.
+  Screenshots at 390/768/1440/1920 and 720 px (a 1440 px window at 200%) inspected; no horizontal overflow.
+- Not verified: native 200% browser zoom (headless). Shared DEV and PROD were not touched.

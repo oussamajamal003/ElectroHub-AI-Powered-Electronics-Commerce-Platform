@@ -20,6 +20,7 @@
     "test:visual:task05-2": "playwright test -c playwright.task05-2-disposable.config.ts",
     "test:visual:task05-2-account": "playwright test -c playwright.task05-2-account-disposable.config.ts",
     "test:visual:task05-2-succession": "playwright test -c playwright.task05-2-succession-disposable.config.ts",
+    "test:visual:task05-2-administrators-access": "playwright test -c playwright.task05-2-administrators-access-disposable.config.ts",
     "test:visual:task05-2-revocation": "playwright test -c playwright.task05-2-revocation-disposable.config.ts",
     "test:visual:task05-2-activation": "playwright test -c playwright.task05-2-activation-disposable.config.ts",
     "test:visual:task05-2-recovery": "playwright test -c playwright.task05-2-recovery-disposable.config.ts",

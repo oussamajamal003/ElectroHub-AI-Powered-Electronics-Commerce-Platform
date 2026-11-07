@@ -15,6 +15,8 @@ import { SettingsSkeleton } from '@/features/admin/settings/components/SettingsS
 import {
   adminSettingsKeys, useNotificationPreferences, useShippingSettings, useStoreSettings,
 } from '@/features/admin/settings/api';
+import { useAdminProfile } from '@/features/admin/security/api';
+import { canAccessAdministrators } from '@/features/admin/security/administratorsAccess';
 
 /** Tab ids are part of the URL (`/admin/settings?tab=shipping`); an unknown or missing value opens Store. */
 const TABS = ['store', 'notifications', 'shipping', 'administrators'] as const;
@@ -80,7 +82,11 @@ function AdministratorsTab() {
 
 export function AdminSettingsPage() {
   const [params, setParams] = useSearchParams();
-  const active = parseTab(params.get('tab'));
+  // The Administrators section is offered only to Owners and administrator managers (the team page enforces the same rule).
+  const canSeeAdministrators = canAccessAdministrators(useAdminProfile().data?.capabilities);
+  const tabs = TABS.filter(tab => tab !== 'administrators' || canSeeAdministrators);
+  const requested = parseTab(params.get('tab'));
+  const active: Tab = tabs.includes(requested) ? requested : 'store';
   const client = useQueryClient();
   const [dirty, setDirty] = useState(false);
   const [generation, setGeneration] = useState(0);
@@ -125,7 +131,7 @@ export function AdminSettingsPage() {
     <PageHeader title="Settings" description="Store details, notification preferences and shipping rates." />
     <Tabs value={active} onValueChange={requestTab}>
       <TabsList aria-label="Settings sections" className={pageStyles.tabs}>
-        {TABS.map(tab => { const Icon = TAB_ICON[tab]; return <TabsTrigger key={tab} value={tab}><Icon size={16} aria-hidden="true" />{TAB_LABEL[tab]}</TabsTrigger>; })}
+        {tabs.map(tab => { const Icon = TAB_ICON[tab]; return <TabsTrigger key={tab} value={tab}><Icon size={16} aria-hidden="true" />{TAB_LABEL[tab]}</TabsTrigger>; })}
       </TabsList>
       {dirty && <p className={pageStyles.dirty} role="status">You have unsaved changes.</p>}
       <TabsContent value="store">
@@ -137,9 +143,9 @@ export function AdminSettingsPage() {
       <TabsContent value="shipping">
         <ShippingTab {...common} onReload={reloadFor('shipping')} />
       </TabsContent>
-      <TabsContent value="administrators">
+      {canSeeAdministrators && <TabsContent value="administrators">
         <AdministratorsTab />
-      </TabsContent>
+      </TabsContent>}
     </Tabs>
 
     <ConfirmDialog open={pendingTab !== null} onOpenChange={open => { if (!open) setPendingTab(null); }} title="Discard unsaved changes?"

@@ -8,6 +8,7 @@ import { CartProvider } from '@/features/cart/CartProvider';
 import { CustomerLayout } from '@/layouts/CustomerLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { AdminPageSkeleton } from '@/features/admin/shared/AdminUi';
+import { AdministratorsAccessGate } from '@/pages/admin/AdministratorsAccessGate';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute/ProtectedRoute';
 import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
 import { CheckoutDraftSession } from '@/features/checkout/CheckoutDraftSession';
@@ -141,7 +142,7 @@ export function AppRoutes() {
             <Route path="/admin/recommendations" element={adminRoute(<AdminRecommendationsPage />)} />
             <Route path="/admin/analytics" element={adminRoute(<AdminAnalyticsPage />)} />
             <Route path="/admin/settings" element={adminRoute(<AdminSettingsPage />)} />
-            <Route path="/admin/settings/administrators" element={adminRoute(<AdminAdministratorsPage />)} />
+            <Route path="/admin/settings/administrators" element={adminRoute(<AdministratorsAccessGate><AdminAdministratorsPage /></AdministratorsAccessGate>)} />
             <Route path="/admin/profile" element={adminRoute(<AdminProfilePage />)} />
             <Route path="/admin/profile/security" element={adminRoute(<AdminSecurityPage />)} />
             <Route path="/admin/profile/sessions" element={adminRoute(<AdminSessionsPage />)} />

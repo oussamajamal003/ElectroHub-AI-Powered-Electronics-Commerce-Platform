@@ -1,5 +1,4 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -8,13 +7,14 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Select } from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
-import { ApiError } from '@/lib/api';
+import { isCapabilityDenied } from '@/features/admin/security/administratorsAccess';
 import {
   useAdminProfile, useAdministrators, useCreateInvitation, useGrantOwner, useInvitations, useRevokeOwner, useRequestActivation, useResendActivation, useResendInvitation,
   useRevokeActivation, useRevokeInvitation,
   useUpdateAdministratorAccess, type AdminInvitation, type AdministratorSummary, type InvitationDelivery, type InvitationStatus,
 } from '@/features/admin/security/api';
 import { teamFailure } from './teamFailure';
+import { AccessRestricted } from './AdministratorsAccessGate';
 import { DeletedAdministratorsNotice } from './DeletedAdministratorsNotice';
 import { useStepUp } from '@/features/admin/security/useStepUp';
 import { twoStepStatus } from '@/features/admin/security/twoStepStatus';
@@ -92,7 +92,7 @@ export function AdminAdministratorsPage() {
   const [inviteManage, setInviteManage] = useState(false);
   const [inviteFieldError, setInviteFieldError] = useState('');
 
-  const readOnly = administrators.error instanceof ApiError && administrators.error.code === 'CAPABILITY_REQUIRED';
+  const readOnly = isCapabilityDenied(administrators.error) || isCapabilityDenied(invitations.error);
 
   const runAccessChange = async (change: PendingAccessChange) => {
     setRowError(null);
@@ -321,6 +321,9 @@ export function AdminAdministratorsPage() {
     </span> },
   ];
 
+  // Access removed during the session: the server refuses the team data; never show an empty or read-only team page.
+  if (readOnly) return <AccessRestricted />;
+
   if (profile.isPending) {
     return <div className={styles.page}>
       <PageHeader title="Administrators" crumbs={[{ label: 'Dashboard', to: '/admin' }, { label: 'Settings', to: '/admin/settings' }, { label: 'Administrators' }]}
@@ -338,9 +341,6 @@ export function AdminAdministratorsPage() {
       description="Who can use the admin console, and invitations for new administrators."
       actions={canManage && !readOnly ? <Button type="button" onClick={openInvite}>Invite administrator</Button> : undefined} />
 
-    {readOnly && <Alert variant="info">
-      You can see the administrator team, but changing it needs administrator management access. <Link className={styles.panelLink} to="/admin/profile">Back to your profile</Link>
-    </Alert>}
     {rowError && <Alert variant="error">{rowError}</Alert>}
 
     {administrators.isError && !readOnly && !administrators.data && <QueryProblem error={administrators.error} hasData={false}
