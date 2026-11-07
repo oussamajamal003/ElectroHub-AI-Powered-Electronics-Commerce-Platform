@@ -81,6 +81,7 @@ export function AdminLoginPage() {
   const [touched, setTouched] = useState({ email: false, password: false });
   const [submitted, setSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const rememberCredentialFocus = useVerificationFocus(isLoading);
   const passkeysSupported = browserSupportsWebAuthn();
 
   // Tick once a second while a challenge is open so the countdown and expiry stay accurate.
@@ -161,8 +162,6 @@ export function AdminLoginPage() {
     }
   };
 
-  const hasErrors = Boolean(emailError || passwordError);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
@@ -179,6 +178,7 @@ export function AdminLoginPage() {
       return;
     }
 
+    rememberCredentialFocus();
     setIsLoading(true);
 
     try {
@@ -350,7 +350,7 @@ export function AdminLoginPage() {
             <Button
               type="submit"
               className={styles.submitButton}
-              disabled={isLoading || hasErrors}
+              disabled={isLoading}
               isLoading={isLoading}
             >
               {isLoading ? 'Signing in...' : 'Sign In'}

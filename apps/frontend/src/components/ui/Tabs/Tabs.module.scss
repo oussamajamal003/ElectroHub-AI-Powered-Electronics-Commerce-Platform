@@ -50,6 +50,9 @@
 }
 
 .content {
+  // Consumer flex/grid layouts must not reveal inactive Radix panels.
+  &[hidden] { display: none; }
+
   margin-top: $spacing-4;
   min-width: 0;
   max-width: 100%;

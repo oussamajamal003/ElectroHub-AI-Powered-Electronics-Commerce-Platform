@@ -131,6 +131,20 @@ describe('AdminLoginPage', () => {
     expect(passwordInput).toHaveAttribute('type', 'password');
   });
 
+  it('keeps Sign In in the keyboard order after validation errors', async () => {
+    const keyboard = userEvent.setup();
+    renderComponent();
+    const submit = screen.getByRole('button', { name: /^Sign In$/ });
+    fireEvent.submit(submit.closest('form')!);
+    expect(screen.getByText('Email address is required.')).toBeInTheDocument();
+    expect(submit).toBeEnabled();
+    screen.getByLabelText(/^Password$/).focus();
+    await keyboard.tab();
+    await keyboard.tab();
+    expect(submit).toHaveFocus();
+    expect(mockLogin).not.toHaveBeenCalled();
+  });
+
   it('submits successfully with valid ADMIN credentials', async () => {
     mockLogin.mockResolvedValueOnce({
       accessToken: 'test-access-token',
