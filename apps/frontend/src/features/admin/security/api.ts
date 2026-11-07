@@ -226,6 +226,9 @@ export const adminTeamApi = {
   revokeActivation: (id: string) => enveloped<AdminActivation>(`${TEAM}/administrators/${encodeURIComponent(id)}/mfa-activation/revoke`, { method: 'POST' }),
   grantOwner: (id: string) => enveloped<{ id: string; isOwner: true; canManageAdmins: true; signInRequired: true }>(
     `${TEAM}/administrators/${encodeURIComponent(id)}/grant-owner`, { method: 'POST', data: {} }),
+  /** Revokes another Owner's Owner capability; the account stays an active administrator and must sign in again. */
+  revokeOwner: (id: string) => enveloped<{ id: string; isOwner: false; canManageAdmins: false; isActive: true; signInRequired: true }>(
+    `${TEAM}/administrators/${encodeURIComponent(id)}/revoke-owner`, { method: 'POST', data: { confirmation: 'REVOKE' } }),
 };
 
 /** Creates a passkey: server options, the browser ceremony, then the server verifies and stores the credential. */
@@ -299,4 +302,5 @@ export const useRevokeInvitation = () => useNamespaceMutation(adminTeamKeys.all,
 export const useRequestActivation = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.requestActivation(id));
 export const useResendActivation = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.resendActivation(id));
 export const useGrantOwner = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.grantOwner(id));
+export const useRevokeOwner = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.revokeOwner(id));
 export const useRevokeActivation = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.revokeActivation(id));

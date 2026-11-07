@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/Switch';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
 import { ApiError } from '@/lib/api';
 import {
-  useAdminProfile, useAdministrators, useCreateInvitation, useGrantOwner, useInvitations, useRequestActivation, useResendActivation, useResendInvitation,
+  useAdminProfile, useAdministrators, useCreateInvitation, useGrantOwner, useInvitations, useRevokeOwner, useRequestActivation, useResendActivation, useResendInvitation,
   useRevokeActivation, useRevokeInvitation,
   useUpdateAdministratorAccess, type AdminInvitation, type AdministratorSummary, type InvitationDelivery, type InvitationStatus,
 } from '@/features/admin/security/api';
@@ -79,6 +79,9 @@ export function AdminAdministratorsPage() {
   const [revokeActivationTarget, setRevokeActivationTarget] = useState<AdministratorSummary | null>(null);
   const grantOwner = useGrantOwner();
   const [promoteTarget, setPromoteTarget] = useState<AdministratorSummary | null>(null);
+  const revokeOwner = useRevokeOwner();
+  const [revokeOwnerTarget, setRevokeOwnerTarget] = useState<AdministratorSummary | null>(null);
+  const [revokeConfirmation, setRevokeConfirmation] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
@@ -237,6 +240,25 @@ export function AdminAdministratorsPage() {
     }
   };
   // Mirrors the server rule for an obvious UI; the server alone decides (pending activation and usable factors are re-checked there).
+  /** Explicit Owner revocation of another Owner: Owner + fresh step-up + typed REVOKE; the server keeps the account and ends its sessions. */
+  const openRevokeOwner = (row: AdministratorSummary) => { setDialogError(null); setRevokeConfirmation(''); setRevokeOwnerTarget(row); };
+  const confirmRevokeOwner = async () => {
+    if (!revokeOwnerTarget || busy || revokeConfirmation !== 'REVOKE') return;
+    setBusy(true);
+    setDialogError(null);
+    try {
+      await runWithStepUp(() => revokeOwner.mutateAsync(revokeOwnerTarget.id));
+      setRevokeOwnerTarget(null);
+      toast(`${revokeOwnerTarget.email} is no longer an Owner. They remain an administrator and must sign in again.`);
+    } catch (error) {
+      const message = teamFailure(error);
+      if (message) setDialogError(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  // UI convenience only; the server re-checks Owner state, self-revocation and the last-eligible-Owner rule under the owner lock.
+  const canRevokeOwner = (row: AdministratorSummary) => isOwner && !row.isSelf && row.isOwner && row.isActive;
   const canPromote = (row: AdministratorSummary) => isOwner && !row.isSelf && !row.isOwner && row.isActive && row.mfaEnrolled && !row.mfaActivation;
 
   const adminColumns: Column<AdministratorSummary>[] = [
@@ -251,6 +273,8 @@ export function AdminAdministratorsPage() {
       {row.isSelf && <StatusPill tone="neutral" icon={false}>You</StatusPill>}
       {canPromote(row) && <Button type="button" variant="outline" size="small" disabled={busy} aria-label={`Promote ${row.email} to Owner`}
         onClick={() => { setDialogError(null); setPromoteTarget(row); }}>Promote to Owner</Button>}
+      {canRevokeOwner(row) && <Button type="button" variant="outline" size="small" disabled={busy} aria-label={`Revoke Owner privileges for ${row.email}`}
+        onClick={() => openRevokeOwner(row)}>Revoke Ownership</Button>}
     </span> },
     { key: 'mfa', title: 'Two-step', render: row => {
       const status = twoStepStatus(row);
@@ -408,11 +432,37 @@ export function AdminAdministratorsPage() {
         <ul className={styles.dangerList}>
           <li>Full Owner capability, including administrator access, two-step verification activation and future ownership changes.</li>
           <li>Administrator-management authority.</li>
-          <li>There is no demotion: Owner access lasts until the account is deactivated or deleted, and the last Owner must transfer ownership before leaving.</li>
+          <li>Every Owner has equal authority, including over other Owners. Promotion is a sensitive operation.</li>
           <li>They are signed out everywhere and must sign in again with two-step verification before using Owner access.</li>
+          <li>Owner privileges can later be revoked by another authorized Owner. Ownership changes require two-step verification and are recorded in the security audit history.</li>
+          <li>The last eligible Owner is always protected: Owner access cannot be removed from them.</li>
         </ul>
         <p>You will confirm it is you with two-step verification.</p>
       </>} />
+
+    <ConfirmDialog open={revokeOwnerTarget !== null} onOpenChange={(next) => { if (!next && !busy) setRevokeOwnerTarget(null); }}
+      title="Revoke Owner privileges?" confirmLabel="Revoke Owner Privileges" destructive pending={busy} error={dialogError}
+      confirmDisabled={revokeConfirmation !== 'REVOKE'} onConfirm={() => void confirmRevokeOwner()}
+      description={<>
+        <p>This administrator will lose Owner access but will retain their ElectroHub administrator account.</p>
+        <dl className={styles.revokeFacts}>
+          <div><dt>Administrator</dt><dd><strong>{`${revokeOwnerTarget?.firstName ?? ''} ${revokeOwnerTarget?.lastName ?? ''}`.trim() || revokeOwnerTarget?.email}</strong></dd></div>
+          <div><dt>Email</dt><dd>{revokeOwnerTarget?.email}</dd></div>
+          <div><dt>Current role</dt><dd>Owner</dd></div>
+          <div><dt>Resulting role</dt><dd>Administrator</dd></div>
+        </dl>
+        <ul className={styles.dangerList}>
+          <li>They can no longer grant or revoke Owner privileges, or manage administrators (grant that again separately if needed).</li>
+          <li>They can no longer perform Owner-only security operations.</li>
+          <li>They are signed out of all sessions and must sign in again with their existing password and two-step verification.</li>
+          <li>Their account, sign-in methods and operational history remain intact.</li>
+        </ul>
+        <p>You will confirm it is you with two-step verification.</p>
+      </>}>
+      <Input id="revoke-owner-confirmation" label="Type REVOKE to confirm" value={revokeConfirmation} autoComplete="off" spellCheck={false}
+        onChange={(event) => setRevokeConfirmation(event.target.value)} disabled={busy} fullWidth
+        onKeyDown={(event) => { if (event.key === 'Enter' && revokeConfirmation === 'REVOKE') { event.preventDefault(); void confirmRevokeOwner(); } }} />
+    </ConfirmDialog>
 
     <ConfirmDialog open={revokeActivationTarget !== null} onOpenChange={(next) => { if (!next && !busy) setRevokeActivationTarget(null); }}
       title="Revoke this activation?" description={`The activation link sent to ${revokeActivationTarget?.email ?? 'this administrator'} will stop working.`}

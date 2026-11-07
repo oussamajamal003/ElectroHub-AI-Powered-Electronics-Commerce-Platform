@@ -18,14 +18,15 @@ import { countEligibleOwners, ownershipTestHooks } from './admin-ownership.servi
  * Task 05.2 administrator security against a real, freshly migrated, disposable PostgreSQL through the real Express stack (run only by
  * scripts/admin-security-pg.cjs). Synthetic *.invalid identities; the invitation email provider is replaced by a capture.
  */
-const { sentInvitations, sentActivations, sentOwnerGrants } = vi.hoisted(() => ({ sentInvitations: [] as { to: string; token: string }[],
-  sentActivations: [] as { to: string; token: string }[], sentOwnerGrants: [] as string[] }));
+const { sentInvitations, sentActivations, sentOwnerGrants, sentOwnerRevocations } = vi.hoisted(() => ({ sentInvitations: [] as { to: string; token: string }[],
+  sentActivations: [] as { to: string; token: string }[], sentOwnerGrants: [] as string[], sentOwnerRevocations: [] as string[] }));
 vi.mock('./admin-invitation-email.js', () => ({
   sendAdminInvitationEmail: vi.fn(async (input: { to: string; token: string }) => { sentInvitations.push({ to: input.to, token: input.token }); return true; }),
   invitationLink: (token: string) => `http://localhost:3000/admin/invite#token=${token}`,
   sendAdminActivationEmail: vi.fn(async (input: { to: string; token: string }) => { sentActivations.push({ to: input.to, token: input.token }); return true; }),
   activationLink: (token: string) => `http://localhost:3000/admin/activate#token=${token}`,
   sendOwnerGrantedEmail: vi.fn(async (input: { to: string }) => { sentOwnerGrants.push(input.to); return true; }),
+  sendOwnerRevokedEmail: vi.fn(async (input: { to: string }) => { sentOwnerRevocations.push(input.to); return true; }),
 }));
 
 
@@ -856,6 +857,160 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     expect(both.map(response => response.status)).toEqual([200, 200]);
     expect(await prisma.adminAccountSecurity.findMany({ where: { isOwner: true, user: { isActive: true } }, select: { userId: true } })).toEqual([{ userId: c.user.id }]);
     expect(await countEligibleOwners(prisma)).toBe(1);
+  });
+
+  // ── Owner revocation ─────────────────────────────────────────────────────
+  const revoke = (token: string, id: string, body: object = { confirmation: 'REVOKE' }) =>
+    api().post(`/api/admin/administrators/${id}/revoke-owner`, body, token);
+  const capabilities = async (id: string) => {
+    const row = await prisma.user.findUniqueOrThrow({ where: { id }, select: { isActive: true, passwordHash: true, roleId: true, email: true,
+      adminSecurity: { select: { isOwner: true, canManageAdmins: true } } } });
+    return { isActive: row.isActive, isOwner: row.adminSecurity?.isOwner ?? false, canManageAdmins: row.adminSecurity?.canManageAdmins ?? false,
+      passwordHash: row.passwordHash, roleId: row.roleId, email: row.email };
+  };
+
+  it('REV-01: an Owner revokes another Owner; the account stays an active ADMIN with its credentials, sessions end, a fresh MFA sign-in has no Owner access', async () => {
+    const a = await onlyOwner();
+    const b = await enrolledAdmin({ owner: true });
+    const before = await capabilities(b.user.id);
+    const factorsBefore = await prisma.adminMfaFactor.count({ where: { userId: b.user.id, verifiedAt: { not: null }, disabledAt: null } });
+    const codesBefore = await prisma.adminRecoveryCode.count({ where: { userId: b.user.id, consumedAt: null } });
+    // B exercises Owner-only access before the change.
+    expect((await api().get(`/api/admin/administrators/${a.user.id}/mfa-activation`, b.accessToken)).status).toBe(200);
+
+    const disconnect = vi.spyOn(DeliveryPublisher, 'disconnectUser');
+    try {
+      const done = await revoke(a.accessToken, b.user.id);
+      expect(done.status).toBe(200);
+      expect(done.body.data).toEqual({ id: b.user.id, isOwner: false, canManageAdmins: false, isActive: true, signInRequired: true });
+      expect(disconnect).toHaveBeenCalledWith(b.user.id, 'LOGOUT');
+    } finally { disconnect.mockRestore(); }
+
+    // Identity preserved; least privilege applied.
+    const after = await capabilities(b.user.id);
+    expect(after).toEqual({ ...before, isOwner: false, canManageAdmins: false });
+    expect(after.isActive).toBe(true);
+    expect(await prisma.adminMfaFactor.count({ where: { userId: b.user.id, verifiedAt: { not: null }, disabledAt: null } })).toBe(factorsBefore);
+    expect(await prisma.adminRecoveryCode.count({ where: { userId: b.user.id, consumedAt: null } })).toBe(codesBefore);
+    const audit = await prisma.adminAuditLog.findFirstOrThrow({ where: { actorId: a.user.id, action: 'ADMIN_OWNER_REVOKED', outcome: 'SUCCESS', resourceId: b.user.id } });
+    expect(audit.details).toEqual({ previous: { isOwner: true, canManageAdmins: true }, resulting: { isOwner: false, canManageAdmins: false } });
+    expect(sentOwnerRevocations).toContain(b.user.email);
+
+    // Old access and refresh tokens are dead; a fresh password + MFA sign-in works and carries no Owner capability.
+    expect((await api().get('/api/admin/me/profile', b.accessToken)).status).toBe(401);
+    expect((await api().post('/api/auth/refresh', undefined, undefined, b.cookie)).status).toBe(401);
+    const fresh = await signIn(b.user.email, b.secret);
+    expect(fresh.status).toBe(200);
+    expect((await api().get('/api/admin/me/profile', fresh.accessToken)).body.data).toMatchObject({ isOwner: false, canManageAdmins: false });
+    expect((await api().get(`/api/admin/administrators/${a.user.id}/mfa-activation`, fresh.accessToken)).status).toBe(403); // Owner-only
+    expect((await revoke(fresh.accessToken, a.user.id)).status).toBe(403);
+    expect((await api().get('/api/admin/catalog/products', fresh.accessToken)).status).toBe(200); // ordinary ADMIN access remains
+
+    // Repeating the revocation changes nothing; promotion still works afterwards; management can be re-granted explicitly.
+    expect((await revoke(a.accessToken, b.user.id)).body.error.code).toBe('TARGET_NOT_OWNER');
+    expect(await prisma.adminAuditLog.count({ where: { action: 'ADMIN_OWNER_REVOKED', outcome: 'SUCCESS', resourceId: b.user.id } })).toBe(1);
+    expect((await api().patch(`/api/admin/administrators/${b.user.id}/access`, { canManageAdmins: true }, a.accessToken)).body.data)
+      .toMatchObject({ isOwner: false, canManageAdmins: true });
+    expect((await api().post(`/api/admin/administrators/${b.user.id}/grant-owner`, {}, a.accessToken)).status).toBe(200);
+    expect(await capabilities(b.user.id)).toMatchObject({ isOwner: true, canManageAdmins: true, isActive: true });
+  });
+
+  it('REV-02: only an active Owner with a recent step-up and the typed confirmation can revoke; self, unknown and inactive targets are refused', async () => {
+    const a = await onlyOwner();
+    const b = await enrolledAdmin({ owner: true });
+    const manager = await enrolledAdmin({ manage: true });
+    const plain = await enrolledAdmin();
+    const customer = await createUser('CUSTOMER');
+    const customerToken = (await api().post('/api/auth/login', { email: customer.email, password: PASSWORD })).body.accessToken as string;
+
+    for (const token of [manager.accessToken, plain.accessToken, customerToken]) expect((await revoke(token, b.user.id)).status).toBe(403);
+    expect((await revoke(a.accessToken, b.user.id, {})).status).toBe(400);
+    expect((await revoke(a.accessToken, b.user.id, { confirmation: 'revoke' })).status).toBe(400);
+    expect((await revoke(a.accessToken, b.user.id, { confirmation: 'REVOKE', isOwner: false })).status).toBe(400);
+    expect((await revoke(a.accessToken, a.user.id)).body.error.code).toBe('SELF_OWNER_REVOCATION_FORBIDDEN');
+    expect((await revoke(a.accessToken, randomUUID())).body.error.code).toBe('TARGET_NOT_FOUND');
+    expect((await revoke(a.accessToken, customer.id)).body.error.code).toBe('TARGET_NOT_FOUND');
+    expect((await revoke(a.accessToken, plain.user.id)).body.error.code).toBe('TARGET_NOT_OWNER');
+    const inactiveOwner = await enrolledAdmin({ owner: true });
+    await prisma.user.update({ where: { id: inactiveOwner.user.id }, data: { isActive: false } });
+    expect((await revoke(a.accessToken, inactiveOwner.user.id)).body.error.code).toBe('TARGET_INACTIVE');
+
+    await prisma.adminSession.updateMany({ where: { userId: a.user.id }, data: { mfaVerifiedAt: new Date(Date.now() - 20 * 60_000), stepUpAt: null } });
+    expect((await revoke(a.accessToken, b.user.id)).body.error.code).toBe('STEP_UP_REQUIRED');
+    expect(await capabilities(b.user.id)).toMatchObject({ isOwner: true, canManageAdmins: true, isActive: true });
+    expect((await api().get('/api/admin/me/profile', b.accessToken)).status).toBe(200); // nothing happened to B
+    expect(await prisma.adminAuditLog.count({ where: { actorId: a.user.id, action: 'ADMIN_OWNER_REVOKED', outcome: 'DENIED' } })).toBeGreaterThanOrEqual(5);
+    expect(await prisma.adminAuditLog.count({ where: { action: 'ADMIN_OWNER_REVOKED', outcome: 'SUCCESS', resourceId: b.user.id } })).toBe(0);
+  });
+
+  it('REV-03: revocation that would leave no eligible Owner is refused inside the transaction', async () => {
+    const a = await onlyOwner();
+    const b = await enrolledAdmin({ owner: true });
+    // A keeps a live session but no longer has a usable factor (MFA credentials revoked): B is the only ELIGIBLE Owner.
+    await prisma.adminMfaFactor.updateMany({ where: { userId: a.user.id }, data: { disabledAt: new Date() } });
+    const refused = await revoke(a.accessToken, b.user.id);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error).toMatchObject({ code: 'LAST_OWNER',
+      message: 'This is the last eligible Owner. Assign another active, MFA-enrolled administrator as Owner before revoking these privileges.' });
+    expect(await capabilities(b.user.id)).toMatchObject({ isOwner: true, canManageAdmins: true, isActive: true });
+    expect((await api().get('/api/admin/me/profile', b.accessToken)).status).toBe(200); // sessions untouched by the rolled-back attempt
+    expect(await prisma.adminAuditLog.count({ where: { action: 'ADMIN_OWNER_REVOKED', outcome: 'SUCCESS', resourceId: b.user.id } })).toBe(0);
+    await prisma.adminMfaFactor.updateMany({ where: { userId: a.user.id }, data: { disabledAt: null } });
+  });
+
+  it('REV-04: a failure after the capability update rolls everything back', async () => {
+    const a = await onlyOwner();
+    const b = await enrolledAdmin({ owner: true });
+    ownershipTestHooks.afterOwnerRevoked = async () => { throw new Error('injected failure after owner revocation'); };
+    try {
+      expect((await revoke(a.accessToken, b.user.id)).status).toBe(500);
+    } finally { delete ownershipTestHooks.afterOwnerRevoked; }
+    expect(await capabilities(b.user.id)).toMatchObject({ isOwner: true, canManageAdmins: true, isActive: true });
+    expect((await api().get('/api/admin/me/profile', b.accessToken)).status).toBe(200);
+    expect(await prisma.refreshToken.count({ where: { userId: b.user.id, isRevoked: false } })).toBeGreaterThan(0);
+    expect(await prisma.adminAuditLog.count({ where: { action: 'ADMIN_OWNER_REVOKED', outcome: 'SUCCESS', resourceId: b.user.id } })).toBe(0);
+    expect((await revoke(a.accessToken, b.user.id)).status).toBe(200); // the retry succeeds
+  });
+
+  it('REV-05: concurrent revocations, deletions and transfers serialize and always leave an eligible Owner', async () => {
+    // Two Owners revoking each other at once: exactly one wins; the loser has lost Owner (or its session) and cannot complete.
+    const a = await onlyOwner();
+    const b = await enrolledAdmin({ owner: true });
+    const mutual = await Promise.all([revoke(a.accessToken, b.user.id), revoke(b.accessToken, a.user.id)]);
+    expect(mutual.filter(response => response.status === 200)).toHaveLength(1);
+    expect(mutual.find(response => response.status !== 200)!.status).toBeOneOf([401, 403]);
+    expect(await countEligibleOwners(prisma)).toBe(1);
+
+    // Double-clicked revocation: one success, one TARGET_NOT_OWNER, one audit row.
+    const c = await onlyOwner();
+    const d = await enrolledAdmin({ owner: true });
+    const twice = await Promise.all([revoke(c.accessToken, d.user.id), revoke(c.accessToken, d.user.id)]);
+    expect(twice.map(response => response.status).sort()).toEqual([200, 409]);
+    expect(twice.find(response => response.status === 409)!.body.error.code).toBe('TARGET_NOT_OWNER');
+    expect(await prisma.adminAuditLog.count({ where: { action: 'ADMIN_OWNER_REVOKED', outcome: 'SUCCESS', resourceId: d.user.id } })).toBe(1);
+
+    // Revocation racing the actor's own deletion: never both; an eligible Owner remains.
+    const e = await onlyOwner();
+    const f = await enrolledAdmin({ owner: true });
+    const [revoked, deleted] = await Promise.all([revoke(e.accessToken, f.user.id),
+      api().post('/api/admin/me/delete', { currentPassword: PASSWORD, confirmation: 'DELETE' }, e.accessToken)]);
+    expect(revoked.status === 200 && deleted.status === 200).toBe(false);
+    expect(await countEligibleOwners(prisma)).toBeGreaterThanOrEqual(1);
+
+    // Revocation of B racing B's transfer-and-delete to C: either order is consistent and leaves an eligible Owner.
+    const g = await onlyOwner();
+    const h = await enrolledAdmin({ owner: true });
+    const heir = await enrolledAdmin();
+    const [revokedH, moved] = await Promise.all([revoke(g.accessToken, h.user.id), transfer(h.accessToken, heir.user.id)]);
+    expect(revokedH.status === 200 && moved.status === 200).toBe(false);
+    if (moved.status === 200) {
+      expect(await capabilities(heir.user.id)).toMatchObject({ isOwner: true });
+      expect(revokedH.body.error.code).toBeOneOf(['TARGET_INACTIVE', 'TARGET_NOT_OWNER']);
+    } else {
+      expect(await capabilities(h.user.id)).toMatchObject({ isOwner: false, isActive: true });
+      expect(await capabilities(heir.user.id)).toMatchObject({ isOwner: false });
+    }
+    expect(await countEligibleOwners(prisma)).toBeGreaterThanOrEqual(1);
   });
 
   describe('REC administrator forgot-password recovery', () => {

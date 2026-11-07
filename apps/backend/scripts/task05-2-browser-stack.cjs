@@ -39,11 +39,27 @@ async function unusedPort() {
   await new Promise(resolve => listener.close(resolve));
   return port;
 }
-// Optional overrides so a second disposable stack can run beside another one (defaults keep the existing contract).
+// Optional overrides so a second disposable stack can run beside another one (defaults keep the existing contract). A non-default API
+// port also gets its own credentials file, so two stacks never overwrite each other's disposable credentials.
 const apiPort = process.env.TASK05_2_API_PORT || '5200';
 const frontendOrigin = `http://localhost:${process.env.TASK05_2_FRONTEND_PORT || '3200'}`;
+const credentialsFile = process.env.TASK05_2_CREDENTIALS
+  || (apiPort === '5200' ? '.cache/task05-2-browser-credentials.json' : `.cache/task05-2-browser-credentials-${apiPort}.json`);
+
+/** True when something already listens on the loopback port (another stack, a dev server). */
+function portInUse(portNumber) {
+  return new Promise(resolve => {
+    const socket = net.connect({ host: '127.0.0.1', port: Number(portNumber) });
+    socket.once('connect', () => { socket.destroy(); resolve(true); });
+    socket.once('error', () => resolve(false));
+  });
+}
 
 async function run() {
+  // Refuse BEFORE provisioning or seeding: a busy port used to fail only after the shared credentials file had been rewritten.
+  if (await portInUse(apiPort)) {
+    throw new Error(`Port ${apiPort} is already in use (another stack?). Set TASK05_2_API_PORT/TASK05_2_FRONTEND_PORT to run beside it.`);
+  }
   const port = await unusedPort();
   const openssl = process.env.ELECTROHUB_LOCAL_OPENSSL || 'C:/Program Files/Git/usr/bin/openssl.exe';
   command(openssl, ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=localhost',
@@ -84,10 +100,14 @@ async function run() {
     STRIPE_SECRET_KEY: '', STRIPE_WEBHOOK_SECRET: '', BREVO_API_KEY: '', GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '', AI_SERVICE_URL: '', AI_SERVICE_API_KEY: '',
     PAYMENT_SHARED_MUTATIONS_APPROVED: '', COMMERCE_EMAIL_SEND_MODE: 'disabled', PAYMENT_CONFIRMATION_SIGNAL: 'false',
   };
-  const credentials = path.join(root, process.env.TASK05_2_CREDENTIALS || '.cache/task05-2-browser-credentials.json');
+  const credentials = path.join(root, credentialsFile);
   const tsx = path.join(path.dirname(require.resolve('tsx/package.json')), 'dist/cli.mjs');
   const seeded = spawnSync(process.execPath, [tsx, 'scripts/fixtures/task05-2-browser-seed.ts', credentials], { cwd: backend, env, stdio: 'inherit', windowsHide: true });
   if (seeded.status !== 0) throw new Error('Browser fixtures could not be seeded.');
+  // Lets a browser spec age its own disposable admin session (to make the REAL server demand a step-up) without any test-only
+  // backend code. Loopback, trust-auth, throwaway cluster only; the file is git-ignored and removed with the run.
+  const written = JSON.parse(fs.readFileSync(credentials, 'utf8'));
+  fs.writeFileSync(credentials, JSON.stringify({ ...written, disposableDb: { psql: exe('psql'), port, database } }, null, 2));
   console.log(`Disposable browser stack: backend http://127.0.0.1:${apiPort} (credentials file: ${path.relative(root, credentials)})`);
   child = spawn(process.execPath, [tsx, 'src/bootstrap.ts'], { cwd: backend, env, stdio: 'inherit', windowsHide: true });
   return new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', code => resolve(code ?? 1)); });

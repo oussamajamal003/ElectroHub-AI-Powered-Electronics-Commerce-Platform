@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,8 +11,10 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
  * seeded invitation becomes a standard administrator who deletes their own account. Synthetic *.invalid identities only.
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
-const credentials = JSON.parse(readFileSync(path.resolve(here, '../../../../.cache/task05-2-browser-credentials.json'), 'utf8')) as
-  { ownerEmail: string; password: string; invitationToken: string };
+const apiPort = process.env.TASK05_2_API_PORT ?? '5200';
+const credentialsFile = apiPort === '5200' ? 'task05-2-browser-credentials.json' : `task05-2-browser-credentials-${apiPort}.json`;
+const credentials = JSON.parse(readFileSync(path.resolve(here, '../../../../.cache', credentialsFile), 'utf8')) as
+  { ownerEmail: string; password: string; invitationToken: string; disposableDb: { psql: string; port: number; database: string } };
 const shots = path.resolve(here, '../../test-results/task05-2-account-disposable/screens');
 const NEW_PASSWORD = 'Rotated-Owner-7-Pass';
 
@@ -62,6 +65,15 @@ async function enroll(page: Page) {
   await expect(page).toHaveURL(/\/admin\/?$/);
   return secret;
 }
+/** Ages this admin's sessions past the step-up window in the DISPOSABLE database so the REAL server demands a step-up. */
+function expireStepUp(email: string) {
+  const { psql, port, database } = credentials.disposableDb;
+  if (!/^electrohub_disposable_browser_[0-9a-f]+$/.test(database)) throw new Error('Refusing to touch a non-disposable database.');
+  // Prisma stores DateTime as UTC in `timestamp without time zone`; plain now() would be the database session's local time.
+  const sql = `UPDATE admin_sessions SET "mfaVerifiedAt" = (now() AT TIME ZONE 'UTC') - interval '20 minutes', "stepUpAt" = NULL
+    WHERE "userId" = (SELECT id FROM users WHERE email = '${email.replace(/'/g, "''")}') AND "revokedAt" IS NULL`;
+  execFileSync(psql, ['-h', '127.0.0.1', '-p', String(port), '-U', 'postgres', '-d', database, '-v', 'ON_ERROR_STOP=1', '-q', '-c', sql]);
+}
 const newPage = async (browser: Browser) => (await browser.newContext()).newPage();
 
 test.describe.serial('Task 05.2 admin profile: password and Danger Zone (disposable)', () => {
@@ -103,16 +115,14 @@ test.describe.serial('Task 05.2 admin profile: password and Danger Zone (disposa
     await section.getByRole('button', { name: /Update password/ }).click();
     await expect(section.getByText('Your current password is incorrect.')).toBeVisible();
 
-    // The 10-minute step-up window is still open after this fresh sign-in, so the server would not ask yet. The first attempt is
-    // answered with the server's STEP_UP_REQUIRED shape to exercise the real dialog; verification and the retried change are real.
-    let forced = false;
-    await owner.route('**/api/admin/me/password', async route => {
-      if (forced) return route.continue();
-      forced = true;
-      return route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ error: { code: 'STEP_UP_REQUIRED', message: 'Confirm it is you to continue.' } }) });
-    });
+    // A fresh sign-in is inside the 10-minute step-up window, so the session is aged in the disposable database: the REAL server then
+    // answers STEP_UP_REQUIRED (asserted below), the dialog verifies a real TOTP, and the change is retried for real.
+    expireStepUp(credentials.ownerEmail);
+    const demanded = owner.waitForResponse(async response => response.url().includes('/api/admin/me/password') && response.status() === 403
+      && (await response.json().catch(() => null))?.error?.code === 'STEP_UP_REQUIRED');
     await section.getByLabel('Current password', { exact: true }).fill(credentials.password);
     await section.getByRole('button', { name: /Update password/ }).click();
+    await demanded;
     const stepUp = owner.getByRole('dialog', { name: "Confirm it's you" });
     await expect(stepUp).toBeVisible();
     await capture(owner, 'change-password-step-up', [390, 1440]);
@@ -121,7 +131,6 @@ test.describe.serial('Task 05.2 admin profile: password and Danger Zone (disposa
     await expect(owner).toHaveURL(/\/admin\/login/);
     await expect(owner.getByRole('status')).toContainText('Your password was changed and every session was signed out.');
     await capture(owner, 'login-after-password-change', [390, 1440]);
-    await owner.unroute('**/api/admin/me/password');
 
     // The other session ended too, and a reload cannot restore the changed one.
     await second.goto('/admin/profile');

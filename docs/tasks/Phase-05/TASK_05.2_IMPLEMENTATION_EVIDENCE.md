@@ -371,19 +371,25 @@ enrolled, non-Owner rows, with a confirmation explaining the authority; the list
   everything back; sessions intact; retry succeeds), OWN-05 (double-click → one commit; transfer vs same-Owner deletion; transfer vs
   successor deactivation, either order consistent; transfer + another Owner's deletion concurrently → exactly one eligible Owner).
   Existing DEL-01..04, ACT, SEED, PW-01 still pass. The first run also showed the 5-per-15-minute limiter refusing a 6th attempt.
-- Frontend focused: AdminAccountSections 12/12, Administrators promote 4/4; full suite 1306/1308 (the 2 failures — routing and
-  AdminSettingsPage — pass 27/27 when re-run alone; AdminSettingsPage has another contributor's uncommitted edits). `tsc -b`, eslint
-  (0 errors), `vite build` and backend `tsc` passed.
-- Playwright on a fresh disposable stack (`TASK05_2_API_PORT=5201 TASK05_2_FRONTEND_PORT=3201
-  TASK05_2_CREDENTIALS=.cache/task05-2-succession-credentials.json node scripts/task05-2-browser-stack.cjs`, then
-  `npm run test:visual:task05-2-succession`): 4/4 — SUC-01 no-eligible state and exclusions; SUC-02 promotion with the step-up dialog,
+- Frontend focused: AdminAccountSections 12/12, Administrators promote 4/4. `tsc -b`, eslint (0 errors), `vite build` and backend
+  `tsc` passed. Full suite: load-dependent `findBy` timeouts (routing home heading, checkout, settings — each passing alone) were
+  fixed at the root in `src/test/setup.ts` (`asyncUtilTimeout` 5 s instead of 1 s; jsdom `scrollTo` stubbed); two consecutive full
+  runs then passed 159 files / 1313 tests.
+- Playwright on a fresh disposable stack (`TASK05_2_API_PORT=5201 TASK05_2_FRONTEND_PORT=3201 node scripts/task05-2-browser-stack.cjs`,
+  then `npm run test:visual:task05-2-succession`): 4/4 — SUC-01 no-eligible state and exclusions; SUC-02 promotion with the step-up dialog,
   old session revoked, fresh MFA sign-in is Owner, then that Owner deletes normally while another Owner exists; SUC-04 a request
   tampered to name a factor-less admin is refused by the real server with nothing changed, then the genuine transfer commits, old
   Owner refused at login/refresh, successor's old session revoked, fresh sign-in shows Owner-only controls; SUC-05 Enter/Tab/
   Shift+Tab focus trap, Escape + focus return, reduced-motion context, 720 px reflow. Screenshots at 390/768/1440/1920 inspected; one
   inaccurate promote-dialog sentence was corrected afterwards (copy only).
-- Limits: browser step-up dialogs were triggered by answering the first request with the server's `STEP_UP_REQUIRED` shape (fresh
-  sign-ins are inside the 10-minute window); server enforcement is proven by OWN-01/OWN-03. Native 200% zoom: NOT VERIFIED (headless).
+- Step-up in the browser is REAL: before each sensitive action the spec ages the Owner's sessions past the 10-minute window in the
+  disposable database (UTC, matching Prisma's storage), the real server answers `STEP_UP_REQUIRED` (asserted), the dialog verifies a
+  real TOTP and the action is retried for real. No request is faked or intercepted for step-up (also applied to ACC-02; the account
+  spec re-ran 4/4 on its own stack at 5202).
+- Harness safety: the stack refuses a busy API port BEFORE provisioning or seeding (it previously failed only after rewriting the
+  shared credentials file), and a non-default port writes its own `.cache/task05-2-browser-credentials-<port>.json`, so concurrent
+  stacks cannot overwrite each other. The account config/spec honour the same `TASK05_2_API_PORT`/`TASK05_2_FRONTEND_PORT` variables.
+- Limits: native 200% zoom: NOT VERIFIED (headless).
   Shared DEV (`pzxekjybdiulzmssalfo`) and PROD were not touched; no seeded admin was promoted; real Brevo delivery not exercised.
 
 ## Focused authentication keyboard correction — 2026-11-07
@@ -426,3 +432,41 @@ Verification: `admin-signin-keyboard.spec.ts` passed 5/5 with actual keyboard ev
 - Local: backend `tsc --noEmit` and eslint clean; frontend `tsc -b`, eslint, `vite build` clean; focused vitest 325/325.
 - NOT VERIFIED: real Brevo delivery of the recovery code; native 200% browser zoom; backend payment suites (`payment.routes`, `stripe-webhook.routes`) fail locally under the dev environment flags and are unrelated to this change, so CI is their authority.
 - Shared DEV (`pzxekjybdiulzmssalfo`): target identity verified by the guarded entrypoint, `20261107000000_admin_password_recovery` applied (ledger 32/32, pending none); both enum values confirmed by read-only SQL. No recovery was exercised on DEV and no account data was touched.
+
+## Owner privilege revocation (2026-11-07)
+
+- Policy: any active Owner (all Owners have equal authority; no founder/super-Owner flag) can revoke ANOTHER Owner's Owner capability.
+  The account is kept: still an active `ADMIN` with the same email, password, MFA factors, recovery codes, passkeys and history.
+  Least privilege: `isOwner` and `canManageAdmins` are both cleared (management can be granted again through the access switch).
+  Self-revocation is refused (`SELF_OWNER_REVOCATION_FORBIDDEN`); an Owner leaves through transfer-and-delete. No migration.
+- API: `POST /api/admin/administrators/:id/revoke-owner` — Owner (DB-authoritative) + live MFA session + recent step-up + `writes`
+  limiter; strict body `{ "confirmation": "REVOKE" }`. The access PATCH still rejects `isOwner`.
+- `AdminOwnershipService.revokeOwner`, in one `ADMIN_AUTH_TX` transaction: owner-lifecycle lock, target token lock, re-read actor
+  (active Owner) and target (exists/ADMIN → `TARGET_NOT_FOUND`, active → `TARGET_INACTIVE`, Owner → `TARGET_NOT_OWNER`), clear both
+  capabilities, revoke every refresh family and admin session (`OWNER_REVOKED`), write `ADMIN_OWNER_REVOKED` with previous/resulting
+  capabilities, then re-check `countEligibleOwners` (`LAST_OWNER` with the required message). After commit only: socket disconnect and
+  the `SECURITY_ALERT` email (shared Owner-change notice, ledgered; a failure cannot undo the revocation). Refusals are audited
+  `DENIED` with the code only.
+- UI (`/admin/settings/administrators`): compact **Revoke Ownership** in the Role cell of another active Owner (never on your own row,
+  hidden for non-Owners); confirmation dialog with identity, current → resulting role, removed privileges, sign-out notice, typed
+  `REVOKE` gating the destructive button (shared `ConfirmDialog` gained `confirmDisabled`), real step-up; the list refreshes from the
+  server so the row shows Administrator and Promote to Owner again. Promotion copy no longer claims there is no demotion.
+
+**Verification (local, actually run):**
+- Disposable PostgreSQL (`node scripts/admin-security-pg.cjs`): 49/49, including REV-01 (identity, password, factors and recovery codes
+  preserved; both capabilities cleared; audit details; email; old access/refresh 401; fresh MFA sign-in is a plain ADMIN: Owner-only
+  403, catalog 200; repeat → `TARGET_NOT_OWNER` with one audit row; management re-grant and re-promotion work), REV-02 (manager / plain
+  admin / customer 403, missing or wrong confirmation and extra fields 400, self, unknown, customer, non-Owner, inactive Owner refused,
+  expired step-up refused, nothing changed), REV-03 (actor without a usable factor → `LAST_OWNER`, target untouched), REV-04 (injected
+  failure after the capability update rolls back capabilities, sessions, refresh tokens and audit; retry succeeds), REV-05 (mutual
+  revocation → exactly one wins; double click → one success; revocation racing the actor's deletion and the target's
+  transfer-and-delete → never both, an eligible Owner always remains). Existing OWN/DEL/ACT/PW/SEED tests still pass.
+- Frontend: Administrators promote + revoke tests 10/10; full suite 160 files / 1329 tests; `tsc -b`, eslint (0 errors), `vite build`.
+- Playwright on a fresh disposable stack (`TASK05_2_API_PORT=5203 TASK05_2_FRONTEND_PORT=3203 node scripts/task05-2-browser-stack.cjs`,
+  `npm run test:visual:task05-2-revocation`): 3/3 — REV-UI-01 promote B, B's fresh sign-in uses an Owner-only API (200), A revokes B
+  with typed REVOKE and a REAL server step-up, row shows Administrator / active / not managing / promotable, B's old session ends, B's
+  fresh MFA sign-in gets 403 on Owner-only APIs and 200 on the catalog; REV-UI-02 no self action and the API refuses self-revocation;
+  REV-UI-03 Enter/Space/Tab/Shift+Tab/Escape with focus containment and return, and a concurrent deactivation announced as an
+  alert. Screenshots at 390/768/1440/1920 and a 720 px reflow inspected.
+- Not verified: native 200% zoom (headless); real Brevo delivery. Shared DEV and PROD were not touched; no real administrator was
+  promoted or revoked.

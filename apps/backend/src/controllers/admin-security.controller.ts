@@ -285,6 +285,11 @@ export const adminSecurityController = {
     z.object({}).strict().parse(req.body ?? {});
     res.json({ data: await adminOwnershipService.grantOwner({ userId: userId(req), requestId: req.id }, z.string().uuid().parse(req.params.id)) });
   }),
+  revokeOwner: handle(async (req, res) => {
+    // Typed confirmation is required server-side too, so an accidental or scripted call without it is refused before any lock.
+    z.object({ confirmation: z.literal('REVOKE', { message: 'Type REVOKE to confirm.' }) }).strict().parse(req.body ?? {});
+    res.json({ data: await adminOwnershipService.revokeOwner({ userId: userId(req), requestId: req.id }, z.string().uuid().parse(req.params.id)) });
+  }),
   setAccess: handle(async (req, res) => {
     const body = z.object({ isActive: z.boolean().optional(), canManageAdmins: z.boolean().optional() }).strict()
       .refine(value => value.isActive !== undefined || value.canManageAdmins !== undefined, 'Nothing to change.').parse(req.body);

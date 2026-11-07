@@ -1,8 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Task 05.2 addendum: Owner succession (promotion, transfer-and-delete) against a FRESH disposable stack (apps/backend: node
- * TASK05_2_API_PORT=5201 TASK05_2_FRONTEND_PORT=3201 TASK05_2_CREDENTIALS=.cache/task05-2-succession-credentials.json node scripts/task05-2-browser-stack.cjs → backend :5201 on its own loopback PostgreSQL). Run it on its own stack: it transfers the seeded
+ * Task 05.2 addendum: Owner succession (promotion, transfer-and-delete) against a FRESH disposable stack (apps/backend:
+ * TASK05_2_API_PORT=5201 TASK05_2_FRONTEND_PORT=3201 node scripts/task05-2-browser-stack.cjs → backend :5201 on its own loopback PostgreSQL). Run it on its own stack: it transfers the seeded
  * ownership and deletes accounts. Traces/videos stay off because the flows type passwords and one-time codes.
  */
 export default defineConfig({

@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,8 +17,10 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
  *  SUC-05         keyboard, focus return and reduced motion on the wizard; 200%-zoom-equivalent reflow.
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
-const credentials = JSON.parse(readFileSync(path.resolve(here, '../../../../.cache/task05-2-succession-credentials.json'), 'utf8')) as
-  { ownerEmail: string; staffEmail: string; password: string; invitationToken: string; legacyDeliveryEmail: string };
+// Written by the stack started with TASK05_2_API_PORT=5201 (a per-port file, so it never collides with another stack on 5200).
+const credentials = JSON.parse(readFileSync(path.resolve(here, '../../../../.cache/task05-2-browser-credentials-5201.json'), 'utf8')) as
+  { ownerEmail: string; staffEmail: string; password: string; invitationToken: string; legacyDeliveryEmail: string;
+    disposableDb: { psql: string; port: number; database: string } };
 const shots = path.resolve(here, '../../test-results/task05-2-succession-disposable/screens');
 
 function base32(text: string) {
@@ -76,15 +79,22 @@ async function capture(page: Page, name: string, widths: number[]) {
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
 }
-/** Answers the first matching request with the server's STEP_UP_REQUIRED shape so the real step-up dialog is exercised; later ones pass. */
-async function forceStepUpOnce(page: Page, pattern: string) {
-  let forced = false;
-  await page.route(pattern, async route => {
-    if (forced || route.request().method() !== 'POST') return route.continue();
-    forced = true;
-    return route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ error: { code: 'STEP_UP_REQUIRED', message: 'Confirm it is you to continue.' } }) });
-  });
+/**
+ * Ages this administrator's live sessions past the 10-minute step-up window in the DISPOSABLE database (the same thing the PostgreSQL
+ * suite does), so the REAL server answers the next sensitive request with STEP_UP_REQUIRED. No request is faked or intercepted.
+ */
+function expireStepUp(email: string) {
+  const { psql, port, database } = credentials.disposableDb;
+  if (!/^electrohub_disposable_browser_[0-9a-f]+$/.test(database)) throw new Error('Refusing to touch a non-disposable database.');
+  // Prisma stores DateTime as UTC in `timestamp without time zone`; plain now() would be the database session's local time.
+  const sql = `UPDATE admin_sessions SET "mfaVerifiedAt" = (now() AT TIME ZONE 'UTC') - interval '20 minutes', "stepUpAt" = NULL
+    WHERE "userId" = (SELECT id FROM users WHERE email = '${email.replace(/'/g, "''")}') AND "revokedAt" IS NULL`;
+  execFileSync(psql, ['-h', '127.0.0.1', '-p', String(port), '-U', 'postgres', '-d', database, '-v', 'ON_ERROR_STOP=1', '-q', '-c', sql]);
 }
+/** Waits for the server's own STEP_UP_REQUIRED answer to the next request matching `path`. */
+const serverDemandsStepUp = (page: Page, path: string) => page.waitForResponse(async response =>
+  response.url().includes(path) && response.request().method() === 'POST' && response.status() === 403
+  && (await response.json().catch(() => null))?.error?.code === 'STEP_UP_REQUIRED');
 const newPage = async (browser: Browser, options: Parameters<Browser['newContext']>[0] = {}) => (await browser.newContext(options)).newPage();
 
 test.describe.serial('Task 05.2 Owner succession (disposable)', () => {
@@ -140,8 +150,10 @@ test.describe.serial('Task 05.2 Owner succession (disposable)', () => {
     await expect(confirm).toContainText('newhire@qa.invalid');
     await expect(confirm).toContainText('signed out everywhere');
     await capture(owner, 'promote-dialog', [390, 768, 1440, 1920]);
-    await forceStepUpOnce(owner, '**/api/admin/administrators/*/grant-owner');
+    expireStepUp(credentials.ownerEmail);
+    const demanded = serverDemandsStepUp(owner, '/grant-owner');
     await confirm.getByRole('button', { name: 'Promote to Owner' }).click();
+    await demanded;
     const stepUp = owner.getByRole('dialog', { name: "Confirm it's you" });
     await expect(stepUp).toBeVisible();
     await stepUp.getByLabel('6-digit code').fill(await freshCode(ownerSecret));
@@ -151,7 +163,6 @@ test.describe.serial('Task 05.2 Owner succession (disposable)', () => {
     await expect(row.getByText('Owner', { exact: true })).toBeVisible();
     await expect(owner.getByRole('button', { name: 'Promote newhire@qa.invalid to Owner' })).toHaveCount(0);
     await capture(owner, 'administrators-after-promotion', [1440]);
-    await owner.unroute('**/api/admin/administrators/*/grant-owner');
 
     // The promoted administrator's existing session is revoked server-side.
     await newhire.goto('/admin/profile');
@@ -230,8 +241,10 @@ test.describe.serial('Task 05.2 Owner succession (disposable)', () => {
     await dialog.getByRole('button', { name: /Review transfer/ }).click();
     await dialog.getByRole('button', { name: /Continue/ }).click();
     await dialog.getByRole('checkbox', { name: /Sam Staff becomes the Owner/ }).click();
-    await forceStepUpOnce(owner, '**/api/admin/me/ownership-transfer-and-delete');
+    expireStepUp(credentials.ownerEmail);
+    const demanded = serverDemandsStepUp(owner, '/ownership-transfer-and-delete');
     await submit.click();
+    await demanded;
     const stepUp = owner.getByRole('dialog', { name: "Confirm it's you" });
     await expect(stepUp).toBeVisible();
     await capture(owner, 'wizard-step-up', [390, 1440]);

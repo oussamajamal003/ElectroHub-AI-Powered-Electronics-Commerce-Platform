@@ -203,3 +203,9 @@ td .mono, td .muted { white-space: nowrap; }
 .transferHeading { margin: 0 0 $spacing-2; font-size: $font-size-sm; font-weight: $font-weight-semibold; color: $color-text-primary; }
 .checkRow { display: flex; gap: $spacing-2; align-items: flex-start; font-size: $font-size-sm; color: $color-text-primary; line-height: $line-height-normal;
   label { cursor: pointer; } }
+
+// Task 05.2 Owner revocation: identity and role change summary inside the confirmation dialog.
+.revokeFacts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: $spacing-1 $spacing-4; margin: 0; font-size: $font-size-sm;
+  div { display: contents; }
+  dt { color: $color-text-secondary; }
+  dd { margin: 0; color: $color-text-primary; overflow-wrap: anywhere; } }

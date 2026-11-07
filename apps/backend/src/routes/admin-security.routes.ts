@@ -81,6 +81,8 @@ adminSecurityRouter.post('/admin/administrators/:id/mfa-activation/resend', writ
 adminSecurityRouter.post('/admin/administrators/:id/mfa-activation/revoke', writes, owner, requireStepUp, c.revokeActivation);
 // Explicit privilege elevation; the access PATCH never accepts isOwner.
 adminSecurityRouter.post('/admin/administrators/:id/grant-owner', writes, owner, requireStepUp, c.grantOwner);
+// Explicit Owner revocation of ANOTHER Owner (the account stays an active ADMIN); never through the access PATCH.
+adminSecurityRouter.post('/admin/administrators/:id/revoke-owner', writes, owner, requireStepUp, c.revokeOwner);
 adminSecurityRouter.get('/admin/invitations', manageAdmins, c.invitations);
 adminSecurityRouter.post('/admin/invitations', writes, manageAdmins, requireStepUp, c.createInvitation);
 adminSecurityRouter.post('/admin/invitations/:id/resend', writes, manageAdmins, requireStepUp, c.resendInvitation);

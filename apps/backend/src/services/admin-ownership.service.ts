@@ -8,7 +8,7 @@ import { verifyPassword } from '../utils/hash.js';
 import { logger } from '../utils/logger.js';
 import { anonymizeAdministrator, assertPasswordUnchanged, inactiveAdministrator, invalidCurrentPassword, lockOwnerLifecycle } from './admin-account.service.js';
 import { recordAdminAudit } from './admin-audit.js';
-import { sendOwnerGrantedEmail } from './admin-invitation-email.js';
+import { sendOwnerGrantedEmail, sendOwnerRevokedEmail } from './admin-invitation-email.js';
 import type { RequestMeta } from './admin-mfa.service.js';
 
 /**
@@ -65,8 +65,11 @@ function problemError(problem: SuccessorProblem, context: 'GRANT' | 'TRANSFER') 
 
 const ownerRequired = () => new AppError('Your administrator account cannot perform this action.', 403, 'CAPABILITY_REQUIRED');
 
-/** Test-only seam (never reachable over HTTP): lets the disposable-PostgreSQL suite fail the transfer after the successor update. */
-export const ownershipTestHooks: { afterSuccessorPromoted?: (tx: Prisma.TransactionClient) => Promise<void> } = {};
+/** Test-only seams (never reachable over HTTP): let the disposable-PostgreSQL suite fail a transaction after its first mutation. */
+export const ownershipTestHooks: {
+  afterSuccessorPromoted?: (tx: Prisma.TransactionClient) => Promise<void>;
+  afterOwnerRevoked?: (tx: Prisma.TransactionClient) => Promise<void>;
+} = {};
 
 async function readCandidate(tx: Prisma.TransactionClient, id: string) {
   return tx.user.findUnique({ where: { id }, select: candidateSelect(new Date()) });
@@ -110,6 +113,50 @@ export class AdminOwnershipService {
       canManageAdmins: Boolean(row.adminSecurity?.canManageAdmins),
       mfa: { totp: row._count.adminMfaFactors, passkeys: row._count.adminWebAuthnCredentials },
     }));
+  }
+
+  /**
+   * Revokes another Owner's Owner capability while keeping the account: still an active ADMIN with the same password, MFA factors,
+   * recovery codes, passkeys and history. Least privilege: `canManageAdmins` (implied by Owner) is cleared too and must be granted again
+   * explicitly if wanted. Self-revocation is refused (an Owner leaves through transfer-and-delete). Under the owner-lifecycle lock and
+   * the target's token lock the actor's and target's state are re-read, every target session and refresh family is revoked, the audit
+   * row is written in the same transaction, and the eligible-Owner invariant is re-checked before commit.
+   */
+  async revokeOwner(actor: { userId: string; requestId?: string }, targetId: string) {
+    try {
+      if (targetId === actor.userId) {
+        throw new AppError('You cannot revoke your own Owner privileges. To leave, transfer ownership when deleting your account.', 409, 'SELF_OWNER_REVOCATION_FORBIDDEN');
+      }
+      const revoked = await prisma.$transaction(async tx => {
+        await lockOwnerLifecycle(tx);
+        await lockUserTokenLifecycle(tx, targetId);
+        const self = await tx.adminAccountSecurity.findFirst({ where: { userId: actor.userId, isOwner: true, user: { isActive: true } }, select: { userId: true } });
+        if (!self) throw ownerRequired();
+        const target = await tx.user.findUnique({ where: { id: targetId }, select: { email: true, isActive: true, role: { select: { name: true } },
+          adminSecurity: { select: { isOwner: true, canManageAdmins: true } } } });
+        if (!target || target.role.name !== 'ADMIN') throw new AppError('Administrator not found.', 404, 'TARGET_NOT_FOUND');
+        if (!target.isActive) throw new AppError('This administrator is deactivated.', 409, 'TARGET_INACTIVE');
+        if (!target.adminSecurity?.isOwner) throw new AppError('This administrator is not an Owner.', 409, 'TARGET_NOT_OWNER');
+        await tx.adminAccountSecurity.update({ where: { userId: targetId }, data: { isOwner: false, canManageAdmins: false } });
+        await tx.refreshToken.updateMany({ where: { userId: targetId }, data: { isRevoked: true, expiresAt: new Date(0) } });
+        await revokeAdminSessions(tx, { userId: targetId }, 'OWNER_REVOKED');
+        await recordAdminAudit({ actorId: actor.userId, action: 'ADMIN_OWNER_REVOKED', resourceType: 'admin_user', resourceId: targetId, outcome: 'SUCCESS',
+          details: { previous: { isOwner: true, canManageAdmins: target.adminSecurity.canManageAdmins }, resulting: { isOwner: false, canManageAdmins: false } },
+          requestId: actor.requestId }, tx);
+        await ownershipTestHooks.afterOwnerRevoked?.(tx);
+        if (await countEligibleOwners(tx) === 0) {
+          throw new AppError('This is the last eligible Owner. Assign another active, MFA-enrolled administrator as Owner before revoking these privileges.', 409, 'LAST_OWNER');
+        }
+        return target.email;
+      }, ADMIN_AUTH_TX);
+      DeliveryPublisher.disconnectUser(targetId, 'LOGOUT');
+      // After commit, never awaited: a delivery failure is ledgered and logged and cannot undo or misreport the revocation.
+      void sendOwnerRevokedEmail({ to: revoked }).catch(() => undefined);
+      return { id: targetId, isOwner: false, canManageAdmins: false, isActive: true, signInRequired: true };
+    } catch (error) {
+      await auditDenied(actor.userId, 'ADMIN_OWNER_REVOKED', targetId, error, actor.requestId);
+      throw error;
+    }
   }
 
   async grantOwner(actor: { userId: string; requestId?: string }, targetId: string) {

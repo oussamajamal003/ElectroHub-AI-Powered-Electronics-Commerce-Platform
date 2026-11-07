@@ -85,28 +85,41 @@ export function adminLoginLink(): string {
   return `${(env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '')}/admin/login`;
 }
 
+const OWNER_NOTICES = {
+  GRANTED: {
+    subject: 'You are now an ElectroHub Owner', heading: 'You are now an Owner', logEvent: 'ADMIN_OWNER_GRANTED_DELIVERY_FAILED',
+    message: 'You are now an Owner of ElectroHub. Sign in again using your administrator credentials and two-step verification to manage your new permissions.',
+  },
+  REVOKED: {
+    subject: 'Your ElectroHub Owner privileges were revoked', heading: 'Owner privileges revoked', logEvent: 'ADMIN_OWNER_REVOKED_DELIVERY_FAILED',
+    message: 'Your ElectroHub Owner privileges have been revoked. Your administrator account remains active, but you have been signed out of existing sessions. Sign in again with your usual credentials and two-step verification.',
+  },
+} as const;
+
 /**
- * Security notice after an Owner grant has committed (promotion or transfer on deletion). Carries no link token or secret: the new Owner
- * signs in normally with their own password and two-step verification. Never throws; the ledger row records the outcome.
+ * Security notice after an Owner change has committed (grant: promotion or transfer on deletion; revocation by another Owner). Carries no
+ * link token or secret: the administrator signs in normally with their own password and two-step verification. Never throws; the ledger
+ * row records the outcome.
  */
-export async function sendOwnerGrantedEmail(input: { to: string }, provider: BrevoProvider = brevoProvider): Promise<boolean> {
+async function sendOwnerChangeEmail(kind: keyof typeof OWNER_NOTICES, to: string, provider: BrevoProvider): Promise<boolean> {
+  const notice = OWNER_NOTICES[kind];
   let deliveryId: string | null = null;
   try {
-    const delivery = await prisma.emailDelivery.create({ data: { type: EmailType.SECURITY_ALERT, recipient: input.to, status: EmailDeliveryStatus.QUEUED, provider: 'BREVO' } });
+    const delivery = await prisma.emailDelivery.create({ data: { type: EmailType.SECURITY_ALERT, recipient: to, status: EmailDeliveryStatus.QUEUED, provider: 'BREVO' } });
     deliveryId = delivery.id;
     const link = adminLoginLink();
-    const message = 'You are now an Owner of ElectroHub. Sign in again using your administrator credentials and two-step verification to manage your new permissions.';
-    const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>You are now an ElectroHub Owner</title></head>
+    const footer = 'Your existing sessions were signed out. If you did not expect this change, contact another Owner immediately.';
+    const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(notice.subject)}</title></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;margin:0;padding:24px;color:#0f172a">
 <div style="max-width:480px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;padding:32px">
 <div style="font-size:22px;font-weight:700;color:#2563eb;text-align:center;margin-bottom:24px">ElectroHub</div>
-<h1 style="font-size:20px;font-weight:600;margin:0 0 12px;text-align:center">You are now an Owner</h1>
-<p style="font-size:14px;line-height:1.6;color:#475569">${escapeHtml(message)}</p>
+<h1 style="font-size:20px;font-weight:600;margin:0 0 12px;text-align:center">${escapeHtml(notice.heading)}</h1>
+<p style="font-size:14px;line-height:1.6;color:#475569">${escapeHtml(notice.message)}</p>
 <p style="text-align:center;margin:24px 0"><a href="${escapeHtml(link)}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;font-weight:600;display:inline-block">Sign in to Admin</a></p>
-<p style="font-size:13px;color:#64748b">Your existing sessions were signed out. If you did not expect this change, contact another Owner immediately.</p>
+<p style="font-size:13px;color:#64748b">${escapeHtml(footer)}</p>
 </div></body></html>`;
-    const textContent = `You are now an ElectroHub Owner\n\n${message}\nSign in: ${link}\n\nYour existing sessions were signed out. If you did not expect this change, contact another Owner immediately.`;
-    const result = await provider.sendTransactionalEmail({ to: input.to, subject: 'You are now an ElectroHub Owner', htmlContent, textContent, tags: [EmailType.SECURITY_ALERT] });
+    const textContent = `${notice.subject}\n\n${notice.message}\nSign in: ${link}\n\n${footer}`;
+    const result = await provider.sendTransactionalEmail({ to, subject: notice.subject, htmlContent, textContent, tags: [EmailType.SECURITY_ALERT] });
     if (result.success && result.messageId) {
       await prisma.emailDelivery.update({ where: { id: delivery.id }, data: { status: EmailDeliveryStatus.SENT, providerMessageId: result.messageId, sentAt: new Date() } });
       return true;
@@ -118,6 +131,9 @@ export async function sendOwnerGrantedEmail(input: { to: string }, provider: Bre
         .catch(() => undefined);
     }
   }
-  logger.error('ADMIN_OWNER_GRANTED_DELIVERY_FAILED', { deliveryId });
+  logger.error(notice.logEvent, { deliveryId });
   return false;
 }
+
+export const sendOwnerGrantedEmail = (input: { to: string }, provider: BrevoProvider = brevoProvider) => sendOwnerChangeEmail('GRANTED', input.to, provider);
+export const sendOwnerRevokedEmail = (input: { to: string }, provider: BrevoProvider = brevoProvider) => sendOwnerChangeEmail('REVOKED', input.to, provider);
