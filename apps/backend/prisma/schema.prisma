@@ -791,6 +791,7 @@ enum SecurityEventType {
   ADMIN_PASSKEY_REMOVED
   ADMIN_SESSION_REVOKED
   ADMIN_STEP_UP_VERIFIED
+  ADMIN_PASSWORD_RECOVERY_VERIFIED
 }
 
 model SecurityEvent {
@@ -1089,6 +1090,8 @@ enum AdminChallengePurpose {
   LOGIN
   STEP_UP
   WEBAUTHN_REGISTRATION
+  /// Forgot-password: email OTP proven, existing factor still required. Never convertible into a session.
+  PASSWORD_RECOVERY
 }
 
 enum AdminMfaMethod {

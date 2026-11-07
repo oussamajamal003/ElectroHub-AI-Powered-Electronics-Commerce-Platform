@@ -24,11 +24,14 @@ export const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 export const CHALLENGE_MAX_ATTEMPTS = 5;
 export const RECOVERY_CODE_COUNT = 10;
 export const INVITE_ENROLLMENT_WINDOW_MS = 24 * 60 * 60 * 1000;
+export const PASSWORD_RECOVERY_TTL_MS = 10 * 60 * 1000;
+export const PASSWORD_RESET_AUTHORIZATION_TTL_MS = 10 * 60 * 1000;
 
 export interface RequestMeta { userAgent?: string | null; ipAddress?: string | null }
 type AdminUser = User & { role: Role };
 
 const challengeInvalid = () => new AppError('Your sign-in attempt expired or is no longer valid. Start again.', 401, 'MFA_CHALLENGE_INVALID');
+const recoveryInvalid = () => new AppError('Your password recovery attempt expired or is no longer valid. Start again.', 401, 'RECOVERY_CHALLENGE_INVALID');
 const codeInvalid = (attemptsRemaining: number) =>
   Object.assign(new AppError('That code is not valid. Check it and try again.', 401, 'MFA_CODE_INVALID'), { attemptsRemaining });
 
@@ -241,6 +244,84 @@ export class AdminMfaService {
       await onAccepted(tx);
       return true;
     }, ADMIN_AUTH_TX);
+  }
+
+  // ── Forgot password: existing factor required before a reset authorization exists ────────────────
+  // The email OTP (AuthService.verifyAdminRecoveryEmail) opens a PASSWORD_RECOVERY transaction. Only a previously registered
+  // factor can convert it into a single-use PasswordResetToken; it can never be converted into a session and an email code is
+  // never accepted as the second proof. Pending / disabled / revoked factors do not qualify (same queries as sign-in).
+  async openPasswordRecovery(tx: Prisma.TransactionClient, user: AdminUser) {
+    const recoveryToken = randomToken();
+    const expiresAt = new Date(Date.now() + PASSWORD_RECOVERY_TTL_MS);
+    await tx.adminAuthChallenge.updateMany({ where: { userId: user.id, purpose: AdminChallengePurpose.PASSWORD_RECOVERY, consumedAt: null }, data: { consumedAt: new Date() } });
+    await tx.adminAuthChallenge.create({ data: { tokenHash: sha256Hex(recoveryToken), userId: user.id, purpose: AdminChallengePurpose.PASSWORD_RECOVERY,
+      credentialFingerprint: credentialFingerprint(user.passwordHash), expiresAt, maxAttempts: CHALLENGE_MAX_ATTEMPTS } });
+    const factors = await this.factorSummary(user.id, tx);
+    return { recoveryToken, expiresAt, factors: { totp: factors.totp > 0, passkey: factors.passkeys > 0, recoveryCode: factors.recoveryCodes > 0 } };
+  }
+
+  private async recoveryChallenge(recoveryToken: string) {
+    if (typeof recoveryToken !== 'string' || recoveryToken.length < 20 || recoveryToken.length > 200) throw recoveryInvalid();
+    const challenge = await prisma.adminAuthChallenge.findUnique({ where: { tokenHash: sha256Hex(recoveryToken) }, include: { user: { include: { role: true } } } });
+    if (!challenge || challenge.purpose !== AdminChallengePurpose.PASSWORD_RECOVERY || challenge.consumedAt || challenge.expiresAt <= new Date() ||
+      challenge.attempts >= challenge.maxAttempts || !challenge.user.isActive || challenge.user.role.name !== 'ADMIN' ||
+      challenge.credentialFingerprint !== credentialFingerprint(challenge.user.passwordHash)) throw recoveryInvalid();
+    return challenge;
+  }
+
+  /** Consume the recovery transaction and mint the single-use, 10-minute, password-reset-only authorization in one commit. */
+  private async issueResetAuthorization(tx: Prisma.TransactionClient, challenge: { id: string; userId: string; credentialFingerprint: string }, meta?: RequestMeta) {
+    await lockUserTokenLifecycle(tx, challenge.userId);
+    const current = await tx.user.findUnique({ where: { id: challenge.userId }, include: { role: true } });
+    if (!current || !current.isActive || current.role.name !== 'ADMIN' || credentialFingerprint(current.passwordHash) !== challenge.credentialFingerprint) throw recoveryInvalid();
+    await this.consume(tx, challenge.id);
+    const resetToken = randomToken();
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_AUTHORIZATION_TTL_MS);
+    await tx.passwordResetToken.upsert({ where: { userId: challenge.userId },
+      create: { userId: challenge.userId, tokenHash: sha256Hex(resetToken), expiresAt },
+      update: { tokenHash: sha256Hex(resetToken), expiresAt, consumedAt: null } });
+    await securityEvent(SecurityEventType.ADMIN_PASSWORD_RECOVERY_VERIFIED, challenge.userId, meta, tx);
+    return { resetToken, expiresAt };
+  }
+
+  async recoveryTotp(recoveryToken: string, code: string, meta?: RequestMeta) {
+    const challenge = await this.recoveryChallenge(recoveryToken);
+    const result = await prisma.$transaction(async tx => {
+      if (!await this.acceptTotp(tx, challenge.userId, code)) return null;
+      return this.issueResetAuthorization(tx, challenge, meta);
+    }, ADMIN_AUTH_TX);
+    return result ?? this.failAttempt(challenge.id, challenge.userId, meta);
+  }
+
+  async recoveryRecoveryCode(recoveryToken: string, code: string, meta?: RequestMeta) {
+    const challenge = await this.recoveryChallenge(recoveryToken);
+    const result = await prisma.$transaction(async tx => {
+      if (!await this.consumeRecoveryCode(tx, challenge.userId, code)) return null;
+      await securityEvent(SecurityEventType.ADMIN_RECOVERY_CODE_USED, challenge.userId, meta, tx);
+      return this.issueResetAuthorization(tx, challenge, meta);
+    }, ADMIN_AUTH_TX);
+    return result ?? this.failAttempt(challenge.id, challenge.userId, meta);
+  }
+
+  async recoveryWebAuthnOptions(recoveryToken: string) {
+    const challenge = await this.recoveryChallenge(recoveryToken);
+    const credentials = await prisma.adminWebAuthnCredential.findMany({ where: { userId: challenge.userId, revokedAt: null } });
+    if (credentials.length === 0) throw new AppError('No passkey is registered for this account.', 422, 'NO_PASSKEY');
+    const options = await generateAuthenticationOptions({
+      rpID: webauthnConfig().rpID, userVerification: 'required', timeout: 120_000,
+      allowCredentials: credentials.map(item => ({ id: item.credentialId, transports: item.transports as never })),
+    });
+    await prisma.adminAuthChallenge.update({ where: { id: challenge.id }, data: { webauthnChallenge: options.challenge } });
+    return { options };
+  }
+
+  async recoveryWebAuthn(recoveryToken: string, response: AuthenticationResponseJSON, meta?: RequestMeta) {
+    const challenge = await this.recoveryChallenge(recoveryToken);
+    if (!challenge.webauthnChallenge) throw recoveryInvalid();
+    let issued: { resetToken: string; expiresAt: Date } | null = null;
+    const accepted = await this.acceptAssertion(challenge.userId, challenge.webauthnChallenge, response, async tx => { issued = await this.issueResetAuthorization(tx, challenge, meta); });
+    if (!accepted || !issued) return this.failAttempt(challenge.id, challenge.userId, meta);
+    return issued as { resetToken: string; expiresAt: Date };
   }
 
   // ── First-factor enrollment inside a LOGIN transaction ───────────────────

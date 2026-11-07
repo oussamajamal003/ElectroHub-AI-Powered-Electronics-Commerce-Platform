@@ -139,7 +139,9 @@ describe('AdminLoginPage', () => {
     expect(screen.getByText('Email address is required.')).toBeInTheDocument();
     expect(submit).toBeEnabled();
     screen.getByLabelText(/^Password$/).focus();
+    await keyboard.tab(); // show/hide password
     await keyboard.tab();
+    expect(screen.getByRole('link', { name: 'Forgot Password?' })).toHaveFocus();
     await keyboard.tab();
     expect(submit).toHaveFocus();
     expect(mockLogin).not.toHaveBeenCalled();

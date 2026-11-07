@@ -205,8 +205,24 @@ export class AuthRepository {
         data: { isRevoked: true, expiresAt: new Date(0) },
       });
       await revokeAdminSessions(transaction, { userId }, 'PASSWORD_RESET');
+      // Unfinished sign-in / recovery transactions and reset codes are void once the credential changes (MFA factors are untouched).
+      await transaction.adminAuthChallenge.updateMany({ where: { userId, consumedAt: null }, data: { consumedAt: now } });
+      await transaction.otpChallenge.updateMany({ where: { userId, purpose: OtpPurpose.PASSWORD_RESET, consumedAt: null }, data: { consumedAt: now } });
       await transaction.securityEvent.create({ data: { userId, type: SecurityEventType.PASSWORD_RESET } });
       return true;
+    }, { timeout: 15000 });
+  }
+
+  /** Consume a reset OTP and run `onConsumed` in the same transaction; null when the code was already used, locked or expired. */
+  async consumeResetOtpThen<T>(challengeId: string, userId: string, codeHash: string, now: Date, onConsumed: (transaction: Prisma.TransactionClient) => Promise<T>): Promise<T | null> {
+    return prisma.$transaction(async (transaction) => {
+      await lockUserTokenLifecycle(transaction, userId);
+      const consumed = await transaction.otpChallenge.updateMany({
+        where: { id: challengeId, userId, purpose: OtpPurpose.PASSWORD_RESET, codeHash, consumedAt: null, lockedAt: null, expiresAt: { gt: now } },
+        data: { consumedAt: now },
+      });
+      if (consumed.count !== 1) return null;
+      return onConsumed(transaction);
     }, { timeout: 15000 });
   }
 

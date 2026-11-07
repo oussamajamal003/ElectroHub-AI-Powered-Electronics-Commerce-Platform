@@ -8,6 +8,8 @@ import { adminAccountService } from '../services/admin-account.service.js';
 import { adminOwnershipService } from '../services/admin-ownership.service.js';
 import { hasRecentStepUp } from '../services/admin-session.js';
 import { prisma } from '../lib/prisma.js';
+import { AuthService } from '../services/auth.service.js';
+import { OtpVerificationError } from '../services/otp.service.js';
 import { AppError } from '../middleware/errorHandler.js';
 
 /**
@@ -57,6 +59,8 @@ function sendSession(res: Response, result: { accessToken: string; refreshToken:
 const session = (req: Request) => req.adminSession!;
 const userId = (req: Request) => req.user!.userId;
 
+const authService = new AuthService();
+
 export const adminSecurityController = {
   // ── Pre-auth ───────────────────────────────────────────────────────────
   verifyTotp: handle(async (req, res) => {
@@ -96,6 +100,58 @@ export const adminSecurityController = {
   activationPreview: handle(async (req, res) => {
     const body = z.object({ token: z.string().min(20).max(200) }).strict().parse(req.body);
     res.set('Cache-Control', 'no-store').json(await adminActivationService.preview(body.token));
+  }),
+  // ── Forgot password (pre-auth; never returns a session) ───────────────
+  recoveryRequest: handle(async (req, res) => {
+    const body = z.object({ email: z.string().trim().email().max(254) }).strict().parse(req.body);
+    await authService.requestAdminPasswordRecovery(body.email);
+    res.set('Cache-Control', 'no-store').status(200).json({ message: 'If an eligible account exists, verification instructions will be sent shortly.' });
+  }),
+  recoveryResend: handle(async (req, res) => {
+    const body = z.object({ email: z.string().trim().email().max(254) }).strict().parse(req.body);
+    // Same acknowledgement for everyone; only a live reset challenge is ever re-sent.
+    res.set('Cache-Control', 'no-store').status(200).json(await authService.resendPasswordReset(body.email));
+  }),
+  recoveryVerifyEmail: handle(async (req, res) => {
+    const body = z.object({ email: z.string().trim().email().max(254), code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code.') }).strict().parse(req.body);
+    try {
+      res.set('Cache-Control', 'no-store').status(200).json(await authService.verifyAdminRecoveryEmail(body.email, body.code));
+    } catch (error) {
+      if (error instanceof OtpVerificationError) {
+        res.status(400).json({ error: { code: error.code, message: error.message } });
+        return;
+      }
+      throw error;
+    }
+  }),
+  recoveryTotp: handle(async (req, res) => {
+    const body = z.object({ recoveryToken: mfaToken, code: totpCode }).strict().parse(req.body);
+    res.set('Cache-Control', 'no-store').json(await adminMfaService.recoveryTotp(body.recoveryToken, body.code, meta(req)));
+  }),
+  recoveryCode: handle(async (req, res) => {
+    const body = z.object({ recoveryToken: mfaToken, code: recoveryCode }).strict().parse(req.body);
+    res.set('Cache-Control', 'no-store').json(await adminMfaService.recoveryRecoveryCode(body.recoveryToken, body.code, meta(req)));
+  }),
+  recoveryPasskeyOptions: handle(async (req, res) => {
+    const body = z.object({ recoveryToken: mfaToken }).strict().parse(req.body);
+    res.set('Cache-Control', 'no-store').json(await adminMfaService.recoveryWebAuthnOptions(body.recoveryToken));
+  }),
+  recoveryPasskeyVerify: handle(async (req, res) => {
+    const body = z.object({ recoveryToken: mfaToken, response: webauthnResponse }).strict().parse(req.body);
+    res.set('Cache-Control', 'no-store').json(await adminMfaService.recoveryWebAuthn(body.recoveryToken, body.response as never, meta(req)));
+  }),
+  recoveryComplete: handle(async (req, res) => {
+    const body = z.object({ resetToken: z.string().min(32).max(200), newPassword: password }).strict().parse(req.body);
+    try {
+      await authService.resetPassword(body.resetToken, body.newPassword);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Invalid or expired reset token') {
+        res.status(400).json({ error: { code: 'RESET_AUTHORIZATION_INVALID', message: 'This password reset is no longer valid. Start again.' } });
+        return;
+      }
+      throw error;
+    }
+    res.set('Cache-Control', 'no-store').status(200).json({ message: 'Password reset successful.' });
   }),
   activationRedeem: handle(async (req, res) => {
     const body = z.object({ token: z.string().min(20).max(200), password }).strict().parse(req.body);

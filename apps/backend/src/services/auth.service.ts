@@ -277,8 +277,9 @@ export class AuthService {
   async forgotPassword(email: string) {
     const normalizedEmail = normalizeEmail(email);
     const user = await this.repository.findUserByEmail(normalizedEmail);
-    // Generic response behavior: Do not fail if user doesn't exist
-    if (!user || !user.isActive) {
+    // Generic response behavior: Do not fail if user doesn't exist.
+    // Administrators never recover through this customer path: it would accept an email code as the only proof.
+    if (!user || !user.isActive || user.role.name === 'ADMIN') {
       return; 
     }
 
@@ -315,12 +316,47 @@ export class AuthService {
   }
 
   /**
+   * Administrator forgot-password, step 1. Enumeration-safe: unknown, inactive and CUSTOMER addresses behave exactly like an
+   * administrator whose mail could not be delivered. Role comes from the database only.
+   */
+  async requestAdminPasswordRecovery(email: string) {
+    const normalizedEmail = normalizeEmail(email);
+    const user = await this.repository.findUserByEmail(normalizedEmail);
+    if (!user || !user.isActive || user.role.name !== 'ADMIN') return;
+    try {
+      const code = await otpService.createChallenge(user.id, user.email, OtpPurpose.PASSWORD_RESET);
+      if (!await emailService.sendPasswordResetOtp(user.email, code, user.id)) logger.error('Admin recovery delivery failed', { userId: user.id });
+    } catch {
+      logger.error('Admin recovery delivery exception', { userId: user.id, error: 'admin_recovery_delivery_failed' });
+    }
+  }
+
+  /**
+   * Administrator forgot-password, step 2: the email code proves mailbox control only. It opens a restricted PASSWORD_RECOVERY
+   * transaction (no reset authorization, no session) that an already-registered MFA factor must still convert.
+   */
+  async verifyAdminRecoveryEmail(email: string, code: string) {
+    const normalizedEmail = normalizeEmail(email);
+    const user = await this.repository.findUserByEmail(normalizedEmail);
+    if (!user || !user.isActive || user.role.name !== 'ADMIN') throw new OtpVerificationError('OTP_INVALID');
+    const challengeId = await otpService.getLatestChallengeIdByEmail(normalizedEmail, OtpPurpose.PASSWORD_RESET);
+    if (!challengeId) throw new OtpVerificationError('OTP_INVALID');
+    const verification = await otpService.checkChallengeForAtomicConsumption(challengeId, code);
+    if (verification !== 'VERIFIED') throw new OtpVerificationError(verification);
+    const challenge = await otpService.getActiveChallengeForUser(user.id, OtpPurpose.PASSWORD_RESET);
+    if (!challenge || challenge.id !== challengeId) throw new OtpVerificationError('OTP_INVALID');
+    const opened = await this.repository.consumeResetOtpThen(challenge.id, user.id, challenge.codeHash, new Date(), tx => adminMfaService.openPasswordRecovery(tx, user));
+    if (!opened) throw new OtpVerificationError('OTP_INVALID');
+    return opened;
+  }
+
+  /**
    * Verify a reset OTP and return a short-lived reset authorization.
    */
   async verifyPasswordResetOtp(email: string, code: string) {
     const normalizedEmail = normalizeEmail(email);
     const user = await this.repository.findUserByEmail(normalizedEmail);
-    if (!user || !user.isActive) {
+    if (!user || !user.isActive || user.role.name === 'ADMIN') {
       throw new OtpVerificationError('OTP_INVALID');
     }
 
@@ -353,6 +389,8 @@ export class AuthService {
     const newPasswordHash = await hashPassword(newPasswordPlain);
     const completed = await this.repository.completePasswordReset(authorization.userId, tokenHash, newPasswordHash, new Date());
     if (!completed) throw new Error('Invalid or expired reset token');
+    // After commit: live administrator sockets held by the old credential end now (access tokens are already DB-revoked).
+    if (authorization.user.role.name === 'ADMIN') DeliveryPublisher.disconnectUser(authorization.userId, 'LOGOUT');
     if (!await emailService.sendPasswordChangedNotification(authorization.user.email, authorization.userId)) {
       logger.error('Password reset notification delivery failed', { userId: authorization.userId });
     }

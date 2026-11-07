@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Navigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Fingerprint, KeyRound, Smartphone } from 'lucide-react';
 import { browserSupportsWebAuthn, startAuthentication } from '@simplewebauthn/browser';
 import { BrandLogo } from '@/components/ui/BrandLogo';
@@ -346,6 +346,8 @@ export function AdminLoginPage() {
                 }
               />
             </div>
+
+            <Link className={styles.forgotLink} to="/admin/forgot-password" tabIndex={isLoading ? -1 : undefined}>Forgot Password?</Link>
 
             <Button
               type="submit"

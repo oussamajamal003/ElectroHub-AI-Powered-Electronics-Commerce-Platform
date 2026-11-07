@@ -22,6 +22,16 @@ const writes = limiter(30, 60 * 1000, req => req.user!.userId);
 const credentialWrites = limiter(5, 15 * 60 * 1000, req => req.user!.userId);
 
 export const preAuthRouter = Router();
+// Forgot password: unauthenticated by design, rate limited per IP; every proof is bound to a single-use recovery transaction.
+const recoveryLimiter = limiter(10, 15 * 60 * 1000);
+preAuthRouter.post('/admin/password-recovery/request', recoveryLimiter, c.recoveryRequest);
+preAuthRouter.post('/admin/password-recovery/resend', recoveryLimiter, c.recoveryResend);
+preAuthRouter.post('/admin/password-recovery/verify-email', mfaLimiter, c.recoveryVerifyEmail);
+preAuthRouter.post('/admin/password-recovery/totp', mfaLimiter, c.recoveryTotp);
+preAuthRouter.post('/admin/password-recovery/recovery-code', mfaLimiter, c.recoveryCode);
+preAuthRouter.post('/admin/password-recovery/passkey/options', mfaLimiter, c.recoveryPasskeyOptions);
+preAuthRouter.post('/admin/password-recovery/passkey/verify', mfaLimiter, c.recoveryPasskeyVerify);
+preAuthRouter.post('/admin/password-recovery/complete', recoveryLimiter, c.recoveryComplete);
 preAuthRouter.post('/admin/mfa/totp/verify', mfaLimiter, c.verifyTotp);
 preAuthRouter.post('/admin/mfa/recovery/verify', mfaLimiter, c.verifyRecovery);
 preAuthRouter.post('/admin/mfa/webauthn/options', mfaLimiter, c.webauthnOptions);

@@ -137,6 +137,29 @@ export const adminAuthApi = {
     apiClient<AdminMfaRequired>(`${PRE_AUTH}/activation/redeem`, { method: 'POST', data: body }),
 };
 
+// ─── Forgot password (pre-auth; no session is ever returned) ─────────────
+export interface AdminRecoveryTransaction {
+  recoveryToken: string;
+  expiresAt: string;
+  factors: { totp: boolean; passkey: boolean; recoveryCode: boolean };
+}
+export interface AdminResetAuthorization { resetToken: string; expiresAt: string }
+const RECOVERY = `${PRE_AUTH}/password-recovery`;
+
+export const adminRecoveryApi = {
+  request: (body: { email: string }) => apiClient<{ message: string }>(`${RECOVERY}/request`, { method: 'POST', data: body }),
+  resend: (body: { email: string }) => apiClient<{ message: string; resendAvailableAt?: string }>(`${RECOVERY}/resend`, { method: 'POST', data: body }),
+  verifyEmail: (body: { email: string; code: string }) => apiClient<AdminRecoveryTransaction>(`${RECOVERY}/verify-email`, { method: 'POST', data: body }),
+  verifyTotp: (body: { recoveryToken: string; code: string }) => apiClient<AdminResetAuthorization>(`${RECOVERY}/totp`, { method: 'POST', data: body }),
+  verifyRecoveryCode: (body: { recoveryToken: string; code: string }) =>
+    apiClient<AdminResetAuthorization>(`${RECOVERY}/recovery-code`, { method: 'POST', data: body }),
+  passkeyOptions: async (body: { recoveryToken: string }) =>
+    (await apiClient<{ options: PublicKeyCredentialRequestOptionsJSON }>(`${RECOVERY}/passkey/options`, { method: 'POST', data: body })).options,
+  verifyPasskey: (body: { recoveryToken: string; response: AuthenticationResponseJSON }) =>
+    apiClient<AdminResetAuthorization>(`${RECOVERY}/passkey/verify`, { method: 'POST', data: body }),
+  complete: (body: { resetToken: string; newPassword: string }) => apiClient<{ message: string }>(`${RECOVERY}/complete`, { method: 'POST', data: body }),
+};
+
 // ─── Self-service (MFA-assured session) ───────────────────
 const ME = '/api/admin/me';
 const enveloped = async <T>(endpoint: string, options?: { method?: string; data?: unknown; signal?: AbortSignal }): Promise<T> =>

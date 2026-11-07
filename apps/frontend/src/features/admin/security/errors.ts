@@ -42,6 +42,10 @@ export function describeAdminAuthError(error: unknown, context: AdminAuthContext
       return { message: 'This activation link is invalid, expired or already used. Ask an Owner to send you a new one.', restart: false };
     case 'PASSWORD_REUSED':
       return { message: 'Choose a password you have not used before.', restart: false };
+    case 'RECOVERY_CHALLENGE_INVALID':
+      return { message: 'Your password recovery attempt expired. Start again.', restart: true };
+    case 'RESET_AUTHORIZATION_INVALID':
+      return { message: 'This password reset is no longer valid. Start again.', restart: true };
     case 'NO_PASSKEY':
       return { message: 'No passkey is registered for this account. Use an authenticator app or a recovery code.', restart: false };
     case 'INVITATION_UNAVAILABLE':
