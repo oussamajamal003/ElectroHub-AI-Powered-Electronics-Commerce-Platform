@@ -57,14 +57,20 @@ adminSecurityRouter.get('/admin/me/login-history', c.loginHistory);
 adminSecurityRouter.post('/admin/me/password', credentialWrites, requireStepUp, c.changePassword);
 adminSecurityRouter.post('/admin/me/delete', credentialWrites, requireStepUp, c.deleteAccount);
 
+const owner = requireAdminCapability('OWNER');
+// Owner succession: eligible successors (Owner only), and the atomic last-Owner exit (Owner + recent step-up + password + DELETE).
+adminSecurityRouter.get('/admin/me/ownership-successors', owner, c.ownershipSuccessors);
+adminSecurityRouter.post('/admin/me/ownership-transfer-and-delete', credentialWrites, owner, requireStepUp, c.transferOwnershipAndDelete);
+
 const manageAdmins = requireAdminCapability('MANAGE_ADMINS');
 adminSecurityRouter.get('/admin/administrators', manageAdmins, c.administrators);
 adminSecurityRouter.patch('/admin/administrators/:id/access', writes, requireAdminCapability('OWNER'), requireStepUp, c.setAccess);
-const owner = requireAdminCapability('OWNER');
 adminSecurityRouter.get('/admin/administrators/:id/mfa-activation', owner, c.activationState);
 adminSecurityRouter.post('/admin/administrators/:id/mfa-activation', writes, owner, requireStepUp, c.requestActivation);
 adminSecurityRouter.post('/admin/administrators/:id/mfa-activation/resend', writes, owner, requireStepUp, c.resendActivation);
 adminSecurityRouter.post('/admin/administrators/:id/mfa-activation/revoke', writes, owner, requireStepUp, c.revokeActivation);
+// Explicit privilege elevation; the access PATCH never accepts isOwner.
+adminSecurityRouter.post('/admin/administrators/:id/grant-owner', writes, owner, requireStepUp, c.grantOwner);
 adminSecurityRouter.get('/admin/invitations', manageAdmins, c.invitations);
 adminSecurityRouter.post('/admin/invitations', writes, manageAdmins, requireStepUp, c.createInvitation);
 adminSecurityRouter.post('/admin/invitations/:id/resend', writes, manageAdmins, requireStepUp, c.resendInvitation);

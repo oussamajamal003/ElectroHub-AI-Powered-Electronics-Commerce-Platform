@@ -11,17 +11,20 @@ import { env } from '../config/env.js';
 import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
 import { adminMfaService } from './admin-mfa.service.js';
 import { seedAdministrators } from '../utils/admin-seed.js';
+import { countEligibleOwners, ownershipTestHooks } from './admin-ownership.service.js';
 
 /**
  * Task 05.2 administrator security against a real, freshly migrated, disposable PostgreSQL through the real Express stack (run only by
  * scripts/admin-security-pg.cjs). Synthetic *.invalid identities; the invitation email provider is replaced by a capture.
  */
-const { sentInvitations, sentActivations } = vi.hoisted(() => ({ sentInvitations: [] as { to: string; token: string }[], sentActivations: [] as { to: string; token: string }[] }));
+const { sentInvitations, sentActivations, sentOwnerGrants } = vi.hoisted(() => ({ sentInvitations: [] as { to: string; token: string }[],
+  sentActivations: [] as { to: string; token: string }[], sentOwnerGrants: [] as string[] }));
 vi.mock('./admin-invitation-email.js', () => ({
   sendAdminInvitationEmail: vi.fn(async (input: { to: string; token: string }) => { sentInvitations.push({ to: input.to, token: input.token }); return true; }),
   invitationLink: (token: string) => `http://localhost:3000/admin/invite#token=${token}`,
   sendAdminActivationEmail: vi.fn(async (input: { to: string; token: string }) => { sentActivations.push({ to: input.to, token: input.token }); return true; }),
   activationLink: (token: string) => `http://localhost:3000/admin/activate#token=${token}`,
+  sendOwnerGrantedEmail: vi.fn(async (input: { to: string }) => { sentOwnerGrants.push(input.to); return true; }),
 }));
 
 
@@ -464,7 +467,7 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     const blocked = await api().post('/api/admin/me/delete', { currentPassword: PASSWORD, confirmation: 'DELETE' }, owner.accessToken);
     expect(blocked.status).toBe(409);
     expect(blocked.body.error).toMatchObject({ code: 'LAST_OWNER',
-      message: 'You are the last active Owner. Assign another trusted administrator as Owner before deleting your account.' });
+      message: 'You are the last active Owner. Transfer ownership to another administrator before deleting your account.' });
     expect((await prisma.user.findUniqueOrThrow({ where: { id: owner.user.id } })).isActive).toBe(true);
 
     const coOwner = await enrolledAdmin({ owner: true });
@@ -633,5 +636,224 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     expect(after.isActive).toBe(false);
     expect(after.roleId).toBe(adminRoleId);
     expect(await prisma.adminAccountSecurity.findUniqueOrThrow({ where: { userId: seeded.id } })).toMatchObject({ isOwner: false, canManageAdmins: false, enrollmentAllowedUntil: null });
+  });
+  // ── Owner succession ─────────────────────────────────────────────────────
+  const onlyOwner = async () => {
+    await prisma.adminAccountSecurity.updateMany({ where: { isOwner: true }, data: { isOwner: false } });
+    return enrolledAdmin({ owner: true });
+  };
+  const ownerState = async (id: string) => {
+    const row = await prisma.user.findUniqueOrThrow({ where: { id }, select: { isActive: true, adminSecurity: { select: { isOwner: true } } } });
+    return { isActive: row.isActive, isOwner: row.adminSecurity?.isOwner ?? false };
+  };
+  const transfer = (token: string, successorId: string, extra: object = {}) =>
+    api().post('/api/admin/me/ownership-transfer-and-delete', { successorId, currentPassword: PASSWORD, confirmation: 'DELETE', ...extra }, token);
+
+  it('OWN-01: only an Owner with a recent step-up promotes an eligible administrator; sessions end and Owner works after a fresh MFA sign-in', async () => {
+    const owner = await onlyOwner();
+    const target = await enrolledAdmin();
+    const manager = await enrolledAdmin({ manage: true });
+    const plain = await enrolledAdmin();
+    const customer = await createUser('CUSTOMER');
+    const customerToken = (await api().post('/api/auth/login', { email: customer.email, password: PASSWORD })).body.accessToken as string;
+    const grant = (token: string, id: string) => api().post(`/api/admin/administrators/${id}/grant-owner`, {}, token);
+
+    // canManageAdmins alone, a plain ADMIN and a CUSTOMER cannot grant Owner.
+    for (const token of [manager.accessToken, plain.accessToken, customerToken]) expect((await grant(token, target.user.id)).status).toBe(403);
+    // The access PATCH never accepts isOwner.
+    expect((await api().patch(`/api/admin/administrators/${target.user.id}/access`, { isOwner: true }, owner.accessToken)).status).toBe(400);
+    expect(await ownerState(target.user.id)).toEqual({ isActive: true, isOwner: false });
+
+    // Ineligible targets: unknown, a customer, inactive, factor-less (even with an expired activation), a pending security lifecycle change.
+    expect((await grant(owner.accessToken, randomUUID())).body.error.code).toBe('SUCCESSOR_NOT_FOUND');
+    expect((await grant(owner.accessToken, customer.id)).body.error.code).toBe('SUCCESSOR_NOT_FOUND');
+    const inactive = await enrolledAdmin();
+    await prisma.user.update({ where: { id: inactive.user.id }, data: { isActive: false } });
+    expect((await grant(owner.accessToken, inactive.user.id)).body.error.code).toBe('SUCCESSOR_INACTIVE');
+    const factorless = await createUser('ADMIN');
+    await prisma.adminMfaActivation.create({ data: { userId: factorless.id, email: factorless.email, tokenHash: randomBytes(32).toString('hex'),
+      status: 'PENDING', expiresAt: new Date(Date.now() - 60_000) } });
+    expect((await grant(owner.accessToken, factorless.id)).body.error.code).toBe('SUCCESSOR_MFA_REQUIRED');
+    const pendingReset = await enrolledAdmin();
+    await prisma.adminMfaActivation.create({ data: { userId: pendingReset.user.id, email: pendingReset.user.email, tokenHash: randomBytes(32).toString('hex'),
+      status: 'PENDING', expiresAt: new Date(Date.now() + 3600_000) } });
+    expect((await grant(owner.accessToken, pendingReset.user.id)).body.error.code).toBe('SUCCESSOR_NOT_ELIGIBLE');
+    expect(await prisma.adminAuditLog.count({ where: { actorId: owner.user.id, action: 'ADMIN_OWNER_GRANTED', outcome: 'DENIED' } })).toBeGreaterThanOrEqual(4);
+
+    // An expired step-up is refused without changing anything.
+    await prisma.adminSession.updateMany({ where: { userId: owner.user.id }, data: { mfaVerifiedAt: new Date(Date.now() - 20 * 60_000), stepUpAt: null } });
+    expect((await grant(owner.accessToken, target.user.id)).body.error.code).toBe('STEP_UP_REQUIRED');
+    expect(await ownerState(target.user.id)).toEqual({ isActive: true, isOwner: false });
+    expect((await api().post('/api/admin/me/security/step-up', { method: 'RECOVERY_CODE', code: owner.recoveryCodes[0] }, owner.accessToken)).status).toBe(200);
+
+    const disconnect = vi.spyOn(DeliveryPublisher, 'disconnectUser');
+    try {
+      const granted = await grant(owner.accessToken, target.user.id);
+      expect(granted.status).toBe(200);
+      expect(granted.body.data).toEqual({ id: target.user.id, isOwner: true, canManageAdmins: true, signInRequired: true });
+      expect(disconnect).toHaveBeenCalledWith(target.user.id, 'LOGOUT');
+    } finally { disconnect.mockRestore(); }
+    expect(await prisma.adminAccountSecurity.findUniqueOrThrow({ where: { userId: target.user.id } })).toMatchObject({ isOwner: true, canManageAdmins: true });
+    expect(await prisma.adminAuditLog.count({ where: { actorId: owner.user.id, action: 'ADMIN_OWNER_GRANTED', outcome: 'SUCCESS', resourceId: target.user.id } })).toBe(1);
+    expect(sentOwnerGrants).toContain(target.user.email);
+    // The promoted administrator's existing access and refresh tokens are dead; a fresh password + MFA sign-in carries Owner.
+    expect((await api().get('/api/admin/me/profile', target.accessToken)).status).toBe(401);
+    expect((await api().post('/api/auth/refresh', undefined, undefined, target.cookie)).status).toBe(401);
+    const fresh = await signIn(target.user.email, target.secret);
+    expect(fresh.status).toBe(200);
+    expect((await api().get('/api/admin/me/profile', fresh.accessToken)).body.data.isOwner).toBe(true);
+    expect((await api().get(`/api/admin/administrators/${plain.user.id}/mfa-activation`, fresh.accessToken)).status).toBe(200); // Owner-only
+    // Already-Owner targets (including yourself) are reported, not re-granted.
+    expect((await grant(owner.accessToken, target.user.id)).body.error.code).toBe('ALREADY_OWNER');
+    expect((await grant(owner.accessToken, owner.user.id)).body.error.code).toBe('ALREADY_OWNER');
+  });
+
+  it('OWN-02: the last Owner transfers ownership and is deleted atomically; only eligible successors are offered or accepted', async () => {
+    const owner = await onlyOwner();
+    const successor = await enrolledAdmin();
+    const factorless = await createUser('ADMIN');
+    const inactive = await enrolledAdmin();
+    await prisma.user.update({ where: { id: inactive.user.id }, data: { isActive: false } });
+    const bystander = await enrolledAdmin();
+    expect((await api().get('/api/admin/me/profile', owner.accessToken)).body.data.deletion).toEqual({ allowed: false, reason: 'LAST_OWNER' });
+
+    // Successor list: Owner only, eligible administrators only.
+    expect((await api().get('/api/admin/me/ownership-successors', bystander.accessToken)).status).toBe(403);
+    const list = await api().get('/api/admin/me/ownership-successors', owner.accessToken);
+    expect(list.status).toBe(200);
+    const ids = list.body.data.map((row: { id: string }) => row.id);
+    expect(ids).toEqual(expect.arrayContaining([successor.user.id, bystander.user.id]));
+    for (const excluded of [owner.user.id, factorless.id, inactive.user.id]) expect(ids).not.toContain(excluded);
+    expect(list.body.data.find((row: { id: string }) => row.id === successor.user.id)).toEqual({ id: successor.user.id, firstName: 'QA', lastName: 'ADMIN',
+      email: successor.user.email, canManageAdmins: false, mfa: { totp: 1, passkeys: 0 } });
+
+    // Refusals leave both accounts unchanged (each transfer attempt counts toward the 5-per-15-minute credential limiter).
+    expect((await transfer(owner.accessToken, successor.user.id, { currentPassword: 'Not-The-Password-1' })).body.error.code).toBe('INVALID_CURRENT_PASSWORD');
+    expect((await transfer(owner.accessToken, factorless.id)).body.error.code).toBe('SUCCESSOR_MFA_REQUIRED');
+    expect((await transfer(owner.accessToken, inactive.user.id)).body.error.code).toBe('SUCCESSOR_INACTIVE');
+    expect(await ownerState(owner.user.id)).toEqual({ isActive: true, isOwner: true });
+    expect(await ownerState(successor.user.id)).toEqual({ isActive: true, isOwner: false });
+
+    const disconnect = vi.spyOn(DeliveryPublisher, 'disconnectUser');
+    try {
+      const done = await transfer(owner.accessToken, successor.user.id);
+      expect(done.status).toBe(200);
+      expect(done.body.data).toEqual({ deleted: true, ownershipTransferred: true });
+      expect(disconnect).toHaveBeenCalledWith(owner.user.id, 'ACCOUNT_DELETED');
+      expect(disconnect).toHaveBeenCalledWith(successor.user.id, 'LOGOUT');
+    } finally { disconnect.mockRestore(); }
+
+    expect(await ownerState(successor.user.id)).toEqual({ isActive: true, isOwner: true });
+    const gone = await prisma.user.findUniqueOrThrow({ where: { id: owner.user.id }, include: { adminSecurity: true } });
+    expect(gone).toMatchObject({ isActive: false, passwordHash: null, email: `deleted-admin-${owner.user.id}@deleted.invalid` });
+    expect(gone.adminSecurity).toMatchObject({ isOwner: false, canManageAdmins: false });
+    expect(await prisma.adminMfaFactor.count({ where: { userId: owner.user.id } })).toBe(0);
+    expect(await countEligibleOwners(prisma)).toBe(1);
+    // History is kept and both halves are audited in the same commit.
+    expect(await prisma.adminAuditLog.count({ where: { actorId: owner.user.id, outcome: 'SUCCESS', action: { in: ['ADMIN_OWNERSHIP_TRANSFERRED', 'ADMIN_ACCOUNT_DELETED'] } } })).toBe(2);
+    expect((await prisma.adminAuditLog.findFirstOrThrow({ where: { actorId: owner.user.id, action: 'ADMIN_ACCOUNT_DELETED' } })).details).toMatchObject({ wasOwner: true, successorId: successor.user.id });
+    expect(await prisma.securityEvent.count({ where: { userId: owner.user.id, type: 'LOGIN_SUCCESS' } })).toBeGreaterThan(0);
+    expect(sentOwnerGrants).toContain(successor.user.email);
+
+    // The old Owner is locked out; a retry of the same request cannot touch anyone.
+    expect((await api().post('/api/auth/login', { email: owner.user.email, password: PASSWORD })).status).toBe(401);
+    expect((await api().post('/api/auth/refresh', undefined, undefined, owner.cookie)).status).toBe(401);
+    expect((await transfer(owner.accessToken, bystander.user.id)).status).toBe(401);
+    expect(await ownerState(bystander.user.id)).toEqual({ isActive: true, isOwner: false });
+    // The new Owner must authenticate freshly, then holds Owner capability.
+    expect((await api().get('/api/admin/me/profile', successor.accessToken)).status).toBe(401);
+    const fresh = await signIn(successor.user.email, successor.secret);
+    expect(fresh.status).toBe(200);
+    expect((await api().get('/api/admin/me/profile', fresh.accessToken)).body.data).toMatchObject({ isOwner: true, deletion: { allowed: false, reason: 'LAST_OWNER' } });
+    expect((await api().get('/api/admin/me/ownership-successors', fresh.accessToken)).status).toBe(200);
+  });
+
+  it('OWN-03: transfer needs a recent step-up and current Owner capability; a successor that lost MFA is refused', async () => {
+    const owner = await onlyOwner();
+    const successor = await enrolledAdmin();
+    await prisma.adminSession.updateMany({ where: { userId: owner.user.id }, data: { mfaVerifiedAt: new Date(Date.now() - 20 * 60_000), stepUpAt: null } });
+    expect((await transfer(owner.accessToken, successor.user.id)).body.error.code).toBe('STEP_UP_REQUIRED');
+    expect((await api().post('/api/admin/me/security/step-up', { method: 'RECOVERY_CODE', code: owner.recoveryCodes[0] }, owner.accessToken)).status).toBe(200);
+    // The successor's only factor is reset while the Owner is confirming.
+    await prisma.adminMfaFactor.updateMany({ where: { userId: successor.user.id }, data: { disabledAt: new Date() } });
+    expect((await transfer(owner.accessToken, successor.user.id)).body.error.code).toBe('SUCCESSOR_MFA_REQUIRED');
+    await prisma.adminMfaFactor.updateMany({ where: { userId: successor.user.id }, data: { disabledAt: null } });
+    expect((await transfer(owner.accessToken, owner.user.id)).body.error.code).toBe('SUCCESSOR_NOT_ELIGIBLE');
+    // The caller stops being an Owner mid-flow.
+    await prisma.adminAccountSecurity.update({ where: { userId: owner.user.id }, data: { isOwner: false } });
+    expect((await transfer(owner.accessToken, successor.user.id)).status).toBe(403);
+    await prisma.adminAccountSecurity.update({ where: { userId: owner.user.id }, data: { isOwner: true } });
+    expect(await ownerState(owner.user.id)).toEqual({ isActive: true, isOwner: true });
+    expect(await ownerState(successor.user.id)).toEqual({ isActive: true, isOwner: false });
+  });
+
+  it('OWN-04: a failure after the successor update rolls everything back; both accounts keep their original security state', async () => {
+    const owner = await onlyOwner();
+    const successor = await enrolledAdmin();
+    // Strict validation: a successor, the exact typed confirmation and no extra fields.
+    expect((await api().post('/api/admin/me/ownership-transfer-and-delete', { currentPassword: PASSWORD, confirmation: 'DELETE' }, owner.accessToken)).status).toBe(400);
+    expect((await transfer(owner.accessToken, successor.user.id, { confirmation: 'delete' })).status).toBe(400);
+    expect((await transfer(owner.accessToken, successor.user.id, { userId: randomUUID() })).status).toBe(400);
+    ownershipTestHooks.afterSuccessorPromoted = async () => { throw new Error('injected failure after successor promotion'); };
+    try {
+      expect((await transfer(owner.accessToken, successor.user.id)).status).toBe(500);
+    } finally { delete ownershipTestHooks.afterSuccessorPromoted; }
+    expect(await ownerState(owner.user.id)).toEqual({ isActive: true, isOwner: true });
+    expect(await ownerState(successor.user.id)).toEqual({ isActive: true, isOwner: false });
+    expect(await prisma.adminMfaFactor.count({ where: { userId: owner.user.id, verifiedAt: { not: null } } })).toBe(1);
+    expect(await prisma.adminAuditLog.count({ where: { actorId: owner.user.id, outcome: 'SUCCESS', action: { in: ['ADMIN_OWNERSHIP_TRANSFERRED', 'ADMIN_ACCOUNT_DELETED'] } } })).toBe(0);
+    // Neither account lost its sessions; the Owner can retry and succeed.
+    expect((await api().get('/api/admin/me/profile', owner.accessToken)).status).toBe(200);
+    expect((await api().get('/api/admin/me/profile', successor.accessToken)).status).toBe(200);
+    expect((await transfer(owner.accessToken, successor.user.id)).status).toBe(200);
+    expect(await ownerState(successor.user.id)).toEqual({ isActive: true, isOwner: true });
+  });
+
+  it('OWN-05: concurrent owner operations never leave zero eligible Owners or a partial transfer', async () => {
+    // Double-clicked transfer: exactly one commit; nothing unrelated changes.
+    const owner = await onlyOwner();
+    const successor = await enrolledAdmin();
+    const bystander = await enrolledAdmin();
+    const twice = await Promise.all([transfer(owner.accessToken, successor.user.id), transfer(owner.accessToken, successor.user.id)]);
+    expect(twice.filter(response => response.status === 200)).toHaveLength(1);
+    expect(await ownerState(successor.user.id)).toEqual({ isActive: true, isOwner: true });
+    expect(await ownerState(owner.user.id)).toEqual({ isActive: false, isOwner: false });
+    expect(await ownerState(bystander.user.id)).toEqual({ isActive: true, isOwner: false });
+    expect(await countEligibleOwners(prisma)).toBe(1);
+
+    // Transfer racing the same Owner's ordinary deletion: never both, and the store keeps an Owner.
+    const lone = await onlyOwner();
+    const heir = await enrolledAdmin();
+    const raced = await Promise.all([transfer(lone.accessToken, heir.user.id),
+      api().post('/api/admin/me/delete', { currentPassword: PASSWORD, confirmation: 'DELETE' }, lone.accessToken)]);
+    expect(raced[1].status).not.toBe(200);
+    expect(raced[0].status).toBe(200);
+    expect(await countEligibleOwners(prisma)).toBe(1);
+
+    // Transfer racing the successor's deactivation by another Owner: either order is consistent.
+    const first = await onlyOwner();
+    const second = await enrolledAdmin({ owner: true });
+    const target = await enrolledAdmin();
+    const [moved, deactivated] = await Promise.all([transfer(first.accessToken, target.user.id),
+      api().patch(`/api/admin/administrators/${target.user.id}/access`, { isActive: false }, second.accessToken)]);
+    expect(deactivated.status).toBe(200);
+    if (moved.status === 200) {
+      expect(await ownerState(first.user.id)).toEqual({ isActive: false, isOwner: false });
+    } else {
+      expect(moved.body.error.code).toBe('SUCCESSOR_INACTIVE');
+      expect(await ownerState(first.user.id)).toEqual({ isActive: true, isOwner: true });
+      expect(await ownerState(target.user.id)).toEqual({ isActive: false, isOwner: false });
+    }
+    expect(await countEligibleOwners(prisma)).toBeGreaterThanOrEqual(1);
+
+    // Two Owners leaving at once (one by transfer, one by deletion) still leave an eligible Owner.
+    const a = await onlyOwner();
+    const b = await enrolledAdmin({ owner: true });
+    const c = await enrolledAdmin();
+    const both = await Promise.all([transfer(a.accessToken, c.user.id),
+      api().post('/api/admin/me/delete', { currentPassword: PASSWORD, confirmation: 'DELETE' }, b.accessToken)]);
+    expect(both.map(response => response.status)).toEqual([200, 200]);
+    expect(await prisma.adminAccountSecurity.findMany({ where: { isOwner: true, user: { isActive: true } }, select: { userId: true } })).toEqual([{ userId: c.user.id }]);
+    expect(await countEligibleOwners(prisma)).toBe(1);
   });
 });

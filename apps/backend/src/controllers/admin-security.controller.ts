@@ -5,6 +5,7 @@ import { adminMfaService, maskIp, type RequestMeta } from '../services/admin-mfa
 import { adminTeamService } from '../services/admin-team.service.js';
 import { adminActivationService } from '../services/admin-activation.service.js';
 import { adminAccountService } from '../services/admin-account.service.js';
+import { adminOwnershipService } from '../services/admin-ownership.service.js';
 import { hasRecentStepUp } from '../services/admin-session.js';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
@@ -179,6 +180,14 @@ export const adminSecurityController = {
     clearRefreshCookie(res);
     res.json({ data: { deleted: true } });
   }),
+  ownershipSuccessors: handle(async (req, res) => { res.json({ data: await adminOwnershipService.listSuccessors(userId(req)) }); }),
+  transferOwnershipAndDelete: handle(async (req, res) => {
+    const body = z.object({ successorId: z.string({ message: 'Choose the next Owner.' }).uuid('Choose the next Owner.'), currentPassword,
+      confirmation: z.literal('DELETE', { message: 'Type DELETE to confirm.' }) }).strict().parse(req.body);
+    await adminOwnershipService.transferOwnershipAndDeleteSelf(userId(req), body, meta(req), req.id);
+    clearRefreshCookie(res);
+    res.json({ data: { deleted: true, ownershipTransferred: true } });
+  }),
   revokeOtherSessions: handle(async (req, res) => {
     res.json({ data: await adminAccountService.revokeOtherSessions(userId(req), session(req).familyId, meta(req)) });
   }),
@@ -215,6 +224,10 @@ export const adminSecurityController = {
   }),
   revokeActivation: handle(async (req, res) => {
     res.json({ data: await adminActivationService.revoke({ userId: userId(req), requestId: req.id }, z.string().uuid().parse(req.params.id)) });
+  }),
+  grantOwner: handle(async (req, res) => {
+    z.object({}).strict().parse(req.body ?? {});
+    res.json({ data: await adminOwnershipService.grantOwner({ userId: userId(req), requestId: req.id }, z.string().uuid().parse(req.params.id)) });
   }),
   setAccess: handle(async (req, res) => {
     const body = z.object({ isActive: z.boolean().optional(), canManageAdmins: z.boolean().optional() }).strict()

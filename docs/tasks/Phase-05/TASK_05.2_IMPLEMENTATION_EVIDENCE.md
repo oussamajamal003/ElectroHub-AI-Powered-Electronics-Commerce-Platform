@@ -332,3 +332,56 @@ either action the client clears auth state and private caches and opens `/admin/
 - Disposable browser stack: `test:visual:task05-2-activation` → 5 passed (ACT-UI-01..05) at 390/768/1440/1920 with overflow assertions, dialog focus restoration, honest delivery-failure state, redeem + enrollment, replay invalid, login message for an unactivated admin.
 - Local: backend `tsc --noEmit` and eslint clean; frontend `tsc -b`, eslint (0 errors), `vite build` OK; focused vitest 300/300 on re-run (one earlier run showed 2 timing failures under load that did not reproduce).
 - NOT VERIFIED / not done: the migration is NOT applied to shared DEV (`pzxekjybdiulzmssalfo`) and no real activation was sent; admin1–admin4 untouched, no Owner granted; PROD untouched. Real Brevo delivery not exercised (no provider on the disposable stack).
+
+## Owner succession: promotion and transfer-and-delete (2026-11-07)
+
+**Backend** (no migration; reuses `AdminAccountSecurity.isOwner`, `SECURITY_ALERT` email type, existing audit/session tables):
+- `GET /api/admin/me/ownership-successors` (Owner): eligible administrators only — existing active ADMIN, not the caller, not already
+  Owner, verified email, `mfaEnrolledAt` AND at least one usable factor now (verified enabled TOTP or unrevoked passkey), no pending
+  MFA activation. One rule (`successorProblem`) serves the list and the in-transaction re-check.
+- `POST /api/admin/administrators/:id/grant-owner` (Owner + recent step-up, `writes` limiter): explicit elevation; the access PATCH
+  still rejects `isOwner`. Sets `isOwner` + `canManageAdmins`, revokes the target's refresh families and admin sessions, audits
+  `ADMIN_OWNER_GRANTED`, drops sockets and emails the new Owner after commit (failure is ledgered, never reported as a failed grant).
+- `POST /api/admin/me/ownership-transfer-and-delete` (Owner + recent step-up + 5/15 min credential limiter; strict
+  `{ successorId, currentPassword, confirmation: "DELETE" }`): bcrypt outside the transaction; inside ONE transaction the password
+  hash is re-bound, Owner capability re-read, successor re-validated, successor promoted and signed out, `ADMIN_OWNERSHIP_TRANSFERRED`
+  audited, the departing Owner anonymized by the same transaction-scoped helper ordinary deletion now uses
+  (`anonymizeAdministrator`, no second deletion engine), and the eligible-Owner count re-checked before commit.
+- Locking: every Owner-affecting operation (deactivation, deletion, promotion, transfer) takes `admin_owner_lifecycle` FIRST, then
+  per-user token-lifecycle locks in ascending id order. Ordinary deletion and deactivation were reordered to match.
+- Codes: `SUCCESSOR_NOT_FOUND` 404, `SUCCESSOR_INACTIVE` / `SUCCESSOR_MFA_REQUIRED` / `SUCCESSOR_NOT_ELIGIBLE` / `ALREADY_OWNER` /
+  `OWNER_STATE_CHANGED` / `OWNERSHIP_TRANSFER_CONFLICT` 409, `CAPABILITY_REQUIRED` 403 (existing), `INVALID_CURRENT_PASSWORD` 400.
+  Refusals are audited as `DENIED` with the code only.
+
+**Frontend:** the last Owner's Danger Zone shows the warning and **Transfer Ownership & Delete Account** (no disabled dead end);
+other admins keep ordinary deletion. Three-step dialog (choose → review → confirm): radio cards with Active / two-step / capability
+badges, search above 3 entries, honest empty state with **Manage Administrators**; review of current vs new Owner and consequences;
+password + `DELETE` + successor acknowledgement + step-up. Eligibility/conflict refusals offer "Choose another administrator" and
+reload the list; nothing is reported before the server commits; success ends the session with a fixed sign-in notice. The successor
+list is only fetched while the wizard is open (`gcTime: 0`). Administrators page: **Promote to Owner** for an Owner on active,
+enrolled, non-Owner rows, with a confirmation explaining the authority; the list refreshes from the server after success.
+
+**Verification (local, actually run):**
+- Disposable PostgreSQL (`node scripts/admin-security-pg.cjs`): 36/36 — OWN-01 (manager/plain admin/customer 403, PATCH `isOwner`
+  400, unknown/customer/inactive/factor-less/expired-activation/pending-activation refused, expired step-up refused, success revokes
+  target access + refresh, audit, email, fresh MFA sign-in has Owner, already-Owner and self refused), OWN-02 (successor list
+  filtering and shape, wrong password / factor-less / inactive refused with both accounts unchanged, atomic success, anonymized
+  Owner, two audit rows, old Owner login/refresh/retry 401, bystander untouched, new Owner must sign in again), OWN-03 (step-up,
+  successor losing its factor, caller losing Owner, self, all unchanged), OWN-04 (injected failure AFTER the successor update rolls
+  everything back; sessions intact; retry succeeds), OWN-05 (double-click → one commit; transfer vs same-Owner deletion; transfer vs
+  successor deactivation, either order consistent; transfer + another Owner's deletion concurrently → exactly one eligible Owner).
+  Existing DEL-01..04, ACT, SEED, PW-01 still pass. The first run also showed the 5-per-15-minute limiter refusing a 6th attempt.
+- Frontend focused: AdminAccountSections 12/12, Administrators promote 4/4; full suite 1306/1308 (the 2 failures — routing and
+  AdminSettingsPage — pass 27/27 when re-run alone; AdminSettingsPage has another contributor's uncommitted edits). `tsc -b`, eslint
+  (0 errors), `vite build` and backend `tsc` passed.
+- Playwright on a fresh disposable stack (`TASK05_2_API_PORT=5201 TASK05_2_FRONTEND_PORT=3201
+  TASK05_2_CREDENTIALS=.cache/task05-2-succession-credentials.json node scripts/task05-2-browser-stack.cjs`, then
+  `npm run test:visual:task05-2-succession`): 4/4 — SUC-01 no-eligible state and exclusions; SUC-02 promotion with the step-up dialog,
+  old session revoked, fresh MFA sign-in is Owner, then that Owner deletes normally while another Owner exists; SUC-04 a request
+  tampered to name a factor-less admin is refused by the real server with nothing changed, then the genuine transfer commits, old
+  Owner refused at login/refresh, successor's old session revoked, fresh sign-in shows Owner-only controls; SUC-05 Enter/Tab/
+  Shift+Tab focus trap, Escape + focus return, reduced-motion context, 720 px reflow. Screenshots at 390/768/1440/1920 inspected; one
+  inaccurate promote-dialog sentence was corrected afterwards (copy only).
+- Limits: browser step-up dialogs were triggered by answering the first request with the server's `STEP_UP_REQUIRED` shape (fresh
+  sign-ins are inside the 10-minute window); server enforcement is proven by OWN-01/OWN-03. Native 200% zoom: NOT VERIFIED (headless).
+  Shared DEV (`pzxekjybdiulzmssalfo`) and PROD were not touched; no seeded admin was promoted; real Brevo delivery not exercised.

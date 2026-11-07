@@ -15,6 +15,9 @@ export function teamFailure(error: unknown): string | null {
       case 'ALREADY_ENROLLED': return 'This administrator already has two-step verification. Lost factors follow the separate recovery procedure.';
       case 'ACCOUNT_INACTIVE': return 'This administrator account is deactivated. Reactivate it before sending an activation link.';
       case 'RESEND_COOLDOWN': return 'The link was sent moments ago. Wait a minute before resending.';
+      case 'ALREADY_OWNER': return 'This administrator is already an Owner.';
+      case 'SUCCESSOR_NOT_FOUND': case 'SUCCESSOR_INACTIVE': case 'SUCCESSOR_MFA_REQUIRED': case 'SUCCESSOR_NOT_ELIGIBLE':
+        return 'This administrator is no longer eligible to become Owner. Only active administrators with two-step verification enabled can be promoted.';
       case 'CAPABILITY_REQUIRED': return 'Managing administrators requires additional access. Ask an owner.';
       default: break;
     }

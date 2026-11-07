@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/Switch';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
 import { ApiError } from '@/lib/api';
 import {
-  useAdminProfile, useAdministrators, useCreateInvitation, useInvitations, useRequestActivation, useResendActivation, useResendInvitation,
+  useAdminProfile, useAdministrators, useCreateInvitation, useGrantOwner, useInvitations, useRequestActivation, useResendActivation, useResendInvitation,
   useRevokeActivation, useRevokeInvitation,
   useUpdateAdministratorAccess, type AdminInvitation, type AdministratorSummary, type InvitationDelivery, type InvitationStatus,
 } from '@/features/admin/security/api';
@@ -77,6 +77,8 @@ export function AdminAdministratorsPage() {
   // The dialog is opened from a table button, not a Radix trigger, so the opener is remembered to hand focus back on close.
   const activateOpener = useRef<HTMLElement | null>(null);
   const [revokeActivationTarget, setRevokeActivationTarget] = useState<AdministratorSummary | null>(null);
+  const grantOwner = useGrantOwner();
+  const [promoteTarget, setPromoteTarget] = useState<AdministratorSummary | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
@@ -218,6 +220,25 @@ export function AdminAdministratorsPage() {
     }
   };
 
+  /** Explicit Owner elevation: Owner + fresh step-up; the server re-validates eligibility and signs the new Owner out everywhere. */
+  const confirmPromote = async () => {
+    if (!promoteTarget || busy) return;
+    setBusy(true);
+    setDialogError(null);
+    try {
+      await runWithStepUp(() => grantOwner.mutateAsync(promoteTarget.id));
+      setPromoteTarget(null);
+      toast(`${promoteTarget.email} is now an Owner. They must sign in again to use Owner access.`);
+    } catch (error) {
+      const message = teamFailure(error);
+      if (message) setDialogError(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  // Mirrors the server rule for an obvious UI; the server alone decides (pending activation and usable factors are re-checked there).
+  const canPromote = (row: AdministratorSummary) => isOwner && !row.isSelf && !row.isOwner && row.isActive && row.mfaEnrolled && !row.mfaActivation;
+
   const adminColumns: Column<AdministratorSummary>[] = [
     { key: 'name', title: 'Administrator', render: row => <span className={styles.cellText}>
       <strong>{`${row.firstName} ${row.lastName}`.trim() || row.email}</strong>
@@ -228,6 +249,8 @@ export function AdminAdministratorsPage() {
       {row.canManageAdmins && !row.isOwner && <StatusPill tone="info" icon={false}>Manages admins</StatusPill>}
       {!row.isOwner && !row.canManageAdmins && <span className={styles.muted}>Administrator</span>}
       {row.isSelf && <StatusPill tone="neutral" icon={false}>You</StatusPill>}
+      {canPromote(row) && <Button type="button" variant="outline" size="small" disabled={busy} aria-label={`Promote ${row.email} to Owner`}
+        onClick={() => { setDialogError(null); setPromoteTarget(row); }}>Promote to Owner</Button>}
     </span> },
     { key: 'mfa', title: 'Two-step', render: row => {
       const status = twoStepStatus(row);
@@ -377,6 +400,19 @@ export function AdminAdministratorsPage() {
         </DialogDescription>
       </DialogContent>
     </Dialog>
+
+    <ConfirmDialog open={promoteTarget !== null} onOpenChange={(next) => { if (!next && !busy) setPromoteTarget(null); }}
+      title="Promote to Owner?" confirmLabel="Promote to Owner" pending={busy} error={dialogError} onConfirm={() => void confirmPromote()}
+      description={<>
+        <p><strong>{`${promoteTarget?.firstName ?? ''} ${promoteTarget?.lastName ?? ''}`.trim() || promoteTarget?.email}</strong> ({promoteTarget?.email}) becomes an Owner of ElectroHub.</p>
+        <ul className={styles.dangerList}>
+          <li>Full Owner capability, including administrator access, two-step verification activation and future ownership changes.</li>
+          <li>Administrator-management authority.</li>
+          <li>There is no demotion: Owner access lasts until the account is deactivated or deleted, and the last Owner must transfer ownership before leaving.</li>
+          <li>They are signed out everywhere and must sign in again with two-step verification before using Owner access.</li>
+        </ul>
+        <p>You will confirm it is you with two-step verification.</p>
+      </>} />
 
     <ConfirmDialog open={revokeActivationTarget !== null} onOpenChange={(next) => { if (!next && !busy) setRevokeActivationTarget(null); }}
       title="Revoke this activation?" description={`The activation link sent to ${revokeActivationTarget?.email ?? 'this administrator'} will stop working.`}

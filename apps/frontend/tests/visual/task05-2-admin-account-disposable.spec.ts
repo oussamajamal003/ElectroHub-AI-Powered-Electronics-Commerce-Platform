@@ -68,7 +68,7 @@ test.describe.serial('Task 05.2 admin profile: password and Danger Zone (disposa
   let owner: Page;
   let ownerSecret = '';
 
-  test('ACC-01 the last active Owner sees the profile sections and cannot delete their account', async ({ browser }) => {
+  test('ACC-01 the last active Owner sees the profile sections and is offered ownership transfer instead of deletion', async ({ browser }) => {
     owner = await newPage(browser);
     await owner.goto('/admin/login');
     await owner.getByLabel('Email Address').fill(credentials.ownerEmail);
@@ -80,8 +80,9 @@ test.describe.serial('Task 05.2 admin profile: password and Danger Zone (disposa
     const order = await owner.locator('h2').allInnerTexts();
     expect(order.filter(text => ['Personal details', 'Role and access', 'Change password', 'Security', 'Danger Zone'].includes(text)))
       .toEqual(['Personal details', 'Role and access', 'Change password', 'Security', 'Danger Zone']);
-    await expect(owner.getByText('You are the last active Owner. Assign another trusted administrator as Owner before deleting your account.')).toBeVisible();
-    await expect(owner.getByRole('button', { name: /Delete My Administrator Account/ })).toBeDisabled();
+    // The last Owner is not stuck: the Danger Zone offers the succession wizard (journeys in task05-2-owner-succession-disposable.spec.ts).
+    await expect(owner.getByText('You are the last active Owner', { exact: true })).toBeVisible();
+    await expect(owner.getByRole('button', { name: /Transfer Ownership & Delete Account/ })).toBeEnabled();
     await capture(owner, 'profile-owner', [390, 768, 1440, 1920]);
   });
 

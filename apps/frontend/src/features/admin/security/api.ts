@@ -24,7 +24,7 @@ export interface AdminProfile {
   role: string;
   emailVerified: boolean;
   capabilities: AdminCapabilities;
-  /** Advisory: the server re-checks inside the deletion transaction. LAST_OWNER blocks self-deletion until another Owner exists. */
+  /** Advisory: the server re-checks inside the deletion transaction. LAST_OWNER: ordinary deletion is refused; the Owner transfers ownership as part of deleting instead. */
   deletion?: { allowed: boolean; reason: 'LAST_OWNER' | null };
 }
 export interface TotpFactorSummary { id: string; label: string; createdAt: string; lastUsedAt: string | null }
@@ -51,6 +51,15 @@ export interface LoginHistoryEvent {
   ipMasked: string | null;
   occurredAt: string;
 }
+export interface OwnershipSuccessor {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  canManageAdmins: boolean;
+  mfa: { totp: number; passkeys: number };
+}
+
 export interface AdministratorSummary {
   id: string;
   email: string;
@@ -170,6 +179,11 @@ export const adminSecurityApi = {
     enveloped<{ changed: true; signInRequired: true }>(`${ME}/password`, { method: 'POST', data: body }),
   deleteAccount: (body: { currentPassword: string; confirmation: 'DELETE' }) =>
     enveloped<{ deleted: true }>(`${ME}/delete`, { method: 'POST', data: body }),
+  /** Owner only: administrators the server currently considers eligible to become Owner (re-checked again at commit). */
+  ownershipSuccessors: (signal?: AbortSignal) => enveloped<OwnershipSuccessor[]>(`${ME}/ownership-successors`, { signal }),
+  /** The last-Owner exit: promotes the successor and deletes this account in one server transaction. Ends this session. */
+  transferOwnershipAndDelete: (body: { successorId: string; currentPassword: string; confirmation: 'DELETE' }) =>
+    enveloped<{ deleted: true; ownershipTransferred: true }>(`${ME}/ownership-transfer-and-delete`, { method: 'POST', data: body }),
 };
 
 // ─── Team ─────────────────────────────────────────────────
@@ -187,6 +201,8 @@ export const adminTeamApi = {
   requestActivation: (id: string) => enveloped<AdminActivation>(`${TEAM}/administrators/${encodeURIComponent(id)}/mfa-activation`, { method: 'POST' }),
   resendActivation: (id: string) => enveloped<AdminActivation>(`${TEAM}/administrators/${encodeURIComponent(id)}/mfa-activation/resend`, { method: 'POST' }),
   revokeActivation: (id: string) => enveloped<AdminActivation>(`${TEAM}/administrators/${encodeURIComponent(id)}/mfa-activation/revoke`, { method: 'POST' }),
+  grantOwner: (id: string) => enveloped<{ id: string; isOwner: true; canManageAdmins: true; signInRequired: true }>(
+    `${TEAM}/administrators/${encodeURIComponent(id)}/grant-owner`, { method: 'POST', data: {} }),
 };
 
 /** Creates a passkey: server options, the browser ceremony, then the server verifies and stores the credential. */
@@ -211,6 +227,12 @@ export function useAdminSessions(page: number) {
 
 export function useAdminLoginHistory(page: number) {
   return useQuery({ queryKey: adminSecurityKeys.loginHistory(page), queryFn: () => adminSecurityApi.loginHistory(page), placeholderData: keepPreviousData });
+}
+
+/** Fetched only while the succession wizard is open; never cached across visits (eligibility can change at any time). */
+export function useOwnershipSuccessors(enabled: boolean) {
+  return useQuery({ queryKey: [...adminSecurityKeys.all, 'ownership-successors'], queryFn: ({ signal }) => adminSecurityApi.ownershipSuccessors(signal),
+    enabled, staleTime: 0, gcTime: 0 });
 }
 
 export function useAdministrators(page: number) {
@@ -253,4 +275,5 @@ export const useResendInvitation = () => useNamespaceMutation(adminTeamKeys.all,
 export const useRevokeInvitation = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.revokeInvitation(id));
 export const useRequestActivation = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.requestActivation(id));
 export const useResendActivation = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.resendActivation(id));
+export const useGrantOwner = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.grantOwner(id));
 export const useRevokeActivation = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.revokeActivation(id));

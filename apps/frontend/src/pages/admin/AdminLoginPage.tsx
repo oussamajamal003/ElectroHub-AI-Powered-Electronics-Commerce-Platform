@@ -55,7 +55,8 @@ export function AdminLoginPage() {
   // Fixed copy keyed by a known value: navigation state never supplies text that is rendered.
   const signInNotice = notice === 'PASSWORD_CHANGED'
     ? 'Your password was changed and every session was signed out. Sign in with your new password and two-step verification.'
-    : notice === 'ACCOUNT_DELETED' ? 'Your administrator account was deleted and every session was signed out.' : null;
+    : notice === 'ACCOUNT_DELETED' ? 'Your administrator account was deleted and every session was signed out.'
+    : notice === 'OWNERSHIP_TRANSFERRED' ? 'Your administrator account has been deleted, and ownership has been transferred successfully.' : null;
   const returnPath = typeof from === 'string' && /^\/admin(\/[A-Za-z0-9._~%-]+)*\/?$/.test(from) && !from.startsWith('/admin/login') ? from : null;
   // List filters live in the query string; it is only ever applied as the search part of an already-validated /admin path.
   const destination = returnPath
@@ -290,7 +291,7 @@ export function AdminLoginPage() {
           </Alert>
         )}
         {!error && stage === 'credentials' && signInNotice && (
-          <Alert variant={notice === 'ACCOUNT_DELETED' ? 'info' : 'success'} className={styles.alert} role="status">
+          <Alert variant={notice === 'PASSWORD_CHANGED' ? 'success' : 'info'} className={styles.alert} role="status">
             {signInNotice}
           </Alert>
         )}

@@ -1,41 +1,20 @@
 import { useRef, useState, type ChangeEvent, type FormEvent, type RefObject } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, KeyRound, Trash2 } from 'lucide-react';
-import { Alert } from '@/components/ui/Alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
 import { Input } from '@/components/ui/Input';
 import { PasswordInput } from '@/components/ui/PasswordInput/PasswordInput';
-import { useAuth } from '@/features/auth/context/AuthContext';
 import { ApiError } from '@/lib/api';
 import { fieldErrors as serverFieldErrors } from '@/features/admin/shared/api';
 import { adminSecurityApi, type AdminProfile } from '../api';
 import { STRONG_PASSWORD, passwordHint } from '../passwordPolicy';
 import { isStepUpCancelled, useStepUp } from '../useStepUp';
+import { failureMessage, useEndAdminSession } from '../endAdminSession';
+import { OwnershipTransferDialog } from './OwnershipTransferDialog';
 import pageStyles from '@/features/admin/shared/AdminPages.module.scss';
 
-/** Why the administrator is on the sign-in page after ending every session from the profile. Read once by AdminLoginPage. */
-export type AdminSignInNotice = 'PASSWORD_CHANGED' | 'ACCOUNT_DELETED';
-export const SIGN_IN_NOTICE_KEY = 'eh.admin-sign-in-notice';
-
-const failureMessage = (error: unknown, fallback: string) => {
-  if (error instanceof ApiError && error.status === 0) return 'Unable to connect. Check your connection and try again.';
-  if (error instanceof ApiError && error.status === 429) return 'Too many attempts. Wait a few minutes and try again.';
-  return error instanceof ApiError && error.message ? error.message : fallback;
-};
-
-/** After a change that revoked every session server-side: drop local auth state and private caches, then sign in afresh. */
-function useEndAdminSession() {
-  const { clearSession } = useAuth();
-  const navigate = useNavigate();
-  return (notice: AdminSignInNotice) => {
-    // Clearing auth makes the admin route guard redirect to sign-in with its own state, which can replace ours: hand the notice over
-    // through sessionStorage as well (a fixed value, read and removed by the sign-in page).
-    try { window.sessionStorage.setItem(SIGN_IN_NOTICE_KEY, notice); } catch { /* the state below still carries it when storage is blocked */ }
-    clearSession();
-    navigate('/admin/login', { replace: true, state: { notice } });
-  };
-}
+export { SIGN_IN_NOTICE_KEY, type AdminSignInNotice } from '../endAdminSession';
 
 type PasswordField = 'currentPassword' | 'newPassword' | 'confirmPassword';
 
@@ -114,18 +93,24 @@ export function ChangePasswordSection() {
 export function DangerZoneSection({ profile }: { profile: AdminProfile }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
-  const blocked = profile.deletion?.reason === 'LAST_OWNER';
+  // Advisory only (the server re-checks under the owner lock): the last active Owner leaves through the succession wizard instead.
+  const lastOwner = profile.deletion?.reason === 'LAST_OWNER';
   return <section className={`${pageStyles.panel} ${pageStyles.dangerPanel}`} aria-labelledby="profile-danger-title">
     <div className={pageStyles.panelHeader}>
       <h2 id="profile-danger-title" className={`${pageStyles.panelTitle} ${pageStyles.dangerTitle}`}>Danger Zone</h2>
     </div>
     <p className={pageStyles.panelHint}>Permanently remove access to your administrator account. This action requires additional verification and cannot be undone.</p>
-    {blocked && <Alert variant="warning">You are the last active Owner. Assign another trusted administrator as Owner before deleting your account.</Alert>}
+    {lastOwner && <Alert variant="warning">
+      <AlertTitle>You are the last active Owner</AlertTitle>
+      <AlertDescription>Before deleting your administrator account, you must transfer ownership to another active administrator who has completed two-step verification.</AlertDescription>
+    </Alert>}
     <div className={pageStyles.actionsStart}>
-      <Button ref={trigger} type="button" variant="destructive" onClick={() => setOpen(true)} disabled={blocked}>
-        <Trash2 aria-hidden="true" /> Delete My Administrator Account</Button>
+      <Button ref={trigger} type="button" variant="destructive" onClick={() => setOpen(true)}>
+        <Trash2 aria-hidden="true" /> {lastOwner ? 'Transfer Ownership & Delete Account' : 'Delete My Administrator Account'}</Button>
     </div>
-    <DeleteAdminAccountDialog profile={profile} open={open} onOpenChange={setOpen} returnFocus={trigger} />
+    {lastOwner
+      ? <OwnershipTransferDialog profile={profile} open={open} onOpenChange={setOpen} returnFocus={trigger} />
+      : <DeleteAdminAccountDialog profile={profile} open={open} onOpenChange={setOpen} returnFocus={trigger} />}
   </section>;
 }
 

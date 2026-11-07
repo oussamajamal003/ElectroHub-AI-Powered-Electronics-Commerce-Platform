@@ -39,6 +39,10 @@ async function unusedPort() {
   await new Promise(resolve => listener.close(resolve));
   return port;
 }
+// Optional overrides so a second disposable stack can run beside another one (defaults keep the existing contract).
+const apiPort = process.env.TASK05_2_API_PORT || '5200';
+const frontendOrigin = `http://localhost:${process.env.TASK05_2_FRONTEND_PORT || '3200'}`;
+
 async function run() {
   const port = await unusedPort();
   const openssl = process.env.ELECTROHUB_LOCAL_OPENSSL || 'C:/Program Files/Git/usr/bin/openssl.exe';
@@ -71,20 +75,20 @@ async function run() {
       '-f', path.join(migrations, name, 'migration.sql')]);
   }
   const env = {
-    ...process.env, NODE_ENV: 'development', DATABASE_URL: url, DIRECT_URL: url, PORT: '5200',
+    ...process.env, NODE_ENV: 'development', DATABASE_URL: url, DIRECT_URL: url, PORT: apiPort,
     DB_SSL_CA_CERT_PATH: path.join(work, 'server.crt'), NODE_EXTRA_CA_CERTS: path.join(work, 'server.crt'),
     JWT_SECRET: crypto.randomBytes(48).toString('base64url'), ELECTROHUB_LOG_DIR: path.join(work, 'logs'),
     ADMIN_MFA_ENCRYPTION_KEYS: `1:${crypto.randomBytes(32).toString('base64')}`, ADMIN_MFA_ACTIVE_KEY_VERSION: '1',
-    FRONTEND_URL: 'http://localhost:3200', WEBAUTHN_RP_ID: 'localhost', WEBAUTHN_ORIGIN: 'http://localhost:3200',
+    FRONTEND_URL: frontendOrigin, WEBAUTHN_RP_ID: 'localhost', WEBAUTHN_ORIGIN: frontendOrigin,
     // No real providers: email, Stripe and AI are disabled so nothing leaves this machine.
     STRIPE_SECRET_KEY: '', STRIPE_WEBHOOK_SECRET: '', BREVO_API_KEY: '', GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '', AI_SERVICE_URL: '', AI_SERVICE_API_KEY: '',
     PAYMENT_SHARED_MUTATIONS_APPROVED: '', COMMERCE_EMAIL_SEND_MODE: 'disabled', PAYMENT_CONFIRMATION_SIGNAL: 'false',
   };
-  const credentials = path.join(root, '.cache/task05-2-browser-credentials.json');
+  const credentials = path.join(root, process.env.TASK05_2_CREDENTIALS || '.cache/task05-2-browser-credentials.json');
   const tsx = path.join(path.dirname(require.resolve('tsx/package.json')), 'dist/cli.mjs');
   const seeded = spawnSync(process.execPath, [tsx, 'scripts/fixtures/task05-2-browser-seed.ts', credentials], { cwd: backend, env, stdio: 'inherit', windowsHide: true });
   if (seeded.status !== 0) throw new Error('Browser fixtures could not be seeded.');
-  console.log(`Disposable browser stack: backend http://127.0.0.1:5200 (credentials file: ${path.relative(root, credentials)})`);
+  console.log(`Disposable browser stack: backend http://127.0.0.1:${apiPort} (credentials file: ${path.relative(root, credentials)})`);
   child = spawn(process.execPath, [tsx, 'src/bootstrap.ts'], { cwd: backend, env, stdio: 'inherit', windowsHide: true });
   return new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', code => resolve(code ?? 1)); });
 }

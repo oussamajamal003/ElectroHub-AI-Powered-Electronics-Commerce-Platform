@@ -171,3 +171,35 @@ td .mono, td .muted { white-space: nowrap; }
   svg { flex: none; width: 1.25rem; height: 1.25rem; color: $color-error; } }
 .dangerList { display: grid; gap: $spacing-2; margin: 0; padding-left: $spacing-5; list-style: disc; color: $color-text-secondary; font-size: $font-size-sm;
   line-height: $line-height-normal; }
+
+// Task 05.2 Owner succession wizard (profile Danger Zone) and Owner promotion.
+.wizardDialog { max-width: 40rem; }
+.wizardSteps { display: flex; gap: $spacing-2; margin: 0; padding: 0; list-style: none; font-size: $font-size-xs; color: $color-text-secondary;
+  li { display: inline-flex; align-items: center; gap: $spacing-1; flex: 1; padding-bottom: $spacing-2; border-bottom: 2px solid $color-border; }
+  li span { display: inline-grid; place-items: center; width: 1.25rem; height: 1.25rem; border: 1px solid $color-border; font-weight: $font-weight-semibold; }
+  li[aria-current='step'] { color: $color-text-primary; font-weight: $font-weight-semibold; } }
+.wizardStepDone { border-bottom-color: $color-primary !important; span { border-color: $color-primary !important; background: $color-primary; color: $color-text-inverse; } }
+.successorList { display: grid; gap: $spacing-2; max-height: min(22rem, 45dvh); overflow-y: auto; overscroll-behavior: contain; padding: 2px; }
+.successorSkeleton { height: 5.5rem; }
+.successorCard { position: relative; display: flex; gap: $spacing-3; align-items: flex-start; padding: $spacing-4; border: 1px solid $color-border;
+  background: $color-background; cursor: pointer; transition: border-color $transition-fast, box-shadow $transition-fast, background-color $transition-fast;
+  &:hover { border-color: rgba($color-primary, .45); }
+  &:focus-within { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
+  @media (prefers-reduced-motion: reduce) { transition: none; } }
+.successorCardSelected { border-color: $color-primary; background: rgba($color-primary, .05); box-shadow: inset 3px 0 0 $color-primary; }
+.successorRadio { flex: none; width: 1.125rem; height: 1.125rem; margin: 2px 0 0; accent-color: $color-primary; }
+.successorBody { display: grid; gap: $spacing-1; min-width: 0; font-size: $font-size-sm; color: $color-text-primary; }
+.successorEmail { color: $color-text-secondary; overflow-wrap: anywhere; }
+.successorMethods { font-size: $font-size-xs; color: $color-text-secondary; }
+.transferPeople { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: $spacing-3; align-items: center;
+  @media (max-width: $breakpoint-sm - 1px) { grid-template-columns: minmax(0, 1fr); .transferArrow { transform: rotate(90deg); justify-self: center; } } }
+.transferPerson { display: grid; gap: 2px; min-width: 0; padding: $spacing-3 $spacing-4; border: 1px solid $color-border; background: $color-surface; font-size: $font-size-sm;
+  span:last-child { color: $color-text-secondary; overflow-wrap: anywhere; } }
+.transferPersonNew { border-color: $color-primary; background: rgba($color-primary, .05); }
+.transferRole { font-size: $font-size-xs; font-weight: $font-weight-semibold; text-transform: uppercase; letter-spacing: .04em; color: $color-text-secondary; }
+.transferArrow { width: 1.25rem; height: 1.25rem; color: $color-primary; }
+.transferColumns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: $spacing-4;
+  @media (max-width: $breakpoint-sm - 1px) { grid-template-columns: minmax(0, 1fr); } }
+.transferHeading { margin: 0 0 $spacing-2; font-size: $font-size-sm; font-weight: $font-weight-semibold; color: $color-text-primary; }
+.checkRow { display: flex; gap: $spacing-2; align-items: flex-start; font-size: $font-size-sm; color: $color-text-primary; line-height: $line-height-normal;
+  label { cursor: pointer; } }

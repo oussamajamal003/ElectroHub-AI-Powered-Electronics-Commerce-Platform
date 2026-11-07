@@ -19,6 +19,7 @@
     "test:e2e": "playwright test -c playwright.auth.config.ts",
     "test:visual:task05-2": "playwright test -c playwright.task05-2-disposable.config.ts",
     "test:visual:task05-2-account": "playwright test -c playwright.task05-2-account-disposable.config.ts",
+    "test:visual:task05-2-succession": "playwright test -c playwright.task05-2-succession-disposable.config.ts",
     "test:visual:task05-2-activation": "playwright test -c playwright.task05-2-activation-disposable.config.ts",
     "test:visual:task05-2-live-dev": "playwright test -c playwright.task05-2-live-dev.config.ts"
   },

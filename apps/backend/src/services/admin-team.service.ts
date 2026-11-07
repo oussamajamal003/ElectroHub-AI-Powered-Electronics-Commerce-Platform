@@ -11,6 +11,7 @@ import { adminMfaService, INVITE_ENROLLMENT_WINDOW_MS } from './admin-mfa.servic
 import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
 import { adminNotifications } from './admin-notification.service.js';
 import { activationDto } from './admin-activation.service.js';
+import { lockOwnerLifecycle } from './admin-account.service.js';
 
 /**
  * Task 05.2 invitation-only administrator onboarding and team management. The ADMIN role is only ever assigned here, by the server,
@@ -209,14 +210,14 @@ export class AdminTeamService {
   async setAccess(actor: Actor, targetId: string, input: { isActive?: boolean; canManageAdmins?: boolean }) {
     if (targetId === actor.userId) throw new AppError('You cannot change your own access.', 409, 'SELF_CHANGE');
     const result = await prisma.$transaction(async tx => {
+      // A deactivation can remove an Owner: take the shared owner lock before the user lock, the order every owner-affecting
+      // operation uses, so concurrent owner changes serialize and cannot deadlock.
+      if (input.isActive === false) await lockOwnerLifecycle(tx);
       await lockUserTokenLifecycle(tx, targetId);
       const target = await tx.user.findFirst({ where: { id: targetId, role: { name: 'ADMIN' } },
         select: { id: true, isActive: true, adminSecurity: { select: { isOwner: true, canManageAdmins: true } } } });
       if (!target) throw new AppError('Administrator not found.', 404, 'NOT_FOUND');
       if (input.isActive === false && target.adminSecurity?.isOwner) {
-        // Per-user lifecycle locks do not serialize changes to different owners. Share one transaction lock before
-        // counting so concurrent requests cannot both observe the same last-two-owner state.
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('admin_owner_lifecycle'), 0)`;
         const activeOwners = await tx.adminAccountSecurity.count({ where: { isOwner: true, user: { isActive: true } } });
         if (activeOwners <= 1) throw new AppError('The last active owner cannot be deactivated.', 409, 'LAST_OWNER');
       }

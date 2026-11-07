@@ -1,4 +1,4 @@
-import { AdminInvitationStatus, SecurityEventType } from '@prisma/client';
+import { AdminInvitationStatus, SecurityEventType, type Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { ADMIN_AUTH_TX } from '../lib/transaction-options.js';
 import { AppError } from '../middleware/errorHandler.js';
@@ -11,7 +11,7 @@ import { adminMfaService, type RequestMeta } from './admin-mfa.service.js';
 import { STEP_UP_WINDOW_MS } from './admin-session.js';
 
 const OWNER_LIFECYCLE_LOCK = 'admin_owner_lifecycle';
-export const LAST_OWNER_MESSAGE = 'You are the last active Owner. Assign another trusted administrator as Owner before deleting your account.';
+export const LAST_OWNER_MESSAGE = 'You are the last active Owner. Transfer ownership to another administrator before deleting your account.';
 
 async function authService() {
   // Imported lazily, like AdminMfaService does: AuthService depends on the MFA service, so a static import here risks a cycle.
@@ -48,6 +48,60 @@ const HISTORY_EVENT: Partial<Record<SecurityEventType, string>> = {
   ADMIN_RECOVERY_CODE_USED: 'RECOVERY_CODE_USED', ADMIN_PASSKEY_ADDED: 'PASSKEY_ADDED', ADMIN_PASSKEY_REMOVED: 'PASSKEY_REMOVED',
   ADMIN_SESSION_REVOKED: 'SESSION_REVOKED', ADMIN_STEP_UP_VERIFIED: 'STEP_UP',
 };
+
+/**
+ * The one owner-lifecycle lock. Every operation that can add or remove an active Owner (deactivation, deletion, promotion,
+ * transfer-and-delete) takes it FIRST, then per-user token-lifecycle locks in ascending id order, so owner operations serialize and
+ * cannot deadlock against each other or against account deletion.
+ */
+export async function lockOwnerLifecycle(tx: Prisma.TransactionClient) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${OWNER_LIFECYCLE_LOCK}), 0)`;
+}
+
+/** Re-reads the caller inside the transaction: still an active ADMIN, and the password verified before the transaction is still current. */
+export async function assertPasswordUnchanged(tx: Prisma.TransactionClient, userId: string, verifiedHash: string | null) {
+  const current = await tx.user.findFirst({ where: { id: userId, role: { name: 'ADMIN' } },
+    select: { isActive: true, passwordHash: true, adminSecurity: { select: { isOwner: true } } } });
+  if (!current?.isActive) throw inactiveAccount();
+  // A concurrent password change wins over a proof made against the previous hash.
+  if (current.passwordHash !== verifiedHash) throw new AppError('Your account changed while confirming. Sign in again.', 409, 'ACCOUNT_CHANGED');
+  return { isOwner: Boolean(current.adminSecurity?.isOwner) };
+}
+
+/**
+ * Transaction-scoped administrator anonymization, shared by ordinary self-deletion and transfer-and-delete; the caller holds the locks.
+ * Not a row delete: orders, inventory, delivery and audit records keep their foreign keys. Credentials, MFA factors, recovery codes,
+ * passkeys, open challenges, refresh families and admin sessions are removed or revoked; pending invitations this administrator sent are
+ * revoked; capabilities end with the account and are never transferred implicitly. Security events and audit rows are kept.
+ */
+export async function anonymizeAdministrator(tx: Prisma.TransactionClient, userId: string,
+  input: { wasOwner: boolean; meta?: RequestMeta; requestId?: string; successorId?: string }) {
+  const now = new Date();
+  await tx.refreshToken.updateMany({ where: { userId }, data: { isRevoked: true, expiresAt: new Date(0) } });
+  await revokeAdminSessions(tx, { userId }, 'ACCOUNT_DELETED');
+  await tx.adminAuthChallenge.updateMany({ where: { userId, consumedAt: null }, data: { consumedAt: now } });
+  await tx.adminMfaFactor.deleteMany({ where: { userId } });
+  await tx.adminRecoveryCode.deleteMany({ where: { userId } });
+  await tx.adminWebAuthnCredential.deleteMany({ where: { userId } });
+  await tx.otpChallenge.deleteMany({ where: { userId } });
+  await tx.passwordResetToken.deleteMany({ where: { userId } });
+  await tx.oAuthAccount.deleteMany({ where: { userId } });
+  const revokedInvitations = await tx.adminInvitation.updateMany({ where: { invitedById: userId, status: AdminInvitationStatus.PENDING },
+    data: { status: AdminInvitationStatus.REVOKED, revokedAt: now } });
+  await tx.adminAccountSecurity.updateMany({ where: { userId },
+    data: { isOwner: false, canManageAdmins: false, enrollmentAllowedUntil: null, mfaEnrolledAt: null } });
+  await tx.user.update({ where: { id: userId }, data: {
+    email: `deleted-admin-${userId}@deleted.invalid`, pendingEmail: null, passwordHash: null,
+    firstName: 'Deleted', lastName: 'Administrator', isActive: false, emailVerifiedAt: null,
+  } });
+  await tx.securityEvent.create({ data: { userId, type: SecurityEventType.ACCOUNT_DELETED,
+    ipAddress: input.meta?.ipAddress ?? null, userAgent: input.meta?.userAgent?.slice(0, 1000) ?? null } });
+  await recordAdminAudit({ actorId: userId, action: 'ADMIN_ACCOUNT_DELETED', resourceType: 'admin_user', resourceId: userId, outcome: 'SUCCESS',
+    details: { wasOwner: input.wasOwner, revokedInvitations: revokedInvitations.count, ...(input.successorId ? { successorId: input.successorId } : {}) },
+    requestId: input.requestId }, tx);
+}
+
+export { invalidPassword as invalidCurrentPassword, inactiveAccount as inactiveAdministrator };
 
 export class AdminAccountService {
   async profile(userId: string, session: { mfaVerifiedAt: Date; stepUpAt: Date | null }) {
@@ -161,42 +215,16 @@ export class AdminAccountService {
     const account = await prisma.user.findFirst({ where: { id: userId, isActive: true, role: { name: 'ADMIN' } }, select: { passwordHash: true } });
     if (!account) throw inactiveAccount();
     if (!await verifyPassword(currentPassword, account.passwordHash)) throw invalidPassword(); // bcrypt stays outside the transaction
-    const now = new Date();
     await prisma.$transaction(async tx => {
+      // Owner lock first, then the user lock: the same order every owner-affecting operation uses (see lockOwnerLifecycle).
+      await lockOwnerLifecycle(tx);
       await lockUserTokenLifecycle(tx, userId);
-      const current = await tx.user.findFirst({ where: { id: userId, role: { name: 'ADMIN' } },
-        select: { isActive: true, passwordHash: true, adminSecurity: { select: { isOwner: true } } } });
-      if (!current?.isActive) throw inactiveAccount();
-      // The password verified above must still be the stored one: a concurrent password change wins.
-      if (current.passwordHash !== account.passwordHash) throw new AppError('Your account changed while confirming. Sign in again.', 409, 'ACCOUNT_CHANGED');
-      if (current.adminSecurity?.isOwner) {
-        // Same shared lock as owner deactivation, so two owners leaving at once cannot both see "another owner remains".
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${OWNER_LIFECYCLE_LOCK}), 0)`;
+      const current = await assertPasswordUnchanged(tx, userId, account.passwordHash);
+      if (current.isOwner) {
         const others = await tx.adminAccountSecurity.count({ where: { isOwner: true, userId: { not: userId }, user: { isActive: true } } });
         if (others === 0) throw new AppError(LAST_OWNER_MESSAGE, 409, 'LAST_OWNER');
       }
-      await tx.refreshToken.updateMany({ where: { userId }, data: { isRevoked: true, expiresAt: new Date(0) } });
-      await revokeAdminSessions(tx, { userId }, 'ACCOUNT_DELETED');
-      await tx.adminAuthChallenge.updateMany({ where: { userId, consumedAt: null }, data: { consumedAt: now } });
-      await tx.adminMfaFactor.deleteMany({ where: { userId } });
-      await tx.adminRecoveryCode.deleteMany({ where: { userId } });
-      await tx.adminWebAuthnCredential.deleteMany({ where: { userId } });
-      await tx.otpChallenge.deleteMany({ where: { userId } });
-      await tx.passwordResetToken.deleteMany({ where: { userId } });
-      await tx.oAuthAccount.deleteMany({ where: { userId } });
-      const revokedInvitations = await tx.adminInvitation.updateMany({ where: { invitedById: userId, status: AdminInvitationStatus.PENDING },
-        data: { status: AdminInvitationStatus.REVOKED, revokedAt: now } });
-      // Capabilities end with the account; nothing is transferred to anyone else.
-      await tx.adminAccountSecurity.updateMany({ where: { userId },
-        data: { isOwner: false, canManageAdmins: false, enrollmentAllowedUntil: null, mfaEnrolledAt: null } });
-      await tx.user.update({ where: { id: userId }, data: {
-        email: `deleted-admin-${userId}@deleted.invalid`, pendingEmail: null, passwordHash: null,
-        firstName: 'Deleted', lastName: 'Administrator', isActive: false, emailVerifiedAt: null,
-      } });
-      await tx.securityEvent.create({ data: { userId, type: SecurityEventType.ACCOUNT_DELETED,
-        ipAddress: meta?.ipAddress ?? null, userAgent: meta?.userAgent?.slice(0, 1000) ?? null } });
-      await recordAdminAudit({ actorId: userId, action: 'ADMIN_ACCOUNT_DELETED', resourceType: 'admin_user', resourceId: userId, outcome: 'SUCCESS',
-        details: { wasOwner: Boolean(current.adminSecurity?.isOwner), revokedInvitations: revokedInvitations.count }, requestId }, tx);
+      await anonymizeAdministrator(tx, userId, { wasOwner: current.isOwner, meta, requestId });
     }, ADMIN_AUTH_TX);
     DeliveryPublisher.disconnectUser(userId, 'ACCOUNT_DELETED');
   }
