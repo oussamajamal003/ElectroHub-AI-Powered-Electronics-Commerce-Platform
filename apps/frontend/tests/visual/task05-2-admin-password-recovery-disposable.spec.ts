@@ -153,9 +153,18 @@ test.describe.serial('Task 05.2 administrator forgot-password (disposable)', () 
     await expect(page.getByRole('alert').first()).toBeVisible();
     await signInPasswordStep(page, staff.email, STAFF_PASSWORD_1);
     await expect(page.getByRole('heading', { name: "Verify it's you" })).toBeVisible();
+    // Skipping the second verification: the console and its API stay closed, and nothing was stored.
+    await page.goto('/admin/orders');
+    await expect(page).toHaveURL(/\/admin\/login/);
+    expect((await page.request.get('/api/admin/dashboard/overview')).status()).toBe(401);
+    expect(await page.evaluate(() => Object.keys(window.localStorage).concat(Object.keys(window.sessionStorage)).join(','))).not.toMatch(/token|password/i);
+    await signInPasswordStep(page, staff.email, STAFF_PASSWORD_1);
+    await expect(page.getByRole('heading', { name: "Verify it's you" })).toBeVisible();
     await page.getByLabel('6-digit code').fill(await freshCode(staff.secret));
     await page.getByRole('button', { name: 'Verify and sign in' }).click();
-    await expect(page).toHaveURL(/\/admin\/?$/);
+    await expect(page).toHaveURL(/\/admin(\/orders)?\/?$/); // returns to the page that was requested before sign-in
+    // The login MFA produced a fresh, MFA-assured session: the API now answers for this browser.
+    await expect.poll(async () => (await page.request.post('/api/auth/refresh')).status()).toBe(200);
   });
 
   test('REC-UI-02 Journey C + F: a recovery code works once, and the reset signs out every existing session', async ({ browser }) => {

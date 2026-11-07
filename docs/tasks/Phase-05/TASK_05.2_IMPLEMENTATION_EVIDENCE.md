@@ -488,3 +488,18 @@ Verification: `admin-signin-keyboard.spec.ts` passed 5/5 with actual keyboard ev
   password, sees the message, stays on the step and then succeeds). No schema change, no password-history table, MFA untouched.
 - Not verified: the unrelated payment/Stripe/live-DB backend suites fail locally for environment reasons; CI is the authority.
   Shared DEV and PROD were not touched.
+
+### Two independent MFA verifications across recovery and login
+
+- Audit found no product gap: recovery uses the `PASSWORD_RECOVERY` challenge purpose and login uses `LOGIN`; each token type is
+  refused by the other's endpoints, a reset issues no token/cookie/session and voids every session and open challenge, and MFA
+  factors are untouched. Only regression coverage was added.
+- PostgreSQL (53/53): REC-11 recovery token refused at login endpoints and a login challenge refused at recovery endpoints, reset
+  returns no session, pre-reset sessions and login challenges dead, old password refused, new password gives only a restricted
+  challenge that is no bearer token for any admin API, the recovery TOTP step cannot be replayed at login, wrong code refused,
+  login MFA via another factor yields an MFA-assured session, finished challenge not replayable; REC-12 a recovery code spent on
+  recovery cannot open the next login (another code does), expired login and recovery challenges refuse a correct proof, an
+  abandoned recovery is superseded and proves nothing. The passkey path is covered in Chromium (REC-UI-03).
+- Chromium (5/5): REC-UI-01 now also opens `/admin/orders` and the admin API between the password step and the second MFA
+  (redirected to sign-in, 401, nothing stored), then completes login MFA and confirms a fresh session.
+- Not verified: real Brevo delivery; native 200% zoom. Shared DEV and PROD untouched.

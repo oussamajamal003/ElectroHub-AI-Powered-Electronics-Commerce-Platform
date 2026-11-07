@@ -1215,6 +1215,81 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
       expect(results.filter(response => response.status === 200)).toHaveLength(1);
     });
 
+    it('REC-11: recovery MFA and login MFA are separate purposes; a reset yields no session and a fresh login MFA is mandatory (TOTP path)', async () => {
+      const enrolled = await enrolledAdmin();
+      const outstanding = await api().post('/api/auth/login', { email: enrolled.user.email, password: PASSWORD }); // login challenge opened before the reset
+      const { verified } = await verifiedEmail(enrolled.user.email);
+      const recoveryToken = verified.body.recoveryToken as string;
+      // A login challenge is no recovery transaction and a recovery transaction is no login challenge.
+      expect((await api().post(`${recoveryApi}/totp`, { recoveryToken: outstanding.body.mfaToken, code: code(enrolled.secret, 1) })).status).toBe(401);
+      expect((await api().post('/api/auth/admin/mfa/totp/verify', { mfaToken: recoveryToken, code: code(enrolled.secret, 1) })).status).toBe(401);
+      expect((await api().post('/api/auth/admin/mfa/recovery/verify', { mfaToken: recoveryToken, code: enrolled.recoveryCodes[0] })).status).toBe(401);
+      expect((await api().post('/api/auth/admin/mfa/webauthn/options', { mfaToken: recoveryToken })).status).toBeGreaterThanOrEqual(400);
+      const proven = await api().post(`${recoveryApi}/totp`, { recoveryToken, code: code(enrolled.secret, 1) });
+      expect(proven.status).toBe(200);
+      const reset = await api().post(`${recoveryApi}/complete`, { resetToken: proven.body.resetToken, newPassword: NEW_PASSWORD });
+      expect(reset.status).toBe(200);
+      // Reset issues no token, cookie or session; every pre-reset session and login challenge is dead.
+      expect(reset.body.accessToken).toBeUndefined();
+      expect(refreshCookie(reset)).toBeUndefined();
+      expect(await prisma.adminSession.count({ where: { userId: enrolled.user.id, revokedAt: null } })).toBe(0);
+      expect((await api().get('/api/admin/dashboard/overview', enrolled.accessToken)).status).toBe(401);
+      expect((await api().post('/api/auth/admin/mfa/totp/verify', { mfaToken: outstanding.body.mfaToken, code: code(enrolled.secret, 2) })).status).toBe(401);
+      // The consumed recovery transaction cannot be replayed as anything.
+      expect((await api().post('/api/auth/admin/mfa/totp/verify', { mfaToken: recoveryToken, code: code(enrolled.secret, 2) })).status).toBe(401);
+      // Old password is refused; the new password alone opens only a restricted login challenge.
+      expect((await api().post('/api/auth/login', { email: enrolled.user.email, password: PASSWORD })).status).toBe(401);
+      const login = await api().post('/api/auth/login', { email: enrolled.user.email, password: NEW_PASSWORD });
+      expect(login.body).toMatchObject({ requiresMfa: true });
+      expect(login.body.accessToken).toBeUndefined();
+      expect(refreshCookie(login)).toBeUndefined();
+      // Skipping the second verification: the challenge is not a bearer token for any administrator API.
+      for (const path of ['/api/admin/dashboard/overview', '/api/admin/me/profile', '/api/admin/invitations']) {
+        expect((await api().get(path, login.body.mfaToken)).status, path).toBe(401);
+      }
+      // The recovery proof's TOTP step cannot be replayed at login, and a wrong code fails.
+      expect((await api().post('/api/auth/admin/mfa/totp/verify', { mfaToken: login.body.mfaToken, code: code(enrolled.secret, 1) })).status).toBe(401);
+      expect((await api().post('/api/auth/admin/mfa/totp/verify', { mfaToken: login.body.mfaToken, code: '000000' })).status).toBe(401);
+      // TOTP steps only move forward (recovery used the next one), so login MFA uses a different registered factor: an unused recovery code.
+      const ok = await api().post('/api/auth/admin/mfa/recovery/verify', { mfaToken: login.body.mfaToken, code: enrolled.recoveryCodes[0] });
+      expect(ok.status).toBe(200);
+      expect(refreshCookie(ok)).toBeDefined();
+      expect((await api().get('/api/admin/dashboard/overview', ok.body.accessToken)).status).toBe(200);
+      const session = await prisma.adminSession.findFirstOrThrow({ where: { userId: enrolled.user.id, revokedAt: null } });
+      expect(session.mfaVerifiedAt).not.toBeNull();
+      // Replaying the finished login challenge grants nothing.
+      expect((await api().post('/api/auth/admin/mfa/recovery/verify', { mfaToken: login.body.mfaToken, code: enrolled.recoveryCodes[1] })).status).toBe(401);
+    });
+
+    it('REC-12: a recovery code spent on recovery cannot open the next login; another code does; expiry and cancellation grant nothing', async () => {
+      const enrolled = await enrolledAdmin();
+      const first = await verifiedEmail(enrolled.user.email);
+      const proven = await api().post(`${recoveryApi}/recovery-code`, { recoveryToken: first.verified.body.recoveryToken, code: enrolled.recoveryCodes[0] });
+      expect(proven.status).toBe(200);
+      expect((await api().post(`${recoveryApi}/complete`, { resetToken: proven.body.resetToken, newPassword: NEW_PASSWORD })).status).toBe(200);
+      const login = await api().post('/api/auth/login', { email: enrolled.user.email, password: NEW_PASSWORD });
+      expect((await api().post('/api/auth/admin/mfa/recovery/verify', { mfaToken: login.body.mfaToken, code: enrolled.recoveryCodes[0] })).status).toBe(401);
+      expect(await prisma.adminSession.count({ where: { userId: enrolled.user.id, revokedAt: null } })).toBe(0);
+      const ok = await api().post('/api/auth/admin/mfa/recovery/verify', { mfaToken: login.body.mfaToken, code: enrolled.recoveryCodes[1] });
+      expect(ok.status).toBe(200);
+      expect((await api().get('/api/admin/dashboard/overview', ok.body.accessToken)).status).toBe(200);
+
+      // Expiry: an expired login challenge and an expired recovery transaction both refuse a correct proof.
+      const expiredLogin = await api().post('/api/auth/login', { email: enrolled.user.email, password: NEW_PASSWORD });
+      await prisma.adminAuthChallenge.updateMany({ where: { userId: enrolled.user.id, purpose: 'LOGIN', consumedAt: null }, data: { expiresAt: new Date(Date.now() - 1000) } });
+      expect((await api().post('/api/auth/admin/mfa/recovery/verify', { mfaToken: expiredLogin.body.mfaToken, code: enrolled.recoveryCodes[2] })).status).toBe(401);
+      const second = await verifiedEmail(enrolled.user.email);
+      await prisma.adminAuthChallenge.updateMany({ where: { userId: enrolled.user.id, purpose: 'PASSWORD_RECOVERY', consumedAt: null }, data: { expiresAt: new Date(Date.now() - 1000) } });
+      expect((await api().post(`${recoveryApi}/recovery-code`, { recoveryToken: second.verified.body.recoveryToken, code: enrolled.recoveryCodes[2] })).status).toBe(401);
+
+      // Cancellation: an abandoned recovery is superseded by a new one; the abandoned token proves nothing and no reset authorization exists.
+      const abandoned = await verifiedEmail(enrolled.user.email);
+      const replacement = await verifiedEmail(enrolled.user.email);
+      expect(replacement.verified.body.recoveryToken).not.toBe(abandoned.verified.body.recoveryToken);
+      expect((await api().post(`${recoveryApi}/recovery-code`, { recoveryToken: abandoned.verified.body.recoveryToken, code: enrolled.recoveryCodes[2] })).status).toBe(401);
+      expect(await prisma.passwordResetToken.count({ where: { userId: enrolled.user.id, consumedAt: null } })).toBe(0);
+    });
+
     it('REC-08: deactivation during recovery denies the proof; customer recovery is unchanged', async () => {
       const enrolled = await enrolledAdmin();
       const { verified } = await verifiedEmail(enrolled.user.email);
