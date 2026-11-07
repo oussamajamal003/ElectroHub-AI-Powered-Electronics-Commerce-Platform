@@ -142,8 +142,9 @@ export const adminSecurityController = {
   }),
   recoveryComplete: handle(async (req, res) => {
     const body = z.object({ resetToken: z.string().min(32).max(200), newPassword: password }).strict().parse(req.body);
+    let reset: { userId: string; role: string; passwordHash: string };
     try {
-      await authService.resetPassword(body.resetToken, body.newPassword);
+      reset = await authService.resetPassword(body.resetToken, body.newPassword);
     } catch (error) {
       if (error instanceof Error && error.message === 'Invalid or expired reset token') {
         res.status(400).json({ error: { code: 'RESET_AUTHORIZATION_INVALID', message: 'This password reset is no longer valid. Start again.' } });
@@ -151,7 +152,14 @@ export const adminSecurityController = {
       }
       throw error;
     }
-    res.set('Cache-Control', 'no-store').status(200).json({ message: 'Password reset successful.' });
+    // The recovery proof already earned an MFA-assured session; if it cannot be established for any reason the administrator signs in
+    // normally (password + MFA). There is no other fallback.
+    const established = reset.role === 'ADMIN' ? await adminMfaService.sessionAfterRecovery(body.resetToken, reset.userId, reset.passwordHash, meta(req)) : null;
+    if (established) {
+      sendSession(res, established, { message: 'Password reset successful.', signInRequired: false });
+      return;
+    }
+    res.set('Cache-Control', 'no-store').status(200).json({ message: 'Password reset successful.', signInRequired: true });
   }),
   activationRedeem: handle(async (req, res) => {
     const body = z.object({ token: z.string().min(20).max(200), password }).strict().parse(req.body);

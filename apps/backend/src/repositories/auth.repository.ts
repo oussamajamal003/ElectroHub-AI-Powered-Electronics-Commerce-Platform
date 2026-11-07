@@ -28,6 +28,8 @@ export interface AdminSessionAssurance {
   method: AdminMfaMethod;
   userAgent?: string | null;
   ipAddress?: string | null;
+  /** Re-check, under the lifecycle lock, that the account still has a usable registered factor (password-recovery sessions). */
+  requireRegisteredFactor?: boolean;
 }
 
 /** Task 05.2: mark matching administrator sessions revoked (the access check also requires a live refresh family). */
@@ -292,6 +294,15 @@ export class AuthRepository {
         current.roleId !== authorized.roleId
       ) {
         return null;
+      }
+
+      if (adminAssurance?.requireRegisteredFactor) {
+        const [totp, passkeys, codes] = await Promise.all([
+          transaction.adminMfaFactor.count({ where: { userId: authorized.id, verifiedAt: { not: null }, disabledAt: null } }),
+          transaction.adminWebAuthnCredential.count({ where: { userId: authorized.id, revokedAt: null } }),
+          transaction.adminRecoveryCode.count({ where: { userId: authorized.id, consumedAt: null, revokedAt: null } }),
+        ]);
+        if (totp + passkeys + codes === 0) return null;
       }
 
       const token = await transaction.refreshToken.create({

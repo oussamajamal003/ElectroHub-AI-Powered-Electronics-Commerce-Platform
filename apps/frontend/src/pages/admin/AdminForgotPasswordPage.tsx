@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { PasswordInput } from '@/components/ui/PasswordInput/PasswordInput';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { ApiError } from '@/lib/api';
+import { useAuth } from '@/features/auth/context/AuthContext';
 import { adminRecoveryApi, type AdminRecoveryTransaction, type AdminResetAuthorization } from '@/features/admin/security/api';
 import { describeAdminAuthError } from '@/features/admin/security/errors';
 import { OtpCodeInput } from '@/features/admin/security/components/OtpCodeInput';
@@ -40,6 +41,7 @@ const formatRemaining = (ms: number) => {
  */
 export function AdminForgotPasswordPage() {
   const navigate = useNavigate();
+  const { completeAdminSession } = useAuth();
   const [stage, setStage] = useState<Stage>({ name: 'email' });
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -216,10 +218,16 @@ export function AdminForgotPasswordPage() {
     setPending(true);
     setError('');
     try {
-      await adminRecoveryApi.complete({ resetToken: stage.authorization.resetToken, newPassword: password });
+      const result = await adminRecoveryApi.complete({ resetToken: stage.authorization.resetToken, newPassword: password });
       // The authorization is spent and the password is never kept: nothing sensitive survives this step.
       setPassword('');
       setConfirmPassword('');
+      if (!result.signInRequired && result.accessToken && result.user) {
+        // The backend confirmed the reset and issued an MFA-assured session from the proof just verified: no second prompt.
+        completeAdminSession({ accessToken: result.accessToken, user: result.user });
+        navigate('/admin', { replace: true });
+        return;
+      }
       setStage({ name: 'done' });
     } catch (err) {
       const failure = describeAdminAuthError(err, 'team');

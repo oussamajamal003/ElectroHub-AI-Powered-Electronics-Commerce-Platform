@@ -408,6 +408,7 @@ export class AuthService {
     if (!await emailService.sendPasswordChangedNotification(authorization.user.email, authorization.userId)) {
       logger.error('Password reset notification delivery failed', { userId: authorization.userId });
     }
+    return { userId: authorization.userId, role: authorization.user.role.name, passwordHash: newPasswordHash };
   }
 
   /**

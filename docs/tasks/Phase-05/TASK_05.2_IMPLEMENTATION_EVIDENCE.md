@@ -503,3 +503,25 @@ Verification: `admin-signin-keyboard.spec.ts` passed 5/5 with actual keyboard ev
 - Chromium (5/5): REC-UI-01 now also opens `/admin/orders` and the admin API between the password step and the second MFA
   (redirected to sign-in, 401, nothing stored), then completes login MFA and confirms a fresh session.
 - Not verified: real Brevo delivery; native 200% zoom. Shared DEV and PROD untouched.
+
+### Single MFA during administrator recovery (supersedes the "sign in again with MFA" step above)
+
+- Flow: email code → one existing factor (TOTP / passkey / recovery code) → new password → the backend establishes the MFA-assured
+  session that proof earned → Admin Dashboard. A normal sign-in (password) still requires MFA; email OTP alone never yields a session.
+- Design (no schema change): the reset authorization the backend mints after the factor proof carries the verified method inside the
+  secret (`<random>.<TOTP|WEBAUTHN|RECOVERY_CODE>`, only its hash stored), so a client cannot supply or alter it. After the reset
+  commit (which atomically revokes every session, refresh family and open challenge) `AdminMfaService.sessionAfterRecovery` issues the
+  session through the existing `createAssuredAdminSession`, bound to the password hash this reset wrote; under the lifecycle lock it
+  re-validates active / ADMIN / verified email and, new, that a registered factor still exists. Any doubt returns
+  `signInRequired: true` with no token or cookie and the UI falls back to the normal password + MFA sign-in; there is no other fallback.
+  The `/complete` response is `{ accessToken, user, signInRequired: false }` + refresh cookie, or `{ signInRequired: true }`.
+- Evidence: PostgreSQL 56/56. REC-11 (TOTP: one `mfaMethod=TOTP` session, dashboard 200, refresh 200, spent authorization not
+  replayable, pre-reset access token / login challenge dead, recovery and login tokens not interchangeable, normal login still
+  restricted until MFA); REC-12 (recovery code: session on `RECOVERY_CODE`, the spent code is refused at login, another works);
+  REC-13 (session creation failure → no cookie/token, password changed, normal MFA login required); REC-14 (deactivation, a competing
+  password change or every factor revoked between reset commit and issuance → no session); REC-15 (bogus, forged-method and expired
+  authorization → no session; email OTP alone → none). Frontend suites 295/295, `tsc -b`, eslint, `vite build` clean. Chromium 5/5
+  (TOTP, recovery code with two-session revocation, passkey via virtual authenticator, each reaching the dashboard with no second
+  prompt, then a normal sign-in still asking for MFA).
+- Residual: a factor revoked in the instant after issuance is handled like any live session (existing revocation ends it). Real Brevo
+  delivery and native 200% zoom not verified; shared DEV and PROD untouched.

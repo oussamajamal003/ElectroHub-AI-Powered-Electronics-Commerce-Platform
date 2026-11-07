@@ -157,7 +157,9 @@ export const adminRecoveryApi = {
     (await apiClient<{ options: PublicKeyCredentialRequestOptionsJSON }>(`${RECOVERY}/passkey/options`, { method: 'POST', data: body })).options,
   verifyPasskey: (body: { recoveryToken: string; response: AuthenticationResponseJSON }) =>
     apiClient<AdminResetAuthorization>(`${RECOVERY}/passkey/verify`, { method: 'POST', data: body }),
-  complete: (body: { resetToken: string; newPassword: string }) => apiClient<{ message: string }>(`${RECOVERY}/complete`, { method: 'POST', data: body }),
+  /** `signInRequired: false` carries the MFA-assured session the recovery proof earned; otherwise the administrator signs in normally. */
+  complete: (body: { resetToken: string; newPassword: string }) =>
+    apiClient<{ message: string; signInRequired: boolean; accessToken?: string; user?: User }>(`${RECOVERY}/complete`, { method: 'POST', data: body }),
 };
 
 // ─── Self-service (MFA-assured session) ───────────────────

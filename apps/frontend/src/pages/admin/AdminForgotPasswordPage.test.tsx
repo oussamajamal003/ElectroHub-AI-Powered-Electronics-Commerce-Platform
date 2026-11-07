@@ -9,6 +9,8 @@ vi.mock('@/features/admin/security/api', () => ({
   adminRecoveryApi: { request: vi.fn(), resend: vi.fn(), verifyEmail: vi.fn(), verifyTotp: vi.fn(), verifyRecoveryCode: vi.fn(),
     passkeyOptions: vi.fn(), verifyPasskey: vi.fn(), complete: vi.fn() },
 }));
+const completeAdminSession = vi.fn();
+vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: () => ({ completeAdminSession }) }));
 vi.mock('@simplewebauthn/browser', () => ({ browserSupportsWebAuthn: () => true, startAuthentication: vi.fn() }));
 
 const STRONG = 'Recovered-Unique-7-Pass';
@@ -20,6 +22,7 @@ const renderPage = () => render(
     <Routes>
       <Route path="/admin/forgot-password" element={<AdminForgotPasswordPage />} />
       <Route path="/admin/login" element={<div>Admin sign in screen</div>} />
+      <Route path="/admin" element={<div>Admin dashboard</div>} />
     </Routes>
   </MemoryRouter>,
 );
@@ -94,7 +97,7 @@ describe('AdminForgotPasswordPage', () => {
     expect(await screen.findByText('The passwords do not match.')).toBeInTheDocument();
     expect(adminRecoveryApi.complete).not.toHaveBeenCalled();
 
-    vi.mocked(adminRecoveryApi.complete).mockResolvedValue({ message: 'ok' });
+    vi.mocked(adminRecoveryApi.complete).mockResolvedValue({ message: 'ok', signInRequired: true });
     fireEvent.change(screen.getByLabelText(/^New password/i), { target: { value: STRONG } });
     fireEvent.change(screen.getByLabelText(/Confirm password/i), { target: { value: STRONG } });
     fireEvent.click(screen.getByRole('button', { name: 'Reset password' }));
@@ -117,9 +120,39 @@ describe('AdminForgotPasswordPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reset password' }));
     expect(await screen.findByText('Your new password must be different from your current password.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Create a new password' })).toBeInTheDocument();
-    vi.mocked(adminRecoveryApi.complete).mockResolvedValueOnce({ message: 'ok' });
+    vi.mocked(adminRecoveryApi.complete).mockResolvedValueOnce({ message: 'ok', signInRequired: true });
     fireEvent.click(screen.getByRole('button', { name: 'Reset password' }));
     await screen.findByRole('heading', { name: 'Password reset successful' });
+  });
+
+  it('goes straight to the dashboard with the backend-issued session, without a second MFA prompt', async () => {
+    await toMfaStep();
+    vi.mocked(adminRecoveryApi.verifyTotp).mockResolvedValue({ resetToken: 'reset-authorization-token-abcdefghijklmnopqrstuv.TOTP', expiresAt: future() });
+    fireEvent.change(screen.getByLabelText('6-digit code'), { target: { value: '654321' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify and continue' }));
+    await screen.findByRole('heading', { name: 'Create a new password' });
+    const user = { id: 'u1', email: 'admin@example.invalid', role: 'ADMIN' };
+    vi.mocked(adminRecoveryApi.complete).mockResolvedValue({ message: 'ok', signInRequired: false, accessToken: 'access-token', user } as never);
+    fireEvent.change(screen.getByLabelText(/^New password/i), { target: { value: STRONG } });
+    fireEvent.change(screen.getByLabelText(/Confirm password/i), { target: { value: STRONG } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reset password' }));
+    expect(await screen.findByText('Admin dashboard')).toBeInTheDocument();
+    expect(completeAdminSession).toHaveBeenCalledWith({ accessToken: 'access-token', user });
+  });
+
+  it('falls back to the sign-in screen path when the backend issues no session', async () => {
+    await toMfaStep();
+    vi.mocked(adminRecoveryApi.verifyTotp).mockResolvedValue({ resetToken: 'reset-authorization-token-abcdefghijklmnopqrstuv.TOTP', expiresAt: future() });
+    fireEvent.change(screen.getByLabelText('6-digit code'), { target: { value: '654321' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify and continue' }));
+    await screen.findByRole('heading', { name: 'Create a new password' });
+    vi.mocked(adminRecoveryApi.complete).mockResolvedValue({ message: 'ok', signInRequired: true });
+    fireEvent.change(screen.getByLabelText(/^New password/i), { target: { value: STRONG } });
+    fireEvent.change(screen.getByLabelText(/Confirm password/i), { target: { value: STRONG } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reset password' }));
+    await screen.findByRole('heading', { name: 'Password reset successful' });
+    expect(completeAdminSession).not.toHaveBeenCalled();
+    expect(screen.queryByText('Admin dashboard')).not.toBeInTheDocument();
   });
 
   it('uses a recovery code for the second proof', async () => {

@@ -271,12 +271,13 @@ export class AdminMfaService {
   }
 
   /** Consume the recovery transaction and mint the single-use, 10-minute, password-reset-only authorization in one commit. */
-  private async issueResetAuthorization(tx: Prisma.TransactionClient, challenge: { id: string; userId: string; credentialFingerprint: string }, meta?: RequestMeta) {
+  private async issueResetAuthorization(tx: Prisma.TransactionClient, challenge: { id: string; userId: string; credentialFingerprint: string }, method: AdminMfaMethod, meta?: RequestMeta) {
     await lockUserTokenLifecycle(tx, challenge.userId);
     const current = await tx.user.findUnique({ where: { id: challenge.userId }, include: { role: true } });
     if (!current || !current.isActive || current.role.name !== 'ADMIN' || credentialFingerprint(current.passwordHash) !== challenge.credentialFingerprint) throw recoveryInvalid();
     await this.consume(tx, challenge.id);
-    const resetToken = randomToken();
+    // The verified method travels inside the secret itself (only its hash is stored), so it cannot be altered or supplied by a client.
+    const resetToken = `${randomToken()}.${method}`;
     const expiresAt = new Date(Date.now() + PASSWORD_RESET_AUTHORIZATION_TTL_MS);
     await tx.passwordResetToken.upsert({ where: { userId: challenge.userId },
       create: { userId: challenge.userId, tokenHash: sha256Hex(resetToken), expiresAt },
@@ -289,7 +290,7 @@ export class AdminMfaService {
     const challenge = await this.recoveryChallenge(recoveryToken);
     const result = await prisma.$transaction(async tx => {
       if (!await this.acceptTotp(tx, challenge.userId, code)) return null;
-      return this.issueResetAuthorization(tx, challenge, meta);
+      return this.issueResetAuthorization(tx, challenge, 'TOTP', meta);
     }, ADMIN_AUTH_TX);
     return result ?? this.failAttempt(challenge.id, challenge.userId, meta);
   }
@@ -299,7 +300,7 @@ export class AdminMfaService {
     const result = await prisma.$transaction(async tx => {
       if (!await this.consumeRecoveryCode(tx, challenge.userId, code)) return null;
       await securityEvent(SecurityEventType.ADMIN_RECOVERY_CODE_USED, challenge.userId, meta, tx);
-      return this.issueResetAuthorization(tx, challenge, meta);
+      return this.issueResetAuthorization(tx, challenge, 'RECOVERY_CODE', meta);
     }, ADMIN_AUTH_TX);
     return result ?? this.failAttempt(challenge.id, challenge.userId, meta);
   }
@@ -320,9 +321,29 @@ export class AdminMfaService {
     const challenge = await this.recoveryChallenge(recoveryToken);
     if (!challenge.webauthnChallenge) throw recoveryInvalid();
     let issued: { resetToken: string; expiresAt: Date } | null = null;
-    const accepted = await this.acceptAssertion(challenge.userId, challenge.webauthnChallenge, response, async tx => { issued = await this.issueResetAuthorization(tx, challenge, meta); });
+    const accepted = await this.acceptAssertion(challenge.userId, challenge.webauthnChallenge, response, async tx => { issued = await this.issueResetAuthorization(tx, challenge, 'WEBAUTHN', meta); });
     if (!accepted || !issued) return this.failAttempt(challenge.id, challenge.userId, meta);
     return issued as { resetToken: string; expiresAt: Date };
+  }
+
+  /**
+   * After a completed recovery reset: establish the MFA-assured session the recovery proof already earned, so the administrator is not
+   * asked for the same factor twice. The method comes from the reset token the backend minted after the proof (never from the client).
+   * The account is re-read after the reset commit and session issuance re-validates it, and re-checks a registered factor still exists,
+   * under the lifecycle lock; any doubt returns null and the caller falls back to a normal password + MFA sign-in.
+   */
+  async sessionAfterRecovery(resetToken: string, userId: string, resetPasswordHash: string, meta?: RequestMeta) {
+    const method = resetToken.split('.')[1];
+    if (method !== 'TOTP' && method !== 'WEBAUTHN' && method !== 'RECOVERY_CODE') return null;
+    try {
+      const user = await prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
+      if (!user || !user.isActive || !user.emailVerifiedAt || user.role.name !== 'ADMIN') return null;
+      // Bound to the hash this reset wrote: a later password change, deactivation or role change makes issuance fail under the lock.
+      return await (await authService()).createAssuredAdminSession({ ...user, passwordHash: resetPasswordHash },
+        { method, userAgent: meta?.userAgent, ipAddress: meta?.ipAddress, requireRegisteredFactor: true });
+    } catch {
+      return null;
+    }
   }
 
   // ── First-factor enrollment inside a LOGIN transaction ───────────────────

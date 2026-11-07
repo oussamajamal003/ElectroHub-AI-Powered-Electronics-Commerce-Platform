@@ -100,7 +100,15 @@ async function setNewPassword(page: Page, password: string, currentPassword?: st
   await page.getByLabel('New password', { exact: true }).fill(password);
   await page.getByLabel('Confirm password').fill(password);
   await page.keyboard.press('Enter'); // the form submits from the keyboard
-  await expect(page.getByRole('heading', { name: 'Password reset successful' })).toBeVisible();
+  // The email code and the factor were verified once; the backend issues the MFA-assured session and the console opens with no second prompt.
+  await expect(page).toHaveURL(/\/admin\/?$/);
+  await expect(page.getByRole('heading', { name: "Verify it's you" })).toHaveCount(0);
+}
+/** The recovery session is real (it refreshes) and is then ended so the next steps exercise the normal sign-in. */
+async function endRecoverySession(page: Page) {
+  await expect.poll(async () => (await page.request.post('/api/auth/refresh')).status()).toBe(200);
+  await page.evaluate(() => fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }));
+  await page.context().clearCookies();
 }
 async function signInPasswordStep(page: Page, email: string, password: string) {
   await page.goto('/admin/login');
@@ -124,7 +132,7 @@ test.describe.serial('Task 05.2 administrator forgot-password (disposable)', () 
   });
   test.afterAll(async () => { await api.dispose(); });
 
-  test('REC-UI-01 Journey A: Forgot Password → email code → authenticator → new password → sign in again with password + TOTP', async ({ browser }) => {
+  test('REC-UI-01 Journey A: Forgot Password → email code → authenticator → new password → dashboard with no second MFA; a later normal sign-in still needs password + TOTP', async ({ browser }) => {
     const page = await newPage(browser);
     await page.goto('/admin/login');
     await expect(page.getByRole('link', { name: 'Forgot Password?' })).toBeVisible(); // wait for the lazy page before capturing
@@ -141,12 +149,10 @@ test.describe.serial('Task 05.2 administrator forgot-password (disposable)', () 
     await page.keyboard.press('Enter');
     await capture(page, 'recovery-new-password', [390, 1440]);
     await setNewPassword(page, STAFF_PASSWORD_1, credentials.password);
-    await capture(page, 'recovery-success', [390, 1440]);
-    // Nothing signed the administrator in: the success screen holds no session and the console is still closed.
+    await capture(page, 'recovery-dashboard', [390, 1440]);
+    // Nothing sensitive is kept in the browser; the session lives in the memory/cookie the normal login also uses.
     expect(await page.evaluate(() => Object.keys(window.localStorage).concat(Object.keys(window.sessionStorage)).join(','))).not.toMatch(/token|password/i);
-    await page.getByRole('button', { name: 'Back to Admin Sign In' }).click();
-    await expect(page).toHaveURL(/\/admin\/login$/);
-    await expect(page.getByText(/every session was signed out/i)).toBeVisible();
+    await endRecoverySession(page);
 
     // Old password is dead; the new one only reaches the normal MFA step, never the console.
     await signInPasswordStep(page, staff.email, credentials.password);
@@ -200,7 +206,7 @@ test.describe.serial('Task 05.2 administrator forgot-password (disposable)', () 
     await expect(replay.getByRole('heading', { name: 'Create a new password' })).toHaveCount(0);
   });
 
-  test('REC-UI-03 Journey B: a registered passkey proves identity (Chromium virtual authenticator) and no session is created', async ({ browser }) => {
+  test('REC-UI-03 Journey B: a registered passkey proves identity once (Chromium virtual authenticator) and earns the session', async ({ browser }) => {
     const page = await newPage(browser);
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('WebAuthn.enable');
@@ -222,7 +228,8 @@ test.describe.serial('Task 05.2 administrator forgot-password (disposable)', () 
     await page.getByRole('tab', { name: /Passkey/ }).click();
     await page.getByRole('button', { name: 'Use passkey' }).click(); // a real WebAuthn assertion, verified server-side
     await setNewPassword(page, OWNER_PASSWORD);
-    // Recovery never became a passwordless session: the console is closed until password + MFA.
+    // The passkey proof earned this session; ending it, the console is closed again until password + MFA.
+    await endRecoverySession(page);
     await page.goto('/admin');
     await expect(page).toHaveURL(/\/admin\/login/);
     await signInPasswordStep(page, owner.email, OWNER_PASSWORD);
