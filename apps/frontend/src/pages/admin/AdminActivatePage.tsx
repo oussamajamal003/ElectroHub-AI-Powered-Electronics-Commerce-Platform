@@ -28,6 +28,34 @@ function problemsFor(values: Record<Field, string>): FieldErrors {
 }
 
 type Preview = { status: 'loading' } | { status: 'ready'; account: AdminActivationPreview } | { status: 'invalid' } | { status: 'error' };
+
+/**
+ * The two trust models share the password and enrollment steps but never their proof: an Owner activation link was emailed (mailbox
+ * possession); a seed setup link was issued by an operator for a development seed account and handed over directly (no email proof).
+ */
+export type ActivationMode = 'activation' | 'provisioning';
+const MODE = {
+  activation: {
+    title: 'Activate your administrator account',
+    preview: (body: { token: string }) => adminAuthApi.previewActivation(body),
+    redeem: (body: { token: string; password: string }) => adminAuthApi.redeemActivation(body),
+    unavailableCode: 'ACTIVATION_UNAVAILABLE',
+    checking: 'Checking your activation link…',
+    invalid: 'This activation link is invalid, expired or already used. Ask an Owner to send you a new one.',
+    lost: 'If setup is no longer available, ask an Owner to send a new activation link.',
+    intro: 'Choose a new password. Your previous password stops working, and you will then set up an authenticator app.',
+  },
+  provisioning: {
+    title: 'Set up your development administrator account',
+    preview: (body: { token: string }) => adminAuthApi.previewProvisioning(body),
+    redeem: (body: { token: string; password: string }) => adminAuthApi.redeemProvisioning(body),
+    unavailableCode: 'PROVISIONING_UNAVAILABLE',
+    checking: 'Checking your setup link…',
+    invalid: 'This setup link is invalid, expired or already used. Ask the operator who issued it for a new one.',
+    lost: 'If setup is no longer available, ask the operator for a new setup link.',
+    intro: 'An operator authorized setup of this development account. Choose a new password; the seeded password stops working, and you will then set up an authenticator app.',
+  },
+} as const;
 type Stage = { name: 'form' } | { name: 'enroll'; mfaToken: string } | { name: 'ended'; message: string };
 
 /**
@@ -35,7 +63,8 @@ type Stage = { name: 'form' } | { name: 'enroll'; mfaToken: string } | { name: '
  * redeeming it rotates the legacy password and only then opens first-factor enrollment through the same restricted flow as an invitation.
  * No session exists until the authenticator code is verified.
  */
-export function AdminActivatePage() {
+export function AdminActivatePage({ mode = 'activation' }: { mode?: ActivationMode }) {
+  const copy = MODE[mode];
   const { completeAdminSession } = useAuth();
   const navigate = useNavigate();
   const [token, setToken] = useState<string | null>(() => readInvitationToken(window.location.hash));
@@ -62,15 +91,15 @@ export function AdminActivatePage() {
     }
     let active = true;
     setPreview({ status: 'loading' });
-    adminAuthApi.previewActivation({ token })
+    copy.preview({ token })
       .then(account => { if (active) setPreview({ status: 'ready', account }); })
       .catch((err: unknown) => {
         if (!active) return;
-        const unavailable = err instanceof ApiError && (err.status === 410 || err.code === 'ACTIVATION_UNAVAILABLE');
+        const unavailable = err instanceof ApiError && (err.status === 410 || err.code === copy.unavailableCode);
         setPreview(unavailable ? { status: 'invalid' } : { status: 'error' });
       });
     return () => { active = false; };
-  }, [token, attempt]);
+  }, [token, attempt, copy]);
 
   const problems = problemsFor({ password, confirmPassword });
   const errorFor = (field: Field) => fieldErrors[field] ?? (touched[field] ? problems[field] : undefined);
@@ -93,14 +122,14 @@ export function AdminActivatePage() {
     if (Object.keys(problems).length > 0) return;
     setPending(true);
     try {
-      const result = await adminAuthApi.redeemActivation({ token, password });
+      const result = await copy.redeem({ token, password });
       // The link is consumed: drop the token and every password value before the next step.
       setToken(null);
       setPassword('');
       setConfirmPassword('');
       setStage({ name: 'enroll', mfaToken: result.mfaToken });
     } catch (err) {
-      if (err instanceof ApiError && (err.status === 410 || err.code === 'ACTIVATION_UNAVAILABLE')) {
+      if (err instanceof ApiError && (err.status === 410 || err.code === copy.unavailableCode)) {
         setToken(null);
         setPreview({ status: 'invalid' });
       } else {
@@ -133,12 +162,12 @@ export function AdminActivatePage() {
           <AdminEnrollmentFlow
             mfaToken={stage.mfaToken}
             onComplete={finishSetup}
-            onChallengeLost={(message) => setStage({ name: 'ended', message: `${message} Sign in at the Admin Portal with your new password to continue setup. If setup is no longer available, ask an Owner to send a new activation link.` })}
+            onChallengeLost={(message) => setStage({ name: 'ended', message: `${message} Sign in at the Admin Portal with your new password to continue setup. ${copy.lost}` })}
           />
         </div>
       );
     }
-    if (preview.status === 'loading') return <p role="status" className={styles.description}>Checking your activation link…</p>;
+    if (preview.status === 'loading') return <p role="status" className={styles.description}>{copy.checking}</p>;
     if (preview.status === 'error') {
       return (
         <div className={styles.form}>
@@ -150,7 +179,7 @@ export function AdminActivatePage() {
     if (preview.status === 'invalid') {
       return (
         <div className={styles.form}>
-          <Alert variant="error">This activation link is invalid, expired or already used. Ask an Owner to send you a new one.</Alert>
+          <Alert variant="error">{copy.invalid}</Alert>
           <Link className={styles.textLink} to="/admin/login">Go to Admin sign in</Link>
         </div>
       );
@@ -160,7 +189,7 @@ export function AdminActivatePage() {
         {formError && <Alert variant="error">{formError}</Alert>}
         <Input id="activate-email" name="email" label="Administrator account" type="email" value={preview.account.email} readOnly fullWidth autoComplete="email"
           helperText={`${preview.account.firstName} ${preview.account.lastName}`.trim() || 'This link is for this account.'} />
-        <p className={styles.description}>Choose a new password. Your previous password stops working, and you will then set up an authenticator app.</p>
+        <p className={styles.description}>{copy.intro}</p>
         <PasswordInput id="activate-password" name="password" label="New password" value={password} onChange={edit('password', setPassword)}
           error={errorFor('password')} helperText={passwordHint(password)} autoComplete="new-password" fullWidth disabled={pending} />
         <PasswordInput id="activate-confirm-password" name="confirmPassword" label="Confirm password" value={confirmPassword}
@@ -175,7 +204,7 @@ export function AdminActivatePage() {
       <div className={styles.loginCard}>
         <div className={styles.header}>
           <div className={styles.brand}><BrandLogo size="large" /><span className={styles.visuallyHidden}>ElectroHub</span></div>
-          <h1 className={styles.title}>Activate your administrator account</h1>
+          <h1 className={styles.title}>{copy.title}</h1>
           <p className={styles.description}>Admin Portal</p>
         </div>
         {renderBody()}

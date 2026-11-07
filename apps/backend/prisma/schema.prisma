@@ -160,6 +160,7 @@ model User {
   adminInvitationAccepted       AdminInvitation?             @relation("AdminInvitationAcceptedUser")
   adminMfaActivations           AdminMfaActivation[]         @relation("AdminMfaActivationTarget")
   adminMfaActivationsAuthorized AdminMfaActivation[]         @relation("AdminMfaActivationAuthorizer")
+  adminSeedIdentity             AdminSeedIdentity?
   adminNotificationPreference   AdminNotificationPreference?
 
   createdAt DateTime @default(now())
@@ -1249,6 +1250,33 @@ model AdminInvitation {
   @@map("admin_invitations")
 }
 
+/// Which trust model a single-use activation proof belongs to. OWNER_ACTIVATION: an Owner authorized it and it was emailed (mailbox
+/// possession). SEED_PROVISIONING: an operator authorized it for an approved seed identity and handed it over out of band (no email
+/// proof). A proof is redeemable only on its own purpose's endpoint.
+enum AdminActivationPurpose {
+  OWNER_ACTIVATION
+  SEED_PROVISIONING
+}
+
+enum AdminSeedIdentitySource {
+  SEED
+  OPERATOR
+}
+
+/// Approved seed administrator identity, bound to the exact user id (never inferred from the email address).
+model AdminSeedIdentity {
+  userId     String                  @id @db.Uuid
+  seedEmail  String                  @unique @db.VarChar(255)
+  source     AdminSeedIdentitySource
+  approvedBy String?                 @db.VarChar(120)
+  reason     String?                 @db.VarChar(500)
+  createdAt  DateTime                @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@map("admin_seed_identities")
+}
+
 enum AdminActivationStatus {
   PENDING
   REDEEMED
@@ -1271,6 +1299,9 @@ model AdminMfaActivation {
   lastSentAt     DateTime?
   redeemedAt     DateTime?
   revokedAt      DateTime?
+  purpose        AdminActivationPurpose  @default(OWNER_ACTIVATION)
+  operatorName   String?                 @db.VarChar(120)
+  operatorReason String?                 @db.VarChar(500)
 
   user         User  @relation("AdminMfaActivationTarget", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   authorizedBy User? @relation("AdminMfaActivationAuthorizer", fields: [authorizedById], references: [id], onDelete: SetNull, onUpdate: Cascade)

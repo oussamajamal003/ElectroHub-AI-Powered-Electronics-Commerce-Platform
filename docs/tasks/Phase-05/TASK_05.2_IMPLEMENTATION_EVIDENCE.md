@@ -618,3 +618,51 @@ Also: the Owner deletion notice now closes immediately on click (server acknowle
     (browser-injected) → the list error, not Access Restricted.
   Screenshots at 390/768/1440/1920 and 720 px (a 1440 px window at 200%) inspected; no horizontal overflow.
 - Not verified: native 200% browser zoom (headless). Shared DEV and PROD were not touched.
+
+## Development administrator activation without real inboxes (2026-11-07)
+
+Problem: the seeded DEV administrators (`admin1–4@electrohub.com`) could not complete the Owner-controlled activation, because the single-use link is emailed through Brevo to inboxes nobody controls and their seeded passwords are random. Two separate, auditable paths were added; the Owner activation and Brevo delivery are unchanged. Runbook: `docs/10_Operations/ADMIN_SEED_PROVISIONING_RUNBOOK.md`.
+
+**A. Local / disposable QA: captured email.**
+- The existing file outbox (`E2E_OTP_OUTBOX_DIR`) is honoured in `NODE_ENV=test`, or in `development` against a **loopback** database only.
+- Mail to `.invalid` recipients is written locally (with `sentAt`); every other recipient is refused (never sent).
+- `env.ts` refuses to boot with the outbox set in production, or in development against a remote database such as shared DEV.
+- The browser stack enables it only with `TASK05_2_EMAIL_CAPTURE=1`, so earlier journeys keep their "no provider" behaviour.
+- Mailpit was not adopted: not installed, no Docker on the reference workstation, and new dependencies are excluded by the task.
+
+**B. Shared DEV: operator provisioning of seed administrators.**
+- **Migration** `20261108000000_admin_seed_provisioning` (additive; applied to disposable PostgreSQL only):
+  - `admin_seed_identities` records provenance by user id (seed-created → `SEED`; operator-approved → `OPERATOR`).
+  - `admin_mfa_activations.purpose` (`OWNER_ACTIVATION` default | `SEED_PROVISIONING`), plus `operatorName`/`operatorReason`.
+  - The seed records provenance only for accounts it creates. A recreated account with the same email never inherits it.
+- **CLI** (`npm run admin:security`): `seed-status`, `register-seed-identity`, `provision-seeded-admin`, `revoke-seed-provisioning`.
+  - Targets are allowlisted to `local` and `pzxekjybdiulzmssalfo`, with an exact `--confirm-target`. Production, unknown identities and `NODE_ENV=production` are refused before any database access.
+  - Requires an operator, a tester and a reason, plus the exact user id and email.
+  - Refuses `admin@electrohub.com`, Owners, non-seed, inactive, deleted, CUSTOMER and already-enrolled accounts, and accounts without provenance.
+  - The one-time link is written only to a new owner-only file outside any git checkout and is never printed.
+- **Redemption**: `/admin/provision` → `POST /api/auth/admin/provisioning/{preview,redeem}`.
+  - Mounted only with `ADMIN_SEED_PROVISIONING_ENABLED=true` outside production.
+  - Purpose-bound: an emailed activation token and an operator token are each refused on the other path. An Owner cannot resend an operator setup as an email.
+  - Same effects as activation: password rotated (reuse refused), refresh families, sessions and challenges revoked, 30-minute enrollment window only, mandatory TOTP and recovery codes before any session.
+  - `emailVerifiedAt`, `isOwner` and `canManageAdmins` are never touched.
+- **Audit**: `ADMIN_SEED_IDENTITY_REGISTERED`, `ADMIN_SEED_PROVISIONING_{AUTHORIZED,REDEEMED,REVOKED}`, and `DENIED` with code only. Operator, tester, reason and database identity are recorded; no token, hash or password ever.
+- **Forgot password** for an MFA-enrolled seed administrator: documented, not coded. No fake OTPs, no email-only reset, no silent MFA reset; an operator proof replacing only the email step is a proposed follow-up.
+
+**Verification (local, actually run):**
+- Disposable PostgreSQL (`node scripts/admin-security-pg.cjs`): **73/73**. PROV-01…08:
+  - target identity and ambiguity rules; the real CLI refusing production and unknown URLs without connecting;
+  - the full CLI → handoff → redeem → TOTP → MFA-login journey, with old password 401, refresh tokens revoked, no session before MFA, `canManageAdmins` preserved, Owner never granted, `emailVerifiedAt` unchanged, audits without secrets, seed re-run harmless;
+  - all refusals audited; recreated-identity and supersede rules; expiry, revocation and purpose separation;
+  - concurrent redemption with exactly one winner; route and env production isolation.
+  - The existing ACT/INV/REC/PW/SEED/OWN/REV tests still pass. REC-11 failed once on a TOTP step boundary and passed on re-run; recovery code is untouched.
+- Backend unit: capture guard 4 tests (with the existing Brevo tests, 10/10). `tsc`, eslint, `tsc` build pass.
+- Frontend: `AdminActivatePage` 12/12 (5 new provisioning-mode tests); `tsc -b`, eslint (0 errors), `vite build`.
+- Playwright on a fresh capture stack (`TASK05_2_EMAIL_CAPTURE=1 … 5205`, `npm run test:visual:task05-2-dev-activation`): **4/4**.
+  - PROV-UI-01: Owner activation → captured email link → password → TOTP → recovery codes → console; replay refused; MFA sign-in.
+  - PROV-UI-02: `PROVENANCE_MISSING` until `register-seed-identity` → `provision-seeded-admin` → handoff file → setup link refused on `/admin/activate` → keyboard-only password form → console unreachable before enrollment → TOTP → replay refused → password + TOTP sign-in (Space) → Access Restricted (not an Owner).
+  - PROV-UI-02b: non-seed refused; expired setup link shows the operator error.
+  - PROV-UI-03: Forgot Password with the captured email code plus the authenticator → new password → console; old password dead.
+  - Screenshots at 390/768/1440/1920 and 720 px (200% equivalent) inspected; no horizontal overflow.
+- Regression on a default stack (no capture): existing activation journeys **5/5**. ACT-UI-05's "no button on an enrolled row" was stale since the Owner-promotion button (`9b84640`); it now asserts no *activation* action.
+- Not verified: real Brevo delivery; native 200% zoom; Mailpit.
+- Shared DEV was not migrated or touched, and no seed account was provisioned there; PROV was never run against PROD. Applying the migration to shared DEV and any real provisioning need separate explicit approval.

@@ -121,6 +121,8 @@ export function AppRoutes() {
         <Route path="/admin/invite" element={<Suspense fallback={null}><AdminInvitePage /></Suspense>} />
         <Route path="/admin/forgot-password" element={<Suspense fallback={null}><AdminForgotPasswordPage /></Suspense>} />
         <Route path="/admin/activate" element={<Suspense fallback={null}><AdminActivatePage /></Suspense>} />
+        {/* Operator-issued seed administrator setup (shared DEV / disposable). The server refuses it in production (route not mounted). */}
+        <Route path="/admin/provision" element={<Suspense fallback={null}><AdminActivatePage mode="provisioning" /></Suspense>} />
 
         {/* Admin Protected Routes */}
         {/* Task 05.1: deep links survive sign-in (preserveReturnPath); signing out returns to the admin login, not the storefront. */}

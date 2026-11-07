@@ -90,6 +90,7 @@ async function run() {
     command(exe('psql'), ['-h', '127.0.0.1', '-p', String(port), '-U', 'postgres', '-d', database, '-v', 'ON_ERROR_STOP=1', '-q',
       '-f', path.join(migrations, name, 'migration.sql')]);
   }
+  const emailCapture = process.env.TASK05_2_EMAIL_CAPTURE === '1';
   const env = {
     ...process.env, NODE_ENV: 'development', DATABASE_URL: url, DIRECT_URL: url, PORT: apiPort,
     DB_SSL_CA_CERT_PATH: path.join(work, 'server.crt'), NODE_EXTRA_CA_CERTS: path.join(work, 'server.crt'),
@@ -99,6 +100,10 @@ async function run() {
     // No real providers: email, Stripe and AI are disabled so nothing leaves this machine.
     STRIPE_SECRET_KEY: '', STRIPE_WEBHOOK_SECRET: '', BREVO_API_KEY: '', GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '', AI_SERVICE_URL: '', AI_SERVICE_API_KEY: '',
     PAYMENT_SHARED_MUTATIONS_APPROVED: '', COMMERCE_EMAIL_SEND_MODE: 'disabled', PAYMENT_CONFIRMATION_SIGNAL: 'false',
+    // Operator seed-provisioning redemption endpoints are mounted on this throwaway stack. With TASK05_2_EMAIL_CAPTURE=1, admin
+    // activation / password-recovery mail to synthetic .invalid recipients is captured in this run's own folder instead (loopback DB
+    // only; any other recipient is refused); without it the stack keeps having no email provider, as earlier journeys expect.
+    ADMIN_SEED_PROVISIONING_ENABLED: 'true', ...(emailCapture ? { E2E_OTP_OUTBOX_DIR: path.join(work, 'outbox') } : {}),
   };
   const credentials = path.join(root, credentialsFile);
   const tsx = path.join(path.dirname(require.resolve('tsx/package.json')), 'dist/cli.mjs');
@@ -107,7 +112,9 @@ async function run() {
   // Lets a browser spec age its own disposable admin session (to make the REAL server demand a step-up) without any test-only
   // backend code. Loopback, trust-auth, throwaway cluster only; the file is git-ignored and removed with the run.
   const written = JSON.parse(fs.readFileSync(credentials, 'utf8'));
-  fs.writeFileSync(credentials, JSON.stringify({ ...written, disposableDb: { psql: exe('psql'), port, database } }, null, 2));
+  fs.writeFileSync(credentials, JSON.stringify({ ...written, disposableDb: { psql: exe('psql'), port, database }, outboxDir: emailCapture ? path.join(work, 'outbox') : null,
+    // Loopback trust-auth cluster only (no password): lets a browser spec run the operator CLI against THIS throwaway database.
+    backendDir: backend, databaseUrl: url, caCert: path.join(work, 'server.crt') }, null, 2));
   console.log(`Disposable browser stack: backend http://127.0.0.1:${apiPort} (credentials file: ${path.relative(root, credentials)})`);
   child = spawn(process.execPath, [tsx, 'src/bootstrap.ts'], { cwd: backend, env, stdio: 'inherit', windowsHide: true });
   return new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', code => resolve(code ?? 1)); });

@@ -51,6 +51,16 @@ export const envDiagnostics = {
  * Validates required configuration at startup.
  * Fails safely when required variables are missing.
  */
+/** True only for a loopback PostgreSQL host (a disposable/local cluster), never for Supabase or any remote database. */
+export function isLoopbackDatabaseUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    return ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
@@ -97,11 +107,23 @@ const envSchema = z.object({
   // Task 05.2 administrator MFA. Key ring "1:<base64 32 bytes>[,2:<...>]"; missing/invalid keys fail closed at use, never at boot,
   // so customer traffic is unaffected while administrator MFA refuses to operate.
   ADMIN_MFA_ENCRYPTION_KEYS: z.string().optional(),
+  // Operator-issued seed-administrator provisioning redemption (shared DEV / disposable only). Never mounted in production.
+  ADMIN_SEED_PROVISIONING_ENABLED: z.enum(['true', 'false']).optional(),
   ADMIN_MFA_ACTIVE_KEY_VERSION: z.coerce.number().int().positive().optional(),
   WEBAUTHN_RP_ID: z.string().optional(),
   WEBAUTHN_RP_NAME: z.string().optional(),
   WEBAUTHN_ORIGIN: z.string().url().optional(),
 }).superRefine((data, ctx) => {
+  // The local email outbox captures mail instead of sending it. It is allowed only for automated tests or a development server on
+  // a loopback (disposable) database, so a misconfigured shared DEV or production server can never silently divert real email.
+  if (data.E2E_OTP_OUTBOX_DIR && data.NODE_ENV !== 'test' && !(data.NODE_ENV === 'development' && isLoopbackDatabaseUrl(data.DATABASE_URL))) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['E2E_OTP_OUTBOX_DIR'],
+      message: 'E2E_OTP_OUTBOX_DIR is allowed only in test, or in development against a loopback database' });
+  }
+  if (data.ADMIN_SEED_PROVISIONING_ENABLED === 'true' && data.NODE_ENV === 'production') {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['ADMIN_SEED_PROVISIONING_ENABLED'],
+      message: 'Seed administrator provisioning cannot be enabled in production' });
+  }
   if (data.NODE_ENV === 'production') {
     if (!data.BREVO_API_KEY) {
       ctx.addIssue({

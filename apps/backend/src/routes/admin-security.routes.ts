@@ -2,6 +2,10 @@ import { Router, type Request } from 'express';
 import rateLimit from 'express-rate-limit';
 import { adminSecurityController as c } from '../controllers/admin-security.controller.js';
 import { adminGuard, requireAdminCapability, requireStepUp } from '../middleware/adminGuard.js';
+import { env } from '../config/env.js';
+
+export const seedProvisioningRoutesEnabled = (config: { NODE_ENV: string; ADMIN_SEED_PROVISIONING_ENABLED?: string }) =>
+  config.ADMIN_SEED_PROVISIONING_ENABLED === 'true' && config.NODE_ENV !== 'production';
 
 /**
  * Task 05.2 administrator security routes.
@@ -42,6 +46,12 @@ preAuthRouter.post('/admin/invitations/preview', inviteLimiter, c.invitationPrev
 preAuthRouter.post('/admin/invitations/accept', inviteLimiter, c.invitationAccept);
 preAuthRouter.post('/admin/activation/preview', inviteLimiter, c.activationPreview);
 preAuthRouter.post('/admin/activation/redeem', inviteLimiter, c.activationRedeem);
+// Operator-issued seed administrator provisioning (shared DEV / disposable stacks). Not mounted at all unless explicitly enabled outside
+// production, so a production server answers 404; the proof itself can only be minted by the operator CLI on an approved database.
+if (seedProvisioningRoutesEnabled(env)) {
+  preAuthRouter.post('/admin/provisioning/preview', inviteLimiter, c.provisioningPreview);
+  preAuthRouter.post('/admin/provisioning/redeem', inviteLimiter, c.provisioningRedeem);
+}
 
 export const adminSecurityRouter = Router();
 adminSecurityRouter.use(['/admin/me', '/admin/administrators', '/admin/invitations'], ...adminGuard);

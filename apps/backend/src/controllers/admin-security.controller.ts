@@ -166,6 +166,14 @@ export const adminSecurityController = {
     const body = z.object({ token: z.string().min(20).max(200), password }).strict().parse(req.body);
     res.set('Cache-Control', 'no-store').status(200).json(await adminActivationService.redeem(body));
   }),
+  provisioningPreview: handle(async (req, res) => {
+    const body = z.object({ token: z.string().min(20).max(200) }).strict().parse(req.body);
+    res.set('Cache-Control', 'no-store').json(await adminActivationService.previewProvisioning(body.token));
+  }),
+  provisioningRedeem: handle(async (req, res) => {
+    const body = z.object({ token: z.string().min(20).max(200), password }).strict().parse(req.body);
+    res.set('Cache-Control', 'no-store').status(200).json(await adminActivationService.redeemProvisioning(body));
+  }),
 
   // ── Self-service (MFA-assured) ─────────────────────────────────────────
   profile: handle(async (req, res) => { res.json({ data: await adminAccountService.profile(userId(req), session(req)) }); }),

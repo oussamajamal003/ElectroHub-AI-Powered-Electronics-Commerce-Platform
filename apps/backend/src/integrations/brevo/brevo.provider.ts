@@ -1,4 +1,4 @@
-import { env } from '../../config/env.js';
+import { env, isLoopbackDatabaseUrl } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import { BrevoClient, BrevoRequestError } from './brevo.client.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -10,6 +10,17 @@ import {
   SendTransactionalEmailOptions,
   SendTransactionalEmailResult,
 } from './brevo.types.js';
+
+/**
+ * Local email capture directory, or null. Test runs, and development servers on a loopback (disposable) database, may capture
+ * mail to synthetic .invalid recipients in a local folder instead of sending it. Shared DEV and production never qualify (the
+ * environment schema also refuses to boot with the folder set there).
+ */
+export function emailCaptureDirectory(): string | null {
+  if (!env.E2E_OTP_OUTBOX_DIR) return null;
+  if (env.NODE_ENV === 'test') return env.E2E_OTP_OUTBOX_DIR;
+  return env.NODE_ENV === 'development' && isLoopbackDatabaseUrl(env.DATABASE_URL) ? env.E2E_OTP_OUTBOX_DIR : null;
+}
 
 export class BrevoProvider {
   private client: BrevoClient;
@@ -35,15 +46,22 @@ export class BrevoProvider {
   ): Promise<SendTransactionalEmailResult> {
     try {
       const recipientEmail = typeof options.to === 'string' ? options.to : options.to.email;
-      if (env.NODE_ENV === 'test' && env.E2E_OTP_OUTBOX_DIR && recipientEmail.endsWith('.invalid')) {
+      const outbox = emailCaptureDirectory();
+      if (outbox && recipientEmail.endsWith('.invalid')) {
+        // The newest message per recipient and subject (tests read it by this name). Nothing is sent and nothing is logged.
         const fileName = createHash('sha256').update(`${recipientEmail}:${options.subject}`).digest('hex');
-        await mkdir(env.E2E_OTP_OUTBOX_DIR, { recursive: true });
-        await writeFile(join(env.E2E_OTP_OUTBOX_DIR, `${fileName}.json`), JSON.stringify({
+        await mkdir(outbox, { recursive: true });
+        await writeFile(join(outbox, `${fileName}.json`), JSON.stringify({
           to: recipientEmail,
           subject: options.subject,
           textContent: options.textContent,
+          sentAt: new Date().toISOString(),
         }), { mode: 0o600 });
         return { success: true, messageId: `e2e-${randomUUID()}` };
+      }
+      if (outbox && env.NODE_ENV !== 'test') {
+        // A local capture server never reaches the real provider: only synthetic .invalid recipients are accepted.
+        return { success: false, error: 'Email capture accepts only .invalid recipients', failure: { category: 'provider_error' } };
       }
       if (env.NODE_ENV === 'test' && process.env.VITEST_NO_MOCK_BREVO !== 'true') {
         return { success: true, messageId: `mocked-message-id-${randomUUID()}` };

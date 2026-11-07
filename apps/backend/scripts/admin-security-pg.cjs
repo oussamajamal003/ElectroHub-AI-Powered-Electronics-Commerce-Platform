@@ -77,6 +77,8 @@ async function run() {
     JWT_SECRET: crypto.randomBytes(48).toString('base64url'), ELECTROHUB_LOG_DIR: path.join(work, 'logs'),
     STRIPE_SECRET_KEY: '', STRIPE_WEBHOOK_SECRET: '', BREVO_API_KEY: '', GOOGLE_CLIENT_ID: '', GOOGLE_CLIENT_SECRET: '',
     PAYMENT_SHARED_MUTATIONS_APPROVED: '', COMMERCE_EMAIL_SEND_MODE: 'disabled', PAYMENT_CONFIRMATION_SIGNAL: 'false',
+    // Mounts the operator seed-provisioning redemption routes on this throwaway app (never in production).
+    ADMIN_SEED_PROVISIONING_ENABLED: 'true',
   };
   const vitest = path.join(path.dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
   // --suite=ci runs the CI backend suite (package.json test:ci) against this same disposable cluster instead of the 05.2 gate.

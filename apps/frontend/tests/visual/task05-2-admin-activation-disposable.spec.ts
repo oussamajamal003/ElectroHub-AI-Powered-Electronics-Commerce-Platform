@@ -148,7 +148,8 @@ test.describe.serial('Task 05.2 existing-administrator activation (disposable)',
     await owner.goto('/admin/settings/administrators');
     const row = owner.getByRole('row').filter({ hasText: credentials.legacyLinkedEmail });
     await expect(row.getByText('Two-step verification enabled')).toBeVisible();
-    await expect(row.getByRole('button')).toHaveCount(0);
+    // No activation action remains for an enrolled administrator (an Owner may still promote them, which is a separate capability).
+    await expect(row.getByRole('button', { name: /activat/i })).toHaveCount(0);
 
     const blocked = await newPage(browser);
     await passwordStep(blocked, credentials.legacyUnactivatedEmail, credentials.password);

@@ -136,6 +136,11 @@ export const adminAuthApi = {
     apiClient<AdminActivationPreview>(`${PRE_AUTH}/activation/preview`, { method: 'POST', data: body }),
   redeemActivation: (body: { token: string; password: string }) =>
     apiClient<AdminMfaRequired>(`${PRE_AUTH}/activation/redeem`, { method: 'POST', data: body }),
+  /** Operator-issued seed administrator setup (shared DEV / disposable only; the server does not mount these in production). */
+  previewProvisioning: (body: { token: string }) =>
+    apiClient<AdminActivationPreview>(`${PRE_AUTH}/provisioning/preview`, { method: 'POST', data: body }),
+  redeemProvisioning: (body: { token: string; password: string }) =>
+    apiClient<AdminMfaRequired>(`${PRE_AUTH}/provisioning/redeem`, { method: 'POST', data: body }),
 };
 
 // ─── Forgot password (pre-auth; no session is ever returned) ─────────────

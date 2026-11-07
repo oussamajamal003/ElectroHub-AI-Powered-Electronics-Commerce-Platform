@@ -83,6 +83,10 @@ The API closes its HTTP server and exits on shutdown; process exit releases its 
 
 `E2E_OTP_OUTBOX_DIR` is for isolated browser tests only. When `NODE_ENV=test`, the email adapter captures messages sent to `.invalid` addresses in this local directory. Keep it under an ignored test output folder and do not set it in production. The real Brevo API is used only outside `NODE_ENV=test`; test mocking is not activated by an inherited `VITEST` flag.
 
+Task 05.2 extends the same capture to disposable development stacks. With `NODE_ENV=development`, it is honoured only when `DATABASE_URL` is a loopback host (a throwaway cluster). There, mail to `.invalid` recipients is captured and every other recipient is refused (never sent). The server refuses to start with `E2E_OTP_OUTBOX_DIR` set in production, or in development against a remote database such as shared DEV, so a misconfigured server cannot silently divert real email. `scripts/task05-2-browser-stack.cjs` enables it only with `TASK05_2_EMAIL_CAPTURE=1`.
+
+`ADMIN_SEED_PROVISIONING_ENABLED=true` mounts `POST /api/auth/admin/provisioning/{preview,redeem}`, which redeem operator-issued setup links for seeded DEV administrators. The routes are never mounted in production, and the server refuses to start with the flag set there. Leave it unset unless an operator runs the seed provisioning procedure ([ADMIN_SEED_PROVISIONING_RUNBOOK.md](ADMIN_SEED_PROVISIONING_RUNBOOK.md)).
+
 Production database credentials must never be committed.
 
 ---

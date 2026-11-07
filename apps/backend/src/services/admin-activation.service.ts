@@ -1,5 +1,5 @@
 import { notDeletedAdmin } from './admin-deletion-notice.js';
-import { AdminActivationStatus, AdminInvitationDelivery, Prisma, type AdminMfaActivation } from '@prisma/client';
+import { AdminActivationPurpose, AdminActivationStatus, AdminInvitationDelivery, Prisma, type AdminMfaActivation } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { ADMIN_AUTH_TX } from '../lib/transaction-options.js';
 import { AppError } from '../middleware/errorHandler.js';
@@ -21,6 +21,17 @@ export const ACTIVATION_ENROLLMENT_WINDOW_MS = 30 * 60 * 1000;
 export const ACTIVATION_RESEND_COOLDOWN_MS = 60 * 1000;
 
 const unavailable = () => new AppError('This activation link is invalid, expired or has already been used. Ask an owner for a new one.', 410, 'ACTIVATION_UNAVAILABLE');
+const provisioningUnavailable = () => new AppError('This setup link is invalid, expired or has already been used. Ask the operator who issued it for a new one.', 410,
+  'PROVISIONING_UNAVAILABLE');
+/**
+ * Each proof is redeemable only through its own trust model's endpoint: an emailed Owner activation (mailbox possession) never through
+ * the operator path, and an operator-issued seed provisioning proof (no email proof) never through /admin/activation.
+ */
+const PURPOSE = {
+  [AdminActivationPurpose.OWNER_ACTIVATION]: { unavailable, audit: 'ADMIN_MFA_ACTIVATION_REDEEMED', revokedReason: 'ACTIVATION_PASSWORD_ROTATED' },
+  [AdminActivationPurpose.SEED_PROVISIONING]: { unavailable: provisioningUnavailable, audit: 'ADMIN_SEED_PROVISIONING_REDEEMED',
+    revokedReason: 'SEED_PROVISIONING_PASSWORD_ROTATED' },
+} as const;
 const pendingExists = () => new AppError('An activation is already pending for this administrator. Resend or revoke it instead.', 409, 'ACTIVATION_PENDING');
 const tokenShape = (token: unknown): token is string => typeof token === 'string' && token.length >= 20 && token.length <= 200;
 
@@ -98,10 +109,14 @@ export class AdminActivationService {
       await this.assertActiveOwner(tx, actor.userId);
       await lockUserTokenLifecycle(tx, targetId);
       const target = await this.eligibleTarget(tx, targetId);
-      const rows = await tx.$queryRaw<{ id: string; lastSentAt: Date | null }[]>`
-        SELECT "id", "lastSentAt" FROM "admin_mfa_activations" WHERE "userId" = ${targetId}::uuid AND "status" = 'PENDING' FOR UPDATE`;
+      const rows = await tx.$queryRaw<{ id: string; lastSentAt: Date | null; purpose: AdminActivationPurpose }[]>`
+        SELECT "id", "lastSentAt", "purpose" FROM "admin_mfa_activations" WHERE "userId" = ${targetId}::uuid AND "status" = 'PENDING' FOR UPDATE`;
       const row = rows[0];
       if (!row) throw new AppError('No activation is pending for this administrator.', 404, 'NOT_FOUND');
+      // An operator-issued seed provisioning proof is never turned into an emailed link: revoke it first, then request an activation.
+      if (row.purpose !== AdminActivationPurpose.OWNER_ACTIVATION) {
+        throw new AppError('An operator setup is pending for this administrator. Revoke it before sending an activation email.', 409, 'PROVISIONING_PENDING');
+      }
       if (row.lastSentAt && Date.now() - row.lastSentAt.getTime() < ACTIVATION_RESEND_COOLDOWN_MS) {
         throw new AppError('The activation link was sent moments ago. Wait a minute before resending.', 429, 'RESEND_COOLDOWN');
       }
@@ -131,45 +146,64 @@ export class AdminActivationService {
   }
 
   // ── Public, token-bound ──────────────────────────────────────────────────
-  async preview(token: string) {
-    if (!tokenShape(token)) throw unavailable();
+  preview(token: string) { return this.previewFor(token, AdminActivationPurpose.OWNER_ACTIVATION); }
+  redeem(input: { token: string; password: string }) { return this.redeemFor(input, AdminActivationPurpose.OWNER_ACTIVATION); }
+  /** Operator-issued seed provisioning (shared DEV/disposable only; its routes are never mounted in production). */
+  previewProvisioning(token: string) { return this.previewFor(token, AdminActivationPurpose.SEED_PROVISIONING); }
+  redeemProvisioning(input: { token: string; password: string }) { return this.redeemFor(input, AdminActivationPurpose.SEED_PROVISIONING); }
+
+  /** A seed proof additionally requires the account to still be the approved seed identity (same id, same email) and not an Owner. */
+  private async seedIdentityHolds(client: Prisma.TransactionClient, userId: string, email: string) {
+    const row = await client.user.findUnique({ where: { id: userId },
+      select: { adminSeedIdentity: { select: { seedEmail: true } }, adminSecurity: { select: { isOwner: true } } } });
+    return row?.adminSeedIdentity?.seedEmail === email && !row.adminSecurity?.isOwner;
+  }
+
+  private async previewFor(token: string, purpose: AdminActivationPurpose) {
+    const fail = PURPOSE[purpose].unavailable;
+    if (!tokenShape(token)) throw fail();
     const row = await prisma.adminMfaActivation.findUnique({ where: { tokenHash: sha256Hex(token) },
       include: { user: { select: { email: true, firstName: true, lastName: true, isActive: true, role: { select: { name: true } } } } } });
-    if (!row || row.status !== AdminActivationStatus.PENDING || row.expiresAt <= new Date() || !row.user.isActive ||
-      row.user.role.name !== 'ADMIN' || row.user.email !== row.email) throw unavailable();
+    if (!row || row.purpose !== purpose || row.status !== AdminActivationStatus.PENDING || row.expiresAt <= new Date() || !row.user.isActive ||
+      row.user.role.name !== 'ADMIN' || row.user.email !== row.email) throw fail();
+    if (purpose === AdminActivationPurpose.SEED_PROVISIONING && !await this.seedIdentityHolds(prisma, row.userId, row.email)) throw fail();
     const factors = await adminMfaService.factorSummary(row.userId);
-    if (factors.totp + factors.passkeys > 0) throw unavailable();
+    if (factors.totp + factors.passkeys > 0) throw fail();
     return { email: row.user.email, firstName: row.user.firstName, lastName: row.user.lastName, expiresAt: row.expiresAt };
   }
 
-  async redeem(input: { token: string; password: string }) {
-    if (!tokenShape(input.token)) throw unavailable();
+  private async redeemFor(input: { token: string; password: string }, purpose: AdminActivationPurpose) {
+    const { unavailable: fail, audit, revokedReason } = PURPOSE[purpose];
+    if (!tokenShape(input.token)) throw fail();
     const passwordHash = await hashPassword(input.password); // bcrypt outside the transaction
     const tokenHash = sha256Hex(input.token);
     const user = await prisma.$transaction(async tx => {
-      const rows = await tx.$queryRaw<{ id: string; userId: string; email: string; status: AdminActivationStatus; expiresAt: Date }[]>`
-        SELECT "id", "userId", "email", "status", "expiresAt" FROM "admin_mfa_activations" WHERE "tokenHash" = ${tokenHash} FOR UPDATE`;
+      const rows = await tx.$queryRaw<{ id: string; userId: string; email: string; status: AdminActivationStatus; expiresAt: Date; purpose: AdminActivationPurpose }[]>`
+        SELECT "id", "userId", "email", "status", "expiresAt", "purpose" FROM "admin_mfa_activations" WHERE "tokenHash" = ${tokenHash} FOR UPDATE`;
       const row = rows[0];
-      if (!row || row.status !== AdminActivationStatus.PENDING || row.expiresAt <= new Date()) throw unavailable();
+      if (!row || row.purpose !== purpose || row.status !== AdminActivationStatus.PENDING || row.expiresAt <= new Date()) throw fail();
       await lockUserTokenLifecycle(tx, row.userId);
       const current = await tx.user.findUnique({ where: { id: row.userId }, include: { role: true } });
-      if (!current || !current.isActive || current.role.name !== 'ADMIN' || current.email !== row.email) throw unavailable();
+      if (!current || !current.isActive || current.role.name !== 'ADMIN' || current.email !== row.email) throw fail();
+      if (purpose === AdminActivationPurpose.SEED_PROVISIONING && !await this.seedIdentityHolds(tx, row.userId, row.email)) throw fail();
       const factors = await adminMfaService.factorSummary(row.userId, tx);
-      if (factors.totp + factors.passkeys > 0) throw unavailable();
+      if (factors.totp + factors.passkeys > 0) throw fail();
       if (await verifyPassword(input.password, current.passwordHash)) {
         throw new AppError('Choose a password you have not used before.', 422, 'PASSWORD_REUSED');
       }
       const now = new Date();
+      // Only the password changes on the account: role, Owner/management capabilities and emailVerifiedAt stay exactly as they were.
       const rotated = await tx.user.update({ where: { id: row.userId }, data: { passwordHash }, include: { role: true } });
       await tx.refreshToken.updateMany({ where: { userId: row.userId }, data: { isRevoked: true, expiresAt: new Date(0) } });
-      await revokeAdminSessions(tx, { userId: row.userId }, 'ACTIVATION_PASSWORD_ROTATED');
+      await revokeAdminSessions(tx, { userId: row.userId }, revokedReason);
       // Challenges are bound to the old credential fingerprint already; closing them also stops a half-finished sign-in from lingering.
       await tx.adminAuthChallenge.updateMany({ where: { userId: row.userId, consumedAt: null }, data: { consumedAt: now } });
       await tx.adminAccountSecurity.upsert({ where: { userId: row.userId }, create: { userId: row.userId, enrollmentAllowedUntil: new Date(now.getTime() + ACTIVATION_ENROLLMENT_WINDOW_MS) },
         update: { enrollmentAllowedUntil: new Date(now.getTime() + ACTIVATION_ENROLLMENT_WINDOW_MS) } });
       await tx.adminMfaActivation.update({ where: { id: row.id }, data: { status: AdminActivationStatus.REDEEMED, redeemedAt: now } });
       await tx.securityEvent.create({ data: { userId: row.userId, type: 'PASSWORD_CHANGED' } });
-      await recordAdminAudit({ actorId: row.userId, action: 'ADMIN_MFA_ACTIVATION_REDEEMED', resourceType: 'admin_user', resourceId: row.userId, outcome: 'SUCCESS' }, tx);
+      await recordAdminAudit({ actorId: row.userId, action: audit, resourceType: 'admin_user', resourceId: row.userId, outcome: 'SUCCESS',
+        ...(purpose === AdminActivationPurpose.SEED_PROVISIONING ? { details: { provisioningId: row.id } } : {}) }, tx);
       return rotated;
     }, ADMIN_AUTH_TX);
     // No session: the administrator continues straight into mandatory first-factor enrollment with the restricted challenge.
