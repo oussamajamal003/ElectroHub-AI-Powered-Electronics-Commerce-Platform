@@ -14,6 +14,7 @@ it('prepares additive nullable ownership columns without rewriting historical at
 });
 it('enforces one submitted owner per cart-line generation and releases the cart-wide claim', () => {
   expect(sql).toContain('CREATE UNIQUE INDEX "payment_attempt_items_sourceCartItemId_key"');
-  expect(schema).toMatch(/sourceCartItemId String\? @unique @db.Uuid/);
+  // Whitespace-tolerant: `prisma format` aligns columns.
+  expect(schema).toMatch(/sourceCartItemId\s+String\?\s+@unique\s+@db\.Uuid/);
   expect(sql).toContain('CHECK ("submittedAt" IS NULL OR "activeCartId" IS NULL)');
 });

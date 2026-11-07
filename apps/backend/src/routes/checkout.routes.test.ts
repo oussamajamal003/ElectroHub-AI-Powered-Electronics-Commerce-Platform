@@ -1,3 +1,4 @@
+import { currentShippingSnapshot } from '../services/shipping-config.js';
 import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +10,12 @@ import { cartRevision, requestHash } from '../services/checkout.domain.js';
 import { OrderService } from '../services/order.service.js';
 import type { ProviderIntent } from '../services/payment.domain.js';
 import { logSafely } from '../utils/logger.js';
+// Task 05.2: requireAuth honours an ADMIN identity only through a live MFA-assured session; these suites test role boundaries, so every
+// token carries a session id and the session lookup reports it live (session assurance itself is proven in admin-security suites).
+const TEST_ADMIN_SESSION = '5a1e2c3d-4b5f-4a6b-8c7d-9e0f1a2b3c4d';
+vi.mock('../services/admin-session.js', () => ({ touchAdminSession: vi.fn(),
+  findActiveAdminSession: vi.fn(async (familyId: string) => ({ familyId, mfaMethod: 'TOTP', mfaVerifiedAt: new Date(), stepUpAt: null, lastSeenAt: new Date() })) }));
+
 
 const state = vi.hoisted(() => ({ userId: '11111111-1111-4111-8111-111111111111', cartId: '22222222-2222-4222-8222-222222222222',
   productId: '33333333-3333-4333-8333-333333333333', categoryId: '44444444-4444-4444-8444-444444444444', quantity: 2, stock: 5, active: true, inventory: true, role: 'CUSTOMER',
@@ -18,13 +25,14 @@ const db = vi.hoisted(() => ({ user: { findFirst: vi.fn() }, cart: { findUnique:
   cartItem: { findMany: vi.fn(), deleteMany: vi.fn() }, order: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn() }, inventory: { update: vi.fn() },
   paymentAttempt: { findUnique: vi.fn(), update: vi.fn() }, paymentAttemptItem: { findMany: vi.fn() },
   paymentWork: { update: vi.fn() }, $queryRaw: vi.fn(), $transaction: vi.fn() }));
+vi.mock('../services/shipping-config.js', async original => ({ ...await original<typeof import('../services/shipping-config.js')>(), loadShippingConfig: vi.fn(async () => currentShippingSnapshot()) }));
 vi.mock('../lib/prisma.js', () => ({ prisma: db }));
 vi.mock('../utils/logger.js', () => ({ logger: diagnosticsLogger, logSafely: vi.fn() }));
 const app = express(); app.use(express.json()); app.use('/api', checkoutRoutes); app.use(errorHandler);
 const shipping = { recipient: 'Test Customer', line1: '123 Test Street', city: 'Test City', postalCode: '12345', country: 'United States', phone: '+1 555 010 2000' };
 const body = () => ({ shipping, deliveryMethod: 'EXPRESS', paymentMethod: 'CARD', expectedRevision: cartRevision(state.cartId, [{ productId: state.productId, quantity: state.quantity, product: { price: '19.99' } }]) });
 const key = '55555555-5555-4555-8555-555555555555';
-const token = () => generateAccessToken({ userId: state.userId, role: 'CUSTOMER' });
+const token = () => generateAccessToken({ userId: state.userId, role: 'CUSTOMER', sessionId: TEST_ADMIN_SESSION });
 const intent: ProviderIntent = { id: 'pi_test', account: 'acct_test', livemode: false, amount: 4997, currency: 'usd',
   captureMethod: 'manual', status: 'requires_capture', capturable: 4997, received: 0, methodType: 'card', clientSecret: null,
   attemptId: key, declined: false, card: null, captureBefore: new Date(Date.now() + 60000) };

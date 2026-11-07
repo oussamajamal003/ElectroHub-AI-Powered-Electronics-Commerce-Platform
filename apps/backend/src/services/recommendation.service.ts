@@ -9,6 +9,11 @@ import { publicProductWhere } from './product.service.js';
 import { SearchService } from './search.service.js';
 import { coPurchases, measuredPopularity, profileSignals } from './recommendation.sql.js';
 import { issueImpressionToken, verifyImpressionToken } from './recommendation-token.js';
+import {
+  isPinInWindow, recommendationConfig, RECOMMENDATION_DEFAULT_LIMIT, RECOMMENDATION_MAX_LIMIT, sectionConfigOf,
+  type PinRecord, type RecommendationConfigSnapshot,
+} from './recommendation-config.js';
+export { RECOMMENDATION_DEFAULT_LIMIT, RECOMMENDATION_MAX_LIMIT };
 
 /**
  * Task 04.4: public recommendation gateway. FastAPI ranks over the D3 learned-embedding index; co-purchase and
@@ -16,13 +21,22 @@ import { issueImpressionToken, verifyImpressionToken } from './recommendation-to
  * projection (visibility, fixtures, current price and stock), and every section states truthfully how it was made.
  */
 
-export type RecommendationMode = 'SIMILAR_PRODUCTS' | 'YOU_MAY_ALSO_LIKE' | 'RECOMMENDED_FOR_YOU' | 'FREQUENTLY_BOUGHT_TOGETHER' | 'POPULAR_PRODUCTS';
+export type RecommendationMode = 'SIMILAR_PRODUCTS' | 'YOU_MAY_ALSO_LIKE' | 'RECOMMENDED_FOR_YOU' | 'FREQUENTLY_BOUGHT_TOGETHER' | 'POPULAR_PRODUCTS'
+  /** Administrator-pinned products shown in their own rail on the product page. Not configurable; pins alone decide it. */
+  | 'FEATURED_PRODUCTS';
 export type RecommendationStrategy =
   | 'EMBEDDING_SIMILARITY' | 'BEHAVIOR_EMBEDDING' | 'HYBRID_EMBEDDING' | 'CO_PURCHASE' | 'MEASURED_POPULARITY'
-  | 'FALLBACK_CATEGORY' | 'FALLBACK_POPULAR' | 'FALLBACK_NEW_ARRIVALS' | 'NO_DATA';
+  | 'FALLBACK_CATEGORY' | 'FALLBACK_POPULAR' | 'FALLBACK_NEW_ARRIVALS' | 'NO_DATA'
+  /** Only explicit merchandising pins; never a claim of personalization or measured demand. */
+  | 'MERCHANDISED_PIN';
 export type FallbackReason =
   | 'AI_UNAVAILABLE' | 'NOT_INDEXED' | 'NO_RESULTS' | 'PERSONALIZATION_OFF' | 'INSUFFICIENT_HISTORY'
-  | 'NO_MEASURED_DEMAND' | 'INSUFFICIENT_SUPPORT';
+  | 'NO_MEASURED_DEMAND' | 'INSUFFICIENT_SUPPORT'
+  /** The administrator disabled this section; it is returned as the usual empty shape. */
+  | 'DISABLED';
+
+/** Options for administrator preview: the same engine path, but no impression token and no operational log line. */
+export interface RunOptions { preview?: boolean }
 export type RecommendationSurface = 'product_detail' | 'home' | 'cart';
 export type InteractionType = 'VIEW' | 'RECOMMENDATION_CLICK';
 
@@ -41,11 +55,12 @@ export interface RecommendationSection {
   algorithmVersion: string;
   context: { categoryName: string; categorySlug: string } | null;
   impressionToken: string | null;
-  items: { rank: number; product: ProductSummary }[];
+  items: RecommendationItem[];
 }
 
-export const RECOMMENDATION_DEFAULT_LIMIT = 4;
-export const RECOMMENDATION_MAX_LIMIT = 12;
+/** `featured: true` marks an administrator pin (additive; absent for organic items). */
+export interface RecommendationItem { rank: number; product: ProductSummary; featured?: true }
+
 export const MAX_CART_ANCHORS = 50;
 export const RETENTION_DAYS = 90;
 export const RECENTLY_VIEWED_CAP = 20;
@@ -55,7 +70,7 @@ export const POPULARITY_RULES = { windowDays: 30, minUsersPerProduct: 2, minCont
 export const FBT_MIN_SUPPORT = 2;
 const ALGORITHMS = {
   coPurchase: 'co-purchase-v1', popularity: 'popularity-v1', category: 'category-newest-v1', newArrivals: 'new-arrivals-v1',
-  contextSuffix: '.context-v1', none: 'none',
+  contextSuffix: '.context-v1', none: 'none', pinned: 'merchandised-pin-v1',
 } as const;
 
 class TtlCache<V> {
@@ -75,13 +90,24 @@ class TtlCache<V> {
 
 type AiOutcome = { ok: true; result: AiRecommendationResult } | { ok: false; reason: 'AI_UNAVAILABLE' };
 
-function section(input: Omit<RecommendationSection, 'impressionToken' | 'items'> & { products: ProductSummary[] }): RecommendationSection {
-  const { products, ...rest } = input;
-  const items = products.map((product, index) => ({ rank: index + 1, product }));
+type SectionInput = Omit<RecommendationSection, 'impressionToken' | 'items'> & {
+  products: ProductSummary[];
+  /** Administrator pins inside this rail; flagged on their items, never reordered by strategy. */
+  featuredIds?: ReadonlySet<string>;
+  /** False for administrator preview: no impression token is issued, so nothing can be recorded later. */
+  tokens?: boolean;
+};
+
+function section(input: SectionInput): RecommendationSection {
+  const { products, featuredIds, tokens = true, ...rest } = input;
+  const items: RecommendationItem[] = products.map((product, index) => (
+    featuredIds?.has(product.id) ? { rank: index + 1, product, featured: true } : { rank: index + 1, product }
+  ));
   return {
     ...rest,
-    impressionToken: items.length > 0
-      ? issueImpressionToken({ mode: rest.mode, strategy: rest.strategy, surface: rest.surface, productIds: items.map(item => item.product.id) })
+    impressionToken: tokens && items.length > 0
+      ? issueImpressionToken({ mode: rest.mode, strategy: rest.strategy, surface: rest.surface, productIds: items.map(item => item.product.id),
+        featuredProductIds: items.filter(item => item.featured).map(item => item.product.id) })
       : null,
     items,
   };
@@ -222,8 +248,21 @@ export class RecommendationService {
     return rows;
   }
 
-  async productSections(slug: string, limit: number, requestId?: string) {
+  /**
+   * Active administrator pins for a surface, hydrated through the public catalog so a pin that is hidden, archived, a
+   * fixture or out of stock drops out here (the same predicate as every organic item). Time windows are checked per request.
+   */
+  private async pinnedProducts(surface: RecommendationSurface, exclude: ReadonlySet<string>, snapshot: RecommendationConfigSnapshot, now = Date.now()) {
+    const ids = snapshot.pins
+      .filter((pin: PinRecord) => pin.surface === surface && isPinInWindow(pin, now) && !exclude.has(pin.productId))
+      .map((pin: PinRecord) => pin.productId);
+    if (ids.length === 0) return [] as ProductSummary[];
+    return purchasableOnly(await this.catalog.productSummariesByIds(ids));
+  }
+
+  async productSections(slug: string, limit: number, requestId?: string, options: RunOptions = {}) {
     const started = Date.now();
+    const tokens = !options.preview;
     const timingsMs: {
       fbt: number;
       similarAi: number | null;
@@ -238,51 +277,77 @@ export class RecommendationService {
     });
     if (!anchor) throw new AppError('Product not found.', 404, 'PRODUCT_NOT_FOUND');
     const surface: RecommendationSurface = 'product_detail';
+    const snapshot = await recommendationConfig();
+    const enabled = (mode: RecommendationMode) => sectionConfigOf(snapshot, surface, mode).enabled;
+    const capFor = (mode: RecommendationMode) => Math.min(limit, sectionConfigOf(snapshot, surface, mode).itemLimit);
     const shown = new Set<string>([anchor.id]);
     const unseen = (products: ProductSummary[]) => products.filter(product => !shown.has(product.id));
     const remember = (products: ProductSummary[]) => { for (const product of products) shown.add(product.id); return products; };
 
+    // 0. Administrator pins: an explicit "Featured" rail of its own. Anchor-based rails keep their meaning, so pins are
+    // never merged into them; pinned products are excluded from those rails so nothing appears twice.
+    const pinned = await this.pinnedProducts(surface, shown, snapshot);
+    const featuredProducts = remember(pinned.slice(0, limit));
+    const featured = featuredProducts.length > 0
+      ? section({ mode: 'FEATURED_PRODUCTS', surface, strategy: 'MERCHANDISED_PIN', isPersonalized: false, isFallback: false,
+        fallbackReason: null, modelVersion: null, embeddingVersion: null, algorithmVersion: ALGORITHMS.pinned, context: null,
+        products: featuredProducts, tokens })
+      : null;
+
     // 1. Frequently Bought Together: real distinct qualifying co-purchases only.
-    const fbtStarted = performance.now();
-    const pairs = await this.coPurchaseFor([anchor.id], limit * 2);
-    const fbtProducts = remember(unseen(purchasableOnly(await this.catalog.productSummariesByIds(pairs.map(pair => pair.productId)))).slice(0, limit));
-    const fbt = fbtProducts.length > 0
-      ? section({ mode: 'FREQUENTLY_BOUGHT_TOGETHER', surface, strategy: 'CO_PURCHASE', isPersonalized: false, isFallback: false,
-        fallbackReason: null, modelVersion: null, embeddingVersion: null, algorithmVersion: ALGORITHMS.coPurchase, context: null, products: fbtProducts })
-      : noData('FREQUENTLY_BOUGHT_TOGETHER', surface, 'INSUFFICIENT_SUPPORT');
-    timingsMs.fbt = elapsedMs(fbtStarted);
+    const fbtLimit = capFor('FREQUENTLY_BOUGHT_TOGETHER');
+    let fbt: RecommendationSection;
+    if (!enabled('FREQUENTLY_BOUGHT_TOGETHER')) {
+      fbt = noData('FREQUENTLY_BOUGHT_TOGETHER', surface, 'DISABLED');
+    } else {
+      const fbtStarted = performance.now();
+      const pairs = await this.coPurchaseFor([anchor.id], fbtLimit * 2);
+      const fbtProducts = remember(unseen(purchasableOnly(await this.catalog.productSummariesByIds(pairs.map(pair => pair.productId)))).slice(0, fbtLimit));
+      fbt = fbtProducts.length > 0
+        ? section({ mode: 'FREQUENTLY_BOUGHT_TOGETHER', surface, strategy: 'CO_PURCHASE', isPersonalized: false, isFallback: false,
+          fallbackReason: null, modelVersion: null, embeddingVersion: null, algorithmVersion: ALGORITHMS.coPurchase, context: null,
+          products: fbtProducts, tokens })
+        : noData('FREQUENTLY_BOUGHT_TOGETHER', surface, 'INSUFFICIENT_SUPPORT');
+      timingsMs.fbt = elapsedMs(fbtStarted);
+    }
 
     // 2. Similar Products: D3 learned-embedding retrieval, or an honestly labelled same-category fallback.
-    const similarAiStarted = performance.now();
-    const similarAi = await this.ai({ mode: 'SIMILAR_PRODUCTS', productId: anchor.id, excludeProductIds: [...shown].filter(id => id !== anchor.id),
-      limit: Math.min(AI_MAX_TOP_K, limit * 2) }, requestId);
-    timingsMs.similarAi = elapsedMs(similarAiStarted);
+    const similarLimit = capFor('SIMILAR_PRODUCTS');
     let similar: RecommendationSection | null = null;
     let fallbackReason: FallbackReason | null = null;
-    if (similarAi.ok && similarAi.result.anchorIndexed) {
-      const hydrationStarted = performance.now();
-      const products = remember(unseen(purchasableOnly(await this.catalog.productSummariesByIds(similarAi.result.items.map(item => item.productId)))).slice(0, limit));
-      timingsMs.similarHydration = elapsedMs(hydrationStarted);
-      if (products.length > 0) {
-        similar = section({ mode: 'SIMILAR_PRODUCTS', surface, strategy: 'EMBEDDING_SIMILARITY', isPersonalized: false, isFallback: false,
-          fallbackReason: null, modelVersion: similarAi.result.modelVersion, embeddingVersion: similarAi.result.embeddingVersion,
-          algorithmVersion: similarAi.result.algorithmVersion, context: null, products });
-      } else fallbackReason = 'NO_RESULTS';
-    } else fallbackReason = similarAi.ok ? 'NOT_INDEXED' : similarAi.reason;
-    if (!similar) {
-      fallbackReason ??= 'NO_RESULTS';
-      const fallbackStarted = performance.now();
-      const category = await this.catalog.products({ q: '', category: anchor.category.slug, page: 1, pageSize: limit + shown.size });
-      similar = section({ mode: 'SIMILAR_PRODUCTS', surface, strategy: 'FALLBACK_CATEGORY', isPersonalized: false, isFallback: true,
-        fallbackReason, modelVersion: null, embeddingVersion: null, algorithmVersion: ALGORITHMS.category,
-        context: { categoryName: anchor.category.name, categorySlug: anchor.category.slug },
-        products: remember(unseen(purchasableOnly(category.data)).slice(0, limit)) });
-      timingsMs.similarFallback = elapsedMs(fallbackStarted);
+    if (!enabled('SIMILAR_PRODUCTS')) {
+      similar = noData('SIMILAR_PRODUCTS', surface, 'DISABLED');
+    } else {
+      const similarAiStarted = performance.now();
+      const similarAi = await this.ai({ mode: 'SIMILAR_PRODUCTS', productId: anchor.id, excludeProductIds: [...shown].filter(id => id !== anchor.id),
+        limit: Math.min(AI_MAX_TOP_K, similarLimit * 2) }, requestId);
+      timingsMs.similarAi = elapsedMs(similarAiStarted);
+      if (similarAi.ok && similarAi.result.anchorIndexed) {
+        const hydrationStarted = performance.now();
+        const products = remember(unseen(purchasableOnly(await this.catalog.productSummariesByIds(similarAi.result.items.map(item => item.productId)))).slice(0, similarLimit));
+        timingsMs.similarHydration = elapsedMs(hydrationStarted);
+        if (products.length > 0) {
+          similar = section({ mode: 'SIMILAR_PRODUCTS', surface, strategy: 'EMBEDDING_SIMILARITY', isPersonalized: false, isFallback: false,
+            fallbackReason: null, modelVersion: similarAi.result.modelVersion, embeddingVersion: similarAi.result.embeddingVersion,
+            algorithmVersion: similarAi.result.algorithmVersion, context: null, products, tokens });
+        } else fallbackReason = 'NO_RESULTS';
+      } else fallbackReason = similarAi.ok ? 'NOT_INDEXED' : similarAi.reason;
+      if (!similar) {
+        fallbackReason ??= 'NO_RESULTS';
+        const fallbackStarted = performance.now();
+        const category = await this.catalog.products({ q: '', category: anchor.category.slug, page: 1, pageSize: similarLimit + shown.size });
+        similar = section({ mode: 'SIMILAR_PRODUCTS', surface, strategy: 'FALLBACK_CATEGORY', isPersonalized: false, isFallback: true,
+          fallbackReason, modelVersion: null, embeddingVersion: null, algorithmVersion: ALGORITHMS.category,
+          context: { categoryName: anchor.category.name, categorySlug: anchor.category.slug },
+          products: remember(unseen(purchasableOnly(category.data)).slice(0, similarLimit)), tokens });
+        timingsMs.similarFallback = elapsedMs(fallbackStarted);
+      }
     }
 
     // 3. You May Also Like: deeper D3 neighbours beyond what is already shown, broadened across categories.
-    let alsoLike = noData('YOU_MAY_ALSO_LIKE', surface, fallbackReason ?? 'NO_RESULTS');
-    if (!fallbackReason) {
+    const ymalLimit = capFor('YOU_MAY_ALSO_LIKE');
+    let alsoLike = noData('YOU_MAY_ALSO_LIKE', surface, enabled('YOU_MAY_ALSO_LIKE') ? (fallbackReason ?? 'NO_RESULTS') : 'DISABLED');
+    if (enabled('YOU_MAY_ALSO_LIKE') && !fallbackReason) {
       const ymalAiStarted = performance.now();
       const ymalAi = await this.ai({ mode: 'YOU_MAY_ALSO_LIKE', productId: anchor.id,
         excludeProductIds: [...shown].filter(id => id !== anchor.id), limit: AI_MAX_TOP_K }, requestId);
@@ -290,49 +355,83 @@ export class RecommendationService {
       if (ymalAi.ok && ymalAi.result.anchorIndexed) {
         const hydrationStarted = performance.now();
         const candidates = unseen(purchasableOnly(await this.catalog.productSummariesByIds(ymalAi.result.items.map(item => item.productId))));
-        const products = remember(diversifyByCategory(candidates, anchor.category.slug, limit));
+        const products = remember(diversifyByCategory(candidates, anchor.category.slug, ymalLimit));
         timingsMs.ymalHydration = elapsedMs(hydrationStarted);
         // Two cards are the minimum for a meaningful rail; fewer is hidden rather than padded.
         if (products.length >= 2) {
           alsoLike = section({ mode: 'YOU_MAY_ALSO_LIKE', surface, strategy: 'HYBRID_EMBEDDING', isPersonalized: false, isFallback: false,
             fallbackReason: null, modelVersion: ymalAi.result.modelVersion, embeddingVersion: ymalAi.result.embeddingVersion,
-            algorithmVersion: `${ymalAi.result.algorithmVersion}${ALGORITHMS.contextSuffix}`, context: null, products });
+            algorithmVersion: `${ymalAi.result.algorithmVersion}${ALGORITHMS.contextSuffix}`, context: null, products, tokens });
         }
       } else alsoLike = noData('YOU_MAY_ALSO_LIKE', surface, ymalAi.ok ? 'NOT_INDEXED' : ymalAi.reason);
     }
 
-    const sections = [similar, alsoLike, fbt];
-    this.log('RECOMMENDATIONS_RESOLVED', { surface, durationMs: Date.now() - started, requestId,
-      timingsMs,
-      sections: sections.map(item => ({ mode: item.mode, strategy: item.strategy, fallbackReason: item.fallbackReason, returned: item.items.length })),
-      embeddingVersion: similar.embeddingVersion });
+    const sections = [featured, similar, alsoLike, fbt].filter((item): item is RecommendationSection => item !== null);
+    if (tokens) {
+      this.log('RECOMMENDATIONS_RESOLVED', { surface, durationMs: Date.now() - started, requestId,
+        timingsMs,
+        sections: sections.map(item => ({ mode: item.mode, strategy: item.strategy, fallbackReason: item.fallbackReason, returned: item.items.length })),
+        embeddingVersion: similar.embeddingVersion });
+    }
     return { sections };
   }
 
-  async popular(limit: number, surface: RecommendationSurface = 'home'): Promise<RecommendationSection> {
+  /**
+   * Measured popularity for the home rail (surface home) or the sibling rails. Administrator pins lead the rail, organic
+   * items fill the remaining configured slots without repeating a pin. `pins: false` is used by the personalized fallback,
+   * which must never carry an administrator pin.
+   */
+  async popular(limit: number, surface: RecommendationSurface = 'home', options: RunOptions & { pins?: boolean } = {}): Promise<RecommendationSection> {
+    const tokens = !options.preview;
+    const snapshot = await recommendationConfig();
+    const config = sectionConfigOf(snapshot, surface, 'POPULAR_PRODUCTS');
+    if (!config.enabled) return noData('POPULAR_PRODUCTS', surface, 'DISABLED');
+    const cap = Math.min(limit, config.itemLimit);
+    const pinned = options.pins === false ? [] : (await this.pinnedProducts(surface, new Set<string>(), snapshot)).slice(0, cap);
+    const pinnedIds = new Set(pinned.map(product => product.id));
     const key = String(limit);
     let popularity = this.popularityCache.get(key);
     if (!popularity) {
       popularity = await measuredPopularity(POPULARITY_RULES.windowDays, POPULARITY_RULES.minUsersPerProduct, limit * 2);
       this.popularityCache.set(key, popularity);
     }
+    let organic: ProductSummary[] = [];
+    let measured = false;
     if (popularity.contributingUsers >= POPULARITY_RULES.minContributingUsers) {
-      const products = purchasableOnly(await this.catalog.productSummariesByIds(popularity.rows.map(row => row.productId))).slice(0, limit);
-      if (products.length >= 2) {
-        return section({ mode: 'POPULAR_PRODUCTS', surface, strategy: 'MEASURED_POPULARITY', isPersonalized: false, isFallback: false,
-          fallbackReason: null, modelVersion: null, embeddingVersion: null, algorithmVersion: ALGORITHMS.popularity, context: null, products });
-      }
+      const candidates = purchasableOnly(await this.catalog.productSummariesByIds(popularity.rows.map(row => row.productId)))
+        .filter(product => !pinnedIds.has(product.id)).slice(0, cap);
+      if (candidates.length >= 2) { organic = candidates; measured = true; }
     }
-    const arrivals = purchasableOnly((await this.catalog.products({ q: '', page: 1, pageSize: limit })).data);
+    if (measured) {
+      return section({ mode: 'POPULAR_PRODUCTS', surface, strategy: 'MEASURED_POPULARITY', isPersonalized: false, isFallback: false,
+        fallbackReason: null, modelVersion: null, embeddingVersion: null, algorithmVersion: ALGORITHMS.popularity, context: null,
+        products: [...pinned, ...organic].slice(0, cap), featuredIds: pinnedIds, tokens });
+    }
+    if (organic.length === 0 && pinned.length > 0) {
+      // Pins alone: labelled as merchandising, never as measured demand.
+      return section({ mode: 'POPULAR_PRODUCTS', surface, strategy: 'MERCHANDISED_PIN', isPersonalized: false, isFallback: true,
+        fallbackReason: 'NO_MEASURED_DEMAND', modelVersion: null, embeddingVersion: null, algorithmVersion: ALGORITHMS.pinned, context: null,
+        products: pinned, featuredIds: pinnedIds, tokens });
+    }
+    const arrivals = purchasableOnly((await this.catalog.products({ q: '', page: 1, pageSize: limit })).data)
+      .filter(product => !pinnedIds.has(product.id)).slice(0, cap);
     return section({ mode: 'POPULAR_PRODUCTS', surface, strategy: 'FALLBACK_NEW_ARRIVALS', isPersonalized: false, isFallback: true,
       fallbackReason: 'NO_MEASURED_DEMAND', modelVersion: null, embeddingVersion: null, algorithmVersion: ALGORITHMS.newArrivals,
-      context: null, products: arrivals });
+      context: null, products: [...pinned, ...arrivals].slice(0, cap), featuredIds: pinnedIds, tokens });
   }
 
-  /** Recommended for You: a learned-embedding profile only for a consenting customer with enough real activity. */
-  async forUser(userId: string, limit: number, requestId?: string): Promise<RecommendationSection & { profile: { featureSpecVersion: string; signalCount: number; watermark: string } | null }> {
+  /**
+   * Recommended for You: a learned-embedding profile only for a consenting customer with enough real activity. Administrator
+   * configuration can disable the rail or cap its size; it cannot add pins, bypass consent, or change the profile inputs.
+   */
+  async forUser(userId: string, requestedLimit: number, requestId?: string): Promise<RecommendationSection & { profile: { featureSpecVersion: string; signalCount: number; watermark: string } | null }> {
+    const snapshot = await recommendationConfig();
+    const config = sectionConfigOf(snapshot, 'home', 'RECOMMENDED_FOR_YOU');
+    if (!config.enabled) return { ...noData('RECOMMENDED_FOR_YOU', 'home', 'DISABLED'), profile: null };
+    const limit = Math.min(requestedLimit, config.itemLimit);
     const fallback = async (reason: FallbackReason) => {
-      const popular = await this.popular(limit, 'home');
+      // The fallback is the non-personal popular list, so it never carries an administrator pin.
+      const popular = await this.popular(limit, 'home', { pins: false });
       return { ...popular, mode: 'RECOMMENDED_FOR_YOU' as const, isFallback: true, fallbackReason: reason,
         strategy: popular.strategy === 'MEASURED_POPULARITY' ? 'FALLBACK_POPULAR' as const : 'FALLBACK_NEW_ARRIVALS' as const,
         impressionToken: popular.items.length > 0 ? issueImpressionToken({ mode: 'RECOMMENDED_FOR_YOU',
@@ -381,20 +480,33 @@ export class RecommendationService {
   }
 
   /** Frequently Bought Together for the current cart. Product ids are context only: nothing about the cart is changed. */
-  async forCart(productIds: string[], limit: number): Promise<RecommendationSection> {
+  async forCart(productIds: string[], limit: number, options: RunOptions = {}): Promise<RecommendationSection> {
+    const tokens = !options.preview;
+    const snapshot = await recommendationConfig();
+    const config = sectionConfigOf(snapshot, 'cart', 'FREQUENTLY_BOUGHT_TOGETHER');
+    if (!config.enabled) return noData('FREQUENTLY_BOUGHT_TOGETHER', 'cart', 'DISABLED');
+    const cap = Math.min(limit, config.itemLimit);
     // Out-of-stock cart items still provide purchase context and must remain excluded from recommendations.
     const anchors = (await this.catalog.productSummariesByIds(productIds)).map(product => product.id);
     if (anchors.length === 0) return noData('FREQUENTLY_BOUGHT_TOGETHER', 'cart', 'INSUFFICIENT_SUPPORT');
-    const pairs = await this.coPurchaseFor(anchors, limit * 2);
     // Exclude the caller's complete cart, including ids omitted by catalog hydration (for example, a product
     // whose visibility changed between cart state and recommendation lookup).
     const inCart = new Set(productIds.map(id => id.toLowerCase()));
-    const products = purchasableOnly(await this.catalog.productSummariesByIds(pairs.map(pair => pair.productId)))
-      .filter(product => !inCart.has(product.id)).slice(0, limit);
+    const pinned = (await this.pinnedProducts('cart', inCart, snapshot)).slice(0, cap);
+    const pinnedIds = new Set(pinned.map(product => product.id));
+    const pairs = await this.coPurchaseFor(anchors, cap * 2);
+    const organic = purchasableOnly(await this.catalog.productSummariesByIds(pairs.map(pair => pair.productId)))
+      .filter(product => !inCart.has(product.id) && !pinnedIds.has(product.id)).slice(0, cap);
+    const products = [...pinned, ...organic].slice(0, cap);
     if (products.length === 0) return noData('FREQUENTLY_BOUGHT_TOGETHER', 'cart', 'INSUFFICIENT_SUPPORT');
+    if (organic.length === 0) {
+      return section({ mode: 'FREQUENTLY_BOUGHT_TOGETHER', surface: 'cart', strategy: 'MERCHANDISED_PIN', isPersonalized: false,
+        isFallback: true, fallbackReason: 'INSUFFICIENT_SUPPORT', modelVersion: null, embeddingVersion: null,
+        algorithmVersion: ALGORITHMS.pinned, context: null, products, featuredIds: pinnedIds, tokens });
+    }
     return section({ mode: 'FREQUENTLY_BOUGHT_TOGETHER', surface: 'cart', strategy: 'CO_PURCHASE', isPersonalized: false,
       isFallback: false, fallbackReason: null, modelVersion: null, embeddingVersion: null, algorithmVersion: ALGORITHMS.coPurchase,
-      context: null, products });
+      context: null, products, featuredIds: pinnedIds, tokens });
   }
 
   async preferences(userId: string) {
@@ -496,12 +608,15 @@ export class RecommendationService {
     const claims = verifyImpressionToken(token);
     if (!claims) throw new AppError('Recommendation event token is invalid or expired.', 400, 'INVALID_RECOMMENDATION_TOKEN');
     const rank = new Map(claims.productIds.map((id, index) => [id.toLowerCase(), index + 1]));
+    // Task 05.2: pinned items inside an organic rail are merchandising placements, never credited to the engine's strategy.
+    const featured = new Set((claims.featuredProductIds ?? []).map(id => id.toLowerCase()));
     if (events.some(event => !rank.has(event.productId.toLowerCase()))) {
       throw new AppError('Recommendation event does not match the shown products.', 400, 'INVALID_RECOMMENDATION_EVENT');
     }
     const result = await prisma.recommendationEvent.createMany({
       data: events.map(event => ({ batchId: claims.batchId, productId: event.productId.toLowerCase(), eventType: event.type,
-        mode: claims.mode, strategy: claims.strategy, surface: claims.surface, rank: rank.get(event.productId.toLowerCase())! })),
+        mode: claims.mode, strategy: featured.has(event.productId.toLowerCase()) ? 'MERCHANDISED_PIN' : claims.strategy, surface: claims.surface,
+        rank: rank.get(event.productId.toLowerCase())! })),
       skipDuplicates: true,
     });
     return { accepted: result.count };

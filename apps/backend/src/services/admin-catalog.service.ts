@@ -6,7 +6,8 @@ import { normalizeSlug } from '../validators/product.validator.js';
 import { deriveStockStatus } from './inventory.service.js';
 import { stockWhere } from './admin-inventory.service.js';
 import { logSafely } from '../utils/logger.js';
-import type { categoryCreateSchema, categoryListSchema, categoryUpdateSchema, productCreateSchema, productListSchema,
+import { recordAdminAudit } from './admin-audit.js';
+import type { bulkStatusSchema, categoryCreateSchema, categoryListSchema, categoryUpdateSchema, productCreateSchema, productListSchema,
   productUpdateSchema } from '../validators/admin.validator.js';
 
 /**
@@ -23,6 +24,9 @@ type CategoryList = z.infer<typeof categoryListSchema>;
 type CategoryCreate = z.infer<typeof categoryCreateSchema>;
 type CategoryUpdate = z.infer<typeof categoryUpdateSchema>;
 const TX = { maxWait: 10_000, timeout: 20_000 };
+type BulkOutcome = 'UPDATED' | 'UNCHANGED' | 'CONFLICT' | 'NOT_FOUND' | 'REJECTED';
+type BulkProductResult = { id: string; outcome: BulkOutcome; message: string };
+const BULK_SUMMARY_KEY = { UPDATED: 'updated', UNCHANGED: 'unchanged', CONFLICT: 'conflict', NOT_FOUND: 'notFound', REJECTED: 'rejected' } as const;
 /**
  * Categories the console manages: empty ones and ones holding at least one real product. A category whose only products are QA fixtures
  * (isTestFixture) is test scaffolding, hidden like the fixtures themselves; it is never deleted, because fixtures carry commerce history.
@@ -195,19 +199,81 @@ export class AdminCatalogService {
     return this.getProduct(productId);
   }
 
+  /**
+   * The archive/reactivate policy, shared by the single and bulk endpoints. Runs inside the caller's transaction. Order: existence,
+   * category visibility, then the version precondition. An item already in the requested state is UNCHANGED (no write) when its version
+   * still matches, and a CONFLICT when it does not.
+   */
+  private async applyProductStatus(tx: Db, productId: string, status: ProductStatus, expected: string): Promise<'UPDATED' | 'UNCHANGED'> {
+    const current = await tx.product.findUnique({ where: { id: productId }, select: { isTestFixture: true, status: true,
+      category: { select: { isActive: true } } } });
+    if (!current || current.isTestFixture) throw new AppError('Product not found.', 404, 'PRODUCT_NOT_FOUND');
+    if (status === 'ACTIVE' && !current.category.isActive) {
+      throw new AppError('Reactivate this product’s category first, or move the product to an active category.', 409, 'CATEGORY_INACTIVE');
+    }
+    if (current.status === status) {
+      const matches = await tx.product.count({ where: { id: productId, updatedAt: new Date(expected) } });
+      if (matches !== 1) throw new AppError('This product changed since you opened it. Reload and try again.', 409, 'PRODUCT_CONFLICT');
+      return 'UNCHANGED';
+    }
+    const updated = await tx.product.updateMany({ where: { id: productId, updatedAt: new Date(expected) }, data: { status } });
+    if (updated.count !== 1) throw new AppError('This product changed since you opened it. Reload and try again.', 409, 'PRODUCT_CONFLICT');
+    return 'UPDATED';
+  }
+
   async setProductStatus(actorId: string, productId: string, status: ProductStatus, expected: string) {
-    await this.db.$transaction(async tx => {
-      const current = await tx.product.findUnique({ where: { id: productId }, select: { isTestFixture: true, status: true,
-        category: { select: { isActive: true } } } });
-      if (!current || current.isTestFixture) throw new AppError('Product not found.', 404, 'PRODUCT_NOT_FOUND');
-      if (status === 'ACTIVE' && !current.category.isActive) {
-        throw new AppError('Reactivate this product’s category first, or move the product to an active category.', 409, 'CATEGORY_INACTIVE');
-      }
-      const updated = await tx.product.updateMany({ where: { id: productId, updatedAt: new Date(expected) }, data: { status } });
-      if (updated.count !== 1) throw new AppError('This product changed since you opened it. Reload and try again.', 409, 'PRODUCT_CONFLICT');
-    }, TX);
+    await this.db.$transaction(tx => this.applyProductStatus(tx, productId, status, expected), TX);
     logSafely('info', 'Admin catalog change', { event: status === 'ACTIVE' ? 'admin.product.reactivated' : 'admin.product.archived', actorId, productId });
     return this.getProduct(productId);
+  }
+
+  /**
+   * Bounded batch archive/reactivate. Each row runs the same policy in its own short transaction, so one failing row never rolls back
+   * another and no long lock is held. A successful product write and its item audit commit together; one additional sanitized audit row
+   * summarizes the batch.
+   */
+  async bulkSetProductStatus(actorId: string, status: ProductStatus, items: z.infer<typeof bulkStatusSchema>['items']) {
+    const results: BulkProductResult[] = [];
+    for (const item of items) results.push(await this.bulkStatusItem(actorId, status, item.id, item.expectedUpdatedAt));
+    const summary = { updated: 0, unchanged: 0, conflict: 0, notFound: 0, rejected: 0 };
+    for (const result of results) summary[BULK_SUMMARY_KEY[result.outcome]] += 1;
+    const failed = summary.conflict + summary.notFound + summary.rejected > 0;
+    // Product changes already have durable per-item audit rows from their own transactions. Keep the batch summary supplementary so a
+    // transient summary-write failure cannot leave successful mutations unaudited or falsify their truthful per-item results.
+    try {
+      await recordAdminAudit({ actorId, action: 'PRODUCT_BULK_STATUS', resourceType: 'product', outcome: failed ? 'PARTIAL' : 'SUCCESS',
+        details: { status, counts: summary, ids: items.map(item => item.id) } });
+    } catch {
+      logSafely('warn', 'Admin bulk status summary audit failed; item audits remain durable', { event: 'admin.product.bulk_status_summary_audit_failed', actorId });
+    }
+    logSafely('info', 'Admin catalog change', { event: 'admin.product.bulk_status', actorId, status, ...summary });
+    return { results, summary };
+  }
+
+  private async bulkStatusItem(actorId: string, status: ProductStatus, productId: string, expected: string): Promise<BulkProductResult> {
+    try {
+      const outcome = await this.db.$transaction(async tx => {
+        const result = await this.applyProductStatus(tx, productId, status, expected);
+        if (result === 'UPDATED') {
+          await recordAdminAudit({ actorId, action: 'PRODUCT_BULK_STATUS_ITEM', resourceType: 'product', resourceId: productId,
+            outcome: 'SUCCESS', details: { status } }, tx);
+        }
+        return result;
+      }, TX);
+      if (outcome === 'UNCHANGED') return { id: productId, outcome: 'UNCHANGED', message: 'Already in this state.' };
+      return { id: productId, outcome: 'UPDATED', message: status === 'ACTIVE' ? 'Reactivated.' : 'Archived.' };
+    } catch (error) {
+      if (error instanceof AppError) {
+        if (error.statusCode === 404) return { id: productId, outcome: 'NOT_FOUND', message: error.message };
+        if (error.code === 'PRODUCT_CONFLICT') return { id: productId, outcome: 'CONFLICT', message: error.message };
+        return { id: productId, outcome: 'REJECTED', message: error.message };
+      }
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+        return { id: productId, outcome: 'CONFLICT', message: 'This product was being changed by someone else. Reload and try again.' };
+      }
+      logSafely('error', 'Admin bulk product status item failed', { event: 'admin.product.bulk_status_failed', productId });
+      return { id: productId, outcome: 'REJECTED', message: 'This product could not be changed. Try again.' };
+    }
   }
 
   /** Permanent deletion, re-checked under the product row lock so a concurrent order, cart or photo upload cannot slip in between. */

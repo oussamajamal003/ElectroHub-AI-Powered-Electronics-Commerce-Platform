@@ -1,0 +1,36 @@
+@use '@/styles/abstracts' as *;
+
+// Settings page layout. Forms reuse the admin panel, field and action classes from features/admin/shared/AdminPages.module.scss.
+
+.stack {
+  display: grid;
+  gap: $spacing-6;
+  min-width: 0;
+  align-content: start;
+}
+
+// The tab strip spans the content width and wraps on narrow screens instead of scrolling sideways.
+.tabs {
+  flex-wrap: wrap;
+  max-width: 100%;
+  gap: $spacing-1;
+  padding: $spacing-1;
+  border: 1px solid $color-border;
+  background: $color-surface;
+
+  button {
+    gap: $spacing-2;
+    margin: 0;
+    border-bottom: 2px solid transparent;
+    font-weight: $font-weight-medium;
+
+    &[data-state='active'] {
+      background: $color-background;
+      border-bottom-color: $color-primary;
+      color: $color-primary;
+      font-weight: $font-weight-semibold;
+    }
+  }
+}
+
+.dirty { margin: $spacing-3 0 0; color: $color-warning-foreground; font-size: $font-size-sm; }

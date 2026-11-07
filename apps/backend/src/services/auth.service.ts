@@ -1,10 +1,12 @@
 import crypto from 'crypto';
-import { AuthRepository } from '../repositories/auth.repository.js';
+import { AuthRepository, StalePasswordHashError } from '../repositories/auth.repository.js';
 import { generateAccessToken, JwtPayload } from '../utils/jwt.js';
 import { hashPassword, verifyPassword } from '../utils/hash.js';
 import { otpService, OtpVerificationError, OTP_CONFIG } from './otp.service.js';
 import { emailService } from './email.service.js';
 import { OtpPurpose, SecurityEventType, User, Role } from '@prisma/client';
+import type { AdminSessionAssurance } from '../repositories/auth.repository.js';
+import { adminMfaService } from './admin-mfa.service.js';
 import { logger } from '../utils/logger.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
@@ -100,6 +102,9 @@ export class AuthService {
       };
     }
 
+    // Task 05.2: a correct ADMIN password only opens a restricted, single-use MFA transaction; never a session or a token.
+    if (user.role.name === 'ADMIN') return adminMfaService.startLogin(user);
+
     return this.createSession(user);
   }
 
@@ -137,16 +142,28 @@ export class AuthService {
     return this.createSession(user);
   }
 
-  private async createSession(user: User & { role: Role }) {
+  /**
+   * Task 05.2: the only way to mint an administrator session — called by AdminMfaService after a verified second factor.
+   */
+  async createAssuredAdminSession(user: User & { role: Role }, assurance: AdminSessionAssurance) {
+    if (user.role.name !== 'ADMIN') throw new Error('Invalid credentials');
+    return this.createSession(user, assurance);
+  }
+
+  private async createSession(user: User & { role: Role }, adminAssurance?: AdminSessionAssurance) {
+    // Fail closed: no code path may issue an ADMIN session without a verified second factor (and none a CUSTOMER one with it).
+    if ((user.role.name === 'ADMIN') !== Boolean(adminAssurance)) throw new Error('Invalid credentials');
     const refreshToken = crypto.randomBytes(64).toString('hex');
     // Re-validates the account under the lifecycle lock: a password change, reset, deactivation or role change
     // that committed after this user was read (and its credentials verified) must not yield a surviving session.
-    const issued = await this.repository.createSessionRefreshToken(user, crypto.createHash('sha256').update(refreshToken).digest('hex'), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    const issued = await this.repository.createSessionRefreshToken(user, crypto.createHash('sha256').update(refreshToken).digest('hex'), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), adminAssurance);
     if (!issued) {
       throw new Error('Invalid credentials');
     }
     return {
-      accessToken: generateAccessToken({ userId: user.id, role: user.role.name }),
+      accessToken: generateAccessToken(adminAssurance
+        ? { userId: user.id, role: user.role.name, sessionId: issued.familyId }
+        : { userId: user.id, role: user.role.name }),
       refreshToken,
       user: {
         id: user.id,
@@ -205,17 +222,23 @@ export class AuthService {
     }
 
     const roleName = user.role?.name ?? 'CUSTOMER';
-    const payload: JwtPayload = {
-      userId: user.id,
-      role: roleName,
-    };
+    const isAdmin = roleName === 'ADMIN';
+    // Task 05.2: an ADMIN family refreshes only while its MFA-assured AdminSession lives. A legacy (pre-MFA) admin family has none:
+    // it is revoked here, which is the enforced cutover — there is no grandfathered password-only administrator session.
+    if (isAdmin && !await this.repository.hasAdminSession(storedToken.familyId, user.id)) {
+      await this.repository.revokeRefreshTokenFamily(tokenHash);
+      throw new AppError('Your administrator session has ended. Sign in again.', 401, 'ADMIN_SESSION_INVALID');
+    }
+    const payload: JwtPayload = isAdmin
+      ? { userId: user.id, role: roleName, sessionId: storedToken.familyId }
+      : { userId: user.id, role: roleName };
     const newAccessToken = generateAccessToken(payload);
 
     const newRawRefreshToken = crypto.randomBytes(64).toString('hex');
     const newTokenHash = crypto.createHash('sha256').update(newRawRefreshToken).digest('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    const rotated = await this.repository.rotateRefreshToken(user.id, tokenHash, newTokenHash, expiresAt);
+    const rotated = await this.repository.rotateRefreshToken(user.id, tokenHash, newTokenHash, expiresAt, isAdmin);
     if (!rotated) {
       // Rotation lost the atomic race. The loser gets no token (see above): 409 while the session family is alive, 401 once it is not.
       if (await this.repository.hasActiveFamilyToken(tokenHash)) {
@@ -254,8 +277,9 @@ export class AuthService {
   async forgotPassword(email: string) {
     const normalizedEmail = normalizeEmail(email);
     const user = await this.repository.findUserByEmail(normalizedEmail);
-    // Generic response behavior: Do not fail if user doesn't exist
-    if (!user || !user.isActive) {
+    // Generic response behavior: Do not fail if user doesn't exist.
+    // Administrators never recover through this customer path: it would accept an email code as the only proof.
+    if (!user || !user.isActive || user.role.name === 'ADMIN') {
       return; 
     }
 
@@ -292,12 +316,47 @@ export class AuthService {
   }
 
   /**
+   * Administrator forgot-password, step 1. Enumeration-safe: unknown, inactive and CUSTOMER addresses behave exactly like an
+   * administrator whose mail could not be delivered. Role comes from the database only.
+   */
+  async requestAdminPasswordRecovery(email: string) {
+    const normalizedEmail = normalizeEmail(email);
+    const user = await this.repository.findUserByEmail(normalizedEmail);
+    if (!user || !user.isActive || user.role.name !== 'ADMIN') return;
+    try {
+      const code = await otpService.createChallenge(user.id, user.email, OtpPurpose.PASSWORD_RESET);
+      if (!await emailService.sendPasswordResetOtp(user.email, code, user.id)) logger.error('Admin recovery delivery failed', { userId: user.id });
+    } catch {
+      logger.error('Admin recovery delivery exception', { userId: user.id, error: 'admin_recovery_delivery_failed' });
+    }
+  }
+
+  /**
+   * Administrator forgot-password, step 2: the email code proves mailbox control only. It opens a restricted PASSWORD_RECOVERY
+   * transaction (no reset authorization, no session) that an already-registered MFA factor must still convert.
+   */
+  async verifyAdminRecoveryEmail(email: string, code: string) {
+    const normalizedEmail = normalizeEmail(email);
+    const user = await this.repository.findUserByEmail(normalizedEmail);
+    if (!user || !user.isActive || user.role.name !== 'ADMIN') throw new OtpVerificationError('OTP_INVALID');
+    const challengeId = await otpService.getLatestChallengeIdByEmail(normalizedEmail, OtpPurpose.PASSWORD_RESET);
+    if (!challengeId) throw new OtpVerificationError('OTP_INVALID');
+    const verification = await otpService.checkChallengeForAtomicConsumption(challengeId, code);
+    if (verification !== 'VERIFIED') throw new OtpVerificationError(verification);
+    const challenge = await otpService.getActiveChallengeForUser(user.id, OtpPurpose.PASSWORD_RESET);
+    if (!challenge || challenge.id !== challengeId) throw new OtpVerificationError('OTP_INVALID');
+    const opened = await this.repository.consumeResetOtpThen(challenge.id, user.id, challenge.codeHash, new Date(), tx => adminMfaService.openPasswordRecovery(tx, user));
+    if (!opened) throw new OtpVerificationError('OTP_INVALID');
+    return opened;
+  }
+
+  /**
    * Verify a reset OTP and return a short-lived reset authorization.
    */
   async verifyPasswordResetOtp(email: string, code: string) {
     const normalizedEmail = normalizeEmail(email);
     const user = await this.repository.findUserByEmail(normalizedEmail);
-    if (!user || !user.isActive) {
+    if (!user || !user.isActive || user.role.name === 'ADMIN') {
       throw new OtpVerificationError('OTP_INVALID');
     }
 
@@ -328,8 +387,24 @@ export class AuthService {
       throw new Error('Invalid or expired reset token');
     }
     const newPasswordHash = await hashPassword(newPasswordPlain);
-    const completed = await this.repository.completePasswordReset(authorization.userId, tokenHash, newPasswordHash, new Date());
+    let completed = false;
+    for (let attempt = 0; ; attempt += 1) {
+      // Compare against the latest stored hash; a rejection happens before the authorization is consumed.
+      const current = await this.repository.findUserById(authorization.userId);
+      if (!current || !current.isActive) throw new Error('Invalid or expired reset token');
+      // Read after the hash: a reset that already spent this authorization reports an invalid token, not "reused".
+      if (!await this.repository.findPasswordResetAuthorization(tokenHash)) throw new Error('Invalid or expired reset token');
+      await this.assertNotCurrentPassword(newPasswordPlain, current.passwordHash);
+      try {
+        completed = await this.repository.completePasswordReset(authorization.userId, tokenHash, newPasswordHash, new Date(), current.passwordHash);
+        break;
+      } catch (error) {
+        if (!(error instanceof StalePasswordHashError) || attempt >= 2) throw error;
+      }
+    }
     if (!completed) throw new Error('Invalid or expired reset token');
+    // After commit: live administrator sockets held by the old credential end now (access tokens are already DB-revoked).
+    if (authorization.user.role.name === 'ADMIN') DeliveryPublisher.disconnectUser(authorization.userId, 'LOGOUT');
     if (!await emailService.sendPasswordChangedNotification(authorization.user.email, authorization.userId)) {
       logger.error('Password reset notification delivery failed', { userId: authorization.userId });
     }
@@ -523,6 +598,12 @@ export class AuthService {
     return otpService.resendChallenge(challengeId);
   }
 
+  private async assertNotCurrentPassword(newPasswordPlain: string, currentHash: string | null): Promise<void> {
+    if (currentHash && await verifyPassword(newPasswordPlain, currentHash)) {
+      throw new AppError('Your new password must be different from your current password.', 422, 'PASSWORD_REUSED');
+    }
+  }
+
   /**
    * Change password for authenticated user.
    */
@@ -538,7 +619,20 @@ export class AuthService {
     }
 
     const newPasswordHash = await hashPassword(newPasswordPlain);
-    await this.repository.updatePasswordAndRevokeSessions(userId, newPasswordHash, SecurityEventType.PASSWORD_CHANGED);
+    let observedHash = user.passwordHash;
+    for (let attempt = 0; ; attempt += 1) {
+      await this.assertNotCurrentPassword(newPasswordPlain, observedHash);
+      try {
+        await this.repository.updatePasswordAndRevokeSessions(userId, newPasswordHash, SecurityEventType.PASSWORD_CHANGED, observedHash);
+        break;
+      } catch (error) {
+        if (!(error instanceof StalePasswordHashError) || attempt >= 2) throw error;
+        const latest = await this.repository.findUserById(userId);
+        if (!latest || !latest.isActive) throw new Error('User not found or inactive');
+        if (!await verifyPassword(currentPasswordPlain, latest.passwordHash)) throw new Error('Incorrect current password');
+        observedHash = latest.passwordHash;
+      }
+    }
     if (!await emailService.sendPasswordChangedNotification(user.email, user.id)) {
       logger.error('Password change notification delivery failed', { userId: user.id });
     }

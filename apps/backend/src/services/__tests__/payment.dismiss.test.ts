@@ -1,7 +1,9 @@
+import { currentShippingSnapshot } from '../shipping-config.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { PaymentService } from '../payment.service.js';
 
+vi.mock('../shipping-config.js', async original => ({ ...await original<typeof import('../shipping-config.js')>(), loadShippingConfig: vi.fn(async () => currentShippingSnapshot()) }));
 vi.mock('../../lib/prisma.js', () => ({ prisma: {} }));
 vi.mock('../stripe.provider.js', () => ({ stripeProvider: {} }));
 

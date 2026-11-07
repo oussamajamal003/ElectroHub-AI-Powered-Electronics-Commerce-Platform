@@ -5,6 +5,7 @@ import { currentCart, emptyCart, MAX_CART_LINES, MAX_CART_QUANTITY } from './car
 import { lockCartForUser } from './cart.lock.js';
 import { InventoryService, validateInventoryPurchase, type LockedInventorySnapshot } from './inventory.service.js';
 import { attemptSchema, businessDate, buyNowScopeId, checkoutRequestSchema, requestHash, savedAmountsMatch, savedPurchaseTerms } from './checkout.domain.js';
+import { loadShippingConfig } from './shipping-config.js';
 import { isSerializationConflict } from './transaction-conflict.js';
 import { verifyAuthorization, type ProviderIntent } from './payment.domain.js';
 import { performance } from 'node:perf_hooks';
@@ -245,8 +246,10 @@ export class OrderService {
               item.status === 'ACTIVE' && category.isActive);
           }
           // Shared with saved-purchase retry (PaymentService.resume) so both gates apply identical terms.
+          // The configured snapshot used for the revision and the terms below is loaded inside this transaction's read path.
+          const shipping = await loadShippingConfig(tx);
           const terms = savedPurchaseTerms({ scopeId: buyNowScope ? buyNowScopeId(userId) : (cartId as string),
-            expectedRevision: request.expectedRevision, deliveryMethod: transactionRequest.deliveryMethod, lines });
+            expectedRevision: request.expectedRevision, deliveryMethod: transactionRequest.deliveryMethod, lines, shipping });
           if (!terms.revisionMatches) throw new AppError('Your cart or prices changed. Review the current total before placing your order.', 409, 'CHECKOUT_CHANGED');
           if (!terms.delivery || !terms.totals) throw new AppError('Choose an available delivery method.', 400, 'CHECKOUT_INVALID_DELIVERY');
           const { delivery, totals } = terms;

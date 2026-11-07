@@ -31,6 +31,9 @@
     "lint": "eslint src/ --ext .ts",
     "typecheck": "tsc --noEmit",
     "db:seed": "npx prisma db seed",
+    "admin:security": "tsx scripts/admin-security.ts",
+    "test:admin-security:pg": "node scripts/admin-security-pg.cjs",
+    "qa:task05-2:browser-stack": "node scripts/task05-2-browser-stack.cjs",
     "catalog:expansion": "tsx scripts/catalog-expansion.ts",
     "catalog:expansion:finalize-media": "tsx scripts/catalog-expansion-finalize-media.ts",
     "catalog:expansion:api": "tsx scripts/catalog-expansion-api-smoke.ts"
@@ -38,6 +41,7 @@
   "dependencies": {
     "@prisma/adapter-pg": "^6.12.0",
     "@prisma/client": "^6.12.0",
+    "@simplewebauthn/server": "14.0.3",
     "bcrypt": "^6.0.0",
     "bidi-js": "1.1.0",
     "cookie-parser": "^1.4.7",

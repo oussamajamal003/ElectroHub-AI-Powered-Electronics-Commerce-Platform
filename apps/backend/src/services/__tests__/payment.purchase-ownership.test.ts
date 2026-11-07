@@ -1,10 +1,12 @@
+import { currentShippingSnapshot } from '../shipping-config.js';
 import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { PaymentService } from '../payment.service.js';
 import { currentCart, purchaseItemsProjection } from '../cart.service.js';
 import type { Attempt, PaymentProvider, ProviderIntent } from '../payment.domain.js';
-import { cartRevision, deliveryMethods, savedAmountsMatch, savedPurchaseTerms } from '../checkout.domain.js';
+import { cartRevision, savedAmountsMatch, savedPurchaseTerms } from '../checkout.domain.js';
+vi.mock('../shipping-config.js', async original => ({ ...await original<typeof import('../shipping-config.js')>(), loadShippingConfig: vi.fn(async () => currentShippingSnapshot()) }));
 vi.mock('../../lib/prisma.js', () => ({ prisma: {} }));
 vi.mock('../stripe.provider.js', () => ({ stripeProvider: {} }));
 vi.mock('../cart.service.js', async original => ({ ...await original<typeof import('../cart.service.js')>(), currentCart: vi.fn(), purchaseItemsProjection: vi.fn() }));
@@ -253,7 +255,9 @@ it('purchase projection distinguishes retryable decline from unknown without fin
 
 describe('Saved delivery terms are revalidated before card confirmation (offline doubles)', () => {
   type Method = { id: string; price: string; minDays: number; maxDays: number };
-  const methods = deliveryMethods as unknown as Method[]; const original = methods.map(method => ({ ...method }));
+  // Task 05.2: live delivery terms come from the shipping snapshot (an administrator change is modelled by mutating it); the static
+  // catalog only carries labels and day ranges, so mutating it would no longer reach pricing.
+  const methods = currentShippingSnapshot().methods as unknown as Method[]; const original = methods.map(method => ({ ...method }));
   afterEach(() => { methods.splice(0, methods.length, ...original.map(method => ({ ...method }))); });
   const noMutation = () => {
     expect(db.paymentAttempt.update).not.toHaveBeenCalled(); expect(db.paymentAttempt.updateMany).not.toHaveBeenCalled();

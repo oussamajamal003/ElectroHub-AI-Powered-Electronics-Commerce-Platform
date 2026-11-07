@@ -112,6 +112,13 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       return res.status(403).json(result);
     }
 
+    // Task 05.2: an ADMIN password opens only a restricted MFA transaction — no cookie, no access token.
+    if ('requiresMfa' in result) {
+      logger.info('AUTH_LOGIN_MFA_REQUIRED', { enrollmentRequired: result.enrollmentRequired });
+      res.set('Cache-Control', 'no-store');
+      return res.status(200).json(result);
+    }
+
     if (!('accessToken' in result) || !result.refreshToken || !result.user) {
       throw new Error('Invalid login result state');
     }
@@ -417,6 +424,11 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
+    // Task 05.2: administrators change their password at /api/admin/me/password, which requires a recent MFA step-up. This shared
+    // route must not become a way around it.
+    if (req.user?.role === 'ADMIN') {
+      return res.status(403).json({ error: 'Administrators change their password from the admin console.', code: 'ADMIN_ENDPOINT_REQUIRED' });
+    }
     const data = changePasswordSchema.parse(req.body);
     await authService.changePassword(userId, data.currentPassword, data.newPassword);
 

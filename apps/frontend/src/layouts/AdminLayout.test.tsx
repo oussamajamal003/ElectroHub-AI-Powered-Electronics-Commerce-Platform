@@ -23,12 +23,13 @@ describe('AdminLayout shell', () => {
       isPending: false, isError: false } as unknown as ReturnType<typeof useAdminAlerts>);
   });
 
-  it('lists only implemented 05.1 modules and marks the current one', () => {
+  it('lists only implemented modules (05.1 operations + 05.2 growth/administration) and marks the current one', () => {
     renderAt('/admin/inventory');
     const nav = screen.getByRole('navigation', { name: 'Admin navigation' });
     const labels = within(nav).getAllByRole('link').map(link => link.textContent);
-    expect(labels).toEqual(['Dashboard', 'Products', 'Categories', 'Inventory', 'Orders', 'Delivery', 'Customers']);
-    expect(within(nav).queryByText(/analytics|settings/i)).toBeNull();
+    expect(labels).toEqual(['Dashboard', 'Products', 'Categories', 'Inventory', 'Orders', 'Delivery', 'Customers', 'Recommendations', 'Analytics', 'Settings']);
+    // Personal account destinations live in the avatar menu, never in the main navigation.
+    expect(within(nav).queryByText(/profile|security|sessions/i)).toBeNull();
     expect(within(nav).getByRole('link', { name: 'Inventory' })).toHaveAttribute('aria-current', 'page');
     expect(within(nav).getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current');
   });
@@ -44,6 +45,15 @@ describe('AdminLayout shell', () => {
     expect(window.localStorage.getItem(SIDEBAR_PREFERENCE_KEY)).toBe('1');
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(screen.getByRole('navigation', { name: 'Admin navigation' })).getByRole('link', { name: 'Orders' })).toBeInTheDocument();
+  });
+
+  it('opens another admin page at its top', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    renderAt('/admin/analytics');
+    scrollTo.mockClear();
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Admin navigation' })).getByRole('link', { name: 'Products' }));
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'instant' });
+    scrollTo.mockRestore();
   });
 
   const openSignOut = async () => {

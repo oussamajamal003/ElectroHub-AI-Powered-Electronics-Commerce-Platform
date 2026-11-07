@@ -18,7 +18,12 @@
   @include respond-to(lg) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 .threeColumns { @include respond-to(lg) { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-.item { display: flex; min-width: 0; > * { flex: 1; } }
+.item { position: relative; display: flex; min-width: 0; > * { flex: 1; } }
+.featuredBadge {
+  position: absolute; top: $spacing-3; left: $spacing-3; z-index: 1; pointer-events: none;
+  padding: $spacing-1 $spacing-2; border-radius: $radius-full; background: $color-primary; color: $color-text-inverse;
+  font-size: $font-size-xs; font-weight: $font-weight-semibold; line-height: 1;
+}
 .itemWithRemove {
   flex-direction: column;
   align-items: stretch;

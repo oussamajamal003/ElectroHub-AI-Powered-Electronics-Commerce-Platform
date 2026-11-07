@@ -28,6 +28,9 @@ export function railCopy(section: RecommendationSection): RailCopy | null {
       return section.context ? { title: `More in ${section.context.categoryName}`, description: 'Newest products in this category.' } : null;
     case 'FALLBACK_NEW_ARRIVALS':
       return { title: 'New Arrivals', description: 'The latest products in our store.' };
+    case 'MERCHANDISED_PIN':
+      // Hand-picked by the store team: never described as measured demand or personal relevance.
+      return { title: 'Featured', description: 'Selected by our store team.' };
     default:
       return null;
   }

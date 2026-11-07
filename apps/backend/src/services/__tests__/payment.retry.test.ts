@@ -1,3 +1,4 @@
+import { currentShippingSnapshot } from '../shipping-config.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { PaymentService } from '../payment.service.js';
@@ -6,6 +7,7 @@ import type { Attempt, PaymentProvider, ProviderIntent } from '../payment.domain
 
 const projection = vi.hoisted(() => vi.fn());
 const commit = vi.hoisted(() => vi.fn());
+vi.mock('../shipping-config.js', async original => ({ ...await original<typeof import('../shipping-config.js')>(), loadShippingConfig: vi.fn(async () => currentShippingSnapshot()) }));
 vi.mock('../../lib/prisma.js', () => ({ prisma: {} }));
 vi.mock('../stripe.provider.js', () => ({ stripeProvider: {} }));
 vi.mock('../cart.service.js', () => ({ currentCart: projection, buyNowProjection: projection, MAX_CART_LINES: 50, MAX_CART_QUANTITY: 999 }));

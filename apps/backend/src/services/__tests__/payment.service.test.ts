@@ -1,3 +1,4 @@
+import { currentShippingSnapshot } from '../shipping-config.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma, type PrismaClient, type PaymentWork } from '@prisma/client';
 import { PaymentService } from '../payment.service.js';
@@ -20,6 +21,7 @@ const captureTools = createRequire(resolve('package.json'))('./scripts/capture-f
 };
 
 const commit = vi.hoisted(() => vi.fn());
+vi.mock('../shipping-config.js', async original => ({ ...await original<typeof import('../shipping-config.js')>(), loadShippingConfig: vi.fn(async () => currentShippingSnapshot()) }));
 vi.mock('../order.service.js', () => ({ OrderService: class { commitAuthorized = commit; getConfirmation = vi.fn().mockResolvedValue(null); } }));
 vi.mock('../../lib/prisma.js', () => ({ prisma: {} }));
 vi.mock('../stripe.provider.js', () => ({ stripeProvider: {} }));

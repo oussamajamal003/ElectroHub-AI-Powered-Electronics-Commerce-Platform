@@ -1,7 +1,9 @@
+import { currentShippingSnapshot } from '../shipping-config.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@prisma/client';
 import { CartService, MAX_CART_LINES, cartResponse, currentCart } from '../cart.service.js';
 
+vi.mock('../shipping-config.js', async original => ({ ...await original<typeof import('../shipping-config.js')>(), loadShippingConfig: vi.fn(async () => currentShippingSnapshot()) }));
 vi.mock('../../lib/prisma.js', () => ({ prisma: {} }));
 vi.mock('../../utils/logger.js', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
 

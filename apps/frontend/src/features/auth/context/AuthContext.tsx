@@ -1,6 +1,6 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, LoginCredentials, RegisterData } from '../types';
-import { authApi, VerificationResponse } from '../api/auth';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { User, LoginCredentials, RegisterData, isAdminMfaRequired } from '../types';
+import { authApi, VerificationResponse, LoginResult } from '../api/auth';
 import { ApiError, setAccessToken } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { readCachedUser, restoreSession } from '../sessionRestore';
@@ -20,12 +20,17 @@ interface AuthContextValue extends AuthState {
   isLoggingOut: boolean;
   rememberedUser: Pick<User, 'firstName' | 'lastName'> | null;
   finishGoogle: () => Promise<void>;
-  login: (credentials: LoginCredentials) => Promise<VerificationResponse>;
+  /** Customer sign-in establishes the session. An administrator's password proof returns `requiresMfa` and establishes nothing. */
+  login: (credentials: LoginCredentials) => Promise<LoginResult>;
+  /** Establishes an administrator session after the MFA challenge, enrollment or invitation acceptance succeeded. */
+  completeAdminSession: (session: { accessToken: string; user: User }) => void;
   register: (data: RegisterData) => Promise<VerificationResponse>;
   verifyEmail: (data: { email: string; code: string }) => Promise<VerificationResponse>;
   logout: () => Promise<void>;
   finishLogoutTransition: () => void;
   clearSession: () => void;
+  /** Updates the authenticated identity after a role-specific profile API succeeds. */
+  updateUserNames: (expectedUserId: string, names: Pick<User, 'firstName' | 'lastName'>) => void;
   updateProfile: (data: { firstName?: string; lastName?: string; email?: string }) => Promise<VerificationResponse>;
   verifyEmailChange: (code: string) => Promise<User>;
 }
@@ -98,6 +103,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [restoreEpoch, setRestoreEpoch] = useState(0);
   const [isLoggingOut, setLoggingOut] = useState(false);
   const [rememberedUser, setRememberedUser] = useState<HeaderIdentity | null>(readHeaderIdentity);
+  const [state, setState] = useState<AuthState>(getInitialAuthState);
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const remember = (user: User) => {
     saveCachedUser(user);
     setRememberedUser(saveHeaderIdentity(user));
@@ -107,8 +115,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     removeHeaderIdentity();
     setRememberedUser(null);
   };
-  const [state, setState] = useState<AuthState>(getInitialAuthState);
-
   useEffect(() => {
     let mounted = true;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -168,26 +174,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('electrohub:session-expired', clearExpiredSession);
   }, [queryClient]);
 
-  const login = async (credentials: LoginCredentials): Promise<VerificationResponse> => {
+  // One browser identity is shared by every tab of this origin. When another tab signs out or switches account, the cached
+  // identity key changes: this tab drops its in-memory token and private cache instead of showing a stale session, or reloads
+  // to restore the new one. Only the key's change is observed; no token or identity is exchanged between tabs.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== userCacheKey || event.storageArea !== localStorage) return;
+      const current = stateRef.current.user;
+      if (!event.newValue) {
+        if (!current) return;
+        setAccessToken(null);
+        queryClient.clear();
+        setState({ user: null, isAuthenticated: false, isLoading: false, isInitializing: false });
+        setSessionVerified(true);
+        return;
+      }
+      const incoming = readCachedUser();
+      if (current && incoming && (incoming.id !== current.id || incoming.role !== current.role)) window.location.reload();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [queryClient]);
+
+  const establishSession = (authenticatedUser: User) => {
+    queryClient.clear();
+    setSessionVerified(true);
+    remember(authenticatedUser);
+    setState((prev) => ({
+      ...prev,
+      user: authenticatedUser,
+      isAuthenticated: true,
+      isInitializing: false,
+    }));
+  };
+
+  const login = async (credentials: LoginCredentials): Promise<LoginResult> => {
     setState((prev) => ({ ...prev, isLoading: true }));
     try {
       const response = await authApi.login(credentials);
+      // Restricted administrator challenge: no session, no cache changes; the caller drives the second factor.
+      if (isAdminMfaRequired(response)) return response;
       const authenticatedUser = response.user;
       if (authenticatedUser) {
-        queryClient.clear();
-        setSessionVerified(true);
-        remember(authenticatedUser);
-        setState((prev) => ({
-          ...prev,
-          user: authenticatedUser,
-          isAuthenticated: true,
-          isInitializing: false,
-        }));
+        establishSession(authenticatedUser);
       }
       return response;
     } finally {
       setState((prev) => ({ ...prev, isLoading: false }));
     }
+  };
+
+  const completeAdminSession = (session: { accessToken: string; user: User }) => {
+    // Same token storage and cache boundary as a successful password login (authApi.login stores the token in the same way).
+    setAccessToken(session.accessToken);
+    establishSession(session.user);
   };
 
   const register = async (data: RegisterData) => {
@@ -252,6 +292,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ user: null, isAuthenticated: false, isLoading: false, isInitializing: false });
   };
 
+  const updateUserNames = (expectedUserId: string, names: Pick<User, 'firstName' | 'lastName'>) => {
+    const currentUser = stateRef.current.user;
+    if (!currentUser || currentUser.id !== expectedUserId) return;
+    const user = { ...currentUser, ...names };
+    remember(user);
+    setState(previous => previous.user?.id === expectedUserId
+      ? { ...previous, user: { ...previous.user, ...names } }
+      : previous);
+  };
+
   const updateProfile = async (data: { firstName?: string; lastName?: string; email?: string }) => {
     setState((prev) => ({ ...prev, isLoading: true }));
     try {
@@ -283,7 +333,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, isSessionVerified, sessionUnavailable, retrySession, isLoggingOut, rememberedUser, login, register, verifyEmail, logout, finishLogoutTransition, clearSession, updateProfile, verifyEmailChange, finishGoogle }}>
+    <AuthContext.Provider value={{ ...state, isSessionVerified, sessionUnavailable, retrySession, isLoggingOut, rememberedUser, login, completeAdminSession, register, verifyEmail, logout, finishLogoutTransition, clearSession, updateUserNames, updateProfile, verifyEmailChange, finishGoogle }}>
       {children}
     </AuthContext.Provider>
   );

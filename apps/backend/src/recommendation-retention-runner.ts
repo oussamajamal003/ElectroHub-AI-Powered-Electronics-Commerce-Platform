@@ -4,7 +4,7 @@ export const RECOMMENDATION_RETENTION_INTERVAL_MS = 60 * 60_000;
 export const RECOMMENDATION_RETENTION_RETRY_MS = 60_000;
 const MAX_RETRY_MS = 30 * 60_000;
 
-type PurgeResult = { interactions: number; recentlyViewed: number; events: number };
+type PurgeResult = { interactions: number; recentlyViewed: number; events: number; analyticsEvents?: number };
 type RunnerDependencies = {
   purge: () => Promise<PurgeResult>;
   report: (level: 'info' | 'error', event: string, fields: Record<string, unknown>) => void;
@@ -56,7 +56,16 @@ export function startOperationalRecommendationRetentionRunner() {
   return startRecommendationRetentionRunner({
     purge: async () => {
       const { recommendationService } = await import('./services/recommendation.service.js');
-      return recommendationService.purgeExpired();
+      const result = await recommendationService.purgeExpired();
+      // Task 05.2: analytics facts share this hourly sweep. Its failure is isolated so recommendation retention still succeeds.
+      try {
+        const { purgeExpiredAnalyticsEvents } = await import('./services/analytics-events.service.js');
+        return { ...result, analyticsEvents: await purgeExpiredAnalyticsEvents() };
+      } catch (error) {
+        logger.warn('Analytics retention sweep failed', { event: 'analytics.retention.failed',
+          errorName: error instanceof Error ? error.name : 'unknown' });
+        return result;
+      }
     },
     report: (level, event, fields) => logger[level]('Recommendation retention sweep', { event, ...fields }),
   });

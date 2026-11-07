@@ -176,9 +176,11 @@ export function ListEmpty({ failed, children }: { failed: boolean; children: Rea
 }
 
 // ─── Confirmation dialog ──────────────────────────────────
-export function ConfirmDialog({ open, onOpenChange, title, description, confirmLabel, destructive, pending, error, onConfirm, children }: {
+export function ConfirmDialog({ open, onOpenChange, title, description, confirmLabel, destructive, pending, error, onConfirm, children, confirmDisabled }: {
   open: boolean; onOpenChange: (open: boolean) => void; title: string; description: ReactNode; confirmLabel: string; destructive?: boolean;
   pending?: boolean; error?: string | null; onConfirm: () => void; children?: ReactNode;
+  /** Keeps the confirm action disabled until the caller's own input (e.g. a typed confirmation) is valid. */
+  confirmDisabled?: boolean;
 }) {
   return <Dialog open={open} onOpenChange={next => { if (!pending) onOpenChange(next); }}>
     <DialogContent className={styles.dialog}>
@@ -189,7 +191,7 @@ export function ConfirmDialog({ open, onOpenChange, title, description, confirmL
       <div className={styles.dialogActions}>
         {/* Cancel is first in DOM order and receives initial focus: Enter never confirms a destructive action by accident. */}
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending} autoFocus>Cancel</Button>
-        <Button type="button" variant={destructive ? 'destructive' : 'primary'} onClick={onConfirm} isLoading={pending}>{confirmLabel}</Button>
+        <Button type="button" variant={destructive ? 'destructive' : 'primary'} onClick={onConfirm} isLoading={pending} disabled={confirmDisabled}>{confirmLabel}</Button>
       </div>
     </DialogContent>
   </Dialog>;

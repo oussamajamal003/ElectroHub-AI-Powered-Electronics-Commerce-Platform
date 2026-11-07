@@ -5,6 +5,12 @@ import sharp from 'sharp';
 import productMediaRoutes from './product-media.routes.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { generateAccessToken } from '../utils/jwt.js';
+// Task 05.2: requireAuth honours an ADMIN identity only through a live MFA-assured session; these suites test role boundaries, so every
+// token carries a session id and the session lookup reports it live (session assurance itself is proven in admin-security suites).
+const TEST_ADMIN_SESSION = '5a1e2c3d-4b5f-4a6b-8c7d-9e0f1a2b3c4d';
+vi.mock('../services/admin-session.js', () => ({ touchAdminSession: vi.fn(),
+  findActiveAdminSession: vi.fn(async (familyId: string) => ({ familyId, mfaMethod: 'TOTP', mfaVerifiedAt: new Date(), stepUpAt: null, lastSeenAt: new Date() })) }));
+
 
 const ids = vi.hoisted(() => ({ admin: '8f2813b4-a388-44d3-b51e-5d4c40386677', product: '1c5bb1a2-5f0e-4f7a-9d4e-2b8d1f0a9c11', image: '2d6cc2b3-6a1f-4a8b-8e5f-3c9e2a1b0d22', role: 'CUSTOMER', active: true }));
 const db = vi.hoisted(() => ({ user: { findFirst: vi.fn() } }));
@@ -16,7 +22,7 @@ vi.mock('../services/product-media.service.js', () => ({ ProductMediaService: cl
 const app = express();
 app.use('/api', productMediaRoutes);
 app.use(errorHandler);
-const jwt = (role = 'ADMIN') => generateAccessToken({ userId: ids.admin, role });
+const jwt = (role = 'ADMIN') => generateAccessToken({ userId: ids.admin, role, sessionId: TEST_ADMIN_SESSION });
 const get = (path: string, role = 'ADMIN') => request(app).get(path).auth(jwt(role), { type: 'bearer' });
 const jpeg = () => sharp({ create: { width: 160, height: 160, channels: 3, background: 'blue' } }).jpeg().toBuffer();
 const stable = { id: ids.image, productId: ids.product, url: 'https://testproject.supabase.co/storage/v1/object/public/product-media/products/a.webp' };

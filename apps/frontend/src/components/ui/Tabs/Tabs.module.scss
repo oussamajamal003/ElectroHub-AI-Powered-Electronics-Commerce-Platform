@@ -5,6 +5,7 @@
   display: flex;
   flex-direction: column;
   width: 100%;
+  min-width: 0;
 }
 
 .list {
@@ -49,7 +50,12 @@
 }
 
 .content {
+  // Consumer flex/grid layouts must not reveal inactive Radix panels.
+  &[hidden] { display: none; }
+
   margin-top: $spacing-4;
+  min-width: 0;
+  max-width: 100%;
   
   @include focus-ring;
 }

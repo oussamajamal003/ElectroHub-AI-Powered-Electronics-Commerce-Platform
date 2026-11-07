@@ -1,3 +1,4 @@
+import { currentShippingSnapshot } from '../services/shipping-config.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,6 +23,7 @@ const database = vi.hoisted(() => ({
   $transaction: vi.fn(),
 }));
 
+vi.mock('../services/shipping-config.js', async original => ({ ...await original<typeof import('../services/shipping-config.js')>(), loadShippingConfig: vi.fn(async () => currentShippingSnapshot()) }));
 vi.mock('../lib/prisma.js', () => ({ prisma: database }));
 vi.mock('../middleware/auth.js', () => ({
   requireAuth: (req: Request, _res: Response, next: NextFunction) => {

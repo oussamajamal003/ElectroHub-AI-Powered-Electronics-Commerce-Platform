@@ -10,6 +10,7 @@ import {
   Menu,
   X,
   Package,
+  Shield,
 } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import {
@@ -49,6 +50,8 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
   const { user, rememberedUser, isAuthenticated, isInitializing } = useAuth();
   const headerUser = isInitializing ? rememberedUser : user;
   const showAuthenticatedHeader = isInitializing ? Boolean(rememberedUser) : isAuthenticated;
+  // Only the verified session decides the role; the remembered header identity carries none, so nothing privileged is inferred while initializing.
+  const isAdmin = !isInitializing && user?.role === 'ADMIN';
   const navigate = useNavigate();
 
   // Auth modals
@@ -158,7 +161,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
             <nav className={styles.navigation} aria-label="Primary navigation">
               <NavLink to="/" end className={navLinkClass}>Home</NavLink>
               <NavLink to="/products" className={navLinkClass}>Products</NavLink>
-              {showAuthenticatedHeader && (
+              {showAuthenticatedHeader && !isAdmin && (
                 <NavLink to="/orders" className={navLinkClass}>Orders</NavLink>
               )}
               <NavLink to="/about" className={navLinkClass}>About</NavLink>
@@ -183,6 +186,8 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                     <span className={styles.searchTriggerKey} aria-hidden="true">{shortcutLabel()}</span>
                   </button>
 
+                  {!isAdmin && (
+                    <>
                   <Link
                     to="/cart"
                     className={styles.iconButton}
@@ -211,6 +216,8 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                       </span>
                     )}
                   </Link>
+                    </>
+                  )}
 
                   {/* Unauthenticated — Account icon */}
                   {isInitializing && !rememberedUser && <span className={styles.authPlaceholder} aria-hidden="true" />}
@@ -244,9 +251,27 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                       <DropdownMenuContent align="end" className={styles.dropdown}>
                         <div className={styles.userInfo}>
                           <p className={styles.userName}>{headerUser.firstName} {headerUser.lastName}</p>
+                          {isAdmin && <p className={styles.userEmail}>Administrator</p>}
                           {user && <p className={styles.userEmail}>{user.email}</p>}
                         </div>
                         <DropdownMenuSeparator />
+                        {isAdmin ? (
+                          <>
+                        <DropdownMenuItem asChild>
+                          <Link to="/admin" className={styles.dropdownLink}>
+                            <Shield size={15} aria-hidden="true" />
+                            <span>Admin Console</span>
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link to="/admin/profile" className={styles.dropdownLink}>
+                            <UserIcon size={15} aria-hidden="true" />
+                            <span>Admin Profile</span>
+                          </Link>
+                        </DropdownMenuItem>
+                          </>
+                        ) : (
+                          <>
                         <DropdownMenuItem asChild>
                           <Link to="/account" className={styles.dropdownLink}>
                             <UserIcon size={15} aria-hidden="true" />
@@ -265,6 +290,8 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                             <span>My Orders</span>
                           </Link>
                         </DropdownMenuItem>
+                          </>
+                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           variant="destructive"
@@ -295,7 +322,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
             <NavLink to="/products" className={mobileNavClass} onClick={closeMobileMenu}>
               Products
             </NavLink>
-            {showAuthenticatedHeader && (
+            {showAuthenticatedHeader && !isAdmin && (
               <NavLink to="/orders" className={mobileNavClass} onClick={closeMobileMenu}>
                 Orders
               </NavLink>

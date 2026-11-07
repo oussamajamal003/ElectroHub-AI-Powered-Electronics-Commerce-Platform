@@ -122,34 +122,45 @@ model Role {
 }
 
 model User {
-  id           String  @id @default(uuid()) @db.Uuid
-  roleId       String  @db.Uuid
-  email        String  @unique @db.VarChar(255)
-  pendingEmail String? @unique @db.VarChar(255)
-  passwordHash String? @db.VarChar(255)
-  firstName    String  @db.VarChar(100)
-  lastName     String  @db.VarChar(100)
-  isActive     Boolean   @default(true)
+  id              String    @id @default(uuid()) @db.Uuid
+  roleId          String    @db.Uuid
+  email           String    @unique @db.VarChar(255)
+  pendingEmail    String?   @unique @db.VarChar(255)
+  passwordHash    String?   @db.VarChar(255)
+  firstName       String    @db.VarChar(100)
+  lastName        String    @db.VarChar(100)
+  isActive        Boolean   @default(true)
   emailVerifiedAt DateTime?
 
-  role               Role                 @relation(fields: [roleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  addresses          Address[]
-  cart               Cart?
-  wishlist           Wishlist?
-  orders             Order[]
-  refreshTokens      RefreshToken[]
-  passwordResetToken PasswordResetToken?
-  otpChallenges      OtpChallenge[]
-  emailDeliveries    EmailDelivery[]
-  securityEvents      SecurityEvent[]
-  oauthAccounts       OAuthAccount[]
-  reviews             Review[]
-  paymentAttempts     PaymentAttempt[]
-  commerceEmails      CommerceEmailOutbox[]
-  deliveryEvents      DeliveryEvent[]      @relation("DeliveryEventActor")
-  recommendationPreference RecommendationPreference?
-  productInteractions      ProductInteraction[]
-  recentlyViewedProducts   RecentlyViewedProduct[]
+  role                          Role                         @relation(fields: [roleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  addresses                     Address[]
+  cart                          Cart?
+  wishlist                      Wishlist?
+  orders                        Order[]
+  refreshTokens                 RefreshToken[]
+  passwordResetToken            PasswordResetToken?
+  otpChallenges                 OtpChallenge[]
+  emailDeliveries               EmailDelivery[]
+  securityEvents                SecurityEvent[]
+  oauthAccounts                 OAuthAccount[]
+  reviews                       Review[]
+  paymentAttempts               PaymentAttempt[]
+  commerceEmails                CommerceEmailOutbox[]
+  deliveryEvents                DeliveryEvent[]              @relation("DeliveryEventActor")
+  recommendationPreference      RecommendationPreference?
+  productInteractions           ProductInteraction[]
+  recentlyViewedProducts        RecentlyViewedProduct[]
+  adminSecurity                 AdminAccountSecurity?
+  adminMfaFactors               AdminMfaFactor[]
+  adminRecoveryCodes            AdminRecoveryCode[]
+  adminWebAuthnCredentials      AdminWebAuthnCredential[]
+  adminAuthChallenges           AdminAuthChallenge[]
+  adminSessions                 AdminSession[]
+  adminInvitationsSent          AdminInvitation[]            @relation("AdminInvitationInviter")
+  adminInvitationAccepted       AdminInvitation?             @relation("AdminInvitationAcceptedUser")
+  adminMfaActivations           AdminMfaActivation[]         @relation("AdminMfaActivationTarget")
+  adminMfaActivationsAuthorized AdminMfaActivation[]         @relation("AdminMfaActivationAuthorizer")
+  adminNotificationPreference   AdminNotificationPreference?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -223,33 +234,35 @@ model Category {
 }
 
 model Product {
-  id          String        @id @default(uuid()) @db.Uuid
-  categoryId  String        @db.Uuid
-  brandId     String?       @db.Uuid
-  sku         String        @unique @db.VarChar(100)
-  name        String        @db.VarChar(255)
-  slug        String        @unique @db.VarChar(280)
-  description String?
-  modelNumber String?       @db.VarChar(100)
-  price       Decimal       @db.Decimal(12, 2)
-  compareAtPrice Decimal?    @db.Decimal(12, 2)
-  status      ProductStatus @default(ACTIVE)
-  isTestFixture Boolean      @default(false)
-  storefrontVisible Boolean  @default(true)
+  id                String        @id @default(uuid()) @db.Uuid
+  categoryId        String        @db.Uuid
+  brandId           String?       @db.Uuid
+  sku               String        @unique @db.VarChar(100)
+  name              String        @db.VarChar(255)
+  slug              String        @unique @db.VarChar(280)
+  description       String?
+  modelNumber       String?       @db.VarChar(100)
+  price             Decimal       @db.Decimal(12, 2)
+  compareAtPrice    Decimal?      @db.Decimal(12, 2)
+  status            ProductStatus @default(ACTIVE)
+  isTestFixture     Boolean       @default(false)
+  storefrontVisible Boolean       @default(true)
 
-  category   Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  brand      Brand?         @relation(fields: [brandId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  images     ProductImage[]
-  specifications ProductSpecification[]
-  inventory  Inventory?
-  cartItems  CartItem[]
-  wishItems  WishlistItem[]
-  orderItems OrderItem[]
-  paymentAttemptItems PaymentAttemptItem[]
-  reviews    Review[]
-  interactions        ProductInteraction[]
-  recentlyViewedBy    RecentlyViewedProduct[]
+  category             Category                @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  brand                Brand?                  @relation(fields: [brandId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  images               ProductImage[]
+  specifications       ProductSpecification[]
+  inventory            Inventory?
+  cartItems            CartItem[]
+  wishItems            WishlistItem[]
+  orderItems           OrderItem[]
+  paymentAttemptItems  PaymentAttemptItem[]
+  reviews              Review[]
+  interactions         ProductInteraction[]
+  recentlyViewedBy     RecentlyViewedProduct[]
   recommendationEvents RecommendationEvent[]
+  featuredPins         FeaturedProductPin[]
+  analyticsEvents      AnalyticsEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -263,25 +276,25 @@ model Product {
 }
 
 model ProductImage {
-  id        String  @id @default(uuid()) @db.Uuid
-  productId String  @db.Uuid
-  url       String  @db.VarChar(2048)
-  publicId  String? @db.VarChar(255)
-  altText   String? @db.VarChar(255)
-  sortOrder Int     @default(0) @map("position")
-  isPrimary Boolean @default(false)
-  storageProvider String @default("LEGACY_LOCAL") @db.VarChar(32)
-  storageBucket String? @db.VarChar(100)
-  storagePath String? @unique @db.VarChar(512)
-  sourceRevision String? @db.Uuid
-  sourceSha256 String? @db.Char(64)
-  sourceMimeType String? @db.VarChar(64)
-  width Int?
-  height Int?
-  byteSize Int?
-  mediaState String @default("PUBLISHED") @db.VarChar(16)
-  retiredAt DateTime?
-  mediaEvents CatalogMediaEvent[]
+  id              String              @id @default(uuid()) @db.Uuid
+  productId       String              @db.Uuid
+  url             String              @db.VarChar(2048)
+  publicId        String?             @db.VarChar(255)
+  altText         String?             @db.VarChar(255)
+  sortOrder       Int                 @default(0) @map("position")
+  isPrimary       Boolean             @default(false)
+  storageProvider String              @default("LEGACY_LOCAL") @db.VarChar(32)
+  storageBucket   String?             @db.VarChar(100)
+  storagePath     String?             @unique @db.VarChar(512)
+  sourceRevision  String?             @db.Uuid
+  sourceSha256    String?             @db.Char(64)
+  sourceMimeType  String?             @db.VarChar(64)
+  width           Int?
+  height          Int?
+  byteSize        Int?
+  mediaState      String              @default("PUBLISHED") @db.VarChar(16)
+  retiredAt       DateTime?
+  mediaEvents     CatalogMediaEvent[]
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
@@ -295,24 +308,24 @@ model ProductImage {
 
 // Durable media synchronization journal. Image rows are retained as tombstones.
 model CatalogMediaEvent {
-  id String @id @default(uuid()) @db.Uuid
-  idempotencyKey String @unique @db.VarChar(160)
-  requestSha256 String @db.Char(64)
-  productId String @db.Uuid
-  productImageId String @db.Uuid
-  image ProductImage @relation(fields: [productImageId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "catalog_media_events_image_fkey")
-  operation String @db.VarChar(24)
-  sourceRevision String? @db.Uuid
-  sourceSha256 String? @db.Char(64)
-  state String @default("READY") @db.VarChar(24)
-  attemptCount Int @default(0)
-  nextAttemptAt DateTime @default(now())
-  claimedUntil DateTime?
-  leaseToken String? @db.Uuid
-  lastErrorCode String? @db.VarChar(80)
-  completedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String       @id @default(uuid()) @db.Uuid
+  idempotencyKey String       @unique @db.VarChar(160)
+  requestSha256  String       @db.Char(64)
+  productId      String       @db.Uuid
+  productImageId String       @db.Uuid
+  image          ProductImage @relation(fields: [productImageId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "catalog_media_events_image_fkey")
+  operation      String       @db.VarChar(24)
+  sourceRevision String?      @db.Uuid
+  sourceSha256   String?      @db.Char(64)
+  state          String       @default("READY") @db.VarChar(24)
+  attemptCount   Int          @default(0)
+  nextAttemptAt  DateTime     @default(now())
+  claimedUntil   DateTime?
+  leaseToken     String?      @db.Uuid
+  lastErrorCode  String?      @db.VarChar(80)
+  completedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@index([state, nextAttemptAt])
   @@index([productImageId, createdAt])
@@ -320,14 +333,14 @@ model CatalogMediaEvent {
 }
 
 model Brand {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String   @unique @db.VarChar(100)
-  slug        String   @unique @db.VarChar(120)
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @unique @db.VarChar(100)
+  slug        String    @unique @db.VarChar(120)
   description String?
-  logoUrl     String?  @db.VarChar(2048)
+  logoUrl     String?   @db.VarChar(2048)
   products    Product[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@map("brands")
 }
@@ -385,8 +398,8 @@ model Cart {
   id     String @id @default(uuid()) @db.Uuid
   userId String @unique @db.Uuid
 
-  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  items CartItem[]
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  items           CartItem[]
   paymentAttempts PaymentAttempt[]
 
   createdAt DateTime @default(now())
@@ -449,13 +462,13 @@ model Order {
   total        Decimal     @db.Decimal(12, 2)
   currency     String      @default("USD") @db.VarChar(3)
 
-  checkoutAttemptId     String @db.Uuid
-  checkoutRequestHash   String @db.VarChar(64)
-  deliveryMethod        CheckoutDeliveryMethod
-  paymentMethod         CheckoutPaymentMethod
-  shippingPhone         String @db.VarChar(32)
-  estimatedDeliveryStart DateTime @db.Date
-  estimatedDeliveryEnd   DateTime @db.Date
+  checkoutAttemptId      String                 @db.Uuid
+  checkoutRequestHash    String                 @db.VarChar(64)
+  deliveryMethod         CheckoutDeliveryMethod
+  paymentMethod          CheckoutPaymentMethod
+  shippingPhone          String                 @db.VarChar(32)
+  estimatedDeliveryStart DateTime               @db.Date
+  estimatedDeliveryEnd   DateTime               @db.Date
 
   shippingRecipient  String   @db.VarChar(200)
   shippingLine1      String   @db.VarChar(255)
@@ -467,35 +480,35 @@ model Order {
   shippingLatitude   Decimal? @db.Decimal(9, 6)
   shippingLongitude  Decimal? @db.Decimal(9, 6)
 
-  user     User        @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  items    OrderItem[]
-  payment  Payment?
-  delivery Delivery?
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  items          OrderItem[]
+  payment        Payment?
+  delivery       Delivery?
   paymentAttempt PaymentAttempt?
   commerceEmails CommerceEmailOutbox[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([userId, checkoutAttemptId])
   @@index([userId])
   @@index([status])
   @@index([createdAt])
   @@index([userId, createdAt])
   @@index([status, createdAt])
-  @@unique([userId, checkoutAttemptId])
   @@map("orders")
 }
 
 model OrderItem {
-  id          String  @id @default(uuid()) @db.Uuid
-  orderId     String  @db.Uuid
-  productId   String  @db.Uuid
-  productName String  @db.VarChar(255)
-  sku         String  @db.VarChar(100)
+  id              String  @id @default(uuid()) @db.Uuid
+  orderId         String  @db.Uuid
+  productId       String  @db.Uuid
+  productName     String  @db.VarChar(255)
+  sku             String  @db.VarChar(100)
   productImageUrl String? @db.VarChar(2048)
-  unitPrice   Decimal @db.Decimal(12, 2)
-  quantity    Int
-  lineTotal   Decimal @db.Decimal(12, 2)
+  unitPrice       Decimal @db.Decimal(12, 2)
+  quantity        Int
+  lineTotal       Decimal @db.Decimal(12, 2)
 
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   product Product @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -518,11 +531,11 @@ model Payment {
   currency          String          @default("USD") @db.VarChar(3)
   paidAt            DateTime?
   failureReason     String?
-  cardBrand         String? @db.VarChar(32)
-  cardLast4         String? @db.VarChar(4)
+  cardBrand         String?         @db.VarChar(32)
+  cardLast4         String?         @db.VarChar(4)
   refundedAt        DateTime?
 
-  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  order          Order                 @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   commerceEmails CommerceEmailOutbox[]
 
   createdAt DateTime @default(now())
@@ -559,50 +572,51 @@ enum PaymentWorkState {
 }
 
 model PaymentAttempt {
-  id String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  cartId String? @db.Uuid
-  cartIdentity String @db.Uuid
+  id                     String               @id @default(uuid()) @db.Uuid
+  userId                 String               @db.Uuid
+  cartId                 String?              @db.Uuid
+  cartIdentity           String               @db.Uuid
   // Nullable unique claim prevents two active purchase attempts for one Cart.
-  activeCartId String? @unique @db.Uuid
-  idempotencyKey String @db.Uuid
-  requestHash String @db.VarChar(64)
-  revision String @db.VarChar(64)
-  request Json
-  subtotal Decimal @db.Decimal(12, 2)
-  shippingCost Decimal @db.Decimal(12, 2)
-  total Decimal @db.Decimal(12, 2)
-  amountCents Int
-  currency String @default("USD") @db.VarChar(3)
-  stripeAccountId String @db.VarChar(255)
-  providerIntentId String? @unique @db.VarChar(255)
-  providerStatus String? @db.VarChar(64)
-  state PaymentAttemptState @default(PREPARING)
-  cancelRequested Boolean @default(false)
-  failureCode String? @db.VarChar(64)
+  activeCartId           String?              @unique @db.Uuid
+  idempotencyKey         String               @db.Uuid
+  requestHash            String               @db.VarChar(64)
+  revision               String               @db.VarChar(64)
+  request                Json
+  subtotal               Decimal              @db.Decimal(12, 2)
+  shippingCost           Decimal              @db.Decimal(12, 2)
+  total                  Decimal              @db.Decimal(12, 2)
+  amountCents            Int
+  currency               String               @default("USD") @db.VarChar(3)
+  stripeAccountId        String               @db.VarChar(255)
+  providerIntentId       String?              @unique @db.VarChar(255)
+  providerStatus         String?              @db.VarChar(64)
+  state                  PaymentAttemptState  @default(PREPARING)
+  cancelRequested        Boolean              @default(false)
+  failureCode            String?              @db.VarChar(64)
   authorizationExpiresAt DateTime?
-  expiresAt DateTime
-  orderId String? @unique @db.Uuid
-  refundId String? @unique @db.VarChar(255)
-  refundAmountCents Int?
-  compensatedAt DateTime?
+  expiresAt              DateTime
+  orderId                String?              @unique @db.Uuid
+  refundId               String?              @unique @db.VarChar(255)
+  refundAmountCents      Int?
+  compensatedAt          DateTime?
   // Only IDs/quantities not merged back into Cart; never a second Product store.
-  recoveryRemainder Json?
+  recoveryRemainder      Json?
   // Durable submission transfers exact cart lines to this immutable purchase.
-  submittedAt DateTime?
-  confirmationStartedAt DateTime?
-  restoredAt DateTime?
-  notificationReadState String? @db.VarChar(32)
+  submittedAt            DateTime?
+  confirmationStartedAt  DateTime?
+  restoredAt             DateTime?
+  notificationReadState  String?              @db.VarChar(32)
   // Customer-only hide for a failed card. Financial and audit records are never deleted or changed by this flag.
-  dismissedAt DateTime?
-  user User @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  cart Cart? @relation(fields: [cartId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  order Order? @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  items PaymentAttemptItem[]
-  work PaymentWork?
-  events StripeEvent[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  dismissedAt            DateTime?
+  user                   User                 @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  cart                   Cart?                @relation(fields: [cartId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  order                  Order?               @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  items                  PaymentAttemptItem[]
+  work                   PaymentWork?
+  events                 StripeEvent[]
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+
   @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])
   @@index([cartId])
@@ -611,62 +625,65 @@ model PaymentAttempt {
 }
 
 model PaymentAttemptItem {
-  sourceCartItemId String? @unique @db.Uuid
-  snapshotCartItemId String? @db.Uuid
-  id String @id @default(uuid()) @db.Uuid
-  attemptId String @db.Uuid
-  productId String @db.Uuid
-  productName String @db.VarChar(255)
-  sku String @db.VarChar(100)
-  imageUrl String? @db.VarChar(2048)
-  quantity Int
-  unitPrice Decimal @db.Decimal(12, 2)
-  lineTotal Decimal @db.Decimal(12, 2)
-  attempt PaymentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  sourceCartItemId   String?        @unique @db.Uuid
+  snapshotCartItemId String?        @db.Uuid
+  id                 String         @id @default(uuid()) @db.Uuid
+  attemptId          String         @db.Uuid
+  productId          String         @db.Uuid
+  productName        String         @db.VarChar(255)
+  sku                String         @db.VarChar(100)
+  imageUrl           String?        @db.VarChar(2048)
+  quantity           Int
+  unitPrice          Decimal        @db.Decimal(12, 2)
+  lineTotal          Decimal        @db.Decimal(12, 2)
+  attempt            PaymentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  product            Product        @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
   @@unique([attemptId, productId])
   @@index([productId])
   @@map("payment_attempt_items")
 }
 
 model PaymentWork {
-  id String @id @default(uuid()) @db.Uuid
-  attemptId String @unique @db.Uuid
-  state PaymentWorkState @default(READY)
-  nextRunAt DateTime @default(now())
-  retryCount Int @default(0)
-  leaseToken String? @db.Uuid
+  id         String           @id @default(uuid()) @db.Uuid
+  attemptId  String           @unique @db.Uuid
+  state      PaymentWorkState @default(READY)
+  nextRunAt  DateTime         @default(now())
+  retryCount Int              @default(0)
+  leaseToken String?          @db.Uuid
   leaseUntil DateTime?
-  lastError String? @db.VarChar(64)
-  attempt PaymentAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  lastError  String?          @db.VarChar(64)
+  attempt    PaymentAttempt   @relation(fields: [attemptId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
   @@index([state, nextRunAt])
   @@index([state, leaseUntil])
   @@map("payment_work")
 }
 
 model StripeEvent {
-  id String @id @db.VarChar(255)
-  type String @db.VarChar(100)
-  providerIntentId String? @db.VarChar(255)
-  attemptId String? @db.Uuid
-  disposition String @db.VarChar(32)
-  attempt PaymentAttempt? @relation(fields: [attemptId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  createdAt DateTime @default(now())
+  id               String          @id @db.VarChar(255)
+  type             String          @db.VarChar(100)
+  providerIntentId String?         @db.VarChar(255)
+  attemptId        String?         @db.Uuid
+  disposition      String          @db.VarChar(32)
+  attempt          PaymentAttempt? @relation(fields: [attemptId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt        DateTime        @default(now())
+
   @@index([attemptId])
   @@map("stripe_events")
 }
 
 model Delivery {
-  id           String         @id @default(uuid()) @db.Uuid
-  orderId      String         @unique @db.Uuid
-  status       DeliveryStatus @default(CONFIRMED)
-  trackingCode String?        @unique @db.VarChar(100)
-  latitude     Decimal?       @db.Decimal(9, 6)
-  longitude    Decimal?       @db.Decimal(9, 6)
-  estimatedAt  DateTime?
-  deliveredAt  DateTime?
+  id                String                  @id @default(uuid()) @db.Uuid
+  orderId           String                  @unique @db.Uuid
+  status            DeliveryStatus          @default(CONFIRMED)
+  trackingCode      String?                 @unique @db.VarChar(100)
+  latitude          Decimal?                @db.Decimal(9, 6)
+  longitude         Decimal?                @db.Decimal(9, 6)
+  estimatedAt       DateTime?
+  deliveredAt       DateTime?
   // Task 04.5: +1 per accepted change (CHECK revision >= 0); each accepted change writes exactly one DeliveryEvent.
   revision          Int                     @default(0)
   locationLabel     String?                 @db.VarChar(80)
@@ -714,17 +731,17 @@ model DeliveryEvent {
 }
 
 model RefreshToken {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  tokenHash String   @unique @db.VarChar(255)
-  expiresAt DateTime
-  isRevoked Boolean  @default(false)
+  id                  String   @id @default(uuid()) @db.Uuid
+  userId              String   @db.Uuid
+  tokenHash           String   @unique @db.VarChar(255)
+  expiresAt           DateTime
+  isRevoked           Boolean  @default(false)
   // Session family: every generation of one login shares this value. The application always sets it
   // explicitly (new family on login, inherited on rotation). There is deliberately NO database default:
   // an old-version instance that omits it fails its INSERT instead of silently minting a disconnected family.
-  familyId  String   @db.Uuid
+  familyId            String   @db.Uuid
   // Durable successor pointer, written in the same transaction that revokes this token.
-  replacedByTokenHash String? @unique @db.VarChar(255)
+  replacedByTokenHash String?  @unique @db.VarChar(255)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
@@ -738,10 +755,10 @@ model RefreshToken {
 }
 
 model PasswordResetToken {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @unique @db.Uuid
-  tokenHash String   @unique @db.VarChar(255)
-  expiresAt DateTime
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @unique @db.Uuid
+  tokenHash  String    @unique @db.VarChar(255)
+  expiresAt  DateTime
   consumedAt DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
@@ -764,6 +781,17 @@ enum SecurityEventType {
   LOGIN_FAILED
   LOGOUT
   ACCOUNT_DELETED
+  // Task 05.2 administrator security (append-only facts; never secrets).
+  ADMIN_MFA_CHALLENGE_FAILED
+  ADMIN_MFA_ENROLLED
+  ADMIN_MFA_DISABLED
+  ADMIN_RECOVERY_CODES_REGENERATED
+  ADMIN_RECOVERY_CODE_USED
+  ADMIN_PASSKEY_ADDED
+  ADMIN_PASSKEY_REMOVED
+  ADMIN_SESSION_REVOKED
+  ADMIN_STEP_UP_VERIFIED
+  ADMIN_PASSWORD_RECOVERY_VERIFIED
 }
 
 model SecurityEvent {
@@ -809,19 +837,22 @@ enum EmailType {
   PASSWORD_CHANGED
   EMAIL_CHANGED
   SECURITY_ALERT
+  ADMIN_INVITATION
+  ADMIN_NOTIFICATION
+  ADMIN_ACTIVATION
 }
 
 model OtpChallenge {
-  id          String      @id @default(uuid()) @db.Uuid
-  userId      String      @db.Uuid
+  id          String     @id @default(uuid()) @db.Uuid
+  userId      String     @db.Uuid
   purpose     OtpPurpose
-  channel     OtpChannel  @default(EMAIL)
-  destination String      @db.VarChar(255)
-  codeHash    String      @db.VarChar(255)
+  channel     OtpChannel @default(EMAIL)
+  destination String     @db.VarChar(255)
+  codeHash    String     @db.VarChar(255)
   expiresAt   DateTime
-  attempts    Int         @default(0)
-  maxAttempts Int         @default(5)
-  resendCount Int         @default(0)
+  attempts    Int        @default(0)
+  maxAttempts Int        @default(5)
+  resendCount Int        @default(0)
   lastSentAt  DateTime?
   consumedAt  DateTime?
   lockedAt    DateTime?
@@ -969,10 +1000,10 @@ model CommerceEmailAttempt {
 
 /// Task 04.4: explicit, opt-in personalization consent. Absent row = personalization off.
 model RecommendationPreference {
-  userId                 String   @id @db.Uuid
-  personalizationEnabled Boolean  @default(false)
+  userId                 String    @id @db.Uuid
+  personalizationEnabled Boolean   @default(false)
   consentedAt            DateTime?
-  updatedAt              DateTime @updatedAt
+  updatedAt              DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
@@ -1036,4 +1067,365 @@ model RecommendationEvent {
   @@index([productId, eventType, occurredAt])
   @@index([occurredAt])
   @@map("recommendation_events")
+}
+
+// ─── Task 05.2 — Administrator security ──────────────────
+// Every table below is private to Express (RLS enabled, no PostgREST grants). Secrets are never stored in clear:
+// TOTP seeds are AES-256-GCM ciphertext under a versioned key, recovery codes / invitation and challenge tokens are
+// keyed digests, and WebAuthn keeps only the COSE public key.
+
+enum AdminInvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+}
+
+enum AdminInvitationDelivery {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum AdminChallengePurpose {
+  LOGIN
+  STEP_UP
+  WEBAUTHN_REGISTRATION
+  /// Forgot-password: email OTP proven, existing factor still required. Never convertible into a session.
+  PASSWORD_RECOVERY
+}
+
+enum AdminMfaMethod {
+  TOTP
+  WEBAUTHN
+  RECOVERY_CODE
+}
+
+/// Per-administrator security state and capabilities. Absent row = no capability, no enrollment authorization.
+model AdminAccountSecurity {
+  userId                 String    @id @db.Uuid
+  isOwner                Boolean   @default(false)
+  canManageAdmins        Boolean   @default(false)
+  /// Operator- or invitation-granted window in which a factor-less administrator may enroll a first factor.
+  enrollmentAllowedUntil DateTime?
+  mfaEnrolledAt          DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isOwner])
+  @@map("admin_account_security")
+}
+
+/// TOTP factor. verifiedAt NULL = enrollment in progress (never accepted for sign-in).
+model AdminMfaFactor {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @db.Uuid
+  label            String    @db.VarChar(60)
+  secretCiphertext String    @db.VarChar(255)
+  keyVersion       Int
+  lastUsedStep     BigInt?
+  verifiedAt       DateTime?
+  disabledAt       DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("admin_mfa_factors")
+}
+
+model AdminRecoveryCode {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  batchId    String    @db.Uuid
+  codeHash   String    @unique @db.VarChar(64)
+  consumedAt DateTime?
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, batchId])
+  @@map("admin_recovery_codes")
+}
+
+model AdminWebAuthnCredential {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  credentialId String    @unique @db.VarChar(512)
+  publicKey    Bytes
+  counter      BigInt    @default(0)
+  transports   String[]  @default([])
+  deviceType   String    @db.VarChar(32)
+  backedUp     Boolean   @default(false)
+  label        String    @db.VarChar(60)
+  lastUsedAt   DateTime?
+  revokedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("admin_webauthn_credentials")
+}
+
+/// Restricted, short-lived, single-use pre-auth / step-up transaction. Never authorizes /api/admin/**.
+model AdminAuthChallenge {
+  id                    String                @id @default(uuid()) @db.Uuid
+  tokenHash             String                @unique @db.VarChar(64)
+  userId                String                @db.Uuid
+  purpose               AdminChallengePurpose
+  /// Session family a STEP_UP / WEBAUTHN_REGISTRATION challenge is bound to.
+  sessionFamilyId       String?               @db.Uuid
+  /// Digest of the password hash the primary proof was checked against; a password change voids the challenge.
+  credentialFingerprint String                @db.VarChar(64)
+  webauthnChallenge     String?               @db.VarChar(128)
+  attempts              Int                   @default(0)
+  maxAttempts           Int                   @default(5)
+  expiresAt             DateTime
+  consumedAt            DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+  @@map("admin_auth_challenges")
+}
+
+/// One row per MFA-assured administrator session family (RefreshToken.familyId). Authoritative for access AND refresh.
+model AdminSession {
+  familyId      String         @id @db.Uuid
+  userId        String         @db.Uuid
+  mfaMethod     AdminMfaMethod
+  mfaVerifiedAt DateTime
+  stepUpAt      DateTime?
+  userAgent     String?        @db.VarChar(300)
+  ipAddress     String?        @db.VarChar(64)
+  lastSeenAt    DateTime
+  revokedAt     DateTime?
+  revokedReason String?        @db.VarChar(40)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("admin_sessions")
+}
+
+model AdminInvitation {
+  id                String                  @id @default(uuid()) @db.Uuid
+  /// Normalized recipient; one PENDING invitation per email (partial unique index in SQL).
+  email             String                  @db.VarChar(255)
+  tokenHash         String                  @unique @db.VarChar(64)
+  invitedById       String?                 @db.Uuid
+  status            AdminInvitationStatus   @default(PENDING)
+  deliveryStatus    AdminInvitationDelivery @default(PENDING)
+  grantManageAdmins Boolean                 @default(false)
+  expiresAt         DateTime
+  sendCount         Int                     @default(0)
+  lastSentAt        DateTime?
+  acceptedUserId    String?                 @unique @db.Uuid
+  acceptedAt        DateTime?
+  revokedAt         DateTime?
+
+  invitedBy    User? @relation("AdminInvitationInviter", fields: [invitedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  acceptedUser User? @relation("AdminInvitationAcceptedUser", fields: [acceptedUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([email])
+  @@map("admin_invitations")
+}
+
+enum AdminActivationStatus {
+  PENDING
+  REDEEMED
+  REVOKED
+}
+
+/// Owner-authorized, single-use proof that lets an EXISTING factor-less administrator rotate its credential and open first-factor
+/// enrollment. One PENDING row per target (partial unique index in SQL). Only the token digest is stored.
+model AdminMfaActivation {
+  id             String                  @id @default(uuid()) @db.Uuid
+  userId         String                  @db.Uuid
+  authorizedById String?                 @db.Uuid
+  /// Address the link was sent to, bound at issue time; redemption re-checks it against the account.
+  email          String                  @db.VarChar(255)
+  tokenHash      String                  @unique @db.VarChar(64)
+  status         AdminActivationStatus   @default(PENDING)
+  deliveryStatus AdminInvitationDelivery @default(PENDING)
+  expiresAt      DateTime
+  sendCount      Int                     @default(0)
+  lastSentAt     DateTime?
+  redeemedAt     DateTime?
+  revokedAt      DateTime?
+
+  user         User  @relation("AdminMfaActivationTarget", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  authorizedBy User? @relation("AdminMfaActivationAuthorizer", fields: [authorizedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status])
+  @@map("admin_mfa_activations")
+}
+
+/// Sanitized, append-only audit of administrative configuration and team changes (no secrets, no request bodies).
+model AdminAuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  actorId      String?  @db.Uuid
+  action       String   @db.VarChar(64)
+  resourceType String   @db.VarChar(40)
+  resourceId   String?  @db.VarChar(100)
+  outcome      String   @db.VarChar(16)
+  details      Json?
+  requestId    String?  @db.VarChar(64)
+  createdAt    DateTime @default(now())
+
+  @@index([resourceType, createdAt])
+  @@index([actorId, createdAt])
+  @@map("admin_audit_logs")
+}
+
+// ─── Task 05.2 — Store, shipping and notification settings ─
+
+/// Singleton (id = 'default'). Currency is fixed: prices, Stripe amounts and order snapshots are USD.
+model StoreSettings {
+  id           String  @id @default("default") @db.VarChar(16)
+  storeName    String  @db.VarChar(120)
+  supportEmail String? @db.VarChar(255)
+  supportPhone String? @db.VarChar(32)
+  addressLine1 String? @db.VarChar(255)
+  addressLine2 String? @db.VarChar(255)
+  city         String? @db.VarChar(100)
+  region       String? @db.VarChar(100)
+  postalCode   String? @db.VarChar(20)
+  country      String? @db.VarChar(100)
+  timezone     String  @default("UTC") @db.VarChar(64)
+  currency     String  @default("USD") @db.VarChar(3)
+  version      Int     @default(1)
+  updatedById  String? @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("store_settings")
+}
+
+/// Singleton (id = 'default'). The checkout quote, payment attempt and order commit read the same snapshot.
+model ShippingSettings {
+  id                    String   @id @default("default") @db.VarChar(16)
+  /// Standard Delivery is free when the merchandise subtotal is at least this amount. NULL = no threshold.
+  freeShippingThreshold Decimal? @db.Decimal(12, 2)
+  version               Int      @default(1)
+  updatedById           String?  @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("shipping_settings")
+}
+
+model ShippingMethodSetting {
+  method  CheckoutDeliveryMethod @id
+  enabled Boolean                @default(true)
+  price   Decimal                @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("shipping_method_settings")
+}
+
+/// Per-administrator operational email preferences. Security alerts are mandatory and not represented here.
+model AdminNotificationPreference {
+  userId             String  @id @db.Uuid
+  orderPaid          Boolean @default(true)
+  lowStock           Boolean @default(true)
+  invitationAccepted Boolean @default(true)
+  version            Int     @default(1)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("admin_notification_preferences")
+}
+
+// ─── Task 05.2 — Recommendation management ───────────────
+
+/// Published per-surface, per-mode rail configuration. Absent row = engine default (enabled, default limit).
+model RecommendationSectionConfig {
+  surface     String  @db.VarChar(32)
+  mode        String  @db.VarChar(32)
+  enabled     Boolean @default(true)
+  itemLimit   Int
+  version     Int     @default(1)
+  updatedById String? @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([surface, mode])
+  @@map("recommendation_section_configs")
+}
+
+/// Explicit merchandising placement, labeled "Featured" to customers; never presented as personalization.
+model FeaturedProductPin {
+  id          String    @id @default(uuid()) @db.Uuid
+  productId   String    @db.Uuid
+  surface     String    @db.VarChar(32)
+  position    Int
+  startsAt    DateTime?
+  endsAt      DateTime?
+  enabled     Boolean   @default(true)
+  version     Int       @default(1)
+  createdById String?   @db.Uuid
+  updatedById String?   @db.Uuid
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([surface, productId])
+  @@index([surface, enabled, position])
+  @@map("featured_product_pins")
+}
+
+// ─── Task 05.2 — Analytics instrumentation ───────────────
+
+/// Server-recorded (or server-signed client) behavioural facts that no existing table holds. Never an uploaded image,
+/// never a user identifier; business truth (revenue, orders, payments) is always read from its authoritative table.
+model AnalyticsEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  type           String   @db.VarChar(48)
+  source         String   @db.VarChar(16)
+  outcome        String?  @db.VarChar(24)
+  correlationId  String?  @db.Uuid
+  productId      String?  @db.Uuid
+  resultCount    Int?
+  durationMs     Int?
+  idempotencyKey String   @unique @db.VarChar(100)
+  occurredAt     DateTime
+  receivedAt     DateTime @default(now())
+
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([type, occurredAt])
+  @@index([occurredAt])
+  @@map("analytics_events")
 }

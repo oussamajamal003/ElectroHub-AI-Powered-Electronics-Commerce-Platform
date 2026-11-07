@@ -26,12 +26,15 @@ const ref = (id: string) => `ORD-${id.toUpperCase()}`;
 const owners = new Map([[orderA, customerA], [orderB, customerB]]);
 
 let http: HttpServer; let gateway: Gateway; let url: string; let active = new Map<string, string>();
+/** Task 05.2: live MFA-assured administrator session families (familyId → userId). */
+const adminSessions = new Map<string, string>();
 const clients: ClientSocket[] = [];
 
 async function start(limits = {}) {
   http = createServer();
   gateway = attachDeliveryGateway(http, { corsOrigin: 'http://localhost:5173', limits,
     lookup: async userId => active.has(userId) ? { role: active.get(userId)! } : null,
+    adminSession: async (familyId, userId) => adminSessions.get(familyId) === userId,
     resolveOrder: async (identity, reference) => {
       const id = [...owners.keys()].find(orderId => ref(orderId) === reference);
       return id && (identity.role === 'ADMIN' || owners.get(id) === identity.userId) ? { orderId: id, revision: 3 } : null;
@@ -45,7 +48,7 @@ function client(token: string | undefined, options: { reconnection?: boolean } =
   clients.push(socket);
   return socket;
 }
-const token = (userId: string, role = 'CUSTOMER') => generateAccessToken({ userId, role });
+const token = (userId: string, role = 'CUSTOMER', sessionId?: string) => generateAccessToken(sessionId ? { userId, role, sessionId } : { userId, role });
 const connected = (socket: ClientSocket) => new Promise<void>((resolve, reject) => { socket.once('connect', () => resolve()); socket.once('connect_error', reject); });
 const refused = (socket: ClientSocket) => new Promise<{ code?: string }>(resolve => socket.once('connect_error', error => resolve((error as Error & { data?: { code?: string } }).data ?? {})));
 const subscribe = (socket: ClientSocket, orderReference: unknown) => socket.timeout(2000).emitWithAck('delivery:subscribe', { orderReference });
@@ -141,14 +144,37 @@ describe('Task 04.7 /delivery gateway (real Socket.IO server and client)', () =>
     await closed;
   });
 
-  it('ADMIN may watch any order; a demoted admin loses that on the next subscribe', async () => {
+  it('Task 05.2: an ADMIN token without a live MFA-assured session is refused at the handshake', async () => {
     const adminId = randomUUID();
     active.set(adminId, 'ADMIN');
-    const socket = client(token(adminId, 'ADMIN'));
+    expect(await refused(client(token(adminId, 'ADMIN')))).toEqual({ code: 'UNAUTHENTICATED' });
+    expect(await refused(client(token(adminId, 'ADMIN', randomUUID())))).toEqual({ code: 'UNAUTHENTICATED' });
+  });
+
+  it('ADMIN may watch any order; a demoted admin loses that on the next subscribe', async () => {
+    const adminId = randomUUID();
+    const sessionId = randomUUID();
+    active.set(adminId, 'ADMIN');
+    adminSessions.set(sessionId, adminId);
+    const socket = client(token(adminId, 'ADMIN', sessionId));
     await connected(socket);
     expect(await subscribe(socket, ref(orderB))).toEqual({ ok: true, revision: 3 });
     active.set(adminId, 'CUSTOMER');
     expect(await subscribe(socket, ref(orderA))).toEqual({ ok: false, code: 'NOT_FOUND' });
+  });
+
+  it('refuses another subscription and disconnects an ADMIN socket after its session is revoked', async () => {
+    const adminId = randomUUID(), sessionId = randomUUID();
+    active.set(adminId, 'ADMIN');
+    adminSessions.set(sessionId, adminId);
+    const socket = client(token(adminId, 'ADMIN', sessionId));
+    await connected(socket);
+    expect(await subscribe(socket, ref(orderB))).toEqual({ ok: true, revision: 3 });
+    adminSessions.delete(sessionId);
+    const closed = new Promise(resolve => socket.once('disconnect', resolve));
+    expect(await subscribe(socket, ref(orderA))).toEqual({ ok: false, code: 'UNAUTHENTICATED' });
+    await closed;
+    expect(gateway.namespace.adapter.rooms.get(orderRoom(orderB))).toBeUndefined();
   });
 
   it('T7-06 server side: a replaced socket keeps no rooms, so events for the old user cannot reach it', async () => {
