@@ -255,7 +255,8 @@ export class AdminMfaService {
     const expiresAt = new Date(Date.now() + PASSWORD_RECOVERY_TTL_MS);
     await tx.adminAuthChallenge.updateMany({ where: { userId: user.id, purpose: AdminChallengePurpose.PASSWORD_RECOVERY, consumedAt: null }, data: { consumedAt: new Date() } });
     await tx.adminAuthChallenge.create({ data: { tokenHash: sha256Hex(recoveryToken), userId: user.id, purpose: AdminChallengePurpose.PASSWORD_RECOVERY,
-      credentialFingerprint: credentialFingerprint(user.passwordHash), expiresAt, maxAttempts: CHALLENGE_MAX_ATTEMPTS } });
+      // A recovery transaction is not tied to a session, but admin_auth_challenges requires a family marker for every non-LOGIN purpose.
+      sessionFamilyId: crypto.randomUUID(), credentialFingerprint: credentialFingerprint(user.passwordHash), expiresAt, maxAttempts: CHALLENGE_MAX_ATTEMPTS } });
     const factors = await this.factorSummary(user.id, tx);
     return { recoveryToken, expiresAt, factors: { totp: factors.totp > 0, passkey: factors.passkeys > 0, recoveryCode: factors.recoveryCodes > 0 } };
   }
