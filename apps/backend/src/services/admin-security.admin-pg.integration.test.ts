@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import app from '../app.js';
 import { prisma } from '../lib/prisma.js';
 import { hashPassword } from '../utils/hash.js';
+import { AuthRepository, StalePasswordHashError } from '../repositories/auth.repository.js';
+import { SecurityEventType } from '@prisma/client';
 import { generateAccessToken } from '../utils/jwt.js';
 import { base32Decode, hotp, totpStep } from './admin-crypto.js';
 import { AuthService } from './auth.service.js';
@@ -1160,6 +1162,57 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
       expect((await api().post(`${recoveryApi}/passkey/options`, { recoveryToken: email.verified.body.recoveryToken })).status).toBe(422);
       expect(await prisma.passwordResetToken.count({ where: { userId: legacy.id } })).toBe(0);
       expect(await prisma.adminAccountSecurity.findUniqueOrThrow({ where: { userId: legacy.id } })).toMatchObject({ enrollmentAllowedUntil: null, mfaEnrolledAt: null });
+    });
+
+    it('REC-09: the current password cannot be reused; the reset authorization survives the rejection; a different password works (admin and customer)', async () => {
+      const enrolled = await enrolledAdmin();
+      const { verified } = await verifiedEmail(enrolled.user.email);
+      const proven = await api().post(`${recoveryApi}/totp`, { recoveryToken: verified.body.recoveryToken, code: code(enrolled.secret, 1) });
+      const resetToken = proven.body.resetToken as string;
+      const beforeHash = (await prisma.user.findUniqueOrThrow({ where: { id: enrolled.user.id } })).passwordHash;
+      const reused = await api().post(`${recoveryApi}/complete`, { resetToken, newPassword: PASSWORD });
+      expect(reused.status).toBe(422);
+      expect(reused.body.error).toMatchObject({ code: 'PASSWORD_REUSED', message: 'Your new password must be different from your current password.' });
+      // Nothing moved: password, sessions, factors and the unconsumed authorization.
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: enrolled.user.id } })).passwordHash).toBe(beforeHash);
+      expect((await prisma.passwordResetToken.findUniqueOrThrow({ where: { userId: enrolled.user.id } })).consumedAt).toBeNull();
+      expect((await api().get('/api/admin/me/profile', enrolled.accessToken)).status).toBe(200);
+      expect(await adminMfaService.factorSummary(enrolled.user.id)).toMatchObject({ totp: 1 });
+      expect((await api().post(`${recoveryApi}/complete`, { resetToken, newPassword: NEW_PASSWORD })).status).toBe(200);
+      // A fresh password plus MFA is now required.
+      expect((await api().get('/api/admin/me/profile', enrolled.accessToken)).status).toBe(401);
+      expect((await api().post('/api/auth/login', { email: enrolled.user.email, password: NEW_PASSWORD })).body).toMatchObject({ requiresMfa: true });
+
+      // Customer: generic reset path and authenticated change both refuse the current password.
+      const customer = await createUser('CUSTOMER');
+      otps.clear();
+      await api().post('/api/auth/forgot-password', { email: customer.email });
+      const otp = await api().post('/api/auth/verify-reset-otp', { email: customer.email, code: otps.get(customer.email) });
+      const same = await api().post('/api/auth/reset-password', { resetToken: otp.body.resetToken, newPassword: PASSWORD });
+      expect(same.status).toBe(422);
+      expect(same.body.error.code).toBe('PASSWORD_REUSED');
+      expect((await api().post('/api/auth/reset-password', { resetToken: otp.body.resetToken, newPassword: NEW_PASSWORD })).status).toBe(200);
+      const login = await api().post('/api/auth/login', { email: customer.email, password: NEW_PASSWORD });
+      const sameChange = await api().post('/api/auth/change-password', { currentPassword: NEW_PASSWORD, newPassword: NEW_PASSWORD }, login.body.accessToken);
+      expect(sameChange.status).toBe(422);
+      expect(sameChange.body.error.code).toBe('PASSWORD_REUSED');
+      expect((await api().post('/api/auth/change-password', { currentPassword: NEW_PASSWORD, newPassword: 'Different-Valid-4-Pass' }, login.body.accessToken)).status).toBe(200);
+      // Invalid reset token stays rejected.
+      expect((await api().post('/api/auth/reset-password', { resetToken: 'x'.repeat(40), newPassword: 'Another-Valid-5-Pass' })).status).toBe(400);
+    });
+
+    it('REC-10: a password changed between the check and the write is never bypassed (stale-hash race)', async () => {
+      const customer = await createUser('CUSTOMER');
+      const repo = new AuthRepository();
+      const stale = (await prisma.user.findUniqueOrThrow({ where: { id: customer.id } })).passwordHash as string;
+      const raced = await hashPassword('Raced-Unique-6-Pass');
+      await prisma.user.update({ where: { id: customer.id }, data: { passwordHash: raced } });
+      await expect(repo.updatePasswordAndRevokeSessions(customer.id, await hashPassword('Whatever-Unique-3-Pass'), SecurityEventType.PASSWORD_CHANGED, stale)).rejects.toBeInstanceOf(StalePasswordHashError);
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: customer.id } })).passwordHash).toBe(raced);
+      // Service level: two simultaneous changes to the same new password; the loser is told it is reused or has a wrong current password, never silently applied twice.
+      const login = await api().post('/api/auth/login', { email: customer.email, password: 'Raced-Unique-6-Pass' });
+      const results = await Promise.all([1, 2].map(() => api().post('/api/auth/change-password', { currentPassword: 'Raced-Unique-6-Pass', newPassword: 'Winner-Unique-2-Pass' }, login.body.accessToken)));
+      expect(results.filter(response => response.status === 200)).toHaveLength(1);
     });
 
     it('REC-08: deactivation during recovery denies the proof; customer recovery is unchanged', async () => {

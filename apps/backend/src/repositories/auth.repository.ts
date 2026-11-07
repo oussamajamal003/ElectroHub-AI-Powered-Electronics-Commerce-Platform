@@ -35,6 +35,16 @@ export async function revokeAdminSessions(transaction: Prisma.TransactionClient,
   await transaction.adminSession.updateMany({ where: { ...where, revokedAt: null }, data: { revokedAt: new Date(), revokedReason: reason } });
 }
 
+export class StalePasswordHashError extends Error {
+  constructor() { super('Stored password changed during the update'); }
+}
+
+async function assertPasswordHashUnchanged(transaction: Prisma.TransactionClient, userId: string, observedHash?: string | null): Promise<void> {
+  if (observedHash === undefined) return;
+  const current = await transaction.user.findUnique({ where: { id: userId }, select: { passwordHash: true } });
+  if (!current || current.passwordHash !== observedHash) throw new StalePasswordHashError();
+}
+
 export class AuthRepository {
   /**
    * Find a user by their email address.
@@ -113,9 +123,15 @@ export class AuthRepository {
     return { password: Boolean(user?.passwordHash), google: Boolean(linkedGoogle) };
   }
 
-  async updatePasswordAndRevokeSessions(userId: string, passwordHash: string, eventType: SecurityEventType): Promise<void> {
+  /**
+   * `observedHash` is the stored hash the caller verified the new password against (bcrypt runs outside the
+   * transaction). Under the lifecycle lock the latest hash is re-read; if it moved, nothing is written and
+   * StalePasswordHashError tells the caller to re-verify against the new value.
+   */
+  async updatePasswordAndRevokeSessions(userId: string, passwordHash: string, eventType: SecurityEventType, observedHash?: string | null): Promise<void> {
     await prisma.$transaction(async (transaction) => {
       await lockUserTokenLifecycle(transaction, userId);
+      await assertPasswordHashUnchanged(transaction, userId, observedHash);
       await transaction.user.update({ where: { id: userId }, data: { passwordHash } });
       await transaction.refreshToken.updateMany({
         where: { userId },
@@ -191,9 +207,11 @@ export class AuthRepository {
     });
   }
 
-  async completePasswordReset(userId: string, tokenHash: string, passwordHash: string, now: Date): Promise<boolean> {
+  async completePasswordReset(userId: string, tokenHash: string, passwordHash: string, now: Date, observedHash?: string | null): Promise<boolean> {
     return prisma.$transaction(async (transaction) => {
       await lockUserTokenLifecycle(transaction, userId);
+      // Checked before the reset authorization is consumed, so a stale check never burns a valid token.
+      await assertPasswordHashUnchanged(transaction, userId, observedHash);
       const consumed = await transaction.passwordResetToken.updateMany({
         where: { userId, tokenHash, consumedAt: null, expiresAt: { gt: now } },
         data: { consumedAt: now },

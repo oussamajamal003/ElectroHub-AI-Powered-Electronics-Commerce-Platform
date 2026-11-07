@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { AuthRepository } from '../repositories/auth.repository.js';
+import { AuthRepository, StalePasswordHashError } from '../repositories/auth.repository.js';
 import { generateAccessToken, JwtPayload } from '../utils/jwt.js';
 import { hashPassword, verifyPassword } from '../utils/hash.js';
 import { otpService, OtpVerificationError, OTP_CONFIG } from './otp.service.js';
@@ -387,7 +387,21 @@ export class AuthService {
       throw new Error('Invalid or expired reset token');
     }
     const newPasswordHash = await hashPassword(newPasswordPlain);
-    const completed = await this.repository.completePasswordReset(authorization.userId, tokenHash, newPasswordHash, new Date());
+    let completed = false;
+    for (let attempt = 0; ; attempt += 1) {
+      // Compare against the latest stored hash; a rejection happens before the authorization is consumed.
+      const current = await this.repository.findUserById(authorization.userId);
+      if (!current || !current.isActive) throw new Error('Invalid or expired reset token');
+      // Read after the hash: a reset that already spent this authorization reports an invalid token, not "reused".
+      if (!await this.repository.findPasswordResetAuthorization(tokenHash)) throw new Error('Invalid or expired reset token');
+      await this.assertNotCurrentPassword(newPasswordPlain, current.passwordHash);
+      try {
+        completed = await this.repository.completePasswordReset(authorization.userId, tokenHash, newPasswordHash, new Date(), current.passwordHash);
+        break;
+      } catch (error) {
+        if (!(error instanceof StalePasswordHashError) || attempt >= 2) throw error;
+      }
+    }
     if (!completed) throw new Error('Invalid or expired reset token');
     // After commit: live administrator sockets held by the old credential end now (access tokens are already DB-revoked).
     if (authorization.user.role.name === 'ADMIN') DeliveryPublisher.disconnectUser(authorization.userId, 'LOGOUT');
@@ -584,6 +598,12 @@ export class AuthService {
     return otpService.resendChallenge(challengeId);
   }
 
+  private async assertNotCurrentPassword(newPasswordPlain: string, currentHash: string | null): Promise<void> {
+    if (currentHash && await verifyPassword(newPasswordPlain, currentHash)) {
+      throw new AppError('Your new password must be different from your current password.', 422, 'PASSWORD_REUSED');
+    }
+  }
+
   /**
    * Change password for authenticated user.
    */
@@ -599,7 +619,20 @@ export class AuthService {
     }
 
     const newPasswordHash = await hashPassword(newPasswordPlain);
-    await this.repository.updatePasswordAndRevokeSessions(userId, newPasswordHash, SecurityEventType.PASSWORD_CHANGED);
+    let observedHash = user.passwordHash;
+    for (let attempt = 0; ; attempt += 1) {
+      await this.assertNotCurrentPassword(newPasswordPlain, observedHash);
+      try {
+        await this.repository.updatePasswordAndRevokeSessions(userId, newPasswordHash, SecurityEventType.PASSWORD_CHANGED, observedHash);
+        break;
+      } catch (error) {
+        if (!(error instanceof StalePasswordHashError) || attempt >= 2) throw error;
+        const latest = await this.repository.findUserById(userId);
+        if (!latest || !latest.isActive) throw new Error('User not found or inactive');
+        if (!await verifyPassword(currentPasswordPlain, latest.passwordHash)) throw new Error('Incorrect current password');
+        observedHash = latest.passwordHash;
+      }
+    }
     if (!await emailService.sendPasswordChangedNotification(user.email, user.id)) {
       logger.error('Password change notification delivery failed', { userId: user.id });
     }

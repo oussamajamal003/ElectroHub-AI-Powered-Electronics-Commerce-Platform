@@ -74,6 +74,18 @@ describe('ChangePasswordSection', () => {
     expect(clearSession).toHaveBeenCalledTimes(1);
   });
 
+  it('shows the server PASSWORD_REUSED message on the new-password field and keeps the session', async () => {
+    vi.mocked(adminSecurityApi.changePassword).mockRejectedValue(new ApiError(422, 'Your new password must be different from your current password.', undefined, 'PASSWORD_REUSED'));
+    renderAt(<ChangePasswordSection />);
+    fill('Current password', 'Old-Pass-1');
+    fill('New password', 'New-Pass-2');
+    fill('Confirm new password', 'New-Pass-2');
+    fireEvent.click(screen.getByRole('button', { name: /Update password/ }));
+    expect(await screen.findByText('Your new password must be different from your current password.')).toBeInTheDocument();
+    expect(screen.getByLabelText('New password')).toHaveAttribute('aria-invalid', 'true');
+    expect(clearSession).not.toHaveBeenCalled();
+  });
+
   it('keeps the session and shows the server reason when the current password is wrong or verification is cancelled', async () => {
     vi.mocked(adminSecurityApi.changePassword).mockRejectedValue(new ApiError(400, 'Your current password is incorrect.', undefined, 'INVALID_CURRENT_PASSWORD'));
     renderAt(<ChangePasswordSection />);

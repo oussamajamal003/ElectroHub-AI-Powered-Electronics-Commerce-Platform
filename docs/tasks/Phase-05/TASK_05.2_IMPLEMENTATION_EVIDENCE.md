@@ -470,3 +470,21 @@ Verification: `admin-signin-keyboard.spec.ts` passed 5/5 with actual keyboard ev
   alert. Screenshots at 390/768/1440/1920 and a 720 px reflow inspected.
 - Not verified: native 200% zoom (headless); real Brevo delivery. Shared DEV and PROD were not touched; no real administrator was
   promoted or revoked.
+
+### Password reuse prevention (customer and administrator)
+
+- Every password replacement path (customer and administrator forgot-password reset, customer change-password, administrator
+  change-password) now refuses a new password equal to the current one: `422 PASSWORD_REUSED`, "Your new password must be
+  different from your current password." The comparison is `verifyPassword(new, storedHash)`, never a hash comparison.
+- Race safety: bcrypt runs outside the transaction against the hash just read; under the user lifecycle lock the write re-reads the
+  stored hash and aborts with `StalePasswordHashError` if it moved (service retries against the latest hash, at most 3 attempts).
+  On reset the check precedes consumption of the reset authorization, so a rejection leaves password, sessions, MFA factors and
+  the authorization untouched, sends no notification and the authorization stays usable until expiry. A reset that already spent
+  the authorization still reports an invalid token rather than "reused".
+- Evidence: PostgreSQL harness 51/51 (REC-09 reuse rejected for admin reset and customer reset/change with the authorization
+  still usable, then a different password accepted and a fresh password + MFA login required; REC-10 stale-hash and concurrent
+  change); `auth.service` / `auth.refresh-concurrency` unit suites 74/74 (regression test reproduces the original acceptance);
+  frontend focused suites, `tsc -b`, eslint, `vite build` clean; Playwright REC-UI 5/5 (the recovery journey submits the current
+  password, sees the message, stays on the step and then succeeds). No schema change, no password-history table, MFA untouched.
+- Not verified: the unrelated payment/Stripe/live-DB backend suites fail locally for environment reasons; CI is the authority.
+  Shared DEV and PROD were not touched.

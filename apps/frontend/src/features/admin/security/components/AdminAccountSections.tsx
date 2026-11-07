@@ -59,7 +59,7 @@ export function ChangePasswordSection() {
     } catch (error) {
       if (isStepUpCancelled(error)) setFormError('Your password was not changed. Confirm it is you to continue.');
       else if (error instanceof ApiError && error.code === 'INVALID_CURRENT_PASSWORD') setServerErrors({ currentPassword: error.message });
-      else if (error instanceof ApiError && error.code === 'PASSWORD_UNCHANGED') setServerErrors({ newPassword: error.message });
+      else if (error instanceof ApiError && (error.code === 'PASSWORD_UNCHANGED' || error.code === 'PASSWORD_REUSED')) setServerErrors({ newPassword: error.message });
       else {
         const fields = serverFieldErrors(error) as Partial<Record<PasswordField, string>>;
         setServerErrors(fields);

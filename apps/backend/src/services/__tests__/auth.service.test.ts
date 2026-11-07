@@ -503,7 +503,9 @@ describe('AuthService', () => {
 
     it('should invalidate all user sessions with expired timestamps on password change', async () => {
       const validHash = await hashPassword('password123');
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({ ...mockUser, passwordHash: validHash } as unknown as User);
+      vi.mocked(prisma.user.findUnique)
+        .mockResolvedValueOnce({ ...mockUser, passwordHash: validHash } as unknown as User)
+        .mockResolvedValueOnce({ passwordHash: validHash } as unknown as User); // latest hash re-read under the lifecycle lock
       vi.mocked(prisma.refreshToken.updateMany).mockResolvedValueOnce({ count: 4 });
 
       await authService.changePassword(mockUser.id, 'password123', 'newpassword456');
@@ -513,6 +515,15 @@ describe('AuthService', () => {
         data: { isRevoked: true, expiresAt: new Date(0) },
       });
       expect(prisma.$executeRaw).toHaveBeenCalled();
+    });
+
+    it('rejects a new password equal to the current one and writes nothing (regression: reuse was accepted)', async () => {
+      const validHash = await hashPassword('password123');
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({ ...mockUser, passwordHash: validHash } as unknown as User);
+      vi.mocked(prisma.refreshToken.updateMany).mockClear();
+
+      await expect(authService.changePassword(mockUser.id, 'password123', 'password123')).rejects.toMatchObject({ code: 'PASSWORD_REUSED', statusCode: 422 });
+      expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
     });
 
     it('should take the user lifecycle advisory lock before any refresh_tokens statement during rotation', async () => {

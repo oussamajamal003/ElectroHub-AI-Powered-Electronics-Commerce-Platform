@@ -226,7 +226,7 @@ export function AdminForgotPasswordPage() {
       if (err instanceof ApiError && err.code === 'RESET_AUTHORIZATION_INVALID') restart(describeAdminAuthError(err, 'team').message);
       else {
         setServerFields(serverFieldErrors(err));
-        setError(failure.message);
+        setError(err instanceof ApiError && err.code === 'PASSWORD_REUSED' ? err.message : failure.message);
       }
     } finally {
       setPending(false);

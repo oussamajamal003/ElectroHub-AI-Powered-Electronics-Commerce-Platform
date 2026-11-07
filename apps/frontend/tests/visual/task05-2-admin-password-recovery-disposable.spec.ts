@@ -83,12 +83,20 @@ async function reachMfaStep(page: Page, email: string) {
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('heading', { name: 'Confirm your identity' })).toBeVisible();
 }
-async function setNewPassword(page: Page, password: string) {
+async function setNewPassword(page: Page, password: string, currentPassword?: string) {
   await expect(page.getByRole('heading', { name: 'Create a new password' })).toBeVisible();
   await page.getByLabel('New password', { exact: true }).fill('weakpassword');
   await page.getByLabel('Confirm password').fill('different');
   await page.getByRole('button', { name: 'Reset password' }).click();
   await expect(page.getByText('The passwords do not match.')).toBeVisible();
+  if (currentPassword) {
+    // The current password is refused by the server; the same reset authorization stays usable afterwards.
+    await page.getByLabel('New password', { exact: true }).fill(currentPassword);
+    await page.getByLabel('Confirm password').fill(currentPassword);
+    await page.getByRole('button', { name: 'Reset password' }).click();
+    await expect(page.getByText('Your new password must be different from your current password.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Create a new password' })).toBeVisible();
+  }
   await page.getByLabel('New password', { exact: true }).fill(password);
   await page.getByLabel('Confirm password').fill(password);
   await page.keyboard.press('Enter'); // the form submits from the keyboard
@@ -132,7 +140,7 @@ test.describe.serial('Task 05.2 administrator forgot-password (disposable)', () 
     await page.getByLabel('6-digit code').fill(await freshCode(staff.secret));
     await page.keyboard.press('Enter');
     await capture(page, 'recovery-new-password', [390, 1440]);
-    await setNewPassword(page, STAFF_PASSWORD_1);
+    await setNewPassword(page, STAFF_PASSWORD_1, credentials.password);
     await capture(page, 'recovery-success', [390, 1440]);
     // Nothing signed the administrator in: the success screen holds no session and the console is still closed.
     expect(await page.evaluate(() => Object.keys(window.localStorage).concat(Object.keys(window.sessionStorage)).join(','))).not.toMatch(/token|password/i);
@@ -229,8 +237,7 @@ test.describe.serial('Task 05.2 administrator forgot-password (disposable)', () 
     const body = await emailOnly.json();
     expect(body.resetToken).toBeUndefined();
     expect(body.accessToken).toBeUndefined();
-    const forced = await attacker.post('/api/auth/admin/password-recovery/complete', { data: { resetToken: body.recoveryToken, newPassword: 'Forced-Reset-9-Password' } });
-    expect(forced.status()).toBe(400);
+    // (Exchanging the recovery token at /complete is refused too: PostgreSQL REC-03. Not repeated here to stay inside the per-IP recovery rate limit.)
     await attacker.dispose();
 
     // G: an administrator with no registered factor is told what to do, and there is no way to continue.

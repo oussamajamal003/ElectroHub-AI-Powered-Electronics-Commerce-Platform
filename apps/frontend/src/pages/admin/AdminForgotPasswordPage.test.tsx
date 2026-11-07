@@ -105,6 +105,23 @@ describe('AdminForgotPasswordPage', () => {
     expect(await screen.findByText('Admin sign in screen')).toBeInTheDocument();
   });
 
+  it('shows the reuse message and stays on the password step so the same authorization can be retried', async () => {
+    await toMfaStep();
+    vi.mocked(adminRecoveryApi.verifyTotp).mockResolvedValue({ resetToken: 'reset-authorization-token-abcdefghijklmnopqrstuv', expiresAt: future() });
+    fireEvent.change(screen.getByLabelText('6-digit code'), { target: { value: '654321' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify and continue' }));
+    await screen.findByRole('heading', { name: 'Create a new password' });
+    vi.mocked(adminRecoveryApi.complete).mockRejectedValueOnce(new ApiError(422, 'Your new password must be different from your current password.', undefined, 'PASSWORD_REUSED'));
+    fireEvent.change(screen.getByLabelText(/^New password/i), { target: { value: STRONG } });
+    fireEvent.change(screen.getByLabelText(/Confirm password/i), { target: { value: STRONG } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reset password' }));
+    expect(await screen.findByText('Your new password must be different from your current password.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Create a new password' })).toBeInTheDocument();
+    vi.mocked(adminRecoveryApi.complete).mockResolvedValueOnce({ message: 'ok' });
+    fireEvent.click(screen.getByRole('button', { name: 'Reset password' }));
+    await screen.findByRole('heading', { name: 'Password reset successful' });
+  });
+
   it('uses a recovery code for the second proof', async () => {
     await toMfaStep();
     fireEvent.mouseDown(screen.getByRole('tab', { name: /Recovery code/ }), { button: 0 }); // Radix tabs activate on mouse down
