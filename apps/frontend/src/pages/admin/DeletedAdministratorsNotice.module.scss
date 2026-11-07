@@ -1,0 +1,60 @@
+@use '@/styles/abstracts' as *;
+
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-3;
+  padding: $spacing-3 $spacing-4;
+  border: 1px solid $color-info-border;
+  background: $color-info-background;
+  color: $color-info-foreground;
+  font-size: $font-size-sm;
+}
+
+.icon {
+  flex: none;
+  margin-top: 2px;
+}
+
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-weight: $font-weight-semibold;
+}
+
+.body {
+  margin: $spacing-1 0 0;
+  line-height: 1.5;
+}
+
+.dismiss {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin: calc(-1 * #{$spacing-1}) calc(-1 * #{$spacing-2}) 0 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgba($color-primary, 0.1);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $color-primary;
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}

@@ -873,6 +873,106 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
       passwordHash: row.passwordHash, roleId: row.roleId, email: row.email };
   };
 
+  describe('DNOTE deleted administrators are hidden and Owners get a one-time notice', () => {
+    const del = (admin: { accessToken: string }) => api().post('/api/admin/me/delete', { currentPassword: PASSWORD, confirmation: 'DELETE' }, admin.accessToken);
+    const list = (token: string, query = '') => api().get(`/api/admin/administrators${query}`, token);
+    /** Every visible row, 50 per page (the API maximum), plus the reported total. */
+    const everyone = async (token: string) => {
+      const rows: Array<{ id: string; email: string }> = [];
+      let total = 0;
+      for (let pageNumber = 1; ; pageNumber += 1) {
+        const page = await list(token, `?page=${pageNumber}&pageSize=50`);
+        expect(page.status).toBe(200);
+        total = page.body.meta.total;
+        rows.push(...page.body.data);
+        if (pageNumber >= page.body.meta.totalPages) return { rows, total };
+      }
+    };
+    const notice = (token: string) => api().get('/api/admin/administrators/deletion-notice', token);
+    const ack = (token: string, through: string) => api().post('/api/admin/administrators/deletion-notice/acknowledge', { through }, token);
+
+    it('DNOTE-01: deleted administrators and Owners vanish from the list, search, pagination and counts; inactive ones stay; history and links are kept', async () => {
+      const viewer = await onlyOwner();
+      const doomed = await enrolledAdmin({ manage: true });
+      const doomedOwner = await enrolledAdmin({ owner: true });
+      const inactive = await enrolledAdmin();
+      await prisma.user.update({ where: { id: inactive.user.id }, data: { isActive: false } });
+      const before = await everyone(viewer.accessToken);
+      expect(before.rows.map(row => row.id)).toEqual(expect.arrayContaining([doomed.user.id, doomedOwner.user.id, inactive.user.id]));
+      expect((await del(doomed)).status).toBe(200);
+      expect((await del(doomedOwner)).status).toBe(200); // another Owner (viewer) remains
+      const after = await everyone(viewer.accessToken);
+      const ids = after.rows.map(row => row.id);
+      expect(ids).not.toContain(doomed.user.id);
+      expect(ids).not.toContain(doomedOwner.user.id);
+      expect(ids).toContain(inactive.user.id);
+      expect(after.rows.every(row => !row.email.endsWith('@deleted.invalid'))).toBe(true);
+      expect(after.total).toBe(before.total - 2);
+      // Search never finds the anonymized rows; pagination covers exactly the visible set.
+      expect((await list(viewer.accessToken, '?search=deleted')).body.data).toHaveLength(0);
+      const visibleTotal = after.total;
+      const paged: string[] = [];
+      for (let pageNumber = 1; pageNumber <= Math.ceil(visibleTotal / 3); pageNumber += 1) {
+        const page = await list(viewer.accessToken, `?page=${pageNumber}&pageSize=3`);
+        expect(page.body.meta.totalPages).toBe(Math.ceil(visibleTotal / 3));
+        paged.push(...page.body.data.map((row: { id: string }) => row.id));
+      }
+      expect(paged).toHaveLength(visibleTotal);
+      expect(new Set(paged).size).toBe(visibleTotal);
+      // Records are preserved, and a deleted account cannot be reached through access management or activation.
+      expect(await prisma.user.count({ where: { id: { in: [doomed.user.id, doomedOwner.user.id] } } })).toBe(2);
+      expect(await prisma.adminAuditLog.count({ where: { actorId: doomed.user.id, action: 'ADMIN_ACCOUNT_DELETED' } })).toBe(1);
+      const reactivate = await api().patch(`/api/admin/administrators/${doomed.user.id}/access`, { isActive: true }, viewer.accessToken);
+      expect([404, 403]).toContain(reactivate.status);
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: doomed.user.id } })).isActive).toBe(false);
+    });
+
+    it('DNOTE-02: each Owner is notified once per deletion event, independently, across refreshes; rollbacks and non-Owners get nothing', async () => {
+      const a = await onlyOwner();
+      const b = await enrolledAdmin({ owner: true });
+      const manager = await enrolledAdmin({ manage: true });
+      expect((await notice(a.accessToken)).body.data).toEqual({ count: 0, through: null });
+      expect((await notice(manager.accessToken)).status).toBe(403); // not an Owner
+      expect((await ack(manager.accessToken, new Date().toISOString())).status).toBe(403);
+
+      // A failed (rolled-back) deletion creates no event.
+      const survivor = await enrolledAdmin();
+      ownershipTestHooks.afterSuccessorPromoted = async () => { throw new Error('injected failure before commit'); };
+      try { expect((await transfer(a.accessToken, survivor.user.id)).status).toBe(500); } finally { delete ownershipTestHooks.afterSuccessorPromoted; }
+      expect((await notice(b.accessToken)).body.data.count).toBe(0);
+
+      const first = await enrolledAdmin();
+      expect((await del(first)).status).toBe(200);
+      const aSees = (await notice(a.accessToken)).body.data;
+      expect(aSees.count).toBe(1);
+      expect(JSON.stringify(aSees)).not.toMatch(/deleted\.invalid|@|Deleted Administrator/);
+      expect((await notice(a.accessToken)).body.data.count).toBe(1); // a refresh does not consume it
+      expect((await ack(a.accessToken, aSees.through)).status).toBe(200);
+      expect((await notice(a.accessToken)).body.data).toEqual({ count: 0, through: null }); // stays dismissed
+      expect((await ack(a.accessToken, aSees.through)).status).toBe(200); // idempotent
+      expect(await prisma.adminAuditLog.count({ where: { actorId: a.user.id, action: 'ADMIN_DELETION_NOTICE_ACKNOWLEDGED' } })).toBe(1);
+      expect((await notice(b.accessToken)).body.data.count).toBe(1); // the other Owner is independent
+      expect((await ack(b.accessToken, (await notice(b.accessToken)).body.data.through)).status).toBe(200);
+      expect((await notice(b.accessToken)).body.data.count).toBe(0);
+
+      // New deletions raise new notices (two at once are one banner with a count, not two).
+      const second = await enrolledAdmin();
+      const third = await enrolledAdmin();
+      expect((await del(second)).status).toBe(200);
+      expect((await del(third)).status).toBe(200);
+      expect((await notice(a.accessToken)).body.data.count).toBe(2);
+      expect((await notice(b.accessToken)).body.data.count).toBe(2);
+      // A future timestamp cannot pre-acknowledge deletions that have not happened.
+      expect((await ack(a.accessToken, new Date(Date.now() + 3_600_000).toISOString())).status).toBe(400);
+      // Ordinary Owner transfer-and-delete is announced to the successor (an Owner) too.
+      const leaving = await onlyOwner();
+      const heir = await enrolledAdmin();
+      expect((await transfer(leaving.accessToken, heir.user.id)).status).toBe(200);
+      const heirSees = await signIn(heir.user.email, heir.secret, 1);
+      expect((await notice(heirSees.accessToken)).body.data.count).toBe(1);
+    });
+  });
+
   describe('DELN administrator deletion confirmation email', () => {
     const sink: Array<{ to: string; subject: string; htmlContent: string; textContent?: string }> = [];
     let send: ReturnType<typeof vi.spyOn>;

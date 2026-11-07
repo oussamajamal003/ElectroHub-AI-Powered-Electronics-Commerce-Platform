@@ -1,3 +1,4 @@
+import { adminDeletionNoticeService } from '../services/admin-deletion-notice.js';
 import type { NextFunction, Request, Response } from 'express';
 import { z, ZodError } from 'zod';
 import { clearRefreshCookie, setRefreshCookie } from './auth.controller.js';
@@ -264,6 +265,12 @@ export const adminSecurityController = {
   administrators: handle(async (req, res) => {
     const query = page.extend({ search: z.string().trim().max(100).optional() }).parse(req.query);
     res.json(await adminTeamService.listAdministrators({ ...query, actorId: userId(req) }));
+  }),
+  deletionNotice: handle(async (req, res) => { res.set('Cache-Control', 'no-store').json({ data: await adminDeletionNoticeService.pending(userId(req)) }); }),
+  acknowledgeDeletionNotice: handle(async (req, res) => {
+    const body = z.object({ through: z.string().datetime() }).strict().parse(req.body);
+    await adminDeletionNoticeService.acknowledge(userId(req), new Date(body.through), req.id);
+    res.json({ data: { acknowledged: true } });
   }),
   invitations: handle(async (req, res) => {
     const query = page.extend({ status: z.enum(['PENDING', 'ACCEPTED', 'REVOKED', 'EXPIRED']).optional() }).parse(req.query);

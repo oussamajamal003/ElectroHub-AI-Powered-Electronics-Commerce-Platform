@@ -15,6 +15,7 @@ import {
   useUpdateAdministratorAccess, type AdminInvitation, type AdministratorSummary, type InvitationDelivery, type InvitationStatus,
 } from '@/features/admin/security/api';
 import { teamFailure } from './teamFailure';
+import { DeletedAdministratorsNotice } from './DeletedAdministratorsNotice';
 import { useStepUp } from '@/features/admin/security/useStepUp';
 import { twoStepStatus } from '@/features/admin/security/twoStepStatus';
 import {
@@ -344,6 +345,7 @@ export function AdminAdministratorsPage() {
 
     {administrators.isError && !readOnly && !administrators.data && <QueryProblem error={administrators.error} hasData={false}
       onRetry={() => void administrators.refetch()} retrying={administrators.isFetching} what="The administrator list" />}
+    <DeletedAdministratorsNotice enabled={isOwner && !readOnly} />
     <section className={styles.panelFlush} aria-labelledby="team-admins-title">
       <div className={styles.panelHeader}>
         <div>

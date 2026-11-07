@@ -1,3 +1,4 @@
+import { notDeletedAdmin } from './admin-deletion-notice.js';
 import { AdminActivationStatus, AdminInvitationDelivery, Prisma, type AdminMfaActivation } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { ADMIN_AUTH_TX } from '../lib/transaction-options.js';
@@ -39,7 +40,7 @@ export class AdminActivationService {
 
   /** The account must still be an active, factor-less ADMIN. Returns the committed account for the caller to use. */
   private async eligibleTarget(tx: Prisma.TransactionClient, targetId: string) {
-    const target = await tx.user.findFirst({ where: { id: targetId, role: { name: 'ADMIN' } }, select: { id: true, email: true, isActive: true } });
+    const target = await tx.user.findFirst({ where: { id: targetId, role: { name: 'ADMIN' }, ...notDeletedAdmin }, select: { id: true, email: true, isActive: true } });
     if (!target) throw new AppError('Administrator not found.', 404, 'NOT_FOUND');
     if (!target.isActive) throw new AppError('This administrator account is deactivated.', 409, 'ACCOUNT_INACTIVE');
     const factors = await adminMfaService.factorSummary(targetId, tx);

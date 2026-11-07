@@ -110,6 +110,7 @@ export const adminTeamKeys = {
   all: ['admin', 'team'] as const,
   administrators: (page: number) => ['admin', 'team', 'administrators', page] as const,
   invitations: (status: string, page: number) => ['admin', 'team', 'invitations', status, page] as const,
+  deletionNotice: ['admin', 'team', 'deletion-notice'] as const,
 };
 
 // ─── Pre-auth (challenge-bound) ───────────────────────────
@@ -213,7 +214,13 @@ export const adminSecurityApi = {
 
 // ─── Team ─────────────────────────────────────────────────
 const TEAM = '/api/admin';
+export interface AdminDeletionNotice { count: number; through: string | null }
+
 export const adminTeamApi = {
+  /** Owner-only: how many administrator deletions this Owner has not yet acknowledged (never any detail about who). */
+  deletionNotice: () => enveloped<AdminDeletionNotice>(`${TEAM}/administrators/deletion-notice`),
+  acknowledgeDeletionNotice: (through: string) =>
+    enveloped<{ acknowledged: boolean }>(`${TEAM}/administrators/deletion-notice/acknowledge`, { method: 'POST', data: { through } }),
   listAdministrators: (page: number) => apiClient<ListResponse<AdministratorSummary>>(`${TEAM}/administrators${queryString({ page })}`),
   updateAccess: (id: string, body: { isActive?: boolean; canManageAdmins?: boolean }) =>
     enveloped<AdministratorSummary>(`${TEAM}/administrators/${encodeURIComponent(id)}/access`, { method: 'PATCH', data: body }),
@@ -265,6 +272,15 @@ export function useOwnershipSuccessors(enabled: boolean) {
 
 export function useAdministrators(page: number) {
   return useQuery({ queryKey: adminTeamKeys.administrators(page), queryFn: () => adminTeamApi.listAdministrators(page), placeholderData: keepPreviousData });
+}
+
+export function useDeletionNotice(enabled: boolean) {
+  return useQuery({ queryKey: adminTeamKeys.deletionNotice, queryFn: adminTeamApi.deletionNotice, enabled, retry: false, refetchOnWindowFocus: false });
+}
+
+export function useAcknowledgeDeletionNotice() {
+  const client = useQueryClient();
+  return useMutation({ mutationFn: adminTeamApi.acknowledgeDeletionNotice, onSuccess: () => client.setQueryData(adminTeamKeys.deletionNotice, { count: 0, through: null }) });
 }
 
 export function useInvitations(status: string, page: number) {

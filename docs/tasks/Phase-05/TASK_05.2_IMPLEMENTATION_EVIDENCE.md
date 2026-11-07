@@ -542,3 +542,24 @@ Verification: `admin-signin-keyboard.spec.ts` passed 5/5 with actual keyboard ev
   deletion committed and reported as success, row `FAILED`, two overlapping retries deliver exactly one email. Template rendered in
   Chromium at 390 px and 1280 px: no horizontal overflow, readable. Backend `tsc` and eslint clean.
 - Not verified: real Brevo delivery; mail-client rendering beyond Chromium. Shared DEV and PROD untouched; no migration needed.
+
+### Deleted administrators hidden, one-time Owner notice
+
+- The administrator list (rows, total, page count, search) excludes anonymized accounts via the explicit `deleted-admin-*@deleted.invalid`
+  convention (`.invalid` addresses cannot be registered or invited, so it never matches an ordinary deactivated administrator);
+  inactive non-deleted administrators stay. Access changes and MFA activation on a deleted account answer 404. Rows, audit history and
+  foreign keys are untouched.
+- Notice: `GET /api/admin/administrators/deletion-notice` (Owner only) counts committed `ADMIN_ACCOUNT_DELETED` audit rows newer than
+  the Owner's watermark; `POST .../acknowledge` records the Owner's own audit row holding that watermark (never moves back, future
+  timestamps refused). No new table or migration; per Owner, persistent across refreshes and devices; a rolled-back deletion wrote no
+  event; several deletions are one banner with a count; the payload carries only a count and a timestamp (no email or name). A small
+  dismissible `role="status"` banner (`DeletedAdministratorsNotice`) sits above the table for Owners only.
+- Evidence: PostgreSQL 62/62 (DNOTE-01 deleted ADMIN and Owner absent, inactive stays, total/page counts and search correct over
+  paging, records kept, reactivation of a deleted account refused; DNOTE-02 once per Owner and independent, refresh keeps it, dismiss
+  persists, new deletions re-notify with a count, rollback and non-Owner get nothing, future acknowledgement refused, successor sees the
+  transfer deletion); frontend 230/230 admin tests, `tsc -b`, eslint, `vite build`; Chromium DNOTE-UI (table has no deleted row, banner
+  visible at 390/768/1440 without overflow, keyboard dismiss with Enter, stays dismissed after reload). The browser run caught and fixed a
+  missing SCSS `@use`. Backend suites that need a live migrated PostgreSQL (db-request-metrics, otp/google/auth integration,
+  co-purchases, admin seed) were not run locally; payment/Stripe suites pass locally once the disposable-target environment is set
+  (`DATABASE_URL`/`DIRECT_URL` database `electrohub_ci_*`, `STRIPE_SECRET_KEY=sk_test_*`): 2056 passed.
+- Not verified: native 200% zoom (headless); shared DEV and PROD untouched.

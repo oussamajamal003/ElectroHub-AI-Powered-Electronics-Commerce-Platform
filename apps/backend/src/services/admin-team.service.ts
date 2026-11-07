@@ -1,3 +1,4 @@
+import { notDeletedAdmin } from './admin-deletion-notice.js';
 import { AdminInvitationDelivery, AdminInvitationStatus, Prisma, type AdminInvitation } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { ADMIN_AUTH_TX } from '../lib/transaction-options.js';
@@ -39,7 +40,8 @@ interface Actor { userId: string; requestId?: string }
 
 export class AdminTeamService {
   async listAdministrators(input: { page: number; pageSize: number; search?: string; actorId?: string }) {
-    const where: Prisma.UserWhereInput = { role: { name: 'ADMIN' }, ...(input.search ? { OR: [
+    // Anonymized (deleted) administrators are never listed; the same predicate feeds the rows, the total and the page count.
+    const where: Prisma.UserWhereInput = { role: { name: 'ADMIN' }, ...notDeletedAdmin, ...(input.search ? { OR: [
       { email: { contains: input.search, mode: 'insensitive' } }, { firstName: { contains: input.search, mode: 'insensitive' } },
       { lastName: { contains: input.search, mode: 'insensitive' } }] } : {}) };
     const [total, users] = await Promise.all([
@@ -214,7 +216,7 @@ export class AdminTeamService {
       // operation uses, so concurrent owner changes serialize and cannot deadlock.
       if (input.isActive === false) await lockOwnerLifecycle(tx);
       await lockUserTokenLifecycle(tx, targetId);
-      const target = await tx.user.findFirst({ where: { id: targetId, role: { name: 'ADMIN' } },
+      const target = await tx.user.findFirst({ where: { id: targetId, role: { name: 'ADMIN' }, ...notDeletedAdmin },
         select: { id: true, isActive: true, adminSecurity: { select: { isOwner: true, canManageAdmins: true } } } });
       if (!target) throw new AppError('Administrator not found.', 404, 'NOT_FOUND');
       if (input.isActive === false && target.adminSecurity?.isOwner) {

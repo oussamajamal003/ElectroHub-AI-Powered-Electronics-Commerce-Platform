@@ -74,6 +74,9 @@ adminSecurityRouter.post('/admin/me/ownership-transfer-and-delete', credentialWr
 
 const manageAdmins = requireAdminCapability('MANAGE_ADMINS');
 adminSecurityRouter.get('/admin/administrators', manageAdmins, c.administrators);
+// One-time Owner notice that administrators were deleted (acknowledged server-side, per Owner).
+adminSecurityRouter.get('/admin/administrators/deletion-notice', owner, c.deletionNotice);
+adminSecurityRouter.post('/admin/administrators/deletion-notice/acknowledge', writes, owner, c.acknowledgeDeletionNotice);
 adminSecurityRouter.patch('/admin/administrators/:id/access', writes, requireAdminCapability('OWNER'), requireStepUp, c.setAccess);
 adminSecurityRouter.get('/admin/administrators/:id/mfa-activation', owner, c.activationState);
 adminSecurityRouter.post('/admin/administrators/:id/mfa-activation', writes, owner, requireStepUp, c.requestActivation);
