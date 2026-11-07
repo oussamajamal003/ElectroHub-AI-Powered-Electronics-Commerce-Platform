@@ -1,3 +1,4 @@
+import { dispatchDeletionNotice, queueDeletionNotice } from './admin-deletion-email.js';
 import { AdminInvitationStatus, SecurityEventType, type Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { ADMIN_AUTH_TX } from '../lib/transaction-options.js';
@@ -75,8 +76,10 @@ export async function assertPasswordUnchanged(tx: Prisma.TransactionClient, user
  * revoked; capabilities end with the account and are never transferred implicitly. Security events and audit rows are kept.
  */
 export async function anonymizeAdministrator(tx: Prisma.TransactionClient, userId: string,
-  input: { wasOwner: boolean; meta?: RequestMeta; requestId?: string; successorId?: string }) {
+  input: { wasOwner: boolean; meta?: RequestMeta; requestId?: string; successorId?: string }): Promise<string | null> {
   const now = new Date();
+  // The confirmation is queued with the ORIGINAL address in this same transaction (before it is anonymized): it exists only if the deletion commits.
+  const deletionNoticeId = await queueDeletionNotice(tx, userId);
   await tx.refreshToken.updateMany({ where: { userId }, data: { isRevoked: true, expiresAt: new Date(0) } });
   await revokeAdminSessions(tx, { userId }, 'ACCOUNT_DELETED');
   await tx.adminAuthChallenge.updateMany({ where: { userId, consumedAt: null }, data: { consumedAt: now } });
@@ -99,6 +102,7 @@ export async function anonymizeAdministrator(tx: Prisma.TransactionClient, userI
   await recordAdminAudit({ actorId: userId, action: 'ADMIN_ACCOUNT_DELETED', resourceType: 'admin_user', resourceId: userId, outcome: 'SUCCESS',
     details: { wasOwner: input.wasOwner, revokedInvitations: revokedInvitations.count, ...(input.successorId ? { successorId: input.successorId } : {}) },
     requestId: input.requestId }, tx);
+  return deletionNoticeId;
 }
 
 export { invalidPassword as invalidCurrentPassword, inactiveAccount as inactiveAdministrator };
@@ -215,7 +219,7 @@ export class AdminAccountService {
     const account = await prisma.user.findFirst({ where: { id: userId, isActive: true, role: { name: 'ADMIN' } }, select: { passwordHash: true } });
     if (!account) throw inactiveAccount();
     if (!await verifyPassword(currentPassword, account.passwordHash)) throw invalidPassword(); // bcrypt stays outside the transaction
-    await prisma.$transaction(async tx => {
+    const noticeId = await prisma.$transaction(async tx => {
       // Owner lock first, then the user lock: the same order every owner-affecting operation uses (see lockOwnerLifecycle).
       await lockOwnerLifecycle(tx);
       await lockUserTokenLifecycle(tx, userId);
@@ -224,9 +228,11 @@ export class AdminAccountService {
         const others = await tx.adminAccountSecurity.count({ where: { isOwner: true, userId: { not: userId }, user: { isActive: true } } });
         if (others === 0) throw new AppError(LAST_OWNER_MESSAGE, 409, 'LAST_OWNER');
       }
-      await anonymizeAdministrator(tx, userId, { wasOwner: current.isOwner, meta, requestId });
+      return anonymizeAdministrator(tx, userId, { wasOwner: current.isOwner, meta, requestId });
     }, ADMIN_AUTH_TX);
     DeliveryPublisher.disconnectUser(userId, 'ACCOUNT_DELETED');
+    // After commit, never awaited by the response: a delivery failure is ledgered for retry and cannot undo or misreport the deletion.
+    void dispatchDeletionNotice(noticeId);
   }
 
   async loginHistory(userId: string, page: number, pageSize: number) {

@@ -13,6 +13,8 @@ import { env } from '../config/env.js';
 import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
 import { adminMfaService } from './admin-mfa.service.js';
 import { emailService } from './email.service.js';
+import { brevoProvider } from '../integrations/brevo/brevo.provider.js';
+import { retryDeletionNotices } from './admin-deletion-email.js';
 import { seedAdministrators } from '../utils/admin-seed.js';
 import { countEligibleOwners, ownershipTestHooks } from './admin-ownership.service.js';
 
@@ -870,6 +872,102 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     return { isActive: row.isActive, isOwner: row.adminSecurity?.isOwner ?? false, canManageAdmins: row.adminSecurity?.canManageAdmins ?? false,
       passwordHash: row.passwordHash, roleId: row.roleId, email: row.email };
   };
+
+  describe('DELN administrator deletion confirmation email', () => {
+    const sink: Array<{ to: string; subject: string; htmlContent: string; textContent?: string }> = [];
+    let send: ReturnType<typeof vi.spyOn>;
+    beforeAll(() => {
+      send = vi.spyOn(brevoProvider, 'sendTransactionalEmail').mockImplementation((async (options: { to: string; subject: string; htmlContent: string; textContent?: string }) => {
+        sink.push(options);
+        return { success: true, messageId: `sink-${randomUUID()}` };
+      }) as never);
+    });
+    afterAll(() => { send.mockRestore(); });
+    const noticesFor = (email: string) => sink.filter(item => item.to === email);
+    const ledger = (userId: string) => prisma.emailDelivery.findMany({ where: { userId, type: 'SECURITY_ALERT' } });
+    const settled = async (userId: string, status: string) => {
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        if ((await ledger(userId)).some(row => row.status === status)) return;
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    };
+
+    it('DELN-01: a regular administrator deletion sends exactly one confirmation to the original address, after anonymization', async () => {
+      const admin = await enrolledAdmin({ manage: true });
+      const original = admin.user.email;
+      const deleted = await api().post('/api/admin/me/delete', { currentPassword: PASSWORD, confirmation: 'DELETE' }, admin.accessToken);
+      expect(deleted.status).toBe(200);
+      await settled(admin.user.id, 'SENT');
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: admin.user.id } })).email).toBe(`deleted-admin-${admin.user.id}@deleted.invalid`);
+      const mails = noticesFor(original);
+      expect(mails).toHaveLength(1);
+      expect(mails[0].subject).toBe('Your ElectroHub administrator account was deleted');
+      for (const body of [mails[0].htmlContent, mails[0].textContent ?? '']) {
+        expect(body).toMatch(/deleted/i);
+        expect(body).toMatch(/audit records/i);
+        expect(body).toMatch(/signed out/i);
+        expect(body).toMatch(/support/i);
+        expect(body).not.toContain(PASSWORD);
+        expect(body).not.toContain(admin.secret);
+        for (const recoveryCode of admin.recoveryCodes) expect(body).not.toContain(recoveryCode);
+        expect(body).not.toContain(admin.accessToken);
+      }
+      expect(mails[0].htmlContent).toContain('width=device-width'); // mobile viewport
+      const rows = await ledger(admin.user.id);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ recipient: original, status: 'SENT' });
+      // Repeating the request cannot create a second notification (the account is gone).
+      expect((await api().post('/api/admin/me/delete', { currentPassword: PASSWORD, confirmation: 'DELETE' }, admin.accessToken)).status).toBeGreaterThanOrEqual(400);
+      expect(noticesFor(original)).toHaveLength(1);
+      expect(await ledger(admin.user.id)).toHaveLength(1);
+    });
+
+    it('DELN-02: an Owner transfer-and-delete notifies the deleted Owner once and never the successor', async () => {
+      const owner = await onlyOwner();
+      const successor = await enrolledAdmin();
+      const done = await transfer(owner.accessToken, successor.user.id);
+      expect(done.status).toBe(200);
+      await settled(owner.user.id, 'SENT');
+      expect(noticesFor(owner.user.email)).toHaveLength(1);
+      expect(noticesFor(successor.user.email).filter(item => item.subject.includes('account was deleted'))).toHaveLength(0);
+      expect(await ledger(successor.user.id)).toHaveLength(0);
+    });
+
+    it('DELN-03: a rolled-back deletion queues and sends nothing', async () => {
+      const owner = await onlyOwner();
+      const successor = await enrolledAdmin();
+      const before = sink.length;
+      ownershipTestHooks.afterSuccessorPromoted = async () => { throw new Error('injected failure before commit'); };
+      try {
+        expect((await transfer(owner.accessToken, successor.user.id)).status).toBe(500);
+      } finally { delete ownershipTestHooks.afterSuccessorPromoted; }
+      await new Promise(resolve => setTimeout(resolve, 300));
+      expect(await ledger(owner.user.id)).toHaveLength(0);
+      expect(sink.length).toBe(before);
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: owner.user.id } })).isActive).toBe(true);
+    });
+
+    it('DELN-04: a delivery failure keeps the deletion committed, is recorded, and the retry sends it exactly once', async () => {
+      const admin = await enrolledAdmin({ manage: true });
+      const original = admin.user.email;
+      send.mockImplementationOnce((async () => ({ success: false, error: 'provider down' })) as never);
+      const deleted = await api().post('/api/admin/me/delete', { currentPassword: PASSWORD, confirmation: 'DELETE' }, admin.accessToken);
+      expect(deleted.status).toBe(200);
+      expect(deleted.body.data).toEqual({ deleted: true }); // never reported as failed
+      await settled(admin.user.id, 'FAILED');
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: admin.user.id } })).isActive).toBe(false);
+      const [failed] = await ledger(admin.user.id);
+      expect(failed).toMatchObject({ status: 'FAILED', recipient: original });
+      expect(failed.failureReason).not.toContain('provider down');
+      expect(noticesFor(original)).toHaveLength(0);
+      // Two overlapping retry sweeps: exactly one delivery.
+      await Promise.all([retryDeletionNotices(), retryDeletionNotices()]);
+      expect(noticesFor(original)).toHaveLength(1);
+      expect((await ledger(admin.user.id))[0].status).toBe('SENT');
+      await retryDeletionNotices();
+      expect(noticesFor(original)).toHaveLength(1);
+    });
+  });
 
   it('REV-01: an Owner revokes another Owner; the account stays an active ADMIN with its credentials, sessions end, a fresh MFA sign-in has no Owner access', async () => {
     const a = await onlyOwner();

@@ -525,3 +525,20 @@ Verification: `admin-signin-keyboard.spec.ts` passed 5/5 with actual keyboard ev
   prompt, then a normal sign-in still asking for MFA).
 - Residual: a factor revoked in the instant after issuance is handled like any live session (existing revocation ends it). Real Brevo
   delivery and native 200% zoom not verified; shared DEV and PROD untouched.
+
+### Administrator account-deletion confirmation email
+
+- Both paths (self-deletion, Owner transfer-and-delete) now email the deleted administrator's ORIGINAL verified address. The
+  `email_deliveries` ledger row (type `SECURITY_ALERT`) is created inside the deletion transaction, before anonymization, so it exists
+  only if the deletion commits (rollback → no row, no email) and a repeated or concurrent request cannot add a second one (the account
+  is already inactive). After commit the row is sent (fire-and-forget; the response never depends on it). On failure the row stays
+  `FAILED` (sanitized reason) and `retryDeletionNotices` (every 5 minutes from the server, plus stale-QUEUED recovery) re-sends it under
+  a conditional-update claim, so overlapping sweeps deliver once. The message is rebuilt from the row (recipient + creation time) and
+  contains no password, MFA secret, recovery code, token or account detail: deletion time, access and sessions revoked, audit records
+  may be retained, contact support if unexpected. No schema change; the existing Brevo provider and ledger are reused.
+- Evidence: PostgreSQL 60/60 with a controlled provider sink. DELN-01 one email to the original address after anonymization, no secrets
+  in HTML or text, repeat request sends nothing more; DELN-02 Owner transfer-and-delete notifies the deleted Owner once and the
+  successor not at all; DELN-03 injected pre-commit failure leaves no ledger row and no email; DELN-04 provider failure keeps the
+  deletion committed and reported as success, row `FAILED`, two overlapping retries deliver exactly one email. Template rendered in
+  Chromium at 390 px and 1280 px: no horizontal overflow, readable. Backend `tsc` and eslint clean.
+- Not verified: real Brevo delivery; mail-client rendering beyond Chromium. Shared DEV and PROD untouched; no migration needed.

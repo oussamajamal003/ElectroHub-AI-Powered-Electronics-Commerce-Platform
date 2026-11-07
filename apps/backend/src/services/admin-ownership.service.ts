@@ -1,3 +1,4 @@
+import { dispatchDeletionNotice } from './admin-deletion-email.js';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { ADMIN_AUTH_TX } from '../lib/transaction-options.js';
@@ -196,7 +197,7 @@ export class AdminOwnershipService {
       const account = await prisma.user.findFirst({ where: { id: userId, isActive: true, role: { name: 'ADMIN' } }, select: { passwordHash: true } });
       if (!account) throw inactiveAdministrator();
       if (!await verifyPassword(input.currentPassword, account.passwordHash)) throw invalidCurrentPassword();
-      const successorEmail = await prisma.$transaction(async tx => {
+      const committed = await prisma.$transaction(async tx => {
         await lockOwnerLifecycle(tx);
         for (const id of [userId, input.successorId].sort()) await lockUserTokenLifecycle(tx, id);
         const current = await assertPasswordUnchanged(tx, userId, account.passwordHash);
@@ -208,15 +209,16 @@ export class AdminOwnershipService {
         await recordAdminAudit({ actorId: userId, action: 'ADMIN_OWNERSHIP_TRANSFERRED', resourceType: 'admin_user', resourceId: input.successorId,
           outcome: 'SUCCESS', details: { via: 'TRANSFER_ON_DELETE', previousOwnerId: userId }, requestId }, tx);
         await ownershipTestHooks.afterSuccessorPromoted?.(tx);
-        await anonymizeAdministrator(tx, userId, { wasOwner: true, meta, requestId, successorId: input.successorId });
+        const deletionNoticeId = await anonymizeAdministrator(tx, userId, { wasOwner: true, meta, requestId, successorId: input.successorId });
         if (await countEligibleOwners(tx) === 0) {
           throw new AppError('Ownership could not be transferred safely. Nothing was changed; try again.', 409, 'OWNERSHIP_TRANSFER_CONFLICT');
         }
-        return row!.email;
+        return { successorEmail: row!.email, deletionNoticeId };
       }, ADMIN_AUTH_TX);
       DeliveryPublisher.disconnectUser(userId, 'ACCOUNT_DELETED');
       DeliveryPublisher.disconnectUser(input.successorId, 'LOGOUT');
-      notifyNewOwner(successorEmail);
+      notifyNewOwner(committed.successorEmail);
+      void dispatchDeletionNotice(committed.deletionNoticeId); // the deleted Owner's original address, never the successor's
     } catch (error) {
       await auditDenied(userId, 'ADMIN_OWNERSHIP_TRANSFERRED', input.successorId, error, requestId);
       throw error;
