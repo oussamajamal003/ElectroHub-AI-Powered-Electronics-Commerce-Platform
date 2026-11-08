@@ -39,7 +39,7 @@ describe('AuthContext query cache boundary', () => {
   });
   it('clears authenticated state and private cache after refresh expiration', async () => {
     vi.mocked(authApi.refreshSession).mockResolvedValue({ accessToken: 'valid' });
-    vi.mocked(authApi.getCurrentUser).mockResolvedValue({ user: { id: 'customer' } as never });
+    vi.mocked(authApi.getCurrentUser).mockResolvedValue({ user: { id: 'customer', role: 'CUSTOMER' } as never });
     const client = createQueryClient();
     client.setQueryData(['account', 'private'], { data: 'private' });
     render(<QueryClientProvider client={client}><AuthProvider><Controls /></AuthProvider></QueryClientProvider>);
@@ -50,7 +50,7 @@ describe('AuthContext query cache boundary', () => {
   });
   it('shares rotating refresh across StrictMode remounts and restores the valid user', async () => {
     vi.mocked(authApi.refreshSession).mockResolvedValue({ accessToken: 'valid' });
-    vi.mocked(authApi.getCurrentUser).mockResolvedValue({ user: { id: 'customer' } as never });
+    vi.mocked(authApi.getCurrentUser).mockResolvedValue({ user: { id: 'customer', role: 'CUSTOMER' } as never });
     render(<StrictMode><QueryClientProvider client={createQueryClient()}><AuthProvider><Controls /></AuthProvider></QueryClientProvider></StrictMode>);
     expect(await screen.findByText('Signed in')).toBeInTheDocument();
     expect(authApi.refreshSession).toHaveBeenCalledTimes(1);

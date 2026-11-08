@@ -381,7 +381,7 @@ test('B01: live sign-out ends admin access', async ({ page, request }) => {
   const leaked = await page.getByRole('table').count();
   await page.goto('/admin/customers');
   await page.waitForURL(url => url.pathname === '/admin/login');
-  const refresh = (await page.request.post(`${state!.backend}/api/auth/refresh`)).status();
+  const refresh = (await page.request.post(`${state!.backend}/api/auth/admin/refresh`)).status();
   const oldToken = bearer ? (await api(request, bearer, 'get', '/api/admin/customers')).status() : 0;
   const ok = leaked === 0 && refresh === 401;
   record(page, { testId: 'B01', route: '/admin → Sign out', action: 'Sign out from the account menu; reopen a protected route; call refresh; replay the last access token',

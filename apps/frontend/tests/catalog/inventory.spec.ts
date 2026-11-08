@@ -181,7 +181,7 @@ test('M: authenticated stock-conflict response rolls back quantity and shows san
   await inventoryHarness(page, 3);
   const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4', email: 'inventory@example.invalid', firstName: 'Inventory', lastName: 'Customer', role: 'CUSTOMER' };
   await page.addInitScript(user => sessionStorage.setItem('electrohub:cached-user', JSON.stringify(user)), user);
-  await page.route('**/api/auth/refresh', route => route.fulfill({ json: { accessToken: 'intercepted-inventory-test-token' } }));
+  await page.route('**/api/auth/customer/refresh', route => route.fulfill({ json: { accessToken: 'intercepted-inventory-test-token' } }));
   await page.route('**/api/auth/me', route => route.fulfill({ json: { user } }));
   await page.route('**/api/wishlist', route => route.fulfill({ json: { data: { items: [], totalItems: 0 } } }));
   await page.route('**/api/cart', route => route.fulfill({ json: { data: { items: [{ id: 'line-1', productId, quantity: 2, stockStatus: 'LOW_STOCK', availableQuantity: 3, availability: 'AVAILABLE',

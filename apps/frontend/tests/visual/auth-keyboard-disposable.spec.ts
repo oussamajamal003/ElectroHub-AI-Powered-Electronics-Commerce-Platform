@@ -42,7 +42,7 @@ test('keyboard enrollment, TOTP/recovery Enter, real passkey ceremony and logout
   await expect(page).toHaveURL(/\/admin\/?$/);
   console.log('AUTH-K02: TOTP input Enter at 390/768/1440');
   // Test the native implicit submit on every supported layout, with an honest failure response.
-  await page.evaluate(() => fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }));
+  await page.evaluate(() => fetch('/api/auth/admin/logout', { method: 'POST', credentials: 'include' }));
   await password(page);
   for (const width of [390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
@@ -60,7 +60,7 @@ test('keyboard enrollment, TOTP/recovery Enter, real passkey ceremony and logout
   await expect(page).toHaveURL(/\/admin\/?$/);
   console.log('AUTH-K03: recovery input Enter');
   // Baseline reproduction: Enter in a recovery input must submit through a native form.
-  await page.evaluate(() => fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }));
+  await page.evaluate(() => fetch('/api/auth/admin/logout', { method: 'POST', credentials: 'include' }));
   await password(page);
   await page.getByRole('tab', { name: 'Authenticator app' }).focus(); await page.keyboard.press('End');
   await expect(page.getByRole('tab', { name: 'Recovery code' })).toHaveAttribute('aria-selected', 'true');
@@ -112,7 +112,7 @@ test('keyboard enrollment, TOTP/recovery Enter, real passkey ceremony and logout
     await expect(page).toHaveURL(/\/admin\/login/);
   };
   // UI logout is asserted below; this reset keeps focus on the login MFA regression.
-  await page.evaluate(() => fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }));
+  await page.evaluate(() => fetch('/api/auth/admin/logout', { method: 'POST', credentials: 'include' }));
   await password(page);
   await page.getByRole('tab', { name: 'Authenticator app' }).focus(); await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('tab', { name: 'Passkey' })).toHaveAttribute('aria-selected', 'true');

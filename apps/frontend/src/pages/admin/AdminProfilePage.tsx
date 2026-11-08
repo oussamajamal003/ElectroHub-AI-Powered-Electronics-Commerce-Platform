@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { ApiError } from '@/lib/api';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { useAdminProfile, useUpdateAdminProfile, type AdminProfile } from '@/features/admin/security/api';
 import { AdminPageSkeleton, ButtonLink, PageHeader, QueryProblem, StatusPill, useAdminToast } from '@/features/admin/shared/AdminUi';
 import { fieldErrors } from '@/features/admin/shared/api';
@@ -28,7 +28,7 @@ export function AdminProfilePage() {
 /** Mounted once the profile is loaded, so the form starts from the saved values; a successful save updates the baseline. */
 function ProfileContent({ profile }: { profile: AdminProfile }) {
   const save = useUpdateAdminProfile();
-  const { updateUserNames } = useAuth();
+  const { updateUserNames } = useAdminAuth();
   const toast = useAdminToast();
   const [firstName, setFirstName] = useState(profile.firstName);
   const [lastName, setLastName] = useState(profile.lastName);

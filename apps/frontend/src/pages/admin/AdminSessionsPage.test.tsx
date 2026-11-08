@@ -3,10 +3,10 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router-dom';
 import { AdminSessionsPage } from './AdminSessionsPage';
 import { AdminToastProvider } from '@/features/admin/shared/AdminUi';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { useAdminSessions, useAdminLoginHistory, useRevokeSession, useRevokeOtherSessions } from '@/features/admin/security/api';
 
-vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: vi.fn() }));
+vi.mock('@/features/auth/context/AuthContext', () => ({ useAdminAuth: vi.fn() }));
 vi.mock('@/features/admin/security/api', () => ({
   useAdminSessions: vi.fn(),
   useAdminLoginHistory: vi.fn(),
@@ -29,7 +29,7 @@ describe('AdminSessionsPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useAuth).mockReturnValue({ clearSession } as unknown as ReturnType<typeof useAuth>);
+    vi.mocked(useAdminAuth).mockReturnValue({ clearSession } as unknown as ReturnType<typeof useAdminAuth>);
     vi.mocked(useAdminSessions).mockReturnValue({ data: sessions, isPending: false, isError: false, isPlaceholderData: false, isFetching: false, refetch: vi.fn() } as unknown as ReturnType<typeof useAdminSessions>);
     vi.mocked(useAdminLoginHistory).mockReturnValue({ data: { data: [], meta: { page: 1, pageSize: 10, total: 0, totalPages: 0 } }, isPending: false, isError: false, isPlaceholderData: false, isFetching: false, refetch: vi.fn() } as unknown as ReturnType<typeof useAdminLoginHistory>);
     vi.mocked(useRevokeOtherSessions).mockReturnValue({ mutateAsync: revokeOthers } as unknown as ReturnType<typeof useRevokeOtherSessions>);

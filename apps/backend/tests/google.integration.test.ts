@@ -116,7 +116,7 @@ describe('Google OAuth ownership and sessions', () => {
     const start = await agent.get('/api/auth/google/start').expect(302);
     const success = await agent.get('/api/auth/google/callback').query({ state: new URL(start.headers.location).searchParams.get('state'), code: 'test-code' }).expect(200);
     expect(success.text).toContain('success');
-    expect(success.headers['set-cookie'].some((cookie: string) => cookie.startsWith('electrohub_refresh='))).toBe(true);
+    expect(success.headers['set-cookie'].some((cookie: string) => cookie.startsWith('electrohub_customer_refresh='))).toBe(true);
     await request(app).post('/api/auth/google/link').set('Origin', 'https://attacker.invalid').send({ password }).expect(403);
     await request(app).post('/api/auth/google/link').set('Origin', 'http://localhost:3000').send({ password }).expect(400);
   }, 30000);
@@ -130,18 +130,17 @@ describe('Google OAuth ownership and sessions', () => {
     const start = await agent.get('/api/auth/google/start').expect(302);
     const callback = await agent.get('/api/auth/google/callback').query({ state: new URL(start.headers.location).searchParams.get('state'), code: 'test-code' }).expect(200);
     expect(callback.text).toContain('linking_required');
-    expect(callback.headers['set-cookie'].every((cookie: string) => !cookie.startsWith('electrohub_refresh='))).toBe(true);
+    expect(callback.headers['set-cookie'].every((cookie: string) => !cookie.startsWith('electrohub_customer_refresh='))).toBe(true);
     await agent.post('/api/auth/google/link').set('Origin', 'http://localhost:3000').send({ password: 'wrong' }).expect(400);
     const linked = await agent.post('/api/auth/google/link').set('Origin', 'http://localhost:3000').send({ password }).expect(200);
     await agent.get('/api/auth/me').set('Authorization', `Bearer ${linked.body.accessToken}`).expect(200);
-    // The response also expires the legacy same-name cookie on Path=/api/auth/refresh. Browsers key cookies by name + path, but
-    // supertest's jar keys by name only and would drop the live token, so send the issued /api/auth cookie explicitly.
-    const issued = (linked.headers['set-cookie'] as unknown as string[]).find(cookie => cookie.startsWith('electrohub_refresh=') && /Path=\/api\/auth;/.test(cookie));
+    // The response also expires the retired shared cookie. supertest's jar keys by name only, so send the issued customer cookie explicitly.
+    const issued = (linked.headers['set-cookie'] as unknown as string[]).find(cookie => cookie.startsWith('electrohub_customer_refresh=') && /Path=\/api\/auth\/customer;/.test(cookie));
     expect(issued).toBeTruthy();
-    const refresh = await request(app).post('/api/auth/refresh').set('Cookie', issued!.split(';')[0]).expect(200);
+    const refresh = await request(app).post('/api/auth/customer/refresh').set('Cookie', issued!.split(';')[0]).expect(200);
     expect(refresh.body.accessToken).toBeTruthy();
-    const rotated = (refresh.headers['set-cookie'] as unknown as string[]).find(cookie => cookie.startsWith('electrohub_refresh=') && /Path=\/api\/auth;/.test(cookie))!.split(';')[0];
-    await request(app).post('/api/auth/logout').set('Cookie', rotated).expect(200);
-    await request(app).post('/api/auth/refresh').set('Cookie', rotated).expect(401);
+    const rotated = (refresh.headers['set-cookie'] as unknown as string[]).find(cookie => cookie.startsWith('electrohub_customer_refresh=') && /Path=\/api\/auth\/customer;/.test(cookie))!.split(';')[0];
+    await request(app).post('/api/auth/customer/logout').set('Cookie', rotated).expect(200);
+    await request(app).post('/api/auth/customer/refresh').set('Cookie', rotated).expect(401);
   }, 60000);
 });

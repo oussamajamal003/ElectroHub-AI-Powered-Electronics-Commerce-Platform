@@ -11,7 +11,7 @@ for (const scenario of ['success', 'linking_required', 'failure', 'cancelled']) 
     });
     await page.route('**/api/auth/me', route => authenticated
       ? route.fulfill({ json: { user } }) : route.fulfill({ status: 401, json: { error: 'Unauthenticated' } }));
-    await page.route('**/api/auth/refresh', route => authenticated
+    await page.route('**/api/auth/customer/refresh', route => authenticated
       ? route.fulfill({ json: { accessToken: 'test-browser-session' } }) : route.fulfill({ status: 401, json: { error: 'Unauthenticated' } }));
     await page.route('**/api/auth/google/link', async route => {
       expect(route.request().postDataJSON()).toEqual({ password: 'OwnershipPassword@123' });

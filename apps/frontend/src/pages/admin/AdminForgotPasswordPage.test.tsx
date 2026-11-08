@@ -10,7 +10,7 @@ vi.mock('@/features/admin/security/api', () => ({
     passkeyOptions: vi.fn(), verifyPasskey: vi.fn(), complete: vi.fn() },
 }));
 const completeAdminSession = vi.fn();
-vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: () => ({ completeAdminSession }) }));
+vi.mock('@/features/auth/context/AuthContext', () => ({ useAdminAuth: () => ({ completeAdminSession }) }));
 vi.mock('@simplewebauthn/browser', () => ({ browserSupportsWebAuthn: () => true, startAuthentication: vi.fn() }));
 
 const STRONG = 'Recovered-Unique-7-Pass';

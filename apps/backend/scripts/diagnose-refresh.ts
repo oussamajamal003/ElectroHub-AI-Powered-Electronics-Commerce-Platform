@@ -11,7 +11,7 @@ async function testScenario(name: string, fn: () => Promise<void>) {
 }
 
 async function createTokenForUser(userId: string, isRevoked = false, isExpired = false) {
-  const rawRefreshToken = crypto.randomBytes(64).toString('hex');
+  const rawRefreshToken = 'customer.' + crypto.randomBytes(64).toString('hex');
   const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
   const expiresAt = isExpired
     ? new Date(Date.now() - 24 * 60 * 60 * 1000) // 1 day ago
@@ -44,10 +44,10 @@ async function main() {
   // Scenario 1: Valid Refresh via HTTP
   await testScenario('1. Valid Refresh via HTTP', async () => {
     const { rawRefreshToken } = await createTokenForUser(user.id);
-    const res = await fetch('http://localhost:5000/api/auth/refresh', {
+    const res = await fetch('http://localhost:5000/api/auth/customer/refresh', {
       method: 'POST',
       headers: {
-        Cookie: `electrohub_refresh=${rawRefreshToken}`,
+        Cookie: `electrohub_customer_refresh=${rawRefreshToken}`,
       },
     });
     console.log('Status:', res.status);
@@ -58,10 +58,10 @@ async function main() {
   // Scenario 2: Expired Token via HTTP
   await testScenario('2. Expired Token via HTTP', async () => {
     const { rawRefreshToken } = await createTokenForUser(user.id, false, true);
-    const res = await fetch('http://localhost:5000/api/auth/refresh', {
+    const res = await fetch('http://localhost:5000/api/auth/customer/refresh', {
       method: 'POST',
       headers: {
-        Cookie: `electrohub_refresh=${rawRefreshToken}`,
+        Cookie: `electrohub_customer_refresh=${rawRefreshToken}`,
       },
     });
     console.log('Status:', res.status);
@@ -71,10 +71,10 @@ async function main() {
   // Scenario 3: Revoked Token via HTTP
   await testScenario('3. Revoked Token via HTTP', async () => {
     const { rawRefreshToken } = await createTokenForUser(user.id, true, false);
-    const res = await fetch('http://localhost:5000/api/auth/refresh', {
+    const res = await fetch('http://localhost:5000/api/auth/customer/refresh', {
       method: 'POST',
       headers: {
-        Cookie: `electrohub_refresh=${rawRefreshToken}`,
+        Cookie: `electrohub_customer_refresh=${rawRefreshToken}`,
       },
     });
     console.log('Status:', res.status);
@@ -84,15 +84,15 @@ async function main() {
   // Scenario 4: Reused Token (Token used twice in sequence)
   await testScenario('4. Reused Token (Rotated then used again)', async () => {
     const { rawRefreshToken } = await createTokenForUser(user.id);
-    const res1 = await fetch('http://localhost:5000/api/auth/refresh', {
+    const res1 = await fetch('http://localhost:5000/api/auth/customer/refresh', {
       method: 'POST',
-      headers: { Cookie: `electrohub_refresh=${rawRefreshToken}` },
+      headers: { Cookie: `electrohub_customer_refresh=${rawRefreshToken}` },
     });
     console.log('Call 1 Status:', res1.status);
 
-    const res2 = await fetch('http://localhost:5000/api/auth/refresh', {
+    const res2 = await fetch('http://localhost:5000/api/auth/customer/refresh', {
       method: 'POST',
-      headers: { Cookie: `electrohub_refresh=${rawRefreshToken}` },
+      headers: { Cookie: `electrohub_customer_refresh=${rawRefreshToken}` },
     });
     console.log('Call 2 Status:', res2.status);
     console.log('Call 2 Body:', await res2.text());
@@ -102,9 +102,9 @@ async function main() {
   await testScenario('5. Concurrent Refresh Requests (5 simultaneous)', async () => {
     const { rawRefreshToken } = await createTokenForUser(user.id);
     const promises = Array.from({ length: 5 }).map((_, i) =>
-      fetch('http://localhost:5000/api/auth/refresh', {
+      fetch('http://localhost:5000/api/auth/customer/refresh', {
         method: 'POST',
-        headers: { Cookie: `electrohub_refresh=${rawRefreshToken}` },
+        headers: { Cookie: `electrohub_customer_refresh=${rawRefreshToken}` },
       }).then(async (r) => ({
         index: i,
         status: r.status,

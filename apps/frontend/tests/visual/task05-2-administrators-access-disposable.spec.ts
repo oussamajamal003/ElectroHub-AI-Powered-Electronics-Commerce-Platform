@@ -74,7 +74,7 @@ const newPage = async (browser: Browser, options: Parameters<Browser['newContext
 /** A fresh access token for this page's own signed-in session (rotates its refresh cookie), to call the real API directly. */
 async function apiAs(page: Page, method: 'GET' | 'POST', url: string, body?: object) {
   return page.evaluate(async ({ method, url, body }) => {
-    const refreshed = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
+    const refreshed = await fetch('/api/auth/admin/refresh', { method: 'POST', credentials: 'include' });
     if (!refreshed.ok) return { status: refreshed.status, code: 'REFRESH_FAILED' };
     const { accessToken } = await refreshed.json() as { accessToken: string };
     const response = await fetch(url, { method, credentials: 'include',

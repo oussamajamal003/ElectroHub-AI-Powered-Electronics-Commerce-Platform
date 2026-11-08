@@ -5,9 +5,11 @@ import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ProtectedRoute } from './ProtectedRoute';
 import { useAuth } from '@/features/auth/context/AuthContext';
 
-vi.mock('@/features/auth/context/AuthContext', () => ({
-  useAuth: vi.fn(),
-}));
+// Both portals read their own session; these tests drive one mocked session through either hook so the route logic is covered for both.
+vi.mock('@/features/auth/context/AuthContext', () => {
+  const session = vi.fn();
+  return { useAuth: session, useAdminAuth: () => session() };
+});
 
 describe('ProtectedRoute', () => {
   beforeEach(() => {

@@ -22,7 +22,7 @@ async function respond(route: Route, outcome: Outcome) {
 async function withSession(page: Page, refresh: () => Outcome | null) {
   await harness(page);
   const calls = { refresh: 0 };
-  await page.route('**/api/auth/refresh', async route => { calls.refresh++; const outcome = refresh(); return outcome ? respond(route, outcome) : route.fallback(); });
+  await page.route('**/api/auth/customer/refresh', async route => { calls.refresh++; const outcome = refresh(); return outcome ? respond(route, outcome) : route.fallback(); });
   return calls;
 }
 

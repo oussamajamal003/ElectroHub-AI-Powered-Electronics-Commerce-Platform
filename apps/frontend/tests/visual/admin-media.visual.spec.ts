@@ -20,7 +20,7 @@ test('admin media workflow previews uploads and stays usable on desktop and mobi
   let uploadCount = 0;
   let failFirstUpload = true;
   const secondPhoto = { ...photo, id: 'image-2', url: '/images/catalog/headphones-detail.jpg', altText: 'Headphones side', sortOrder: 1, isPrimary: false, sourceRevision: 'revision-2' };
-  await page.route('**/api/auth/refresh', route => route.fulfill({ json: { accessToken: 'visual-admin-token' } }));
+  await page.route('**/api/auth/admin/refresh', route => route.fulfill({ json: { accessToken: 'visual-admin-token' } }));
   await page.route('**/api/auth/me', route => route.fulfill({ json: { user: { id: 'admin-1', email: 'admin@electrohub.test', firstName: 'Admin', lastName: 'User', role: 'ADMIN' } } }));
   await page.route('**/api/admin/products**', async route => {
     const request = route.request();
@@ -145,7 +145,7 @@ test('admin media workflow previews uploads and stays usable on desktop and mobi
 });
 
 test('direct product media route mounts and loads after a browser refresh', async ({ page }) => {
-  await page.route('**/api/auth/refresh', route => route.fulfill({ json: { accessToken: 'visual-admin-token' } }));
+  await page.route('**/api/auth/admin/refresh', route => route.fulfill({ json: { accessToken: 'visual-admin-token' } }));
   await page.route('**/api/auth/me', route => route.fulfill({ json: { user: { id: 'admin-1', email: 'admin@electrohub.test', firstName: 'Admin', lastName: 'User', role: 'ADMIN' } } }));
   await page.route('**/api/admin/products**', route => {
     const url = new URL(route.request().url());

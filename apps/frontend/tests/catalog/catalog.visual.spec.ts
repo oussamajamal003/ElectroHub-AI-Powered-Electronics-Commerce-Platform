@@ -65,7 +65,7 @@ test.beforeEach(async ({ page }) => {
     if (!pathname.startsWith('/api/')) return route.continue();
     const respond = (payload: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(payload) });
     // Session restore is refresh-first; the cached identity hint is seeded by the authenticated tests.
-    if (pathname === '/api/auth/refresh' && authenticatedFixture) return respond(refreshedSession(reviewer));
+    if (pathname === '/api/auth/customer/refresh' && authenticatedFixture) return respond(refreshedSession(reviewer));
     if (pathname === '/api/auth/me' && authenticatedFixture) return respond({ user: reviewer });
     // Signed-in providers read the customer's Cart and Wishlist; the generic fallback below is not their contract.
     if (pathname === '/api/wishlist' && authenticatedFixture) return respond(emptyWishlist);

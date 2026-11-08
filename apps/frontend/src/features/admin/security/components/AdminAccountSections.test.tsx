@@ -3,12 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/lib/api';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { adminSecurityApi, useOwnershipSuccessors, type AdminProfile, type OwnershipSuccessor } from '../api';
 import { StepUpCancelledError } from '../useStepUp';
 import { ChangePasswordSection, DangerZoneSection } from './AdminAccountSections';
 
-vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: vi.fn() }));
+vi.mock('@/features/auth/context/AuthContext', () => ({ useAdminAuth: vi.fn() }));
 vi.mock('../api', () => ({ adminSecurityApi: { changePassword: vi.fn(), deleteAccount: vi.fn(), transferOwnershipAndDelete: vi.fn() },
   useOwnershipSuccessors: vi.fn() }));
 // The real step-up flow (dialog + retry) has its own tests; here each case decides whether verification passes or is cancelled.
@@ -44,7 +44,7 @@ const fill = (label: string, value: string) => fireEvent.change(screen.getByLabe
 beforeEach(() => {
   vi.clearAllMocks();
   stepUp.cancel = false;
-  vi.mocked(useAuth).mockReturnValue({ clearSession } as unknown as ReturnType<typeof useAuth>);
+  vi.mocked(useAdminAuth).mockReturnValue({ clearSession } as unknown as ReturnType<typeof useAdminAuth>);
 });
 
 describe('ChangePasswordSection', () => {

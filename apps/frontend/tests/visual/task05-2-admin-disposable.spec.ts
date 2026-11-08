@@ -271,7 +271,7 @@ test.describe.serial('Task 05.2 admin journeys (disposable)', () => {
     await capture(page, 'security-with-passkey', [1440]);
 
     // Sign out and back in with the passkey as the second factor.
-    await page.evaluate(() => fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }));
+    await page.evaluate(() => fetch('/api/auth/admin/logout', { method: 'POST', credentials: 'include' }));
     await page.goto('/admin/login');
     await page.getByLabel('Email Address').fill(credentials.ownerEmail);
     await page.getByLabel('Password', { exact: true }).fill(credentials.password);

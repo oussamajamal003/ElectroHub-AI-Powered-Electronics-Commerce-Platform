@@ -187,7 +187,7 @@ test.describe.serial('Task 05.2 admin profile: password and Danger Zone (disposa
     await invitee.getByLabel('Password', { exact: true }).fill(credentials.password);
     await invitee.getByRole('button', { name: 'Sign In' }).click();
     await expect(invitee.getByText(/Invalid|incorrect/i).first()).toBeVisible();
-    expect(await invitee.evaluate(() => fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' }).then(response => response.status))).toBe(401);
+    expect(await invitee.evaluate(() => fetch('/api/auth/admin/refresh', { method: 'POST', credentials: 'include' }).then(response => response.status))).toBe(401);
   });
 
   test('ACC-04 reflow at a 200%-zoom-equivalent viewport (720 CSS px wide)', async ({ browser }) => {

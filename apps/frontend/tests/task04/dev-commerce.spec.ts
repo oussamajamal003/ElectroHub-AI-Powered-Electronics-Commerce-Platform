@@ -121,7 +121,7 @@ async function reloadAsFixture(page: Page, fixture: Fixture): Promise<void> {
 async function signIn(page: Page, fixture: Fixture): Promise<void> {
   // Drain the document's first refresh attempt before submitting credentials. A stale 401
   // restore can otherwise arrive after login and clear the newly installed access token.
-  const initialRefresh = page.waitForResponse(response => apiPath(response) === '/api/auth/refresh');
+  const initialRefresh = page.waitForResponse(response => apiPath(response) === '/api/auth/customer/refresh');
   await page.goto('/');
   const refreshResponse = await initialRefresh;
   if (refreshResponse.ok()) {

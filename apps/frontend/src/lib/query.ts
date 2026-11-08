@@ -83,3 +83,5 @@ export function createQueryClient() {
 }
 
 export const queryClient = createQueryClient();
+/** Task 05.2: the Admin Console has its own cache so signing an administrator in or out never clears (or reads) storefront private data. */
+export const adminQueryClient = createQueryClient();

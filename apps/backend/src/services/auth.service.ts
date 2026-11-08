@@ -153,7 +153,7 @@ export class AuthService {
   private async createSession(user: User & { role: Role }, adminAssurance?: AdminSessionAssurance) {
     // Fail closed: no code path may issue an ADMIN session without a verified second factor (and none a CUSTOMER one with it).
     if ((user.role.name === 'ADMIN') !== Boolean(adminAssurance)) throw new Error('Invalid credentials');
-    const refreshToken = crypto.randomBytes(64).toString('hex');
+    const refreshToken = (adminAssurance ? 'admin.' : 'customer.') + crypto.randomBytes(64).toString('hex');
     // Re-validates the account under the lifecycle lock: a password change, reset, deactivation or role change
     // that committed after this user was read (and its credentials verified) must not yield a surviving session.
     const issued = await this.repository.createSessionRefreshToken(user, crypto.createHash('sha256').update(refreshToken).digest('hex'), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), adminAssurance);
@@ -181,7 +181,8 @@ export class AuthService {
    * Employs rotation: revokes the old refresh token and creates a new one.
    * Includes reuse detection and a concurrent grace window for race-condition resilience.
    */
-  async refreshSession(rawRefreshToken: string) {
+  async refreshSession(rawRefreshToken: string, scope: 'admin' | 'customer') {
+    if (!rawRefreshToken.startsWith(scope + '.')) throw new AppError('Invalid refresh token', 401, 'INVALID_REFRESH_TOKEN');
     const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
     
     const storedToken = await this.repository.findRefreshTokenByHash(tokenHash);
@@ -223,6 +224,7 @@ export class AuthService {
 
     const roleName = user.role?.name ?? 'CUSTOMER';
     const isAdmin = roleName === 'ADMIN';
+    if (roleName !== scope.toUpperCase()) throw new AppError('Invalid refresh token', 401, 'INVALID_REFRESH_TOKEN');
     // Task 05.2: an ADMIN family refreshes only while its MFA-assured AdminSession lives. A legacy (pre-MFA) admin family has none:
     // it is revoked here, which is the enforced cutover — there is no grandfathered password-only administrator session.
     if (isAdmin && !await this.repository.hasAdminSession(storedToken.familyId, user.id)) {
@@ -234,7 +236,7 @@ export class AuthService {
       : { userId: user.id, role: roleName };
     const newAccessToken = generateAccessToken(payload);
 
-    const newRawRefreshToken = crypto.randomBytes(64).toString('hex');
+    const newRawRefreshToken = scope + '.' + crypto.randomBytes(64).toString('hex');
     const newTokenHash = crypto.createHash('sha256').update(newRawRefreshToken).digest('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
@@ -263,7 +265,8 @@ export class AuthService {
   /**
    * Logout: revoke the presented token's whole session family (all rotated generations), leaving other devices' sessions untouched.
    */
-  async logout(rawRefreshToken: string) {
+  async logout(rawRefreshToken: string, scope: 'admin' | 'customer') {
+    if (!rawRefreshToken.startsWith(scope + '.')) return;
     const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
     const userId = await this.repository.revokeRefreshTokenFamily(tokenHash);
     // Task 04.7: live delivery sockets carry no session family, so every socket of the account is dropped. Other devices keep valid

@@ -4,7 +4,7 @@ import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { useAdminCustomer, useCustomerStatus, type AdminCustomerDetail } from '@/features/admin/customers/api';
 import { ButtonLink, ConfirmDialog, EmptyRows, KpiCard, PageHeader, QueryProblem, TableCard, useAdminToast } from '@/features/admin/shared/AdminUi';
 import { OrderStatusPill, PaymentPill } from '@/features/admin/shared/labels';
@@ -17,7 +17,7 @@ type RecentOrder = AdminCustomerDetail['recentOrders'][number];
 
 export function AdminCustomerDetailPage() {
   const { userId = '' } = useParams();
-  const { user } = useAuth();
+  const { user } = useAdminAuth();
   const query = useAdminCustomer(userId);
   const statusChange = useCustomerStatus(userId);
   const toast = useAdminToast();

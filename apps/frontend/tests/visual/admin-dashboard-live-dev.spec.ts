@@ -22,7 +22,7 @@ function watch(page: Page): Problems {
   page.on('pageerror', error => problems.page.push(`${error.name}: ${error.message.slice(0, 200)}`));
   page.on('response', response => {
     const url = new URL(response.url());
-    if (url.pathname.startsWith('/api/') && response.status() >= 400 && url.pathname !== '/api/auth/refresh') {
+    if (url.pathname.startsWith('/api/') && response.status() >= 400 && url.pathname !== '/api/auth/admin/refresh') {
       problems.api.push(`${response.request().method()} ${url.pathname} ${response.status()}`);
     }
   });

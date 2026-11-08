@@ -39,7 +39,7 @@ test('customer gallery and related product card display published photos at four
     if (path === '/api/cart') return route.fulfill({ json: { data: { revision: '', items: [], totalQuantity: 0, subtotal: '0.00', shipping: '0.00', total: '0.00', currency: 'USD', canCheckout: false } } });
     return route.fulfill({ json: { data: [], meta: { page: 1, pageSize: 5, total: 0, totalPages: 0 } } });
   });
-  await page.route('**/api/auth/refresh', route => route.fulfill({ json: { accessToken: 'visual-customer-token' } }));
+  await page.route('**/api/auth/customer/refresh', route => route.fulfill({ json: { accessToken: 'visual-customer-token' } }));
   await page.route('**/api/auth/me', route => route.fulfill({ json: { user: { id: 'customer-1', email: 'customer@electrohub.test', firstName: 'Customer', lastName: 'User', role: 'CUSTOMER' } } }));
   await page.route('**/api/products/studio-headphones', route => route.fulfill({ json: { data: product } }));
   await page.route('**/api/products/studio-headphones/reviews*', route => route.fulfill({ json: { data: [], meta: { page: 1, pageSize: 10, total: 0, totalPages: 0 }, summary: { averageRating: '4.8', reviewCount: 24 } } }));

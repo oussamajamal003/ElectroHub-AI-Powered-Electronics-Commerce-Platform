@@ -261,7 +261,7 @@ test.describe.serial('Task 05.2 Owner succession (disposable)', () => {
     await owner.getByLabel('Password', { exact: true }).fill(credentials.password);
     await owner.getByRole('button', { name: 'Sign In' }).click();
     await expect(owner.getByText(/Invalid|incorrect/i).first()).toBeVisible();
-    expect(await owner.evaluate(() => fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' }).then(response => response.status))).toBe(401);
+    expect(await owner.evaluate(() => fetch('/api/auth/admin/refresh', { method: 'POST', credentials: 'include' }).then(response => response.status))).toBe(401);
 
     // The successor's old session was revoked; after a fresh MFA sign-in they are a real Owner (and now the last one).
     await staff.goto('/admin/profile');

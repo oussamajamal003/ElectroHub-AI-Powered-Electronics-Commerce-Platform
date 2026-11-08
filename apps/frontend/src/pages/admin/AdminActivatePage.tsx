@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Input } from '@/components/ui/Input';
 import { PasswordInput } from '@/components/ui/PasswordInput/PasswordInput';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { adminAuthApi, type AdminActivationPreview, type AdminSessionResponse } from '@/features/admin/security/api';
 import { describeAdminAuthError } from '@/features/admin/security/errors';
 import { AdminEnrollmentFlow } from '@/features/admin/security/components/AdminEnrollmentFlow';
@@ -65,7 +65,7 @@ type Stage = { name: 'form' } | { name: 'enroll'; mfaToken: string } | { name: '
  */
 export function AdminActivatePage({ mode = 'activation' }: { mode?: ActivationMode }) {
   const copy = MODE[mode];
-  const { completeAdminSession } = useAuth();
+  const { completeAdminSession } = useAdminAuth();
   const navigate = useNavigate();
   const [token, setToken] = useState<string | null>(() => readInvitationToken(window.location.hash));
   const [preview, setPreview] = useState<Preview>({ status: 'loading' });

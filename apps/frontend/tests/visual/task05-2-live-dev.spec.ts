@@ -21,7 +21,7 @@ test('admin password on shared DEV opens no session and shows the enrollment-aut
   expect([200, 403]).toContain(response.status());
   const body = await response.json() as { accessToken?: string; requiresMfa?: boolean; error?: { code?: string } };
   expect(body.accessToken).toBeUndefined();
-  expect(response.headers()['set-cookie'] ?? '').not.toContain('electrohub_refresh');
+  expect(response.headers()['set-cookie'] ?? '').not.toMatch(/electrohub_(admin_|customer_)?refresh/);
   if (response.status() === 403) {
     expect(body.error?.code).toBe('ENROLLMENT_NOT_AUTHORIZED');
     await expect(page.getByText(/authori[sz]ed by an owner/i)).toBeVisible();

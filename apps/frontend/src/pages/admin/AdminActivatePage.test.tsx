@@ -2,11 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AdminActivatePage } from './AdminActivatePage';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { adminAuthApi } from '@/features/admin/security/api';
 import { ApiError } from '@/lib/api';
 
-vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: vi.fn() }));
+vi.mock('@/features/auth/context/AuthContext', () => ({ useAdminAuth: vi.fn() }));
 vi.mock('@/features/admin/security/api', () => ({
   adminAuthApi: { previewActivation: vi.fn(), redeemActivation: vi.fn() },
 }));
@@ -24,7 +24,7 @@ const renderPage = () => render(<MemoryRouter><AdminActivatePage /></MemoryRoute
 describe('AdminActivatePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useAuth).mockReturnValue({ completeAdminSession: vi.fn() } as unknown as ReturnType<typeof useAuth>);
+    vi.mocked(useAdminAuth).mockReturnValue({ completeAdminSession: vi.fn() } as unknown as ReturnType<typeof useAdminAuth>);
     window.history.replaceState(null, '', `/admin/activate#token=${TOKEN}`);
   });
 
@@ -72,7 +72,7 @@ describe('AdminActivatePage', () => {
     expect(enrollment).toHaveAttribute('data-token', 'restricted-challenge-token-xyz');
     expect(adminAuthApi.redeemActivation).toHaveBeenCalledWith({ token: TOKEN, password: STRONG });
     expect(screen.queryByLabelText(/New password/i)).not.toBeInTheDocument();
-    expect(useAuth().completeAdminSession).not.toHaveBeenCalled(); // no session until the authenticator code is verified
+    expect(useAdminAuth().completeAdminSession).not.toHaveBeenCalled(); // no session until the authenticator code is verified
   });
 
   it('shows a reused password as a form error and keeps the link usable', async () => {

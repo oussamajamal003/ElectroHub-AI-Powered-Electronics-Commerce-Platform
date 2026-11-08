@@ -12,7 +12,7 @@ async function signedIn(page: Page) {
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname;
     const send = (json: unknown, status = 200) => route.fulfill({ json, status });
-    if (path === '/api/auth/logout') return send({ message: 'Logged out' });
+    if (path === '/api/auth/customer/logout') return send({ message: 'Logged out' });
     if (path.startsWith('/api/auth/')) return path === '/api/auth/me' ? send({ user }) : send({ accessToken: 'intercepted-refine-token', user });
     if (path === '/api/cart') return send({ data: { revision: 'a'.repeat(64), items: [], totalQuantity: 0, subtotal: '0.00', shipping: '0.00', total: '0.00', currency: 'USD', canCheckout: false } });
     if (path === '/api/wishlist') return send({ data: { items: [], totalItems: 0 } });

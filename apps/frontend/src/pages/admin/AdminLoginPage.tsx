@@ -3,7 +3,7 @@ import { Link, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Fingerprint, KeyRound, Smartphone } from 'lucide-react';
 import { browserSupportsWebAuthn, startAuthentication } from '@simplewebauthn/browser';
 import { BrandLogo } from '@/components/ui/BrandLogo';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { isAdminMfaRequired, type AdminMfaRequired } from '@/features/auth/types';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -39,7 +39,7 @@ const formatRemaining = (ms: number) => {
 };
 
 export function AdminLoginPage() {
-  const { login, logout, completeAdminSession, isAuthenticated, user, isInitializing } = useAuth();
+  const { login, logout, completeAdminSession, isAuthenticated, user, isInitializing } = useAdminAuth();
   const navigate = useNavigate();
   const location = useLocation();
   // A deep link that required sign-in returns to that admin page; anything else (or a crafted value) goes to the dashboard.

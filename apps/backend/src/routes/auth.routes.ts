@@ -3,8 +3,9 @@ import { startGoogle, callbackGoogle, completeGoogle, linkGoogle, prepareGoogleD
 import {
   register,
   login,
-  refresh,
-  logout,
+  refreshFor,
+  retireLegacySession,
+  logoutFor,
   getCurrentUser,
   updateProfile,
   forgotPassword,
@@ -281,7 +282,7 @@ router.post('/change-verification-email', resendVerificationRateLimiter, changeV
  * /auth/refresh:
  *   post:
  *     summary: Refresh access token
- *     description: Requires a valid refresh token in the `electrohub_refresh` HttpOnly cookie. Rotates the refresh token.
+ *     description: Legacy shared route, retired. Always 401 and expires the old `electrohub_refresh` cookie. Use /api/auth/admin/refresh or /api/auth/customer/refresh, which read their own HttpOnly cookie. Rotates the refresh token.
  *     tags: [Authentication]
  *     responses:
  *       200:
@@ -291,7 +292,9 @@ router.post('/change-verification-email', resendVerificationRateLimiter, changeV
  *       429:
  *         description: Too many refresh attempts
  */
-router.post('/refresh', refresh);
+router.post('/refresh', retireLegacySession(401)); // legacy shared route: retires the old cookie, never authenticates
+router.post('/admin/refresh', refreshFor('admin'));
+router.post('/customer/refresh', refreshFor('customer'));
 
 /**
  * @swagger
@@ -405,7 +408,7 @@ router.post('/reset-password', passwordResetRateLimiter, resetPassword);
  * /auth/logout:
  *   post:
  *     summary: Logout and revoke refresh token
- *     description: Clears the `electrohub_refresh` cookie.
+ *     description: Legacy shared route, retired. Expires the old cookie only. Use /api/auth/admin/logout or /api/auth/customer/logout.
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
@@ -415,7 +418,9 @@ router.post('/reset-password', passwordResetRateLimiter, resetPassword);
  *       401:
  *         description: Unauthenticated
  */
-router.post('/logout', logout);
+router.post('/logout', retireLegacySession(200));
+router.post('/admin/logout', logoutFor('admin'));
+router.post('/customer/logout', logoutFor('customer'));
 
 /**
  * @swagger

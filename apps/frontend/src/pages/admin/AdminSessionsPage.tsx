@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import {
   useAdminLoginHistory, useAdminSessions, useRevokeOtherSessions, useRevokeSession,
   type AdminSessionSummary, type LoginHistoryEvent,
@@ -43,7 +43,7 @@ type PendingRevoke = AdminSessionSummary | 'others' | null;
 /** Lists the administrator's own sessions and login history. Revoking sessions is a sensitive action, so it always goes through step-up. */
 export function AdminSessionsPage() {
   const navigate = useNavigate();
-  const { clearSession } = useAuth();
+  const { clearSession } = useAdminAuth();
   const toast = useAdminToast();
   const { runWithStepUp, dialog: stepUpDialog } = useStepUp();
   const [sessionPage, setSessionPage] = useState(1);

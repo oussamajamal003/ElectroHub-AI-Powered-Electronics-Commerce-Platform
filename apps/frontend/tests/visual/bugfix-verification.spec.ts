@@ -52,7 +52,7 @@ test.describe('Header Auth Hydration Verification', () => {
     test(`header renders immediately without "Restoring your session…" at ${vp.name}`, async ({ page, context }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
 
-      await page.route('**/api/auth/refresh', async route => {
+      await page.route('**/api/auth/customer/refresh', async route => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',

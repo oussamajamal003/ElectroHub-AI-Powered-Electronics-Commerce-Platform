@@ -231,12 +231,12 @@ test.describe.serial('customer security flows', () => {
       headers: nextIpHeaders(), data: { resetToken: successfulResetToken, newPassword: 'ThirdPassword#2026' },
     })).status()).toBe(400);
     await assertPasswordWorks(secondPassword);
-    const oldRefresh = await page.request.post('/api/auth/refresh', { headers: { Cookie: oldCookie! } });
+    const oldRefresh = await page.request.post('/api/auth/customer/refresh', { headers: { Cookie: oldCookie! } });
     expect(oldRefresh.status()).toBe(401);
     await dialog.getByRole('button', { name: 'Continue to Login' }).click();
     await expect(dialog.getByLabel('Email Address')).toHaveValue(email);
     await expect(dialog.getByLabel('Password', { exact: true })).toHaveValue('');
-    expect((await page.context().cookies()).some((cookie) => cookie.name === 'electrohub_refresh')).toBe(false);
+    expect((await page.context().cookies()).some((cookie) => cookie.name === 'electrohub_customer_refresh')).toBe(false);
     expect((await page.request.get('/api/auth/me')).status()).toBe(401);
     await dialog.getByLabel('Password', { exact: true }).fill(firstPassword);
     await dialog.getByRole('button', { name: 'Login', exact: true }).click();
@@ -254,8 +254,8 @@ test.describe.serial('customer security flows', () => {
     await dialog.getByLabel('Password', { exact: true }).fill(secondPassword);
     await dialog.getByRole('button', { name: 'Login', exact: true }).click();
     await expect(page).toHaveURL(/\/account/);
-    const oldCookies = await page.context().cookies(`${testInfo.project.use.baseURL || 'http://localhost:3202'}/api/auth/refresh`);
-    const oldCookie = oldCookies.find((cookie) => cookie.name === 'electrohub_refresh');
+    const oldCookies = await page.context().cookies(`${testInfo.project.use.baseURL || 'http://localhost:3202'}/api/auth/customer/refresh`);
+    const oldCookie = oldCookies.find((cookie) => cookie.name === 'electrohub_customer_refresh');
     expect(oldCookie).toBeDefined();
     await page.getByRole('button', { name: 'Edit profile' }).click();
     await expect(page).toHaveURL(/\/account\/profile/);
@@ -295,8 +295,8 @@ test.describe.serial('customer security flows', () => {
     await page.getByLabel('Current Password').fill(secondPassword);
     await page.getByRole('button', { name: 'Change Password' }).click();
     await expect(page.getByText('Password changed successfully.')).toBeVisible();
-    const previousRefresh = await page.request.post('/api/auth/refresh', {
-      headers: { Cookie: `electrohub_refresh=${oldCookie!.value}` },
+    const previousRefresh = await page.request.post('/api/auth/customer/refresh', {
+      headers: { Cookie: `electrohub_customer_refresh=${oldCookie!.value}` },
     });
     expect(previousRefresh.status()).toBe(401);
     expect((await page.request.post('/api/auth/login', { data: { email: changedEmail, password: secondPassword } })).status()).toBe(401);
@@ -310,7 +310,7 @@ test.describe.serial('customer security flows', () => {
       data: { email: unverifiedEmail, password: firstPassword, firstName: 'Unverified', lastName: 'Customer' },
     });
     expect(registration.status()).toBe(201);
-    expect((await page.context().cookies()).some((cookie) => cookie.name === 'electrohub_refresh')).toBe(false);
+    expect((await page.context().cookies()).some((cookie) => cookie.name === 'electrohub_customer_refresh')).toBe(false);
 
     const knownResend = await page.request.post(`${supportBaseURL}/api/auth/resend-verification`, {
       headers: { 'X-Forwarded-For': '192.0.2.201' }, data: { email: unverifiedEmail },
@@ -335,7 +335,7 @@ test.describe.serial('customer security flows', () => {
     await dialog.getByLabel('Password', { exact: true }).fill(firstPassword);
     await dialog.getByRole('button', { name: 'Login', exact: true }).click();
     await expect(dialog.getByText('Enter the 6-digit code sent to e***@electrohub.invalid')).toBeVisible();
-    expect((await page.context().cookies()).some((cookie) => cookie.name === 'electrohub_refresh')).toBe(false);
+    expect((await page.context().cookies()).some((cookie) => cookie.name === 'electrohub_customer_refresh')).toBe(false);
     await expect.poll(() => capturedCode('Verify your ElectroHub account', unverifiedEmail)).toMatch(/^\d{6}$/);
     await dialog.getByRole('button', { name: 'Change email' }).click();
     const changedEmail = unverifiedEmail.replace('e2e-unverified-', 'e2e-corrected-');

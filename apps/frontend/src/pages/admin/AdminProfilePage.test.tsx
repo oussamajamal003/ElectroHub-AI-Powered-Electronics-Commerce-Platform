@@ -2,10 +2,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdminProfilePage } from './AdminProfilePage';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { useAdminProfile, useUpdateAdminProfile } from '@/features/admin/security/api';
 
-vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: vi.fn() }));
+vi.mock('@/features/auth/context/AuthContext', () => ({ useAdminAuth: vi.fn() }));
 vi.mock('@/features/admin/security/api', () => ({ useAdminProfile: vi.fn(), useUpdateAdminProfile: vi.fn() }));
 
 const profile = {
@@ -18,7 +18,7 @@ const updateUserNames = vi.fn();
 describe('AdminProfilePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useAuth).mockReturnValue({ updateUserNames } as unknown as ReturnType<typeof useAuth>);
+    vi.mocked(useAdminAuth).mockReturnValue({ updateUserNames } as unknown as ReturnType<typeof useAdminAuth>);
     vi.mocked(useAdminProfile).mockReturnValue({ data: profile, isPending: false, isError: false } as unknown as ReturnType<typeof useAdminProfile>);
     vi.mocked(useUpdateAdminProfile).mockReturnValue({ mutateAsync, isPending: false } as unknown as ReturnType<typeof useUpdateAdminProfile>);
     mutateAsync.mockResolvedValue({ ...profile, firstName: 'Grace', lastName: 'Hopper' });

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useMatch, useNavigationType } from 'react-router-dom';
 import clsx from 'clsx';
 import { AlertTriangle, Bell, ExternalLink, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, Truck, ClipboardList, UserRound, ShieldCheck, MonitorSmartphone } from 'lucide-react';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/Drawer';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/DropdownMenu';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -87,7 +87,7 @@ function AlertsMenu() {
 
 /** Avatar-only trigger; the name, email and actions live in the menu. Sign out asks first, then uses the existing AuthContext logout. */
 function ProfileMenu() {
-  const { user, logout } = useAuth();
+  const { user, logout } = useAdminAuth();
   const [confirming, setConfirming] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const name = user ? `${user.firstName} ${user.lastName}`.trim() : '';

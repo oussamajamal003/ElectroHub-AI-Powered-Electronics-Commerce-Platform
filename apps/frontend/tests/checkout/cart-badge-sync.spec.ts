@@ -29,7 +29,7 @@ async function world(page: Page) {
   await page.route('**/api/**', async route => {
     const url = new URL(route.request().url()); const path = url.pathname; const method = route.request().method();
     const json = (data: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
-    if (path === '/api/auth/refresh') return json({ accessToken: 'intercepted', user });
+    if (path === '/api/auth/customer/refresh') return json({ accessToken: 'intercepted', user });
     if (path === '/api/auth/me') return json({ user });
     if (path === '/api/cart' && method === 'GET') return json({ data: cart(confirmed) });
     if (path === '/api/cart/items' && method === 'POST') {
