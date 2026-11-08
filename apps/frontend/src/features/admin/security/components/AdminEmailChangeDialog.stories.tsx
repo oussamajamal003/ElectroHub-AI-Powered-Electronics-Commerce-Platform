@@ -27,7 +27,7 @@ function AdminEmailChangeStage() {
     window.fetch = async (input, init) => {
       const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin);
       const method = init?.method ?? (input instanceof Request ? input.method : 'GET');
-      const reply = url.pathname === '/api/auth/refresh' ? { status: 200, body: { accessToken: 'storybook-disposable-access-token' } }
+      const reply = url.pathname === '/api/auth/admin/refresh' ? { status: 200, body: { accessToken: 'storybook-disposable-access-token' } }
         : url.pathname === '/api/auth/me' ? { status: 200, body: { user: storyAdmin } }
         : url.pathname === '/api/admin/me/email-change/status' ? { status: 200, body: { data: { active: false } } }
         : url.pathname === '/api/admin/me/email-change/request' && method === 'POST' ? { status: 202, body: { data: pending } }

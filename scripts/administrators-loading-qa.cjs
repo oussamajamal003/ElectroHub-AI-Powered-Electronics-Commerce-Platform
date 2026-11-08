@@ -19,7 +19,7 @@ const fs = require('node:fs');
           await profileGate;
           return route.fulfill({ json: { data: { ...user, capabilities: { isOwner: false, canManageAdmins: true } } } });
         }
-        if (path === '/api/auth/refresh') return route.fulfill({ json: { accessToken: 'mock-browser-token' } });
+        if (path === '/api/auth/admin/refresh') return route.fulfill({ json: { accessToken: 'mock-browser-token' } });
         if (path === '/api/auth/me') return route.fulfill({ json: { user } });
         return route.fulfill({ json: { data: [], meta: { page: 1, totalPages: 1, total: 0, limit: 20 } } });
       });

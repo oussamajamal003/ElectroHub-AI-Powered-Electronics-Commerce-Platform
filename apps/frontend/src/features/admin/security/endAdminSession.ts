@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { ApiError } from '@/lib/api';
 
 /** Why the administrator is on the sign-in page after ending every session from the profile. Read once by AdminLoginPage. */
@@ -14,7 +14,7 @@ export const failureMessage = (error: unknown, fallback: string) => {
 
 /** After a change that revoked every session server-side: drop local auth state and private caches, then sign in afresh. */
 export function useEndAdminSession() {
-  const { clearSession } = useAuth();
+  const { clearSession } = useAdminAuth();
   const navigate = useNavigate();
   return (notice: AdminSignInNotice) => {
     // Clearing auth makes the admin route guard redirect to sign-in with its own state, which can replace ours: hand the notice over

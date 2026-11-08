@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Input } from '@/components/ui/Input';
 import { PasswordInput } from '@/components/ui/PasswordInput/PasswordInput';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { adminAuthApi, type AdminSessionResponse } from '@/features/admin/security/api';
 import { describeAdminAuthError } from '@/features/admin/security/errors';
 import { AdminEnrollmentFlow } from '@/features/admin/security/components/AdminEnrollmentFlow';
@@ -54,7 +54,7 @@ type Stage =
   | { name: 'ended'; message: string };
 
 export function AdminInvitePage() {
-  const { completeAdminSession } = useAuth();
+  const { completeAdminSession } = useAdminAuth();
   const navigate = useNavigate();
   // The token is read once and kept in state. The fragment is then removed from the address bar and history.
   const [token, setToken] = useState<string | null>(() => readInvitationToken(window.location.hash));

@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth, useAuth } from '@/features/auth/context/AuthContext';
 import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
 
 interface ProtectedRouteProps {
@@ -11,8 +11,19 @@ interface ProtectedRouteProps {
   logoutRedirectTo?: string;
 }
 
-export function ProtectedRoute({ requiredRole, redirectTo = '/', requireVerifiedSession = false, preserveReturnPath = false, logoutRedirectTo = '/' }: ProtectedRouteProps) {
-  const { isAuthenticated, user, isInitializing, isSessionVerified, isLoggingOut } = useAuth();
+type Session = ReturnType<typeof useAuth>;
+
+/** Task 05.2: each portal checks only its own session. An ADMIN route consults the administrator session and every other route the
+ * storefront session, so a signed-in administrator is never "the customer" and a customer is never "the administrator". */
+export function ProtectedRoute(props: ProtectedRouteProps) {
+  return props.requiredRole === 'ADMIN' ? <AdminRouteGate {...props} /> : <CustomerRouteGate {...props} />;
+}
+function AdminRouteGate(props: ProtectedRouteProps) { return <RouteGate session={useAdminAuth()} {...props} />; }
+function CustomerRouteGate(props: ProtectedRouteProps) { return <RouteGate session={useAuth()} {...props} />; }
+
+function RouteGate({ session, requiredRole, redirectTo = '/', requireVerifiedSession = false, preserveReturnPath = false, logoutRedirectTo = '/' }:
+  ProtectedRouteProps & { session: Session }) {
+  const { isAuthenticated, user, isInitializing, isSessionVerified, isLoggingOut } = session;
   const location = useLocation();
 
   if (isInitializing || (requireVerifiedSession && !isSessionVerified)) {

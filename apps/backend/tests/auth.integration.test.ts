@@ -247,7 +247,7 @@ describe('4. GET /api/auth/me — requireAuth', () => {
 
 // ─── 5. TOKEN REFRESH ────────────────────────────────────────────────────────
 
-describe('5. POST /api/auth/refresh — Refresh token rotation', () => {
+describe('5. POST /api/auth/customer/refresh — Refresh token rotation', () => {
   it('5a. Returns new accessToken when refresh cookie is valid', async () => {
     // Login to receive the refresh cookie
     const loginRes = await request(app)
@@ -256,31 +256,31 @@ describe('5. POST /api/auth/refresh — Refresh token rotation', () => {
 
     expect(loginRes.status).toBe(200);
     const cookies = loginRes.headers['set-cookie'] as string[];
-    const refreshCookie = cookies?.find((c) => c.includes('electrohub_refresh'));
+    const refreshCookie = cookies?.find((c) => c.includes('electrohub_customer_refresh'));
     expect(refreshCookie).toBeDefined();
 
     // Use cookie on refresh endpoint
     const refreshRes = await request(app)
-      .post('/api/auth/refresh')
+      .post('/api/auth/customer/refresh')
       .set('Cookie', refreshCookie!.split(';')[0]);
 
     expect(refreshRes.status).toBe(200);
     expect(refreshRes.body.accessToken).toBeDefined();
     // New refresh cookie should be set (token rotation)
     const newCookies = refreshRes.headers['set-cookie'] as string[];
-    expect(newCookies?.some((c: string) => c.includes('electrohub_refresh'))).toBe(true);
+    expect(newCookies?.some((c: string) => c.includes('electrohub_customer_refresh'))).toBe(true);
   }, 20000);
 
   it('5b. Returns 401 when no refresh cookie is provided', async () => {
-    const res = await request(app).post('/api/auth/refresh');
+    const res = await request(app).post('/api/auth/customer/refresh');
     expect(res.status).toBe(401);
     expect(res.body.error).toMatch(/missing/i);
   }, 10000);
 
   it('5c. Returns 401 when an invalid/garbage refresh token is provided', async () => {
     const res = await request(app)
-      .post('/api/auth/refresh')
-      .set('Cookie', 'electrohub_refresh=invalidgarbagetoken');
+      .post('/api/auth/customer/refresh')
+      .set('Cookie', 'electrohub_customer_refresh=invalidgarbagetoken');
 
     expect(res.status).toBe(401);
   }, 10000);
@@ -288,17 +288,17 @@ describe('5. POST /api/auth/refresh — Refresh token rotation', () => {
 
 // ─── 6. LOGOUT ───────────────────────────────────────────────────────────────
 
-describe('6. POST /api/auth/logout', () => {
+describe('6. POST /api/auth/customer/logout', () => {
   it('6a. Clears the refresh cookie on logout', async () => {
     const loginRes = await request(app)
       .post('/api/auth/login')
       .send({ email: testCustomer.email, password: testCustomer.password });
 
     const cookies = loginRes.headers['set-cookie'] as string[];
-    const refreshCookie = cookies?.find((c) => c.includes('electrohub_refresh'));
+    const refreshCookie = cookies?.find((c) => c.includes('electrohub_customer_refresh'));
 
     const logoutRes = await request(app)
-      .post('/api/auth/logout')
+      .post('/api/auth/customer/logout')
       .set('Cookie', refreshCookie!.split(';')[0]);
 
     expect(logoutRes.status).toBe(200);
@@ -306,7 +306,7 @@ describe('6. POST /api/auth/logout', () => {
 
     // The set-cookie header should clear the cookie (Max-Age=0 or expires in the past)
     const logoutCookies = (logoutRes.headers['set-cookie'] as string[] | undefined) ?? [];
-    const cleared = logoutCookies.find((c) => c.includes('electrohub_refresh'));
+    const cleared = logoutCookies.find((c) => c.includes('electrohub_customer_refresh'));
     expect(cleared).toBeDefined();
     // Check for Max-Age=0 OR Expires past date (supertest may vary)
     const hasClear = cleared!.includes('Max-Age=0') || cleared!.includes('Expires=Thu, 01 Jan 1970');
@@ -314,7 +314,7 @@ describe('6. POST /api/auth/logout', () => {
   }, 20000);
 
   it('6b. Logout succeeds even when no cookie is provided (idempotent)', async () => {
-    const res = await request(app).post('/api/auth/logout');
+    const res = await request(app).post('/api/auth/customer/logout');
     expect(res.status).toBe(200);
   }, 10000);
 });
@@ -378,13 +378,13 @@ describe('9. Password security and session invalidation', () => {
       email: testCustomer.email, password: testCustomer.password,
     });
     expect(login.status).toBe(200);
-    const oldCookie = (login.headers['set-cookie'] as string[]).find((cookie) => cookie.includes('electrohub_refresh'))!.split(';')[0];
+    const oldCookie = (login.headers['set-cookie'] as string[]).find((cookie) => cookie.includes('electrohub_customer_refresh'))!.split(';')[0];
 
     const changed = await request(app).post('/api/auth/change-password')
       .set('Authorization', `Bearer ${login.body.accessToken}`)
       .send({ currentPassword: testCustomer.password, newPassword: 'Changed#Test2026' });
     expect(changed.status).toBe(200);
-    expect((await request(app).post('/api/auth/refresh').set('Cookie', oldCookie)).status).toBe(401);
+    expect((await request(app).post('/api/auth/customer/refresh').set('Cookie', oldCookie)).status).toBe(401);
     expect((await request(app).post('/api/auth/login').send({ email: testCustomer.email, password: testCustomer.password })).status).toBe(401);
     expect((await request(app).post('/api/auth/login').send({ email: testCustomer.email, password: 'Changed#Test2026' })).status).toBe(200);
 
@@ -397,7 +397,7 @@ describe('9. Password security and session invalidation', () => {
     const oldLogin = await request(app).post('/api/auth/login').send({
       email: testCustomer.email, password: 'Changed#Test2026',
     });
-    const oldCookie = (oldLogin.headers['set-cookie'] as string[]).find((cookie) => cookie.includes('electrohub_refresh'))!.split(';')[0];
+    const oldCookie = (oldLogin.headers['set-cookie'] as string[]).find((cookie) => cookie.includes('electrohub_customer_refresh'))!.split(';')[0];
     const codeSpy = vi.spyOn(otpService, 'generateCode').mockReturnValue('654321');
     const forgot = await request(app).post('/api/auth/forgot-password')
       .set('X-Forwarded-For', '198.51.100.42')
@@ -414,7 +414,7 @@ describe('9. Password security and session invalidation', () => {
       resetToken: verifiedOtp.body.resetToken, newPassword: 'Recovered#Test2026',
     });
     expect(reset.status).toBe(200);
-    expect((await request(app).post('/api/auth/refresh').set('Cookie', oldCookie)).status).toBe(401);
+    expect((await request(app).post('/api/auth/customer/refresh').set('Cookie', oldCookie)).status).toBe(401);
     expect((await request(app).post('/api/auth/login').send({ email: testCustomer.email, password: 'Changed#Test2026' })).status).toBe(401);
     expect((await request(app).post('/api/auth/login').send({ email: testCustomer.email, password: 'Recovered#Test2026' })).status).toBe(200);
     expect((await request(app).post('/api/auth/reset-password').set('X-Forwarded-For', '198.51.100.44').send({

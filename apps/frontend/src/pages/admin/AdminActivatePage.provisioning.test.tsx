@@ -2,11 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AdminActivatePage } from './AdminActivatePage';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { adminAuthApi } from '@/features/admin/security/api';
 import { ApiError } from '@/lib/api';
 
-vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: vi.fn() }));
+vi.mock('@/features/auth/context/AuthContext', () => ({ useAdminAuth: vi.fn() }));
 vi.mock('@/features/admin/security/api', () => ({
   adminAuthApi: { previewActivation: vi.fn(), redeemActivation: vi.fn(), previewProvisioning: vi.fn(), redeemProvisioning: vi.fn() },
 }));
@@ -27,7 +27,7 @@ const submit = async () => {
 describe('AdminActivatePage — operator seed provisioning mode', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useAuth).mockReturnValue({ completeAdminSession: vi.fn() } as unknown as ReturnType<typeof useAuth>);
+    vi.mocked(useAdminAuth).mockReturnValue({ completeAdminSession: vi.fn() } as unknown as ReturnType<typeof useAdminAuth>);
     window.history.replaceState(null, '', `/admin/provision#token=${TOKEN}`);
   });
 
@@ -51,7 +51,7 @@ describe('AdminActivatePage — operator seed provisioning mode', () => {
     expect(await screen.findByTestId('enrollment')).toHaveAttribute('data-token', 'restricted-challenge');
     expect(adminAuthApi.redeemProvisioning).toHaveBeenCalledWith({ token: TOKEN, password: STRONG });
     expect(adminAuthApi.redeemActivation).not.toHaveBeenCalled();
-    expect(useAuth().completeAdminSession).not.toHaveBeenCalled();
+    expect(useAdminAuth().completeAdminSession).not.toHaveBeenCalled();
     expect(screen.queryByLabelText(/New password/i)).not.toBeInTheDocument();
   });
 

@@ -386,8 +386,10 @@ Authentication endpoints may include:
 ```text
 POST /api/auth/register
 POST /api/auth/login
-POST /api/auth/refresh
-POST /api/auth/logout
+POST /api/auth/customer/refresh   (storefront session; cookie electrohub_customer_refresh)
+POST /api/auth/customer/logout
+POST /api/auth/admin/refresh      (Admin Console session; cookie electrohub_admin_refresh)
+POST /api/auth/admin/logout
 POST /api/auth/otp/request
 POST /api/auth/otp/verify
 ```

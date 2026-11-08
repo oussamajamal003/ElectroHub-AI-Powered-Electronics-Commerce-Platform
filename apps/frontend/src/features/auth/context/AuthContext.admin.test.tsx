@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createQueryClient } from '@/lib/query';
-import { AuthProvider, useAuth } from './AuthContext';
+import { AdminAuthProvider, useAdminAuth } from './AuthContext';
 import { authApi } from '../api/auth';
 import { ApiError } from '@/lib/api';
 import type { User } from '../types';
@@ -15,7 +15,7 @@ vi.mock('@/features/cart/context', () => ({ useCart: () => ({ totalQuantity: 0, 
 const admin = { id: 'admin-1', email: 'admin@electrohub.example', firstName: 'Ada', lastName: 'Admin', role: 'ADMIN' } as unknown as User;
 
 function Controls() {
-  const auth = useAuth();
+  const auth = useAdminAuth();
   return <>
     <button onClick={() => void auth.login({ email: 'admin@electrohub.example', password: 'synthetic-password' }).then(result => {
       (window as unknown as { lastLoginResult?: unknown }).lastLoginResult = result;
@@ -39,7 +39,7 @@ describe('AuthContext administrator sign-in', () => {
     vi.mocked(authApi.logout).mockResolvedValue(undefined);
   });
 
-  const renderProvider = () => render(<QueryClientProvider client={createQueryClient()}><AuthProvider><Controls /></AuthProvider></QueryClientProvider>);
+  const renderProvider = () => render(<QueryClientProvider client={createQueryClient()}><AdminAuthProvider restore><Controls /></AdminAuthProvider></QueryClientProvider>);
 
   it('does not establish a session when the password step asks for a second factor', async () => {
     vi.mocked(authApi.login).mockResolvedValue({

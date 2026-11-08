@@ -36,10 +36,10 @@ async function harness(page: Page, options: { signedIn?: boolean; serverIds?: st
     if (!url.pathname.startsWith('/api/')) return route.continue();
     if (url.pathname.includes('/reviews')) reviewRequests++;
     const send = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
-    if (url.pathname === '/api/auth/refresh') return signedIn ? send({ accessToken: 'intercepted-test' }) : send({ error: 'Unauthenticated' }, 401);
+    if (url.pathname === '/api/auth/customer/refresh') return signedIn ? send({ accessToken: 'intercepted-test' }) : send({ error: 'Unauthenticated' }, 401);
     if (url.pathname === '/api/auth/me') { await userGate; return signedIn ? send({ user }) : send({ error: 'Unauthenticated' }, 401); }
     if (url.pathname === '/api/auth/login') { signedIn = true; return send({ user, accessToken: 'intercepted-test' }); }
-    if (url.pathname === '/api/auth/logout') { signedIn = false; return send({}); }
+    if (url.pathname === '/api/auth/customer/logout') { signedIn = false; return send({}); }
     if (url.pathname === '/api/wishlist/validate') { await wishlistGate; return send(hydrate(route.request().postDataJSON().productIds)); }
     if (url.pathname === '/api/wishlist/reconcile') {
       merges++; if (failMerge) return send({ error: { message: 'private database error' } }, 503);
@@ -658,7 +658,7 @@ test('early auth bootstrap shares one refresh and starts commerce reads only aft
     sessionStorage.setItem(`electrohub.wishlist.auth-count.v1:${cachedUser.id}`, '1');
   }, user);
   const refreshes: string[] = [];
-  page.on('request', request => { if (new URL(request.url()).pathname === '/api/auth/refresh') refreshes.push(request.url()); });
+  page.on('request', request => { if (new URL(request.url()).pathname === '/api/auth/customer/refresh') refreshes.push(request.url()); });
   const verification = page.waitForRequest(request => new URL(request.url()).pathname === '/api/auth/me');
   await page.goto('/wishlist', { waitUntil: 'domcontentloaded' });
   await verification;

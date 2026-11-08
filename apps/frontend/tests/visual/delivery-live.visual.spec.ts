@@ -208,7 +208,7 @@ test('T7-05 / AC6: logout disconnects the live socket server-side; another accou
   await expect(livePill(page)).toHaveText('Live updates on');
   await page.screenshot({ path: path.join(shots, 'live-on-390.png'), fullPage: true });
   // Sign out through the app's own transport so the server-side hook runs.
-  await page.evaluate(async () => { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); });
+  await page.evaluate(async () => { await fetch('/api/auth/customer/logout', { method: 'POST', credentials: 'include' }); });
   await expect.poll(() => closed.length, { timeout: 10_000 }).toBeGreaterThanOrEqual(1);
   expect((await context.request.post(`${base}/api/auth/login`, { data: { email: fixtures!.other.email, password: fixtures!.other.password } })).status()).toBe(200);
   await page.goto(`${base}/orders/${fixtures!.orders.liveA}/tracking`);

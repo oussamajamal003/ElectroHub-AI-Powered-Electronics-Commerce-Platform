@@ -60,7 +60,7 @@ const handle = (fn: Handler) => async (req: Request, res: Response, next: NextFu
 };
 
 function sendSession(res: Response, result: { accessToken: string; refreshToken: string; user: unknown }, extra: Record<string, unknown> = {}) {
-  setRefreshCookie(res, result.refreshToken);
+  setRefreshCookie(res, result.refreshToken, 'admin');
   res.set('Cache-Control', 'no-store');
   res.status(200).json({ accessToken: result.accessToken, user: result.user, ...extra });
 }
@@ -274,14 +274,14 @@ export const adminSecurityController = {
     const body = z.object({ currentPassword, newPassword: password }).strict().parse(req.body);
     await adminAccountService.changePassword(userId(req), body, req.id);
     // Every session, this one included, is revoked: drop the refresh cookie so the browser cannot try to restore it.
-    clearRefreshCookie(res);
+    clearRefreshCookie(res, 'admin');
     res.json({ data: { changed: true, signInRequired: true } });
   }),
   deleteAccount: handle(async (req, res) => {
     const body = z.object({ currentPassword, confirmation: z.literal('DELETE', { message: 'Type DELETE to confirm.' }) })
       .strict().parse(req.body);
     await adminAccountService.deleteSelf(userId(req), body.currentPassword, meta(req), req.id);
-    clearRefreshCookie(res);
+    clearRefreshCookie(res, 'admin');
     res.json({ data: { deleted: true } });
   }),
   ownershipSuccessors: handle(async (req, res) => { res.json({ data: await adminOwnershipService.listSuccessors(userId(req)) }); }),
@@ -289,7 +289,7 @@ export const adminSecurityController = {
     const body = z.object({ successorId: z.string({ message: 'Choose the next Owner.' }).uuid('Choose the next Owner.'), currentPassword,
       confirmation: z.literal('DELETE', { message: 'Type DELETE to confirm.' }) }).strict().parse(req.body);
     await adminOwnershipService.transferOwnershipAndDeleteSelf(userId(req), body, meta(req), req.id);
-    clearRefreshCookie(res);
+    clearRefreshCookie(res, 'admin');
     res.json({ data: { deleted: true, ownershipTransferred: true } });
   }),
   revokeOtherSessions: handle(async (req, res) => {

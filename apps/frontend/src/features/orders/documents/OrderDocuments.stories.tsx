@@ -155,7 +155,7 @@ function binaryResponse(scenario: Scenario, kind: DocumentKind, disposition: 'at
 }
 
 const storyAuthReply = (session: Session, url: URL): Reply | null => {
-  if (url.pathname === '/api/auth/refresh') {
+  if (url.pathname === '/api/auth/customer/refresh') {
     if (session === 'signed-out') return fail(401, 'Unauthorized');
     if (session === 'unavailable') return fail(503, 'Unavailable');
     return ok({ accessToken: 'story-access-token' });

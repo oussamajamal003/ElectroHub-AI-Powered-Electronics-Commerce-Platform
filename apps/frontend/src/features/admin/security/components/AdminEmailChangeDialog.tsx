@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } 
 import { Input } from '@/components/ui/Input';
 import { PasswordInput } from '@/components/ui/PasswordInput/PasswordInput';
 import { ApiError } from '@/lib/api';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { adminSecurityApi, type AdminEmailChangeState } from '../api';
 import { isStepUpCancelled, useStepUp } from '../useStepUp';
 import styles from './AdminEmailChangeDialog.module.scss';
@@ -33,7 +33,7 @@ export function AdminEmailChangeDialog({ currentEmail }: { currentEmail: string 
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [clock, setClock] = useState(Date.now());
   const newEmailRef = useRef<HTMLInputElement>(null);
-  const { clearSession } = useAuth();
+  const { clearSession } = useAdminAuth();
   const navigate = useNavigate();
   const stepUp = useStepUp();
 

@@ -34,7 +34,7 @@ async function tabUntil(page: Page, target: Locator, reverse = false) {
 
 test('guest Cart add, quantity, persistence, removal, and responsive layout', async ({ page }) => {
   test.setTimeout(60_000);
-  await page.route('**/api/auth/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Unauthenticated' } }) }));
+  await page.route('**/api/auth/customer/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Unauthenticated' } }) }));
   await page.route('**/api/search/products**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [product], meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }) }));
   let validationCount = 0;
   await page.route('**/api/cart/validate', async route => {
@@ -80,7 +80,7 @@ test('guest Cart add, quantity, persistence, removal, and responsive layout', as
 
 test('Cart quantity changes stay responsive during serialized rapid updates', async ({ page }) => {
   await page.addInitScript(productId => localStorage.setItem('electrohub.cart.v1', JSON.stringify({ version: 1, items: [{ productId, quantity: 1 }] })), productId);
-  await page.route('**/api/auth/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Unauthenticated' } }) }));
+  await page.route('**/api/auth/customer/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Unauthenticated' } }) }));
   await page.route('**/api/cart/validate', async route => {
     const input = route.request().postDataJSON() as { items: { quantity: number }[] };
     await new Promise(resolve => setTimeout(resolve, 250));
@@ -111,7 +111,7 @@ test('authenticated Cart retries a failed guest merge without losing saved items
     product: { slug: product.slug, name: product.name, category: 'Phones', price: product.price, image: { url: product.primaryImage.url, altText: 'iPhone' } },
     availableQuantity: 5, availability: 'AVAILABLE', lineTotal: (109999 * quantity / 100).toFixed(2) }],
     totalQuantity: quantity, subtotal: (109999 * quantity / 100).toFixed(2), shipping: '0.00', total: (109999 * quantity / 100).toFixed(2), currency: 'USD', canCheckout: true } });
-  await page.route('**/api/auth/refresh', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'browser-test-token' }) }));
+  await page.route('**/api/auth/customer/refresh', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'browser-test-token' }) }));
   await page.route('**/api/auth/me', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ user }) }));
   await page.route('**/api/cart', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify(cart(2)) }));
   await page.route('**/api/checkout/payment-attempts', route => route.fulfill({ json: noSavedPurchases }));
@@ -134,7 +134,7 @@ test('authenticated Cart retries a failed guest merge without losing saved items
 test('Cart skeleton keeps item and summary geometry across responsive widths', async ({ page }) => {
   const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4', email: 'cart-customer@example.invalid', firstName: 'Cart', lastName: 'Customer', role: 'CUSTOMER' };
   await page.addInitScript(user => sessionStorage.setItem('electrohub:cached-user', JSON.stringify(user)), user);
-  await page.route('**/api/auth/refresh', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'browser-test-token' }) }));
+  await page.route('**/api/auth/customer/refresh', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'browser-test-token' }) }));
   await page.route('**/api/auth/me', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ user }) }));
   let release!: () => void;
   await page.route('**/api/cart', async route => {
@@ -169,7 +169,7 @@ test('Cart skeleton keeps item and summary geometry across responsive widths', a
 
 test('Product Details quantity adds to guest Cart without resetting the gallery', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 900 });
-  await page.route('**/api/auth/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
+  await page.route('**/api/auth/customer/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
   await page.route('**/api/products/apple-iphone-15-pro', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: {
     ...product, sku: 'IPHONE-15-PRO', modelNumber: 'A2848', availableQuantity: 5, purchasable: true,
     images: [product.primaryImage, { id: 'image-2', url: '/images/catalog/variety/apple-phone-generic-02.jpg', altText: 'iPhone alternate view', sortOrder: 1, isPrimary: false }],
@@ -196,7 +196,7 @@ test('Product Details quantity adds to guest Cart without resetting the gallery'
 
 test('low stock can be corrected and an out-of-stock line stays removable', async ({ page }) => {
   await page.addInitScript(productId => localStorage.setItem('electrohub.cart.v1', JSON.stringify({ version: 1, items: [{ productId, quantity: 3 }] })), productId);
-  await page.route('**/api/auth/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
+  await page.route('**/api/auth/customer/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
   let outOfStock = false;
   await page.route('**/api/cart/validate', route => {
     const quantity = (route.request().postDataJSON() as { items: { quantity: number }[] }).items[0]!.quantity;
@@ -222,7 +222,7 @@ test('low stock can be corrected and an out-of-stock line stays removable', asyn
 });
 
 test('duplicate adds retain one line and failed quantity update keeps prior Cart', async ({ page }) => {
-  await page.route('**/api/auth/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
+  await page.route('**/api/auth/customer/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
   await page.route('**/api/search/products**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [product], meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }) }));
   let failNext = false;
   await page.route('**/api/cart/validate', route => {
@@ -254,7 +254,7 @@ test('duplicate adds retain one line and failed quantity update keeps prior Cart
 });
 
 test('failed Add does not claim success or change the badge and can be retried', async ({ page }) => {
-  await page.route('**/api/auth/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
+  await page.route('**/api/auth/customer/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
   await page.route('**/api/search/products**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [product], meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }) }));
   let requests = 0;
   await page.route('**/api/cart/validate', route => {
@@ -280,7 +280,7 @@ test('failed Add does not claim success or change the badge and can be retried',
 test('failed Remove preserves authenticated line, badge, and totals until retry succeeds', async ({ page }) => {
   const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4', email: 'cart-customer@example.invalid', firstName: 'Cart', lastName: 'Customer', role: 'CUSTOMER' };
   await page.addInitScript(user => sessionStorage.setItem('electrohub:cached-user', JSON.stringify(user)), user);
-  await page.route('**/api/auth/refresh', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'browser-test-token' }) }));
+  await page.route('**/api/auth/customer/refresh', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'browser-test-token' }) }));
   await page.route('**/api/auth/me', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ user }) }));
   await page.route('**/api/cart', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify(cartResponse(2)) }));
   let attempts = 0;
@@ -306,7 +306,7 @@ test('failed Remove preserves authenticated line, badge, and totals until retry 
 });
 
 test('Tab-only ProductCard to Cart quantity, Remove, and Continue shopping', async ({ page }) => {
-  await page.route('**/api/auth/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
+  await page.route('**/api/auth/customer/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
   await page.route('**/api/search/products**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [product], meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 } }) }));
   await page.route('**/api/cart/validate', route => {
     const quantity = (route.request().postDataJSON() as { items: { quantity: number }[] }).items[0]!.quantity;
@@ -339,12 +339,12 @@ test('Tab-only ProductCard to Cart quantity, Remove, and Continue shopping', asy
 test('authenticated Cart survives refresh and does not become the guest Cart on logout', async ({ page }) => {
   const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4', email: 'cart-customer@example.invalid', firstName: 'Cart', lastName: 'Customer', role: 'CUSTOMER' };
   await page.addInitScript(user => sessionStorage.setItem('electrohub:cached-user', JSON.stringify(user)), user);
-  await page.route('**/api/auth/refresh', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'browser-test-token' }) }));
+  await page.route('**/api/auth/customer/refresh', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'browser-test-token' }) }));
   await page.route('**/api/auth/me', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ user }) }));
   let finishLogout!: () => void;
   let logoutStarted!: () => void;
   const logoutStartedPromise = new Promise<void>(resolve => { logoutStarted = resolve; });
-  await page.route('**/api/auth/logout', async route => {
+  await page.route('**/api/auth/customer/logout', async route => {
     logoutStarted();
     await new Promise<void>(resolve => { finishLogout = resolve; });
     await route.fulfill({ contentType: 'application/json', body: '{}' });
@@ -390,7 +390,7 @@ test('committed reconciliation survives a failed response without a stale saved-
   const user = { id: '62a990ff-7909-4bbb-b42f-8f20b6d97af4', email: 'cart-customer@example.invalid', firstName: 'Cart', lastName: 'Customer', role: 'CUSTOMER' };
   await page.addInitScript(productId => localStorage.setItem('electrohub.cart.v1', JSON.stringify({ version: 1, items: [{ productId, quantity: 3 }] })), productId);
   let signedIn = false;
-  await page.route('**/api/auth/refresh', route => signedIn ? route.fulfill({ json: refreshedSession(user) })
+  await page.route('**/api/auth/customer/refresh', route => signedIn ? route.fulfill({ json: refreshedSession(user) })
     : route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
   await page.route('**/api/auth/login', route => { signedIn = true; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'browser-test-token', user }) }); });
   await page.route('**/api/checkout/payment-attempts', route => route.fulfill({ json: noSavedPurchases }));
@@ -417,7 +417,7 @@ test('guest Checkout intent signs in, reconciles, and returns only to Cart', asy
   const serverOnlyId = '53d67cc1-cced-45e2-88a9-c54d5860122b';
   await page.addInitScript(({ productId, guestOnlyId }) => localStorage.setItem('electrohub.cart.v1', JSON.stringify({ version: 1, items: [{ productId, quantity: 9 }, { productId: guestOnlyId, quantity: 1 }] })), { productId, guestOnlyId });
   let signedIn = false;
-  await page.route('**/api/auth/refresh', route => signedIn ? route.fulfill({ json: refreshedSession(user) })
+  await page.route('**/api/auth/customer/refresh', route => signedIn ? route.fulfill({ json: refreshedSession(user) })
     : route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
   await page.route('**/api/auth/login', route => { signedIn = true; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'browser-test-token', user }) }); });
   await page.route('**/api/checkout/payment-attempts', route => route.fulfill({ json: noSavedPurchases }));
@@ -470,7 +470,7 @@ test('guest Checkout intent signs in, reconciles, and returns only to Cart', asy
 test('Cart controls remain keyboard-operable with reduced motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.addInitScript(productId => localStorage.setItem('electrohub.cart.v1', JSON.stringify({ version: 1, items: [{ productId, quantity: 1 }] })), productId);
-  await page.route('**/api/auth/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
+  await page.route('**/api/auth/customer/refresh', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthenticated' }) }));
   await page.route('**/api/cart/validate', route => {
     const quantity = (route.request().postDataJSON() as { items: { quantity: number }[] }).items[0]!.quantity;
     const total = (109999 * quantity / 100).toFixed(2);

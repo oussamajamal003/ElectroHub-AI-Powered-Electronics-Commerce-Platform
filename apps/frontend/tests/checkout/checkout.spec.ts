@@ -6,7 +6,7 @@ import { routeSavedPurchases, savedPurchase } from './saved-purchases';
 
 // SDK/API interception in this suite proves UI behavior ONLY, never financial persistence.
 test('guest protection', async ({ page }) => {
-  const api = await harness(page, { guest: true }); const restored = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/refresh');
+  const api = await harness(page, { guest: true }); const restored = page.waitForResponse(response => new URL(response.url()).pathname === '/api/auth/customer/refresh');
   await page.goto('/checkout?step=review'); await restored; await expect(page).toHaveURL(/\/cart$/);
   expect(api.requests.some(value => value.method === 'POST' && value.path.includes('payment-attempts'))).toBe(false);
 });

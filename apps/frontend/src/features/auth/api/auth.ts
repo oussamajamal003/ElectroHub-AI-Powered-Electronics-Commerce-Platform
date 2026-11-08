@@ -1,4 +1,4 @@
-import { apiClient, setAccessToken } from '@/lib/api';
+import { apiClient, refreshPath, setAccessToken, type AuthScope } from '@/lib/api';
 import { User, LoginCredentials, RegisterData, AuthResponse, AdminMfaRequired, isAdminMfaRequired } from '../types';
 
 export type LoginResult = VerificationResponse | AdminMfaRequired;
@@ -20,8 +20,9 @@ export interface VerificationResponse extends AuthResponse {
 }
 
 export const authApi = {
-  refreshSession: async (): Promise<{ accessToken: string; user?: User }> => {
-    return apiClient<{ accessToken: string; user?: User }>('/api/auth/refresh', { method: 'POST' });
+  /** Each portal refreshes only through its own endpoint and HttpOnly cookie (Task 05.2 session isolation). */
+  refreshSession: async (scope: AuthScope = 'customer'): Promise<{ accessToken: string; user?: User }> => {
+    return apiClient<{ accessToken: string; user?: User }>(refreshPath(scope), { method: 'POST' });
   },
   reauthenticateDeletionWithPassword: async (password: string): Promise<{ message: string }> => {
     return apiClient('/api/account/deletion/reauth/password', { method: 'POST', data: { password } });
@@ -36,7 +37,7 @@ export const authApi = {
   },
 
   finishGoogle: async (): Promise<{ user: User }> => {
-    const response = await apiClient<{ accessToken: string }>('/api/auth/refresh', { method: 'POST' });
+    const response = await apiClient<{ accessToken: string }>(refreshPath('customer'), { method: 'POST' });
     setAccessToken(response.accessToken);
     return apiClient('/api/auth/me');
   },
@@ -91,13 +92,14 @@ export const authApi = {
     });
   },
 
-  logout: async (): Promise<void> => {
-    await apiClient('/api/auth/logout', { method: 'POST' });
-    setAccessToken(null);
+  /** Revokes only this scope's session family and clears only its cookie; the other portal's session is untouched. */
+  logout: async (scope: AuthScope = 'customer'): Promise<void> => {
+    try { await apiClient(`/api/auth/${scope}/logout`, { method: 'POST' }); }
+    finally { setAccessToken(null, scope); }
   },
 
-  getCurrentUser: async (): Promise<{ user: User }> => {
-    return apiClient('/api/auth/me', { method: 'GET' });
+  getCurrentUser: async (scope: AuthScope = 'customer'): Promise<{ user: User }> => {
+    return apiClient('/api/auth/me', { method: 'GET', scope });
   },
 
   updateProfile: async (data: { firstName?: string; lastName?: string; email?: string }): Promise<{ message: string; user: User & { pendingEmail?: string; requiresEmailVerification?: boolean; verificationDeliveryStatus?: 'ACCEPTED_BY_PROVIDER' | 'FAILED' | 'PENDING' } }> => {

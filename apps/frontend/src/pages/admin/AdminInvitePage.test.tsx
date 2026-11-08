@@ -3,11 +3,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AdminInvitePage, readInvitationToken } from './AdminInvitePage';
 import { MIN_ADMIN_PASSWORD_LENGTH, passwordHint } from '@/features/admin/security/passwordPolicy';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { adminAuthApi } from '@/features/admin/security/api';
 import { ApiError } from '@/lib/api';
 
-vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: vi.fn() }));
+vi.mock('@/features/auth/context/AuthContext', () => ({ useAdminAuth: vi.fn() }));
 vi.mock('@/features/admin/security/api', () => ({
   adminAuthApi: { previewInvitation: vi.fn(), acceptInvitation: vi.fn() },
 }));
@@ -46,7 +46,7 @@ describe('passwordHint', () => {
 describe('AdminInvitePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useAuth).mockReturnValue({ completeAdminSession: vi.fn() } as unknown as ReturnType<typeof useAuth>);
+    vi.mocked(useAdminAuth).mockReturnValue({ completeAdminSession: vi.fn() } as unknown as ReturnType<typeof useAdminAuth>);
     window.history.replaceState(null, '', '/admin/invite');
   });
 

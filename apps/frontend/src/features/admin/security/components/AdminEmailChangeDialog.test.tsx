@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdminEmailChangeDialog } from './AdminEmailChangeDialog';
 import { adminSecurityApi } from '../api';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 
 vi.mock('../api', () => ({
   adminSecurityApi: {
@@ -15,7 +15,7 @@ vi.mock('../useStepUp', () => ({
   useStepUp: () => ({ runWithStepUp: (action: () => Promise<unknown>) => action(), dialog: null, verifying: false }),
   isStepUpCancelled: () => false,
 }));
-vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: vi.fn() }));
+vi.mock('@/features/auth/context/AuthContext', () => ({ useAdminAuth: vi.fn() }));
 
 const pendingState = {
   pendingEmail: 'new@example.test', expiresAt: '2026-11-08T12:10:00.000Z', otpExpiresAt: '2026-11-08T12:01:00.000Z',
@@ -27,7 +27,7 @@ describe('AdminEmailChangeDialog', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useAuth).mockReturnValue({ clearSession } as unknown as ReturnType<typeof useAuth>);
+    vi.mocked(useAdminAuth).mockReturnValue({ clearSession } as unknown as ReturnType<typeof useAdminAuth>);
     vi.mocked(adminSecurityApi.emailChangeStatus).mockResolvedValue({ active: false });
     vi.mocked(adminSecurityApi.requestEmailChange).mockResolvedValue(pendingState);
     vi.mocked(adminSecurityApi.verifyEmailChange).mockResolvedValue({ changed: true, email: pendingState.pendingEmail, signedOut: true });

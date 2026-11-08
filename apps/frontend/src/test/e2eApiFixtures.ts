@@ -14,7 +14,7 @@ import type { WishlistData } from '@/features/wishlist/types';
 /** sessionStorage key the session restore reads as the identity hint (features/auth/sessionRestore.ts). */
 export const cachedUserKey = 'electrohub:cached-user';
 
-/** POST /api/auth/refresh after rotation: the token plus the identity, so restoring the session needs no /me. */
+/** POST /api/auth/customer/refresh after rotation: the token plus the identity, so restoring the session needs no /me. */
 export const refreshedSession = (user: User, accessToken = 'browser-test-token'): Awaited<ReturnType<typeof authApi.refreshSession>> =>
   ({ accessToken, user });
 

@@ -49,7 +49,7 @@ const api = () => { const forwarded = ip(); return {
   delete: (url: string, token: string) => request(app).delete(url).set('X-Forwarded-For', forwarded).set('Authorization', `Bearer ${token}`),
 }; };
 const refreshCookie = (response: request.Response) => ((response.headers['set-cookie'] as unknown as string[] | undefined) ?? [])
-  .find(value => value.startsWith('electrohub_refresh='))?.split(';')[0];
+  .find(value => value.startsWith('electrohub_admin_refresh='))?.split(';')[0];
 const code = (secret: string, offset = 0) => hotp(base32Decode(secret), totpStep(Date.now()) + BigInt(offset));
 
 async function roleId(name: 'ADMIN' | 'CUSTOMER') {
@@ -100,11 +100,12 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     expect((await prisma.storeSettings.findUniqueOrThrow({ where: { id: 'default' } })).currency).toBe('USD');
   });
 
-  it('SEC-01/D02 cutover: a legacy pre-MFA admin refresh family is refused and revoked; a session-less ADMIN access token is refused', async () => {
-    const refreshed = await api().post('/api/auth/refresh', undefined, undefined, 'electrohub_refresh=legacy-admin-refresh-token');
+  it('SEC-01/D02 cutover: a legacy pre-MFA admin refresh token (unscoped format) is refused before any lookup and can never refresh; a session-less ADMIN access token is refused', async () => {
+    const refreshed = await api().post('/api/auth/admin/refresh', undefined, undefined, 'electrohub_admin_refresh=legacy-admin-refresh-token');
     expect(refreshed.status).toBe(401);
     expect(refreshed.body).toEqual({ error: 'Invalid or expired refresh token' }); // existing generic refresh contract
-    expect(await prisma.refreshToken.count({ where: { userId: LEGACY_ADMIN, isRevoked: false } })).toBe(0);
+    // Task 05.2 isolation: a token without the portal prefix is rejected before the database is read, so it neither refreshes nor is its family revoked by a stale cookie.
+    expect(await prisma.refreshToken.count({ where: { userId: LEGACY_ADMIN, isRevoked: false } })).toBe(1);
     const legacyAccess = generateAccessToken({ userId: LEGACY_ADMIN, role: 'ADMIN' });
     for (const path of ['/api/admin/dashboard/overview', '/api/admin/catalog/products', '/api/admin/me/profile', '/api/admin/invitations']) {
       const response = await api().get(path, legacyAccess);
@@ -190,7 +191,7 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     const results = await Promise.all([1, 2].map(() => api().post('/api/auth/admin/mfa/totp/verify', { mfaToken: fresh.body.mfaToken, code: code(admin.secret, 1) })));
     expect(results.map(result => result.status).sort()).toEqual([200, 401]);
     const session = results.find(result => result.status === 200)!;
-    const rotated = await api().post('/api/auth/refresh', undefined, undefined, refreshCookie(session));
+    const rotated = await api().post('/api/auth/admin/refresh', undefined, undefined, refreshCookie(session));
     expect(rotated.status).toBe(200);
     expect((await api().get('/api/admin/catalog/products', rotated.body.accessToken)).status).toBe(200);
   });
@@ -270,10 +271,10 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
       expect(disconnect).toHaveBeenCalledWith(admin.user.id, 'LOGOUT');
     } finally { disconnect.mockRestore(); }
     expect((await api().get('/api/admin/me/profile', other.accessToken)).status).toBe(401);
-    expect((await api().post('/api/auth/refresh', undefined, undefined, other.cookie)).status).toBe(401);
+    expect((await api().post('/api/auth/admin/refresh', undefined, undefined, other.cookie)).status).toBe(401);
     expect((await api().get('/api/admin/me/profile', admin.accessToken)).status).toBe(200);
     // Logout of the current session ends its access token too (not only the refresh cookie).
-    expect((await api().post('/api/auth/logout', undefined, undefined, admin.cookie)).status).toBeLessThan(300);
+    expect((await api().post('/api/auth/admin/logout', undefined, undefined, admin.cookie)).status).toBeLessThan(300);
     expect((await api().get('/api/admin/me/profile', admin.accessToken)).status).toBe(401);
   });
 
@@ -369,7 +370,7 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     expect((await api().patch(`/api/admin/administrators/${target.user.id}/access`, { isActive: false }, manager.accessToken)).status).toBe(403);
     expect((await api().patch(`/api/admin/administrators/${target.user.id}/access`, { isActive: false }, owner.accessToken)).status).toBe(200);
     expect((await api().get('/api/admin/me/profile', target.accessToken)).status).toBe(401);
-    expect((await api().post('/api/auth/refresh', undefined, undefined, target.cookie)).status).toBe(401);
+    expect((await api().post('/api/auth/admin/refresh', undefined, undefined, target.cookie)).status).toBe(401);
   });
 
   it('SEC-10: concurrent deactivation of the last two owners leaves one active owner', async () => {
@@ -412,9 +413,9 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     const changed = await api().post('/api/admin/me/password', { currentPassword: PASSWORD, newPassword: NEW }, admin.accessToken);
     expect(changed.status).toBe(200);
     expect(changed.body.data).toEqual({ changed: true, signInRequired: true });
-    expect(((changed.headers['set-cookie'] as unknown as string[]) ?? []).some(value => value.startsWith('electrohub_refresh=;'))).toBe(true);
+    expect(((changed.headers['set-cookie'] as unknown as string[]) ?? []).some(value => value.startsWith('electrohub_admin_refresh=;'))).toBe(true);
     for (const token of [admin.accessToken, second.accessToken]) expect((await api().get('/api/admin/me/profile', token)).status).toBe(401);
-    for (const cookie of [admin.cookie, second.cookie]) expect((await api().post('/api/auth/refresh', undefined, undefined, cookie)).status).toBe(401);
+    for (const cookie of [admin.cookie, second.cookie]) expect((await api().post('/api/auth/admin/refresh', undefined, undefined, cookie)).status).toBe(401);
     expect(await prisma.adminSession.count({ where: { userId: admin.user.id, revokedAt: null } })).toBe(0);
     expect(await prisma.securityEvent.count({ where: { userId: admin.user.id, type: 'PASSWORD_CHANGED' } })).toBe(1);
     expect(await prisma.adminAuditLog.count({ where: { actorId: admin.user.id, action: 'ADMIN_PASSWORD_CHANGED' } })).toBe(1);
@@ -460,7 +461,7 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     // A deleted administrator cannot use old access or refresh tokens, sign in, or reach any admin API.
     expect((await api().get('/api/admin/me/profile', manager.accessToken)).status).toBe(401);
     expect((await api().get('/api/admin/catalog/products', manager.accessToken)).status).toBe(401);
-    expect((await api().post('/api/auth/refresh', undefined, undefined, manager.cookie)).status).toBe(401);
+    expect((await api().post('/api/auth/admin/refresh', undefined, undefined, manager.cookie)).status).toBe(401);
     expect((await api().post('/api/auth/login', { email: manager.user.email, password: PASSWORD })).status).toBe(401);
     // The other administrator is untouched.
     expect((await api().get('/api/admin/me/profile', other.accessToken)).status).toBe(200);
@@ -704,7 +705,7 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     expect(sentOwnerGrants).toContain(target.user.email);
     // The promoted administrator's existing access and refresh tokens are dead; a fresh password + MFA sign-in carries Owner.
     expect((await api().get('/api/admin/me/profile', target.accessToken)).status).toBe(401);
-    expect((await api().post('/api/auth/refresh', undefined, undefined, target.cookie)).status).toBe(401);
+    expect((await api().post('/api/auth/admin/refresh', undefined, undefined, target.cookie)).status).toBe(401);
     const fresh = await signIn(target.user.email, target.secret);
     expect(fresh.status).toBe(200);
     expect((await api().get('/api/admin/me/profile', fresh.accessToken)).body.data.isOwner).toBe(true);
@@ -763,7 +764,7 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
 
     // The old Owner is locked out; a retry of the same request cannot touch anyone.
     expect((await api().post('/api/auth/login', { email: owner.user.email, password: PASSWORD })).status).toBe(401);
-    expect((await api().post('/api/auth/refresh', undefined, undefined, owner.cookie)).status).toBe(401);
+    expect((await api().post('/api/auth/admin/refresh', undefined, undefined, owner.cookie)).status).toBe(401);
     expect((await transfer(owner.accessToken, bystander.user.id)).status).toBe(401);
     expect(await ownerState(bystander.user.id)).toEqual({ isActive: true, isOwner: false });
     // The new Owner must authenticate freshly, then holds Owner capability.
@@ -1013,7 +1014,7 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
       expect(next.recoveryCodes.filter(codeValue => old.recoveryCodes.includes(codeValue))).toHaveLength(0);
       // Old sessions and tokens are dead; the old secret and recovery codes do not sign into the new account.
       expect((await api().get('/api/admin/me/profile', old.accessToken)).status).toBe(401);
-      expect((await api().post('/api/auth/refresh', {}, undefined, old.cookie)).status).toBe(401);
+      expect((await api().post('/api/auth/admin/refresh', {}, undefined, old.cookie)).status).toBe(401);
       const login = await api().post('/api/auth/login', { email: next.email, password: PASSWORD });
       expect((await api().post('/api/auth/admin/mfa/totp/verify', { mfaToken: login.body.mfaToken, code: code(old.secret, 2) })).status).toBe(401);
       expect((await api().post('/api/auth/admin/mfa/recovery/verify', { mfaToken: login.body.mfaToken, code: old.recoveryCodes[0] })).status).toBe(401);
@@ -1204,7 +1205,7 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
 
     // Old access and refresh tokens are dead; a fresh password + MFA sign-in works and carries no Owner capability.
     expect((await api().get('/api/admin/me/profile', b.accessToken)).status).toBe(401);
-    expect((await api().post('/api/auth/refresh', undefined, undefined, b.cookie)).status).toBe(401);
+    expect((await api().post('/api/auth/admin/refresh', undefined, undefined, b.cookie)).status).toBe(401);
     const fresh = await signIn(b.user.email, b.secret);
     expect(fresh.status).toBe(200);
     expect((await api().get('/api/admin/me/profile', fresh.accessToken)).body.data).toMatchObject({ isOwner: false, canManageAdmins: false });
@@ -1421,7 +1422,7 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
       expect((await api().post('/api/auth/login', { email: enrolled.user.email, password: PASSWORD })).status).toBe(401);
       expect((await api().get('/api/admin/me/profile', enrolled.accessToken)).status).toBe(401);
       expect((await api().get('/api/admin/me/profile', second.accessToken)).status).toBe(401);
-      expect((await api().post('/api/auth/refresh', undefined, undefined, second.cookie!)).status).toBe(401);
+      expect((await api().post('/api/auth/admin/refresh', undefined, undefined, second.cookie!)).status).toBe(401);
       expect((await api().post(`${recoveryApi}/complete`, { resetToken, newPassword: 'Another-Unique-8-Pass' })).status).toBe(400);
       // MFA is untouched: same enrollment, factor and codes; no enrollment window was opened.
       const after = await prisma.adminAccountSecurity.findUniqueOrThrow({ where: { userId: enrolled.user.id } });
@@ -1544,7 +1545,7 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
       expect(recovered[0].mfaVerifiedAt).not.toBeNull();
       expect((await api().get('/api/admin/dashboard/overview', enrolled.accessToken)).status).toBe(401);
       expect((await api().get('/api/admin/dashboard/overview', reset.body.accessToken)).status).toBe(200);
-      expect((await api().post('/api/auth/refresh', undefined, undefined, refreshCookie(reset)!)).status).toBe(200);
+      expect((await api().post('/api/auth/admin/refresh', undefined, undefined, refreshCookie(reset)!)).status).toBe(200);
       // The reset authorization is spent: replaying it yields no second session.
       expect((await api().post(`${recoveryApi}/complete`, { resetToken: proven.body.resetToken, newPassword: 'Another-Unique-8-Pass' })).status).toBe(400);
       expect((await api().post('/api/auth/admin/mfa/totp/verify', { mfaToken: outstanding.body.mfaToken, code: code(enrolled.secret, 2) })).status).toBe(401);
@@ -1690,6 +1691,155 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
       expect(verifiedCustomer.status).toBe(200);
       expect((await api().post('/api/auth/reset-password', { resetToken: verifiedCustomer.body.resetToken, newPassword: NEW_PASSWORD })).status).toBe(200);
       expect((await api().post('/api/auth/login', { email: customer.email, password: NEW_PASSWORD })).status).toBe(200);
+    });
+  });
+
+  describe('ISO administrator and customer sessions are independent credential scopes in one browser', () => {
+    const named = (response: request.Response, name: string) => ((response.headers['set-cookie'] as unknown as string[] | undefined) ?? []).find(value => value.startsWith(`${name}=`));
+    const valueOf = (cookie: string) => cookie.split(';')[0]!.split('=')[1]!;
+    const customerCookie = (response: request.Response) => named(response, 'electrohub_customer_refresh')?.split(';')[0];
+    /** An MFA-assured administrator and a customer signed in separately, as one browser would hold them. */
+    async function both() {
+      const admin = await enrolledAdmin({ owner: true });
+      const customer = await createUser('CUSTOMER');
+      const login = await api().post('/api/auth/login', { email: customer.email, password: PASSWORD });
+      expect(login.status).toBe(200);
+      return { admin, customer, customerToken: login.body.accessToken as string, customerCookie: customerCookie(login)!, login };
+    }
+
+    it('ISO-01/04: a password alone creates no session; MFA creates an ADMIN-only cookie, a customer login a CUSTOMER-only cookie, and both coexist', async () => {
+      const user = await createUser('ADMIN', { owner: true });
+      const passwordOnly = await api().post('/api/auth/login', { email: user.email, password: PASSWORD });
+      expect(passwordOnly.status).toBe(200);
+      expect(passwordOnly.body.accessToken).toBeUndefined();
+      expect(named(passwordOnly, 'electrohub_admin_refresh')).toBeUndefined();
+      expect(named(passwordOnly, 'electrohub_customer_refresh')).toBeUndefined();
+      expect(await prisma.refreshToken.count({ where: { userId: user.id } })).toBe(0);
+
+      const { admin, customer, login } = await both();
+      const adminSet = named(await api().post('/api/auth/admin/refresh', undefined, undefined, admin.cookie), 'electrohub_admin_refresh')!;
+      expect(valueOf(adminSet)).toMatch(/^admin\.[0-9a-f]{128}$/);
+      expect(adminSet).toContain('Path=/api/auth/admin');
+      expect(adminSet).toContain('HttpOnly');
+      expect(adminSet).toContain('SameSite=Lax');
+      const customerSet = named(login, 'electrohub_customer_refresh')!;
+      expect(valueOf(customerSet)).toMatch(/^customer\.[0-9a-f]{128}$/);
+      expect(customerSet).toContain('Path=/api/auth/customer');
+      expect(customerSet).toContain('HttpOnly');
+      expect(named(login, 'electrohub_admin_refresh')).toBeUndefined();
+      // Two distinct, simultaneously live session families, each bound to its own identity; only the administrator's has an MFA session.
+      const adminFamily = await prisma.refreshToken.findFirstOrThrow({ where: { userId: admin.user.id, isRevoked: false }, select: { familyId: true } });
+      const customerFamily = await prisma.refreshToken.findFirstOrThrow({ where: { userId: customer.id, isRevoked: false }, select: { familyId: true } });
+      expect(adminFamily.familyId).not.toBe(customerFamily.familyId);
+      expect(await prisma.adminSession.count({ where: { familyId: customerFamily.familyId } })).toBe(0);
+    });
+
+    it('ISO-05/07/08/09/17/18: each refresh returns only its own role, and each token works only on its own API surface', async () => {
+      const { admin, customerToken, customerCookie: cookie } = await both();
+      const adminRefresh = await api().post('/api/auth/admin/refresh', undefined, undefined, admin.cookie);
+      const customerRefresh = await api().post('/api/auth/customer/refresh', undefined, undefined, cookie);
+      expect(adminRefresh.status).toBe(200);
+      expect(customerRefresh.status).toBe(200);
+      expect(adminRefresh.body.user.role).toBe('ADMIN');
+      expect(customerRefresh.body.user.role).toBe('CUSTOMER');
+      expect(adminRefresh.body.user.id).not.toBe(customerRefresh.body.user.id);
+      expect(named(adminRefresh, 'electrohub_customer_refresh')).toBeUndefined();
+      expect(named(customerRefresh, 'electrohub_admin_refresh')).toBeUndefined();
+      // ADMIN token: Admin Console yes; cart, wishlist and the customer profile surface no. CUSTOMER token: the reverse.
+      expect((await api().get('/api/admin/me/profile', adminRefresh.body.accessToken)).status).toBe(200);
+      expect((await api().get('/api/cart', adminRefresh.body.accessToken)).status).toBe(403);
+      expect((await api().get('/api/wishlist', adminRefresh.body.accessToken)).status).toBe(403);
+      expect((await api().get('/api/cart', customerRefresh.body.accessToken)).status).toBe(200);
+      expect((await api().get('/api/admin/me/profile', customerRefresh.body.accessToken)).status).toBe(403);
+      expect((await api().get('/api/admin/me/profile', customerToken)).status).toBe(403);
+    });
+
+    it('ISO-10: a wrong-scope refresh credential is rejected without revoking the other portal\'s family, in both directions', async () => {
+      const { admin, customerCookie: cookie } = await both();
+      const customerValue = valueOf(cookie);
+      const adminValue = valueOf(admin.cookie);
+      const familiesBefore = await prisma.refreshToken.count({ where: { isRevoked: false, userId: admin.user.id } });
+      // A customer token presented to the administrator route (and the reverse), under the route's own cookie name.
+      expect((await api().post('/api/auth/admin/refresh', undefined, undefined, `electrohub_admin_refresh=${customerValue}`)).status).toBe(401);
+      expect((await api().post('/api/auth/customer/refresh', undefined, undefined, `electrohub_customer_refresh=${adminValue}`)).status).toBe(401);
+      // The other portal's cookie name is simply not read.
+      expect((await api().post('/api/auth/admin/refresh', undefined, undefined, cookie)).status).toBe(401);
+      expect((await api().post('/api/auth/customer/refresh', undefined, undefined, admin.cookie)).status).toBe(401);
+      // Neither family was revoked or even touched by the wrong-scope attempts: both still refresh.
+      expect(await prisma.refreshToken.count({ where: { isRevoked: false, userId: admin.user.id } })).toBe(familiesBefore);
+      expect((await api().post('/api/auth/admin/refresh', undefined, undefined, admin.cookie)).status).toBe(200);
+      expect((await api().post('/api/auth/customer/refresh', undefined, undefined, cookie)).status).toBe(200);
+    });
+
+    it('ISO-11/12: signing out of one portal revokes only that family and clears only that cookie', async () => {
+      const { admin, customerCookie: cookie } = await both();
+      const adminOut = await api().post('/api/auth/admin/logout', undefined, undefined, admin.cookie);
+      expect(adminOut.status).toBe(200);
+      expect(named(adminOut, 'electrohub_admin_refresh')).toContain('electrohub_admin_refresh=;');
+      expect(named(adminOut, 'electrohub_customer_refresh')).toBeUndefined();
+      expect((await api().post('/api/auth/admin/refresh', undefined, undefined, admin.cookie)).status).toBe(401);
+      const stillCustomer = await api().post('/api/auth/customer/refresh', undefined, undefined, cookie);
+      expect(stillCustomer.status).toBe(200);
+
+      const second = await both();
+      const customerOut = await api().post('/api/auth/customer/logout', undefined, undefined, second.customerCookie);
+      expect(customerOut.status).toBe(200);
+      expect(named(customerOut, 'electrohub_customer_refresh')).toContain('electrohub_customer_refresh=;');
+      expect(named(customerOut, 'electrohub_admin_refresh')).toBeUndefined();
+      expect((await api().post('/api/auth/customer/refresh', undefined, undefined, second.customerCookie)).status).toBe(401);
+      expect((await api().post('/api/auth/admin/refresh', undefined, undefined, second.admin.cookie)).status).toBe(200);
+      // Presenting the wrong portal's cookie to a logout route revokes nothing.
+      const third = await both();
+      await api().post('/api/auth/customer/logout', undefined, undefined, `electrohub_customer_refresh=${valueOf(third.admin.cookie)}`);
+      expect((await api().post('/api/auth/admin/refresh', undefined, undefined, third.admin.cookie)).status).toBe(200);
+    });
+
+    it('ISO-10/15: replay inside one scope revokes only that scope\'s family; concurrent rotation hands out exactly one successor', async () => {
+      const { admin, customerCookie: cookie } = await both();
+      const results = await Promise.all([1, 2].map(() => api().post('/api/auth/customer/refresh', undefined, undefined, cookie)));
+      expect(results.map(result => result.status).sort()).toEqual([200, 409]);
+      // A real replay: the family is dead after sign-out, and presenting its old cookie again must not disturb the administrator.
+      const winner = results.find(result => result.status === 200)!;
+      expect((await api().post('/api/auth/customer/logout', undefined, undefined, customerCookie(winner)!)).status).toBe(200);
+      expect((await api().post('/api/auth/customer/refresh', undefined, undefined, customerCookie(winner)!)).status).toBe(401);
+      expect((await api().post('/api/auth/admin/refresh', undefined, undefined, admin.cookie)).status).toBe(200);
+    });
+
+    it('ISO-16: the retired shared cookie authenticates neither portal and is only ever expired', async () => {
+      const { admin, customer, customerCookie: cookie } = await both();
+      const family = randomUUID();
+      const legacyRaw = randomBytes(64).toString('hex'); // the pre-isolation format: no scope prefix
+      const { createHash } = await import('node:crypto');
+      await prisma.refreshToken.create({ data: { userId: customer.id, tokenHash: createHash('sha256').update(legacyRaw).digest('hex'), familyId: family,
+        expiresAt: new Date(Date.now() + 3600_000) } });
+      for (const route of ['/api/auth/customer/refresh', '/api/auth/admin/refresh']) {
+        const name = route.includes('admin') ? 'electrohub_admin_refresh' : 'electrohub_customer_refresh';
+        expect((await api().post(route, undefined, undefined, `${name}=${legacyRaw}`)).status).toBe(401);
+      }
+      // The retired route and cookie name never restore anything, and the stale cookie is expired.
+      const retired = await api().post('/api/auth/refresh', undefined, undefined, `electrohub_refresh=${legacyRaw}`);
+      expect(retired.status).toBe(401);
+      expect(retired.body.accessToken).toBeUndefined();
+      expect(named(retired, 'electrohub_refresh')).toContain('electrohub_refresh=;');
+      expect(named(retired, 'electrohub_admin_refresh')).toBeUndefined();
+      expect(named(retired, 'electrohub_customer_refresh')).toBeUndefined();
+      const retiredLogout = await api().post('/api/auth/logout', undefined, undefined, `electrohub_refresh=${legacyRaw}`);
+      expect(retiredLogout.status).toBe(200);
+      expect(named(retiredLogout, 'electrohub_refresh')).toContain('electrohub_refresh=;');
+      // Wrong-scope rejection came before replay handling: the legacy row was not revoked, and no valid family of either portal was touched.
+      expect(await prisma.refreshToken.count({ where: { familyId: family, isRevoked: true } })).toBe(0);
+      expect((await api().post('/api/auth/admin/refresh', undefined, undefined, admin.cookie)).status).toBe(200);
+      expect((await api().post('/api/auth/customer/refresh', undefined, undefined, cookie)).status).toBe(200);
+    });
+
+    it('ISO-19: administrator step-up and Owner capability are unchanged by the scoped cookie', async () => {
+      const { admin } = await both();
+      const refreshed = await api().post('/api/auth/admin/refresh', undefined, undefined, admin.cookie);
+      expect(refreshed.status).toBe(200);
+      const noStepUp = await api().post('/api/admin/administrators/' + randomUUID() + '/mfa-activation', undefined, refreshed.body.accessToken);
+      expect([403, 404]).toContain(noStepUp.status); // still gated (step-up or eligibility), never a silent success
+      const plain = await enrolledAdmin();
+      expect((await api().get('/api/admin/invitations', plain.accessToken)).status).toBe(403); // no inherited Owner/manage capability
     });
   });
 });

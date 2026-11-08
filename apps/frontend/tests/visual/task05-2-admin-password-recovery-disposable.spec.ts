@@ -106,8 +106,8 @@ async function setNewPassword(page: Page, password: string, currentPassword?: st
 }
 /** The recovery session is real (it refreshes) and is then ended so the next steps exercise the normal sign-in. */
 async function endRecoverySession(page: Page) {
-  await expect.poll(async () => (await page.request.post('/api/auth/refresh')).status()).toBe(200);
-  await page.evaluate(() => fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }));
+  await expect.poll(async () => (await page.request.post('/api/auth/admin/refresh')).status()).toBe(200);
+  await page.evaluate(() => fetch('/api/auth/admin/logout', { method: 'POST', credentials: 'include' }));
   await page.context().clearCookies();
 }
 async function signInPasswordStep(page: Page, email: string, password: string) {
@@ -170,7 +170,7 @@ test.describe.serial('Task 05.2 administrator forgot-password (disposable)', () 
     await page.getByRole('button', { name: 'Verify and sign in' }).click();
     await expect(page).toHaveURL(/\/admin(\/orders)?\/?$/); // returns to the page that was requested before sign-in
     // The login MFA produced a fresh, MFA-assured session: the API now answers for this browser.
-    await expect.poll(async () => (await page.request.post('/api/auth/refresh')).status()).toBe(200);
+    await expect.poll(async () => (await page.request.post('/api/auth/admin/refresh')).status()).toBe(200);
   });
 
   test('REC-UI-02 Journey C + F: a recovery code works once, and the reset signs out every existing session', async ({ browser }) => {
@@ -222,7 +222,7 @@ test.describe.serial('Task 05.2 administrator forgot-password (disposable)', () 
     await dialog.getByLabel('Name').fill('Recovery virtual key');
     await dialog.getByRole('button', { name: 'Create passkey' }).click();
     await expect(page.getByText('Recovery virtual key')).toBeVisible();
-    await page.evaluate(() => fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }));
+    await page.evaluate(() => fetch('/api/auth/admin/logout', { method: 'POST', credentials: 'include' }));
 
     await reachMfaStep(page, owner.email);
     await page.getByRole('tab', { name: /Passkey/ }).click();

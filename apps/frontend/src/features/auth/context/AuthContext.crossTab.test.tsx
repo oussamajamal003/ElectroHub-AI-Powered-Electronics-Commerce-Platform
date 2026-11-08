@@ -9,14 +9,14 @@ import { authApi } from '../api/auth';
 vi.mock('../api/auth', () => ({ authApi: { refreshSession: vi.fn(), getCurrentUser: vi.fn(), logout: vi.fn() } }));
 
 const KEY = 'electrohub:cached-user';
-const admin = { id: '22222222-2222-4222-8222-222222222222', email: 'a@example.invalid', firstName: 'A', lastName: 'D', role: 'ADMIN' };
+const customer = { id: '22222222-2222-4222-8222-222222222222', email: 'a@example.invalid', firstName: 'A', lastName: 'D', role: 'CUSTOMER' };
 function Who() { const { user, isAuthenticated } = useAuth(); return <output data-testid="who">{isAuthenticated ? user?.role : 'GUEST'}</output>; }
 const storageEvent = (newValue: string | null) => act(() => { window.dispatchEvent(new StorageEvent('storage', { key: KEY, newValue, storageArea: localStorage })); });
 
 beforeEach(() => {
   vi.resetAllMocks(); sessionStorage.clear(); localStorage.clear();
   vi.mocked(authApi.refreshSession).mockResolvedValue({ accessToken: 'test-token' });
-  vi.mocked(authApi.getCurrentUser).mockResolvedValue({ user: admin } as never);
+  vi.mocked(authApi.getCurrentUser).mockResolvedValue({ user: customer } as never);
 });
 
 describe('single browser identity across tabs', () => {
@@ -24,7 +24,7 @@ describe('single browser identity across tabs', () => {
     const queryClient = createQueryClient();
     const clear = vi.spyOn(queryClient, 'clear');
     render(<QueryClientProvider client={queryClient}><MemoryRouter><AuthProvider><Who /></AuthProvider></MemoryRouter></QueryClientProvider>);
-    expect(await screen.findByText('ADMIN')).toBeInTheDocument();
+    expect(await screen.findByText('CUSTOMER')).toBeInTheDocument();
     storageEvent(null);
     expect(screen.getByTestId('who').textContent).toBe('GUEST');
     expect(clear).toHaveBeenCalled();
@@ -32,8 +32,8 @@ describe('single browser identity across tabs', () => {
 
   it('ignores unrelated storage keys', async () => {
     render(<QueryClientProvider client={createQueryClient()}><MemoryRouter><AuthProvider><Who /></AuthProvider></MemoryRouter></QueryClientProvider>);
-    expect(await screen.findByText('ADMIN')).toBeInTheDocument();
+    expect(await screen.findByText('CUSTOMER')).toBeInTheDocument();
     act(() => { window.dispatchEvent(new StorageEvent('storage', { key: 'other', newValue: null, storageArea: localStorage })); });
-    expect(screen.getByTestId('who').textContent).toBe('ADMIN');
+    expect(screen.getByTestId('who').textContent).toBe('CUSTOMER');
   });
 });

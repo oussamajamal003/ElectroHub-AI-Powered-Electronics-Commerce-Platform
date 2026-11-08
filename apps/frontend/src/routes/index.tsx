@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, Outlet, useLocation } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { adminQueryClient } from '@/lib/query';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { WishlistProvider } from '@/features/wishlist/WishlistProvider';
 import { WishlistPage } from '@/pages/customer/WishlistPage';
-import { AuthProvider } from '@/features/auth/context/AuthContext';
+import { AdminAuthProvider, AuthProvider } from '@/features/auth/context/AuthContext';
 import { CartProvider } from '@/features/cart/CartProvider';
 import { CustomerLayout } from '@/layouts/CustomerLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
@@ -76,9 +78,13 @@ const route = (content: React.ReactNode) => <Suspense fallback={<ElectroHubLoade
 // Inside the admin shell a page's code chunk loads behind a page-shaped skeleton; the full-page loader is kept for a whole-app reload.
 const adminRoute = (content: React.ReactNode) => <Suspense fallback={<AdminPageSkeleton />}>{content}</Suspense>;
 
+/** Task 05.2: every /admin page reads and writes the administrator's own query cache, never the storefront's. */
+function AdminQueryBoundary() { return <QueryClientProvider client={adminQueryClient}><Outlet /></QueryClientProvider>; }
+
 export function AppRoutes() {
   return (
     <AuthProvider>
+      <AdminAuthProvider queryClient={adminQueryClient}>
       <CartProvider>
       <WishlistProvider>
       <PaymentLockProvider>
@@ -115,6 +121,7 @@ export function AppRoutes() {
           </Route>
         </Route>
 
+        <Route element={<AdminQueryBoundary />}>
         {/* Admin Public Routes */}
         <Route path="/admin/login" element={<Suspense fallback={null}><AdminLoginPage /></Suspense>} />
         {/* Task 05.2: invitation acceptance is token-bound (URL fragment) and continues into mandatory MFA enrollment. */}
@@ -152,12 +159,15 @@ export function AppRoutes() {
           </Route>
         </Route>
 
+        </Route>
+
         {/* Fallback */}
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       </PaymentLockProvider>
       </WishlistProvider>
       </CartProvider>
+      </AdminAuthProvider>
     </AuthProvider>
   );
 }
