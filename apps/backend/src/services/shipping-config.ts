@@ -131,22 +131,26 @@ export function isSeedShippingSnapshot(shipping: ShippingSnapshot): boolean {
 }
 
 /** STANDARD becomes free at or above the threshold; every other method keeps its configured price. */
+function qualifiesForFreeShipping(method: ShippingMethodTerms, subtotal: Prisma.Decimal | string, shipping: ShippingSnapshot): boolean {
+  return method.id === 'STANDARD' && shipping.freeShippingThreshold !== null &&
+    new Prisma.Decimal(subtotal).gte(shipping.freeShippingThreshold);
+}
+
 export function effectiveShippingPrice(method: ShippingMethodTerms, subtotal: Prisma.Decimal | string, shipping: ShippingSnapshot): string {
-  if (method.id === 'STANDARD' && shipping.freeShippingThreshold !== null &&
-    new Prisma.Decimal(subtotal).gte(shipping.freeShippingThreshold)) return '0.00';
+  if (qualifiesForFreeShipping(method, subtotal, shipping)) return '0.00';
   return method.price;
 }
 
-/** The quote for one method, or null when the method is unknown or disabled. */
+/** Free STANDARD is independent of regular STANDARD availability. Other methods require their enabled flag. */
 export function shippingQuoteFor(methodId: string, subtotal: Prisma.Decimal | string,
   shipping: ShippingSnapshot = currentShippingSnapshot()): ShippingQuote | null {
   const method = shipping.methods.find(candidate => candidate.id === methodId);
-  if (!method || !method.enabled) return null;
+  if (!method || (!method.enabled && !qualifiesForFreeShipping(method, subtotal, shipping))) return null;
   return { id: method.id, label: method.label, price: effectiveShippingPrice(method, subtotal, shipping),
     minDays: method.minDays, maxDays: method.maxDays, estimate: method.estimate };
 }
 
-/** Quotes for every enabled method, in catalog order. */
+/** Quotes for every eligible method, in catalog order. */
 export function shippingQuotes(subtotal: Prisma.Decimal | string, shipping: ShippingSnapshot = currentShippingSnapshot()): ShippingQuote[] {
   return shipping.methods.flatMap(method => {
     const quote = shippingQuoteFor(method.id, subtotal, shipping);

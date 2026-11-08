@@ -555,3 +555,10 @@ Admin functionality is complete when:
 ## 30. Admin Principle
 
 > **The admin interface is an operational control surface, but every administrative permission and mutation must be enforced by the backend rather than trusted to the frontend.**
+
+
+### Shipping threshold and regular Standard Delivery
+
+Free shipping and regular Standard Delivery are independent. A configured threshold enables free STANDARD when the cart merchandise subtotal is at or above that threshold, including when regular STANDARD is disabled. Below threshold, STANDARD is offered only when its normal flag is enabled, at its configured price. With free shipping disabled, the normal flag and price apply. Express and Overnight use their independent settings.
+
+Check quotes reads saved settings; unsaved drafts do not change preview or customer checkout. Saving invalidates cached quotes, and existing checkout revision validation rejects stale terms rather than silently repricing a saved purchase. At least one ordinary method must remain enabled so below-threshold orders have a delivery path. Historical order/payment amounts are retained.

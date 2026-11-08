@@ -174,3 +174,33 @@ describe('quotes and effective prices', () => {
     expect(terms.totals).toMatchObject({ subtotal: '57.00', shipping: '0.00', total: '57.00' });
   });
 });
+
+
+describe('independent free STANDARD eligibility', () => {
+  it.each([
+    [true, false, '49.99', null], [true, false, '50.00', '0.00'], [true, false, '50.01', '0.00'],
+    [true, false, '60.00', '0.00'], [true, true, '40.00', '5.00'], [true, true, '60.00', '0.00'],
+    [false, true, '60.00', '5.00'], [false, false, '60.00', null],
+  ])('free=%s regular=%s subtotal=%s gives %s', (free, regular, subtotal, price) => {
+    const shipping = withMethod({ ...SEED_SHIPPING_SNAPSHOT, freeShippingThreshold: free ? '50.00' : null },
+      'STANDARD', { enabled: regular, price: '5.00' });
+    const quote = shippingQuoteFor('STANDARD', subtotal, shipping);
+    expect(quote?.price ?? null).toBe(price);
+    expect(shippingQuotes(subtotal, shipping).filter(row => row.id === 'STANDARD')).toEqual(quote ? [quote] : []);
+    const lines = [{ productId: 'p', quantity: 1, price: subtotal }];
+    const revision = cartRevision('scope', [{ productId: 'p', quantity: 1, product: { price: subtotal } }], shipping);
+    const saved = savedPurchaseTerms({ scopeId: 'scope', expectedRevision: revision, deliveryMethod: 'STANDARD', lines, shipping });
+    expect(saved.delivery).toEqual(quote);
+    expect(saved.totals?.shipping ?? null).toBe(price);
+    if (price !== null) expect(saved.totals?.total).toBe(new Prisma.Decimal(subtotal).plus(price).toFixed(2));
+    const changed = { ...shipping, freeShippingThreshold: '100.00' };
+    expect(savedPurchaseTerms({ scopeId: 'scope', expectedRevision: revision, deliveryMethod: 'STANDARD', lines, shipping: changed }))
+      .toMatchObject({ revisionMatches: false, totals: null });
+  });
+  it.each(['EXPRESS', 'OVERNIGHT'])('%s uses only its own flag and configured price', id => {
+    for (const enabled of [true, false]) {
+      const shipping = withMethod({ ...SEED_SHIPPING_SNAPSHOT, freeShippingThreshold: '50.00' }, id, { enabled, price: '8.25' });
+      for (const subtotal of ['49.99', '50.00', '60.00']) expect(shippingQuoteFor(id, subtotal, shipping)?.price ?? null).toBe(enabled ? '8.25' : null);
+    }
+  });
+});

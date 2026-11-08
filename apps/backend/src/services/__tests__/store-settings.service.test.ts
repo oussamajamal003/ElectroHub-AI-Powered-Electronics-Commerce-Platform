@@ -126,6 +126,8 @@ describe('shipping validation', () => {
     expect(shippingUpdateSchema.safeParse(missing).success).toBe(false);
     expect(shippingUpdateSchema.safeParse(duplicate).success).toBe(false);
     expect(shippingUpdateSchema.safeParse(allOff).success).toBe(false);
+    // A threshold-only path would strand every sub-threshold cart; it does not replace this validation.
+    expect(shippingUpdateSchema.safeParse({ ...allOff, freeShippingThreshold: '50.00' }).success).toBe(false);
   });
 
   it('normalises prices to two decimals and rejects over-precise or oversized prices', () => {

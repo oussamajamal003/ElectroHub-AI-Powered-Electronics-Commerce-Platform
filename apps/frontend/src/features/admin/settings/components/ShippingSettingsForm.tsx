@@ -96,7 +96,7 @@ export function ShippingSettingsForm({ view, onDirtyChange, onSaved, onReload }:
       <div className={styles.fieldFull}>
         <Input label="Free Shipping Threshold ($)" value={draft.threshold} disabled={!draft.thresholdOn} inputMode="decimal" fullWidth
           placeholder="50.00" error={errors.freeShippingThreshold}
-          helperText="Applies to Standard delivery only. Enable Standard delivery and save these settings to offer it free at or above this subtotal."
+          helperText="Orders at or above this subtotal qualify for free Standard Delivery, even when the regular Standard Delivery option is disabled."
           onChange={event => { setDraft(current => ({ ...current, threshold: event.target.value })); clearError('freeShippingThreshold'); }} />
       </div>
       {view.methods.map((entry, index) => <div key={entry.method} className={styles.fieldFull}>
@@ -113,7 +113,8 @@ export function ShippingSettingsForm({ view, onDirtyChange, onSaved, onReload }:
       </label>
       {view.methods.map((entry, index) => <label key={entry.method} className={settingsStyles.option}>
         <Checkbox checked={draft.methods[entry.method].enabled} onCheckedChange={checked => setMethod(entry.method, { enabled: checked === true })} />
-        <span className={settingsStyles.optionText}>{ENABLE_LABEL[entry.method]}</span>
+        <span className={settingsStyles.optionText}>{entry.method === 'STANDARD' && draft.thresholdOn
+          ? 'Enable regular Standard Delivery for orders below the free-shipping threshold.' : ENABLE_LABEL[entry.method]}</span>
         {rowError(index, 'enabled') && <span className={styles.fieldError}>{rowError(index, 'enabled')}</span>}
       </label>)}
     </fieldset>

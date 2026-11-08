@@ -5,7 +5,7 @@ import { loadShippingConfig, shippingQuotes } from './shipping-config.js';
 export class CheckoutService {
   async get(userId: string, buyNow?: BuyNowInput) {
     const { data } = buyNow ? await buyNowProjection(userId, buyNow) : await currentCart(userId);
-    // Quotes come from the configured snapshot: disabled methods are absent and STANDARD is free at/above the threshold.
+    // The shared engine includes qualifying free STANDARD even when regular STANDARD is disabled.
     const shipping = await loadShippingConfig();
     return { cartRevision: data.revision, eligible: data.canCheckout, subtotal: data.subtotal, currency: data.currency,
       blockers: data.items.filter(item => item.availability !== 'AVAILABLE').map(item => ({ productId: item.productId, availability: item.availability })),
