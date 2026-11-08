@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import { startGoogle, callbackGoogle, completeGoogle, linkGoogle, prepareGoogleDeletionReauth } from '../controllers/google.controller.js';
 import {
   register,
@@ -28,6 +28,22 @@ import {
 } from '../middleware/rateLimiter.js';
 
 const router = Router();
+
+/** Shared customer email routes fail closed for database-resolved administrators. */
+const rejectAdminEmailChange = (req: Request, res: Response, next: NextFunction) => {
+  if (req.user?.role === 'ADMIN') {
+    res.status(403).json({ error: { code: 'ADMIN_ENDPOINT_REQUIRED', message: 'Administrators change email through the admin security flow.' } });
+    return;
+  }
+  next();
+};
+const rejectAdminEmailPatch = (req: Request, res: Response, next: NextFunction) => {
+  if (req.user?.role === 'ADMIN' && req.body && Object.prototype.hasOwnProperty.call(req.body, 'email')) {
+    res.status(403).json({ error: { code: 'ADMIN_ENDPOINT_REQUIRED', message: 'Administrators change email through the admin security flow.' } });
+    return;
+  }
+  next();
+};
 /**
  * @swagger
  * /auth/google/start:
@@ -461,7 +477,7 @@ router.get('/me', requireAuth, getCurrentUser);
  *       429:
  *         description: Profile update rate limit reached
  */
-router.patch('/me', requireAuth, resendVerificationRateLimiter, updateProfile);
+router.patch('/me', requireAuth, rejectAdminEmailPatch, resendVerificationRateLimiter, updateProfile);
 
 /**
  * @swagger
@@ -485,7 +501,7 @@ router.patch('/me', requireAuth, resendVerificationRateLimiter, updateProfile);
  *       400: { description: Invalid or expired code }
  *       401: { description: Unauthenticated }
  */
-router.post('/me/verify-email-change', requireAuth, verifyPendingEmailChange);
+router.post('/me/verify-email-change', requireAuth, rejectAdminEmailChange, requireRole('CUSTOMER'), verifyPendingEmailChange);
 
 /**
  * @swagger
@@ -501,7 +517,7 @@ router.post('/me/verify-email-change', requireAuth, verifyPendingEmailChange);
  *       401: { description: Unauthenticated }
  *       429: { description: Resend cooldown or request limit reached }
  */
-router.post('/me/resend-email-change', requireAuth, resendVerificationRateLimiter, resendPendingEmailChange);
+router.post('/me/resend-email-change', requireAuth, rejectAdminEmailChange, requireRole('CUSTOMER'), resendVerificationRateLimiter, resendPendingEmailChange);
 
 /**
  * @swagger

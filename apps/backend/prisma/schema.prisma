@@ -156,6 +156,7 @@ model User {
   adminWebAuthnCredentials      AdminWebAuthnCredential[]
   adminAuthChallenges           AdminAuthChallenge[]
   adminSessions                 AdminSession[]
+  adminEmailChangeAuthorization AdminEmailChangeAuthorization?
   adminInvitationsSent          AdminInvitation[]            @relation("AdminInvitationInviter")
   adminInvitationAccepted       AdminInvitation?             @relation("AdminInvitationAcceptedUser")
   adminMfaActivations           AdminMfaActivation[]         @relation("AdminMfaActivationTarget")
@@ -841,6 +842,9 @@ enum EmailType {
   ADMIN_INVITATION
   ADMIN_NOTIFICATION
   ADMIN_ACTIVATION
+  ADMIN_EMAIL_CHANGE_OTP
+  ADMIN_EMAIL_CHANGE_OLD
+  ADMIN_EMAIL_CHANGE_NEW
 }
 
 model OtpChallenge {
@@ -859,6 +863,7 @@ model OtpChallenge {
   lockedAt    DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  adminEmailChangeAuthorization AdminEmailChangeAuthorization?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1221,6 +1226,33 @@ model AdminSession {
 
   @@index([userId, createdAt])
   @@map("admin_sessions")
+}
+
+/// Short-lived, single-use proof that an administrator verified their password and recent MFA in one exact live session before
+/// confirming possession of a proposed email address. One row per administrator prevents parallel pending changes.
+model AdminEmailChangeAuthorization {
+  userId                String   @id @db.Uuid
+  currentEmail          String   @db.VarChar(255)
+  targetEmail           String   @db.VarChar(255)
+  sessionFamilyId       String   @db.Uuid
+  credentialFingerprint String   @db.VarChar(64)
+  securityFingerprint   String   @db.VarChar(64)
+  stepUpAt              DateTime
+  challengeId           String?  @unique @db.Uuid
+  expiresAt             DateTime
+  resendAvailableAt     DateTime
+  cancelledAt           DateTime?
+  consumedAt            DateTime?
+
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  challenge OtpChallenge? @relation(fields: [challengeId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sessionFamilyId])
+  @@index([expiresAt])
+  @@map("admin_email_change_authorizations")
 }
 
 model AdminInvitation {

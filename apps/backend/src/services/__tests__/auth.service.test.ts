@@ -603,4 +603,16 @@ describe('AuthService', () => {
       await expect(authService['repository'].findRotationSuccessor(sha('any'))).rejects.toBe(failure);
     });
   });
+
+  it('rejects ADMIN email initiation, verification and resend at the customer service boundary', async () => {
+    const admin = { id: '11111111-1111-4111-8111-111111111111', email: 'admin@example.test', pendingEmail: 'pending@example.test',
+      passwordHash: 'hash', firstName: 'Admin', lastName: 'User', isActive: true, role: { name: 'ADMIN' } };
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(admin as never);
+
+    await expect(authService.updateProfile(admin.id, { email: 'new@example.test' })).rejects.toMatchObject({ code: 'ADMIN_ENDPOINT_REQUIRED', statusCode: 403 });
+    await expect(authService.verifyPendingEmailChange(admin.id, '123456')).rejects.toMatchObject({ code: 'ADMIN_ENDPOINT_REQUIRED', statusCode: 403 });
+    await expect(authService.resendPendingEmailChange(admin.id)).rejects.toMatchObject({ code: 'ADMIN_ENDPOINT_REQUIRED', statusCode: 403 });
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.otpChallenge.updateMany).not.toHaveBeenCalled();
+  });
 });

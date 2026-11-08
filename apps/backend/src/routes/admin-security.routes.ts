@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import rateLimit from 'express-rate-limit';
 import { adminSecurityController as c } from '../controllers/admin-security.controller.js';
-import { adminGuard, requireAdminCapability, requireStepUp } from '../middleware/adminGuard.js';
+import { adminGuard, requireAdminCapability, requireFreshStepUp, requireStepUp } from '../middleware/adminGuard.js';
 import { env } from '../config/env.js';
 
 export const seedProvisioningRoutesEnabled = (config: { NODE_ENV: string; ADMIN_SEED_PROVISIONING_ENABLED?: string }) =>
@@ -24,6 +24,7 @@ const stepUpLimiter = limiter(10, 15 * 60 * 1000, req => req.user!.userId);
 const writes = limiter(30, 60 * 1000, req => req.user!.userId);
 // Password proof on change-password and self-deletion: keep guessing slow even inside a valid step-up window.
 const credentialWrites = limiter(5, 15 * 60 * 1000, req => req.user!.userId);
+const emailChangeWrites = limiter(5, 15 * 60 * 1000, req => req.user!.userId);
 
 export const preAuthRouter = Router();
 // Forgot password: unauthenticated by design, rate limited per IP; every proof is bound to a single-use recovery transaction.
@@ -60,6 +61,11 @@ adminSecurityRouter.use(['/admin/me', '/admin/administrators', '/admin/invitatio
 
 adminSecurityRouter.get('/admin/me/profile', c.profile);
 adminSecurityRouter.patch('/admin/me/profile', writes, c.updateProfile);
+adminSecurityRouter.get('/admin/me/email-change/status', c.emailChangeStatus);
+adminSecurityRouter.post('/admin/me/email-change/request', emailChangeWrites, requireFreshStepUp, c.requestEmailChange);
+adminSecurityRouter.post('/admin/me/email-change/resend', emailChangeWrites, requireFreshStepUp, c.resendEmailChange);
+adminSecurityRouter.post('/admin/me/email-change/verify', emailChangeWrites, requireFreshStepUp, c.verifyEmailChange);
+adminSecurityRouter.post('/admin/me/email-change/cancel', emailChangeWrites, c.cancelEmailChange);
 adminSecurityRouter.post('/admin/me/security/step-up', stepUpLimiter, c.stepUp);
 adminSecurityRouter.post('/admin/me/security/step-up/webauthn/options', stepUpLimiter, c.stepUpWebauthnOptions);
 adminSecurityRouter.post('/admin/me/security/step-up/webauthn', stepUpLimiter, c.stepUpWebauthn);

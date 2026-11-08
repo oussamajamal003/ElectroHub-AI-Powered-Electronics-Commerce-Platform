@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { requireAuth, requireRole } from './auth.js';
 import { prisma } from '../lib/prisma.js';
-import { hasRecentStepUp } from '../services/admin-session.js';
+import { hasRecentStepUp, STEP_UP_WINDOW_MS } from '../services/admin-session.js';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -18,6 +18,20 @@ export function requireStepUp(req: Request, res: Response, next: NextFunction) {
     return;
   }
   if (!hasRecentStepUp(req.adminSession)) {
+    res.status(403).json({ error: { code: 'STEP_UP_REQUIRED', message: 'Confirm it is you to continue.' } });
+    return;
+  }
+  next();
+}
+
+/** Email identity changes require an explicit step-up proof; the MFA used at initial sign-in alone is not enough. */
+export function requireFreshStepUp(req: Request, res: Response, next: NextFunction) {
+  const stepUpAt = req.adminSession?.stepUpAt;
+  if (!req.adminSession) {
+    res.status(401).json({ error: { code: 'ADMIN_SESSION_INVALID', message: 'Your administrator session has ended. Sign in again.' } });
+    return;
+  }
+  if (!stepUpAt || Date.now() - stepUpAt.getTime() > STEP_UP_WINDOW_MS) {
     res.status(403).json({ error: { code: 'STEP_UP_REQUIRED', message: 'Confirm it is you to continue.' } });
     return;
   }

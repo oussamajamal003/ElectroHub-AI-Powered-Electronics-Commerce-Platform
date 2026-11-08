@@ -10,6 +10,7 @@ import { useAdminProfile, useUpdateAdminProfile, type AdminProfile } from '@/fea
 import { AdminPageSkeleton, ButtonLink, PageHeader, QueryProblem, StatusPill, useAdminToast } from '@/features/admin/shared/AdminUi';
 import { fieldErrors } from '@/features/admin/shared/api';
 import { ChangePasswordSection, DangerZoneSection } from '@/features/admin/security/components/AdminAccountSections';
+import { AdminEmailChangeDialog } from '@/features/admin/security/components/AdminEmailChangeDialog';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
 
 export function AdminProfilePage() {
@@ -92,7 +93,10 @@ function ProfileContent({ profile }: { profile: AdminProfile }) {
               error={fieldError.lastName} autoComplete="family-name" maxLength={100} fullWidth disabled={save.isPending} />
           </div>
           <Input id="profile-email" name="email" label="Email address" value={profile.email} readOnly fullWidth autoComplete="email"
-            helperText={profile.emailVerified ? 'Verified. Email changes are not available from this page.' : 'Not verified. Email changes are not available from this page.'} />
+            helperText={profile.emailVerified ? 'Verified. Used for administrator sign-in and security notifications.' : 'Not verified. Contact an Owner to resolve the account status.'} />
+          <div className={styles.formActions}>
+            <AdminEmailChangeDialog currentEmail={profile.email} />
+          </div>
           <div className={styles.formActions}>
             <Button type="button" variant="outline" onClick={discard} disabled={!dirty || save.isPending}>Discard</Button>
             <Button type="submit" disabled={!dirty} isLoading={save.isPending}>Save changes</Button>

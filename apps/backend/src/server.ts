@@ -1,4 +1,5 @@
 import { startDeletionNoticeRetry } from './services/admin-deletion-email.js';
+import { startAdminEmailChangeNoticeRetry } from './services/admin-email-change-email.js';
 import app, { corsOrigin } from './app.js';
 import { env } from './config/env.js';
 import { logger, flushLogsWithDeadline, installFatalLogging } from './utils/logger.js';
@@ -18,6 +19,7 @@ const PORT = env.PORT;
 let stopRecovery: (() => Promise<void>) | null = null;
 let stopRecommendationRetention: (() => Promise<void>) | null = null;
 let stopDeletionNoticeRetry: (() => void) | null = null;
+let stopAdminEmailChangeNoticeRetry: (() => void) | null = null;
 installFatalLogging();
 // Task 04.6: a partial or out-of-range DELIVERY_ORIGIN_* configuration refuses to boot; unset leaves the map off.
 logger.info('Delivery map origin resolved', { event: 'delivery.map.origin_resolved', configured: deliveryOrigin() !== null });
@@ -81,6 +83,7 @@ export const server = app.listen(PORT, async () => {
   // The bounded retention runner owns retries if startup DB readiness is degraded.
   if (!shuttingDown) stopRecommendationRetention = startOperationalRecommendationRetentionRunner();
   if (!shuttingDown) stopDeletionNoticeRetry = startDeletionNoticeRetry();
+  if (!shuttingDown) stopAdminEmailChangeNoticeRetry = startAdminEmailChangeNoticeRetry();
   if (isDbReady && !shuttingDown) {
     deliverySimulation.recoverOrphans().catch(() => logger.warn('Delivery simulation recovery failed', { event: 'delivery.simulation.recovery_failed' }));
   }
@@ -100,6 +103,7 @@ export const gracefulShutdown = (signal: string) => {
   const recoveryStopped = stopRecovery?.();
   const retentionStopped = stopRecommendationRetention?.();
   stopDeletionNoticeRetry?.();
+  stopAdminEmailChangeNoticeRetry?.();
   logger.info(`${signal} signal received. Closing HTTP server.`, { event: 'server.stopping' });
   deliverySimulation.stopAll();
   stopRealtimeMetrics();

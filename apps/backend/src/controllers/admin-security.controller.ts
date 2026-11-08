@@ -13,6 +13,7 @@ import { prisma } from '../lib/prisma.js';
 import { AuthService } from '../services/auth.service.js';
 import { OtpVerificationError } from '../services/otp.service.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { adminEmailChangeService } from '../services/admin-email-change.service.js';
 
 /**
  * Task 05.2 administrator security HTTP layer. Thin: validation (strict Zod), request metadata and response shaping only; every
@@ -26,6 +27,7 @@ const recoveryCode = z.string().trim().min(12).max(20);
 const name = z.string().trim().min(1).max(100);
 const label = z.string().trim().min(1).max(60);
 const currentPassword = z.string().min(1, 'Enter your current password.').max(128);
+const emailAddress = z.string().trim().email('Enter a valid email address.').max(255).transform(value => value.toLowerCase());
 const password = z.string().min(8, 'Use at least 8 characters.').max(128)
   .regex(/[a-z]/, 'Add a lowercase letter.').regex(/[A-Z]/, 'Add an uppercase letter.').regex(/\d/, 'Add a number.');
 // WebAuthn JSON is verified cryptographically by @simplewebauthn/server; only its outer size/shape is bounded here.
@@ -39,6 +41,11 @@ const handle = (fn: Handler) => async (req: Request, res: Response, next: NextFu
   try {
     await fn(req, res);
   } catch (error) {
+    if (error instanceof OtpVerificationError) {
+      res.status(error.statusCode).json({ error: { code: error.code, message: error.message,
+        ...(error.attemptsRemaining === undefined ? {} : { attemptsRemaining: error.attemptsRemaining }) } });
+      return;
+    }
     if (error instanceof ZodError) {
       res.status(400).json({ error: { code: 'VALIDATION_FAILED', message: 'Check the highlighted fields.',
         fields: error.issues.map(issue => ({ field: issue.path.join('.') || null, message: issue.message })) } });
@@ -187,6 +194,24 @@ export const adminSecurityController = {
     const body = z.object({ firstName: name, lastName: name }).strict().parse(req.body);
     await adminAccountService.updateProfile(userId(req), body);
     res.json({ data: await adminAccountService.profile(userId(req), session(req)) });
+  }),
+  requestEmailChange: handle(async (req, res) => {
+    const body = z.object({ newEmail: emailAddress, currentPassword }).strict().parse(req.body);
+    res.status(202).json({ data: await adminEmailChangeService.request(userId(req), session(req).familyId, body) });
+  }),
+  emailChangeStatus: handle(async (req, res) => {
+    res.json({ data: await adminEmailChangeService.status(userId(req), session(req).familyId) });
+  }),
+  resendEmailChange: handle(async (req, res) => {
+    res.json({ data: await adminEmailChangeService.resend(userId(req), session(req).familyId) });
+  }),
+  verifyEmailChange: handle(async (req, res) => {
+    const body = z.object({ code: totpCode }).strict().parse(req.body);
+    res.json({ data: await adminEmailChangeService.verify(userId(req), session(req).familyId, body.code, meta(req)) });
+  }),
+  cancelEmailChange: handle(async (req, res) => {
+    await adminEmailChangeService.cancel(userId(req), session(req).familyId);
+    res.json({ data: { cancelled: true } });
   }),
   stepUp: handle(async (req, res) => {
     const body = z.discriminatedUnion('method', [z.object({ method: z.literal('TOTP'), code: totpCode }).strict(),

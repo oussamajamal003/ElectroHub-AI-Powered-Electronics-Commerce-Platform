@@ -438,6 +438,10 @@ export class AuthService {
     if (!user || !user.isActive) {
       throw new Error('User not found or inactive');
     }
+    // Defense in depth: ADMIN is resolved from the stored Role relation, never from a caller-provided role/JWT claim.
+    if (user.role.name === 'ADMIN' && data.email !== undefined) {
+      throw new AppError('Administrators change email from the admin profile security flow.', 403, 'ADMIN_ENDPOINT_REQUIRED');
+    }
 
     const normalizedEmail = data.email ? normalizeEmail(data.email) : user.email;
     const firstName = data.firstName?.trim() ?? user.firstName;
@@ -512,7 +516,7 @@ export class AuthService {
     const normalizedNewEmail = normalizeEmail(newEmail);
     const user = await this.repository.findUserByEmail(normalizedCurrentEmail);
 
-    if (!user || !user.isActive || user.emailVerifiedAt || !(await verifyPassword(passwordPlain, user.passwordHash))) {
+    if (!user || user.role.name !== 'CUSTOMER' || !user.isActive || user.emailVerifiedAt || !(await verifyPassword(passwordPlain, user.passwordHash))) {
       return {
         message: 'If verification is pending, a code will be sent when available.',
         email: normalizedNewEmail,
@@ -561,6 +565,8 @@ export class AuthService {
 
   async verifyPendingEmailChange(userId: string, code: string) {
     const user = await this.repository.findUserById(userId);
+    if (user?.role.name === 'ADMIN') throw new AppError('Administrators verify email changes through the admin security flow.', 403, 'ADMIN_ENDPOINT_REQUIRED');
+    if (user?.role.name !== 'CUSTOMER') throw new Error('No active verification process found');
     if (!user || !user.isActive || !user.pendingEmail) {
       throw new Error('No active verification process found');
     }
@@ -593,6 +599,8 @@ export class AuthService {
 
   async resendPendingEmailChange(userId: string) {
     const user = await this.repository.findUserById(userId);
+    if (user?.role.name === 'ADMIN') throw new AppError('Administrators resend email verification through the admin security flow.', 403, 'ADMIN_ENDPOINT_REQUIRED');
+    if (user?.role.name !== 'CUSTOMER') throw new Error('No active verification process found');
     if (!user?.pendingEmail) throw new Error('No active verification process found');
     const challengeId = await otpService.getChallengeIdByUserAndDestination(userId, user.pendingEmail, OtpPurpose.EMAIL_CHANGE);
     if (!challengeId) throw new Error('No active verification process found');

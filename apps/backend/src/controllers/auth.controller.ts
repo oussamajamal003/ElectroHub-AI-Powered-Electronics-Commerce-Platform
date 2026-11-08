@@ -301,6 +301,12 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
     const data = req.body;
     const parsedData = updateProfileSchema.parse(data);
 
+    // Role is freshly resolved from the database by requireAuth. ADMIN email changes belong to the
+    // MFA-assured /api/admin/me/email-change workflow, never the shared customer profile endpoint.
+    if (req.user?.role === 'ADMIN' && Object.prototype.hasOwnProperty.call(parsedData, 'email')) {
+      return res.status(403).json({ error: { code: 'ADMIN_ENDPOINT_REQUIRED', message: 'Administrators change email from the admin profile security flow.' } });
+    }
+
     const user = await authService.updateProfile(userId, parsedData);
     logger.info('AUTH_UPDATE_PROFILE_SUCCESS', { userId });
     res.status(200).json({ user, message: 'Profile updated successfully' });
@@ -385,6 +391,9 @@ export const verifyResetOtp = async (req: Request, res: Response, next: NextFunc
 
 export const verifyPendingEmailChange = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (req.user?.role === 'ADMIN') {
+      return res.status(403).json({ error: { code: 'ADMIN_ENDPOINT_REQUIRED', message: 'Administrators verify email changes through the admin security flow.' } });
+    }
     const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -405,6 +414,9 @@ export const verifyPendingEmailChange = async (req: Request, res: Response, next
 
 export const resendPendingEmailChange = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (req.user?.role === 'ADMIN') {
+      return res.status(403).json({ error: { code: 'ADMIN_ENDPOINT_REQUIRED', message: 'Administrators resend email verification through the admin security flow.' } });
+    }
     const userId = req.user?.userId;
     if (!userId) return res.status(401).json({ error: 'Not authenticated' });
     const result = await authService.resendPendingEmailChange(userId);

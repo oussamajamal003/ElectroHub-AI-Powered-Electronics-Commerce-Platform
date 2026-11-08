@@ -18,6 +18,7 @@ vi.mock('../../lib/prisma.js', () => ({
       findFirst: vi.fn(),
     },
     $transaction: vi.fn(),
+    $queryRaw: vi.fn(),
   },
 }));
 
@@ -128,6 +129,26 @@ describe('Auth Controller - /api/auth/me', () => {
 
     expect(res.status).toBe(500);
     expect(res.body.error.code).toBe('INTERNAL_SERVER_ERROR');
+  });
+
+  it('blocks all shared customer email-change endpoints for an authenticated ADMIN before any profile or OTP mutation', async () => {
+    const adminId = '11111111-1111-4111-8111-111111111111';
+    const familyId = '22222222-2222-4222-8222-222222222222';
+    vi.mocked(prisma.user.findFirst).mockResolvedValue({ ...validUser, role: { ...validUser.role, name: 'ADMIN' } } as never);
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ familyId, mfaMethod: 'TOTP', mfaVerifiedAt: new Date(), stepUpAt: null, lastSeenAt: new Date() }] as never);
+    const token = generateAccessToken({ userId: adminId, role: 'ADMIN', sessionId: familyId });
+
+    const responses = await Promise.all([
+      request(app).patch('/api/auth/me').set('Authorization', `Bearer ${token}`).send({ email: 'new@example.test' }),
+      request(app).post('/api/auth/me/verify-email-change').set('Authorization', `Bearer ${token}`).send({ code: '123456' }),
+      request(app).post('/api/auth/me/resend-email-change').set('Authorization', `Bearer ${token}`),
+    ]);
+
+    for (const response of responses) {
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('ADMIN_ENDPOINT_REQUIRED');
+    }
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 });
 

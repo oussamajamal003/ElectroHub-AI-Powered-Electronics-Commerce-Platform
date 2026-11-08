@@ -1,0 +1,80 @@
+@use "@/styles/abstracts" as *;
+
+.dialog {
+  gap: $spacing-4;
+}
+
+.form {
+  display: grid;
+  gap: $spacing-4;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: $spacing-3;
+  margin-top: $spacing-2;
+}
+
+.feedback {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: $spacing-2 $spacing-4;
+  color: $color-text-secondary;
+  font-size: $font-size-xs;
+}
+
+.resend {
+  align-self: flex-start;
+}
+
+.status {
+  margin: 0;
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+}
+
+.success {
+  display: grid;
+  justify-items: center;
+  gap: $spacing-4;
+  text-align: center;
+
+  :global([data-radix-dialog-title]) {
+    width: 100%;
+  }
+
+  :global([data-radix-dialog-description]) {
+    line-height: 1.65;
+  }
+}
+
+.successIcon {
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border-radius: 50%;
+  background: $color-success-background;
+  color: $color-success-foreground;
+
+  svg {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .actions {
+    flex-direction: column-reverse;
+
+    button {
+      width: 100%;
+    }
+  }
+
+  .feedback {
+    flex-direction: column;
+  }
+}

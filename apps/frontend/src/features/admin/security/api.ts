@@ -27,6 +27,14 @@ export interface AdminProfile {
   /** Advisory: the server re-checks inside the deletion transaction. LAST_OWNER: ordinary deletion is refused; the Owner transfers ownership as part of deleting instead. */
   deletion?: { allowed: boolean; reason: 'LAST_OWNER' | null };
 }
+export interface AdminEmailChangeState {
+  pendingEmail: string;
+  expiresAt: string;
+  otpExpiresAt: string;
+  resendAvailableAt: string;
+  deliveryStatus: 'ACCEPTED_BY_PROVIDER' | 'FAILED';
+  attemptsRemaining?: number;
+}
 export interface TotpFactorSummary { id: string; label: string; createdAt: string; lastUsedAt: string | null }
 export interface PasskeySummary { id: string; label: string; createdAt: string; lastUsedAt: string | null }
 export interface AdminFactors {
@@ -179,6 +187,13 @@ export const adminSecurityApi = {
   getProfile: (signal?: AbortSignal) => enveloped<AdminProfile>(`${ME}/profile`, { signal }),
   updateProfile: (body: { firstName: string; lastName: string }) =>
     enveloped<AdminProfile>(`${ME}/profile`, { method: 'PATCH', data: body }),
+
+  requestEmailChange: (body: { newEmail: string; currentPassword: string }) =>
+    enveloped<AdminEmailChangeState>(`${ME}/email-change/request`, { method: 'POST', data: body }),
+  emailChangeStatus: () => enveloped<{ active: false } | ({ active: true } & Omit<AdminEmailChangeState, 'deliveryStatus'>)>(`${ME}/email-change/status`),
+  resendEmailChange: () => enveloped<AdminEmailChangeState>(`${ME}/email-change/resend`, { method: 'POST' }),
+  verifyEmailChange: (body: { code: string }) => enveloped<{ changed: true; email: string; signedOut: true }>(`${ME}/email-change/verify`, { method: 'POST', data: body }),
+  cancelEmailChange: () => enveloped<{ cancelled: true }>(`${ME}/email-change/cancel`, { method: 'POST' }),
 
   stepUp: (body: { method: StepUpMethod; code: string }) =>
     apiClient<void>(`${ME}/security/step-up`, { method: 'POST', data: body }),
