@@ -86,3 +86,58 @@ test('Start again stays next to the active MFA action', async ({ page }) => {
     await page.screenshot({ path: `test-results/auth-keyboard/mfa-compact-actions-${width}.png` });
   }
 });
+
+for (const method of ['totp', 'recovery'] as const) {
+  test(`Verify and sign in supports keyboard activation and retry for ${method}`, async ({ page }) => {
+    await page.route('**/api/auth/login', route => route.fulfill({ status: 200,
+      contentType: 'application/json', body: JSON.stringify({ requiresMfa: true,
+        mfaToken: 'synthetic-keyboard-only', expiresAt: new Date(Date.now() + 300_000).toISOString(),
+        factors: { totp: true, passkey: false, recoveryCode: true }, enrollmentRequired: false }) }));
+    let requests = 0;
+    let release = () => {};
+    await page.route(`**/api/auth/admin/mfa/${method}/verify`, async route => {
+      requests++;
+      await new Promise<void>(resolve => { release = resolve; });
+      await route.fulfill({ status: 401, contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'MFA_CODE_INVALID', message: 'Invalid code' } }) });
+    });
+    await page.getByLabel('Email Address').focus();
+    await page.keyboard.type('keyboard@qa.invalid');
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('Synthetic-invalid-password');
+    await page.keyboard.press('Enter');
+    const tab = page.getByRole('tab', { name: 'Authenticator app', exact: true });
+    await expect(tab).toBeFocused();
+    if (method === 'recovery') await page.keyboard.press('End');
+    const field = page.getByRole('textbox', { name: method === 'totp' ? '6-digit code' : 'Recovery code', exact: true });
+    // Radix panel is itself a tab stop before its form input.
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    await expect(field).toBeFocused();
+    const button = page.getByRole('button', { name: 'Verify and sign in', exact: true });
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const key of ['Enter', 'Space']) {
+        await field.focus();
+        await page.keyboard.type(method === 'totp' ? '123456' : 'synthetic-invalid-code');
+        await page.keyboard.press('Tab');
+        await expect(button).toBeFocused();
+        expect(await button.evaluate(element => getComputedStyle(element).outlineStyle)).not.toBe('none');
+        const before = requests;
+        await page.keyboard.press(key);
+        await expect.poll(() => requests).toBe(before + 1);
+        await expect(button).toBeDisabled();
+        await page.keyboard.press('Enter');
+        await page.keyboard.press('Space');
+        expect(requests).toBe(before + 1);
+        release();
+        await expect(button).toBeEnabled();
+        await expect(field).toHaveValue('');
+        await expect(button).toBeFocused();
+        await expect(field).toHaveAttribute('aria-invalid', 'true');
+        await expect(page).toHaveURL(/\/admin\/login$/);
+      }
+    }
+    await page.screenshot({ path: `test-results/auth-keyboard/verify-signin-${method}.png` });
+  });
+}
