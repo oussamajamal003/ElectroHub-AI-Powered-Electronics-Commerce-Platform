@@ -24,7 +24,7 @@ const diagnosticsLogger = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), erro
 const db = vi.hoisted(() => ({ user: { findFirst: vi.fn() }, cart: { findUnique: vi.fn() }, product: { findMany: vi.fn() },
   cartItem: { findMany: vi.fn(), deleteMany: vi.fn() }, order: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn() }, inventory: { update: vi.fn() },
   paymentAttempt: { findUnique: vi.fn(), update: vi.fn() }, paymentAttemptItem: { findMany: vi.fn() },
-  paymentWork: { update: vi.fn() }, $queryRaw: vi.fn(), $transaction: vi.fn() }));
+  paymentWork: { update: vi.fn() }, storeSettings: { findUnique: vi.fn() }, $queryRaw: vi.fn(), $transaction: vi.fn() }));
 vi.mock('../services/shipping-config.js', async original => ({ ...await original<typeof import('../services/shipping-config.js')>(), loadShippingConfig: vi.fn(async () => currentShippingSnapshot()) }));
 vi.mock('../lib/prisma.js', () => ({ prisma: db }));
 vi.mock('../utils/logger.js', () => ({ logger: diagnosticsLogger, logSafely: vi.fn() }));
@@ -51,6 +51,7 @@ function prepareAttempt(input = body()) {
 }
 beforeEach(() => {
   vi.resetAllMocks(); Object.assign(state, { quantity: 2, stock: 5, active: true, inventory: true, role: 'CUSTOMER' });
+  db.storeSettings.findUnique.mockResolvedValue(null);
   db.user.findFirst.mockResolvedValue({ id: state.userId, role: { name: state.role } });
   db.cart.findUnique.mockImplementation(async () => ({ id: state.cartId, items: state.quantity ? [{ id: 'line', productId: state.productId, quantity: state.quantity }] : [] }));
   db.cartItem.findMany.mockResolvedValue([{ productId: state.productId }]);

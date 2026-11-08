@@ -68,6 +68,7 @@ describe('Buy Now Concurrency, Scope Collisions & Nullable Cart Recovery', () =>
     });
 
     db = {
+      storeSettings: { findUnique: vi.fn().mockResolvedValue(null) },
       user: {
         findFirst: vi.fn().mockImplementation(async ({ where }) => {
           if (where.id === userId && where.isActive) return { id: userId, role: { name: 'CUSTOMER' } };

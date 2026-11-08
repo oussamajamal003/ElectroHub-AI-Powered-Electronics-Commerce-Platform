@@ -157,8 +157,9 @@ describe('AdminDashboardService.overview', () => {
     expect(overview.inventory).toMatchObject({ outOfStock: 3, untracked: 4 });
     expect(overview.fulfillment).toEqual({ awaitingFulfillment: 0, preparing: 0, outForDelivery: 0 });
     const sql = String(db.$queryRaw.mock.calls[0]![0].strings.join(''));
-    expect(sql).toContain(`date_trunc('day', "paidAt")`);
-    expect(sql).not.toContain('AT TIME ZONE');
+    expect(sql).toContain(`date_trunc('day', "paidAt" AT TIME ZONE 'UTC' AT TIME ZONE`);
+    expect(sql).toContain(`to_char(date_trunc('day'`);
+    expect(sql).toContain('AT TIME ZONE');
   });
 });
 
