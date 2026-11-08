@@ -422,6 +422,12 @@ Verification: `admin-signin-keyboard.spec.ts` passed 5/5 with actual keyboard ev
 
 Verify and sign in follow-up (2026-11-08): two additional Chromium scenarios passed for TOTP and recovery, each exercising Tab reachability, visible focus, Enter/Space activation, single-request pending guards and focus restoration after rejection at 390/768/1440. This is 12 button submission/retry checks using synthetic rejected codes and a restricted pre-auth challenge, with no successful authentication mocked, session issued or database accessed. `verify-signin-{totp,recovery}.png` screenshots were captured and inspected. No application correction was necessary; regression coverage is in `admin-signin-keyboard.spec.ts`.
 
+### Top products catalog images — 2026-11-08
+
+Analytics products now includes `image: { url, altText } | null` in both rankings. A scalar lookup selects one PUBLISHED catalog image using the same primary/position/id ordering as the catalog; no image join multiplies sales aggregates. Top products reuses ProductImage with lazy loading and the existing missing/broken-image fallback, retaining the product name link, responsive dimensions and accessible data table. No schema or migration change.
+
+Verification: frontend Analytics 20/20 and backend Analytics 18/18 unit tests; affected disposable PostgreSQL business file 9/9, including actual primary selection, unpublished exclusion, secondary fallback, no-image nulls and unchanged totals/ranks. Frontend/backend typecheck, lint and builds passed (three existing frontend lint warnings; existing build warnings). `node scripts/analytics-product-images-qa.cjs` passed on the existing Analytics Storybook story at 390/768/1440 with loaded-photo and missing/broken-photo assertions and no page overflow. Screenshots `test-results/analytics-product-images/top-products-{390,768,1440}.png` and `top-products-broken-image.png` were captured; mobile/desktop/failure screenshots inspected against the existing ranked layout and approved Analytics page reference. Browser data is synthetic; shared DEV and PROD were not accessed.
+
 ## Administrator forgot-password and account recovery
 
 - Flow: `/admin/login` â†’ Forgot Password? â†’ `/admin/forgot-password`: email â†’ email code â†’ an already-registered factor (authenticator, passkey or single-use recovery code) â†’ new password â†’ success â†’ normal password + MFA sign-in. No step returns a session or token; the recovery and reset authorizations live only in component state.

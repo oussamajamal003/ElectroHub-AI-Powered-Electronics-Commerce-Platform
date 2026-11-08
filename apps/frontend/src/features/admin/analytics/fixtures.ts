@@ -40,8 +40,8 @@ export const overviewFixture = envelope<OverviewData>({
 export const productsFixture = envelope<ProductsData>({
   limit: 10,
   byUnits: [
-    { productId: 'p-1', name: 'Studio Monitor Headphones', status: 'ACTIVE', currency: 'USD', units: 18, amount: '2250.00', orders: 14 },
-    { productId: 'p-2', name: 'Mechanical Keyboard TKL', status: 'INACTIVE', currency: 'USD', units: 9, amount: '810.00', orders: 8 },
+    { productId: 'p-1', name: 'Studio Monitor Headphones', status: 'ACTIVE', image: { url: '/images/catalog/headphones.jpg', altText: 'Studio headphones' }, currency: 'USD', units: 18, amount: '2250.00', orders: 14 },
+    { productId: 'p-2', name: 'Mechanical Keyboard TKL', status: 'INACTIVE', image: null, currency: 'USD', units: 9, amount: '810.00', orders: 8 },
   ],
   byAmount: [],
 });

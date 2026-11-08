@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { DollarSign, Minus, Package, ShoppingCart, TrendingDown, TrendingUp, Users } from 'lucide-react';
 import { DataTable, type Column } from '@/components/ui/DataTable';
+import { ProductImage } from '@/components/ui/ProductImage';
 import {
   ANALYTICS_PERIODS, DEFAULT_ANALYTICS_PERIOD, useAnalyticsCategories, useAnalyticsCustomers, useAnalyticsDeliveries,
   useAnalyticsImageSearch, useAnalyticsInventory, useAnalyticsOverview, useAnalyticsProducts, useAnalyticsRecommendations,
@@ -273,7 +274,7 @@ function TopProducts({ rows }: { rows: ProductRow[] }) {
     <ol className={local.rankedProducts} aria-label="Top products ranked by units sold">
       {rows.map((row, index) => <li className={local.productRank} key={`${row.productId}:${row.currency}`}>
         <span className={local.rankNumber} aria-label={`Rank ${index + 1}`}>{String(index + 1).padStart(2, '0')}</span>
-        <span className={local.productPlaceholder} aria-hidden="true">{row.name.trim().charAt(0).toUpperCase() || <Package size={18} />}</span>
+        <ProductImage src={row.image?.url} alt="" fallbackText="" loading="lazy" containerClassName={local.productThumbnail} />
         <span className={local.productDetails}>
           <Link className={local.productName} to={`/admin/products/${encodeURIComponent(row.productId)}/edit`}>{row.name}</Link>
           <span className={local.productBarTrack} aria-hidden="true"><span className={local.productBar} style={{ width: `${Math.max(row.units > 0 ? 2 : 0, (row.units / maxUnits) * 100)}%`, background: seriesColor(index) }} /></span>

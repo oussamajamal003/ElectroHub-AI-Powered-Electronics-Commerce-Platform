@@ -117,8 +117,7 @@
 .productRank { display: grid; grid-template-columns: 2.25rem 2.75rem minmax(0, 1fr) auto; align-items: center; gap: $spacing-3;
   padding: $spacing-3; border: 1px solid $color-border; border-radius: $radius-md; min-width: 0; }
 .rankNumber { color: $color-text-muted; font-family: $font-family-mono; font-size: $font-size-xs; font-variant-numeric: tabular-nums; }
-.productPlaceholder { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border: 1px solid $color-border; background: $color-surface; color: $color-primary;
-  font-weight: $font-weight-semibold; }
+.productThumbnail { width: 2.75rem; height: 2.75rem; border: 1px solid $color-border; border-radius: $radius-sm; }
 .productDetails { display: grid; gap: $spacing-1; min-width: 0; }
 .productName, .categoryName { color: $color-text-primary; font-weight: $font-weight-medium; overflow-wrap: anywhere; text-decoration: none;
   &:hover { color: $color-primary; text-decoration: underline; }
@@ -138,7 +137,7 @@
 
 @media (max-width: 520px) {
   .productRank { grid-template-columns: 1.75rem 2.5rem minmax(0, 1fr); gap: $spacing-2; }
-  .productPlaceholder { width: 2.5rem; height: 2.5rem; }
+  .productThumbnail { width: 2.5rem; height: 2.5rem; }
   .productAmount { grid-column: 3; }
   .categoryHeading { align-items: flex-start; flex-direction: column; gap: $spacing-1; }
 }

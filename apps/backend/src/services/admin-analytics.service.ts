@@ -114,7 +114,7 @@ const bucketExpression = (granularity: Granularity, column: '"paidAt"' | 'u."cre
 
 type CurrencyTotal = { currency: string; amount: Prisma.Decimal; orders: bigint | number };
 type ProductRow = { productId: string; currency: string; units: bigint | number; amount: Prisma.Decimal; orders: bigint | number;
-  name: string; status: string; unitRank: bigint | number; amountRank: bigint | number };
+  name: string; status: string; image: { url: string; altText: string | null } | null; unitRank: bigint | number; amountRank: bigint | number };
 type CategoryRow = { categoryId: string; name: string; currency: string; units: bigint | number; amount: Prisma.Decimal };
 type BucketRow = { bucket: string; currency: string; amount: Prisma.Decimal; orders: bigint | number };
 type CustomerBucketRow = { bucket: string; count: bigint | number };
@@ -231,8 +231,14 @@ export class AdminAnalyticsService {
           ROW_NUMBER() OVER (PARTITION BY l."currency" ORDER BY l.amount DESC, l.units DESC, l."productId" ASC) AS "amountRank"
         FROM lines l JOIN "products" pr ON pr."id" = l."productId"
       )
-      SELECT * FROM ranked WHERE "unitRank" <= ${TOP_LIMIT} OR "amountRank" <= ${TOP_LIMIT}`);
-    const row = (item: ProductRow) => ({ productId: item.productId, name: item.name, status: item.status, currency: item.currency,
+      SELECT ranked.*, (
+        SELECT jsonb_build_object('url', pi."url", 'altText', pi."altText")
+        FROM "product_images" pi
+        WHERE pi."productId" = ranked."productId" AND pi."mediaState" = 'PUBLISHED'
+        ORDER BY pi."isPrimary" DESC, pi."position" ASC, pi."id" ASC LIMIT 1
+      ) AS image
+      FROM ranked WHERE "unitRank" <= ${TOP_LIMIT} OR "amountRank" <= ${TOP_LIMIT}`);
+    const row = (item: ProductRow) => ({ productId: item.productId, name: item.name, status: item.status, image: item.image ?? null, currency: item.currency,
       units: toNumber(item.units), amount: money(decimal(item.amount)), orders: toNumber(item.orders) });
     const byUnits = rows.filter(item => toNumber(item.unitRank) <= TOP_LIMIT)
       .sort((a, b) => toNumber(a.unitRank) - toNumber(b.unitRank)).map(row);

@@ -90,6 +90,25 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     expect(JSON.stringify(products.data)).toContain(ids.p1!);
   });
 
+  it('ANA-01 images select one published catalog thumbnail without multiplying sales', async () => {
+    const before = (await analytics.products('30d')).data;
+    await prisma.productImage.createMany({ data: [
+      { productId: ids.p1!, url: '/secondary.jpg', isPrimary: false, sortOrder: 0 },
+      { productId: ids.p1!, url: '/retired.jpg', isPrimary: false, sortOrder: -1, mediaState: 'RETIRED' },
+      { productId: ids.p1!, url: '/later.jpg', isPrimary: false, sortOrder: 2 },
+      { productId: ids.p1!, url: '/primary.jpg', altText: 'Catalog primary', isPrimary: true, sortOrder: 5 },
+    ] });
+    const after = (await analytics.products('30d')).data;
+    for (const key of ['byUnits', 'byAmount'] as const) {
+      const withoutImage = (rows: typeof after.byUnits) => rows.map(({ image: _image, ...row }) => row);
+      expect(withoutImage(after[key])).toEqual(withoutImage(before[key]));
+      expect(after[key].find(row => row.productId === ids.p1)?.image).toEqual({ url: '/primary.jpg', altText: 'Catalog primary' });
+      expect(after[key].find(row => row.productId === ids.p2)?.image).toBeNull();
+    }
+    await prisma.productImage.updateMany({ where: { productId: ids.p1! }, data: { isPrimary: false } });
+    expect((await analytics.products('30d')).data.byUnits.find(row => row.productId === ids.p1)?.image?.url).toBe('/secondary.jpg');
+  });
+
   it('ANA-02/ANA-03 recommendation CTR uses deduplicated events; conversion counts only the consenting click-then-paid order', async () => {
     const token = issueImpressionToken({ mode: 'POPULAR_PRODUCTS', strategy: 'MEASURED_POPULARITY', surface: 'home', productIds: [ids.p1!, ids.p2!] });
     await recommendationService.recordEvents(token, [{ productId: ids.p1!, type: 'IMPRESSION' }, { productId: ids.p2!, type: 'IMPRESSION' }, { productId: ids.p1!, type: 'CLICK' }]);

@@ -110,13 +110,15 @@ describe('overview', () => {
 describe('products and categories', () => {
   it('returns top products by units and by amount per currency, labelled with current names and status', async () => {
     const rows = [
-      { productId: 'p1', currency: 'USD', units: 9n, amount: D('900.00'), orders: 4n, name: 'Headphones', status: 'ACTIVE', unitRank: 1n, amountRank: 2n },
-      { productId: 'p2', currency: 'USD', units: 3n, amount: D('1200.00'), orders: 2n, name: 'Camera', status: 'INACTIVE', unitRank: 12n, amountRank: 1n },
+      { productId: 'p1', currency: 'USD', units: 9n, amount: D('900.00'), orders: 4n, name: 'Headphones', image: { url: '/headphones.jpg', altText: null }, status: 'ACTIVE', unitRank: 1n, amountRank: 2n },
+      { productId: 'p2', currency: 'USD', units: 3n, amount: D('1200.00'), orders: 2n, name: 'Camera', image: null, status: 'INACTIVE', unitRank: 12n, amountRank: 1n },
     ];
     const result = await service({ 'ranked AS': rows }).products('30d');
     expect(result.data.byUnits).toEqual([expect.objectContaining({ productId: 'p1', units: 9, amount: '900.00', status: 'ACTIVE' })]);
     expect(result.data.byAmount.map(row => row.productId)).toEqual(['p2', 'p1']);
     expect(result.data.byAmount[0]).toEqual(expect.objectContaining({ name: 'Camera', amount: '1200.00', status: 'INACTIVE' }));
+    expect(result.data.byUnits[0].image).toEqual({ url: '/headphones.jpg', altText: null });
+    expect(result.data.byAmount[0].image).toBeNull();
   });
 
   it('labels categories as the current catalog category and computes shares within each currency', async () => {

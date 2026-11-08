@@ -41,7 +41,7 @@ export interface ProductsData {
   byUnits: ProductRow[];
   byAmount: ProductRow[];
 }
-export interface ProductRow { productId: string; name: string; status: string; currency: string; units: number; amount: string; orders: number }
+export interface ProductRow { productId: string; name: string; status: string; image: { url: string; altText: string | null } | null; currency: string; units: number; amount: string; orders: number }
 
 export interface CategoriesData {
   basis: 'CURRENT_CATALOG_CATEGORY';

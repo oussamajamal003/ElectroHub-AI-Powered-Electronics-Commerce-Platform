@@ -145,6 +145,18 @@ describe('AdminAnalyticsPage', () => {
     expect(within(section).getByRole('img', { name: /Peripherals:.*30/ }).firstElementChild).toHaveStyle({ width: '30%' });
   });
 
+  it('shows catalog thumbnails and falls back when a product photo is missing or fails', () => {
+    renderPage();
+    const section = screen.getByRole('region', { name: 'Top products' });
+    const photo = section.querySelector('img')!;
+    expect(photo).toHaveAttribute('src', '/images/catalog/headphones.jpg');
+    expect(photo).toHaveAttribute('alt', ''); // The adjacent product link already names it.
+    expect(within(section).getAllByTestId('product-image-fallback')).toHaveLength(1);
+    fireEvent.error(photo);
+    expect(within(section).getAllByTestId('product-image-fallback')).toHaveLength(2);
+    expect(within(section).getByRole('link', { name: 'Studio Monitor Headphones' })).toBeInTheDocument();
+  });
+
   it('shows recommendation attribution item count and all available breakdowns', () => {
     const data = structuredClone(fx.recommendationsFixture);
     data.data.breakdown.byMode = [{ mode: 'PERSONALIZED', impressions: 700, clicks: 58, ctr: 58 / 700 }];
