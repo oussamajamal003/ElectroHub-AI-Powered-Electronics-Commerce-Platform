@@ -68,7 +68,7 @@ function AlertsMenu() {
         {attention > 0 && <span className={styles.badge} aria-hidden="true">{attention > 99 ? '99+' : attention}</span>}
       </button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" sideOffset={8} className={styles.menu}>
+    <DropdownMenuContent align="end" sideOffset={8} className={`${styles.menu} ${styles.animatedMenu}`}>
       <DropdownMenuLabel className={styles.menuLabel}>Operational alerts</DropdownMenuLabel>
       <DropdownMenuSeparator />
       {alerts.isPending && <p className={styles.menuNote} role="status">Loading alerts…</p>}
@@ -105,7 +105,7 @@ function ProfileMenu() {
         <span className={styles.avatar} aria-hidden="true">{initials(name, 'A')}</span>
       </button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" sideOffset={8} className={styles.menu}>
+    <DropdownMenuContent align="end" sideOffset={8} className={`${styles.menu} ${styles.animatedMenu}`}>
       <DropdownMenuLabel className={styles.profileLabel}>
         <strong>{name || 'Administrator'}</strong>
         {user?.email && <span>{user.email}</span>}

@@ -14,6 +14,28 @@ describe('twoStepStatus', () => {
     expect(twoStepStatus(row(), now)).toMatchObject({ label: 'Not set up', action: 'activate', canRevoke: false });
   });
 
+  it('never offers an emailed activation for a seed mailbox; points to operator setup instead', () => {
+    expect(twoStepStatus(row({ seedAccount: { recorded: true } }), now)).toMatchObject({ label: 'Operator setup required', action: 'none', canRevoke: false,
+      detail: 'Ask an operator for a one-time setup link.' });
+    expect(twoStepStatus(row({ seedAccount: { recorded: false } }), now).detail).toMatch(/must record this seed account/);
+  });
+
+  it('keeps only Revoke for an emailed link already sent to a seed mailbox', () => {
+    expect(twoStepStatus(row({ seedAccount: { recorded: false }, mfaActivation: activation() }), now)).toMatchObject({ label: 'Operator setup required', action: 'none', canRevoke: true });
+  });
+
+  it('shows an operator-issued setup link as pending with no console action; an expired one asks for a new link', () => {
+    const issued = activation({ purpose: 'SEED_PROVISIONING' as const });
+    expect(twoStepStatus(row({ seedAccount: { recorded: true }, mfaActivation: issued }), now)).toMatchObject({ label: 'Operator setup pending', detail: 'Setup link expires in 20 min', action: 'none', canRevoke: false });
+    expect(twoStepStatus(row({ seedAccount: { recorded: true }, mfaActivation: { ...issued, status: 'EXPIRED' as const } }), now)).toMatchObject({ label: 'Operator setup required', canRevoke: false });
+  });
+
+  it('a seed account that is enrolled, inactive or inside its setup window keeps the normal states', () => {
+    expect(twoStepStatus(row({ seedAccount: { recorded: true }, mfaEnrolled: true }), now).label).toBe('Enabled');
+    expect(twoStepStatus(row({ seedAccount: { recorded: true }, isActive: false }), now).label).toBe('Inactive');
+    expect(twoStepStatus(row({ seedAccount: { recorded: true }, enrollmentAuthorizedUntil: '2026-11-06T12:10:00.000Z' }), now).label).toBe('Setup pending');
+  });
+
   it('shows an enrolled administrator as enabled with no activation action', () => {
     expect(twoStepStatus(row({ mfaEnrolled: true, mfaActivation: activation() }), now)).toMatchObject({ tone: 'success', label: 'Enabled', action: 'none', canRevoke: false });
   });

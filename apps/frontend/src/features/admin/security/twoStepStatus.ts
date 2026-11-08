@@ -19,6 +19,16 @@ export function twoStepStatus(row: AdministratorSummary, now = new Date()): TwoS
   if (row.mfaEnrolled) return { tone: 'success', label: 'Enabled', action: 'none', canRevoke: false };
   if (!row.isActive) return { tone: 'neutral', label: 'Inactive', action: 'none', canRevoke: false };
   const activation = row.mfaActivation;
+  // Seed mailboxes receive no email: never offer (or resend) an emailed link; point to operator setup and keep Revoke for a stale link.
+  if (row.seedAccount && !(row.enrollmentAuthorizedUntil && new Date(row.enrollmentAuthorizedUntil) > now)) {
+    if (activation?.purpose === 'SEED_PROVISIONING' && activation.status === 'PENDING' && new Date(activation.expiresAt) > now) {
+      return { tone: 'info', label: 'Operator setup pending', detail: `Setup link expires in ${minutesLeft(activation.expiresAt, now)} min`, action: 'none', canRevoke: false };
+    }
+    if (activation && activation.purpose !== 'SEED_PROVISIONING') return { tone: 'warning', label: 'Operator setup required', action: 'none', canRevoke: true,
+      detail: 'An emailed link cannot reach this seed mailbox. Revoke it and ask an operator for a setup link.' };
+    return { tone: 'info', label: 'Operator setup required', action: 'none', canRevoke: false,
+      detail: row.seedAccount.recorded ? 'Ask an operator for a one-time setup link.' : 'An operator must record this seed account, then issue a setup link.' };
+  }
   if (activation) {
     const expired = activation.status === 'EXPIRED' || new Date(activation.expiresAt) <= now;
     if (expired) return { tone: 'warning', label: 'Link expired', action: 'resend', canRevoke: true };

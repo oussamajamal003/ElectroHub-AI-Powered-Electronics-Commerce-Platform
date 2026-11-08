@@ -136,7 +136,8 @@ describe('Delivery tracking page', () => {
     renderPage();
     expect(await screen.findByRole('heading', { name: title })).toBeVisible();
     expect(screen.queryByRole('region', { name: 'Delivery overview' })).toBeNull();
-    if (status === 'CANCELLED') expect(screen.getByRole('region', { name: 'Delivery history' })).toHaveTextContent('Tracking started');
+    expect(screen.queryByRole('region', { name: 'Delivery history' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Delivery progress' })).toBeNull();
   });
 
   it.each([404, 400])('T5-11 %s shows the same safe not-found state', async status => {

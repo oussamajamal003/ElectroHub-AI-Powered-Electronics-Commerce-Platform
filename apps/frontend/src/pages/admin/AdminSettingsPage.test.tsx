@@ -29,6 +29,13 @@ vi.mock('@/features/admin/security/api', async importOriginal => ({
   ...(await importOriginal<typeof import('@/features/admin/security/api')>()),
   useAdminProfile: vi.fn(),
 }));
+// The team page and its gate have their own tests; here they are stubs so the tab's wiring is what is asserted.
+vi.mock('@/pages/admin/AdminAdministratorsPage', () => ({
+  AdminAdministratorsPage: ({ embedded }: { embedded?: boolean }) => <div data-testid="team" data-embedded={String(embedded)}>Team list</div>,
+}));
+vi.mock('@/pages/admin/AdministratorsAccessGate', () => ({
+  AdministratorsAccessGate: ({ children }: { children: React.ReactNode }) => <div data-testid="gate">{children}</div>,
+}));
 const asAdministrator = (capabilities: { isOwner: boolean; canManageAdmins: boolean }) =>
   vi.mocked(useAdminProfile).mockReturnValue({ data: { capabilities } } as unknown as ReturnType<typeof useAdminProfile>);
 
@@ -123,7 +130,8 @@ describe('store section', () => {
     expect(screen.getByRole('heading', { name: 'Store Information' })).toBeInTheDocument();
     expect(screen.getByLabelText('Store name')).toHaveValue('ElectroHub');
     expect(screen.getByLabelText('Store email')).toHaveValue('hello@electrohub.com');
-    expect(screen.getByTestId('store-currency')).toHaveTextContent('USD – US Dollar (fixed)');
+    expect(screen.getByLabelText('Currency')).toHaveValue('USD – US Dollar (fixed)');
+    expect(screen.getByLabelText('Currency')).toHaveAttribute('readonly');
     expect(screen.queryByRole('combobox', { name: /currency/i })).not.toBeInTheDocument();
   });
 
@@ -222,11 +230,20 @@ describe('tabs and the URL', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/admin/settings?tab=notifications');
   });
 
-  it('the Administrators tab links to the team page', async () => {
+  it('the Administrators tab shows the team list in place, behind the access gate', async () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(screen.getByRole('tab', { name: 'Administrators' }));
-    expect(await screen.findByRole('link', { name: 'Manage administrators' })).toHaveAttribute('href', '/admin/settings/administrators');
+    const team = await screen.findByTestId('team');
+    expect(team).toHaveAttribute('data-embedded', 'true');
+    expect(within(screen.getByTestId('gate')).getByTestId('team')).toBe(team);
+    expect(screen.queryByRole('link', { name: 'Manage administrators' })).not.toBeInTheDocument();
+  });
+
+  it('opens straight on the team list from ?tab=administrators', () => {
+    asAdministrator({ isOwner: false, canManageAdmins: true });
+    renderPage('/admin/settings?tab=administrators');
+    expect(screen.getByTestId('team')).toBeInTheDocument();
   });
 
   it('offers the Administrators section to an administrator manager who is not an Owner', () => {
@@ -240,14 +257,22 @@ describe('tabs and the URL', () => {
     renderPage('/admin/settings?tab=administrators');
     expect(screen.queryByRole('tab', { name: 'Administrators' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('tab')).toHaveLength(3);
-    expect(screen.queryByRole('link', { name: 'Manage administrators' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('team')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Store Information' })).toBeInTheDocument();
   });
 
-  it('does not offer the Administrators section while capabilities are still unknown', () => {
+  it('keeps a direct ?tab=administrators link on its tab while permissions load', () => {
+    vi.mocked(useAdminProfile).mockReturnValue({ data: undefined, isError: false } as unknown as ReturnType<typeof useAdminProfile>);
+    renderPage('/admin/settings?tab=administrators');
+    expect(screen.getByRole('tab', { name: 'Administrators' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('gate')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Store Information' })).not.toBeInTheDocument();
+  });
+
+  it('shows the Administrators tab while capabilities are still loading', () => {
     vi.mocked(useAdminProfile).mockReturnValue({ data: undefined } as unknown as ReturnType<typeof useAdminProfile>);
     renderPage();
-    expect(screen.queryByRole('tab', { name: 'Administrators' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Administrators' })).toBeInTheDocument();
   });
 
   it('asks before leaving a tab with unsaved changes, and keeps them when the administrator cancels', async () => {

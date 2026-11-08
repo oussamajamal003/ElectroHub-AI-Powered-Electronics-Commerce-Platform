@@ -49,6 +49,20 @@ $sidebar-rail: 4.5rem;
 
 // ─── Menus ────────────────────────────────────────────────
 .menu { min-width: 18rem; max-width: calc(100vw - 2rem); }
+.animatedMenu {
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin, top right);
+
+  &[data-state='open'] { animation: adminMenuOpen 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  &[data-state='closed'] { animation: adminMenuClose 150ms ease-in both; }
+}
+@keyframes adminMenuOpen {
+  from { opacity: 0; transform: perspective(720px) rotateX(-6deg) scaleY(0.9) translateY(-5px); }
+  to { opacity: 1; transform: perspective(720px) rotateX(0) scaleY(1) translateY(0); }
+}
+@keyframes adminMenuClose {
+  from { opacity: 1; transform: perspective(720px) rotateX(0) scaleY(1) translateY(0); }
+  to { opacity: 0; transform: perspective(720px) rotateX(-4deg) scaleY(0.94) translateY(-3px); }
+}
 .menuLabel { font-size: $font-size-sm; font-weight: $font-weight-semibold; color: $color-text-primary; }
 .menuNote, .menuFoot { margin: 0; padding: $spacing-2 $spacing-3; font-size: $font-size-xs; color: $color-text-secondary; }
 .menuFoot { border-top: 1px solid $color-border; margin-top: $spacing-1; }
@@ -114,4 +128,7 @@ $sidebar-rail: 4.5rem;
     .adminPill { display: none; }
   .main { padding: $spacing-4; }
 }
-@media (prefers-reduced-motion: reduce) { .iconButton, .navLink, .collapseButton, .avatar { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .iconButton, .navLink, .collapseButton, .avatar { transition: none; }
+  .animatedMenu[data-state] { animation: none !important; transform: none; opacity: 1; }
+}

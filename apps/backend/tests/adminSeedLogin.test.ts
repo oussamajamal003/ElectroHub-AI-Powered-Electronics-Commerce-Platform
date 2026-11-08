@@ -8,18 +8,16 @@ describe('Admin Seed Authentication Integration Tests', () => {
     'admin@electrohub.com',
     'admin1@electrohub.com',
     'admin2@electrohub.com',
-    'admin3@electrohub.com',
-    'admin4@electrohub.com',
   ];
   const password = 'admin123!';
 
-  it('1. All 5 admin accounts exist in database with role = ADMIN', async () => {
+  it('1. All 3 admin accounts exist in database with role = ADMIN', async () => {
     const users = await prisma.user.findMany({
       where: { email: { in: adminEmails } },
       include: { role: true },
     });
     
-    expect(users.length).toBe(5);
+    expect(users.length).toBe(3);
     for (const email of adminEmails) {
       const user = users.find((u) => u.email === email);
       expect(user).toBeDefined();

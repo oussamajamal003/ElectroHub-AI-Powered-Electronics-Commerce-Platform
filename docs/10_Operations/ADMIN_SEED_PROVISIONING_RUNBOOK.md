@@ -102,7 +102,7 @@ The deployment serving `/admin/provision` must run with `ADMIN_SEED_PROVISIONING
 |---|---|
 | `PRODUCTION_REFUSED`, `TARGET_NOT_ALLOWED`, `TARGET_CONFIRMATION_MISMATCH` | Wrong or unconfirmed database, or production mode. |
 | `APPROVAL_REQUIRED` | Missing operator, tester or a reason of at least 10 characters. |
-| `NOT_SEED_EMAIL`, `PRIMARY_OWNER_REFUSED` | Only `admin1–4`; never `admin@electrohub.com`. |
+| `NOT_SEED_EMAIL`, `PRIMARY_OWNER_REFUSED` | Only `admin1–2`; never `admin@electrohub.com`. |
 | `USER_ID_REQUIRED`, `USER_NOT_FOUND`, `IDENTITY_MISMATCH` | The id must be the exact account holding that email. |
 | `NOT_ADMIN`, `ACCOUNT_INACTIVE`, `ACCOUNT_DELETED`, `OWNER_REFUSED` | Customers, deactivated, deleted (anonymized) and Owner accounts. |
 | `PROVENANCE_MISSING` | Not a recorded seed identity (for example, an account recreated with the same email after the original was deleted). |

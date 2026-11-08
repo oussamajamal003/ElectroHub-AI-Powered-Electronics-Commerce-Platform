@@ -34,9 +34,14 @@ export function useCustomerStatus(userId: string) {
   return useMutation({
     mutationFn: (body: { isActive: boolean; expectedUpdatedAt: string }) =>
       apiClient<ItemResponse<AdminCustomerDetail>>(`/api/admin/customers/${encodeURIComponent(userId)}/status`, { method: 'PATCH', data: body }),
-    onSuccess: response => {
+    onSuccess: async response => {
       client.setQueryData(adminKeys.customer(userId), response);
-      void client.invalidateQueries({ queryKey: adminKeys.customers });
+      // Refresh every cached filter/page variant, including inactive entries. Otherwise a previously
+      // visited Deactivated tab can remain fresh in cache and omit the account until a browser reload.
+      await client.invalidateQueries({
+        queryKey: [...adminKeys.customers, 'list'],
+        refetchType: 'all',
+      });
       void client.invalidateQueries({ queryKey: ['admin', 'dashboard'] });
     },
   });

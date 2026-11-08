@@ -73,12 +73,15 @@ export type StoreUpdateInput = z.infer<typeof storeUpdateSchema>;
 
 const METHOD_IDS = SHIPPING_CATALOG.map(method => method.id) as [ShippingMethodId, ...ShippingMethodId[]];
 const moneyPattern = /^\d{1,4}(\.\d{1,2})?$/;
+const thresholdPattern = /^\d{1,7}(\.\d{1,2})?$/;
+// Zod runs every refine even after the pattern has failed, so each numeric check is guarded by its pattern. Without the guard,
+// Prisma.Decimal throws on a blank or malformed value and the request returns 500 instead of a 400 validation error.
 const priceSchema = z.string().trim().regex(moneyPattern, 'Enter a price such as 9.99.')
-  .refine(value => new Prisma.Decimal(value).lte(SHIPPING_PRICE_MAX), `Price must be at most ${SHIPPING_PRICE_MAX}.`)
+  .refine(value => !moneyPattern.test(value) || new Prisma.Decimal(value).lte(SHIPPING_PRICE_MAX), `Price must be at most ${SHIPPING_PRICE_MAX}.`)
   .transform(value => new Prisma.Decimal(value).toFixed(2));
-const thresholdSchema = z.union([z.null(), z.string().trim().regex(/^\d{1,7}(\.\d{1,2})?$/, 'Enter an amount such as 50.00.')
-  .refine(value => new Prisma.Decimal(value).gt(0), 'The free-shipping threshold must be greater than zero.')
-  .refine(value => new Prisma.Decimal(value).lte('9999999.99'), 'The free-shipping threshold is too large.')
+const thresholdSchema = z.union([z.null(), z.string().trim().regex(thresholdPattern, 'Enter an amount such as 50.00.')
+  .refine(value => !thresholdPattern.test(value) || new Prisma.Decimal(value).gt(0), 'The free-shipping threshold must be greater than zero.')
+  .refine(value => !thresholdPattern.test(value) || new Prisma.Decimal(value).lte('9999999.99'), 'The free-shipping threshold is too large.')
   .transform(value => new Prisma.Decimal(value).toFixed(2))]);
 
 export const shippingUpdateSchema = z.object({

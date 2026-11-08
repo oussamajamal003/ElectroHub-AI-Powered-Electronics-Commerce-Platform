@@ -15,8 +15,6 @@ export const SEED_ADMIN_EMAILS = [
   'admin@electrohub.com',
   'admin1@electrohub.com',
   'admin2@electrohub.com',
-  'admin3@electrohub.com',
-  'admin4@electrohub.com',
 ];
 
 /** Seed identities an operator may provision without a mailbox. The primary Owner seed (admin@electrohub.com) is never one. */

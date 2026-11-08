@@ -19,3 +19,13 @@
   align-items: center;
   gap: $spacing-2;
 }
+
+// Access switches: a quiet "Saving…" beside the switch until the server confirms (then the toast).
+.accessCell { display: inline-flex; align-items: center; gap: $spacing-2; }
+.saving { display: inline-flex; align-items: center; gap: $spacing-1; padding: 2px $spacing-2; border-radius: $radius-full;
+  font-size: $font-size-xs; font-weight: $font-weight-medium; line-height: 1.4; white-space: nowrap;
+  color: $color-primary; background: rgba($color-primary, .08); border: 1px solid rgba($color-primary, .25);
+  animation: savingIn 150ms ease-out;
+  svg { width: 12px; height: 12px; }
+  @media (prefers-reduced-motion: reduce) { animation: none; } }
+@keyframes savingIn { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: none; } }

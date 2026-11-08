@@ -1,6 +1,8 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { ShieldCheck } from 'lucide-react';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
+import { Spinner } from '@/components/ui/Spinner';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -52,13 +54,16 @@ interface PendingAccessChange {
   value: boolean;
 }
 
-export function AdminAdministratorsPage() {
+const DESCRIPTION = 'Who can use the admin console, and invitations for new administrators.';
+
+/** `embedded` renders the team inside the Settings → Administrators tab, which already owns the page title and breadcrumb. */
+export function AdminAdministratorsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const profile = useAdminProfile();
   const capabilities = profile.data?.capabilities;
   const canManage = capabilities?.canManageAdmins ?? false;
   const isOwner = capabilities?.isOwner ?? false;
   const toast = useAdminToast();
-  const { runWithStepUp, dialog: stepUpDialog } = useStepUp();
+  const { runWithStepUp, dialog: stepUpDialog, verifying } = useStepUp();
 
   const [adminPage, setAdminPage] = useState(1);
   const [invitePage, setInvitePage] = useState(1);
@@ -86,6 +91,19 @@ export function AdminAdministratorsPage() {
   const [revokeConfirmation, setRevokeConfirmation] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // The switch being saved: only that switch waits (busy), the rest of the table stays usable.
+  // `ready`: the switch may show its new position. Not before a verification the server will ask for has been completed, so a click
+  // never flips the switch on and then back off when the dialog appears.
+  const [savingAccess, setSavingAccess] = useState<(PendingAccessChange & { ready: boolean }) | null>(null);
+  const wasVerifying = useRef(false);
+  useEffect(() => {
+    if (wasVerifying.current && !verifying) {
+      setSavingAccess(current => current && { ...current, ready: true });
+      // A verification just finished: refresh the profile so its fresh window is known and the next switch flips at once.
+      void profile.refetch();
+    }
+    wasVerifying.current = verifying;
+  }, [verifying, profile]);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
 
@@ -98,6 +116,8 @@ export function AdminAdministratorsPage() {
   const runAccessChange = async (change: PendingAccessChange) => {
     setRowError(null);
     setBusy(true);
+    const stepUpUntil = profile.data?.stepUpUntil;
+    setSavingAccess({ ...change, ready: Boolean(stepUpUntil && new Date(stepUpUntil).getTime() > Date.now() + 5_000) });
     setDialogError(null);
     try {
       await runWithStepUp(() => updateAccess.mutateAsync({ id: change.row.id, body: change.field === 'isActive' ? { isActive: change.value } : { canManageAdmins: change.value } }));
@@ -108,12 +128,14 @@ export function AdminAdministratorsPage() {
       if (accessChange) setDialogError(message);
       else if (message) setRowError(message);
     } finally {
+      setSavingAccess(null);
       setBusy(false);
     }
   };
 
   /** Turning access off asks first; turning it on applies straight away. Both still pass through step-up. */
   const requestAccessChange = (change: PendingAccessChange) => {
+    if (savingAccess) return; // one access change at a time; the switch being saved stays enabled-looking
     if (change.value === false) {
       setDialogError(null);
       setAccessChange(change);
@@ -263,6 +285,13 @@ export function AdminAdministratorsPage() {
   const canRevokeOwner = (row: AdministratorSummary) => isOwner && !row.isSelf && row.isOwner && row.isActive;
   const canPromote = (row: AdministratorSummary) => isOwner && !row.isSelf && !row.isOwner && row.isActive && row.mfaEnrolled && !row.mfaActivation;
 
+  const savingFor = (row: AdministratorSummary, field: PendingAccessChange['field']) => savingAccess?.row.id === row.id && savingAccess.field === field;
+  // The switch moves at once while the change is being saved, but never while a confirmation or verification dialog is still open:
+  // cancelling those leaves it where it was. On success the confirmed value is patched into the cache, so it stays without a refetch.
+  const savingShown = (row: AdministratorSummary, field: PendingAccessChange['field']) => savingFor(row, field) && savingAccess!.ready && !verifying && accessChange === null;
+  const shownAccess = (row: AdministratorSummary, field: PendingAccessChange['field']) =>
+    savingShown(row, field) ? savingAccess!.value : row[field];
+
   const adminColumns: Column<AdministratorSummary>[] = [
     { key: 'name', title: 'Administrator', render: row => <span className={styles.cellText}>
       <strong>{`${row.firstName} ${row.lastName}`.trim() || row.email}</strong>
@@ -273,6 +302,7 @@ export function AdminAdministratorsPage() {
       {row.canManageAdmins && !row.isOwner && <StatusPill tone="info" icon={false}>Manages admins</StatusPill>}
       {!row.isOwner && !row.canManageAdmins && <span className={styles.muted}>Administrator</span>}
       {row.isSelf && <StatusPill tone="neutral" icon={false}>You</StatusPill>}
+      {row.seedAccount && <StatusPill tone="neutral" icon={false}>Seed account</StatusPill>}
       {canPromote(row) && <Button type="button" variant="outline" size="small" disabled={busy} aria-label={`Promote ${row.email} to Owner`}
         onClick={() => { setDialogError(null); setPromoteTarget(row); }}>Promote to Owner</Button>}
       {canRevokeOwner(row) && <Button type="button" variant="outline" size="small" disabled={busy} aria-label={`Revoke Owner privileges for ${row.email}`}
@@ -295,12 +325,20 @@ export function AdminAdministratorsPage() {
     } },
     { key: 'lastLogin', title: 'Last sign-in', render: row => row.lastLoginAt ? formatDateTime(row.lastLoginAt) : 'Never' },
     { key: 'active', title: 'Active', render: row => isOwner
-      ? <Switch aria-label={`Active access for ${row.email}`} checked={row.isActive} disabled={row.isSelf || busy}
+      ? <span className={teamStyles.accessCell}>
+        <Switch aria-label={`Active access for ${row.email}`} checked={shownAccess(row, 'isActive')} aria-busy={savingFor(row, 'isActive')}
+        disabled={row.isSelf || (busy && !savingAccess)}
         onCheckedChange={(value) => requestAccessChange({ row, field: 'isActive', value })} />
+        {savingShown(row, 'isActive') && <span className={teamStyles.saving} role="status"><Spinner size="small" />Saving</span>}
+      </span>
       : (row.isActive ? <StatusPill tone="success">Active</StatusPill> : <StatusPill tone="neutral">Inactive</StatusPill>) },
     { key: 'manage', title: 'Manages admins', render: row => isOwner
-      ? <Switch aria-label={`Manage administrators for ${row.email}`} checked={row.canManageAdmins} disabled={row.isSelf || row.isOwner || busy}
+      ? <span className={teamStyles.accessCell}>
+        <Switch aria-label={`Manage administrators for ${row.email}`} checked={shownAccess(row, 'canManageAdmins')} aria-busy={savingFor(row, 'canManageAdmins')}
+        disabled={row.isSelf || row.isOwner || (busy && !savingAccess)}
         onCheckedChange={(value) => requestAccessChange({ row, field: 'canManageAdmins', value })} />
+        {savingShown(row, 'canManageAdmins') && <span className={teamStyles.saving} role="status"><Spinner size="small" />Saving</span>}
+      </span>
       : (row.canManageAdmins ? 'Yes' : 'No') },
   ];
 
@@ -322,13 +360,24 @@ export function AdminAdministratorsPage() {
     </span> },
   ];
 
+  const header = (actions?: ReactNode) => embedded
+    ? <div className={styles.teamIntro}>
+      <span className={styles.teamIntroIcon} aria-hidden="true"><ShieldCheck size={22} /></span>
+      <div className={styles.teamIntroText}>
+        <h2 className={styles.teamIntroTitle}>Administrators</h2>
+        <p className={styles.panelHint}>{DESCRIPTION}</p>
+      </div>
+      {actions && <div className={styles.teamIntroActions}>{actions}</div>}
+    </div>
+    : <PageHeader title="Administrators" crumbs={[{ label: 'Dashboard', to: '/admin' }, { label: 'Settings', to: '/admin/settings' }, { label: 'Administrators' }]}
+      description={DESCRIPTION} actions={actions} />;
+
   // Access removed during the session: the server refuses the team data; never show an empty or read-only team page.
   if (readOnly) return <AccessRestricted />;
 
   if (profile.isPending) {
     return <div className={styles.page}>
-      <PageHeader title="Administrators" crumbs={[{ label: 'Dashboard', to: '/admin' }, { label: 'Settings', to: '/admin/settings' }, { label: 'Administrators' }]}
-        description="Who can use the admin console, and invitations for new administrators." />
+      {header()}
       <div role="status" aria-label="Loading administrators" aria-busy="true">
         <TableCard busy label="Administrators">
           <DataTable<AdministratorSummary> caption="Administrators" data={[]} columns={adminColumns} keyExtractor={row => row.id} loadingRows={4} />
@@ -338,9 +387,7 @@ export function AdminAdministratorsPage() {
   }
 
   return <div className={styles.page}>
-    <PageHeader title="Administrators" crumbs={[{ label: 'Dashboard', to: '/admin' }, { label: 'Settings', to: '/admin/settings' }, { label: 'Administrators' }]}
-      description="Who can use the admin console, and invitations for new administrators."
-      actions={canManage && !readOnly ? <Button type="button" onClick={openInvite}>Invite administrator</Button> : undefined} />
+    {header(canManage && !readOnly ? <Button type="button" onClick={openInvite}>Invite administrator</Button> : undefined)}
 
     {rowError && <Alert variant="error">{rowError}</Alert>}
 
@@ -350,7 +397,7 @@ export function AdminAdministratorsPage() {
     <section className={styles.panelFlush} aria-labelledby="team-admins-title">
       <div className={styles.panelHeader}>
         <div>
-          <h2 id="team-admins-title" className={styles.panelTitle}>Administrators</h2>
+          <h2 id="team-admins-title" className={styles.panelTitle}>{embedded ? 'Team members' : 'Administrators'}</h2>
           <p className={styles.panelHint}>
             {isOwner ? 'As an owner you can turn access on or off. You cannot change your own access here.'
               : 'Only owners can change access. Ask an owner if access needs to change.'}
@@ -478,7 +525,7 @@ export function AdminAdministratorsPage() {
           <form className={styles.form} onSubmit={submitInvite} noValidate>
             <p className={styles.panelHint}>They receive a one-time link to create their account and set up two-step verification.</p>
             {dialogError && <Alert variant="error">{dialogError}</Alert>}
-            <Input id="invite-admin-email" name="email" label="Email address" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)}
+            <Input id="invite-admin-email" name="email" label="Email address" type="email" value={inviteEmail} onChange={(e) => { setInviteEmail(e.target.value); setDialogError(null); setInviteFieldError(''); }}
               error={inviteFieldError} autoComplete="off" fullWidth disabled={busy} />
             <label className={secStyles.checkRow}>
               <Checkbox checked={inviteManage} onCheckedChange={(value) => setInviteManage(value === true)} disabled={busy} aria-describedby="invite-manage-help" />

@@ -218,3 +218,13 @@ td .mono, td .muted { white-space: nowrap; }
   div { display: contents; }
   dt { color: $color-text-secondary; }
   dd { margin: 0; color: $color-text-primary; overflow-wrap: anywhere; } }
+
+// Settings → Administrators: an introduction card above the team, in place of the standalone page header.
+.teamIntro { display: flex; align-items: center; gap: $spacing-4; flex-wrap: wrap; min-width: 0; padding: $spacing-5 $spacing-6;
+  background: $color-background; border: 1px solid $color-border; border-left: 3px solid $color-primary; }
+.teamIntroIcon { display: grid; place-items: center; flex: none; width: 3rem; height: 3rem; border-radius: $radius-full;
+  color: $color-primary; background: rgba($color-primary, .08); border: 1px solid rgba($color-primary, .2); }
+.teamIntroText { display: grid; gap: $spacing-1; flex: 1 1 16rem; min-width: 0; }
+.teamIntroTitle { margin: 0; font-size: $font-size-xl; font-weight: $font-weight-semibold; color: $color-text-primary; }
+.teamIntroActions { display: flex; gap: $spacing-3; flex: none;
+  @media (max-width: $breakpoint-sm - 1px) { flex: 1 1 100%; > * { flex: 1; } } }

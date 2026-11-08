@@ -13,6 +13,9 @@ import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
 import { adminNotifications } from './admin-notification.service.js';
 import { activationDto } from './admin-activation.service.js';
 import { lockOwnerLifecycle } from './admin-account.service.js';
+import { env } from '../config/env.js';
+import { PROVISIONABLE_SEED_EMAILS } from '../utils/admin-seed.js';
+import { seedProvisioningRoutesEnabled } from '../utils/seed-provisioning-flag.js';
 
 /**
  * Task 05.2 invitation-only administrator onboarding and team management. The ADMIN role is only ever assigned here, by the server,
@@ -36,6 +39,18 @@ function invitationDto(row: InvitationWithInviter, now = new Date()) {
   };
 }
 
+/**
+ * Development seed mailboxes (admin1–2@electrohub.com) receive no email, so the console points Owners to operator setup instead.
+ * Display only, and only where operator provisioning is enabled (never production): `recorded` is true when provenance is bound to
+ * this exact user id; the operator CLI still re-checks provenance, the account and the target database itself.
+ */
+function seedAccount(user: { email: string; adminSeedIdentity: { seedEmail: string } | null }) {
+  if (!seedProvisioningRoutesEnabled(env)) return null;
+  const recorded = user.adminSeedIdentity?.seedEmail === user.email;
+  // The primary Owner seed (admin@electrohub.com) also carries provenance but is never an operator-provisioning target.
+  return (PROVISIONABLE_SEED_EMAILS as readonly string[]).includes(user.email) ? { recorded } : null;
+}
+
 interface Actor { userId: string; requestId?: string }
 
 export class AdminTeamService {
@@ -48,7 +63,8 @@ export class AdminTeamService {
       prisma.user.count({ where }),
       prisma.user.findMany({ where, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], skip: (input.page - 1) * input.pageSize, take: input.pageSize,
         select: { id: true, email: true, firstName: true, lastName: true, isActive: true, createdAt: true,
-          adminSecurity: { select: { isOwner: true, canManageAdmins: true, mfaEnrolledAt: true, enrollmentAllowedUntil: true } } } }),
+          adminSecurity: { select: { isOwner: true, canManageAdmins: true, mfaEnrolledAt: true, enrollmentAllowedUntil: true } },
+          adminSeedIdentity: { select: { seedEmail: true } } } }),
     ]);
     const ids = users.map(user => user.id);
     const [totp, passkeys, logins, activations] = ids.length === 0 ? [[], [], [], []] : await Promise.all([
@@ -68,6 +84,7 @@ export class AdminTeamService {
         mfaActivation: (() => { const row = activations.find(item => item.userId === user.id); return row ? activationDto(row) : null; })(),
         enrollmentAuthorizedUntil: user.adminSecurity?.enrollmentAllowedUntil && user.adminSecurity.enrollmentAllowedUntil > new Date() ? user.adminSecurity.enrollmentAllowedUntil : null,
         lastLoginAt: logins.find(row => row.userId === user.id)?._max.createdAt ?? null,
+        seedAccount: seedAccount(user),
       })),
       meta: { page: input.page, pageSize: input.pageSize, total, totalPages: Math.max(1, Math.ceil(total / input.pageSize)) },
     };
@@ -107,7 +124,11 @@ export class AdminTeamService {
       if (input.grantManageAdmins && !actorSecurity?.isOwner) {
         throw new AppError('Only an owner can grant administrator-management access.', 403, 'CAPABILITY_REQUIRED');
       }
-      if (await tx.user.findFirst({ where: { OR: [{ email }, { pendingEmail: email }] }, select: { id: true } })) {
+      const account = await tx.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } }, select: { role: { select: { name: true } } } });
+      if (account?.role.name === 'ADMIN') {
+        throw new AppError('An administrator account already exists for this email address.', 409, 'ADMIN_ALREADY_EXISTS');
+      }
+      if (account || await tx.user.findFirst({ where: { pendingEmail: { equals: email, mode: 'insensitive' } }, select: { id: true } })) {
         throw new AppError('An account already exists for this email address.', 409, 'ACCOUNT_EXISTS');
       }
       const pending = await tx.adminInvitation.findFirst({ where: { email, status: AdminInvitationStatus.PENDING } });

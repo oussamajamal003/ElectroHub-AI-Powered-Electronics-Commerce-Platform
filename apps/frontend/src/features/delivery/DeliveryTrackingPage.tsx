@@ -115,7 +115,6 @@ function TrackingBody({ snapshot, detailsPath, busy }: { snapshot: CustomerDeliv
   </div>;
   if (snapshot.availability === 'CANCELLED') return <div className={styles.grid}>
     <DeliveryStateNotice kind="cancelled" actions={<Link className={shared.outlineLink} to={detailsPath}>View order details</Link>} />
-    {snapshot.timeline.length > 0 && <DeliveryTimeline entries={snapshot.timeline} trackingReference={null} />}
     {actions}
   </div>;
   return <div className={styles.grid} aria-busy={busy || undefined}>

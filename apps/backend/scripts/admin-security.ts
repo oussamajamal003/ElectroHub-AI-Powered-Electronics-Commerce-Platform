@@ -8,7 +8,7 @@
  *                                                                               opens a fresh enrollment window; operator identity
  *                                                                               check happens out of band and is recorded in the audit)
  *
- * Seeded DEV administrators without a mailbox (admin1–4@electrohub.com). Only on "local" (disposable loopback) or the shared DEV
+ * Seeded DEV administrators without a mailbox (admin1–2@electrohub.com). Only on "local" (disposable loopback) or the shared DEV
  * project; production, unknown databases and NODE_ENV=production are refused before any database access. Not email verification
  * and not a production recovery mechanism; see docs/10_Operations/ADMIN_SEED_PROVISIONING_RUNBOOK.md.
  *   npm run admin:security -- seed-status --confirm-target=<ref>

@@ -1529,7 +1529,9 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
       expect((await api().post('/api/auth/admin/mfa/totp/verify', { mfaToken: recoveryToken, code: code(enrolled.secret, 1) })).status).toBe(401);
       expect((await api().post('/api/auth/admin/mfa/recovery/verify', { mfaToken: recoveryToken, code: enrolled.recoveryCodes[0] })).status).toBe(401);
       expect((await api().post('/api/auth/admin/mfa/webauthn/options', { mfaToken: recoveryToken })).status).toBeGreaterThanOrEqual(400);
-      const proven = await api().post(`${recoveryApi}/totp`, { recoveryToken, code: code(enrolled.secret, 1) });
+      // Pinned: recomputing "next step" later in this slow test can land on a newer, still-unused step and pass a replay check by accident.
+      const recoveryTotp = code(enrolled.secret, 1);
+      const proven = await api().post(`${recoveryApi}/totp`, { recoveryToken, code: recoveryTotp });
       expect(proven.status).toBe(200);
       const reset = await api().post(`${recoveryApi}/complete`, { resetToken: proven.body.resetToken, newPassword: NEW_PASSWORD });
       expect(reset.status).toBe(200);
@@ -1559,7 +1561,7 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
         expect((await api().get(path, login.body.mfaToken)).status, path).toBe(401);
       }
       // The recovery proof's TOTP step cannot be replayed at login, and a wrong code fails.
-      expect((await api().post('/api/auth/admin/mfa/totp/verify', { mfaToken: login.body.mfaToken, code: code(enrolled.secret, 1) })).status).toBe(401);
+      expect((await api().post('/api/auth/admin/mfa/totp/verify', { mfaToken: login.body.mfaToken, code: recoveryTotp })).status).toBe(401);
       expect((await api().post('/api/auth/admin/mfa/totp/verify', { mfaToken: login.body.mfaToken, code: '000000' })).status).toBe(401);
       // TOTP steps only move forward (recovery used the next one), so login MFA uses a different registered factor: an unused recovery code.
       const ok = await api().post('/api/auth/admin/mfa/recovery/verify', { mfaToken: login.body.mfaToken, code: enrolled.recoveryCodes[0] });

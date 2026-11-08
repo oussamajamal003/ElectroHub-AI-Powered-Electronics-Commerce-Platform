@@ -12,6 +12,7 @@ import { base32Decode, hotp, totpStep } from './admin-crypto.js';
 import { seedAdministrators } from '../utils/admin-seed.js';
 import { seedProvisioningRoutesEnabled } from '../routes/admin-security.routes.js';
 import { validateEnvironment } from '../config/env.js';
+import { adminTeamService } from './admin-team.service.js';
 import {
   PRODUCTION_REF, SHARED_DEV_REF, SeedProvisioningError, assertProvisioningTarget, authorizeSeedProvisioning, databaseIdentity, registerSeedIdentity,
   revokeSeedProvisioning,
@@ -32,7 +33,7 @@ const post = (url: string, body?: object, token?: string) => {
 const get = (url: string, token?: string) => { const call = request(app).get(url).set('X-Forwarded-For', ip()); return token ? call.set('Authorization', `Bearer ${token}`) : call; };
 const code = (secret: string, offset = 0) => hotp(base32Decode(secret), totpStep(Date.now()) + BigInt(offset));
 const approval = { operator: 'QA Operator', tester: 'QA Tester', reason: 'Disposable QA of seed administrator provisioning' };
-const SEEDS = ['admin@electrohub.com', 'admin1@electrohub.com', 'admin2@electrohub.com', 'admin3@electrohub.com', 'admin4@electrohub.com'];
+const SEEDS = ['admin@electrohub.com', 'admin1@electrohub.com', 'admin2@electrohub.com'];
 const handoffDir = mkdtempSync(path.join(tmpdir(), 'eh-seed-handoff-'));
 
 async function roleId(name: 'ADMIN' | 'CUSTOMER') { return (await prisma.role.findUniqueOrThrow({ where: { name } })).id; }
@@ -176,17 +177,18 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
   });
 
   it('PROV-04 refusals: non-seed ADMIN, primary Owner, Owner, CUSTOMER, inactive, deleted, wrong id, missing approval — each audited, nothing changed', async () => {
+    ids = await freshSeeds(); // fresh, factor-less admin1/admin2 for this test
     const plain = await prisma.user.create({ data: { email: `plain-${randomUUID().slice(0, 8)}@qa.invalid`, passwordHash: await hashPassword(SEED_PASSWORD),
       firstName: 'Plain', lastName: 'Admin', roleId: await roleId('ADMIN') } });
     expect(await codeOf(authorizeSeedProvisioning(target(plain.email, plain.id), approval))).toBe('NOT_SEED_EMAIL');
     expect(await codeOf(authorizeSeedProvisioning(target('admin@electrohub.com', ids['admin@electrohub.com']!), approval))).toBe('PRIMARY_OWNER_REFUSED');
-    // An Owner among admin1–4 is refused too.
+    // An Owner among admin1–2 is refused too.
     const admin2 = ids['admin2@electrohub.com']!;
     await prisma.adminAccountSecurity.upsert({ where: { userId: admin2 }, create: { userId: admin2, isOwner: true, canManageAdmins: true }, update: { isOwner: true } });
     expect(await codeOf(authorizeSeedProvisioning(target('admin2@electrohub.com', admin2), approval))).toBe('OWNER_REFUSED');
     await prisma.adminAccountSecurity.update({ where: { userId: admin2 }, data: { isOwner: false, canManageAdmins: false } });
     // The id must belong to that exact email.
-    expect(await codeOf(authorizeSeedProvisioning(target('admin2@electrohub.com', ids['admin3@electrohub.com']!), approval))).toBe('IDENTITY_MISMATCH');
+    expect(await codeOf(authorizeSeedProvisioning(target('admin2@electrohub.com', ids['admin1@electrohub.com']!), approval))).toBe('IDENTITY_MISMATCH');
     expect(await codeOf(authorizeSeedProvisioning(target('admin2@electrohub.com', randomUUID()), approval))).toBe('USER_NOT_FOUND');
     expect(await codeOf(authorizeSeedProvisioning(target('admin2@electrohub.com', 'not-a-uuid'), approval))).toBe('USER_ID_REQUIRED');
     // Explicit approval is mandatory.
@@ -198,16 +200,16 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     expect(await codeOf(authorizeSeedProvisioning(target('admin2@electrohub.com', admin2), approval))).toBe('ACCOUNT_INACTIVE');
     await prisma.user.update({ where: { id: admin2 }, data: { isActive: true } });
     // A CUSTOMER that happens to hold a seed email is not an administrator.
-    const admin4 = ids['admin4@electrohub.com']!;
-    await prisma.user.update({ where: { id: admin4 }, data: { roleId: await roleId('CUSTOMER') } });
-    expect(await codeOf(authorizeSeedProvisioning(target('admin4@electrohub.com', admin4), approval))).toBe('NOT_ADMIN');
-    await prisma.user.update({ where: { id: admin4 }, data: { roleId: await roleId('ADMIN') } });
+    const admin1 = ids['admin1@electrohub.com']!;
+    await prisma.user.update({ where: { id: admin1 }, data: { roleId: await roleId('CUSTOMER') } });
+    expect(await codeOf(authorizeSeedProvisioning(target('admin1@electrohub.com', admin1), approval))).toBe('NOT_ADMIN');
+    await prisma.user.update({ where: { id: admin1 }, data: { roleId: await roleId('ADMIN') } });
     // A deleted (anonymized) account is never restored.
     const deleted = await prisma.user.create({ data: { email: `deleted-admin-${randomUUID()}@deleted.invalid`, passwordHash: null, firstName: 'Deleted', lastName: 'Administrator',
       isActive: false, roleId: await roleId('ADMIN') } });
-    expect(await codeOf(authorizeSeedProvisioning(target('admin3@electrohub.com', deleted.id), approval))).toBe('ACCOUNT_DELETED');
+    expect(await codeOf(authorizeSeedProvisioning(target('admin1@electrohub.com', deleted.id), approval))).toBe('ACCOUNT_DELETED');
 
-    expect(await prisma.adminMfaActivation.count({ where: { purpose: 'SEED_PROVISIONING', userId: { in: [plain.id, admin2, admin4, deleted.id] } } })).toBe(0);
+    expect(await prisma.adminMfaActivation.count({ where: { purpose: 'SEED_PROVISIONING', userId: { in: [plain.id, admin2, admin1, deleted.id] } } })).toBe(0);
     const denials = await prisma.adminAuditLog.findMany({ where: { action: 'ADMIN_SEED_PROVISIONING_AUTHORIZED', outcome: 'DENIED' } });
     const codes = denials.map(row => (row.details as { code: string }).code);
     expect(codes).toEqual(expect.arrayContaining(['NOT_SEED_EMAIL', 'PRIMARY_OWNER_REFUSED', 'OWNER_REFUSED', 'IDENTITY_MISMATCH', 'APPROVAL_REQUIRED',
@@ -216,33 +218,35 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
   });
 
   it('PROV-05 provenance: a recreated account with the same email is never mistaken for the seed identity until explicitly approved', async () => {
-    // The original admin3 is deleted (anonymized, as the product does); the seed re-run recreates the email with a NEW id.
-    const original = ids['admin3@electrohub.com']!;
+    ids = await freshSeeds();
+    // The original admin1 is deleted (anonymized, as the product does); the seed re-run recreates the email with a NEW id.
+    const original = ids['admin1@electrohub.com']!;
     await prisma.user.update({ where: { id: original }, data: { email: `deleted-admin-${original}@deleted.invalid`, isActive: false, passwordHash: null } });
     await seedAdministrators(prisma, { adminRoleId: await roleId('ADMIN'), passwordFor: () => SEED_PASSWORD });
-    const recreated = await prisma.user.findUniqueOrThrow({ where: { email: 'admin3@electrohub.com' }, include: { adminSeedIdentity: true } });
+    const recreated = await prisma.user.findUniqueOrThrow({ where: { email: 'admin1@electrohub.com' }, include: { adminSeedIdentity: true } });
     expect(recreated.id).not.toBe(original);
     expect(recreated.adminSeedIdentity).toBeNull();
-    expect(await codeOf(authorizeSeedProvisioning(target('admin3@electrohub.com', recreated.id), approval))).toBe('PROVENANCE_MISSING');
-    expect(await codeOf(registerSeedIdentity(target('admin3@electrohub.com', recreated.id), approval))).toBe('SUPERSEDE_REQUIRED');
-    expect(await codeOf(registerSeedIdentity(target('admin3@electrohub.com', recreated.id), { ...approval, supersedeDeleted: true }))).toBe('OK');
-    expect(await codeOf(registerSeedIdentity(target('admin3@electrohub.com', recreated.id), approval))).toBe('ALREADY_REGISTERED');
+    expect(await codeOf(authorizeSeedProvisioning(target('admin1@electrohub.com', recreated.id), approval))).toBe('PROVENANCE_MISSING');
+    expect(await codeOf(registerSeedIdentity(target('admin1@electrohub.com', recreated.id), approval))).toBe('SUPERSEDE_REQUIRED');
+    expect(await codeOf(registerSeedIdentity(target('admin1@electrohub.com', recreated.id), { ...approval, supersedeDeleted: true }))).toBe('OK');
+    expect(await codeOf(registerSeedIdentity(target('admin1@electrohub.com', recreated.id), approval))).toBe('ALREADY_REGISTERED');
     expect(await prisma.adminSeedIdentity.findUniqueOrThrow({ where: { userId: recreated.id } })).toMatchObject({ source: 'OPERATOR', approvedBy: 'QA Operator' });
-    expect(await codeOf(authorizeSeedProvisioning(target('admin3@electrohub.com', recreated.id), approval))).toBe('OK');
+    expect(await codeOf(authorizeSeedProvisioning(target('admin1@electrohub.com', recreated.id), approval))).toBe('OK');
 
     // An account that predates provenance (as on shared DEV today) needs the same explicit registration.
-    const admin4 = ids['admin4@electrohub.com']!;
-    await prisma.adminSeedIdentity.delete({ where: { userId: admin4 } });
-    expect(await codeOf(authorizeSeedProvisioning(target('admin4@electrohub.com', admin4), approval))).toBe('PROVENANCE_MISSING');
-    expect(await codeOf(registerSeedIdentity(target('admin4@electrohub.com', admin4), { operator: 'QA Operator', reason: '' }))).toBe('APPROVAL_REQUIRED');
-    expect(await codeOf(registerSeedIdentity(target('admin4@electrohub.com', admin4), approval))).toBe('OK');
-    expect(await prisma.adminAuditLog.count({ where: { action: 'ADMIN_SEED_IDENTITY_REGISTERED', outcome: 'SUCCESS', resourceId: admin4 } })).toBe(1);
+    const admin2 = ids['admin2@electrohub.com']!;
+    await prisma.adminSeedIdentity.delete({ where: { userId: admin2 } });
+    expect(await codeOf(authorizeSeedProvisioning(target('admin2@electrohub.com', admin2), approval))).toBe('PROVENANCE_MISSING');
+    expect(await codeOf(registerSeedIdentity(target('admin2@electrohub.com', admin2), { operator: 'QA Operator', reason: '' }))).toBe('APPROVAL_REQUIRED');
+    expect(await codeOf(registerSeedIdentity(target('admin2@electrohub.com', admin2), approval))).toBe('OK');
+    expect(await prisma.adminAuditLog.count({ where: { action: 'ADMIN_SEED_IDENTITY_REGISTERED', outcome: 'SUCCESS', resourceId: admin2 } })).toBe(1);
   });
 
   it('PROV-06 expiry, revocation, purpose separation and Owner resend: a proof works only on its own path, once, before it expires', async () => {
-    const id = ids['admin4@electrohub.com']!;
-    const issued = await authorizeSeedProvisioning(target('admin4@electrohub.com', id), approval);
-    expect(await codeOf(authorizeSeedProvisioning(target('admin4@electrohub.com', id), approval))).toBe('PENDING_EXISTS');
+    ids = await freshSeeds();
+    const id = ids['admin2@electrohub.com']!;
+    const issued = await authorizeSeedProvisioning(target('admin2@electrohub.com', id), approval);
+    expect(await codeOf(authorizeSeedProvisioning(target('admin2@electrohub.com', id), approval))).toBe('PENDING_EXISTS');
     // A seed proof is never accepted by the Owner activation endpoint.
     expect((await post('/api/auth/admin/activation/preview', { token: issued.token })).body.error.code).toBe('ACTIVATION_UNAVAILABLE');
     expect((await post('/api/auth/admin/activation/redeem', { token: issued.token, password: NEW_PASSWORD })).status).toBe(410);
@@ -251,18 +255,18 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     expect((await post('/api/auth/admin/provisioning/preview', { token: issued.token })).status).toBe(410);
     expect((await post('/api/auth/admin/provisioning/redeem', { token: issued.token, password: NEW_PASSWORD })).body.error.code).toBe('PROVISIONING_UNAVAILABLE');
     // An expired pending proof is closed when a new one is issued; the new one can then be revoked by the operator.
-    const second = await authorizeSeedProvisioning(target('admin4@electrohub.com', id), approval);
-    expect(await codeOf(revokeSeedProvisioning(target('admin4@electrohub.com', id), { operator: 'QA Operator', reason: 'Tester no longer needs the account' }))).toBe('OK');
+    const second = await authorizeSeedProvisioning(target('admin2@electrohub.com', id), approval);
+    expect(await codeOf(revokeSeedProvisioning(target('admin2@electrohub.com', id), { operator: 'QA Operator', reason: 'Tester no longer needs the account' }))).toBe('OK');
     expect((await post('/api/auth/admin/provisioning/redeem', { token: second.token, password: NEW_PASSWORD })).status).toBe(410);
-    expect(await codeOf(revokeSeedProvisioning(target('admin4@electrohub.com', id), approval))).toBe('NOT_PENDING');
+    expect(await codeOf(revokeSeedProvisioning(target('admin2@electrohub.com', id), approval))).toBe('NOT_PENDING');
     // The seeded password is unchanged (nothing was redeemed: 403 ENROLLMENT_NOT_AUTHORIZED, not 401) and no window was opened.
-    expect((await post('/api/auth/login', { email: 'admin4@electrohub.com', password: SEED_PASSWORD })).body.error.code).toBe('ENROLLMENT_NOT_AUTHORIZED');
+    expect((await post('/api/auth/login', { email: 'admin2@electrohub.com', password: SEED_PASSWORD })).body.error.code).toBe('ENROLLMENT_NOT_AUTHORIZED');
     expect((await prisma.adminAccountSecurity.findUnique({ where: { userId: id } }))?.enrollmentAllowedUntil ?? null).toBeNull();
 
     // An Owner-emailed activation token is never accepted by the provisioning endpoint.
     const ownerToken = `owner-activation-${randomUUID()}`;
     const { createHash } = await import('node:crypto');
-    await prisma.adminMfaActivation.create({ data: { userId: id, email: 'admin4@electrohub.com', tokenHash: createHash('sha256').update(ownerToken).digest('hex'),
+    await prisma.adminMfaActivation.create({ data: { userId: id, email: 'admin2@electrohub.com', tokenHash: createHash('sha256').update(ownerToken).digest('hex'),
       expiresAt: new Date(Date.now() + 600_000) } });
     expect((await post('/api/auth/admin/provisioning/preview', { token: ownerToken })).status).toBe(410);
     expect((await post('/api/auth/admin/provisioning/redeem', { token: ownerToken, password: NEW_PASSWORD })).status).toBe(410);
@@ -296,5 +300,21 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     expect(valid({ NODE_ENV: 'development', E2E_OTP_OUTBOX_DIR: '/tmp/outbox', DATABASE_URL: remote })).toBe(false);
     expect(valid({ NODE_ENV: 'development', E2E_OTP_OUTBOX_DIR: '/tmp/outbox' })).toBe(true);
     expect(valid({ NODE_ENV: 'test', E2E_OTP_OUTBOX_DIR: '/tmp/outbox', DATABASE_URL: remote })).toBe(true);
+  });
+  it('PROV-09 the administrator list marks seed mailboxes (recorded or not) and tags operator-issued setup links by purpose', async () => {
+    const ids = await freshSeeds();
+    // A pre-provenance seed account: same email, provenance removed, so it is a seed mailbox that is not yet recorded.
+    await prisma.adminSeedIdentity.delete({ where: { userId: ids['admin2@electrohub.com']! } });
+    await authorizeSeedProvisioning(target('admin1@electrohub.com', ids['admin1@electrohub.com']!), approval);
+    const other = await prisma.user.create({ data: { email: `prov09-${randomUUID()}@qa.invalid`, firstName: 'Real', lastName: 'Admin',
+      passwordHash: await hashPassword(SEED_PASSWORD), roleId: await roleId('ADMIN') } });
+    // Searched one by one: earlier suites leave many administrators, so a single page would not reach every row.
+    const rows = (await Promise.all([...SEEDS, other.email].map(email => adminTeamService.listAdministrators({ page: 1, pageSize: 10, search: email })))).flatMap(page => page.data);
+    const byEmail = (email: string) => rows.find(row => row.email === email)!;
+    expect(byEmail('admin1@electrohub.com').seedAccount).toEqual({ recorded: true });
+    expect(byEmail('admin1@electrohub.com').mfaActivation).toMatchObject({ status: 'PENDING', purpose: 'SEED_PROVISIONING' });
+    expect(byEmail('admin2@electrohub.com').seedAccount).toEqual({ recorded: false });
+    expect(byEmail('admin@electrohub.com').seedAccount).toBeNull(); // the primary Owner is never a provisioning target
+    expect(byEmail(other.email).seedAccount).toBeNull(); // a real mailbox keeps the emailed activation
   });
 });

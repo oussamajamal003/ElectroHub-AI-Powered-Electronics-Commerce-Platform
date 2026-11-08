@@ -94,10 +94,7 @@ export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload }:
         error={errors.supportEmail} maxLength={255} fullWidth autoComplete="email" />
       <Input label="Phone" type="tel" value={draft.supportPhone} onChange={event => update('supportPhone', event.target.value)}
         error={errors.supportPhone} maxLength={32} fullWidth autoComplete="tel" helperText="Digits, spaces and + ( ) . - only." />
-      <div className={styles.field}>
-        <span className={styles.fieldLabel}>Currency</span>
-        <span className={styles.fieldHelp} data-testid="store-currency">USD – US Dollar (fixed)</span>
-      </div>
+      <Input label="Currency" value="USD – US Dollar (fixed)" readOnly fullWidth data-testid="store-currency" />
       <h3 className={settingsStyles.groupHeading}>Address and locale</h3>
       <Input label="Address line 1" value={draft.addressLine1} onChange={event => update('addressLine1', event.target.value)}
         error={errors.addressLine1} maxLength={255} fullWidth autoComplete="address-line1" />

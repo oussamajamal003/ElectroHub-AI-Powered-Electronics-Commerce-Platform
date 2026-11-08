@@ -39,7 +39,8 @@ interface Actor { userId: string; requestId?: string }
 
 export function activationDto(row: AdminMfaActivation, now = new Date()) {
   const status = row.status === AdminActivationStatus.PENDING && row.expiresAt <= now ? 'EXPIRED' : row.status;
-  return { id: row.id, status, deliveryStatus: row.deliveryStatus, expiresAt: row.expiresAt, lastSentAt: row.lastSentAt, sendCount: row.sendCount, createdAt: row.createdAt };
+  return { id: row.id, status, deliveryStatus: row.deliveryStatus, expiresAt: row.expiresAt, lastSentAt: row.lastSentAt, sendCount: row.sendCount, createdAt: row.createdAt,
+    purpose: row.purpose };
 }
 
 export class AdminActivationService {

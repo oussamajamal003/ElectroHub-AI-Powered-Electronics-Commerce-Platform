@@ -10,7 +10,7 @@ import { randomToken, sha256Hex } from './admin-crypto.js';
 import { adminMfaService } from './admin-mfa.service.js';
 
 /**
- * Task 05.2 operator provisioning of SEEDED development administrators that have no deliverable mailbox (admin1–4@electrohub.com).
+ * Task 05.2 operator provisioning of SEEDED development administrators that have no deliverable mailbox (admin1–2@electrohub.com).
  *
  * Trust model (deliberately different from Owner activation): an operator explicitly approves one exact seed identity on one exact,
  * allowed database and hands a one-time proof to a named tester out of band. This proves operator authorization, NOT mailbox control:

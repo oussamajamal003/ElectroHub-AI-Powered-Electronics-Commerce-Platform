@@ -155,13 +155,21 @@ describe('AdminTeamService.createInvitation collisions', () => {
     state.reset();
     for (const key of Object.keys(state.row)) delete state.row[key];
     state.invitation.findFirst.mockResolvedValue(null);
-    db.user.findFirst.mockResolvedValue(null);
+    db.user.findFirst.mockReset().mockResolvedValue(null);
     email.sendAdminInvitationEmail.mockResolvedValue(true);
   });
 
-  it.each([['an existing CUSTOMER'], ['an existing ADMIN'], ['an unverified CUSTOMER'], ['an address held as a pending email change']])(
-    'rejects %s with ACCOUNT_EXISTS and creates no invitation, whatever the role', async () => {
-      db.user.findFirst.mockResolvedValue({ id: 'existing-user' });
+  it.each([['active ADMIN'], ['inactive ADMIN']])('rejects an existing %s without creating an invitation', async () => {
+      db.user.findFirst.mockResolvedValue({ role: { name: 'ADMIN' } });
+      await expect(new AdminTeamService().createInvitation(owner, { email: 'person@example.com', grantManageAdmins: false }))
+        .rejects.toMatchObject({ statusCode: 409, code: 'ADMIN_ALREADY_EXISTS' });
+      expect(state.invitation.create).not.toHaveBeenCalled();
+      expect(email.sendAdminInvitationEmail).not.toHaveBeenCalled();
+    });
+
+  it.each([['CUSTOMER', { role: { name: 'CUSTOMER' } }], ['pending email reservation', null]])(
+    'rejects an existing %s with a generic conflict', async (_label, primary) => {
+      db.user.findFirst.mockResolvedValueOnce(primary).mockResolvedValueOnce({ id: 'existing-user' });
       await expect(new AdminTeamService().createInvitation(owner, { email: 'person@example.com', grantManageAdmins: false }))
         .rejects.toMatchObject({ statusCode: 409, code: 'ACCOUNT_EXISTS' });
       expect(state.invitation.create).not.toHaveBeenCalled();
@@ -169,9 +177,10 @@ describe('AdminTeamService.createInvitation collisions', () => {
     });
 
   it('matches the normalized address against both the account email and a pending email change', async () => {
-    db.user.findFirst.mockResolvedValue({ id: 'existing-user' });
+    db.user.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'existing-user' });
     await expect(new AdminTeamService().createInvitation(owner, { email: '  Person@Example.COM ', grantManageAdmins: false })).rejects.toBeInstanceOf(AppError);
-    expect(db.user.findFirst).toHaveBeenCalledWith({ where: { OR: [{ email: 'person@example.com' }, { pendingEmail: 'person@example.com' }] }, select: { id: true } });
+    expect(db.user.findFirst).toHaveBeenNthCalledWith(1, { where: { email: { equals: 'person@example.com', mode: 'insensitive' } }, select: { role: { select: { name: true } } } });
+    expect(db.user.findFirst).toHaveBeenNthCalledWith(2, { where: { pendingEmail: { equals: 'person@example.com', mode: 'insensitive' } }, select: { id: true } });
   });
 
   it('keeps a live pending invitation distinct from an account collision', async () => {

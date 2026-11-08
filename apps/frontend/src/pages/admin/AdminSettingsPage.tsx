@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { Bell, Store, Truck, Users } from 'lucide-react';
-import { ConfirmDialog, ButtonLink, PageHeader, QueryProblem } from '@/features/admin/shared/AdminUi';
+import { ConfirmDialog, PageHeader, QueryProblem } from '@/features/admin/shared/AdminUi';
 import { useUnsavedChangesGuard } from '@/features/admin/shared/useUnsavedChangesGuard';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
 import pageStyles from './AdminSettingsPage.module.scss';
@@ -17,6 +17,8 @@ import {
 } from '@/features/admin/settings/api';
 import { useAdminProfile } from '@/features/admin/security/api';
 import { canAccessAdministrators } from '@/features/admin/security/administratorsAccess';
+import { AdminAdministratorsPage } from '@/pages/admin/AdminAdministratorsPage';
+import { AdministratorsAccessGate } from '@/pages/admin/AdministratorsAccessGate';
 
 /** Tab ids are part of the URL (`/admin/settings?tab=shipping`); an unknown or missing value opens Store. */
 const TABS = ['store', 'notifications', 'shipping', 'administrators'] as const;
@@ -70,22 +72,17 @@ function ShippingTab({ generation, onDirtyChange, onSaved, onReload }: TabProps)
   </div>;
 }
 
-function AdministratorsTab() {
-  return <section className={styles.panel} aria-labelledby="administrators-title">
-    <h2 id="administrators-title" className={styles.panelTitle}>Administrators</h2>
-    <p className={styles.panelHint}>Manage administrator accounts and invitations on the team page.</p>
-    <div>
-      <ButtonLink to="/admin/settings/administrators" variant="outline">Manage administrators</ButtonLink>
-    </div>
-  </section>;
-}
-
 export function AdminSettingsPage() {
   const [params, setParams] = useSearchParams();
   // The Administrators section is offered only to Owners and administrator managers (the team page enforces the same rule).
-  const canSeeAdministrators = canAccessAdministrators(useAdminProfile().data?.capabilities);
-  const tabs = TABS.filter(tab => tab !== 'administrators' || canSeeAdministrators);
+  const adminProfile = useAdminProfile();
   const requested = parseTab(params.get('tab'));
+  // While permissions load the tab is shown (the gate shows a skeleton if opened), so it never pops in late for administrators who have access;
+  // it is removed once the profile says the administrator cannot manage the team.
+  const checkingAdministrators = adminProfile.data === undefined && !adminProfile.isError;
+  const canSeeAdministrators = canAccessAdministrators(adminProfile.data?.capabilities);
+  const showAdministrators = canSeeAdministrators || checkingAdministrators;
+  const tabs = TABS.filter(tab => tab !== 'administrators' || showAdministrators);
   const active: Tab = tabs.includes(requested) ? requested : 'store';
   const client = useQueryClient();
   const [dirty, setDirty] = useState(false);
@@ -144,8 +141,9 @@ export function AdminSettingsPage() {
       <TabsContent value="shipping">
         <ShippingTab {...common} onReload={reloadFor('shipping')} />
       </TabsContent>
-      {canSeeAdministrators && <TabsContent value="administrators">
-        <AdministratorsTab />
+      {showAdministrators && <TabsContent value="administrators">
+        {/* The team itself, in place: the same gate and page as /admin/settings/administrators, without a second page header. */}
+        <AdministratorsAccessGate><AdminAdministratorsPage embedded /></AdministratorsAccessGate>
       </TabsContent>}
     </Tabs>
 

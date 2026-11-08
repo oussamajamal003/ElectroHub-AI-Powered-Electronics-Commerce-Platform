@@ -21,7 +21,7 @@ const ip = () => `10.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random
 const post = (url: string, body?: object) => { const call = request(app).post(url).set('X-Forwarded-For', ip()); return body ? call.send(body) : call; };
 const code = (secret: string, offset = 0) => hotp(base32Decode(secret), totpStep(Date.now()) + BigInt(offset));
 const approval = { operator: 'QA Operator', tester: 'QA Tester', reason: 'Disposable QA of seed password recovery' };
-const SEEDS = ['admin@electrohub.com', 'admin1@electrohub.com', 'admin2@electrohub.com', 'admin3@electrohub.com', 'admin4@electrohub.com'];
+const SEEDS = ['admin@electrohub.com', 'admin1@electrohub.com', 'admin2@electrohub.com'];
 const handoffDir = mkdtempSync(path.join(tmpdir(), 'eh-seed-recovery-'));
 const target = (email: string, userId: string) => ({ databaseIdentity: 'local', email, userId });
 const codeOf = async (promise: Promise<unknown>) => {
@@ -139,9 +139,13 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
   });
 
   it('REC-04 a recovery code is accepted as the mandatory factor proof', async () => {
-    const id = ids['admin3@electrohub.com']!;
-    const { recoveryCodes } = await enroll('admin3@electrohub.com', id);
-    const issued = await authorizeSeedPasswordRecovery(target('admin3@electrohub.com', id), approval);
+    // Only admin1–2 are seeded and both are enrolled by earlier tests: re-seed so admin2 is fresh and factor-less again.
+    await prisma.user.deleteMany({ where: { email: 'admin2@electrohub.com' } });
+    await prisma.adminSeedIdentity.deleteMany({ where: { seedEmail: 'admin2@electrohub.com' } });
+    await seedAdministrators(prisma, { adminRoleId: (await prisma.role.findUniqueOrThrow({ where: { name: 'ADMIN' } })).id, passwordFor: () => SEED_PASSWORD });
+    const id = (await prisma.user.findUniqueOrThrow({ where: { email: 'admin2@electrohub.com' } })).id;
+    const { recoveryCodes } = await enroll('admin2@electrohub.com', id);
+    const issued = await authorizeSeedPasswordRecovery(target('admin2@electrohub.com', id), approval);
     const opened = await post('/api/auth/admin/password-recovery/seed-proof', { token: issued.token });
     expect(opened.status).toBe(200);
     const verified = await post('/api/auth/admin/password-recovery/recovery-code', { recoveryToken: opened.body.recoveryToken, code: recoveryCodes[0] });

@@ -4,8 +4,8 @@ import { adminSecurityController as c } from '../controllers/admin-security.cont
 import { adminGuard, requireAdminCapability, requireFreshStepUp, requireStepUp } from '../middleware/adminGuard.js';
 import { env } from '../config/env.js';
 
-export const seedProvisioningRoutesEnabled = (config: { NODE_ENV: string; ADMIN_SEED_PROVISIONING_ENABLED?: string }) =>
-  config.ADMIN_SEED_PROVISIONING_ENABLED === 'true' && config.NODE_ENV !== 'production';
+import { seedProvisioningRoutesEnabled } from '../utils/seed-provisioning-flag.js';
+export { seedProvisioningRoutesEnabled };
 
 /**
  * Task 05.2 administrator security routes.

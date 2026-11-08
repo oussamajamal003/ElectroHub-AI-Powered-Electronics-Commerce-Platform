@@ -146,8 +146,12 @@ test.describe.serial('Task 05.2 Administrators page access (disposable)', () => 
     await enroll(owner);
     await owner.goto('/admin/settings');
     await owner.getByRole('tab', { name: 'Administrators' }).click();
-    await owner.getByRole('link', { name: 'Manage administrators' }).click();
-    await expect(owner).toHaveURL(/\/admin\/settings\/administrators$/);
+    // The tab shows the team in place (no extra click), under the Settings page title.
+    await expect(owner).toHaveURL(/\/admin\/settings\?tab=administrators$/);
+    await expect(owner.getByRole('heading', { level: 2, name: 'Administrators' })).toBeVisible();
+    await expect(owner.getByText(credentials.staffEmail)).toBeVisible();
+    await capture(owner, 'owner-settings-administrators-tab', [390, 768, 1440, 1920]);
+    await owner.goto('/admin/settings/administrators');
     await expect(owner.getByRole('heading', { level: 1, name: 'Administrators' })).toBeVisible();
     await expect(owner.getByText(credentials.staffEmail)).toBeVisible();
     await expect(owner.getByRole('button', { name: 'Invite administrator' })).toBeVisible();

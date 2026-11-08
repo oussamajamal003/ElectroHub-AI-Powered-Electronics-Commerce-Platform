@@ -24,6 +24,8 @@ export interface AdminProfile {
   role: string;
   emailVerified: boolean;
   capabilities: AdminCapabilities;
+  /** End of this session's fresh-verification window (null when a sensitive change will ask to confirm it's you first). */
+  stepUpUntil?: string | null;
   /** Advisory: the server re-checks inside the deletion transaction. LAST_OWNER: ordinary deletion is refused; the Owner transfers ownership as part of deleting instead. */
   deletion?: { allowed: boolean; reason: 'LAST_OWNER' | null };
 }
@@ -83,6 +85,8 @@ export interface AdministratorSummary {
   enrollmentAuthorizedUntil: string | null;
   isSelf: boolean;
   lastLoginAt: string | null;
+  /** Development seed mailbox (admin1–2), sent only where operator provisioning is enabled; `recorded` = provenance bound to this account. */
+  seedAccount?: { recorded: boolean } | null;
 }
 export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED';
 export type InvitationDelivery = 'PENDING' | 'SENT' | 'FAILED';
@@ -102,6 +106,8 @@ export interface AdminActivation {
   expiresAt: string;
   lastSentAt: string | null;
   sendCount: number;
+  /** Who issued it: an Owner's emailed link, or an operator's out-of-band seed setup link. */
+  purpose?: 'OWNER_ACTIVATION' | 'SEED_PROVISIONING';
 }
 export interface AdminActivationPreview { email: string; firstName: string; lastName: string; expiresAt: string }
 export type StepUpMethod = 'TOTP' | 'RECOVERY_CODE';
@@ -335,7 +341,17 @@ export const useRemovePasskey = () => useNamespaceMutation(adminSecurityKeys.all
 export const useRevokeSession = () => useNamespaceMutation(adminSecurityKeys.all, (id: string) => adminSecurityApi.revokeSession(id));
 export const useRevokeOtherSessions = () => useNamespaceMutation(adminSecurityKeys.all, () => adminSecurityApi.revokeOtherSessions());
 
-export const useUpdateAdministratorAccess = () => useNamespaceMutation(adminTeamKeys.all, (vars: { id: string; body: { isActive?: boolean; canManageAdmins?: boolean } }) => adminTeamApi.updateAccess(vars.id, vars.body));
+/** Access switches settle as soon as the server answers; the team list refreshes in the background instead of holding the switch. */
+export function useUpdateAdministratorAccess() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; body: { isActive?: boolean; canManageAdmins?: boolean } }) => adminTeamApi.updateAccess(vars.id, vars.body),
+    // Patch the cached rows with the confirmed change so the switch never flips back while the background refetch runs.
+    onSuccess: (_result, vars) => client.setQueriesData<{ data: AdministratorSummary[] }>({ queryKey: ['admin', 'team', 'administrators'] },
+      cached => cached && { ...cached, data: cached.data.map(row => row.id === vars.id ? { ...row, ...vars.body } : row) }),
+    onSettled: () => { void client.invalidateQueries({ queryKey: adminTeamKeys.all }); },
+  });
+}
 export const useCreateInvitation = () => useNamespaceMutation(adminTeamKeys.all, (body: { email: string; grantManageAdmins: boolean }) => adminTeamApi.createInvitation(body));
 export const useResendInvitation = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.resendInvitation(id));
 export const useRevokeInvitation = () => useNamespaceMutation(adminTeamKeys.all, (id: string) => adminTeamApi.revokeInvitation(id));

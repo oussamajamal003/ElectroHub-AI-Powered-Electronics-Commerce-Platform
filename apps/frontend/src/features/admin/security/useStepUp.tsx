@@ -16,7 +16,7 @@ export const isStepUpCancelled = (error: unknown): error is StepUpCancelledError
  * the same action is retried. Closing the dialog rejects with StepUpCancelledError so the caller can stay quiet about it.
  * Render `dialog` once in the page that calls `runWithStepUp`.
  */
-export function useStepUp(): { runWithStepUp: <T>(action: () => Promise<T>) => Promise<T>; dialog: ReactNode } {
+export function useStepUp(): { runWithStepUp: <T>(action: () => Promise<T>) => Promise<T>; dialog: ReactNode; verifying: boolean } {
   const [open, setOpen] = useState(false);
   const waiter = useRef<{ resolve: () => void; reject: (error: unknown) => void } | null>(null);
 
@@ -50,5 +50,6 @@ export function useStepUp(): { runWithStepUp: <T>(action: () => Promise<T>) => P
     />
   );
 
-  return { runWithStepUp, dialog };
+  // `verifying`: the step-up dialog is open (callers keep optimistic UI back until the administrator has verified).
+  return { runWithStepUp, dialog, verifying: open };
 }
