@@ -51,6 +51,8 @@ preAuthRouter.post('/admin/activation/redeem', inviteLimiter, c.activationRedeem
 if (seedProvisioningRoutesEnabled(env)) {
   preAuthRouter.post('/admin/provisioning/preview', inviteLimiter, c.provisioningPreview);
   preAuthRouter.post('/admin/provisioning/redeem', inviteLimiter, c.provisioningRedeem);
+  // Seed administrators with a factor but no mailbox: operator proof in place of the email code (factor proof still required next).
+  preAuthRouter.post('/admin/password-recovery/seed-proof', mfaLimiter, c.recoverySeedProof);
 }
 
 export const adminSecurityRouter = Router();

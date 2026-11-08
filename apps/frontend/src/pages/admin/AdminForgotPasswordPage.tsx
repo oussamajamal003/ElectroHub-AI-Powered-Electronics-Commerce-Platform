@@ -74,6 +74,24 @@ export function AdminForgotPasswordPage() {
   // Each step moves focus to its heading so keyboard and screen-reader users land on the new content.
   useEffect(() => { headingRef.current?.focus(); }, [stage.name]);
 
+  // An operator recovery link (/admin/forgot-password#seed-recovery=…) stands in for the email code only. The fragment is removed from
+  // the address bar immediately so the proof is not left in history; it is redeemed once and the factor step stays mandatory.
+  useEffect(() => {
+    const match = /(?:^#|&)seed-recovery=([^&]+)/.exec(window.location.hash);
+    if (!match) return;
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    const token = decodeURIComponent(match[1] ?? '');
+    setPending(true);
+    adminRecoveryApi.verifySeedProof({ token })
+      .then(recovery => {
+        setNotice('Recovery link accepted. Confirm with your authenticator app, a passkey or a recovery code.');
+        setMethod(recovery.factors.totp ? 'totp' : recovery.factors.passkey ? 'passkey' : 'recovery');
+        setStage({ name: 'mfa', recovery });
+      })
+      .catch(err => setError(err instanceof ApiError && err.status === 410 ? err.message : describeAdminAuthError(err, 'team').message))
+      .finally(() => setPending(false));
+  }, []);
+
   const expired = expiry !== null && expiry - now <= 0;
   useEffect(() => {
     if (expired) restart('Your password recovery attempt expired. Start again.');

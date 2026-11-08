@@ -14,6 +14,8 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
  *  PROV-UI-02  operator CLI (register + provision, on "local") → private handoff file → /admin/provision → password → mandatory TOTP →
  *              MFA sign-in; no console before enrollment; replayed and expired setup links refused; keyboard-only form.
  *  PROV-UI-03  Forgot Password with the CAPTURED email code plus the enrolled authenticator → new password → MFA-assured console.
+ *  PROV-UI-04  enrolled seed account, forgotten password, no mailbox: operator recovery link replaces the email code only → enrolled
+ *              authenticator still required → new password → MFA sign-in; replayed link refused; factors-less refusal on the CLI.
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
 const credentials = JSON.parse(readFileSync(path.resolve(here, '../../../../.cache/task05-2-browser-credentials-5205.json'), 'utf8')) as {
@@ -24,6 +26,7 @@ const shots = path.resolve(here, '../../test-results/task05-2-dev-admin-activati
 const ACTIVATED_PASSWORD = 'Activated-Unique-9-Secret';
 const RECOVERED_PASSWORD = 'Recovered-Unique-9-Secret';
 const PROVISIONED_PASSWORD = 'Provisioned-Unique-9-Secret';
+const SEED_RECOVERED_PASSWORD = 'Seed-Recovered-Unique-9-Secret';
 const SEED_EMAIL = 'admin1@electrohub.com';
 
 function base32(text: string) {
@@ -95,6 +98,7 @@ function operatorCli(args: string[]) {
 
 test.describe.serial('Task 05.2 development administrator activation without real inboxes (disposable)', () => {
   let activatedSecret = '';
+  let seedSecret = '';
   const handoffDir = mkdtempSync(path.join(tmpdir(), 'eh-provision-'));
   test.afterAll(() => rmSync(handoffDir, { recursive: true, force: true }));
 
@@ -177,6 +181,7 @@ test.describe.serial('Task 05.2 development administrator activation without rea
     await probe.goto('/admin');
     await expect(probe).toHaveURL(/\/admin\/login/);
     const secret = await enroll(tester);
+    seedSecret = secret;
 
     // Replay of the consumed setup link is refused.
     const replay = await newPage(browser);
@@ -241,5 +246,55 @@ test.describe.serial('Task 05.2 development administrator activation without rea
     const old = await newPage(browser);
     await passwordStep(old, credentials.legacyDeliveryEmail, ACTIVATED_PASSWORD);
     await expect(old.getByLabel('6-digit code')).toHaveCount(0);
+  });
+
+  test('PROV-UI-04 operator recovery link for an enrolled seed account: replaces only the email code; the authenticator stays mandatory', async ({ browser }) => {
+    expect(seedSecret).not.toBe('');
+    const id = disposableSql(`SELECT id FROM users WHERE email = '${SEED_EMAIL}'`);
+    const approval = ['--operator=QA Operator', '--tester=QA Tester', '--reason=Disposable browser QA of seed password recovery'];
+    // A factor-less administrator is refused (first-time setup uses provision-seeded-admin instead).
+    const legacy = disposableSql(`SELECT id FROM users WHERE email = 'legacy-unactivated@qa.invalid'`);
+    expect(operatorCli(['recover-seeded-admin-password', 'legacy-unactivated@qa.invalid', `--user-id=${legacy}`, ...approval,
+      `--handoff-file=${path.join(handoffDir, 'never-recovery.txt')}`]).out).toContain('[NOT_SEED_EMAIL]');
+    const handoff = path.join(handoffDir, 'admin1-recovery.txt');
+    const issued = operatorCli(['recover-seeded-admin-password', SEED_EMAIL, `--user-id=${id}`, ...approval, `--handoff-file=${handoff}`]);
+    expect(issued.status, issued.out).toBe(0);
+    const link = readFileSync(handoff, 'utf8').trim();
+    expect(link).toMatch(/\/admin\/forgot-password#seed-recovery=/);
+    expect(issued.out).not.toContain(link.split('#seed-recovery=')[1]!);
+
+    const page = await newPage(browser, { reducedMotion: 'reduce' });
+    await page.goto(link.replace('http://localhost:3205', ''));
+    // Straight to the factor step: no email code is asked for, and the proof is removed from the address bar.
+    await expect(page.getByRole('heading', { name: 'Confirm your identity' })).toBeVisible();
+    expect(new URL(page.url()).hash).toBe('');
+    await expect(page.getByText('Recovery link accepted. Confirm with your authenticator app, a passkey or a recovery code.')).toBeVisible();
+    await capture(page, 'seed-recovery-factor', [390, 768, 1440]);
+    await page.getByLabel('6-digit code').fill('000000');
+    await page.getByRole('button', { name: 'Verify and continue' }).click();
+    await expect(page.getByRole('heading', { name: 'Create a new password' })).toHaveCount(0);
+    await page.getByLabel('6-digit code').fill(await freshCode(seedSecret));
+    await page.getByRole('button', { name: 'Verify and continue' }).click();
+    await expect(page.getByRole('heading', { name: 'Create a new password' })).toBeVisible();
+    await page.getByLabel('New password', { exact: true }).fill(SEED_RECOVERED_PASSWORD);
+    await page.getByLabel('Confirm password').fill(SEED_RECOVERED_PASSWORD);
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/admin\/?$/);
+
+    // Single use.
+    const replay = await newPage(browser);
+    await replay.goto(link.replace('http://localhost:3205', ''));
+    await expect(replay.getByText(/This recovery link is invalid, expired or has already been used/)).toBeVisible();
+    await expect(replay.getByRole('heading', { name: 'Confirm your identity' })).toHaveCount(0);
+    await capture(replay, 'seed-recovery-replayed', [390, 1440]);
+    // Old password refused; new password still requires MFA.
+    const old = await newPage(browser);
+    await passwordStep(old, SEED_EMAIL, PROVISIONED_PASSWORD);
+    await expect(old.getByLabel('6-digit code')).toHaveCount(0);
+    const fresh = await newPage(browser);
+    await passwordStep(fresh, SEED_EMAIL, SEED_RECOVERED_PASSWORD);
+    await expect(fresh.getByLabel('6-digit code')).toBeVisible();
+    // Never presented as email verification; factors untouched.
+    expect(disposableSql(`SELECT count(*) FROM admin_mfa_factors WHERE "userId" = '${id}' AND "verifiedAt" IS NOT NULL AND "disabledAt" IS NULL`)).toBe('1');
   });
 });

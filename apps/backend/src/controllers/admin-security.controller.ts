@@ -1,3 +1,4 @@
+import { redeemSeedPasswordRecoveryProof } from '../services/admin-seed-provisioning.service.js';
 import { adminDeletionNoticeService } from '../services/admin-deletion-notice.js';
 import type { NextFunction, Request, Response } from 'express';
 import { z, ZodError } from 'zod';
@@ -169,6 +170,11 @@ export const adminSecurityController = {
   provisioningPreview: handle(async (req, res) => {
     const body = z.object({ token: z.string().min(20).max(200) }).strict().parse(req.body);
     res.set('Cache-Control', 'no-store').json(await adminActivationService.previewProvisioning(body.token));
+  }),
+  // Operator-issued seed recovery proof: replaces ONLY the emailed code; the response is the same factor-required recovery transaction.
+  recoverySeedProof: handle(async (req, res) => {
+    const body = z.object({ token: z.string().min(20).max(200) }).strict().parse(req.body);
+    res.set('Cache-Control', 'no-store').status(200).json(await redeemSeedPasswordRecoveryProof(body.token));
   }),
   provisioningRedeem: handle(async (req, res) => {
     const body = z.object({ token: z.string().min(20).max(200), password }).strict().parse(req.body);

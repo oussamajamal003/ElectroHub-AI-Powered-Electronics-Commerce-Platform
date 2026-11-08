@@ -156,6 +156,8 @@ export const adminRecoveryApi = {
   request: (body: { email: string }) => apiClient<{ message: string }>(`${RECOVERY}/request`, { method: 'POST', data: body }),
   resend: (body: { email: string }) => apiClient<{ message: string; resendAvailableAt?: string }>(`${RECOVERY}/resend`, { method: 'POST', data: body }),
   verifyEmail: (body: { email: string; code: string }) => apiClient<AdminRecoveryTransaction>(`${RECOVERY}/verify-email`, { method: 'POST', data: body }),
+  /** Operator-issued seed recovery proof (DEV / disposable only): replaces the email code; the factor step that follows is unchanged. */
+  verifySeedProof: (body: { token: string }) => apiClient<AdminRecoveryTransaction>(`${RECOVERY}/seed-proof`, { method: 'POST', data: body }),
   verifyTotp: (body: { recoveryToken: string; code: string }) => apiClient<AdminResetAuthorization>(`${RECOVERY}/totp`, { method: 'POST', data: body }),
   verifyRecoveryCode: (body: { recoveryToken: string; code: string }) =>
     apiClient<AdminResetAuthorization>(`${RECOVERY}/recovery-code`, { method: 'POST', data: body }),

@@ -97,7 +97,7 @@ export class AdminActivationService {
   }
 
   async state(targetId: string) {
-    const row = await prisma.adminMfaActivation.findFirst({ where: { userId: targetId }, orderBy: { createdAt: 'desc' } });
+    const row = await prisma.adminMfaActivation.findFirst({ where: { userId: targetId, purpose: { not: AdminActivationPurpose.SEED_PASSWORD_RECOVERY } }, orderBy: { createdAt: 'desc' } });
     return row ? activationDto(row) : null;
   }
 
@@ -159,7 +159,7 @@ export class AdminActivationService {
     return row?.adminSeedIdentity?.seedEmail === email && !row.adminSecurity?.isOwner;
   }
 
-  private async previewFor(token: string, purpose: AdminActivationPurpose) {
+  private async previewFor(token: string, purpose: keyof typeof PURPOSE) {
     const fail = PURPOSE[purpose].unavailable;
     if (!tokenShape(token)) throw fail();
     const row = await prisma.adminMfaActivation.findUnique({ where: { tokenHash: sha256Hex(token) },
@@ -172,7 +172,7 @@ export class AdminActivationService {
     return { email: row.user.email, firstName: row.user.firstName, lastName: row.user.lastName, expiresAt: row.expiresAt };
   }
 
-  private async redeemFor(input: { token: string; password: string }, purpose: AdminActivationPurpose) {
+  private async redeemFor(input: { token: string; password: string }, purpose: keyof typeof PURPOSE) {
     const { unavailable: fail, audit, revokedReason } = PURPOSE[purpose];
     if (!tokenShape(input.token)) throw fail();
     const passwordHash = await hashPassword(input.password); // bcrypt outside the transaction

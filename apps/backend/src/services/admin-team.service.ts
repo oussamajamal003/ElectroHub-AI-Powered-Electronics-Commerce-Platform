@@ -56,7 +56,7 @@ export class AdminTeamService {
       prisma.adminWebAuthnCredential.groupBy({ by: ['userId'], where: { userId: { in: ids }, revokedAt: null }, _count: { _all: true } }),
       prisma.securityEvent.groupBy({ by: ['userId'], where: { userId: { in: ids }, type: 'LOGIN_SUCCESS' }, _max: { createdAt: true } }),
       // The live activation per administrator (at most one PENDING row; expiry is derived).
-      prisma.adminMfaActivation.findMany({ where: { userId: { in: ids }, status: 'PENDING' } }),
+      prisma.adminMfaActivation.findMany({ where: { userId: { in: ids }, status: 'PENDING', purpose: { not: 'SEED_PASSWORD_RECOVERY' } } }),
     ]);
     const count = (rows: { userId: string | null; _count: { _all: number } }[], id: string) => rows.find(row => row.userId === id)?._count._all ?? 0;
     return {

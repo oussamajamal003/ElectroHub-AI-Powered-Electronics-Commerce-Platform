@@ -6,7 +6,7 @@ import { adminRecoveryApi } from '@/features/admin/security/api';
 import { ApiError } from '@/lib/api';
 
 vi.mock('@/features/admin/security/api', () => ({
-  adminRecoveryApi: { request: vi.fn(), resend: vi.fn(), verifyEmail: vi.fn(), verifyTotp: vi.fn(), verifyRecoveryCode: vi.fn(),
+  adminRecoveryApi: { request: vi.fn(), resend: vi.fn(), verifyEmail: vi.fn(), verifySeedProof: vi.fn(), verifyTotp: vi.fn(), verifyRecoveryCode: vi.fn(),
     passkeyOptions: vi.fn(), verifyPasskey: vi.fn(), complete: vi.fn() },
 }));
 const completeAdminSession = vi.fn();
@@ -194,5 +194,25 @@ describe('AdminForgotPasswordPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Verify and continue' }));
     expect(await screen.findByText('Your password recovery attempt expired. Start again.')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Reset your administrator password' })).toBeInTheDocument());
+  });
+
+  it('an operator seed recovery link replaces only the email code: fragment cleared, factor step still required', async () => {
+    window.history.replaceState(null, '', '/admin/forgot-password#seed-recovery=operator-proof-token-abcdefghij');
+    vi.mocked(adminRecoveryApi.verifySeedProof).mockResolvedValue(transaction());
+    renderPage();
+    await screen.findByRole('heading', { name: 'Confirm your identity' });
+    expect(adminRecoveryApi.verifySeedProof).toHaveBeenCalledTimes(1);
+    expect(adminRecoveryApi.verifySeedProof).toHaveBeenCalledWith({ token: 'operator-proof-token-abcdefghij' });
+    expect(window.location.hash).toBe('');
+    expect(adminRecoveryApi.verifyEmail).not.toHaveBeenCalled();
+    expect(adminRecoveryApi.complete).not.toHaveBeenCalled();
+  });
+
+  it('an invalid or used seed recovery link shows the server message and stays on the email step', async () => {
+    window.history.replaceState(null, '', '/admin/forgot-password#seed-recovery=used-proof-token-abcdefghijk');
+    vi.mocked(adminRecoveryApi.verifySeedProof).mockRejectedValue(new ApiError(410, 'This recovery link is invalid, expired or has already been used.'));
+    renderPage();
+    expect(await screen.findByText('This recovery link is invalid, expired or has already been used.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send verification code' })).toBeInTheDocument();
   });
 });

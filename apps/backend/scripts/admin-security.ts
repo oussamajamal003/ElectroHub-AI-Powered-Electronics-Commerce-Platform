@@ -16,6 +16,10 @@
  *                                                                               [--supersede-deleted]
  *   npm run admin:security -- provision-seeded-admin <email> --user-id=<uuid> --operator=<name> --tester=<name> --reason="<why>"
  *                                                       --handoff-file=<path outside any git checkout> --confirm-target=<ref> [--minutes=30]
+ *   npm run admin:security -- recover-seeded-admin-password <email> --user-id=<uuid> --operator=<name> --tester=<name> --reason="<why>"
+ *                                                       --handoff-file=<path outside any git checkout> --confirm-target=<ref> [--minutes=30]
+ *                                                       (account must HAVE a factor; replaces only the emailed code, factor still required)
+ *   npm run admin:security -- revoke-seed-password-recovery <email> --user-id=<uuid> --operator=<name> --reason="<why>" --confirm-target=<ref>
  *   npm run admin:security -- revoke-seed-provisioning <email> --user-id=<uuid> --operator=<name> --reason="<why>" --confirm-target=<ref>
  *
  * <ref> must equal the database identity derived from DATABASE_URL (Supabase project ref, or "local" for a loopback cluster), so a
@@ -27,11 +31,12 @@ import path from 'node:path';
 import { prisma } from '../src/lib/prisma.js';
 import { recordAdminAudit } from '../src/services/admin-audit.js';
 import {
-  assertProvisioningTarget, authorizeSeedProvisioning, databaseIdentity, provisioningLink, registerSeedIdentity, revokeSeedProvisioning, seedIdentityStatus,
+  assertProvisioningTarget, authorizeSeedPasswordRecovery, authorizeSeedProvisioning, passwordRecoveryLink, databaseIdentity, provisioningLink, registerSeedIdentity, revokeSeedProvisioning, seedIdentityStatus,
 } from '../src/services/admin-seed-provisioning.service.js';
 
 const targetRef = databaseIdentity;
-const SEED_COMMANDS = new Set(['seed-status', 'register-seed-identity', 'provision-seeded-admin', 'revoke-seed-provisioning']);
+const SEED_COMMANDS = new Set(['seed-status', 'register-seed-identity', 'provision-seeded-admin', 'revoke-seed-provisioning',
+  'recover-seeded-admin-password', 'revoke-seed-password-recovery']);
 
 /** The handoff file must not be inside any git checkout (it could be committed) and must not already exist. */
 function assertHandoffPath(file: string | undefined): string {
@@ -94,6 +99,20 @@ async function main() {
     console.log(`Provisioning ${revoked.provisioningId} revoked.`);
     return;
   }
+  if (command === 'recover-seeded-admin-password') {
+    const handoff = assertHandoffPath(flags['handoff-file']);
+    const minutes = flags.minutes ? Number(flags.minutes) : undefined;
+    const issued = await authorizeSeedPasswordRecovery(seedTarget, { ...approval, tester: flags.tester ?? '', minutes });
+    writeFileSync(handoff, `${passwordRecoveryLink(issued.token)}
+`, { flag: 'wx', mode: 0o600 });
+    console.log(`One-time recovery link written to ${handoff}. It expires at ${issued.expiresAt.toISOString()}. The tester still needs their authenticator, a recovery code or a passkey. Delete the file after handing it over.`);
+    return;
+  }
+  if (command === 'revoke-seed-password-recovery') {
+    const revoked = await revokeSeedProvisioning(seedTarget, approval, 'PASSWORD_RECOVERY');
+    console.log(`Recovery proof ${revoked.provisioningId} revoked.`);
+    return;
+  }
   const user = await prisma.user.findFirst({ where: { email: email.toLowerCase().trim(), role: { name: 'ADMIN' }, isActive: true }, select: { id: true } });
   if (!user) throw new Error('No active administrator has that email.');
 
@@ -139,7 +158,7 @@ async function main() {
     console.log(`MFA reset; re-enrollment allowed until ${until.toISOString()}.`);
     return;
   }
-  throw new Error('Unknown command. Use status | authorize-enrollment | grant-owner | reset-mfa | seed-status | register-seed-identity | provision-seeded-admin | revoke-seed-provisioning.');
+  throw new Error('Unknown command. Use status | authorize-enrollment | grant-owner | reset-mfa | seed-status | register-seed-identity | provision-seeded-admin | revoke-seed-provisioning | recover-seeded-admin-password | revoke-seed-password-recovery.');
 }
 
 main().then(() => prisma.$disconnect()).catch(async error => {

@@ -118,12 +118,39 @@ The deployment serving `/admin/provision` must run with `ADMIN_SEED_PROVISIONING
 | Situation | Procedure |
 |---|---|
 | **No factor yet** | Issue a new setup link (step 3). |
-| **Factor enrolled, password forgotten, still has the authenticator or recovery codes** | There is no mailbox for the email code. Do **not** send fake codes, reveal codes, or reset the password or MFA from the database. An operator recovery proof that replaces only the email step (the existing factor proof still required) is a proposed follow-up and is not implemented yet. Until then, the account stays locked. |
+| **Factor enrolled, password forgotten, still has the authenticator, a recovery code or a passkey** | Issue an operator recovery link (below). It replaces **only** the email-code step of the normal Forgot Password flow; the existing factor is still required. Never send fake codes, reveal codes, or reset the password or MFA from the database. |
 | **All factors lost** | Follow the separately approved high-assurance MFA recovery policy (`reset-mfa`, with out-of-band identity verification). It is never triggered just because a password was forgotten. |
+
+#### Operator recovery link (`recover-seeded-admin-password`)
+
+Same guards as provisioning: allowed targets only (`local` or shared DEV, exact `--confirm-target`, refused under `NODE_ENV=production` and on
+production before any database access), seed email + exact `--user-id`, recorded provenance, not an Owner, active, not deleted, and named
+`--operator`, `--tester` and `--reason`. Unlike provisioning, the account **must already have** a factor (`NOT_ENROLLED` otherwise).
+
+```bash
+cd apps/backend
+npm run admin:security -- recover-seeded-admin-password admin1@electrohub.com --user-id=<uuid> --operator="<name>" --tester="<name>"   --reason="<why>" --handoff-file=<private path outside any git checkout> --confirm-target=<ref> [--minutes=30]
+# Withdraw an unused link:
+npm run admin:security -- revoke-seed-password-recovery admin1@electrohub.com --user-id=<uuid> --operator="<name>" --reason="<why>" --confirm-target=<ref>
+```
+
+- The handoff file holds `/admin/forgot-password#seed-recovery=<proof>`. The proof is hashed in `admin_mfa_activations` (purpose
+  `SEED_PASSWORD_RECOVERY`), lasts 30 minutes by default (5–60), is single use and is never printed or audited.
+- Opening the link removes the fragment from the address bar and redeems it once at `POST /api/auth/admin/password-recovery/seed-proof`
+  (mounted only when `ADMIN_SEED_PROVISIONING_ENABLED=true` outside production). This opens the ordinary recovery transaction: the tester
+  must then pass TOTP, a recovery code or a passkey before a new password can be set. No session or reset authorization comes from the
+  proof itself.
+- It never resets or disables factors, never sets `emailVerifiedAt`, and never changes Owner or management capabilities. It is not accepted
+  by `/admin/provision` or `/admin/activate`, and Owners do not see it as an activation on the Administrators page.
+- Redemption re-checks the live account (still the seed identity, active, non-Owner, still has a factor). Expired, revoked, reused or
+  ineligible proofs return `410 SEED_RECOVERY_UNAVAILABLE` and are audited `ADMIN_SEED_PASSWORD_RECOVERY_REDEEMED` / `DENIED` with a code
+  (`EXPIRED`, `ALREADY_USED`, `REVOKED`, `NOT_ENROLLED`, …). Issue and revoke are audited as `ADMIN_SEED_PASSWORD_RECOVERY_AUTHORIZED` /
+  `_REVOKED` with operator, tester and reason.
+- Migration `20261109000000_admin_seed_password_recovery` adds the enum value only (additive).
 
 ## Verification
 
-- `apps/backend`: `node scripts/admin-security-pg.cjs` (PROV-01…08 on disposable PostgreSQL, including the real CLI).
+- `apps/backend`: `node scripts/admin-security-pg.cjs` (PROV-01…08 and REC-01…04 on disposable PostgreSQL, including the real CLI).
 - `apps/backend`: `npx vitest run src/integrations/brevo` (capture guard).
-- `apps/frontend`: `npx vitest run src/pages/admin/AdminActivatePage`.
-- Playwright: `npm run test:visual:task05-2-dev-activation` on a stack started with `TASK05_2_EMAIL_CAPTURE=1 TASK05_2_API_PORT=5205 TASK05_2_FRONTEND_PORT=3205`.
+- `apps/frontend`: `npx vitest run src/pages/admin/AdminActivatePage src/pages/admin/AdminForgotPasswordPage`.
+- Playwright: `npm run test:visual:task05-2-dev-activation` on a stack started with `TASK05_2_EMAIL_CAPTURE=1 TASK05_2_API_PORT=5205 TASK05_2_FRONTEND_PORT=3205` (PROV-UI-01…04; PROV-UI-04 is the seed recovery link).

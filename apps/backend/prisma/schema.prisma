@@ -1256,6 +1256,7 @@ model AdminInvitation {
 enum AdminActivationPurpose {
   OWNER_ACTIVATION
   SEED_PROVISIONING
+  SEED_PASSWORD_RECOVERY
 }
 
 enum AdminSeedIdentitySource {

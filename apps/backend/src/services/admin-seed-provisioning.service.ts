@@ -1,5 +1,6 @@
 import { AdminActivationPurpose, AdminActivationStatus, AdminInvitationDelivery, Prisma } from '@prisma/client';
 import { env } from '../config/env.js';
+import { AppError } from '../middleware/errorHandler.js';
 import { prisma } from '../lib/prisma.js';
 import { ADMIN_AUTH_TX } from '../lib/transaction-options.js';
 import { lockUserTokenLifecycle } from '../repositories/auth.repository.js';
@@ -171,8 +172,56 @@ export async function authorizeSeedProvisioning(target: Target, approval: Operat
   }
 }
 
+/** One-time forgot-password link carrying the operator recovery proof (fragment only: never sent to servers or referrers). */
+export function passwordRecoveryLink(token: string): string {
+  return `${(env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '')}/admin/forgot-password#seed-recovery=${encodeURIComponent(token)}`;
+}
+
+/**
+ * Issues a single-use, short-lived proof that replaces ONLY the email-OTP step of admin forgot-password for an approved seed identity that
+ * HAS an enrolled factor. Redeeming it opens the ordinary PASSWORD_RECOVERY transaction; the existing factor (TOTP / recovery code /
+ * passkey) is still required before any reset authorization exists. Never resets factors, never sets emailVerifiedAt, grants no session.
+ */
+export async function authorizeSeedPasswordRecovery(target: Target, approval: OperatorApproval & { tester: string; minutes?: number }) {
+  try {
+    assertApproval(approval, true);
+    const minutes = Math.min(SEED_PROVISIONING_MAX_TTL_MINUTES, Math.max(5, Math.floor(approval.minutes ?? SEED_PROVISIONING_TTL_MINUTES)));
+    const token = randomToken();
+    const expiresAt = new Date(Date.now() + minutes * 60_000);
+    const created = await prisma.$transaction(async tx => {
+      const user = await eligibleSeedUser(tx, target);
+      if (!user.adminSeedIdentity || user.adminSeedIdentity.seedEmail !== user.email) {
+        throw refuse('PROVENANCE_MISSING', 'That account is not a recorded seed identity. An operator must register it explicitly (register-seed-identity).');
+      }
+      const factors = await adminMfaService.factorSummary(user.id, tx);
+      if (factors.totp + factors.passkeys + factors.recoveryCodes === 0) {
+        throw refuse('NOT_ENROLLED', 'That administrator has no enrolled factor. Use provision-seeded-admin for first-time setup.');
+      }
+      const pending = await tx.adminMfaActivation.findFirst({ where: { userId: user.id, status: AdminActivationStatus.PENDING } });
+      if (pending && pending.expiresAt > new Date()) throw refuse('PENDING_EXISTS', 'An activation or operator proof is already pending. Revoke it first.');
+      if (pending) await tx.adminMfaActivation.update({ where: { id: pending.id }, data: { status: AdminActivationStatus.REVOKED, revokedAt: new Date() } });
+      const row = await tx.adminMfaActivation.create({ data: { userId: user.id, authorizedById: null, email: user.email, tokenHash: sha256Hex(token), expiresAt,
+        purpose: AdminActivationPurpose.SEED_PASSWORD_RECOVERY, operatorName: approval.operator.trim(), operatorReason: approval.reason.trim(),
+        deliveryStatus: AdminInvitationDelivery.SENT, lastSentAt: new Date(), sendCount: 1 } });
+      await recordAdminAudit({ actorId: null, action: 'ADMIN_SEED_PASSWORD_RECOVERY_AUTHORIZED', resourceType: 'admin_user', resourceId: user.id, outcome: 'SUCCESS',
+        details: { databaseIdentity: target.databaseIdentity, operator: approval.operator.trim(), tester: approval.tester.trim(), reason: approval.reason.trim(),
+          recoveryProofId: row.id, expiresAt: expiresAt.toISOString() } }, tx);
+      return row;
+    }, ADMIN_AUTH_TX).catch(error => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw refuse('PENDING_EXISTS', 'An activation or operator proof is already pending.');
+      throw error;
+    });
+    return { token, expiresAt, recoveryProofId: created.id };
+  } catch (error) {
+    await denied('ADMIN_SEED_PASSWORD_RECOVERY_AUTHORIZED', target, approval, error);
+    throw error;
+  }
+}
+
 /** Revokes a pending provisioning proof and closes any enrollment window a half-finished redemption opened. */
-export async function revokeSeedProvisioning(target: Target, approval: OperatorApproval) {
+export async function revokeSeedProvisioning(target: Target, approval: OperatorApproval, kind: 'PROVISIONING' | 'PASSWORD_RECOVERY' = 'PROVISIONING') {
+  const purpose = kind === 'PROVISIONING' ? 'SEED_PROVISIONING' : 'SEED_PASSWORD_RECOVERY';
+  const action = kind === 'PROVISIONING' ? 'ADMIN_SEED_PROVISIONING_REVOKED' : 'ADMIN_SEED_PASSWORD_RECOVERY_REVOKED';
   try {
     assertApproval(approval, false);
     return await prisma.$transaction(async tx => {
@@ -181,16 +230,16 @@ export async function revokeSeedProvisioning(target: Target, approval: OperatorA
       const user = await tx.user.findUnique({ where: { id: target.userId }, select: { email: true } });
       if (!user || user.email !== target.email.trim().toLowerCase()) throw refuse('IDENTITY_MISMATCH', 'The id and email do not belong to the same account.');
       const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "admin_mfa_activations" WHERE "userId" = ${target.userId}::uuid
-        AND "status" = 'PENDING' AND "purpose" = 'SEED_PROVISIONING' FOR UPDATE`;
-      if (!rows[0]) throw refuse('NOT_PENDING', 'No provisioning proof is pending for that administrator.');
+        AND "status" = 'PENDING' AND "purpose" = ${purpose}::"AdminActivationPurpose" FOR UPDATE`;
+      if (!rows[0]) throw refuse('NOT_PENDING', 'No such operator proof is pending for that administrator.');
       await tx.adminMfaActivation.update({ where: { id: rows[0].id }, data: { status: AdminActivationStatus.REVOKED, revokedAt: new Date() } });
-      await tx.adminAccountSecurity.updateMany({ where: { userId: target.userId, mfaEnrolledAt: null }, data: { enrollmentAllowedUntil: null } });
-      await recordAdminAudit({ actorId: null, action: 'ADMIN_SEED_PROVISIONING_REVOKED', resourceType: 'admin_user', resourceId: target.userId, outcome: 'SUCCESS',
+      if (kind === 'PROVISIONING') await tx.adminAccountSecurity.updateMany({ where: { userId: target.userId, mfaEnrolledAt: null }, data: { enrollmentAllowedUntil: null } });
+      await recordAdminAudit({ actorId: null, action, resourceType: 'admin_user', resourceId: target.userId, outcome: 'SUCCESS',
         details: { databaseIdentity: target.databaseIdentity, operator: approval.operator.trim(), reason: approval.reason.trim(), provisioningId: rows[0].id } }, tx);
       return { provisioningId: rows[0].id };
     }, ADMIN_AUTH_TX);
   } catch (error) {
-    await denied('ADMIN_SEED_PROVISIONING_REVOKED', target, approval, error);
+    await denied(action, target, approval, error);
     throw error;
   }
 }
@@ -205,4 +254,48 @@ export async function seedIdentityStatus() {
     return { email: user.email, userId: user.id, role: user.role.name, active: user.isActive, owner: user.adminSecurity?.isOwner ?? false,
       managesAdmins: user.adminSecurity?.canManageAdmins ?? false, factors: factors.totp + factors.passkeys, provenance: user.adminSeedIdentity?.source ?? 'NONE' };
   }));
+}
+
+/**
+ * Redeems an operator recovery proof in place of the emailed OTP: in one transaction the proof is locked, re-checked against the live
+ * account (still the approved seed identity, active, non-Owner ADMIN, same email, still has a factor), marked REDEEMED and converted into
+ * the ordinary PASSWORD_RECOVERY transaction. The caller must still prove an existing factor before a reset authorization exists.
+ * Refusals are uniform to the client and audited (code only, never the token or its hash).
+ */
+export async function redeemSeedPasswordRecoveryProof(token: string) {
+  const unavailable = () => new AppError('This recovery link is invalid, expired or has already been used. Ask the operator who issued it for a new one.', 410,
+    'SEED_RECOVERY_UNAVAILABLE');
+  if (typeof token !== 'string' || token.length < 20 || token.length > 200) throw unavailable();
+  const tokenHash = sha256Hex(token);
+  let refusal: { code: string; userId: string; proofId: string } | null = null;
+  try {
+    return await prisma.$transaction(async tx => {
+      const rows = await tx.$queryRaw<{ id: string; userId: string; email: string; status: AdminActivationStatus; expiresAt: Date; purpose: AdminActivationPurpose }[]>`
+        SELECT "id", "userId", "email", "status", "expiresAt", "purpose" FROM "admin_mfa_activations" WHERE "tokenHash" = ${tokenHash} FOR UPDATE`;
+      const row = rows[0];
+      if (!row || row.purpose !== AdminActivationPurpose.SEED_PASSWORD_RECOVERY) throw unavailable();
+      const fail = (code: string) => { refusal = { code, userId: row.userId, proofId: row.id }; return unavailable(); };
+      if (row.status !== AdminActivationStatus.PENDING) throw fail(row.status === AdminActivationStatus.REDEEMED ? 'ALREADY_USED' : 'REVOKED');
+      if (row.expiresAt <= new Date()) throw fail('EXPIRED');
+      await lockUserTokenLifecycle(tx, row.userId);
+      const user = await tx.user.findUnique({ where: { id: row.userId }, include: { role: true,
+        adminSecurity: { select: { isOwner: true } }, adminSeedIdentity: { select: { seedEmail: true } } } });
+      if (!user || !user.isActive || user.role.name !== 'ADMIN' || user.email !== row.email || DELETED_EMAIL.test(user.email)) throw fail('ACCOUNT_INELIGIBLE');
+      if (user.adminSecurity?.isOwner || user.adminSeedIdentity?.seedEmail !== user.email) throw fail('NOT_SEED_IDENTITY');
+      const factors = await adminMfaService.factorSummary(user.id, tx);
+      if (factors.totp + factors.passkeys + factors.recoveryCodes === 0) throw fail('NOT_ENROLLED');
+      await tx.adminMfaActivation.update({ where: { id: row.id }, data: { status: AdminActivationStatus.REDEEMED, redeemedAt: new Date() } });
+      await recordAdminAudit({ actorId: null, action: 'ADMIN_SEED_PASSWORD_RECOVERY_REDEEMED', resourceType: 'admin_user', resourceId: user.id, outcome: 'SUCCESS',
+        details: { recoveryProofId: row.id } }, tx);
+      // Same transaction the emailed OTP would open: factor proof still mandatory; email is never marked verified.
+      return adminMfaService.openPasswordRecovery(tx, user);
+    }, ADMIN_AUTH_TX);
+  } catch (error) {
+    const r = refusal as { code: string; userId: string; proofId: string } | null;
+    if (r) {
+      await recordAdminAudit({ actorId: null, action: 'ADMIN_SEED_PASSWORD_RECOVERY_REDEEMED', resourceType: 'admin_user', resourceId: r.userId, outcome: 'DENIED',
+        details: { code: r.code, recoveryProofId: r.proofId } }).catch(() => undefined);
+    }
+    throw error;
+  }
 }
