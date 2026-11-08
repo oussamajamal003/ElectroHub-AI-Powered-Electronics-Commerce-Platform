@@ -1,3 +1,4 @@
+import { submitContactAndAssertCaptured } from './storefront-contact-capture.helper';
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -15,8 +16,8 @@ import { expect, test, type Browser, type Page, type Request } from '@playwright
  *  ACC-UI-04  failures: capabilities unreachable (aborted request) and a team-list 500 are error states with retry, not Access Restricted.
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
-const credentials = JSON.parse(readFileSync(path.resolve(here, '../../../../.cache/task05-2-browser-credentials-5204.json'), 'utf8')) as
-  { ownerEmail: string; staffEmail: string; password: string; disposableDb: { psql: string; port: number; database: string } };
+const credentials = JSON.parse(readFileSync(path.resolve(here, `../../../../.cache/task05-2-browser-credentials-${process.env.TASK05_2_API_PORT ?? '5204'}.json`), 'utf8')) as
+  { ownerEmail: string; staffEmail: string; password: string; outboxDir?: string | null; disposableDb: { psql: string; port: number; database: string } };
 const shots = path.resolve(here, '../../test-results/task05-2-administrators-access-disposable/screens');
 
 function base32(text: string) {
@@ -72,7 +73,7 @@ const newPage = async (browser: Browser, options: Parameters<Browser['newContext
 
 
 /** A fresh access token for this page's own signed-in session (rotates its refresh cookie), to call the real API directly. */
-async function apiAs(page: Page, method: 'GET' | 'POST', url: string, body?: object) {
+async function apiAs(page: Page, method: 'GET' | 'POST' | 'PATCH', url: string, body?: object) {
   return page.evaluate(async ({ method, url, body }) => {
     const refreshed = await fetch('/api/auth/admin/refresh', { method: 'POST', credentials: 'include' });
     if (!refreshed.ok) return { status: refreshed.status, code: 'REFRESH_FAILED' };
@@ -102,6 +103,9 @@ test.describe.serial('Task 05.2 Administrators page access (disposable)', () => 
 
     await staff.goto('/admin/settings');
     await expect(staff.getByRole('tab', { name: 'Store' })).toBeVisible();
+    await expect(staff.getByText(/Only an Owner can update store information/)).toBeVisible();
+    await expect(staff.getByRole('button', { name: 'Save Changes' })).toHaveCount(0);
+    expect(await apiAs(staff, 'PATCH', '/api/admin/settings/store', {})).toEqual({ status: 403, code: 'CAPABILITY_REQUIRED' });
     await expect(staff.getByRole('tab', { name: 'Administrators' })).toHaveCount(0);
     await staff.goto('/admin/settings?tab=administrators');
     await expect(staff.getByRole('heading', { name: 'Store Information' })).toBeVisible();
@@ -145,6 +149,34 @@ test.describe.serial('Task 05.2 Administrators page access (disposable)', () => 
     await submitPassword(owner, credentials.ownerEmail, credentials.password);
     await enroll(owner);
     await owner.goto('/admin/settings');
+    const stale = await owner.context().newPage();
+    await stale.goto('/admin/settings?tab=store');
+    await stale.getByLabel('Store name').fill('Stale identity');
+    await owner.getByLabel('Store name').fill('ElectroTech');
+    await owner.getByLabel('Store email').fill('support@qa.invalid');
+    await owner.getByLabel('Phone', { exact: true }).fill('+1 202 555 0198');
+    await owner.getByLabel('Address line 1').fill('10 Test Street');
+    await owner.getByLabel('City', { exact: true }).fill('Test City');
+    await owner.getByRole('button', { name: 'Save Changes' }).press('Enter');
+    await expect(owner.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
+    await owner.reload();
+    await expect(owner.getByLabel('Store name')).toHaveValue('ElectroTech');
+    const conflict = stale.waitForResponse(r => r.url().endsWith('/api/admin/settings/store') && r.request().method() === 'PATCH');
+    await stale.getByRole('button', { name: 'Save Changes' }).press('Space');
+    expect((await conflict).status()).toBe(409);
+    await stale.close();
+    const storefront = await newPage(browser);
+    await storefront.goto('/products');
+    await expect(storefront.getByRole('link', { name: /ElectroTech.*home/i }).first()).toBeVisible();
+    await storefront.goto('/contact');
+    await expect(storefront.getByRole('link', { name: 'support@qa.invalid' }).first()).toHaveAttribute('href', 'mailto:support@qa.invalid');
+    await expect(storefront.getByText(/10 Test Street/).first()).toBeVisible();
+    await capture(storefront, 'storefront-contact', [390, 768, 1440, 1920]);
+    if (credentials.outboxDir) await submitContactAndAssertCaptured(storefront, {
+      recipient: 'support@qa.invalid', name: 'QA Contact', email: 'visitor@qa.invalid', subject: 'Store profile journey',
+      message: 'Disposable acceptance inquiry.', outboxDir: credentials.outboxDir,
+    });
+    await storefront.close();
     await owner.getByRole('tab', { name: 'Administrators' }).click();
     // The tab shows the team in place (no extra click), under the Settings page title.
     await expect(owner).toHaveURL(/\/admin\/settings\?tab=administrators$/);
@@ -168,6 +200,8 @@ test.describe.serial('Task 05.2 Administrators page access (disposable)', () => 
 
     await staff.goto('/admin/settings');
     await expect(staff.getByRole('tab', { name: 'Administrators' })).toBeVisible();
+    await expect(staff.getByText(/Only an Owner can update store information/)).toBeVisible();
+    expect(await apiAs(staff, 'PATCH', '/api/admin/settings/store', {})).toEqual({ status: 403, code: 'CAPABILITY_REQUIRED' });
     await staff.goto('/admin/settings/administrators');
     await expect(staff.getByRole('heading', { level: 1, name: 'Administrators' })).toBeVisible();
     await expect(staff.getByText(credentials.ownerEmail)).toBeVisible();
@@ -197,6 +231,9 @@ test.describe.serial('Task 05.2 Administrators page access (disposable)', () => 
     await expect(staff).toHaveURL(/\/admin\/?$/);
     await staff.getByRole('link', { name: 'Settings', exact: true }).first().click();
     await expect(staff.getByRole('tab', { name: 'Store' })).toBeVisible();
+    await expect(staff.getByText(/Only an Owner can update store information/)).toBeVisible();
+    await expect(staff.getByRole('button', { name: 'Save Changes' })).toHaveCount(0);
+    expect(await apiAs(staff, 'PATCH', '/api/admin/settings/store', {})).toEqual({ status: 403, code: 'CAPABILITY_REQUIRED' });
     await expect(staff.getByRole('tab', { name: 'Administrators' })).toHaveCount(0);
   });
 

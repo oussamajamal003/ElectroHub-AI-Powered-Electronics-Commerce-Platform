@@ -34,3 +34,11 @@
 }
 
 .dirty { margin: $spacing-3 0 0; color: $color-warning-foreground; font-size: $font-size-sm; }
+
+.businessDetails {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: $spacing-4;
+  dt { font-weight: $font-weight-semibold; }
+  dd { margin: $spacing-1 0 0; overflow-wrap: anywhere; }
+}

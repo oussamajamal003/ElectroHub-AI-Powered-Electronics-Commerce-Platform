@@ -1,6 +1,7 @@
 import { EmailDeliveryStatus, EmailType } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { brevoProvider, type BrevoProvider } from '../integrations/brevo/brevo.provider.js';
+import { storeSettings } from './store-settings.service.js';
 import { env } from '../config/env.js';
 import { logger } from '../utils/logger.js';
 
@@ -17,21 +18,23 @@ export function invitationLink(token: string): string {
 export async function sendAdminInvitationEmail(input: { to: string; token: string; inviterName: string | null; expiresAt: Date },
   provider: BrevoProvider = brevoProvider): Promise<boolean> {
   const delivery = await prisma.emailDelivery.create({ data: { type: EmailType.ADMIN_INVITATION, recipient: input.to, status: EmailDeliveryStatus.QUEUED, provider: 'BREVO' } });
+  const { storeName, supportEmail } = await storeSettings.getStore();
+  const brand = escapeHtml(storeName);
   const link = invitationLink(input.token);
-  const inviter = input.inviterName ? escapeHtml(input.inviterName) : 'An ElectroHub owner';
+  const inviter = input.inviterName ? escapeHtml(input.inviterName) : `An ${brand} owner`;
   const expires = input.expiresAt.toUTCString();
-  const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>You're invited to ElectroHub Admin</title></head>
+  const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>You're invited to ${brand} Admin</title></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;margin:0;padding:24px;color:#0f172a">
 <div style="max-width:480px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;padding:32px">
-<div style="font-size:22px;font-weight:700;color:#2563eb;text-align:center;margin-bottom:24px">ElectroHub</div>
+<div style="font-size:22px;font-weight:700;color:#2563eb;text-align:center;margin-bottom:24px">${brand}</div>
 <h1 style="font-size:20px;font-weight:600;margin:0 0 12px;text-align:center">You're invited to the Admin Portal</h1>
-<p style="font-size:14px;line-height:1.6;color:#475569">${inviter} invited you to join the ElectroHub administration team. Create your account and set up two-step verification to get access.</p>
+<p style="font-size:14px;line-height:1.6;color:#475569">${inviter} invited you to join the ${brand} administration team. Create your account and set up two-step verification to get access.</p>
 <p style="text-align:center;margin:24px 0"><a href="${escapeHtml(link)}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;font-weight:600;display:inline-block">Accept invitation</a></p>
 <p style="font-size:13px;color:#64748b">This single-use invitation expires on ${escapeHtml(expires)}. If you were not expecting it, ignore this email.</p>
 </div></body></html>`;
-  const textContent = `ElectroHub Admin invitation\n\n${input.inviterName ?? 'An ElectroHub owner'} invited you to join the ElectroHub administration team.\nAccept: ${link}\n\nThis single-use invitation expires on ${expires}. If you were not expecting it, ignore this email.`;
+  const textContent = `${storeName} Admin invitation\n\n${input.inviterName ?? `An ${storeName} owner`} invited you to join the ${storeName} administration team.\nAccept: ${link}\n\nThis single-use invitation expires on ${expires}. If you were not expecting it, ignore this email.`;
   try {
-    const result = await provider.sendTransactionalEmail({ to: input.to, subject: "You're invited to ElectroHub Admin", htmlContent, textContent, tags: [EmailType.ADMIN_INVITATION] });
+    const result = await provider.sendTransactionalEmail({ to: input.to, replyTo: supportEmail ? { email: supportEmail } : undefined, subject: `You're invited to ${storeName} Admin`, htmlContent, textContent, tags: [EmailType.ADMIN_INVITATION] });
     if (result.success && result.messageId) {
       await prisma.emailDelivery.update({ where: { id: delivery.id }, data: { status: EmailDeliveryStatus.SENT, providerMessageId: result.messageId, sentAt: new Date() } });
       return true;
@@ -53,21 +56,23 @@ export function activationLink(token: string): string {
 export async function sendAdminActivationEmail(input: { to: string; token: string; ownerName: string | null; expiresAt: Date },
   provider: BrevoProvider = brevoProvider): Promise<boolean> {
   const delivery = await prisma.emailDelivery.create({ data: { type: EmailType.ADMIN_ACTIVATION, recipient: input.to, status: EmailDeliveryStatus.QUEUED, provider: 'BREVO' } });
+  const { storeName, supportEmail } = await storeSettings.getStore();
+  const brand = escapeHtml(storeName);
   const link = activationLink(input.token);
-  const owner = input.ownerName ? escapeHtml(input.ownerName) : 'An ElectroHub owner';
+  const owner = input.ownerName ? escapeHtml(input.ownerName) : `An ${brand} owner`;
   const expires = input.expiresAt.toUTCString();
-  const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Activate your ElectroHub administrator account</title></head>
+  const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Activate your ${brand} administrator account</title></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;margin:0;padding:24px;color:#0f172a">
 <div style="max-width:480px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;padding:32px">
-<div style="font-size:22px;font-weight:700;color:#2563eb;text-align:center;margin-bottom:24px">ElectroHub</div>
+<div style="font-size:22px;font-weight:700;color:#2563eb;text-align:center;margin-bottom:24px">${brand}</div>
 <h1 style="font-size:20px;font-weight:600;margin:0 0 12px;text-align:center">Activate your administrator account</h1>
 <p style="font-size:14px;line-height:1.6;color:#475569">${owner} authorized two-step verification for your administrator account. Choose a new password and set up an authenticator app to continue. Your previous password stops working once you finish this step.</p>
 <p style="text-align:center;margin:24px 0"><a href="${escapeHtml(link)}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;font-weight:600;display:inline-block">Activate account</a></p>
 <p style="font-size:13px;color:#64748b">This single-use link expires on ${escapeHtml(expires)}. If you were not expecting it, ignore this email and tell an owner.</p>
 </div></body></html>`;
-  const textContent = `Activate your ElectroHub administrator account\n\n${input.ownerName ?? 'An ElectroHub owner'} authorized two-step verification for your administrator account.\nActivate: ${link}\n\nThis single-use link expires on ${expires}. If you were not expecting it, ignore this email and tell an owner.`;
+  const textContent = `Activate your ${storeName} administrator account\n\n${input.ownerName ?? `An ${storeName} owner`} authorized two-step verification for your administrator account.\nActivate: ${link}\n\nThis single-use link expires on ${expires}. If you were not expecting it, ignore this email and tell an owner.`;
   try {
-    const result = await provider.sendTransactionalEmail({ to: input.to, subject: 'Activate your ElectroHub administrator account', htmlContent, textContent, tags: [EmailType.ADMIN_ACTIVATION] });
+    const result = await provider.sendTransactionalEmail({ to: input.to, replyTo: supportEmail ? { email: supportEmail } : undefined, subject: `Activate your ${storeName} administrator account`, htmlContent, textContent, tags: [EmailType.ADMIN_ACTIVATION] });
     if (result.success && result.messageId) {
       await prisma.emailDelivery.update({ where: { id: delivery.id }, data: { status: EmailDeliveryStatus.SENT, providerMessageId: result.messageId, sentAt: new Date() } });
       return true;

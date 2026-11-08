@@ -8,11 +8,13 @@ import { WishlistContext } from '@/features/wishlist/context';
 import { wishlistFixture, wishlistProduct } from '@/features/wishlist/fixtures';
 import type { WishlistItem } from '@/features/wishlist/types';
 import { useCart } from '@/features/cart/context';
+import { useStorefrontProfile } from '@/features/storefront/api';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
 vi.mock('@/features/cart/context', () => ({ useCart: vi.fn() }));
+vi.mock('@/features/storefront/api', () => ({ useStorefrontProfile: vi.fn() }));
 
 describe('CustomerHeader', () => {
   const mockLogout = vi.fn();
@@ -20,6 +22,7 @@ describe('CustomerHeader', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useCart).mockReturnValue({ data: { totalQuantity: 0 }, isLoading: false } as unknown as ReturnType<typeof useCart>);
+    vi.mocked(useStorefrontProfile).mockReturnValue({ data: { storeName: 'ElectroHub' } } as unknown as ReturnType<typeof useStorefrontProfile>);
   });
 
   const renderWithRouter = (ui: React.ReactElement) => {
@@ -92,6 +95,15 @@ describe('CustomerHeader', () => {
     expect(screen.getByRole('link', { name: 'Cart, 0 items' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Wishlist' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Account' })).toBeInTheDocument();
+  });
+
+  it('shows the configured store name while preserving the lightning brand mark', () => {
+    vi.mocked(useAuth).mockReturnValue({ user: null, isInitializing: false, isAuthenticated: false } as ReturnType<typeof useAuth>);
+    vi.mocked(useStorefrontProfile).mockReturnValue({ data: { storeName: 'Northstar Electronics' } } as unknown as ReturnType<typeof useStorefrontProfile>);
+    renderWithRouter(<CustomerHeader />);
+    const brand = screen.getByRole('link', { name: 'Northstar Electronics — Home' });
+    expect(brand).toHaveTextContent('Northstar Electronics');
+    expect(brand.querySelector('[data-brand-mark]')).toBeInTheDocument();
   });
 
   it('opens login popup when unauthenticated Account icon is clicked', async () => {

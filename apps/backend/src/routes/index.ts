@@ -21,6 +21,7 @@ import adminAnalyticsRoutes from './admin-analytics.routes.js';
 import analyticsEventsRoutes from './analytics-events.routes.js';
 import adminRecommendationsRoutes from './admin-recommendations.routes.js';
 import adminSettingsRoutes from './admin-settings.routes.js';
+import storefrontRoutes from './storefront.routes.js';
 import { env } from '../config/env.js';
 
 /**
@@ -41,6 +42,7 @@ router.use(orderDocumentRoutes);
 router.use(checkoutRoutes);
 router.use(wishlistRoutes);
 router.use('/account', accountRoutes);
+router.use(storefrontRoutes);
 // Task 04.4: before productRoutes so /products/:slug/recommendations is owned by its own limiter and cache policy.
 router.use(recommendationRoutes);
 router.use(productRoutes);

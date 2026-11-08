@@ -114,6 +114,27 @@ describe.skipIf(!enabled)('Task 03.8 commerce email — real PostgreSQL', () => 
       expect((await db.paymentAttempt.findUniqueOrThrow({ where: { id: attempt.id } })).state).toBe('PAID');
     });
 
+    it('captures the transaction-time store identity on new orders and commerce email snapshots', async () => {
+      const original = await db.storeSettings.findUniqueOrThrow({ where: { id: 'default' } });
+      try {
+        await db.storeSettings.update({ where: { id: 'default' }, data: { storeName: 'Northwind Electronics', supportEmail: 'help@example.test' } });
+        const { orderId } = await paid();
+        const order = await db.order.findUniqueOrThrow({ where: { id: orderId } });
+        expect(order.storeIdentitySnapshot).toMatchObject({ storeName: 'Northwind Electronics', supportEmail: 'help@example.test' });
+        const confirmation = (await eventsFor(orderId)).find(event => event.type === 'ORDER_CONFIRMED')!;
+        expect(commerceEmailSnapshot.parse(confirmation.snapshot)).toMatchObject({
+          seller: { storeName: 'Northwind Electronics', supportEmail: 'help@example.test' },
+        });
+      } finally {
+        await db.storeSettings.update({ where: { id: 'default' }, data: {
+          storeName: original.storeName, supportEmail: original.supportEmail, supportPhone: original.supportPhone,
+          addressLine1: original.addressLine1, addressLine2: original.addressLine2, city: original.city, region: original.region,
+          postalCode: original.postalCode, country: original.country, timezone: original.timezone, currency: original.currency,
+          version: original.version, updatedById: original.updatedById,
+        } });
+      }
+    });
+
     it('T01: an authorized order awaiting capture (and a pending payment) produces zero success events', async () => {
       const purchase = await authorized();
       purchase.provider.fail('capture-before');

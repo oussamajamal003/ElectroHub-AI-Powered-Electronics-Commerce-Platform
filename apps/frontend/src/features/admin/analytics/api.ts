@@ -12,7 +12,7 @@ export interface AnalyticsMeta {
   window: AnalyticsRangeIso;
   previousWindow: AnalyticsRangeIso;
   generatedAt: string;
-  timezone: 'UTC';
+  timezone: string;
   definitions: Record<string, string>;
 }
 export interface AnalyticsEnvelope<T> { data: T; meta: AnalyticsMeta }

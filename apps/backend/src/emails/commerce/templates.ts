@@ -13,10 +13,9 @@ import {
 import { escapeHtml, headerSafe, orderUrl } from './escape.js';
 import { formatCardBrand, formatEstimate, formatInstant, formatMoney } from './format.js';
 import { FONT_STACK, MONO_STACK, renderLayout, type StatusTone } from './layout.js';
+import { LEGACY_STORE_IDENTITY } from '../../services/store-identity.js';
 
 const CTA_LABEL = 'View Order Details';
-const FOOTER_TEXT = 'You received this email because you placed an order with ElectroHub. '
-  + 'You can find the latest information in Order Details.';
 const P_STYLE = `margin:0 0 16px 0;font-family:${FONT_STACK};font-size:16px;line-height:24px;color:#0F172A;`;
 const LABEL_STYLE = `margin:0 0 8px 0;font-family:${FONT_STACK};font-size:14px;line-height:20px;font-weight:600;color:#0F172A;`;
 
@@ -111,6 +110,7 @@ function deliveryBlock(delivery: DeliverySnapshot, suffix: string, includeMethod
 }
 
 function composeEmail(parts: EmailParts, orderReference: string, ctx: RenderContext): RenderedCommerceEmail {
+  const seller = ctx.seller ?? LEGACY_STORE_IDENTITY;
   const url = orderUrl(ctx.origin, orderReference);
   const html = renderLayout({
     preheader: parts.preheader,
@@ -121,9 +121,10 @@ function composeEmail(parts: EmailParts, orderReference: string, ctx: RenderCont
     eventDateLabel: parts.eventDateLabel,
     bodyHtml: parts.blocks.map(block => block.html).join(''),
     cta: { label: CTA_LABEL, url },
+    storeName: seller.storeName, supportEmail: seller.supportEmail, supportPhone: seller.supportPhone,
   });
   const text = [
-    'ElectroHub',
+    seller.storeName,
     '',
     parts.heading,
     `${parts.statusLabel} · ${parts.eventDateLabel}`,
@@ -134,7 +135,8 @@ function composeEmail(parts: EmailParts, orderReference: string, ctx: RenderCont
     CTA_LABEL,
     url,
     '',
-    FOOTER_TEXT,
+    `You received this email because you placed an order with ${seller.storeName}. You can find the latest information in Order Details.`
+      + (seller.supportEmail || seller.supportPhone ? ` For help, contact ${[seller.supportEmail, seller.supportPhone].filter(Boolean).join(' · ')}.` : ''),
   ].join('\n');
   return { subject: headerSafe(parts.subject), preheader: parts.preheader, html, text };
 }
@@ -310,13 +312,14 @@ const rendererRegistry: Readonly<Record<string, RendererMap>> = {
 export function renderCommerceEmail(snapshot: CommerceEmailSnapshot, ctx: RenderContext, templateVersion: string): RenderedCommerceEmail {
   const renderers = Object.hasOwn(rendererRegistry, templateVersion) ? rendererRegistry[templateVersion] : undefined;
   if (templateVersion !== TEMPLATE_VERSION || !renderers) throw new Error('UNSUPPORTED_TEMPLATE_VERSION');
+  const renderContext = { ...ctx, seller: ctx.seller ?? snapshot.seller ?? LEGACY_STORE_IDENTITY };
   switch (snapshot.type) {
-    case 'ORDER_CONFIRMED': return renderers.ORDER_CONFIRMED(snapshot, ctx);
-    case 'PAYMENT_CONFIRMED': return renderers.PAYMENT_CONFIRMED(snapshot, ctx);
-    case 'ORDER_PREPARING': return renderers.ORDER_PREPARING(snapshot, ctx);
-    case 'ORDER_OUT_FOR_DELIVERY': return renderers.ORDER_OUT_FOR_DELIVERY(snapshot, ctx);
-    case 'ORDER_DELIVERED': return renderers.ORDER_DELIVERED(snapshot, ctx);
-    case 'ORDER_CANCELLED': return renderers.ORDER_CANCELLED(snapshot, ctx);
-    case 'PAYMENT_REFUNDED': return renderers.PAYMENT_REFUNDED(snapshot, ctx);
+    case 'ORDER_CONFIRMED': return renderers.ORDER_CONFIRMED(snapshot, renderContext);
+    case 'PAYMENT_CONFIRMED': return renderers.PAYMENT_CONFIRMED(snapshot, renderContext);
+    case 'ORDER_PREPARING': return renderers.ORDER_PREPARING(snapshot, renderContext);
+    case 'ORDER_OUT_FOR_DELIVERY': return renderers.ORDER_OUT_FOR_DELIVERY(snapshot, renderContext);
+    case 'ORDER_DELIVERED': return renderers.ORDER_DELIVERED(snapshot, renderContext);
+    case 'ORDER_CANCELLED': return renderers.ORDER_CANCELLED(snapshot, renderContext);
+    case 'PAYMENT_REFUNDED': return renderers.PAYMENT_REFUNDED(snapshot, renderContext);
   }
 }

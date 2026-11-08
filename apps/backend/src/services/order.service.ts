@@ -12,6 +12,7 @@ import { performance } from 'node:perf_hooks';
 import { timeDbStage } from '../lib/db-request-metrics.js';
 import { logger, logSafely } from '../utils/logger.js';
 import { CONFIRMATION_EMAIL_TYPES, projectEmailConfirmation, type EmailConfirmationSummary } from './commerce-email.domain.js';
+import { readStoreIdentitySnapshot } from './store-identity.js';
 
 const include = { items: { orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }] }, payment: true } satisfies Prisma.OrderInclude;
 type StoredOrder = Prisma.OrderGetPayload<{ include: typeof include }>;
@@ -263,9 +264,11 @@ export class OrderService {
           });
           const { totals, delivery } = validated;
           const now = new Date(); const shipping = transactionRequest.shipping;
+          const storeIdentitySnapshot = await readStoreIdentitySnapshot(tx);
           const order = await measureStage('order_payment_items_create', 1, () => tx.order.create({ data: {
             userId, checkoutAttemptId, checkoutRequestHash: hash, deliveryMethod: delivery.id, paymentMethod: transactionRequest.paymentMethod,
             subtotal: totals.subtotal, shippingCost: totals.shipping, total: totals.total, currency: 'USD', status: 'AWAITING_CAPTURE',
+            storeIdentitySnapshot,
             payment: { create: { provider: 'STRIPE', providerPaymentId: intent.id, status: 'PROCESSING', amount: attempt.total, currency: 'USD' } },
             shippingRecipient: shipping.recipient, shippingLine1: shipping.line1, shippingLine2: shipping.line2 || null,
             shippingCity: shipping.city, shippingState: shipping.state || null, shippingPostalCode: shipping.postalCode,

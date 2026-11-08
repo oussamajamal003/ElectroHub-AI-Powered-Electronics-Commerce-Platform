@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { adminSettingsController as c } from '../controllers/admin-settings.controller.js';
-import { adminGuard } from '../middleware/adminGuard.js';
+import { adminGuard, requireAdminCapability, requireStepUp } from '../middleware/adminGuard.js';
 
 /**
  * Task 05.2 settings API. Every route runs the shared admin guard chain (valid access token, DB-backed ADMIN role, live MFA-assured
@@ -15,7 +15,7 @@ const writes = rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: 'draft-
   message: { error: { code: 'RATE_LIMITED', message: 'Too many changes in a short time. Wait a moment and try again.' } } });
 
 router.get('/admin/settings/store', c.getStore);
-router.patch('/admin/settings/store', writes, c.updateStore);
+router.patch('/admin/settings/store', requireAdminCapability('OWNER'), requireStepUp, writes, c.updateStore);
 router.get('/admin/settings/shipping', c.getShipping);
 router.get('/admin/settings/shipping/preview', c.previewShipping);
 router.patch('/admin/settings/shipping', writes, c.updateShipping);

@@ -293,7 +293,7 @@ export function AdminAdministratorsPage({ embedded = false }: { embedded?: boole
     savingShown(row, field) ? savingAccess!.value : row[field];
 
   const adminColumns: Column<AdministratorSummary>[] = [
-    { key: 'name', title: 'Administrator', render: row => <span className={styles.cellText}>
+    { key: 'name', title: 'Administrator', render: row => <span className={`${styles.cellText} ${teamStyles.administratorIdentity}`}>
       <strong>{`${row.firstName} ${row.lastName}`.trim() || row.email}</strong>
       <span>{row.email}</span>
     </span> },
@@ -380,7 +380,7 @@ export function AdminAdministratorsPage({ embedded = false }: { embedded?: boole
       {header()}
       <div role="status" aria-label="Loading administrators" aria-busy="true">
         <TableCard busy label="Administrators">
-          <DataTable<AdministratorSummary> caption="Administrators" data={[]} columns={adminColumns} keyExtractor={row => row.id} loadingRows={4} />
+          <DataTable<AdministratorSummary> className={teamStyles.administratorsTable} caption="Administrators" data={[]} columns={adminColumns} keyExtractor={row => row.id} loadingRows={4} />
         </TableCard>
       </div>
     </div>;
@@ -406,7 +406,7 @@ export function AdminAdministratorsPage({ embedded = false }: { embedded?: boole
       </div>
       {readOnly ? null : <>
         <TableCard busy={administrators.isPlaceholderData} label="Administrators">
-          <DataTable caption="Administrators" data={administrators.data?.data ?? []} columns={adminColumns} keyExtractor={row => row.id}
+          <DataTable className={teamStyles.administratorsTable} caption="Administrators" data={administrators.data?.data ?? []} columns={adminColumns} keyExtractor={row => row.id}
             loadingRows={administrators.isPending ? 4 : undefined}
             emptyMessage={<ListEmpty failed={administrators.isError && !administrators.data}>
               <EmptyRows title="No administrators to show" />

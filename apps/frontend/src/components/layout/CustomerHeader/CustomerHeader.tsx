@@ -29,6 +29,7 @@ import { SignOutModal } from '@/features/auth/components/SignOutModal';
 import { shortcutLabel, useDiscovery } from '@/features/search/discovery/context';
 import { Toast, ToastClose, ToastProvider, ToastTitle, ToastViewport } from '@/components/ui/Toast';
 import styles from './CustomerHeader.module.scss';
+import { useStorefrontProfile } from '@/features/storefront/api';
 
 export interface CustomerHeaderProps {
   cartCount?: number;
@@ -36,6 +37,7 @@ export interface CustomerHeaderProps {
 }
 
 export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishlistOverride }: CustomerHeaderProps) {
+  const { data: storeProfile } = useStorefrontProfile();
   const wishlist = useWishlist();
   const { data: cartData } = useCart();
   // Badges count exactly the items the Cart and Wishlist pages render, so they appear with the list and never before it.
@@ -152,8 +154,8 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                 {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
               </button>
 
-              <Link to="/" className={styles.logoLink} aria-label="ElectroHub — Home">
-                <BrandLogo className={styles.brandLogo} />
+              <Link to="/" className={styles.logoLink} aria-label={`${storeProfile?.storeName ?? 'ElectroHub'} — Home`}>
+                <BrandLogo className={styles.brandLogo} name={storeProfile?.storeName ?? 'ElectroHub'} />
               </Link>
             </div>
 

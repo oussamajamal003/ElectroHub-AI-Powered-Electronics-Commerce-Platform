@@ -7,6 +7,8 @@ import { ConfirmDialog, PageHeader, QueryProblem } from '@/features/admin/shared
 import { useUnsavedChangesGuard } from '@/features/admin/shared/useUnsavedChangesGuard';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
 import pageStyles from './AdminSettingsPage.module.scss';
+import type { StoreProfile } from '@/features/admin/settings/api';
+import { errorCode } from '@/features/admin/shared/api';
 import { StoreSettingsForm } from '@/features/admin/settings/components/StoreSettingsForm';
 import { NotificationPreferencesForm } from '@/features/admin/settings/components/NotificationPreferencesForm';
 import { ShippingSettingsForm } from '@/features/admin/settings/components/ShippingSettingsForm';
@@ -36,14 +38,41 @@ interface TabProps {
   onReload: () => Promise<void>;
 }
 
+const businessFields = {
+  storeName: 'Store name', supportEmail: 'Store email', supportPhone: 'Phone', currency: 'Currency',
+  addressLine1: 'Address line 1', addressLine2: 'Address line 2', city: 'City', region: 'State or region',
+  postalCode: 'Postal code', country: 'Country', timezone: 'Time zone',
+} satisfies Partial<Record<keyof StoreProfile, string>>;
+
+function ReadOnlyStore({ profile }: { profile: StoreProfile }) {
+  return <>
+    <p className={styles.panelHint}>Only an Owner can update store information. You can view the current business details.</p>
+    <dl className={pageStyles.businessDetails}>
+      {(Object.keys(businessFields) as (keyof typeof businessFields)[]).map(key =>
+        <div key={key}><dt>{businessFields[key]}</dt><dd>{profile[key] ?? 'Not configured'}</dd></div>)}
+    </dl>
+  </>;
+}
+
 function StoreTab({ generation, onDirtyChange, onSaved, onReload }: TabProps) {
   const query = useStoreSettings();
+  const actor = useAdminProfile();
+  const [denied, setDenied] = useState(false);
   if (query.isPending) return <SettingsSkeleton section="store" />;
   if (!query.data) return <QueryProblem error={query.error} hasData={false} onRetry={() => void query.refetch()} retrying={query.isFetching} what="store settings" />;
   return <section className={styles.panel} aria-labelledby="store-settings-title">
     <h2 id="store-settings-title" className={styles.panelTitle}>Store Information</h2>
+    {actor.data?.capabilities.isOwner && !denied ? <>
     <p className={styles.panelHint}>Manage the details customers use to identify and contact your store.</p>
-    <StoreSettingsForm key={generation} profile={query.data} onDirtyChange={onDirtyChange} onSaved={onSaved} onReload={onReload} />
+    <StoreSettingsForm key={generation} profile={query.data} onDirtyChange={onDirtyChange} onSaved={onSaved} onReload={onReload}
+      onFailure={error => {
+        if (errorCode(error) === 'CAPABILITY_REQUIRED') {
+          setDenied(true);
+          void actor.refetch();
+          void query.refetch();
+        }
+      }} />
+    </> : <ReadOnlyStore profile={query.data} />}
   </section>;
 }
 

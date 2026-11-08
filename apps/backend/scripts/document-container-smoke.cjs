@@ -12,6 +12,8 @@ async function main() {
   const snapshot = {
     version: 1, kind: 'invoice', policy: 'COMMERCIAL_V1', templateVersion: TEMPLATE_VERSION,
     assetVersion: ASSET_VERSION, sellerProfileVersion: SELLER_PROFILE_VERSION, testTransaction: true,
+    seller: { storeName: 'ElectroHub', supportEmail: null, supportPhone: null, addressLine1: null, addressLine2: null,
+      city: null, region: null, postalCode: null, country: null },
     orderReference: 'ORD-7C9E6679-7425-40DE-944B-E07FC1F90AE7', purchaseDate: '2026-10-01T10:00:00.000Z',
     fulfillmentStatus: 'CONFIRMED',
     items: [{ name: 'Synthetic QA product', sku: 'EH-SYN-0001', quantity: 1, unitPrice: '90.00', lineTotal: '90.00' }],

@@ -17,6 +17,7 @@ Signed-in customers can view and download three PDFs for their own orders: an **
   - billing identity ("Ship to", never "Bill to");
   - sequential invoice number.
 - The order reference is a reference, not a legal number.
+- New orders snapshot the configured store name and support contact in the checkout transaction; their PDFs use that historical identity. Orders predating the snapshot use the legacy ElectroHub identity.
 
 **Receipt**
 - It records the original successful payment: amount, the recorded `paidAt` (labelled as a confirmation time, not bank settlement), and the card brand and last four only when both are stored.
@@ -89,14 +90,14 @@ Example metadata entry:
 ```json
 { "kind": "receipt", "label": "Payment receipt", "description": "Confirms the card payment recorded for this order.",
   "availability": "UNAVAILABLE", "reasonCode": "PAYMENT_NOT_CONFIRMED", "mediaType": "application/pdf", "filename": null,
-  "contentVersion": null, "templateVersion": "commercial-template-1.0.0", "policy": "COMMERCIAL_V1", "issuedAt": null,
+  "contentVersion": null, "templateVersion": "commercial-template-1.1.0", "policy": "COMMERCIAL_V1", "issuedAt": null,
   "purchaseDate": "2026-10-19T12:00:00.000Z", "paidAt": null, "previewPath": null, "downloadPath": null }
 ```
 
 ## Rendering and runtime
 
 **Generation**
-- Documents are generated on demand, with no schema change and no stored PDFs.
+- Documents are generated on demand, with seller identity retained in the order snapshot and no stored PDFs.
 - Snapshot → PDF goes through a bounded pool of worker threads (`apps/backend/src/documents/`).
 
 **Pool limits**

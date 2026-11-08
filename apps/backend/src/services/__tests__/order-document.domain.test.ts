@@ -48,8 +48,10 @@ const PAID_ITEMS = [
 
 /** Literal expectation for the default paid order (paidOrder fixture). */
 const PAID_BASE = {
-  version: 1, policy: 'COMMERCIAL_V1', templateVersion: 'commercial-template-1.0.0', assetVersion: ASSET,
-  sellerProfileVersion: 'electrohub-brand-1', testTransaction: true,
+  version: 1, policy: 'COMMERCIAL_V1', templateVersion: 'commercial-template-1.1.0', assetVersion: ASSET,
+  sellerProfileVersion: 'store-identity-snapshot-v1',
+  seller: { storeName: 'ElectroHub', supportEmail: null, supportPhone: null, addressLine1: null, addressLine2: null,
+    city: null, region: null, postalCode: null, country: null }, testTransaction: true,
   orderReference: 'ORD-7C9E6679-7425-40DE-944B-E07FC1F90AE7', purchaseDate: '2026-10-01T10:00:00.000Z',
   fulfillmentStatus: 'CONFIRMED', currency: 'USD',
   subtotal: '1348.00', shipping: '9.99', total: '1357.99',
@@ -63,6 +65,16 @@ const PAID_RECEIPT = { ...PAID_BASE, kind: 'receipt', items: [], delivery: null,
 const PAID_SUMMARY = { ...PAID_BASE, kind: 'summary', items: PAID_ITEMS };
 
 describe('Eligibility matrix (section 4.2)', () => {
+  it('uses the order-time seller snapshot and preserves the legacy ElectroHub identity when absent', () => {
+    const legacy = decide(paidOrder()).find(entry => entry.kind === 'invoice')!;
+    const named = decide(paidOrder({ storeIdentitySnapshot: { storeName: 'Northwind Electronics', supportEmail: 'help@example.com',
+      supportPhone: null, addressLine1: '1 Main St', addressLine2: null, city: 'Boston', region: 'MA', postalCode: '02110', country: 'US' } }))
+      .find(entry => entry.kind === 'invoice')!;
+    expect(legacy.snapshot?.seller.storeName).toBe('ElectroHub');
+    expect(named.snapshot?.seller).toMatchObject({ storeName: 'Northwind Electronics', supportEmail: 'help@example.com' });
+    expect(named.contentVersion).not.toBe(legacy.contentVersion);
+  });
+
   describe('V + P, fulfilled (CONFIRMED / PREPARING / OUT_FOR_DELIVERY / DELIVERED)', () => {
     it('returns invoice, receipt and summary in that fixed order', () => {
       expect(decide(paidOrder()).map(decision => decision.kind)).toEqual(['invoice', 'receipt', 'summary']);

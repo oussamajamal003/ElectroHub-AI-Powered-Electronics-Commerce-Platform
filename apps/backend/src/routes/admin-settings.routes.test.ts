@@ -10,7 +10,8 @@ const ids = vi.hoisted(() => ({ admin: '8f2813b4-a388-44d3-b51e-5d4c40386677' })
 const db = vi.hoisted(() => {
   const model = () => ({ findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), findMany: vi.fn(), create: vi.fn(), updateMany: vi.fn(), upsert: vi.fn() });
   const handle: Record<string, unknown> = { storeSettings: model(), shippingSettings: model(), shippingMethodSetting: model(),
-    adminNotificationPreference: model(), adminAuditLog: { create: vi.fn() }, user: { findMany: vi.fn() } };
+    adminAccountSecurity: model(), adminNotificationPreference: model(), adminAuditLog: { create: vi.fn() }, user: { findMany: vi.fn() } };
+  handle.$queryRaw = vi.fn().mockResolvedValue([{ userId: "owner" }]);
   handle.$transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback(handle));
   return handle as Record<string, ReturnType<typeof model> & Record<string, unknown>> & { $transaction: ReturnType<typeof vi.fn>; adminAuditLog: { create: ReturnType<typeof vi.fn> }; user: { findMany: ReturnType<typeof vi.fn> } };
 });
@@ -19,9 +20,9 @@ vi.mock('../lib/prisma.js', () => ({ prisma: db }));
 vi.mock('../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, logSafely: vi.fn() }));
 // The shared admin guard chain needs a live MFA-assured session (covered by its own tests). Here it only proves that the router
 // is guarded: a request without credentials never reaches a handler, and an accepted request carries the authenticated user id.
-vi.mock('../middleware/adminGuard.js', () => ({ adminGuard: [(req: express.Request, res: express.Response, next: express.NextFunction) => {
+vi.mock('../middleware/adminGuard.js', async importOriginal => ({ ...await importOriginal<typeof import('../middleware/adminGuard.js')>(), adminGuard: [(req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (!req.headers.authorization) { res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Sign in.' } }); return; }
-  Object.assign(req, { user: { userId: ids.admin, role: 'ADMIN' } });
+  Object.assign(req, { user: { userId: ids.admin, role: 'ADMIN' }, adminSession: { mfaVerifiedAt: new Date(), stepUpAt: new Date() } });
   res.set('Cache-Control', 'private, no-store');
   next();
 }] }));
@@ -47,6 +48,7 @@ const validShipping = { expectedVersion: 2, freeShippingThreshold: '50.00',
 beforeEach(() => {
   vi.clearAllMocks();
   invalidateShippingConfig();
+  db.adminAccountSecurity.findUnique.mockResolvedValue({ isOwner: true, canManageAdmins: true });
   db.storeSettings.findUnique.mockResolvedValue(storeRow);
   db.storeSettings.findUniqueOrThrow.mockResolvedValue({ ...storeRow, storeName: 'Northwind Electronics', timezone: 'Europe/Paris', version: 4 });
   db.storeSettings.updateMany.mockResolvedValue({ count: 1 });
@@ -75,6 +77,16 @@ describe('administrator settings API guard', () => {
 });
 
 describe('store profile', () => {
+  it.each([false, true])('allows read only for non-Owner with manage-admins=%s', async canManageAdmins => {
+    db.adminAccountSecurity.findUnique.mockResolvedValue({ isOwner: false, canManageAdmins });
+    expect((await as(request(app).get('/api/admin/settings/store'))).status).toBe(200);
+    const response = await as(request(app).patch('/api/admin/settings/store').send(validStore));
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('CAPABILITY_REQUIRED');
+    expect(db.$transaction).not.toHaveBeenCalled();
+    expect(db.adminAuditLog.create).not.toHaveBeenCalled();
+  });
+
   it('GET returns the stored profile with USD fixed and a private response', async () => {
     const response = await as(request(app).get('/api/admin/settings/store'));
     expect(response.status).toBe(200);

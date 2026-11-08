@@ -52,8 +52,8 @@ const phoneSchema = z.union([z.literal(''), z.null(), z.string().trim().max(32, 
 const timeZones = new Set<string>([...Intl.supportedValuesOf('timeZone'), 'UTC']);
 
 export const storeUpdateSchema = z.object({
-  expectedVersion: z.number().int().min(1, 'Reload the settings and try again.'),
-  storeName: z.string().trim().min(2, 'Enter a store name of at least 2 characters.').max(120, 'Store name is too long.'),
+  expectedVersion: z.number().int().min(0, 'Reload the settings and try again.'),
+  storeName: z.string().trim().regex(/^[^\r\n]+$/, 'Use a single line for the store name.').min(2, 'Enter a store name of at least 2 characters.').max(120, 'Store name is too long.'),
   supportEmail: z.union([z.literal(''), z.null(), z.string().trim().email('Enter a valid support email address.').max(255, 'Email is too long.')])
     .transform(value => (value === '' || value === null ? null : value)),
   supportPhone: phoneSchema,
@@ -134,6 +134,10 @@ export class StoreSettingsService {
     const write: StoreWrite = fields;
     try {
       const saved = await this.db.$transaction(async tx => {
+        // Serialize this decision with ownership changes until the settings and audit commit.
+        const owners = await tx.$queryRaw<{ userId: string }[]>`
+          SELECT "userId" FROM admin_account_security WHERE "userId" = ${actorId}::uuid AND "isOwner" FOR SHARE`;
+        if (!owners.length) throw new AppError('Only an Owner can update store information.', 403, 'CAPABILITY_REQUIRED');
         const current = await tx.storeSettings.findUnique({ where: { id: STORE_ID }, select: storeSelect });
         const currentVersion = current?.version ?? 0;
         if (currentVersion !== expectedVersion) throw conflict('These settings changed elsewhere. Reload to review the latest values.', projectStore(current ?? DEFAULT_STORE));

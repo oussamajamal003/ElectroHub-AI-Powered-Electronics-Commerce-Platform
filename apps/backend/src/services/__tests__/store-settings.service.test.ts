@@ -5,6 +5,7 @@ const audit = vi.hoisted(() => ({ recordAdminAudit: vi.fn() }));
 const db = vi.hoisted(() => {
   const model = () => ({ findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), findMany: vi.fn(), create: vi.fn(), updateMany: vi.fn(), upsert: vi.fn() });
   const handle: Record<string, unknown> = { storeSettings: model(), shippingSettings: model(), shippingMethodSetting: model() };
+  handle.$queryRaw = vi.fn().mockResolvedValue([{ userId: "owner" }]);
   handle.$transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback(handle));
   return handle as Record<string, ReturnType<typeof model>> & { $transaction: ReturnType<typeof vi.fn> };
 });

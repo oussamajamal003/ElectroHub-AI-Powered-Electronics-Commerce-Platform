@@ -48,8 +48,8 @@ class Layout {
     // Fixed metadata (source-event dates, no customer data) makes identical inputs produce identical bytes, including the file ID.
     this.doc = new PDFDocument({
       size: 'A4', margin: 0, autoFirstPage: false, bufferPages: true, compress: true, pdfVersion: '1.7', lang: 'en-US', displayTitle: true,
-      info: { Title: `${this.titles.short} — ${snapshot.orderReference}`, Author: 'ElectroHub', Subject: this.titles.qualifier,
-        Creator: 'ElectroHub documents', Producer: `ElectroHub ${snapshot.templateVersion}`, CreationDate: date, ModDate: date },
+      info: { Title: `${this.titles.short} — ${snapshot.orderReference}`, Author: snapshot.seller.storeName, Subject: this.titles.qualifier,
+        Creator: `${snapshot.seller.storeName} documents`, Producer: `${snapshot.seller.storeName} ${snapshot.templateVersion}`, CreationDate: date, ModDate: date },
     });
     this.text = new TextEngine(this.doc, fonts);
   }
@@ -77,10 +77,11 @@ class Layout {
     doc.translate(x + (size - icon) / 2, y + (size - icon) / 2).scale(icon / 24)
       .path(ZAP).lineWidth(2).lineJoin('round').lineCap('round').stroke('#FFFFFF');
     doc.restore();
-    const word = style(size * 0.66, 'bold', COLOR.primary);
+    let word = style(size * 0.66, 'bold', COLOR.primary);
+    const nameWidth = CONTENT_WIDTH - size - 7;
+    while (word.size > 7 && this.text.width(this.snapshot.seller.storeName, word) > nameWidth) word = { ...word, size: word.size - 0.5 };
     const baseline = y + size * 0.74;
-    this.text.drawLine('Electro', x + size + 7, baseline, 200, word);
-    this.text.drawLine('Hub', x + size + 7 + this.text.width('Electro', word), baseline, 100, { ...word, color: COLOR.text });
+    this.text.drawLine(this.snapshot.seller.storeName, x + size + 7, baseline, nameWidth, word);
   }
 
   private testLabel(top: number) {
@@ -95,8 +96,19 @@ class Layout {
   private firstHeader() {
     this.logo(MARGIN_X, MARGIN_TOP, 24);
     this.testLabel(MARGIN_TOP + 4.5);
-    this.rule(MARGIN_TOP + 36, COLOR.primary, 1.5);
-    let y = MARGIN_TOP + 52;
+    const seller = this.snapshot.seller;
+    const locality = [seller.city, [seller.region, seller.postalCode].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    const address = [seller.addressLine1, seller.addressLine2, locality, seller.country].filter(Boolean).join(' · ');
+    const contact = [seller.supportEmail, seller.supportPhone].filter(Boolean).join(' · ');
+    let y = MARGIN_TOP + 43;
+    for (const line of [address, contact].filter(Boolean)) {
+      for (const wrapped of this.text.wrap(line, CONTENT_WIDTH, S.small)) {
+        this.text.drawLine(wrapped, MARGIN_X, y, CONTENT_WIDTH, S.small);
+        y += this.text.lineHeight(S.small, 1.3);
+      }
+    }
+    this.rule(y + 5, COLOR.primary, 1.5);
+    y += 21;
     for (const line of this.text.wrap(this.titles.title, CONTENT_WIDTH, S.title)) {
       this.text.drawLine(line, MARGIN_X, y + S.title.size, CONTENT_WIDTH, S.title);
       y += this.text.lineHeight(S.title, 1.3);
@@ -105,7 +117,7 @@ class Layout {
     const body = this.snapshot.kind === 'invoice'
       ? 'Commercial statement of a completed purchase. Tax details are not recorded, and the order reference is not a sequential invoice number.'
       : this.snapshot.kind === 'receipt'
-        ? 'Confirms a payment ElectroHub recorded as successful. The confirmation time is not a bank settlement time.'
+        ? `Confirms a payment ${this.snapshot.seller.storeName} recorded as successful. The confirmation time is not a bank settlement time.`
         : 'Shows the order as placed and its current status.';
     const lines = this.text.wrap(body, CONTENT_WIDTH - 20, S.small);
     const height = 12 + S.qualifier.size + 4 + lines.length * this.text.lineHeight(S.small, 1.35) + 6;
@@ -298,7 +310,7 @@ class Layout {
       this.doc.switchToPage(range.start + index);
       const top = PAGE.height - FOOTER;
       this.rule(top, COLOR.border, 0.75);
-      this.text.drawLine(`ElectroHub · ${this.titles.short} · ${this.snapshot.orderReference}`, MARGIN_X, top + 13, CONTENT_WIDTH - 70, S.footer);
+      this.text.drawLine(`${this.snapshot.seller.storeName} · ${this.titles.short} · ${this.snapshot.orderReference}`, MARGIN_X, top + 13, CONTENT_WIDTH - 70, S.footer);
       this.text.drawLine(`Page ${index + 1} of ${range.count}`, MARGIN_X, top + 13, CONTENT_WIDTH, style(7.5, 'medium', COLOR.secondary), 'right');
       this.text.drawLine(qualifier, MARGIN_X, top + 24, CONTENT_WIDTH, S.footer);
     }

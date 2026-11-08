@@ -5,6 +5,8 @@ import { defineConfig, devices } from '@playwright/test';
  * TASK05_2_API_PORT=5204 TASK05_2_FRONTEND_PORT=3204 node scripts/task05-2-browser-stack.cjs → backend :5204 on its own loopback PostgreSQL). Run it on its own stack: it enrolls the seeded Owner and staff
  * accounts and changes the staff account's management access. Traces/videos stay off because the flows type passwords and one-time codes.
  */
+const port = process.env.TASK05_2_FRONTEND_PORT ?? '3204';
+const apiPort = process.env.TASK05_2_API_PORT ?? '5204';
 export default defineConfig({
   testDir: './tests/visual',
   testMatch: 'task05-2-administrators-access-disposable.spec.ts',
@@ -16,17 +18,17 @@ export default defineConfig({
   reporter: 'list',
   use: {
     ...devices['Desktop Chrome'],
-    baseURL: 'http://localhost:3204',
+    baseURL: `http://localhost:${port}`,
     viewport: { width: 1440, height: 1000 },
     trace: 'off',
     video: 'off',
     screenshot: 'off',
   },
   webServer: {
-    command: 'npm run dev -- --host localhost --port 3204 --strictPort',
-    url: 'http://localhost:3204/admin/login',
+    command: `npm run dev -- --host localhost --port ${port} --strictPort`,
+    url: `http://localhost:${port}/admin/login`,
     reuseExistingServer: false,
     timeout: 90_000,
-    env: { E2E_FRONTEND_PORT: '3204', E2E_API_PROXY_TARGET: 'http://127.0.0.1:5204' },
+    env: { E2E_FRONTEND_PORT: port, E2E_API_PROXY_TARGET: `http://127.0.0.1:${apiPort}` },
   },
 });

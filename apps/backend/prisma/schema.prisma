@@ -463,6 +463,8 @@ model Order {
   shippingCost Decimal     @default(0) @db.Decimal(12, 2)
   total        Decimal     @db.Decimal(12, 2)
   currency     String      @default("USD") @db.VarChar(3)
+  /// Immutable seller identity captured when the order is created. NULL identifies legacy orders and renders with the historical ElectroHub profile.
+  storeIdentitySnapshot Json?
 
   checkoutAttemptId      String                 @db.Uuid
   checkoutRequestHash    String                 @db.VarChar(64)

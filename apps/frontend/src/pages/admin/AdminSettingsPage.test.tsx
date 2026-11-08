@@ -109,6 +109,15 @@ beforeEach(() => {
 });
 
 describe('store section', () => {
+  it.each([false, true])('renders selectable details without editing for non-Owner, manager=%s', manager => {
+    asAdministrator({ isOwner: false, canManageAdmins: manager });
+    renderPage();
+    expect(screen.getByText(profile.supportEmail)).toBeVisible();
+    expect(screen.getByText(/Only an Owner can update/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Save Changes' })).toBeNull();
+    expect(screen.queryByRole('textbox')).toBeNull();
+  });
+
   it('announces the loading state without exposing decorative placeholder controls', () => {
     vi.mocked(useStoreSettings).mockReturnValue(query(undefined, { isPending: true }) as unknown as Hook<typeof useStoreSettings>);
     renderPage();

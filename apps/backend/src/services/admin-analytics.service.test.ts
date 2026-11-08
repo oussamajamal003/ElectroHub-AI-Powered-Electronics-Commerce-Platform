@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   AdminAnalyticsService, bucketKeys, growthRate, resolveAnalyticsWindow,
 } from './admin-analytics.service.js';
+import { localDateKey, localDateStart, localDayWindow } from './reporting-timezone.js';
 
 vi.mock('../lib/prisma.js', () => ({ prisma: {} }));
 vi.mock('../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, logSafely: vi.fn() }));
@@ -25,10 +26,10 @@ function database(routes: Routes) {
 const service = (routes: Routes) => new AdminAnalyticsService(database(routes), () => NOW);
 
 describe('analytics windows', () => {
-  it('uses rolling UTC windows with an equal-length previous window for 7d, 30d and 90d', () => {
+  it('uses local calendar-day windows and an equal number of previous days', () => {
     for (const [period, days] of [['7d', 7], ['30d', 30], ['90d', 90]] as const) {
       const window = resolveAnalyticsWindow(period, NOW);
-      expect(window.current.end).toEqual(NOW);
+      expect(window.current.end.toISOString()).toBe('2026-11-06T00:00:00.000Z');
       expect(window.current.end.getTime() - window.current.start.getTime()).toBe(days * 86_400_000);
       expect(window.previous.end).toEqual(window.current.start);
       expect(window.current.start.getTime() - window.previous.start.getTime()).toBe(days * 86_400_000);
@@ -38,22 +39,49 @@ describe('analytics windows', () => {
 
   it('uses twelve calendar months for 12m with monthly buckets and an equal-length previous window', () => {
     const window = resolveAnalyticsWindow('12m', NOW);
-    expect(window.current.start.toISOString()).toBe('2025-11-05T12:00:00.000Z');
+    expect(window.current.start.toISOString()).toBe('2025-12-01T00:00:00.000Z');
     expect(window.previous.end).toEqual(window.current.start);
-    expect(window.current.end.getTime() - window.current.start.getTime())
-      .toBe(window.current.start.getTime() - window.previous.start.getTime());
+    expect(window.previous.start.toISOString()).toBe('2024-12-01T00:00:00.000Z');
     expect(window.granularity).toBe('MONTH');
+  });
+
+  it('resolves boundaries and buckets across a DST change in the configured store zone', () => {
+    const now = new Date('2026-03-10T12:00:00.000Z');
+    const window = resolveAnalyticsWindow('7d', now, 'America/New_York');
+    expect(window.current.end.toISOString()).toBe('2026-03-11T04:00:00.000Z');
+    expect(window.current.start.toISOString()).toBe('2026-03-04T05:00:00.000Z');
+    expect(bucketKeys(window.current, 'DAY', 'America/New_York')).toHaveLength(7);
+    expect(bucketKeys(window.current, 'DAY', 'America/New_York')).toEqual([
+      '2026-03-04', '2026-03-05', '2026-03-06', '2026-03-07', '2026-03-08', '2026-03-09', '2026-03-10',
+    ]);
+  });
+
+  it('finds the first Beirut instant after a nonexistent spring midnight and handles UTC+14', () => {
+    const beirutStart = localDateStart(new Date('2026-03-29T12:00:00.000Z'), 'Asia/Beirut');
+    expect(localDateKey(beirutStart, 'Asia/Beirut')).toBe('2026-03-29');
+    expect(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Beirut', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(beirutStart)).toBe('01:00');
+    expect(localDateKey(new Date(beirutStart.getTime() - 1), 'Asia/Beirut')).toBe('2026-03-28');
+    const utcPlusFourteen = localDateStart(new Date('2026-01-01T00:00:00.000Z'), 'Pacific/Kiritimati');
+    expect(utcPlusFourteen.toISOString()).toBe('2025-12-31T10:00:00.000Z');
+    expect(localDateKey(utcPlusFourteen, 'Pacific/Kiritimati')).toBe('2026-01-01');
+  });
+
+  it('uses the same count of local dashboard days on both sides of DST', () => {
+    const window = localDayWindow(new Date('2026-03-10T12:00:00.000Z'), 7, 'America/New_York');
+    expect(window.since.toISOString()).toBe('2026-03-04T05:00:00.000Z');
+    expect(window.end.toISOString()).toBe('2026-03-11T04:00:00.000Z');
+    expect(window.previousSince.toISOString()).toBe('2026-02-25T05:00:00.000Z');
   });
 
   it('zero-fills buckets only inside the window (UTC days and months)', () => {
     const days = bucketKeys(resolveAnalyticsWindow('7d', NOW).current, 'DAY');
-    expect(days[0]).toBe('2026-10-29');
+    expect(days[0]).toBe('2026-10-30');
     expect(days.at(-1)).toBe('2026-11-05');
     expect(days.every(key => /^\d{4}-\d{2}-\d{2}$/.test(key))).toBe(true);
     const months = bucketKeys(resolveAnalyticsWindow('12m', NOW).current, 'MONTH');
-    expect(months[0]).toBe('2025-11');
+    expect(months[0]).toBe('2025-12');
     expect(months.at(-1)).toBe('2026-11');
-    expect(months).toHaveLength(13);
+    expect(months).toHaveLength(12);
   });
 });
 
@@ -86,7 +114,7 @@ describe('overview', () => {
     expect(eur.revenue).toEqual({ current: '0.00', previous: '10.00', growth: -1 });
     expect(eur.averageOrderValue.current).toBeNull();
     expect(result.data.newCustomers).toEqual({ current: 2, previous: 2, growth: 0 });
-    expect(result.data.revenueSeries.buckets).toHaveLength(8);
+    expect(result.data.revenueSeries.buckets).toHaveLength(7);
     expect(result.data.revenueSeries.byCurrency[0]!.points.find(point => point.bucket === '2026-11-05'))
       .toEqual({ bucket: '2026-11-05', amount: '300.00', paidOrders: 3 });
     expect(result.meta).toMatchObject({ period: '7d', timezone: 'UTC', generatedAt: NOW.toISOString() });
@@ -103,7 +131,7 @@ describe('overview', () => {
     expect(result.data.byCurrency).toEqual([]);
     expect(result.data.paidOrders).toEqual({ current: 0, previous: 0, growth: null });
     expect(result.data.revenueSeries.byCurrency).toEqual([]);
-    expect(result.meta.window.start).toBe(new Date(NOW.getTime() - 30 * 86_400_000).toISOString());
+    expect(result.meta.window.start).toBe('2026-10-07T00:00:00.000Z');
   });
 });
 

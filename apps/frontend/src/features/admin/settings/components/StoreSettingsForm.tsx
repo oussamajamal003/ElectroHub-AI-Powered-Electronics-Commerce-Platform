@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { isStepUpCancelled, useStepUp } from '@/features/admin/security/useStepUp';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -31,8 +32,9 @@ const toDraft = (profile: StoreProfile): Draft => ({
  */
 const supportedZones = (Intl as typeof Intl & { supportedValuesOf?: (key: 'timeZone') => string[] }).supportedValuesOf?.('timeZone') ?? [];
 
-export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload }: {
+export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload, onFailure }: {
   profile: StoreProfile;
+  onFailure?: (error: unknown) => void;
   onDirtyChange: (dirty: boolean) => void;
   /** The saved profile is already in the cache; the page remounts the form from it. */
   onSaved: () => void;
@@ -51,6 +53,7 @@ export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload }:
   const [formError, setFormError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const save = useUpdateStoreSettings();
+  const { runWithStepUp, dialog, verifying } = useStepUp();
   const toast = useAdminToast();
   const dirty = JSON.stringify(draft) !== JSON.stringify(baseline);
 
@@ -72,10 +75,12 @@ export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload }:
     setFormError(null);
     setConflict(false);
     try {
-      await save.mutateAsync({ expectedVersion, ...draft });
+      await runWithStepUp(() => save.mutateAsync({ expectedVersion, ...draft }));
       toast('Store settings saved');
       onSaved();
     } catch (error) {
+      onFailure?.(error);
+      if (isStepUpCancelled(error)) return;
       if (isVersionConflict(error)) { setConflict(true); return; }
       const fields = fieldErrors(error);
       if (Object.keys(fields).length > 0) { setErrors(fields); return; }
@@ -83,7 +88,7 @@ export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload }:
     }
   };
 
-  return <form className={styles.form} onSubmit={submit} noValidate aria-label="Store information">
+  return <><form className={styles.form} onSubmit={submit} noValidate aria-label="Store information">
     {conflict && <SettingsConflictNotice subject="settings" onReload={onReload} />}
     {formError && <p className={styles.formError} role="alert">{formError}</p>}
     <div className={styles.fieldGrid}>
@@ -114,7 +119,7 @@ export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload }:
       </div>
     </div>
     <div className={`${styles.formActions} ${settingsStyles.formActions}`}>
-      <Button type="submit" isLoading={save.isPending} disabled={!dirty || save.isPending || conflict}>Save Changes</Button>
+      <Button type="submit" isLoading={save.isPending} disabled={!dirty || save.isPending || verifying || conflict}>Save Changes</Button>
     </div>
-  </form>;
+  </form>{dialog}</>;
 }

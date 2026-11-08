@@ -351,7 +351,7 @@ export function AdminAnalyticsPage() {
   return <div className={styles.page}>
     {/* Period control sits on the title row, right-aligned, as in the Figma reference (it wraps under the title on narrow screens). */}
     <PageHeader title="Analytics" crumbs={CRUMBS}
-      description="Paid revenue, orders, products, customers, recommendations and image search for the selected period. Figures are computed on the server in UTC."
+      description={`Paid revenue, orders, products, customers, recommendations and image search for the selected period. Figures use the store time zone (${meta?.timezone ?? '…'}).`}
       actions={<div role="radiogroup" aria-label="Reporting period" className={local.periodGroup}>
         {ANALYTICS_PERIODS.map((value, index) => <button key={value} ref={element => { radios.current[index] = element; }} type="button" role="radio"
           aria-checked={period === value} tabIndex={period === value ? 0 : -1}
@@ -361,7 +361,7 @@ export function AdminAnalyticsPage() {
 
     <div className={local.toolbar}>
       {meta && <p className={local.windowNote}>
-        {formatDate(meta.window.start)} to {formatDate(new Date(new Date(meta.window.end).getTime() - 1).toISOString())} (UTC). Last updated {formatDateTime(meta.generatedAt)}.
+        {formatDate(meta.window.start)} to {formatDate(new Date(new Date(meta.window.end).getTime() - 1).toISOString())} ({meta.timezone}). Last updated {formatDateTime(meta.generatedAt)}.
       </p>}
     </div>
 

@@ -127,7 +127,12 @@ export function useUpdateStoreSettings() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (body: StoreProfileInput) => adminSettingsApi.updateStore(body),
-    onSuccess: profile => client.setQueryData(adminSettingsKeys.store, profile),
+    onSuccess: profile => {
+      client.setQueryData(adminSettingsKeys.store, profile);
+      for (const queryKey of [['store', 'profile'], ['admin', 'dashboard'], ['admin', 'analytics']]) {
+        void client.invalidateQueries({ queryKey });
+      }
+    },
   });
 }
 

@@ -1,5 +1,20 @@
 @use '@/styles/abstracts' as *;
 
+// Keep enough room for identities while allowing the table card to scroll on narrow screens.
+.administratorsTable {
+  table { table-layout: fixed; min-width: 60rem; }
+  th:nth-child(1) { width: 24%; }
+  th:nth-child(2) { width: 20%; }
+  th:nth-child(3) { width: 23%; }
+  th:nth-child(4) { width: 13%; }
+  th:nth-child(5) { width: 8%; }
+  th:nth-child(6) { width: 12%; }
+}
+
+.administratorIdentity {
+  strong, span { max-width: none; overflow: visible; white-space: normal; overflow-wrap: anywhere; }
+}
+
 .twoStep {
   display: flex;
   align-items: center;

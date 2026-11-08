@@ -86,6 +86,7 @@ export class BrevoProvider {
         tags: options.tags,
         templateId: options.templateId,
         params: options.params,
+        replyTo: options.replyTo,
       };
 
       const result = await this.client.sendSmtpEmail(payload);

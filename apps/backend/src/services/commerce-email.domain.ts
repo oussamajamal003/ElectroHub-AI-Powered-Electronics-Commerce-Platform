@@ -6,6 +6,7 @@
  * re-derived later from mutable Product, address-book, account or cart records.
  */
 import { z } from 'zod';
+import { storeIdentitySchema } from './store-identity.js';
 
 export const COMMERCE_EMAIL_TYPES = ['ORDER_CONFIRMED', 'PAYMENT_CONFIRMED', 'ORDER_PREPARING', 'ORDER_OUT_FOR_DELIVERY',
   'ORDER_DELIVERED', 'ORDER_CANCELLED', 'PAYMENT_REFUNDED'] as const;
@@ -40,7 +41,9 @@ const delivery = z.object({ method: z.enum(['STANDARD', 'EXPRESS', 'OVERNIGHT'])
 /** Only HTTPS images are ever rendered; anything else is dropped at snapshot time. */
 const httpsImage = z.string().max(2048).regex(/^https:\/\/[^\s"'<>]+$/).nullable();
 
-const base = { v: z.literal(SNAPSHOT_VERSION), orderReference: reference, occurredAt: instant, recipientName: text(100).nullable() };
+const base = { v: z.literal(SNAPSHOT_VERSION), orderReference: reference, occurredAt: instant, recipientName: text(100).nullable(),
+  /** Optional only for compatibility with immutable outbox snapshots created before store identity capture. */
+  seller: storeIdentitySchema.optional() };
 
 export const orderConfirmedSnapshot = z.object({ ...base, type: z.literal('ORDER_CONFIRMED'),
   items: z.array(z.object({ name: text(255), sku: text(100), quantity: z.number().int().positive().max(999),
@@ -180,4 +183,8 @@ export function classifySendResult(result: ProviderSendResult): SendClassificati
 
 // ─── Rendering contract ─────────────────────────────────────────────────────────────────────────────────────────────
 export interface RenderedCommerceEmail { subject: string; preheader: string; html: string; text: string }
-export interface RenderContext { /** Validated trusted frontend origin, e.g. https://electrohub.example (no trailing slash). */ origin: string }
+export interface RenderContext {
+  /** Validated trusted frontend origin, e.g. https://electrohub.example (no trailing slash). */ origin: string;
+  /** Event-time seller identity. Missing only on historical snapshots, where the renderer uses the legacy ElectroHub profile. */
+  seller?: z.infer<typeof storeIdentitySchema>;
+}

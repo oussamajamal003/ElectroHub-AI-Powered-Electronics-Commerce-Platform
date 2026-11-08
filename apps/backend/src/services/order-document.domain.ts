@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
+import { LEGACY_STORE_IDENTITY, parseStoreIdentitySnapshot } from './store-identity.js';
 import {
   DOCUMENT_KINDS, DOCUMENT_LIMITS, DOCUMENT_POLICY, SELLER_PROFILE_VERSION, SNAPSHOT_VERSION, TEMPLATE_VERSION,
   type DocumentKind, type DocumentSnapshotV1, type PaymentEvidence, type UnavailableReason,
@@ -16,6 +17,7 @@ export interface DocumentSourceOrder {
   userId: string;
   status: string;
   currency: string;
+  storeIdentitySnapshot?: Prisma.JsonValue | null;
   subtotal: Prisma.Decimal;
   shippingCost: Prisma.Decimal;
   total: Prisma.Decimal;
@@ -188,7 +190,8 @@ function snapshotFor(kind: DocumentKind, order: DocumentSourceOrder, proof: Paym
   const payment = order.payment;
   return {
     version: SNAPSHOT_VERSION, kind, policy: DOCUMENT_POLICY, templateVersion: TEMPLATE_VERSION, assetVersion,
-    sellerProfileVersion: SELLER_PROFILE_VERSION, testTransaction: true,
+    sellerProfileVersion: SELLER_PROFILE_VERSION,
+    seller: parseStoreIdentitySnapshot(order.storeIdentitySnapshot ?? LEGACY_STORE_IDENTITY), testTransaction: true,
     orderReference: canonicalReference(order.id), purchaseDate: order.createdAt.toISOString(), fulfillmentStatus: order.status,
     currency: 'USD',
     items: receipt ? [] : items.map(item => ({ name: displayText(item.productName), sku: displayText(item.sku), quantity: item.quantity,

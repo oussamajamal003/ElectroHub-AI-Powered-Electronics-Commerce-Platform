@@ -1,11 +1,12 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { prisma as defaultDb } from '../lib/prisma.js';
+import { addLocalDays, localDateKey, localDateStart, localMonthStart, storeTimeZone } from './reporting-timezone.js';
 
 /**
  * Task 05.2 administrator analytics. Every figure is a bounded, parameterized aggregate over authoritative tables or the
- * analytics_events facts. Paid revenue reuses the 05.1 definition: payments with status SUCCEEDED, grouped by paidAt (UTC) and
+ * analytics_events facts. Paid revenue reuses the 05.1 definition: payments with status SUCCEEDED, grouped by paidAt and
  * currency; refunded payments carry status REFUNDED and are excluded, pending/processing/failed never count.
- * Windows are rolling and half-open [start, end) in UTC, with an equal-length previous window immediately before the current one.
+ * Windows are half-open [start, end) in the configured store timezone, with the same number of local days/months immediately before.
  * Nothing here is sampled, estimated or padded with invented values; unavailable figures are returned as null with a reason.
  */
 export const ANALYTICS_PERIODS = ['7d', '30d', '90d', '12m'] as const;
@@ -14,9 +15,8 @@ export const DEFAULT_ANALYTICS_PERIOD: AnalyticsPeriod = '30d';
 
 type Granularity = 'DAY' | 'MONTH';
 export interface AnalyticsRange { start: Date; end: Date }
-export interface AnalyticsWindow { period: AnalyticsPeriod; current: AnalyticsRange; previous: AnalyticsRange; granularity: Granularity }
+export interface AnalyticsWindow { period: AnalyticsPeriod; current: AnalyticsRange; previous: AnalyticsRange; granularity: Granularity; timezone: string }
 
-const DAY_MS = 86_400_000;
 const PERIOD_DAYS: Record<Exclude<AnalyticsPeriod, '12m'>, number> = { '7d': 7, '30d': 30, '90d': 90 };
 const TOP_LIMIT = 10;
 const DELIVERY_ACTIVE = ['CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY'] as const;
@@ -28,37 +28,42 @@ const BUCKET_SQL: Record<Granularity, { unit: string; format: string }> = {
   MONTH: { unit: 'month', format: 'YYYY-MM' },
 };
 
-/** Rolling window for a period. 12m is twelve calendar months; the previous window has the same duration. */
-export function resolveAnalyticsWindow(period: AnalyticsPeriod, now: Date): AnalyticsWindow {
-  const end = new Date(now.getTime());
+/** Calendar window for a period. 12m contains twelve complete local month buckets. */
+export function resolveAnalyticsWindow(period: AnalyticsPeriod, now: Date, timezone = 'UTC'): AnalyticsWindow {
+  const end = localDateStart(now, timezone);
   let start: Date;
+  let actualEnd: Date;
+  let previousStart: Date;
   if (period === '12m') {
-    start = new Date(end.getTime());
-    start.setUTCMonth(start.getUTCMonth() - 12);
+    start = localMonthStart(end, -11, timezone);
+    actualEnd = localMonthStart(end, 1, timezone);
+    previousStart = localMonthStart(start, -12, timezone);
   } else {
-    start = new Date(end.getTime() - PERIOD_DAYS[period] * DAY_MS);
+    start = addLocalDays(end, -(PERIOD_DAYS[period] - 1), timezone);
+    actualEnd = addLocalDays(end, 1, timezone);
+    previousStart = addLocalDays(start, -PERIOD_DAYS[period], timezone);
   }
-  const length = end.getTime() - start.getTime();
   return {
     period,
-    current: { start, end },
-    previous: { start: new Date(start.getTime() - length), end: start },
+    current: { start, end: actualEnd },
+    previous: { start: previousStart, end: start },
     granularity: period === '12m' ? 'MONTH' : 'DAY',
+    timezone,
   };
 }
 
-/** Every bucket that starts inside [start, end), in UTC, so empty buckets can be shown as zero rather than omitted. */
-export function bucketKeys(range: AnalyticsRange, granularity: Granularity): string[] {
+/** Every local bucket that starts inside [start, end), including empty buckets as zero. */
+export function bucketKeys(range: AnalyticsRange, granularity: Granularity, timezone = 'UTC'): string[] {
   const keys: string[] = [];
   if (granularity === 'DAY') {
-    const first = Date.UTC(range.start.getUTCFullYear(), range.start.getUTCMonth(), range.start.getUTCDate());
-    for (let t = first; t < range.end.getTime(); t += DAY_MS) keys.push(new Date(t).toISOString().slice(0, 10));
+    for (let t = localDateStart(range.start, timezone).getTime(); t < range.end.getTime(); t = addLocalDays(new Date(t), 1, timezone).getTime()) keys.push(localDateKey(new Date(t), timezone));
   } else {
-    const year = range.start.getUTCFullYear();
-    const month = range.start.getUTCMonth();
+    const local = new Intl.DateTimeFormat('en-US', { timeZone: timezone, year: 'numeric', month: '2-digit' }).formatToParts(range.start);
+    const year = Number(local.find(x => x.type === 'year')!.value);
+    const month = Number(local.find(x => x.type === 'month')!.value) - 1;
     for (let offset = 0; ; offset++) {
       const t = Date.UTC(year, month + offset, 1);
-      if (t >= range.end.getTime()) break;
+      if (localDateStart(new Date(t + 12 * 60 * 60 * 1000), timezone).getTime() >= range.end.getTime()) break;
       keys.push(new Date(t).toISOString().slice(0, 7));
     }
   }
@@ -108,9 +113,9 @@ export const recommendationAttributions = (range: AnalyticsRange) => Prisma.sql`
     LIMIT 1
   ) latest ON true`;
 
-/** Bucket label in UTC. `column` is one of two fixed, server-owned column references (never request input). */
-const bucketExpression = (granularity: Granularity, column: '"paidAt"' | 'u."createdAt"') =>
-  Prisma.raw(`to_char(date_trunc('${BUCKET_SQL[granularity].unit}', ${column}), '${BUCKET_SQL[granularity].format}')`);
+/** Bucket label in the store zone. `column` is one of two fixed, server-owned column references (never request input). */
+const bucketExpression = (granularity: Granularity, column: '"paidAt"' | 'u."createdAt"', timezone: string) =>
+  Prisma.sql`to_char(date_trunc('${Prisma.raw(BUCKET_SQL[granularity].unit)}', ${Prisma.raw(column)} AT TIME ZONE 'UTC' AT TIME ZONE ${timezone}), '${Prisma.raw(BUCKET_SQL[granularity].format)}')`;
 
 type CurrencyTotal = { currency: string; amount: Prisma.Decimal; orders: bigint | number };
 type ProductRow = { productId: string; currency: string; units: bigint | number; amount: Prisma.Decimal; orders: bigint | number;
@@ -130,10 +135,15 @@ export class AdminAnalyticsService {
         window: { start: window.current.start.toISOString(), end: window.current.end.toISOString() },
         previousWindow: { start: window.previous.start.toISOString(), end: window.previous.end.toISOString() },
         generatedAt: now.toISOString(),
-        timezone: 'UTC' as const,
+        timezone: window.timezone,
         definitions,
       },
     };
+  }
+
+  private async resolveTimezone() {
+    const row = this.db.storeSettings ? await this.db.storeSettings.findUnique({ where: { id: 'default' }, select: { timezone: true } }) : null;
+    return storeTimeZone(row?.timezone);
   }
 
   private revenueTotals(range: AnalyticsRange) {
@@ -150,23 +160,24 @@ export class AdminAnalyticsService {
         AND u."email" NOT LIKE '%@deleted.invalid'`);
   }
 
-  private revenueBuckets(range: AnalyticsRange, granularity: Granularity) {
+  private revenueBuckets(range: AnalyticsRange, granularity: Granularity, timezone: string) {
     return this.db.$queryRaw<BucketRow[]>(Prisma.sql`
-      SELECT ${bucketExpression(granularity, '"paidAt"')} AS bucket, "currency" AS currency,
+      SELECT ${bucketExpression(granularity, '"paidAt"', timezone)} AS bucket, "currency" AS currency,
         COALESCE(SUM("amount"), 0) AS amount, COUNT(*) AS orders
       FROM "payments"
       WHERE "status" = 'SUCCEEDED' AND "paidAt" >= ${range.start} AND "paidAt" < ${range.end}
       GROUP BY 1, 2 ORDER BY 1 ASC, 2 ASC`);
   }
 
-  /** Paid revenue, paid orders, AOV and new customers, each with the previous equal-length window and growth. */
+  /** Paid revenue, paid orders, AOV and new customers, each with the previous same-calendar-length window and growth. */
   async overview(period: AnalyticsPeriod) {
     const now = this.clock();
-    const window = resolveAnalyticsWindow(period, now);
+    const timezone = await this.resolveTimezone();
+    const window = resolveAnalyticsWindow(period, now, timezone);
     const [current, previous, newCurrent, newPrevious, buckets] = await Promise.all([
       this.revenueTotals(window.current), this.revenueTotals(window.previous),
       this.newCustomers(window.current), this.newCustomers(window.previous),
-      this.revenueBuckets(window.current, window.granularity),
+      this.revenueBuckets(window.current, window.granularity, timezone),
     ]);
     const currencies = [...new Set([...current, ...previous].map(row => row.currency))].sort();
     const byCurrency = currencies.map(currency => {
@@ -189,7 +200,7 @@ export class AdminAnalyticsService {
     const totalOrders = (rows: CurrencyTotal[]) => rows.reduce((sum, row) => sum + toNumber(row.orders), 0);
     const curOrders = totalOrders(current);
     const prevOrders = totalOrders(previous);
-    const keys = bucketKeys(window.current, window.granularity);
+    const keys = bucketKeys(window.current, window.granularity, timezone);
     const points = (currency: string) => keys.map(bucket => {
       const row = buckets.find(item => item.bucket === bucket && item.currency === currency);
       return { bucket, amount: money(decimal(row?.amount)), paidOrders: toNumber(row?.orders) };
@@ -203,10 +214,10 @@ export class AdminAnalyticsService {
       revenueSeries: { granularity: window.granularity, buckets: keys,
         byCurrency: [...new Set(buckets.map(row => row.currency))].sort().map(currency => ({ currency, points: points(currency) })) },
     }, {
-      revenue: 'Sum of SUCCEEDED payments paid inside the window (UTC paidAt), per currency. Refunded and unpaid payments are excluded; currencies are never added together.',
+      revenue: 'Sum of SUCCEEDED payments paid inside the window, per currency. Refunded and unpaid payments are excluded; currencies are never added together.',
       paidOrders: 'Distinct orders with a SUCCEEDED payment paid inside the window. One payment per order, so this equals the number of paid payments.',
       averageOrderValue: 'Paid revenue divided by paid orders for the same window and currency, rounded to cents. Null when there are no paid orders.',
-      growth: 'Current minus previous, divided by the absolute previous value, over the equal-length window immediately before. Null when the previous value is zero.',
+      growth: 'Current minus previous, divided by the absolute previous value, over the same number of local days or months immediately before. Null when the previous value is zero.',
       newCustomers: 'Customer accounts (role CUSTOMER) created inside the window by createdAt. Admin accounts and anonymized deleted accounts are excluded.',
       revenueSeries: 'Daily buckets for 7d/30d/90d and monthly buckets for 12m. Buckets with no paid orders are zero. The first bucket may start before the window; only paid events inside the window are counted.',
     });
@@ -215,7 +226,8 @@ export class AdminAnalyticsService {
   /** Top 10 products by units and by paid amount per currency, from paid orders in the window. Names and status are current. */
   async products(period: AnalyticsPeriod) {
     const now = this.clock();
-    const window = resolveAnalyticsWindow(period, now);
+    const timezone = await this.resolveTimezone();
+    const window = resolveAnalyticsWindow(period, now, timezone);
     const rows = await this.db.$queryRaw<ProductRow[]>(Prisma.sql`
       WITH paid AS (${paidPayments(window.current)}),
       lines AS (
@@ -254,7 +266,8 @@ export class AdminAnalyticsService {
   /** Paid amount and units per CURRENT catalog category. Order items carry no category snapshot, so this is not a historical view. */
   async categories(period: AnalyticsPeriod) {
     const now = this.clock();
-    const window = resolveAnalyticsWindow(period, now);
+    const timezone = await this.resolveTimezone();
+    const window = resolveAnalyticsWindow(period, now, timezone);
     const rows = await this.db.$queryRaw<CategoryRow[]>(Prisma.sql`
       WITH paid AS (${paidPayments(window.current)})
       SELECT c."id" AS "categoryId", c."name" AS name, paid."currency" AS currency,
@@ -282,7 +295,8 @@ export class AdminAnalyticsService {
   /** Current inventory state (not a time series): counts by stored inventory status for non-test products. */
   async inventory(period: AnalyticsPeriod) {
     const now = this.clock();
-    const window = resolveAnalyticsWindow(period, now);
+    const timezone = await this.resolveTimezone();
+    const window = resolveAnalyticsWindow(period, now, timezone);
     const rows = await this.db.$queryRaw<{ status: string; count: bigint | number }[]>(Prisma.sql`
       SELECT i."status"::text AS status, COUNT(*) AS count
       FROM "inventory" i JOIN "products" p ON p."id" = i."productId"
@@ -304,7 +318,8 @@ export class AdminAnalyticsService {
   /** Non-personal impressions and clicks (deduplicated per batch), CTR, breakdowns, and last-click conversion for consenting customers. */
   async recommendations(period: AnalyticsPeriod) {
     const now = this.clock();
-    const window = resolveAnalyticsWindow(period, now);
+    const timezone = await this.resolveTimezone();
+    const window = resolveAnalyticsWindow(period, now, timezone);
     const [events, conversion] = await Promise.all([
       this.db.$queryRaw<{ surface: string; mode: string; strategy: string; eventType: string; count: bigint | number }[]>(Prisma.sql`
         SELECT "surface", "mode", "strategy", "eventType", COUNT(*) AS count
@@ -353,7 +368,8 @@ export class AdminAnalyticsService {
   /** Image-search outcomes measured on the server, selections from signed tokens, and latency percentiles. */
   async imageSearch(period: AnalyticsPeriod) {
     const now = this.clock();
-    const window = resolveAnalyticsWindow(period, now);
+    const timezone = await this.resolveTimezone();
+    const window = resolveAnalyticsWindow(period, now, timezone);
     const [outcome, selections, searchesWithSelection, since] = await Promise.all([
       this.db.$queryRaw<{ completed: bigint | number; noResults: bigint | number; withResults: bigint | number; failed: bigint | number;
         p50: number | null; p95: number | null }[]>(Prisma.sql`
@@ -408,7 +424,8 @@ export class AdminAnalyticsService {
   /** Current delivery statuses, deliveries delivered in the window, and average paid-to-delivered hours where both timestamps exist. */
   async deliveries(period: AnalyticsPeriod) {
     const now = this.clock();
-    const window = resolveAnalyticsWindow(period, now);
+    const timezone = await this.resolveTimezone();
+    const window = resolveAnalyticsWindow(period, now, timezone);
     const [statusRows, delivered] = await Promise.all([
       this.db.$queryRaw<{ status: string; count: bigint | number }[]>(Prisma.sql`
         SELECT d."status"::text AS status, COUNT(*) AS count FROM "deliveries" d GROUP BY d."status"`),
@@ -445,11 +462,12 @@ export class AdminAnalyticsService {
   /** New customer registrations per bucket and repeat paying customers (all-time and within the window). */
   async customers(period: AnalyticsPeriod) {
     const now = this.clock();
-    const window = resolveAnalyticsWindow(period, now);
+    const timezone = await this.resolveTimezone();
+    const window = resolveAnalyticsWindow(period, now, timezone);
     const [newCurrent, newPrevious, series, repeatAll, repeatWindow, sessionsCurrent, sessionsPrevious] = await Promise.all([
       this.newCustomers(window.current), this.newCustomers(window.previous),
       this.db.$queryRaw<CustomerBucketRow[]>(Prisma.sql`
-        SELECT ${bucketExpression(window.granularity, 'u."createdAt"')} AS bucket, COUNT(*) AS count
+        SELECT ${bucketExpression(window.granularity, 'u."createdAt"', timezone)} AS bucket, COUNT(*) AS count
         FROM "users" u JOIN "roles" r ON r."id" = u."roleId"
         WHERE r."name" = 'CUSTOMER' AND u."createdAt" >= ${window.current.start} AND u."createdAt" < ${window.current.end}
           AND u."email" NOT LIKE '%@deleted.invalid'
@@ -478,7 +496,7 @@ export class AdminAnalyticsService {
       },
     }, {
       newCustomers: 'Customer accounts created inside the window by createdAt. Admin accounts and anonymized deleted accounts are excluded.',
-      registrations: 'Registrations per UTC day (7d/30d/90d) or month (12m). Empty buckets are zero.',
+      registrations: 'Registrations per store-local day (7d/30d/90d) or month (12m). Empty buckets are zero.',
       repeatBuyers: 'A paying customer is a user with at least one SUCCEEDED payment. A repeat customer has two or more SUCCEEDED paid orders. allTime counts every paid order; inWindow counts only orders paid inside the window. rate = repeat / paying customers.',
       sessions: 'Storefront sessions that started inside the window. A session is one browser tab; its duration is the time the tab was visible, capped at 4 hours. Sessions under 1 second are ignored. Not linked to accounts.',
       ordersPerCustomer: 'Orders with a SUCCEEDED payment inside the window divided by the customers who paid for them in the window. Null when nobody paid.',

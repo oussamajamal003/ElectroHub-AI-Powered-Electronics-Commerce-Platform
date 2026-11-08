@@ -121,6 +121,7 @@ describe('Brevo Integration', () => {
         to: 'buyer@example.com',
         subject: 'Order Confirm',
         htmlContent: '<h1>Confirmed</h1>',
+        replyTo: { email: 'customer@example.com' },
       });
 
       expect(result).toEqual({
@@ -133,6 +134,7 @@ describe('Brevo Integration', () => {
           sender: { email: 'sender@electrohub.com', name: 'ElectroHub Test' },
           to: [{ email: 'buyer@example.com' }],
           subject: 'Order Confirm',
+          replyTo: { email: 'customer@example.com' },
         })
       );
     });

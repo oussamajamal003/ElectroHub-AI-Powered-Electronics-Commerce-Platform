@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '../lib/prisma.js';
 import { AdminAnalyticsService, recommendationAttributions } from './admin-analytics.service.js';
@@ -73,6 +74,14 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1').sequential('Task 05.2
     await paidOrder(ids.customerA, [{ productId: ids.p2, quantity: 1, unitPrice: '30.00' }], { status: 'REFUNDED', paidAt: new Date(Date.now() - 3 * day), amount: '999.00' });
     await paidOrder(ids.customerB, [{ productId: ids.p2, quantity: 1, unitPrice: '30.00' }], { status: 'FAILED', paidAt: null, amount: '500.00' });
     await paidOrder(ids.customerB, [{ productId: ids.p2, quantity: 1, unitPrice: '30.00' }], { status: 'SUCCEEDED', paidAt: new Date(Date.now() - 40 * day), amount: '70.00' });
+  });
+
+  it('groups UTC-naive stored timestamps by the correct local day across the New York DST jump', async () => {
+    const rows = await prisma.$queryRaw<{ bucket: string }[]>(Prisma.sql`
+      SELECT to_char(date_trunc('day', TIMESTAMP '2026-03-08 04:30:00' AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York'), 'YYYY-MM-DD') AS bucket
+      UNION ALL
+      SELECT to_char(date_trunc('day', TIMESTAMP '2026-03-08 07:30:00' AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York'), 'YYYY-MM-DD') AS bucket`);
+    expect(rows.map(row => row.bucket)).toEqual(['2026-03-07', '2026-03-08']);
   });
   afterAll(async () => { await prisma.$disconnect(); });
 
