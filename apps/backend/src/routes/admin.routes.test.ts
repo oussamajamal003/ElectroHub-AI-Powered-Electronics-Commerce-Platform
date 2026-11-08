@@ -91,6 +91,11 @@ describe('admin operations API authorization', () => {
 });
 
 describe('admin operations API validation', () => {
+  it('accepts the deleted customer filter', async () => {
+    expect((await as(request(app).get('/api/admin/customers?status=DELETED'))).status).toBe(200);
+    expect(customers.list).toHaveBeenCalledWith(expect.objectContaining({ status: 'DELETED' }));
+  });
+
   it('whitelists list queries and rejects unknown or out-of-range parameters', async () => {
     for (const query of ['pageSize=51', 'page=0', 'sort=password', 'status=DELETED', 'role=ADMIN', 'stock=SOME']) {
       expect((await as(request(app).get(`/api/admin/catalog/products?${query}`))).status, query).toBe(400);

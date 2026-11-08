@@ -128,6 +128,15 @@ describe('admin list filters match their counts', () => {
     expect(result.meta.statusCounts).toEqual({ CONFIRMED: 2 });
   });
 
+  it('filters deleted customers without including ordinary deactivated accounts', async () => {
+    const db = database();
+    db.$queryRaw.mockResolvedValue([]);
+    await new AdminCustomerService(db as unknown as PrismaClient).list({ q: undefined, page: 1, pageSize: 20, order: 'desc', sort: 'createdAt', status: 'DELETED' });
+    expect(db.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { AND: [
+      { role: { name: 'CUSTOMER' } }, { email: { endsWith: '@deleted.invalid' } },
+    ] } }));
+  });
+
   it('lists anonymized (deleted) accounts under neither the ACTIVE nor the INACTIVE filter', async () => {
     const db = database();
     db.$queryRaw.mockResolvedValue([]);

@@ -7,7 +7,7 @@ import { useListParams } from '@/features/admin/shared/useListParams';
 import { formatCount, formatDate, formatMoneyList, initials } from '@/features/admin/shared/format';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
 
-const FILTERS = { status: ['ACTIVE', 'INACTIVE'] } as const;
+const FILTERS = { status: ['ACTIVE', 'INACTIVE', 'DELETED'] } as const;
 const SORT_KEYS = ['createdAt', 'name', 'email'] as const;
 const DEFAULT_SORT = { key: 'createdAt', order: 'desc' } as const;
 
@@ -43,7 +43,7 @@ export function AdminCustomersPage() {
         hint="Successful payments, refunded excluded" />
     </section>
     <FilterBand search={list.search} onSearch={list.setSearch} placeholder="Search by name or email" searchLabel="Search customers"
-      chips={[{ value: undefined, label: 'All' }, { value: 'ACTIVE', label: 'Active' }, { value: 'INACTIVE', label: 'Deactivated' }]}
+      chips={[{ value: undefined, label: 'All' }, { value: 'ACTIVE', label: 'Active' }, { value: 'INACTIVE', label: 'Deactivated' }, { value: 'DELETED', label: 'Deleted' }]}
       active={list.filters.status} onChip={value => list.setFilter('status', value)} onReset={list.reset} resetDisabled={!list.isFiltered} />
     {query.isError && <QueryProblem error={query.error} hasData={Boolean(query.data)} onRetry={() => void query.refetch()} retrying={query.isFetching} what="Customers" />}
     <div>

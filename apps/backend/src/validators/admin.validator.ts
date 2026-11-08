@@ -127,7 +127,7 @@ export const orderListSchema = z.object({
 // ─── Customers ──────────────────────────────────────────
 export const customerListSchema = z.object({
   ...listBase,
-  status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'DELETED']).optional(),
   sort: z.enum(['createdAt', 'name', 'email']).prefault('createdAt'),
   order: z.enum(['asc', 'desc']).prefault('desc'),
 }).strict();
