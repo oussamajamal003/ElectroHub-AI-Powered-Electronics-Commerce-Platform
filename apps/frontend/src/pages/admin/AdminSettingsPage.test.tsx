@@ -200,6 +200,12 @@ describe('store section', () => {
 });
 
 describe('tabs and the URL', () => {
+  it.each(['store', 'notifications', 'shipping', 'administrators'])('links back to Settings from the %s section', tab => {
+    renderPage(`/admin/settings?tab=${tab}`);
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/admin/settings');
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/admin');
+  });
+
   it('opens the tab named in ?tab= and falls back to Store for an unknown value', () => {
     const { unmount } = renderPage('/admin/settings?tab=shipping');
     expect(screen.getByRole('heading', { name: 'Shipping Settings' })).toBeInTheDocument();

@@ -1,0 +1,21 @@
+@use '@/styles/abstracts' as *;
+
+.twoStep {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: $spacing-2;
+  min-width: 0;
+}
+
+.twoStepDetail {
+  color: $color-text-secondary;
+  font-size: $font-size-xs;
+}
+
+.twoStepActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-2;
+}

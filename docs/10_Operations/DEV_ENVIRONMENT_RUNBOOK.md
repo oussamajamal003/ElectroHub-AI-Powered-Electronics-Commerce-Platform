@@ -44,6 +44,16 @@ Vite validates loopback targets and reserved port pairs. CLI `--port` is honoure
 
 `npm run dev --workspace=@electrohub/backend` remains the watched, **payment-restricted** shared-DEV mode. It is not read-only for ordinary authenticated cart/auth actions. It does not run shared payment recovery. Never copy a deployment approval into it.
 
+## Local AI image search
+
+Start the AI service from `apps/ai-service` with `venv\Scripts\python.exe -m app`. Use the model and relevance artifact directories configured together in that service's `.env`; inherited shell variables override the file. Clear stale `AI_MODEL_ARTIFACT_DIR` / `AI_RELEVANCE_ARTIFACT_DIR` overrides before starting when the `.env` pair is intended.
+
+In particular, `models/relevance-imagenet-v1` is incompatible with the `siglip2-b16-p256-d1` encoder. That combination fails closed with `ArtifactRejectedError` (relevance gate calibrated for a different model version), leaving image search at `MODEL_NOT_LOADED` and the public endpoint at `503 IMAGE_SEARCH_UNAVAILABLE`. Use the configured compatible relevance artifact, not a disabled relevance gate, and restart the AI process after correcting its launch environment.
+
+Verify authenticated `/internal/v1/ready` reports `features.imageSearch.available: true`, then upload an image to `/api/search/image` through the frontend proxy. `/health` alone does not prove model or index readiness. The image endpoint permits 20 requests per IP per five minutes; honor `Retry-After` when testing instead of weakening the limiter.
+
+Incident verification (2026-11-06): reproduced the incompatible-artifact rejection; the configured SigLIP/D3 pair loaded successfully after restart. Model/index readiness and camera-image uploads through both `:5000` and `:3000` returned HTTP 200 with catalog matches. No model, index, database or application-code changes were required.
+
 ## Isolated QA
 
 ```powershell
@@ -72,6 +82,10 @@ npm run dev -- --host 127.0.0.1 --strictPort
 Use separate browser contexts/profiles for DEV and QA. Localhost cookies are shared across ports; port numbers do not isolate sessions. Do not run simultaneous DEV/QA sign-ins in one browser cookie jar.
 
 ## Browser and regression checks
+
+Settings breadcrumbs use `Dashboard → Settings → current section` for Store, Notifications, Shipping, the Administrators tab and the standalone Administrators page (including its loading state). The Settings ancestor links to `/admin/settings`. Regression coverage lives in `AdminSettingsPage.test.tsx` and `AdminAdministratorsPage.test.tsx`; `scripts/administrators-loading-qa.cjs` also clicks the breadcrumb and verifies navigation at desktop and mobile widths.
+
+Administrators loading regression: `node scripts/administrators-loading-qa.cjs` from the repository root checks the running frontend on `:3000` with mocked API responses only. It holds the profile response pending, checks four existing DataTable skeleton rows and the absence of invitation controls, then releases the profile and checks the loaded transition. Captures are written to `.cache/administrators-loading/pending-{1920,390}.png`. On 2026-11-06, both 1920×900 and 390×900 passed and the captures were inspected: skeleton rows replace the previously blank content area, retaining the existing horizontally scrollable mobile table. The supplied blank-page screenshot and repository settings reference informed this fix; no dedicated Administrators loading frame was available. The component regression is `src/pages/admin/AdminAdministratorsPage.test.tsx` in the frontend workspace.
 
 The private `GET /api/internal/development-runtime` diagnostic requires loopback access and a per-launch bearer token, is unavailable in production, and returns only runtime mode, random instance identity and database/TLS readiness. Tokens are in ignored `.cache/dev-runtime-token.txt` (supervised DEV) or `.isolated/runtime-token.txt` (QA); never paste them into logs or documentation. No diagnostic grants payment authority.
 

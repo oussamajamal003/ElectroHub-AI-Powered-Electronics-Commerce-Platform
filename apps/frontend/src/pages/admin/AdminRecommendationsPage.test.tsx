@@ -267,4 +267,32 @@ describe('AdminRecommendationsPage', () => {
     expect(screen.getByText('$19.99')).toBeInTheDocument();
     expect(screen.getByText(/Previews are not recorded as impressions or clicks/)).toBeInTheDocument();
   });
+
+  it('previews a product page and a cart from picked products, never typed IDs', async () => {
+    const user = userEvent.setup();
+    vi.mocked(useAdminProducts).mockReturnValue({ data: { data: [eligibleProduct, lowStockProduct], meta: { page: 1, totalPages: 1, total: 2, pageSize: 20 } },
+      isPending: false, isError: false } as never);
+    renderPage('/admin/recommendations?tab=preview');
+    expect(screen.queryByLabelText(/Product ID/)).toBeNull();
+    await user.click(screen.getByRole('combobox', { name: 'Placement' }));
+    await user.click(screen.getByRole('option', { name: 'Product page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run preview' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Choose the product whose page you want to preview.');
+    await user.click(screen.getByRole('button', { name: /Product page/ }));
+    await user.click(await screen.findByRole('option', { name: /QA Probe Headphones/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run preview' }));
+    expect(vi.mocked(useRecommendationPreview)).toHaveBeenLastCalledWith(expect.objectContaining({ surface: 'product_detail', productId: PRODUCT }));
+
+    await user.click(screen.getByRole('combobox', { name: 'Placement' }));
+    await user.click(screen.getByRole('option', { name: 'Cart' }));
+    await user.click(screen.getByRole('button', { name: /Add to cart/ }));
+    await user.click(await screen.findByRole('option', { name: /QA Probe Headphones/ }));
+    await user.click(screen.getByRole('button', { name: /Add to cart/ }));
+    await user.click(await screen.findByRole('option', { name: /Low Stock Camera/ }));
+    const chosen = screen.getByRole('list', { name: 'Products in the preview cart' });
+    expect(within(chosen).getAllByRole('listitem')).toHaveLength(2);
+    await user.click(within(chosen).getByRole('button', { name: 'Remove Low Stock Camera from the preview cart' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run preview' }));
+    expect(vi.mocked(useRecommendationPreview)).toHaveBeenLastCalledWith(expect.objectContaining({ surface: 'cart', cartProductIds: [PRODUCT] }));
+  });
 });

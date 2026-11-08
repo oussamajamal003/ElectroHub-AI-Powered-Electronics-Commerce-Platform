@@ -24,6 +24,7 @@ import {
 import { formatDate, formatDateTime } from '@/features/admin/shared/format';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
 import secStyles from './AdminSecurityPage.module.scss';
+import teamStyles from './AdminAdministratorsPage.module.scss';
 
 const INVITATION_STATUS_OPTIONS: { value: InvitationStatus; label: string }[] = [
   { value: 'PENDING', label: 'Pending' },
@@ -279,10 +280,10 @@ export function AdminAdministratorsPage() {
     </span> },
     { key: 'mfa', title: 'Two-step', render: row => {
       const status = twoStepStatus(row);
-      return <span className={styles.cellText}>
+      return <span className={teamStyles.twoStep}>
         <StatusPill tone={status.tone}>{row.mfaEnrolled ? 'Two-step verification enabled' : status.label}</StatusPill>
-        {status.detail && <span>{status.detail}</span>}
-        {isOwner && !row.isSelf && (status.action !== 'none' || status.canRevoke) && <span className={styles.rowActions}>
+        {status.detail && <span className={teamStyles.twoStepDetail}>{status.detail}</span>}
+        {isOwner && !row.isSelf && (status.action !== 'none' || status.canRevoke) && <span className={teamStyles.twoStepActions}>
           {status.action === 'activate' && <Button type="button" variant="outline" size="small" disabled={busy}
             onClick={(event) => { activateOpener.current = event.currentTarget; setDialogError(null); setActivateTarget(row); }} aria-label={`Activate account for ${row.email}`}>Activate account</Button>}
           {status.action === 'resend' && <Button type="button" variant="outline" size="small" disabled={busy}

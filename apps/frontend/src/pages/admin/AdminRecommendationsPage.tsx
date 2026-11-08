@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, Eye, SlidersHorizontal, Star } from 'lucide-react';
+import { BarChart3, Eye, SlidersHorizontal, Star, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
 import { Input } from '@/components/ui/Input';
 import { SearchSelect } from '@/components/ui/SearchSelect';
+import { Select } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import {
@@ -18,6 +19,7 @@ import {
 } from '@/features/admin/recommendations/api';
 import { railCopy } from '@/features/recommendations/labels';
 import { useAdminProducts } from '@/features/admin/products/api';
+import { seriesColor } from '@/features/admin/shared/chartColors';
 import styles from './AdminRecommendationsPage.module.scss';
 
 const TABS = ['overview', 'strategies', 'featured', 'preview'] as const;
@@ -30,7 +32,6 @@ const MODE_LABEL: Record<RecommendationSectionMode, string> = {
 };
 const STATE_TONE: Record<PinState, Tone> = { ACTIVE: 'success', SCHEDULED: 'info', EXPIRED: 'neutral', PAUSED: 'warning', INELIGIBLE: 'error' };
 const STATE_LABEL: Record<PinState, string> = { ACTIVE: 'Active', SCHEDULED: 'Scheduled', EXPIRED: 'Ended', PAUSED: 'Paused', INELIGIBLE: 'Not eligible' };
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CRUMBS = [{ label: 'Dashboard', to: '/admin' }, { label: 'Recommendations' }];
 const percent = (value: number | null) => value === null ? 'No data yet' : `${(value * 100).toFixed(1)}%`;
 const toIso = (value: string) => value ? new Date(value).toISOString() : null;
@@ -75,11 +76,8 @@ function OverviewPanel() {
   return <section aria-labelledby="overview-heading" className={styles.panel}>
     <div className={styles.toolbar}>
       <h2 id="overview-heading" className={styles.sectionTitle}>Performance</h2>
-      <label className={styles.field}>Period
-        <select value={period} onChange={event => setPeriod(event.target.value as RecommendationPeriod)} className={styles.select}>
-          {PERIODS.map(value => <option key={value} value={value}>Last {value.replace('d', ' days')}</option>)}
-        </select>
-      </label>
+      <Select label="Period" value={period} onValueChange={value => setPeriod(value as RecommendationPeriod)}
+        options={PERIODS.map(value => ({ value, label: `Last ${value.replace('d', ' days')}` }))} />
     </div>
     {overview.isError && !data && <QueryProblem error={overview.error} hasData={false} onRetry={() => void overview.refetch()} what="recommendation performance" />}
     {overview.isPending && !data && <OverviewSkeleton />}
@@ -97,9 +95,9 @@ function OverviewPanel() {
           <thead><tr><th scope="col">Surface</th><th scope="col">Section</th><th scope="col">Strategy</th><th scope="col">Impressions</th><th scope="col">Clicks</th><th scope="col">Click-through</th></tr></thead>
           <tbody>
             {data.breakdown.length === 0 && <tr><td colSpan={6}><EmptyRows title="No recommendations were shown in this period" hint="Results appear here once shoppers see a rail." /></td></tr>}
-            {data.breakdown.map(row => <tr key={`${row.surface}-${row.mode}-${row.strategy}`}>
+            {data.breakdown.map((row, index) => <tr key={`${row.surface}-${row.mode}-${row.strategy}`}>
               <td>{SURFACE_LABEL[row.surface]}</td><td>{MODE_LABEL[row.mode]}</td>
-              <td><span className={styles.strategyLabel}>{row.strategy.replace(/_/g, ' ').toLowerCase()}{row.fallback && <StatusPill tone="warning" icon={false}>fallback</StatusPill>}</span><span className={styles.performanceTrack} aria-hidden="true"><span style={{ width: `${data.totals.impressions ? Math.max(4, row.impressions / data.totals.impressions * 100) : 0}%` }} /></span></td>
+              <td><span className={styles.strategyLabel}>{row.strategy.replace(/_/g, ' ').toLowerCase()}{row.fallback && <StatusPill tone="warning" icon={false}>fallback</StatusPill>}</span><span className={styles.performanceTrack} aria-hidden="true"><span style={{ background: seriesColor(index), width: `${data.totals.impressions ? Math.max(4, row.impressions / data.totals.impressions * 100) : 0}%` }} /></span></td>
               <td>{formatCount(row.impressions)}</td><td>{formatCount(row.clicks)}</td><td>{percent(row.ctr)}</td>
             </tr>)}
           </tbody>
@@ -215,11 +213,8 @@ function PinDialog({ open, onOpenChange, surface }: { open: boolean; onOpenChang
           <Button type="button" variant="outline" size="small" disabled={productPage >= products.data.meta.totalPages || products.isFetching} onClick={() => setProductPage(page => page + 1)}>Next products</Button>
         </div>}
         {errors.productId && <p id="pin-product-error" role="alert" className={styles.error}>{errors.productId}</p>}
-        <label className={styles.field}>Placement
-          <select value={pinSurface} onChange={event => setPinSurface(event.target.value as RecommendationSurfaceKey)} className={styles.select}>
-            {(Object.keys(SURFACE_LABEL) as RecommendationSurfaceKey[]).map(value => <option key={value} value={value}>{SURFACE_LABEL[value]}</option>)}
-          </select>
-        </label>
+        <Select label="Placement" value={pinSurface} onValueChange={value => setPinSurface(value as RecommendationSurfaceKey)}
+          options={(Object.keys(SURFACE_LABEL) as RecommendationSurfaceKey[]).map(value => ({ value, label: SURFACE_LABEL[value] }))} />
         <label className={styles.field}>Position (0 is first)
           <Input inputMode="numeric" value={position} onChange={event => setPosition(event.target.value)} aria-invalid={errors.position ? true : undefined} />
         </label>
@@ -353,12 +348,8 @@ function FeaturedPanel() {
     <div className={styles.toolbar}>
       <h2 id="featured-heading" className={styles.sectionTitle}>Featured products</h2>
       <div className={styles.toolbarActions}>
-        <label className={styles.field}>Placement
-          <select value={surface ?? ''} onChange={event => setSurface(event.target.value ? event.target.value as RecommendationSurfaceKey : undefined)} className={styles.select}>
-            <option value="">All placements</option>
-            {(Object.keys(SURFACE_LABEL) as RecommendationSurfaceKey[]).map(value => <option key={value} value={value}>{SURFACE_LABEL[value]}</option>)}
-          </select>
-        </label>
+        <Select label="Placement" value={surface ?? 'all'} onValueChange={value => setSurface(value === 'all' ? undefined : value as RecommendationSurfaceKey)}
+          options={[{ value: 'all', label: 'All placements' }, ...(Object.keys(SURFACE_LABEL) as RecommendationSurfaceKey[]).map(value => ({ value, label: SURFACE_LABEL[value] }))]} />
         <Button onClick={() => setAdding(true)} disabled={rows.length >= max && surface !== undefined}>Add featured product</Button>
       </div>
     </div>
@@ -378,10 +369,31 @@ function FeaturedPanel() {
   </section>;
 }
 
+/**
+ * Find a product by name or SKU instead of typing its ID. Lists published products a shopper can open (any stock level), searched on
+ * the server so the whole catalog is reachable; `exclude` hides products already chosen.
+ */
+function ProductPicker({ label, value, onChange, exclude = [], helperText }: {
+  label: string; value: string; onChange: (product: { id: string; name: string; sku: string }) => void; exclude?: string[]; helperText?: string;
+}) {
+  const [search, setSearch] = useState('');
+  const products = useAdminProducts({ q: search.trim() || undefined, page: 1, status: 'ACTIVE', sort: 'name', order: 'asc' });
+  const rows = (products.data?.data ?? []).filter(product => product.storefrontVisible && product.category.isActive && !exclude.includes(product.id));
+  const options = rows.map(product => ({ value: product.id, label: `${product.name} · ${product.sku}` }));
+  return <div className={styles.pickerGroup}>
+    <Input label={`Search ${label.toLowerCase()}`} value={search} onChange={event => setSearch(event.target.value)} placeholder="Search by name or SKU" />
+    <SearchSelect label={label} value={value || undefined} options={options}
+      onValueChange={id => { const product = rows.find(row => row.id === id); if (product) onChange({ id: product.id, name: product.name, sku: product.sku }); }}
+      placeholder={products.isPending ? 'Loading products…' : 'Choose a product'} searchPlaceholder="Filter these results"
+      emptyText={products.isError ? 'Products could not be loaded' : 'No published products match. Try another name or SKU.'}
+      disabled={products.isPending || options.length === 0} helperText={helperText} />
+  </div>;
+}
+
 function PreviewPanel() {
   const [surface, setSurface] = useState<RecommendationSurfaceKey>('home');
-  const [productId, setProductId] = useState('');
-  const [cart, setCart] = useState('');
+  const [product, setProduct] = useState<{ id: string; name: string; sku: string } | null>(null);
+  const [cart, setCart] = useState<{ id: string; name: string; sku: string }[]>([]);
   const [limit, setLimit] = useState('4');
   const [submitted, setSubmitted] = useState<{ surface: RecommendationSurfaceKey; productId?: string; cartProductIds?: string[]; limit: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -389,31 +401,36 @@ function PreviewPanel() {
 
   const run = (event: FormEvent) => {
     event.preventDefault();
-    const ids = cart.split(',').map(value => value.trim()).filter(Boolean);
+    const ids = cart.map(item => item.id);
     const count = Number(limit);
     if (!/^\d{1,2}$/.test(limit) || count < 1 || count > 12) { setError('Enter a whole number from 1 to 12.'); return; }
-    if (surface === 'product_detail' && !UUID.test(productId.trim())) { setError('Enter the product ID of a product page to preview.'); return; }
-    if (surface === 'cart' && (ids.length === 0 || ids.some(id => !UUID.test(id)))) { setError('Enter one or more product IDs for the cart, separated by commas.'); return; }
+    if (surface === 'product_detail' && !product) { setError('Choose the product whose page you want to preview.'); return; }
+    if (surface === 'cart' && ids.length === 0) { setError('Add at least one product to the cart to preview.'); return; }
     setError(null);
-    setSubmitted({ surface, productId: surface === 'product_detail' ? productId.trim().toLowerCase() : undefined,
-      cartProductIds: surface === 'cart' ? ids.map(id => id.toLowerCase()) : undefined, limit: count });
+    setSubmitted({ surface, productId: surface === 'product_detail' ? product?.id : undefined,
+      cartProductIds: surface === 'cart' ? ids : undefined, limit: count });
   };
 
   return <section aria-labelledby="preview-heading" className={styles.panel}>
     <h2 id="preview-heading" className={styles.sectionTitle}>Preview</h2>
     <p className={styles.help}>See what a shopper would be shown. Previews are not recorded as impressions or clicks.</p>
     <form onSubmit={run} noValidate className={styles.toolbar}>
-      <label className={styles.field}>Placement
-        <select value={surface} onChange={event => setSurface(event.target.value as RecommendationSurfaceKey)} className={styles.select}>
-          {(Object.keys(SURFACE_LABEL) as RecommendationSurfaceKey[]).map(value => <option key={value} value={value}>{SURFACE_LABEL[value]}</option>)}
-        </select>
-      </label>
-      {surface === 'product_detail' && <label className={styles.field}>Product ID
-        <Input value={productId} onChange={event => setProductId(event.target.value)} />
-      </label>}
-      {surface === 'cart' && <label className={styles.field}>Cart product IDs (comma separated)
-        <Input value={cart} onChange={event => setCart(event.target.value)} />
-      </label>}
+      <Select label="Placement" value={surface} onValueChange={value => setSurface(value as RecommendationSurfaceKey)}
+        options={(Object.keys(SURFACE_LABEL) as RecommendationSurfaceKey[]).map(value => ({ value, label: SURFACE_LABEL[value] }))} />
+      {surface === 'product_detail' && <ProductPicker label="Product page" value={product?.id ?? ''}
+        onChange={choice => { setProduct(choice); setError(null); }} />}
+      {surface === 'cart' && <div className={styles.pickerGroup}>
+        <ProductPicker label="Add to cart" value="" exclude={cart.map(item => item.id)}
+          onChange={choice => { setCart(current => current.length >= 20 ? current : [...current, choice]); setError(null); }}
+          helperText={cart.length ? undefined : 'Pick each product a shopper has in their cart.'} />
+        {cart.length > 0 && <ul className={styles.chosenList} aria-label="Products in the preview cart">
+          {cart.map(item => <li key={item.id} className={styles.chosenItem}>
+            <span>{item.name} <span className={styles.muted}>{item.sku}</span></span>
+            <button type="button" className={styles.chosenRemove} onClick={() => setCart(current => current.filter(row => row.id !== item.id))}
+              aria-label={`Remove ${item.name} from the preview cart`}><X aria-hidden="true" size={14} /></button>
+          </li>)}
+        </ul>}
+      </div>}
       <label className={styles.field}>Items
         <Input inputMode="numeric" value={limit} onChange={event => setLimit(event.target.value)} />
       </label>

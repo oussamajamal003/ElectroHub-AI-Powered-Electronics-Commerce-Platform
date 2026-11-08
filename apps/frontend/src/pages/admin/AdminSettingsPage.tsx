@@ -128,7 +128,8 @@ export function AdminSettingsPage() {
   const common = { generation, onDirtyChange, onSaved: bump };
 
   return <div className={styles.page}>
-    <PageHeader title="Settings" description="Store details, notification preferences and shipping rates." />
+    <PageHeader title="Settings" description="Store details, notification preferences and shipping rates."
+      crumbs={[{ label: 'Dashboard', to: '/admin' }, { label: 'Settings', to: '/admin/settings' }, { label: TAB_LABEL[active] }]} />
     <Tabs value={active} onValueChange={requestTab}>
       <TabsList aria-label="Settings sections" className={pageStyles.tabs}>
         {tabs.map(tab => { const Icon = TAB_ICON[tab]; return <TabsTrigger key={tab} value={tab}><Icon size={16} aria-hidden="true" />{TAB_LABEL[tab]}</TabsTrigger>; })}
