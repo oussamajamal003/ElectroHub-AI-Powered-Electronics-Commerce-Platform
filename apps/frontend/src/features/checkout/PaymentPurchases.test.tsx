@@ -454,7 +454,9 @@ it('a refused dismissal on a disabled backend explains the restriction, keeps th
   await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /Remove failed payment/ }, { timeout: 5_000 })); });
   expect(await screen.findByRole('heading', { name: 'Remove this failed payment?' })).toBeInTheDocument();
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Remove' })); });
-  expect(await screen.findByText(/switched off on this server/, {}, { timeout: 5_000 })).toBeVisible();
+  const refusal = await screen.findByText(/switched off on this server/, {}, { timeout: 5_000 });
+  // The dialog content may still be mid-transition on a slow runner; wait for it to settle visible.
+  await waitFor(() => expect(refusal).toBeVisible(), { timeout: 5_000 });
   // The refusal itself claims nothing about charges (the card keeps its own provider-evidence copy).
   expect(within(screen.getByRole('dialog')).queryByText(/Nothing was charged|Please try again\. Your/)).not.toBeInTheDocument();
   expect(document.querySelector('[data-purchase="attempt-a"]')).not.toBeNull();
