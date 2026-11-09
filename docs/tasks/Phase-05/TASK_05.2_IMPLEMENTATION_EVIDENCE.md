@@ -792,3 +792,6 @@ The Admin Orders page recognizes a strict `ORD-<UUID>` focus reference, discards
 **Executed:** frontend checkout suite 278/278 (3 new regression tests), `tsc -b` and eslint clean; backend `payment-isolation` + `dev-supervisor` 23/23 and `dev-payment-runtime.test.cjs` 29/29 (CI-style disposable env).
 
 **NOT VERIFIED:** supervised `--start` on shared DEV (needs separate exact authorization and a stopped port owner), Stripe Payment Element rendering and test purchase, Playwright journeys A-F, 200% zoom. Nothing purchased or mutated on shared DEV beyond the one ledger value.
+
+**Follow-up (2026-11-09, authorized by the owner):** the watched API tree on :5000 was stopped; shared DEV was missing `20261112000000_order_store_identity_snapshot`, applied with `prisma migrate deploy` (additive nullable `orders.storeIdentitySnapshot`; ledger row finished, `logs` NULL). `payment:dev:checkout:preflight` then returned PASS (`supabase:pzxekjybdiulzmssalfo/postgres`, `stripeAccountVerified:true`, 38 migrations, 0 backlog). `payment:dev:checkout` was started; `/api/health` 200 and `/api/health/ready` ready (database connected); `GET /api/checkout/payment-capability` returns the same 401 direct and through `localhost:3000`. **NOT VERIFIED:** `paymentsEnabled:true` (needs a customer session; none used), Payment Element render, test purchase.
+
