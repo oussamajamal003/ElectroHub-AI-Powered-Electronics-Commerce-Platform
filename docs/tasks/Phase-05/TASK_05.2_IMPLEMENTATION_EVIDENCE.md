@@ -781,4 +781,4 @@ The Admin Orders page recognizes a strict `ORD-<UUID>` focus reference, discards
 - Frontend `npm run typecheck`, focused ESLint, production build, and `git diff --check`: passed. The build emitted existing Sass slash-division, dynamic/static import and large-chunk warnings.
 - Backend focused ESLint passed. Backend `npm run typecheck` and `npm run build` are **blocked by existing uncommitted adjacent stock-alert work** in `src/services/order.service.ts` at lines 293–294 (`number | undefined` passed where `number` is required); that file is outside this task and was left untouched.
 
-**Not verified.** A real Brevo delivery, live inbox rendering, or hosted GitHub CI on the final feature SHA have not yet been verified. No database or production data was changed.
+**External verification.** A real Brevo delivery and live inbox rendering were not exercised. GitHub PR #49 CI for the code-bearing commit `ab82c6e1c5068255f368c589003f1af815de7129` passed all 12 reported checks, including backend/frontend tests, typechecks, lint, builds, migration policy, security audit and AI-service jobs. No database or production data was changed.
