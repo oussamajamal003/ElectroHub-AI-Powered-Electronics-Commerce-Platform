@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { Bell, Store, Truck, Users } from 'lucide-react';
+import { AlertTriangle, Bell, Store, Truck, Users } from 'lucide-react';
 import { ConfirmDialog, PageHeader, QueryProblem } from '@/features/admin/shared/AdminUi';
 import { useUnsavedChangesGuard } from '@/features/admin/shared/useUnsavedChangesGuard';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
@@ -160,7 +160,13 @@ export function AdminSettingsPage() {
       <TabsList aria-label="Settings sections" className={pageStyles.tabs}>
         {tabs.map(tab => { const Icon = TAB_ICON[tab]; return <TabsTrigger key={tab} value={tab}><Icon size={16} aria-hidden="true" />{TAB_LABEL[tab]}</TabsTrigger>; })}
       </TabsList>
-      {dirty && <p className={pageStyles.dirty} role="status">You have unsaved changes.</p>}
+      {dirty && <div className={pageStyles.dirty} role="status" aria-live="polite">
+        <AlertTriangle size={18} aria-hidden="true" />
+        <div className={pageStyles.dirtyCopy}>
+          <strong>You have unsaved changes</strong>
+          <span>Save this section to keep your updates.</span>
+        </div>
+      </div>}
       <TabsContent value="store">
         <StoreTab {...common} onReload={reloadFor('store')} />
       </TabsContent>

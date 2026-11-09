@@ -288,6 +288,8 @@ describe('tabs and the URL', () => {
     const user = userEvent.setup();
     renderPage();
     setValue(screen.getByLabelText('Store name'), 'ElectroHub!');
+    expect(screen.getByText('You have unsaved changes')).toBeInTheDocument();
+    expect(screen.getByText('Save this section to keep your updates.')).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Notifications' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
