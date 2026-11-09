@@ -12,6 +12,7 @@ export interface Column<T> {
 }
 
 export interface DataTableSort { key: string; order: 'asc' | 'desc' }
+export interface DataTableRowAttributes { id?: string; tabIndex?: number; 'aria-label'?: string; className?: string }
 
 export interface DataTableProps<T> {
   data: T[];
@@ -26,6 +27,8 @@ export interface DataTableProps<T> {
   onSortChange?: (sort: DataTableSort) => void;
   /** Renders this many skeleton rows instead of data (first load only: never a false empty state). */
   loadingRows?: number;
+  /** Optional stable row attributes for deep-link focus and other table-specific navigation affordances. */
+  rowAttributes?: (item: T) => DataTableRowAttributes | undefined;
 }
 
 export function DataTable<T>({
@@ -40,6 +43,7 @@ export function DataTable<T>({
   sort,
   onSortChange,
   loadingRows,
+  rowAttributes,
 }: DataTableProps<T>) {
   const ariaSort = (col: Column<T>) => !col.sortKey || !onSortChange ? undefined
     : sort?.key === col.sortKey ? (sort.order === 'asc' ? 'ascending' : 'descending') : 'none';
@@ -96,10 +100,14 @@ export function DataTable<T>({
               </td>
             </tr>
           ) : (
-            data.map((item) => (
-              <tr 
+            data.map((item) => {
+              const attributes = rowAttributes?.(item);
+              return <tr
                 key={keyExtractor(item)} 
-                className={`${styles.tr} ${onRowClick ? styles.clickable : ''}`}
+                id={attributes?.id}
+                tabIndex={attributes?.tabIndex}
+                aria-label={attributes?.['aria-label']}
+                className={`${styles.tr} ${onRowClick ? styles.clickable : ''} ${attributes?.className ?? ''}`}
                 // Links and buttons inside a clickable row keep their own action instead of also triggering the row.
                 onClick={event => { if (!(event.target as HTMLElement).closest('a, button, input, select, textarea, label')) onRowClick?.(item); }}
               >
@@ -126,8 +134,8 @@ export function DataTable<T>({
                     </button>
                   </td>
                 )}
-              </tr>
-            ))
+              </tr>;
+            })
           )}
         </tbody>
       </table>

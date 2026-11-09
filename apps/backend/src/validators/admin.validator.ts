@@ -120,6 +120,8 @@ export const orderListSchema = z.object({
   status: z.enum(['AWAITING_CAPTURE', 'CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED']).optional(),
   payment: z.enum(PAYMENT_STATES).optional(),
   customerId: uuidSchema.optional(),
+  /** Exact, authenticated Admin Console deep link; when present it takes precedence over list filters and free-text search. */
+  orderReference: z.string().regex(/^ORD-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i).optional(),
   sort: z.enum(['createdAt', 'total']).prefault('createdAt'),
   order: z.enum(['asc', 'desc']).prefault('desc'),
 }).strict();

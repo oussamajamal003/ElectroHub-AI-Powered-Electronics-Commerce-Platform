@@ -5,6 +5,7 @@ import { brevoProvider, type BrevoProvider } from '../integrations/brevo/brevo.p
 import { AppError } from '../middleware/errorHandler.js';
 import { recordAdminAudit } from './admin-audit.js';
 import { orderReference } from './commerce-email.domain.js';
+import { trustedOrigin } from './commerce-email.config.js';
 import { parseOrThrow } from './store-settings.service.js';
 import { logSafely } from '../utils/logger.js';
 
@@ -24,6 +25,7 @@ type NotificationKind = 'ORDER_PAID' | 'LOW_STOCK' | 'INVITATION_ACCEPTED';
 
 const preferenceSelect = { orderPaid: true, lowStock: true, invitationAccepted: true, version: true } as const;
 const DEFAULT_PREFERENCES = { orderPaid: true, lowStock: true, invitationAccepted: true, version: 0 } as const;
+const ORDER_REFERENCE = /^ORD-[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/;
 
 export const preferencesUpdateSchema = z.object({
   expectedVersion: z.number().int().min(0, 'Reload your preferences and try again.'),
@@ -42,14 +44,33 @@ const wrapHtml = (heading: string, body: string) => `<!DOCTYPE html><html><head>
 <div style="max-width:480px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;padding:32px">
 <div style="font-size:22px;font-weight:700;color:#2563eb;text-align:center;margin-bottom:24px">ElectroHub Admin</div>
 <h1 style="font-size:18px;font-weight:600;margin:0 0 12px">${escapeHtml(heading)}</h1>
-<p style="font-size:14px;line-height:1.6;color:#475569">${body}</p>
+<div style="font-size:14px;line-height:1.6;color:#475569">${body}</div>
 <p style="font-size:12px;color:#94a3b8;margin-top:24px">${escapeHtml(footer)}</p></div></body></html>`;
 
-const orderPaidEmail = (reference: string, total: string, currency: string): OperationalEmail => ({
-  subject: `Payment confirmed: order ${reference}`,
-  text: `Payment was confirmed for order ${reference} (total ${currency} ${total}).\n\n${footer}`,
-  html: wrapHtml(`Payment confirmed: order ${reference}`, `Payment was confirmed for order <strong>${escapeHtml(reference)}</strong> (total ${escapeHtml(currency)} ${escapeHtml(total)}).`),
-});
+/** A fixed Admin Orders route on a trusted configured frontend origin; neither value can select a host or redirect target. */
+export function adminOrderUrl(reference: string, configuredOrigin = process.env.COMMERCE_EMAIL_ORIGIN?.trim() || process.env.FRONTEND_URL ||
+  (process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:3000'), nodeEnv = process.env.NODE_ENV ?? 'development'): string | null {
+  if (!ORDER_REFERENCE.test(reference)) return null;
+  const origin = trustedOrigin(configuredOrigin, nodeEnv);
+  if (!origin) return null;
+  const url = new URL('/admin/orders', origin);
+  url.searchParams.set('q', reference);
+  url.searchParams.set('focus', reference);
+  return url.href;
+}
+
+const orderPaidEmail = (reference: string, total: string, currency: string, viewOrderUrl: string | null): OperationalEmail => {
+  const paymentSummary = `Payment was confirmed for order <strong>${escapeHtml(reference)}</strong> (total ${escapeHtml(currency)} ${escapeHtml(total)}).`;
+  const button = viewOrderUrl
+    ? `<div style="margin:24px 0 12px"><a href="${escapeHtml(viewOrderUrl)}" style="display:inline-block;background:#2563eb;color:#ffffff;padding:12px 22px;font-size:14px;font-weight:600;text-decoration:none;border-radius:6px">View Order</a></div>
+<p style="font-size:12px;color:#64748b;line-height:1.5;margin:0">If the button does not open, copy this link into your browser:<br><a href="${escapeHtml(viewOrderUrl)}" style="color:#0369a1;overflow-wrap:anywhere">${escapeHtml(viewOrderUrl)}</a></p>`
+    : '';
+  return {
+    subject: `Payment confirmed: order ${reference}`,
+    text: `Payment was confirmed for order ${reference} (total ${currency} ${total}).${viewOrderUrl ? `\n\nView Order: ${viewOrderUrl}` : ''}\n\n${footer}`,
+    html: wrapHtml(`Payment confirmed: order ${reference}`, `${paymentSummary}${button}`),
+  };
+};
 
 const lowStockEmail = (productName: string, status: 'LOW_STOCK' | 'OUT_OF_STOCK', quantity: number): OperationalEmail => {
   const label = status === 'OUT_OF_STOCK' ? 'out of stock' : 'low on stock';
@@ -120,9 +141,10 @@ export class AdminNotificationService {
   /** Call only after the payment transition that proves the payment has committed. */
   notifyOrderPaid(orderId: string): void {
     this.dispatchInBackground('ORDER_PAID', async () => {
-      const order = await this.db.order.findUnique({ where: { id: orderId }, select: { total: true, currency: true } });
+      const order = await this.db.order.findUnique({ where: { id: orderId }, select: { id: true, total: true, currency: true } });
       if (!order) return null;
-      return orderPaidEmail(orderReference(orderId), new Prisma.Decimal(order.total).toFixed(2), order.currency);
+      const reference = orderReference(order.id);
+      return orderPaidEmail(reference, new Prisma.Decimal(order.total).toFixed(2), order.currency, adminOrderUrl(reference));
     });
   }
 

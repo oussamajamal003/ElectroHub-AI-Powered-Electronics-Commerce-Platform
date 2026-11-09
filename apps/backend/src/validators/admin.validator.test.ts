@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { MAX_BULK_PRODUCTS, bulkStatusSchema } from './admin.validator.js';
+import { MAX_BULK_PRODUCTS, bulkStatusSchema, orderListSchema } from './admin.validator.js';
 
 vi.mock('../lib/prisma.js', () => ({ prisma: {} }));
 
@@ -7,6 +7,14 @@ const A = '1c5bb1a2-5f0e-4f7a-9d4e-2b8d1f0a9c11';
 const B = '2d6cc2b3-6a1f-4b8e-8e5f-3c9e2a1b0d22';
 const stamp = '2026-11-01T10:00:00.000Z';
 const item = (id: string) => ({ id, expectedUpdatedAt: stamp });
+
+describe('orderListSchema exact email lookup', () => {
+  it('accepts only a complete public order reference for exact lookup', () => {
+    expect(orderListSchema.safeParse({ orderReference: `ORD-${A.toUpperCase()}` }).success).toBe(true);
+    expect(orderListSchema.safeParse({ orderReference: 'ORD-../../admin' }).success).toBe(false);
+    expect(orderListSchema.safeParse({ orderReference: A }).success).toBe(false);
+  });
+});
 
 describe('bulkStatusSchema', () => {
   it('accepts a bounded batch of ACTIVE or INACTIVE changes with a version per item', () => {

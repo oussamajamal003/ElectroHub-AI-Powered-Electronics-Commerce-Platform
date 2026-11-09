@@ -1,0 +1,44 @@
+@use '../../styles/abstracts/variables' as *;
+
+.viewDetails {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-2;
+  min-height: 2.5rem;
+  padding: 0 $spacing-3;
+  border: 1px solid $color-border;
+  background: $color-background;
+  color: $color-primary;
+  font-family: $font-family-base;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  line-height: 1.25;
+  text-decoration: none;
+  white-space: nowrap;
+
+  svg { width: 16px; height: 16px; flex: none; }
+  &:hover { border-color: $color-primary; background: $color-surface; }
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
+}
+
+.focusedOrderRow > td {
+  animation: orderFocusPulse 3s ease-out both;
+}
+
+.focusedOrderRow:focus-visible {
+  outline: 2px solid $color-info-border;
+  outline-offset: -2px;
+}
+
+@keyframes orderFocusPulse {
+  0%, 45% { background-color: $color-info-background; }
+  100% { background-color: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focusedOrderRow > td {
+    animation: none;
+    background-color: $color-info-background;
+  }
+}

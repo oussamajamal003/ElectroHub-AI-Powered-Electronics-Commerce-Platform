@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const audit = vi.hoisted(() => ({ recordAdminAudit: vi.fn() }));
 const logs = vi.hoisted(() => ({ logSafely: vi.fn() }));
@@ -24,7 +24,7 @@ vi.mock('../../lib/prisma.js', () => ({ prisma: db }));
 vi.mock('../admin-audit.js', () => ({ recordAdminAudit: audit.recordAdminAudit }));
 vi.mock('../../utils/logger.js', () => ({ logSafely: logs.logSafely, logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
-import { AdminNotificationService, preferencesUpdateSchema } from '../admin-notification.service.js';
+import { adminOrderUrl, AdminNotificationService, preferencesUpdateSchema } from '../admin-notification.service.js';
 import { AppError } from '../../middleware/errorHandler.js';
 
 const ADMIN = '8f2813b4-a388-44d3-b51e-5d4c40386677';
@@ -36,6 +36,9 @@ let provider: { sendTransactionalEmail: ReturnType<typeof vi.fn> };
 let service: AdminNotificationService;
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv('FRONTEND_URL', 'https://admin.electrohub.example');
+  vi.stubEnv('COMMERCE_EMAIL_ORIGIN', '');
+  vi.stubEnv('NODE_ENV', 'test');
   provider = { sendTransactionalEmail: vi.fn(async () => ({ success: true, messageId: 'brevo-1' })) };
   service = new AdminNotificationService(db as never, provider as never);
   db.adminNotificationPreference.findUnique.mockResolvedValue(current);
@@ -43,9 +46,26 @@ beforeEach(() => {
   db.adminNotificationPreference.updateMany.mockResolvedValue({ count: 1 });
   db.emailDelivery.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'delivery-1', ...data }));
   db.emailDelivery.update.mockResolvedValue({});
-  db.order.findUnique.mockResolvedValue({ total: new Prisma.Decimal('129.5'), currency: 'USD' });
+  db.order.findUnique.mockResolvedValue({ id: ORDER, total: new Prisma.Decimal('129.5'), currency: 'USD' });
   db.user.findMany.mockResolvedValue([{ id: ADMIN, email: 'admin@example.com' }]);
   audit.recordAdminAudit.mockResolvedValue(undefined);
+});
+afterEach(() => vi.unstubAllEnvs());
+
+describe('administrator order email links', () => {
+  it('builds a fixed Admin Orders URL from a valid reference and trusted frontend origin', () => {
+    const reference = `ORD-${ORDER.toUpperCase()}`;
+    expect(adminOrderUrl(reference, 'https://admin.electrohub.example/', 'production'))
+      .toBe(`https://admin.electrohub.example/admin/orders?q=${reference}&focus=${reference}`);
+  });
+
+  it('rejects malformed references and origins containing redirects, paths or production HTTP', () => {
+    const reference = `ORD-${ORDER.toUpperCase()}`;
+    expect(adminOrderUrl('ORD-https://evil.example', 'https://admin.electrohub.example', 'production')).toBeNull();
+    expect(adminOrderUrl(reference, 'https://admin.electrohub.example/console', 'production')).toBeNull();
+    expect(adminOrderUrl(reference, 'https://admin.electrohub.example?next=https://evil.example', 'production')).toBeNull();
+    expect(adminOrderUrl(reference, 'http://localhost:3000', 'production')).toBeNull();
+  });
 });
 
 describe('preferences validation', () => {
@@ -135,8 +155,15 @@ describe('operational notifications', () => {
     service.notifyOrderPaid(ORDER);
     await flush();
     const sent = provider.sendTransactionalEmail.mock.calls[0][0];
+    const reference = `ORD-${ORDER.toUpperCase()}`;
+    const url = `https://admin.electrohub.example/admin/orders?q=${reference}&focus=${reference}`;
     expect(sent.textContent).toContain('129.50');
     expect(sent.textContent).toContain('USD');
+    expect(sent.textContent).toContain(`View Order: ${url}`);
+    expect(sent.htmlContent).toContain('>View Order</a>');
+    expect(sent.htmlContent).toContain(`href="${url.replaceAll('&', '&amp;')}"`);
+    expect(sent.htmlContent).toContain(url.replaceAll('&', '&amp;'));
+    expect(db.order.findUnique).toHaveBeenCalledWith({ where: { id: ORDER }, select: { id: true, total: true, currency: true } });
   });
 
   it('records a provider rejection as FAILED without throwing into the caller', async () => {
@@ -184,5 +211,12 @@ describe('operational notifications', () => {
     const where = db.user.findMany.mock.calls[0][0].where;
     expect(where).toMatchObject({ isActive: true, emailVerifiedAt: { not: null }, role: { name: 'ADMIN' } });
     expect(where.OR).toEqual([{ adminNotificationPreference: { is: null } }, { adminNotificationPreference: { is: { lowStock: true } } }]);
+  });
+
+  it('applies the existing order-paid preference and verified ADMIN recipient rules to the View Order email', async () => {
+    await service.recipientsFor('ORDER_PAID');
+    const where = db.user.findMany.mock.calls[0][0].where;
+    expect(where).toMatchObject({ isActive: true, emailVerifiedAt: { not: null }, role: { name: 'ADMIN' } });
+    expect(where.OR).toEqual([{ adminNotificationPreference: { is: null } }, { adminNotificationPreference: { is: { orderPaid: true } } }]);
   });
 });

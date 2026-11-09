@@ -128,6 +128,17 @@ describe('admin list filters match their counts', () => {
     expect(result.meta.statusCounts).toEqual({ CONFIRMED: 2 });
   });
 
+  it('uses an exact order-reference lookup and ignores stale text, page, customer, status and payment filters', async () => {
+    const db = database();
+    const service = new AdminOrderService(db as unknown as PrismaClient, {} as never);
+    await service.list({ orderReference: `ORD-${PRODUCT.toUpperCase()}`, q: 'another order', page: 8, pageSize: 20, order: 'desc', sort: 'createdAt',
+      status: 'CANCELLED', payment: 'FAILED', customerId: CUSTOMER });
+    const exact = { AND: [{ id: PRODUCT }] };
+    expect(db.order.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: exact, skip: 0, take: 20 }));
+    expect(db.order.count).toHaveBeenCalledWith({ where: exact });
+    expect(db.order.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: exact }));
+  });
+
   it('filters deleted customers without including ordinary deactivated accounts', async () => {
     const db = database();
     db.$queryRaw.mockResolvedValue([]);

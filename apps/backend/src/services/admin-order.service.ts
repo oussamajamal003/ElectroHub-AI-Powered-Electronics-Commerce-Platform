@@ -72,19 +72,25 @@ export class AdminOrderService {
   async list(query: OrderList) {
     // Status chips count within every other active filter (search, payment, customer), so each chip matches the rows it selects.
     const scope: Prisma.OrderWhereInput[] = [];
-    if (query.q) scope.push(orderSearch(query.q));
-    if (query.payment) scope.push(paymentWhere(query.payment));
-    if (query.customerId) scope.push({ userId: query.customerId });
-    const and = query.status ? [...scope, { status: query.status }] : scope;
+    if (query.orderReference) {
+      // Email deep links are exact and win over any stale/free-text filters. Route authorization still requires a live ADMIN session.
+      scope.push({ id: parseOrderReference(query.orderReference) });
+    } else {
+      if (query.q) scope.push(orderSearch(query.q));
+      if (query.payment) scope.push(paymentWhere(query.payment));
+      if (query.customerId) scope.push({ userId: query.customerId });
+    }
+    const and = query.status && !query.orderReference ? [...scope, { status: query.status }] : scope;
     const where: Prisma.OrderWhereInput = and.length ? { AND: and } : {};
+    const page = query.orderReference ? 1 : query.page;
     const [rows, total, groups] = await Promise.all([
-      this.db.order.findMany({ where, orderBy: [{ [query.sort]: query.order }, { id: 'desc' }], skip: (query.page - 1) * query.pageSize,
+      this.db.order.findMany({ where, orderBy: [{ [query.sort]: query.order }, { id: 'desc' }], skip: (page - 1) * query.pageSize,
         take: query.pageSize, select: listSelect }),
       this.db.order.count({ where }),
       this.db.order.groupBy({ by: ['status'], where: scope.length ? { AND: scope } : {}, _count: { _all: true } }),
     ]);
     const statusCounts = Object.fromEntries(groups.map(group => [group.status, group._count._all]));
-    return { data: rows.map(projectOrderRow), meta: { page: query.page, pageSize: query.pageSize, total,
+    return { data: rows.map(projectOrderRow), meta: { page, pageSize: query.pageSize, total,
       totalPages: Math.ceil(total / query.pageSize), statusCounts } };
   }
 
