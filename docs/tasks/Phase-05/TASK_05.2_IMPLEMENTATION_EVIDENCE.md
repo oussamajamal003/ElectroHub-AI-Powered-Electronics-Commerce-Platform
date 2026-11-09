@@ -782,3 +782,13 @@ The Admin Orders page recognizes a strict `ORD-<UUID>` focus reference, discards
 - Backend focused ESLint passed. Backend `npm run typecheck` and `npm run build` are **blocked by existing uncommitted adjacent stock-alert work** in `src/services/order.service.ts` at lines 293–294 (`number | undefined` passed where `number` is required); that file is outside this task and was left untouched.
 
 **External verification.** A real Brevo delivery and live inbox rendering were not exercised. GitHub PR #49 CI for the code-bearing commit `ab82c6e1c5068255f368c589003f1af815de7129` passed all 12 reported checks, including backend/frontend tests, typechecks, lint, builds, migration policy, security audit and AI-service jobs. No database or production data was changed.
+
+## Checkout "payments switched off" diagnosis and retry fix (2026-11-09)
+
+**Root cause (verified):** port 5000 is the watched restricted API (`paymentsEnabled:false`), so the notice is correct. Supervised checkout preflight was additionally BLOCKED by shared DEV ledger row `20261113000000_stock_alert_outbox` having `logs = ''` (checksum and `finished_at` correct). With separate approval I cleared only that value (`logs = NULL`, one row). Preflight now stops at `DEV backend port has an existing owner`; the supervisor never replaces the user's watched API.
+
+**Code fix (`CheckoutPage.tsx`):** *Check availability again* now uses a ref guard (no duplicate reads on rapid clicks), forces an uncached read, restarts the eligible setup after a stale 503 refusal (previously `autoSetup` suppressed it), revalidates prerequisites, and on a failed read keeps the notice and shows a retry error (previously the failed query dropped the notice and unblocked the screen).
+
+**Executed:** frontend checkout suite 278/278 (3 new regression tests), `tsc -b` and eslint clean; backend `payment-isolation` + `dev-supervisor` 23/23 and `dev-payment-runtime.test.cjs` 29/29 (CI-style disposable env).
+
+**NOT VERIFIED:** supervised `--start` on shared DEV (needs separate exact authorization and a stopped port owner), Stripe Payment Element rendering and test purchase, Playwright journeys A-F, 200% zoom. Nothing purchased or mutated on shared DEV beyond the one ledger value.

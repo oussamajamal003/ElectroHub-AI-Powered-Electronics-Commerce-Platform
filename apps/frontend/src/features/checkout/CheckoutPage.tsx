@@ -100,6 +100,7 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
   // Environment restriction (payment isolation): known up front from the capability read, or learned from a 503 PAYMENT_MUTATIONS_DISABLED.
   const [paymentsRefused, setPaymentsRefused] = useState(false);
   const [checkingPaymentAvailability, setCheckingPaymentAvailability] = useState(false);
+  const [capabilityCheckError, setCapabilityCheckError] = useState<string | null>(null);
   const activeSecret = useRef<string | null>(secret);
   activeSecret.current = secret;
   const [outcome, setOutcome] = useState<PaymentOutcome | null>(null);
@@ -127,19 +128,32 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
   // Asked only where checkout setup could start; a refusal learned from a 503 also counts.
   const paymentCapability = usePaymentCapability(['payment', 'review'].includes(step));
   const paymentsUnavailable = paymentCapability === false || paymentsRefused;
+  const recheckBusy = useRef(false);
   const recheckPaymentAvailability = async () => {
-    if (checkingPaymentAvailability) return;
-    setCheckingPaymentAvailability(true);
+    // A ref, not state, so rapid repeated clicks cannot start two reads before the first render.
+    if (recheckBusy.current) return;
+    recheckBusy.current = true;
+    setCheckingPaymentAvailability(true); setCapabilityCheckError(null);
     try {
-      const capability = await client.fetchQuery(paymentCapabilityQueryOptions(userId));
+      // Always a fresh server read: an old cached answer must never decide this.
+      await client.invalidateQueries({ queryKey: ['payment-capability', userId], refetchType: 'none' });
+      const capability = await client.fetchQuery({ ...paymentCapabilityQueryOptions(userId), staleTime: 0, retry: false });
+      if (!isMounted.current) return;
       if (capability.paymentsEnabled) {
+        // Drop the stale refusal and let the existing eligible setup start again; never submits a card.
         setPaymentsRefused(false);
         setSetupError(current => current === PAYMENTS_UNAVAILABLE_MESSAGE ? null : current);
+        autoSetup.current = '';
+        setSetupEpoch(value => value + 1);
+        void refreshPrerequisites();
       }
     } catch {
-      // Keep checkout blocked unless an authoritative capability read succeeds.
+      // Keep checkout blocked unless an authoritative capability read succeeds, and say so.
+      // A failed read makes the capability hook report "unknown", which would otherwise drop the notice and unblock the screen.
+      if (isMounted.current) { setPaymentsRefused(true); setCapabilityCheckError('Payment availability could not be checked. Please try again.'); }
     } finally {
-      setCheckingPaymentAvailability(false);
+      recheckBusy.current = false;
+      if (isMounted.current) setCheckingPaymentAvailability(false);
     }
   };
   const recoveryCartReady = interactive.current || isBuyNow || Boolean(cart.data && !cart.isLoading && !cart.isError && !cart.isMutating &&
@@ -911,6 +925,7 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
         ) : paymentsUnavailable ? (
           // Recheck server authority before allowing setup; this control never overrides the backend boundary.
           <div className={styles.inlineNotice}><p role="status">{PAYMENTS_UNAVAILABLE_MESSAGE}</p>
+            {capabilityCheckError && <p role="alert">{capabilityCheckError}</p>}
             <div className={styles.inlineActions}>
               <Button size="small" variant="outline" onClick={() => void recheckPaymentAvailability()} disabled={checkingPaymentAvailability} isLoading={checkingPaymentAvailability}>
                 Check availability again
