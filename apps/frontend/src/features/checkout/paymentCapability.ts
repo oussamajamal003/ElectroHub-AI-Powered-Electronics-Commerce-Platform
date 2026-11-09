@@ -15,14 +15,25 @@ export const PAYMENTS_UNAVAILABLE_MESSAGE =
 export const isPaymentsDisabledError = (error: unknown) =>
   error instanceof ApiError && error.status === 503 && ['PAYMENT_MUTATIONS_DISABLED', 'PAYMENT_CONFIGURATION_UNAVAILABLE'].includes(error.code ?? '');
 
+export const paymentCapabilityQueryOptions = (userId: string) => ({
+  queryKey: ['payment-capability', userId] as const,
+  queryFn: async ({ signal }: { signal: AbortSignal }) => (await apiClient<{ data: { paymentsEnabled: boolean } }>('/api/checkout/payment-capability',
+    { signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]) })).data,
+  // Supervisor authority can change while checkout stays open. A cached disabled response must not
+  // survive entering Payment, returning to the tab, or restoring the network connection.
+  staleTime: 0,
+  refetchOnMount: 'always' as const,
+  refetchOnWindowFocus: 'always' as const,
+  refetchOnReconnect: 'always' as const,
+  retry: 1,
+});
+
 /** `false` only when the backend explicitly reports payment writes disabled; `undefined` while unknown (never assumed disabled). */
 export function usePaymentCapability(needed = true): boolean | undefined {
   const { user, isSessionVerified } = useAuth();
   const query = useQuery({
-    queryKey: ['payment-capability', user?.id ?? ''],
-    queryFn: async ({ signal }) => (await apiClient<{ data: { paymentsEnabled: boolean } }>('/api/checkout/payment-capability',
-      { signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]) })).data,
-    enabled: needed && Boolean(user && isSessionVerified), staleTime: 60_000, retry: 1,
+    ...paymentCapabilityQueryOptions(user?.id ?? ''),
+    enabled: needed && Boolean(user && isSessionVerified),
   });
   if (!user || !isSessionVerified || query.isError) return undefined;
   return typeof query.data?.paymentsEnabled === 'boolean' ? query.data.paymentsEnabled : undefined;

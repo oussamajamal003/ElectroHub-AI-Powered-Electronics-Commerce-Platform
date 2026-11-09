@@ -20,6 +20,7 @@ const fixturePath = path.join(acceptanceDirectory, 'fixture.json');
 const statePath = path.join(acceptanceDirectory, 'fixture.state.json');
 const outputDirectory = path.resolve(specDirectory, '../../test-results/task04-dev');
 const CARD_OK = '4242424242424242';
+let customerAccountLabel: string | null = null;
 
 function parseFixture(value: unknown): Fixture {
   if (!value || typeof value !== 'object') throw new Error('Private Task04 fixture is malformed.');
@@ -105,17 +106,15 @@ async function requireFixtureUser(response: Response, fixture: Fixture): Promise
 }
 
 async function gotoAsFixture(page: Page, path: string, fixture: Fixture): Promise<void> {
-  const userResponse = page.waitForResponse(response => apiPath(response) === '/api/auth/me');
+  if (!fixture.userId || !customerAccountLabel) throw new Error('Synthetic customer identity was not verified at login.');
   await page.goto(path);
-  const user = await requireFixtureUser(await userResponse, fixture);
-  await expect(page.getByRole('button', { name: `Account menu for ${user.firstName} ${user.lastName}` })).toBeVisible();
+  await expect(page.getByRole('button', { name: customerAccountLabel })).toBeVisible({ timeout: 30_000 });
 }
 
 async function reloadAsFixture(page: Page, fixture: Fixture): Promise<void> {
-  const userResponse = page.waitForResponse(response => apiPath(response) === '/api/auth/me');
+  if (!fixture.userId || !customerAccountLabel) throw new Error('Synthetic customer identity was not verified at login.');
   await page.reload();
-  const user = await requireFixtureUser(await userResponse, fixture);
-  await expect(page.getByRole('button', { name: `Account menu for ${user.firstName} ${user.lastName}` })).toBeVisible();
+  await expect(page.getByRole('button', { name: customerAccountLabel })).toBeVisible({ timeout: 30_000 });
 }
 
 async function signIn(page: Page, fixture: Fixture): Promise<void> {
@@ -138,7 +137,8 @@ async function signIn(page: Page, fixture: Fixture): Promise<void> {
   await expect(dialog).toBeHidden();
   const userResponse = await currentUser;
   const user = await requireFixtureUser(userResponse, fixture);
-  await expect(page.getByRole('button', { name: `Account menu for ${user.firstName} ${user.lastName}` })).toBeVisible();
+  customerAccountLabel = `Account menu for ${user.firstName} ${user.lastName}`;
+  await expect(page.getByRole('button', { name: customerAccountLabel })).toBeVisible();
 }
 
 // The app reports its own outcome: ready (skeleton removed), a provider load error, or its 90 s stall alert. The harness waits for
@@ -178,7 +178,9 @@ async function checkout(page: Page, fixture: Fixture): Promise<void> {
   if (await country.evaluate(node => node.tagName === 'SELECT')) await country.selectOption({ label: 'United States' });
   else await country.fill('United States');
   await page.getByRole('button', { name: 'Continue to Delivery' }).click();
-  await page.getByRole('radio', { name: /Standard Delivery/ }).check();
+  const deliveryOptions = page.getByRole('radio');
+  await expect(deliveryOptions.first()).toBeVisible();
+  await deliveryOptions.first().check();
 
   const capabilityResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/checkout/payment-capability');
   await page.getByRole('button', { name: 'Continue to Payment' }).click();

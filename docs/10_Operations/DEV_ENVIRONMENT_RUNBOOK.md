@@ -141,10 +141,14 @@ Manual equivalent of the default: `--allow-email-allowlist` plus `COMMERCE_EMAIL
 
 **Normal Test Mode checkout (MAIN DEV).**
 - **Why checkout fails on the watched API:** `npm run dev` is the payment-restricted API and always reports `paymentsEnabled:false`, so checkout shows `PAYMENT_MUTATIONS_DISABLED`.
-- **To check out,** stop the watched API and run `node scripts/dev-payment-runtime.cjs --start --allow-dev-checkout --recovery-mode=checkout --accepted-backlog-attempt=<isolated id>`. A `--preflight` variant runs the same checks without starting.
+- **Read-only preflight:** from the repository root, run `npm run payment:dev:checkout:preflight --workspace=@electrohub/backend`.
+- **Start checkout mode:** after preflight passes and the existing port owner is stopped safely, run `npm run payment:dev:checkout --workspace=@electrohub/backend`. These named commands call the same supervisor as the direct `node scripts/dev-payment-runtime.cjs` invocation; they add no payment authority of their own.
+  - If preflight identifies a specific isolated backlog row, use only its already verified and separately approved ID: append `-- --accepted-backlog-attempt=<uuid>` to the npm command. Never invent an ID or bypass the backlog gate.
+  - If the branch contains a migration absent from shared DEV, preflight must refuse startup. Do not skip the migration check; use a schema-matching checkout or complete the migration through its separately authorized procedure first.
   - It runs the same DEV identity, TLS, migration, Stripe Test account and backlog gates.
   - It supervises the payment-enabled API plus the signed webhook listener.
   - It starts **no recovery worker** and keeps in-process recovery off. A stalled attempt stays Processing until a separately authorized `exact-attempt` run.
+- **Browser routing:** keep the frontend on `http://localhost:3000` with its Vite API proxy pointed at the supervised `http://localhost:5000` API. Use the private development-runtime diagnostic to confirm direct and proxied requests attest the same instance; never expose its bearer token.
 - **Ctrl+C** returns to restricted mode, after which `npm run dev` may be restarted.
 - **Only one owner of :5000 at a time.** Switching modes is always: stop, then preflight, then start.
 

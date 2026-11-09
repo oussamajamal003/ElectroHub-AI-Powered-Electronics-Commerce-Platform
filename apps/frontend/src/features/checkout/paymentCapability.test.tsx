@@ -48,3 +48,17 @@ it('returns false only when the backend explicitly disables payment actions', as
   const { result } = mountHook();
   await waitFor(() => expect(result.current).toBe(false));
 });
+
+it('refreshes a cached disabled result when checkout enters the payment step', async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  client.setQueryData(['payment-capability', 'customer-a'], { paymentsEnabled: false });
+  const wrapper = ({ children }: PropsWithChildren) => createElement(QueryClientProvider, { client }, children);
+  vi.mocked(apiClient).mockResolvedValue({ data: { paymentsEnabled: true } } as never);
+  const { result, rerender } = renderHook(({ needed }: { needed: boolean }) => usePaymentCapability(needed), {
+    wrapper, initialProps: { needed: false },
+  });
+  expect(result.current).toBe(false);
+  rerender({ needed: true });
+  await waitFor(() => expect(result.current).toBe(true));
+  expect(apiClient).toHaveBeenCalledTimes(1);
+});

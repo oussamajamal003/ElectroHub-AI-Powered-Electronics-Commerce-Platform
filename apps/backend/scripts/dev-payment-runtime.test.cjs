@@ -189,7 +189,7 @@ test('scoped start validates the reviewed attempt and unique Task04-owned synthe
 
 test('migration preflight requires every local migration exactly once with an accepted exact checksum', () => {
   const rows = fixtureRows();
-  assert.equal(verifyMigrationLedger(rows), 20);
+  assert.equal(verifyMigrationLedger(rows), migrationNames().length);
   for (const invalid of [rows.slice(1), [...rows, { ...rows[0] }], [...rows, { ...rows[0], migration_name: 'unknown' }],
     rows.map((row, index) => index ? row : { ...row, checksum: '0'.repeat(64) }),
     rows.map((row, index) => index ? row : { ...row, finished_at: null }),
@@ -212,7 +212,7 @@ test('preflight verifies both DEV identities, all migration checksums, no paymen
   try {
     const config = await preflight(preflightDependencies());
     assert.equal(config.targetIdentity, 'supabase:pzxekjybdiulzmssalfo/postgres');
-    assert.equal(config.migrationCount, 20);
+    assert.equal(config.migrationCount, migrationNames().length);
     assert.deepEqual(config.paymentBacklog, { unfinishedWork: 0, unresolvedAttempts: 0, historicalIncidentAttempts: 0 });
     assert.equal(config.stripeAccountVerified, true);
   } finally {
@@ -267,7 +267,7 @@ test('email worker receives no payment scope or shared-payment supervisor flags'
   Object.assign(process.env, { PAYMENT_DEV_ATTEMPT_IDS: 'untrusted-caller-scope', PAYMENT_DEV_SUPERVISED: '1',
     PAYMENT_INPROCESS_RECOVERY: 'true', COMMERCE_EMAIL_DISPATCH_ENABLED: 'true', COMMERCE_EMAIL_SEND_MODE: 'allowlist' });
   try {
-    await supervise({ port: 5136, targetIdentity: 'supabase:pzxekjybdiulzmssalfo/postgres', runtimeUrlSource: 'direct', migrationCount: 20,
+    await supervise({ port: 5136, targetIdentity: 'supabase:pzxekjybdiulzmssalfo/postgres', runtimeUrlSource: 'direct', migrationCount: migrationNames().length,
       workerAttemptIds, paymentBacklog: { unfinishedWork: 0, unresolvedAttempts: 0, historicalIncidentAttempts: 0 }, stripeAccountVerified: true },
     { start: true, reviewedRecoveryAttempt: REVIEWED_ID, allowEmailAllowlist: true }, state.deps);
   } finally {
@@ -298,7 +298,7 @@ test('supervisor activates only after both child preparations, DB readiness sign
   const priorAttemptEnv = process.env.PAYMENT_DEV_ATTEMPT_IDS;
   process.env.PAYMENT_DEV_ATTEMPT_IDS = 'untrusted-caller-scope';
   try {
-    await supervise({ port: 5136, targetIdentity: 'supabase:pzxekjybdiulzmssalfo/postgres', runtimeUrlSource: 'direct', migrationCount: 20,
+    await supervise({ port: 5136, targetIdentity: 'supabase:pzxekjybdiulzmssalfo/postgres', runtimeUrlSource: 'direct', migrationCount: migrationNames().length,
       workerAttemptIds,
       paymentBacklog: { unfinishedWork: 0, unresolvedAttempts: 0, historicalIncidentAttempts: 0 }, stripeAccountVerified: true },
     { start: true, reviewedRecoveryAttempt: REVIEWED_ID }, state.deps);
@@ -327,7 +327,7 @@ test('a child exit before readiness stops only tracked siblings and releases loc
     queueMicrotask(() => { child.emit('message', { event: 'payment.supervisor.awaiting', role }); if (role === 'api') { child.exitCode = 1; child.emit('exit', 1); } });
     return child;
   };
-  await assert.rejects(supervise({ port: 5136, targetIdentity: 'supabase:pzxekjybdiulzmssalfo/postgres', runtimeUrlSource: 'direct', migrationCount: 20,
+  await assert.rejects(supervise({ port: 5136, targetIdentity: 'supabase:pzxekjybdiulzmssalfo/postgres', runtimeUrlSource: 'direct', migrationCount: migrationNames().length,
     workerAttemptIds,
     paymentBacklog: {}, stripeAccountVerified: true }, { start: true, reviewedRecoveryAttempt: REVIEWED_ID }, state.deps), /exited unexpectedly|timed out/);
   assert.equal(state.children.every(child => child.signalCode === 'SIGTERM' || child.exitCode !== null), true);
@@ -377,7 +377,7 @@ test('bounded shutdown escalates owned children and retains the lock while a chi
     });
     return child;
   };
-  await assert.rejects(supervise({ port: 5136, targetIdentity: 'supabase:pzxekjybdiulzmssalfo/postgres', runtimeUrlSource: 'direct', migrationCount: 20,
+  await assert.rejects(supervise({ port: 5136, targetIdentity: 'supabase:pzxekjybdiulzmssalfo/postgres', runtimeUrlSource: 'direct', migrationCount: migrationNames().length,
     workerAttemptIds,
     paymentBacklog: {}, stripeAccountVerified: true }, { start: true, reviewedRecoveryAttempt: REVIEWED_ID }, state.deps), /exited unexpectedly|condition timed out|Owned process did not stop/);
   assert.ok(state.children.filter(child => child.pid >= 1000).every(child => child.signals.includes('SIGKILL')));
@@ -415,7 +415,7 @@ test('governed preflight: only work created at/after the boundary is in scope; o
 
 test('governed supervisor sends only the boundary to the worker, nothing to the API, and refuses a mismatched boundary', async () => {
   const since = new Date(Date.now() - 3600_000).toISOString();
-  const config = { port: 5136, targetIdentity: 'supabase:pzxekjybdiulzmssalfo/postgres', runtimeUrlSource: 'direct', migrationCount: 20,
+  const config = { port: 5136, targetIdentity: 'supabase:pzxekjybdiulzmssalfo/postgres', runtimeUrlSource: 'direct', migrationCount: migrationNames().length,
     workerAttemptIds: [], workerScope: { createdSince: since },
     paymentBacklog: { unfinishedWork: 0, unresolvedAttempts: 0, historicalIncidentAttempts: 0 }, stripeAccountVerified: true };
   const state = fakeRuntime(record => { assert.equal(record.readiness, 'PASS'); process.emit('SIGINT'); });

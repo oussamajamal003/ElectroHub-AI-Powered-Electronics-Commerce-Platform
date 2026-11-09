@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight } from 'lucide-react';
 import { announceConfirmation } from './confirmationSignal';
-import { PAYMENTS_UNAVAILABLE_MESSAGE, isPaymentsDisabledError, usePaymentCapability } from './paymentCapability';
+import { PAYMENTS_UNAVAILABLE_MESSAGE, isPaymentsDisabledError, paymentCapabilityQueryOptions, usePaymentCapability } from './paymentCapability';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { useCart } from '@/features/cart/context';
 import { ApiError, apiClient } from '@/lib/api';
@@ -99,6 +99,7 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
   const [message, setMessage] = useState(''); const [setupError, setSetupError] = useState<string | null>(null); const [secret, setSecret] = useState<string | null>(null);
   // Environment restriction (payment isolation): known up front from the capability read, or learned from a 503 PAYMENT_MUTATIONS_DISABLED.
   const [paymentsRefused, setPaymentsRefused] = useState(false);
+  const [checkingPaymentAvailability, setCheckingPaymentAvailability] = useState(false);
   const activeSecret = useRef<string | null>(secret);
   activeSecret.current = secret;
   const [outcome, setOutcome] = useState<PaymentOutcome | null>(null);
@@ -126,6 +127,21 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
   // Asked only where checkout setup could start; a refusal learned from a 503 also counts.
   const paymentCapability = usePaymentCapability(['payment', 'review'].includes(step));
   const paymentsUnavailable = paymentCapability === false || paymentsRefused;
+  const recheckPaymentAvailability = async () => {
+    if (checkingPaymentAvailability) return;
+    setCheckingPaymentAvailability(true);
+    try {
+      const capability = await client.fetchQuery(paymentCapabilityQueryOptions(userId));
+      if (capability.paymentsEnabled) {
+        setPaymentsRefused(false);
+        setSetupError(current => current === PAYMENTS_UNAVAILABLE_MESSAGE ? null : current);
+      }
+    } catch {
+      // Keep checkout blocked unless an authoritative capability read succeeds.
+    } finally {
+      setCheckingPaymentAvailability(false);
+    }
+  };
   const recoveryCartReady = interactive.current || isBuyNow || Boolean(cart.data && !cart.isLoading && !cart.isError && !cart.isMutating &&
     (!cart.data.items.length || cart.data.revision === draft.attempt?.request.expectedRevision));
   const recovering = recoveryCartReady && Boolean(draft.attempt?.status === 'unknown' || (draft.attempt?.status === 'pending' && !pending));
@@ -893,9 +909,15 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
             <Button size="small" variant="outline" onClick={() => void refreshPrerequisites()} disabled={refreshingPrerequisites} isLoading={refreshingPrerequisites}>Refresh totals</Button>
           </div>
         ) : paymentsUnavailable ? (
-          // Maintenance, not a payment problem: no retry is offered (it could only return 503) and nothing implies a card was charged.
+          // Recheck server authority before allowing setup; this control never overrides the backend boundary.
           <div className={styles.inlineNotice}><p role="status">{PAYMENTS_UNAVAILABLE_MESSAGE}</p>
-            <div className={styles.inlineActions}><Link to="/cart">Return to Cart</Link></div></div>
+            <div className={styles.inlineActions}>
+              <Button size="small" variant="outline" onClick={() => void recheckPaymentAvailability()} disabled={checkingPaymentAvailability} isLoading={checkingPaymentAvailability}>
+                Check availability again
+              </Button>
+              <Link to="/cart">Return to Cart</Link>
+            </div>
+          </div>
         ) : setupError ? (
           <div className={styles.providerError}>
             <p role="alert">{setupError}</p>

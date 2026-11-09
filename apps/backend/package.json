@@ -19,6 +19,8 @@
     "email:pg": "node scripts/commerce-email-pg.cjs",
     "payment:dev:preflight": "node scripts/dev-payment-runtime.cjs --preflight",
     "payment:dev": "node scripts/dev-payment-runtime.cjs --start --allow-dev-recovery",
+    "payment:dev:checkout:preflight": "node scripts/dev-payment-runtime.cjs --preflight --recovery-mode=checkout",
+    "payment:dev:checkout": "node scripts/dev-payment-runtime.cjs --start --allow-dev-checkout --recovery-mode=checkout",
     "dev:isolated": "node scripts/dev-isolated.cjs backend",
     "dev:isolated:real-email": "node scripts/dev-isolated.cjs backend --real-email",
     "dev:isolated:all-recipients": "node scripts/dev-isolated.cjs backend --real-email --all-recipients",

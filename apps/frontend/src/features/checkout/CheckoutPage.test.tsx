@@ -1339,4 +1339,27 @@ describe('payment-write-disabled environment', () => {
     expect(await screen.findByText(/switched off on this server/)).toBeVisible();
     expect(setups).toBe(0); expect(actions.confirm).not.toHaveBeenCalled();
   });
+
+  it('rechecks backend authority before retrying payment setup after the runtime becomes ready', async () => {
+    let capabilityReads = 0; let setups = 0;
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint === '/api/checkout') return { data: quote } as never;
+      if (endpoint === '/api/checkout/payment-capability') {
+        capabilityReads++;
+        return { data: { paymentsEnabled: capabilityReads > 1 } } as never;
+      }
+      if (endpoint === '/api/checkout/payment-attempts') {
+        setups++;
+        throw new ApiError(503, 'Payments are unavailable in this environment.', undefined, 'PAYMENT_MUTATIONS_DISABLED');
+      }
+      throw new Error(`Unexpected test request ${endpoint}`);
+    });
+    reviewedDraft(); show('/checkout?step=payment');
+    expect(await screen.findByText(/switched off on this server/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Check availability again' }));
+    await waitFor(() => expect(capabilityReads).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(setups).toBe(1));
+    expect(screen.getByText(/switched off on this server/)).toBeVisible();
+    expect(actions.confirm).not.toHaveBeenCalled();
+  });
 });
