@@ -9,6 +9,7 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { ADMIN_NAVIGATION, SIDEBAR_PREFERENCE_KEY, type AdminNavItem } from '@/features/admin/shell/navigation';
 import { useAdminAlerts } from '@/features/admin/dashboard/api';
+import { useAdminInventoryLiveUpdates } from '@/features/admin/dashboard/useAdminInventoryLiveUpdates';
 import { AdminToastProvider, ConfirmDialog } from '@/features/admin/shared/AdminUi';
 import { formatCount, initials } from '@/features/admin/shared/format';
 import styles from './AdminLayout.module.scss';
@@ -141,6 +142,7 @@ export function AdminLayout() {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  useAdminInventoryLiveUpdates();
 
   useEffect(() => {
     try { window.localStorage.setItem(SIDEBAR_PREFERENCE_KEY, collapsed ? '1' : '0'); } catch { /* preference only */ }

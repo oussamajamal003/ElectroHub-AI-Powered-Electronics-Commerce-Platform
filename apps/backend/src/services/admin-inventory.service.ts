@@ -3,7 +3,7 @@ import type { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { deriveStockStatus, InventoryService } from './inventory.service.js';
-import { AdminNotificationService } from './admin-notification.service.js';
+import { StockAlertService } from './stock-alert.service.js';
 import { logSafely } from '../utils/logger.js';
 import type { inventoryAdjustmentSchema, inventoryListSchema, STOCK_FILTERS } from '../validators/admin.validator.js';
 
@@ -56,7 +56,7 @@ async function heldUnits(db: PrismaClient | Prisma.TransactionClient, productIds
 
 export class AdminInventoryService {
   constructor(private readonly db: PrismaClient = prisma, private readonly inventory = new InventoryService(),
-    private readonly notifier = new AdminNotificationService(db)) {}
+    private readonly stockAlerts = new StockAlertService(db)) {}
 
   /** One grouped query over the stored status column InventoryService maintains on every write. */
   async summary() {
@@ -107,13 +107,17 @@ export class AdminInventoryService {
       if (!current) {
         // A product without a stock record (legacy data) can be given one by an absolute correction only.
         if (input.operation !== 'SET') throw new AppError('Set an absolute quantity to start tracking this product’s stock.', 409, 'INVENTORY_NOT_FOUND');
-        await tx.inventory.create({ data: { productId, quantity: input.quantity, lowStockAt: 5, status: deriveStockStatus(input.quantity, 5) } });
-        return { from: null, to: input.quantity, status: deriveStockStatus(input.quantity, 5), previousStatus: null };
+        const status = deriveStockStatus(input.quantity, 5);
+        await tx.inventory.create({ data: { productId, quantity: input.quantity, lowStockAt: 5, status } });
+        const eventId = await this.stockAlerts.record(tx, { productId, previousStatus: null, status, quantity: input.quantity, lowStockAt: 5 });
+        return { from: null, to: input.quantity, status, previousStatus: null, eventId };
       }
       const next = input.operation === 'SET'
         ? await this.inventory.setStock(productId, input.quantity, tx)
         : await this.inventory.increaseStock(productId, input.quantity, tx);
-      return { from: current.quantity, to: next.quantity, status: next.status, previousStatus: deriveStockStatus(current.quantity, current.lowStockAt) };
+      const previousStatus = deriveStockStatus(current.quantity, current.lowStockAt);
+      const eventId = await this.stockAlerts.record(tx, { productId, previousStatus, status: next.status, quantity: next.quantity, lowStockAt: current.lowStockAt });
+      return { from: current.quantity, to: next.quantity, status: next.status, previousStatus, eventId };
     }, TX).catch(error => {
       if (isWriteConflict(error)) { stale = true; return null; }
       throw error;
@@ -123,15 +127,13 @@ export class AdminInventoryService {
     logSafely('info', 'Admin inventory change', { event: 'admin.inventory.adjusted', actorId, productId, operation: input.operation,
       from: outcome.from, to: outcome.to, reasonProvided: Boolean(input.reason) });
     const after = await this.get(productId);
-    // Only a transition INTO low or out of stock notifies; the email is fire-and-forget after commit.
-    if ((outcome.status === 'LOW_STOCK' || outcome.status === 'OUT_OF_STOCK') && outcome.status !== outcome.previousStatus) {
-      this.notifier.notifyLowStock({ productName: after.name, status: outcome.status, quantity: outcome.to });
-    }
+    this.stockAlerts.afterCommit(outcome.eventId);
     return after;
   }
 
   async setThreshold(actorId: string, productId: string, lowStockAt: number, expectedLowStockAt: number) {
     let stale = false;
+    let eventId: string | null = null;
     await this.db.$transaction(async tx => {
       // Fixtures are read-only here too, whether or not they have a stock record.
       const product = await tx.product.findUnique({ where: { id: productId }, select: { isTestFixture: true } });
@@ -141,13 +143,18 @@ export class AdminInventoryService {
       const current = rows[0];
       if (!current) throw new AppError('This product has no stock record yet. Set its quantity first.', 409, 'INVENTORY_NOT_FOUND');
       if (current.lowStockAt !== expectedLowStockAt) { stale = true; return; }
-      await tx.inventory.update({ where: { productId }, data: { lowStockAt, status: deriveStockStatus(current.quantity, lowStockAt) } });
+      const previousStatus = deriveStockStatus(current.quantity, current.lowStockAt);
+      const status = deriveStockStatus(current.quantity, lowStockAt);
+      await tx.inventory.update({ where: { productId }, data: { lowStockAt, status } });
+      eventId = await this.stockAlerts.record(tx, { productId, previousStatus, status, quantity: current.quantity, lowStockAt });
     }, TX).catch(error => {
       if (isWriteConflict(error)) { stale = true; return; }
       throw error;
     });
     if (stale) return this.conflict(productId);
     logSafely('info', 'Admin inventory change', { event: 'admin.inventory.threshold', actorId, productId, lowStockAt });
-    return this.get(productId);
+    const updated = await this.get(productId);
+    this.stockAlerts.afterCommit(eventId);
+    return updated;
   }
 }

@@ -11,15 +11,18 @@ import { startOperationalRecommendationRetentionRunner } from './recommendation-
 import { deliveryOrigin } from './config/delivery-map.config.js';
 import { attachDeliveryGateway, type DeliveryGateway } from './sockets/delivery.gateway.js';
 import { DeliveryPublisher } from './sockets/delivery.publisher.js';
+import { AdminInventoryPublisher } from './sockets/admin-inventory.publisher.js';
 import { startRealtimeMetricsLog } from './sockets/realtime-metrics.js';
 import { assertSimulationBootConfig, simulationAvailability } from './services/delivery-simulation/simulation.config.js';
 import { deliverySimulation } from './services/delivery-simulation/delivery-simulation.runner.js';
+import { startStockAlertRecoveryRunner } from './services/stock-alert.runtime.js';
 
 const PORT = env.PORT;
 let stopRecovery: (() => Promise<void>) | null = null;
 let stopRecommendationRetention: (() => Promise<void>) | null = null;
 let stopDeletionNoticeRetry: (() => void) | null = null;
 let stopAdminEmailChangeNoticeRetry: (() => void) | null = null;
+let stopStockAlertRecovery: (() => void) | null = null;
 installFatalLogging();
 // Task 04.6: a partial or out-of-range DELIVERY_ORIGIN_* configuration refuses to boot; unset leaves the map off.
 logger.info('Delivery map origin resolved', { event: 'delivery.map.origin_resolved', configured: deliveryOrigin() !== null });
@@ -84,6 +87,7 @@ export const server = app.listen(PORT, async () => {
   if (!shuttingDown) stopRecommendationRetention = startOperationalRecommendationRetentionRunner();
   if (!shuttingDown) stopDeletionNoticeRetry = startDeletionNoticeRetry();
   if (!shuttingDown) stopAdminEmailChangeNoticeRetry = startAdminEmailChangeNoticeRetry();
+  if (!shuttingDown) stopStockAlertRecovery = startStockAlertRecoveryRunner();
   if (isDbReady && !shuttingDown) {
     deliverySimulation.recoverOrphans().catch(() => logger.warn('Delivery simulation recovery failed', { event: 'delivery.simulation.recovery_failed' }));
   }
@@ -92,6 +96,7 @@ export const server = app.listen(PORT, async () => {
 // Task 04.7: Socket.IO /delivery on the same HTTP server and CORS allowlist; closed before the HTTP server on shutdown.
 const deliveryGateway: DeliveryGateway = attachDeliveryGateway(server, { corsOrigin });
 DeliveryPublisher.attach(deliveryGateway);
+AdminInventoryPublisher.attach(deliveryGateway);
 const stopRealtimeMetrics = startRealtimeMetricsLog();
 
 let shuttingDown = false;
@@ -104,10 +109,12 @@ export const gracefulShutdown = (signal: string) => {
   const retentionStopped = stopRecommendationRetention?.();
   stopDeletionNoticeRetry?.();
   stopAdminEmailChangeNoticeRetry?.();
+  stopStockAlertRecovery?.();
   logger.info(`${signal} signal received. Closing HTTP server.`, { event: 'server.stopping' });
   deliverySimulation.stopAll();
   stopRealtimeMetrics();
   DeliveryPublisher.attach(null);
+  AdminInventoryPublisher.attach(null);
   // io.close() disconnects every socket first (clients reconnect and refetch), then closes the HTTP server itself.
   const socketsClosed = deliveryGateway.close();
 

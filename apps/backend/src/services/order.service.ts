@@ -3,7 +3,8 @@ import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { currentCart, emptyCart, MAX_CART_LINES, MAX_CART_QUANTITY } from './cart.service.js';
 import { lockCartForUser } from './cart.lock.js';
-import { InventoryService, validateInventoryPurchase, type LockedInventorySnapshot } from './inventory.service.js';
+import { InventoryService, deriveStockStatus, validateInventoryPurchase, type LockedInventorySnapshot } from './inventory.service.js';
+import { StockAlertService } from './stock-alert.service.js';
 import { attemptSchema, businessDate, buyNowScopeId, checkoutRequestSchema, requestHash, savedAmountsMatch, savedPurchaseTerms } from './checkout.domain.js';
 import { loadShippingConfig } from './shipping-config.js';
 import { isSerializationConflict } from './transaction-conflict.js';
@@ -64,7 +65,8 @@ export function parseOrderReference(reference: string) {
 }
 
 export class OrderService {
-  constructor(private readonly database: PrismaClient = prisma, private readonly inventory = new InventoryService()) {}
+  constructor(private readonly database: PrismaClient = prisma, private readonly inventory = new InventoryService(),
+    private readonly stockAlerts = new StockAlertService(database)) {}
 
   async list(userId: string, { page, pageSize }: { page: number; pageSize: number }) {
     const where = { userId };
@@ -160,6 +162,7 @@ export class OrderService {
     const preflightTimings = stageTimings;
 
     for (let retry = 0; retry < 3; retry++) {
+      const stockEventIds: string[] = [];
       stageTimings = [];
       const transactionRequestedAt = performance.now();
       let callbackEnteredAt = 0;
@@ -285,8 +288,13 @@ export class OrderService {
           for (const id of ids) {
             const item = lines.find(line => line.productId === id);
             const lockedInventory = inventoryByProduct.get(id);
-            if (item && lockedInventory) await measureStage('inventory_decrement', 1, () =>
-              this.inventory.decreaseStock(id, item.quantity, tx, lockedInventory));
+            if (item && lockedInventory) {
+              const updated = await measureStage('inventory_decrement', 1, () => this.inventory.decreaseStock(id, item.quantity, tx, lockedInventory));
+              const lowStockAt = lockedInventory.lowStockAt ?? 5;
+              const eventId = await this.stockAlerts.record(tx, { productId: id, previousStatus: deriveStockStatus(lockedInventory.quantity, lowStockAt),
+                status: updated.status, quantity: updated.quantity, lowStockAt });
+              if (eventId) stockEventIds.push(eventId);
+            }
           }
           // BUY_NOW must never clear or mutate the persistent Cart.
           if (!buyNowScope && !attempt.submittedAt && cartId) await measureStage('cart_cleanup', 1, () => tx.cartItem.deleteMany({ where: { cartId } }));
@@ -311,6 +319,7 @@ export class OrderService {
             commitAndResolutionMs: Math.round((transactionResolvedAt - callbackFinishedAt) * 100) / 100,
             transactionDurationMs: Math.round((transactionResolvedAt - transactionRequestedAt) * 100) / 100 });
         }
+        for (const eventId of stockEventIds) this.stockAlerts.afterCommit(eventId);
         return committed;
       } catch (error) {
         const failedAt = performance.now();

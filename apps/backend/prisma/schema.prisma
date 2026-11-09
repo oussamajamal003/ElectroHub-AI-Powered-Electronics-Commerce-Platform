@@ -255,6 +255,7 @@ model Product {
   images               ProductImage[]
   specifications       ProductSpecification[]
   inventory            Inventory?
+  stockAlertEvents     StockAlertEvent[]
   cartItems            CartItem[]
   wishItems            WishlistItem[]
   orderItems           OrderItem[]
@@ -388,6 +389,7 @@ model Inventory {
   status     InventoryStatus @default(IN_STOCK)
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  stockAlertEvents StockAlertEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -828,6 +830,7 @@ enum OtpChannel {
 
 enum EmailDeliveryStatus {
   QUEUED
+  SENDING
   SENT
   DELIVERED
   FAILED
@@ -888,8 +891,12 @@ model EmailDelivery {
   deliveredAt       DateTime?
   failedAt          DateTime?
   failureReason     String?
+  attempts          Int                 @default(0)
+  nextAttemptAt     DateTime?
+  stockAlertEventId String?             @db.Uuid
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  stockAlertEvent StockAlertEvent? @relation(fields: [stockAlertEventId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -898,7 +905,34 @@ model EmailDelivery {
   @@index([type, status])
   @@index([recipient])
   @@index([createdAt])
+  @@index([stockAlertEventId, status, nextAttemptAt])
+  @@unique([stockAlertEventId, userId])
   @@map("email_deliveries")
+}
+
+/// Durable, committed inventory-category transition. The event is an internal outbox record: it is never exposed to browsers,
+/// and one optional stock-warning delivery can exist per eligible administrator.
+model StockAlertEvent {
+  id             String          @id @default(uuid()) @db.Uuid
+  productId      String          @db.Uuid
+  previousStatus InventoryStatus?
+  status         InventoryStatus
+  quantity       Int
+  lowStockAt     Int
+  productName    String          @db.VarChar(255)
+  sku            String          @db.VarChar(100)
+  processedAt    DateTime?
+
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "stock_alert_events_productId_fkey")
+  inventory      Inventory       @relation(fields: [productId], references: [productId], onDelete: Cascade, onUpdate: Cascade, map: "stock_alert_events_productId_inventory_fkey")
+  deliveries     EmailDelivery[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([processedAt, createdAt])
+  @@index([productId, createdAt])
+  @@map("stock_alert_events")
 }
 
 // ─── Task 03.8 — Commerce email outbox ───────────────────

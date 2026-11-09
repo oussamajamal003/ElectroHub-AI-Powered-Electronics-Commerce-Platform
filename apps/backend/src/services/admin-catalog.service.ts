@@ -7,6 +7,7 @@ import { deriveStockStatus } from './inventory.service.js';
 import { stockWhere } from './admin-inventory.service.js';
 import { logSafely } from '../utils/logger.js';
 import { recordAdminAudit } from './admin-audit.js';
+import { StockAlertService } from './stock-alert.service.js';
 import type { bulkStatusSchema, categoryCreateSchema, categoryListSchema, categoryUpdateSchema, productCreateSchema, productListSchema,
   productUpdateSchema } from '../validators/admin.validator.js';
 
@@ -95,7 +96,7 @@ function mapUniqueViolation(error: unknown, entity: 'PRODUCT' | 'CATEGORY'): nev
 }
 
 export class AdminCatalogService {
-  constructor(private readonly db: PrismaClient = prisma) {}
+  constructor(private readonly db: PrismaClient = prisma, private readonly stockAlerts = new StockAlertService(db)) {}
 
   // ─── Products ─────────────────────────────────────────
   async listProducts(query: ProductList) {
@@ -156,7 +157,7 @@ export class AdminCatalogService {
   }
 
   async createProduct(actorId: string, input: ProductCreate) {
-    const id = await this.db.$transaction(async tx => {
+    const created = await this.db.$transaction(async tx => {
       await this.assertCategory(tx, input.categoryId);
       await this.assertBrand(tx, input.brandId);
       await this.assertSkuFree(tx, input.sku);
@@ -172,10 +173,15 @@ export class AdminCatalogService {
         inventory: { create: { quantity: input.inventory.quantity, lowStockAt: input.inventory.lowStockAt,
           status: deriveStockStatus(input.inventory.quantity, input.inventory.lowStockAt) } },
       }, select: { id: true } });
-      return product.id;
+      const status = deriveStockStatus(input.inventory.quantity, input.inventory.lowStockAt);
+      const eventId = input.status === 'ACTIVE' && (status === 'LOW_STOCK' || status === 'OUT_OF_STOCK')
+        ? await this.stockAlerts.record(tx, { productId: product.id, previousStatus: null, status, quantity: input.inventory.quantity, lowStockAt: input.inventory.lowStockAt })
+        : null;
+      return { id: product.id, eventId };
     }, TX).catch(error => mapUniqueViolation(error, 'PRODUCT'));
-    logSafely('info', 'Admin catalog change', { event: 'admin.product.created', actorId, productId: id, status: input.status });
-    return this.getProduct(id);
+    logSafely('info', 'Admin catalog change', { event: 'admin.product.created', actorId, productId: created.id, status: input.status });
+    this.stockAlerts.afterCommit(created.eventId);
+    return this.getProduct(created.id);
   }
 
   async updateProduct(actorId: string, productId: string, input: ProductUpdate) {

@@ -8,6 +8,7 @@ import { SIDEBAR_PREFERENCE_KEY } from '@/features/admin/shell/navigation';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({ useAdminAuth: vi.fn() }));
 vi.mock('@/features/admin/dashboard/api', () => ({ useAdminAlerts: vi.fn() }));
+vi.mock('@/features/admin/dashboard/useAdminInventoryLiveUpdates', () => ({ useAdminInventoryLiveUpdates: vi.fn() }));
 
 const logout = vi.fn();
 const renderAt = (path: string) => render(<MemoryRouter initialEntries={[path]}>

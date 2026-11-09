@@ -6,7 +6,8 @@ import { AppError } from '../middleware/errorHandler.js';
 import { buyNowProjection, purchaseItemsProjection, currentCart, MAX_CART_LINES, MAX_CART_QUANTITY } from './cart.service.js';
 import { lockCart, lockCartForUser } from './cart.lock.js';
 import { checkoutRequestSchema, attemptSchema, buyNowScopeId, checkoutTotals, deliveryMethods, isBuyNowRequest, requestHash, savedAmountsMatch, savedPurchaseTerms } from './checkout.domain.js';
-import { InventoryService } from './inventory.service.js';
+import { InventoryService, deriveStockStatus } from './inventory.service.js';
+import { StockAlertService } from './stock-alert.service.js';
 import { loadShippingConfig, shippingQuoteFor, type ShippingSnapshot } from './shipping-config.js';
 import { adminNotifications } from './admin-notification.service.js';
 import { OrderService } from './order.service.js';
@@ -164,7 +165,8 @@ export function paymentWorkScopeWhere(scope?: PaymentWorkScope): Prisma.PaymentW
 
 export class PaymentService {
   constructor(private readonly database: PrismaClient = prisma, private readonly provider: PaymentProvider = stripeProvider,
-    private readonly inventory = new InventoryService(), private readonly isolation: () => PaymentIsolationDecision = paymentIsolation) {}
+    private readonly inventory = new InventoryService(), private readonly isolation: () => PaymentIsolationDecision = paymentIsolation,
+    private readonly stockAlerts = new StockAlertService(database)) {}
 
   /** Payment isolation boundary (see payment-isolation.ts): every payment write fails closed unless this process may mutate its target. */
   private assertMutationsAllowed() {
@@ -1098,8 +1100,8 @@ export class PaymentService {
   }
   private async compensate(attempt: Attempt, token: string, refunded: boolean) {
     await this.patch(attempt.id, token, { state: refunded ? 'REFUND_PENDING' : 'COMPENSATION_PENDING' });
-    const emails = await this.fenced(attempt.id, token, async (tx, latest) => {
-      if (!latest.orderId || latest.compensatedAt) return [];
+    const outcome = await this.fenced(attempt.id, token, async (tx, latest) => {
+      if (!latest.orderId || latest.compensatedAt) return { emails: [], stockEventIds: [] };
       const payment = await tx.payment.findUnique({ where: { orderId: latest.orderId } });
       if (payment?.status === 'SUCCEEDED' && !refunded) throw new AppError('Captured payment cannot be released.', 409, 'PAYMENT_RECOVERY_PENDING');
       const buyNowScope = isBuyNowRequest(latest.request);
@@ -1110,8 +1112,18 @@ export class PaymentService {
       const productRows = await tx.$queryRaw<{ categoryId: string }[]>(Prisma.sql`SELECT "categoryId" FROM "products" WHERE "id" IN (${sqlIds}) ORDER BY "id" FOR SHARE`);
       const categoryIds = [...new Set(productRows.map(product => product.categoryId))].sort();
       if (categoryIds.length) await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "categories" WHERE "id" IN (${Prisma.join(categoryIds.map(id => Prisma.sql`${id}::uuid`))}) ORDER BY "id" FOR SHARE`);
-      await tx.$queryRaw(Prisma.sql`SELECT "productId" FROM "inventory" WHERE "productId" IN (${sqlIds}) ORDER BY "productId" FOR UPDATE`);
-      for (const item of latest.items) await this.inventory.increaseStock(item.productId, item.quantity, tx);
+      const lockedInventory = await tx.$queryRaw<{ productId: string; quantity: number; lowStockAt: number }[]>(Prisma.sql`SELECT "productId", "quantity", "lowStockAt" FROM "inventory" WHERE "productId" IN (${sqlIds}) ORDER BY "productId" FOR UPDATE`);
+      const lockedByProduct = new Map(lockedInventory.map(row => [row.productId, row]));
+      const stockEventIds: string[] = [];
+      for (const item of latest.items) {
+        const updated = await this.inventory.increaseStock(item.productId, item.quantity, tx);
+        const before = lockedByProduct.get(item.productId);
+        if (before) {
+          const eventId = await this.stockAlerts.record(tx, { productId: item.productId, previousStatus: deriveStockStatus(before.quantity, before.lowStockAt),
+            status: updated.status, quantity: updated.quantity, lowStockAt: before.lowStockAt });
+          if (eventId) stockEventIds.push(eventId);
+        }
+      }
       const restoredProducts = await tx.product.findMany({ where: { id: { in: ids } }, select: { id: true, status: true, isTestFixture: true,
         category: { select: { isActive: true } }, inventory: { select: { quantity: true } } } });
       const restored = new Map(restoredProducts.map(product => [product.id, product]));
@@ -1145,11 +1157,13 @@ export class PaymentService {
         compensatedAt: cancelledAt, activeCartId: null, recoveryRemainder: remainder } });
       // Task 03.8: the cancellation (and, only when this transition records a verified refund, the refund) events commit with it.
       // compensatedAt above makes a replay return early, so a retried compensation never emits a second event.
-      if (!before) return [];
-      return enqueueCancellation(tx, { orderId: latest.orderId, fromStatus: before.status, cancelledAt, paymentConfirmed: Boolean(payment?.paidAt),
+      if (!before) return { emails: [], stockEventIds };
+      const emails = await enqueueCancellation(tx, { orderId: latest.orderId, fromStatus: before.status, cancelledAt, paymentConfirmed: Boolean(payment?.paidAt),
         refund: refunded && latest.refundId && latest.refundAmountCents ? { id: latest.refundId, amountCents: latest.refundAmountCents, refundedAt: cancelledAt } : null });
+      return { emails, stockEventIds };
     });
-    logCreatedEvents(emails);
+    logCreatedEvents(outcome.emails);
+    for (const eventId of outcome.stockEventIds) this.stockAlerts.afterCommit(eventId);
     // Task 04.7: after commit, a hint so live tracking pages refetch and show Cancelled. A no-op without an attached gateway (workers).
     if (attempt.orderId) DeliveryPublisher.revoked(attempt.orderId, `ORD-${attempt.orderId.toUpperCase()}`, 'ORDER_CANCELLED');
   }

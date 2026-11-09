@@ -13,6 +13,8 @@ import { liveAdminSession, lookupActiveUser, socketAuthMiddleware, socketError, 
 export const DELIVERY_NAMESPACE = '/delivery';
 export const orderRoom = (orderId: string) => `delivery:order:${orderId}`;
 export const userRoom = (userId: string) => `user:${userId}`;
+/** Server-selected room for MFA-assured administrators. Customers never join it. */
+export const adminInventoryRoom = 'admin:inventory';
 const REFERENCE = /^ORD-[0-9A-F-]{36}$/;
 
 export type GatewayLimits = { connectionsPerUser: number; subscriptionsPerSocket: number; subscribesPerMinute: number };
@@ -70,6 +72,7 @@ export function attachDeliveryGateway(server: HttpServer, options: { corsOrigin:
     realtimeMetrics.increment('connections_accepted');
     realtimeMetrics.adjust('connected_sockets', 1);
     void socket.join(userRoom(identity.userId));
+    if (identity.role === 'ADMIN') void socket.join(adminInventoryRoom);
     const subscriptions = new Set<string>();
     const attempts: number[] = [];
 
