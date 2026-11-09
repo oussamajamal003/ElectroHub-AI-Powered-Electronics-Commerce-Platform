@@ -343,10 +343,22 @@ describe('Buy Now Concurrency, Scope Collisions & Nullable Cart Recovery', () =>
     };
 
     inventory = new InventoryService();
-    vi.spyOn(inventory, 'decreaseStock').mockResolvedValue(undefined as any);
-    vi.spyOn(inventory, 'increaseStock').mockResolvedValue(undefined as any);
+    // Stock transitions now publish a committed inventory snapshot to the
+    // stock-alert outbox. Keep this focused Buy Now test double aligned with
+    // InventoryService's real return contract.
+    vi.spyOn(inventory, 'decreaseStock').mockResolvedValue({
+      id: 'inv-a', productId: productAId, quantity: 9, lowStockAt: 2, status: 'IN_STOCK',
+    } as any);
+    vi.spyOn(inventory, 'increaseStock').mockResolvedValue({
+      id: 'inv-a', productId: productAId, quantity: 10, lowStockAt: 2, status: 'IN_STOCK',
+    } as any);
 
-    paymentService = new PaymentService(db as unknown as PrismaClient, provider, inventory);
+    paymentService = new PaymentService(
+      db as unknown as PrismaClient,
+      provider,
+      inventory,
+      () => ({ allowed: true, target: 'disposable', identity: 'unit-test', reason: 'disposable-target' }),
+    );
     orderService = new OrderService(db as unknown as PrismaClient, inventory);
   });
 
