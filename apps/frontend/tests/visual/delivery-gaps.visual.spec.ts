@@ -274,7 +274,7 @@ test('P3 T47-B05: an obsolete acknowledgment and a failed reconciliation never m
   restFails = false;                                     // polling (60 s) now succeeds and completes the reconciliation
   await expect(livePill(c.page)).toHaveText(/Live updates on|Live updates restored|Resynced/i, { timeout: 90_000 });
   const latestEta = await estimate(c.page);
-  const apiEta = (await (await c.context.request.get(`${base}/api/orders/${ref}/delivery`, { headers: { Authorization: `Bearer ${(await (await c.context.request.post(`${base}/api/auth/refresh`)).json()).accessToken}` } })).json()).data.eta.estimatedAt as string;
+  const apiEta = (await (await c.context.request.get(`${base}/api/orders/${ref}/delivery`, { headers: { Authorization: `Bearer ${(await (await c.context.request.post(`${base}/api/auth/customer/refresh`)).json()).accessToken}` } })).json()).data.eta.estimatedAt as string;
   expect(apiEta).toBeTruthy();
   expect(latestEta.length).toBeGreaterThan(0);
   await c.page.screenshot({ path: path.join(shots, 'p3-resynced.png') });
@@ -393,7 +393,7 @@ function shortToken(realToken: string, seconds: number) {
 async function shortLivedSession(browser: Browser, scenario: string, refreshAfterExpiry: 'real' | 'reject') {
   const { context, page } = await newContext(browser, fixtures!.customer, scenario, refreshAfterExpiry === 'reject' ? [/http POST \/api\/auth\/refresh 401/i] : []);
   let refreshes = 0;
-  await context.route('**/api/auth/refresh', async r => {
+  await context.route('**/api/auth/customer/refresh', async r => {
     refreshes++;
     if (refreshes === 1) {
       const real = await r.fetch();

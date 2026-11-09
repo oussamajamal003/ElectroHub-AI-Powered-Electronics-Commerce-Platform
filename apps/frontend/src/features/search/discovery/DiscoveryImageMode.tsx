@@ -5,7 +5,7 @@ import type { ProductSummary } from '@/features/products/types';
 import { DiscoveryCamera } from './DiscoveryCamera';
 import { DiscoveryState } from './DiscoveryState';
 import { assessPhoto, type PhotoIssue } from './photoQuality';
-import { IMAGE_ACCEPT, MAX_IMAGE_LABEL, formatBytes, imageSearchEnabled, searchByImage, validateImageFile, type ImageSearchOutcome } from './imageSearch';
+import { IMAGE_ACCEPT, MAX_IMAGE_LABEL, formatBytes, imageSearchEnabled, reportImageResultSelected, searchByImage, validateImageFile, type ImageSearchOutcome } from './imageSearch';
 import styles from './Discovery.module.scss';
 
 type Step = 'entry' | 'camera' | 'ready' | 'searching' | 'done';
@@ -181,7 +181,11 @@ function Outcome({ outcome, issues, onNavigate, onRetry, onSearchText, onReplace
         const href = `/products/${encodeURIComponent(product.slug)}`;
         const [stockLabel, stockTone] = stockOf(product);
         return <li key={product.id}>
-          <a className={styles.resultCard} href={href} onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); onNavigate(href); }}>
+          <a className={styles.resultCard} href={href} onClick={event => {
+            reportImageResultSelected(outcome.analyticsToken, product.id);
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+            event.preventDefault(); onNavigate(href);
+          }}>
             <span className={styles.resultImage}>
               <span className={styles.rank} aria-label={`Match ${index + 1}`}>#{index + 1}</span>
               {product.primaryImage ? <img src={product.primaryImage.url} alt="" loading="lazy" /> : <ImageOff size={24} aria-hidden="true" />}

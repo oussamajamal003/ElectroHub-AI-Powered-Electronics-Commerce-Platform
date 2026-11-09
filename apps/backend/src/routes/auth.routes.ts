@@ -1,10 +1,11 @@
-import { Router } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import { startGoogle, callbackGoogle, completeGoogle, linkGoogle, prepareGoogleDeletionReauth } from '../controllers/google.controller.js';
 import {
   register,
   login,
-  refresh,
-  logout,
+  refreshFor,
+  retireLegacySession,
+  logoutFor,
   getCurrentUser,
   updateProfile,
   forgotPassword,
@@ -28,6 +29,22 @@ import {
 } from '../middleware/rateLimiter.js';
 
 const router = Router();
+
+/** Shared customer email routes fail closed for database-resolved administrators. */
+const rejectAdminEmailChange = (req: Request, res: Response, next: NextFunction) => {
+  if (req.user?.role === 'ADMIN') {
+    res.status(403).json({ error: { code: 'ADMIN_ENDPOINT_REQUIRED', message: 'Administrators change email through the admin security flow.' } });
+    return;
+  }
+  next();
+};
+const rejectAdminEmailPatch = (req: Request, res: Response, next: NextFunction) => {
+  if (req.user?.role === 'ADMIN' && req.body && Object.prototype.hasOwnProperty.call(req.body, 'email')) {
+    res.status(403).json({ error: { code: 'ADMIN_ENDPOINT_REQUIRED', message: 'Administrators change email through the admin security flow.' } });
+    return;
+  }
+  next();
+};
 /**
  * @swagger
  * /auth/google/start:
@@ -265,7 +282,7 @@ router.post('/change-verification-email', resendVerificationRateLimiter, changeV
  * /auth/refresh:
  *   post:
  *     summary: Refresh access token
- *     description: Requires a valid refresh token in the `electrohub_refresh` HttpOnly cookie. Rotates the refresh token.
+ *     description: Legacy shared route, retired. Always 401 and expires the old `electrohub_refresh` cookie. Use /api/auth/admin/refresh or /api/auth/customer/refresh, which read their own HttpOnly cookie. Rotates the refresh token.
  *     tags: [Authentication]
  *     responses:
  *       200:
@@ -275,7 +292,9 @@ router.post('/change-verification-email', resendVerificationRateLimiter, changeV
  *       429:
  *         description: Too many refresh attempts
  */
-router.post('/refresh', refresh);
+router.post('/refresh', retireLegacySession(401)); // legacy shared route: retires the old cookie, never authenticates
+router.post('/admin/refresh', refreshFor('admin'));
+router.post('/customer/refresh', refreshFor('customer'));
 
 /**
  * @swagger
@@ -389,7 +408,7 @@ router.post('/reset-password', passwordResetRateLimiter, resetPassword);
  * /auth/logout:
  *   post:
  *     summary: Logout and revoke refresh token
- *     description: Clears the `electrohub_refresh` cookie.
+ *     description: Legacy shared route, retired. Expires the old cookie only. Use /api/auth/admin/logout or /api/auth/customer/logout.
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
@@ -399,7 +418,9 @@ router.post('/reset-password', passwordResetRateLimiter, resetPassword);
  *       401:
  *         description: Unauthenticated
  */
-router.post('/logout', logout);
+router.post('/logout', retireLegacySession(200));
+router.post('/admin/logout', logoutFor('admin'));
+router.post('/customer/logout', logoutFor('customer'));
 
 /**
  * @swagger
@@ -461,7 +482,7 @@ router.get('/me', requireAuth, getCurrentUser);
  *       429:
  *         description: Profile update rate limit reached
  */
-router.patch('/me', requireAuth, resendVerificationRateLimiter, updateProfile);
+router.patch('/me', requireAuth, rejectAdminEmailPatch, resendVerificationRateLimiter, updateProfile);
 
 /**
  * @swagger
@@ -485,7 +506,7 @@ router.patch('/me', requireAuth, resendVerificationRateLimiter, updateProfile);
  *       400: { description: Invalid or expired code }
  *       401: { description: Unauthenticated }
  */
-router.post('/me/verify-email-change', requireAuth, verifyPendingEmailChange);
+router.post('/me/verify-email-change', requireAuth, rejectAdminEmailChange, requireRole('CUSTOMER'), verifyPendingEmailChange);
 
 /**
  * @swagger
@@ -501,7 +522,7 @@ router.post('/me/verify-email-change', requireAuth, verifyPendingEmailChange);
  *       401: { description: Unauthenticated }
  *       429: { description: Resend cooldown or request limit reached }
  */
-router.post('/me/resend-email-change', requireAuth, resendVerificationRateLimiter, resendPendingEmailChange);
+router.post('/me/resend-email-change', requireAuth, rejectAdminEmailChange, requireRole('CUSTOMER'), resendVerificationRateLimiter, resendPendingEmailChange);
 
 /**
  * @swagger

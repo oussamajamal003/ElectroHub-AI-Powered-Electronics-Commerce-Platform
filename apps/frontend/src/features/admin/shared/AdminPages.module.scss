@@ -74,6 +74,8 @@ td .mono, td .muted { white-space: nowrap; }
 .filterSelectTrigger { min-width: 11rem; }
 .formActions { display: flex; gap: $spacing-3; justify-content: flex-end; flex-wrap: wrap; position: sticky; bottom: 0; padding: $spacing-4 0;
   background: linear-gradient(to top, $color-surface 70%, rgba($color-surface, 0)); }
+// Short forms and dialogs: the sticky footer would pin over their own fields, so their actions stay in the flow.
+.formActionsStatic { position: static; padding: $spacing-2 0 0; background: none; }
 .formError { margin: 0; padding: $spacing-3 $spacing-4; border: 1px solid $color-error-border; background: $color-error-background; color: $color-error-foreground;
   font-size: $font-size-sm; }
 .notice { margin: 0; padding: $spacing-3 $spacing-4; border: 1px solid $color-info-border; background: $color-info-background; color: $color-info-foreground;
@@ -137,8 +139,18 @@ td .mono, td .muted { white-space: nowrap; }
 .statusRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: $spacing-2; align-items: center; font-size: $font-size-sm; }
 .meter { grid-column: 1 / -1; height: 6px; background: $color-surface; border: 1px solid $color-border; overflow: hidden;
   span { display: block; height: 100%; background: $color-primary; } }
+.legendDot { display: inline-block; flex: none; width: .625rem; height: .625rem; margin-right: $spacing-2; border-radius: $radius-full; vertical-align: middle; }
 .windowSwitch { display: inline-flex; }
 
+.restricted { display: grid; justify-items: center; gap: $spacing-3; width: 100%; max-width: 40rem; margin: $spacing-6 auto 0;
+  padding: $spacing-10 $spacing-6; text-align: center; background: $color-background; border: 1px solid $color-border; }
+.restrictedIcon { display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: $radius-full; color: $color-warning-foreground;
+  background: $color-warning-background; border: 1px solid $color-warning-border; }
+.restrictedTitle { margin: 0; color: $color-text-primary; font-size: $font-size-2xl; line-height: 1.2; overflow-wrap: anywhere;
+  // Focus is moved here programmatically (tabindex -1, never a Tab stop), so it carries no ring; the next Tab reaches the action.
+  &:focus, &:focus-visible { outline: none; } }
+.restrictedText { max-width: 32rem; margin: 0 0 $spacing-2; color: $color-text-secondary; font-size: $font-size-base; overflow-wrap: anywhere; }
+@media (max-width: $breakpoint-sm - 1px) { .restricted { margin-top: $spacing-2; padding: $spacing-8 $spacing-4; } }
 .notFound { display: grid; justify-items: start; gap: $spacing-3; padding: $spacing-10 $spacing-6; background: $color-background; border: 1px solid $color-border;
   h1 { margin: 0; font-size: $font-size-2xl; } p { margin: 0; color: $color-text-secondary; } }
 
@@ -157,3 +169,62 @@ td .mono, td .muted { white-space: nowrap; }
 @media (max-width: $breakpoint-sm - 1px) {
   .kpiGrid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Admin profile Danger Zone: restrained (error border and title only), never a filled red block. */
+.dangerPanel { border-color: $color-error-border;
+  &:hover, &:focus-within { border-color: $color-error; box-shadow: $shadow-md; } }
+.dangerTitle { color: $color-error-foreground; }
+.dangerDialog { max-width: 34rem; background: $color-background; }
+.dangerDialogTitle { display: flex; align-items: center; gap: $spacing-2; margin: 0; padding-right: $spacing-8; font-size: $font-size-xl;
+  font-weight: $font-weight-semibold; color: $color-text-primary;
+  svg { flex: none; width: 1.25rem; height: 1.25rem; color: $color-error; } }
+.dangerList { display: grid; gap: $spacing-2; margin: 0; padding-left: $spacing-5; list-style: disc; color: $color-text-secondary; font-size: $font-size-sm;
+  line-height: $line-height-normal; }
+
+// Task 05.2 Owner succession wizard (profile Danger Zone) and Owner promotion.
+.wizardDialog { max-width: 40rem; }
+.wizardSteps { display: flex; gap: $spacing-2; margin: 0; padding: 0; list-style: none; font-size: $font-size-xs; color: $color-text-secondary;
+  li { display: inline-flex; align-items: center; gap: $spacing-1; flex: 1; padding-bottom: $spacing-2; border-bottom: 2px solid $color-border; }
+  li span { display: inline-grid; place-items: center; width: 1.25rem; height: 1.25rem; border: 1px solid $color-border; font-weight: $font-weight-semibold; }
+  li[aria-current='step'] { color: $color-text-primary; font-weight: $font-weight-semibold; } }
+.wizardStepDone { border-bottom-color: $color-primary !important; span { border-color: $color-primary !important; background: $color-primary; color: $color-text-inverse; } }
+.successorList { display: grid; gap: $spacing-2; max-height: min(22rem, 45dvh); overflow-y: auto; overscroll-behavior: contain; padding: 2px; }
+.successorSkeleton { height: 5.5rem; }
+.successorCard { position: relative; display: flex; gap: $spacing-3; align-items: flex-start; padding: $spacing-4; border: 1px solid $color-border;
+  background: $color-background; cursor: pointer; transition: border-color $transition-fast, box-shadow $transition-fast, background-color $transition-fast;
+  &:hover { border-color: rgba($color-primary, .45); }
+  &:focus-within { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
+  @media (prefers-reduced-motion: reduce) { transition: none; } }
+.successorCardSelected { border-color: $color-primary; background: rgba($color-primary, .05); box-shadow: inset 3px 0 0 $color-primary; }
+.successorRadio { flex: none; width: 1.125rem; height: 1.125rem; margin: 2px 0 0; accent-color: $color-primary; }
+.successorBody { display: grid; gap: $spacing-1; min-width: 0; font-size: $font-size-sm; color: $color-text-primary; }
+.successorEmail { color: $color-text-secondary; overflow-wrap: anywhere; }
+.successorMethods { font-size: $font-size-xs; color: $color-text-secondary; }
+.transferPeople { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: $spacing-3; align-items: center;
+  @media (max-width: $breakpoint-sm - 1px) { grid-template-columns: minmax(0, 1fr); .transferArrow { transform: rotate(90deg); justify-self: center; } } }
+.transferPerson { display: grid; gap: 2px; min-width: 0; padding: $spacing-3 $spacing-4; border: 1px solid $color-border; background: $color-surface; font-size: $font-size-sm;
+  span:last-child { color: $color-text-secondary; overflow-wrap: anywhere; } }
+.transferPersonNew { border-color: $color-primary; background: rgba($color-primary, .05); }
+.transferRole { font-size: $font-size-xs; font-weight: $font-weight-semibold; text-transform: uppercase; letter-spacing: .04em; color: $color-text-secondary; }
+.transferArrow { width: 1.25rem; height: 1.25rem; color: $color-primary; }
+.transferColumns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: $spacing-4;
+  @media (max-width: $breakpoint-sm - 1px) { grid-template-columns: minmax(0, 1fr); } }
+.transferHeading { margin: 0 0 $spacing-2; font-size: $font-size-sm; font-weight: $font-weight-semibold; color: $color-text-primary; }
+.checkRow { display: flex; gap: $spacing-2; align-items: flex-start; font-size: $font-size-sm; color: $color-text-primary; line-height: $line-height-normal;
+  label { cursor: pointer; } }
+
+// Task 05.2 Owner revocation: identity and role change summary inside the confirmation dialog.
+.revokeFacts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: $spacing-1 $spacing-4; margin: 0; font-size: $font-size-sm;
+  div { display: contents; }
+  dt { color: $color-text-secondary; }
+  dd { margin: 0; color: $color-text-primary; overflow-wrap: anywhere; } }
+
+// Settings → Administrators: an introduction card above the team, in place of the standalone page header.
+.teamIntro { display: flex; align-items: center; gap: $spacing-4; flex-wrap: wrap; min-width: 0; padding: $spacing-5 $spacing-6;
+  background: $color-background; border: 1px solid $color-border; border-left: 3px solid $color-primary; }
+.teamIntroIcon { display: grid; place-items: center; flex: none; width: 3rem; height: 3rem; border-radius: $radius-full;
+  color: $color-primary; background: rgba($color-primary, .08); border: 1px solid rgba($color-primary, .2); }
+.teamIntroText { display: grid; gap: $spacing-1; flex: 1 1 16rem; min-width: 0; }
+.teamIntroTitle { margin: 0; font-size: $font-size-xl; font-weight: $font-weight-semibold; color: $color-text-primary; }
+.teamIntroActions { display: flex; gap: $spacing-3; flex: none;
+  @media (max-width: $breakpoint-sm - 1px) { flex: 1 1 100%; > * { flex: 1; } } }

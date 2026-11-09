@@ -69,14 +69,22 @@ test('automatic pending plan fails closed for unsafe SQL and ledger integrity de
 });
 
 test('the missed delivery tracking migration is automatically discovered and passes the additive SQL gate', () => {
-  const local = plan.localMigrations(path.resolve(__dirname, '../../apps/backend/prisma/migrations'));
   const target = '20261031000000_delivery_tracking';
+  // Reconstruct the historical checkout: migrations added later were not already applied at this cutover.
+  const all = plan.localMigrations(path.resolve(__dirname, '../../apps/backend/prisma/migrations'));
+  const local = all.filter((entry) => entry.name <= target);
   const migration = local.find((entry) => entry.name === target);
   assert.ok(migration);
   const ledger = local.filter((entry) => entry.name !== target).map((entry) => ({
     name: entry.name, checksum: entry.sha256, finished: true, rolledBack: false,
   }));
   assert.deepEqual(plan.validatePendingMigrations(local, ledger), { pending: [target], problems: [] });
+  // A later applied migration must still make this same gap unsafe; never relax the ordering guard.
+  const later = all.find((entry) => entry.name > target);
+  if (later) {
+    const outOfOrderLedger = [...ledger, { name: later.name, checksum: later.sha256, finished: true, rolledBack: false }];
+    assert.match(plan.validatePendingMigrations(all, outOfOrderLedger).problems.join(), /sorts before already-applied/);
+  }
 });
 
 test('line-ending reconciliation accepts only the two exact, content-pinned legacy CRLF checksums', () => {

@@ -66,6 +66,16 @@ const fiftyItems = Array.from({ length: 50 }, (_, index) => line(index, '5.00', 
 const pendingOrder = withPayment(paidOrder({ status: 'AWAITING_CAPTURE' }), { status: 'PROCESSING', paidAt: null, cardBrand: null, cardLast4: null }, { state: 'CAPTURE_PENDING' });
 
 describe('PDF renderer: basic output', () => {
+  it('prints the seller captured on the order, including the support contact', async () => {
+    const order = paidOrder({ storeIdentitySnapshot: { storeName: 'Northwind Electronics', supportEmail: 'help@example.com', supportPhone: null,
+      addressLine1: null, addressLine2: null, city: null, region: null, postalCode: null, country: null } });
+    const pdf = await renderKind(order, 'invoice');
+    const parsed = await parse(pdf.bytes);
+    expect(parsed.info.Author).toBe('Northwind Electronics');
+    expect(parsed.text).toContain('Northwind Electronics');
+    expect(parsed.text).toContain('help@example.com');
+  }, 60_000);
+
   it.each(['invoice', 'receipt', 'summary'] as DocumentKind[])('renders a %s as a parseable PDF', async kind => {
     const pdf = await renderKind(paidOrder(), kind);
     expect(pdf.bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');

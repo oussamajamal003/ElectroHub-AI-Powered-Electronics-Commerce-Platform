@@ -32,7 +32,7 @@ const pending: Api = () => 'pending';
 const unavailable: Api = () => fail(503, 'Unavailable');
 
 function respond({ session = 'signed-in', api }: Scenario, url: URL): Reply {
-  if (url.pathname === '/api/auth/refresh') {
+  if (url.pathname === '/api/auth/customer/refresh') {
     if (session === 'signed-out') return fail(401, 'Unauthorized');
     if (session === 'unavailable') return fail(503, 'Unavailable');
     return ok({ accessToken: 'story-access-token' });

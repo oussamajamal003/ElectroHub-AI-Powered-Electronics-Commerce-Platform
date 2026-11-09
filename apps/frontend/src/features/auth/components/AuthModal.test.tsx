@@ -26,6 +26,7 @@ const mockNavigate = vi.fn();
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
   useLocation: () => ({ state: { from: '/account' } }),
+  Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a>,
 }));
 
 describe('AuthModal Component', () => {
@@ -55,6 +56,22 @@ describe('AuthModal Component', () => {
     fireEvent.submit(form);
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(returnTo, { replace: true }));
     expect(mockOnOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('never signs in an administrator password proof: clears the password and points to the Admin Portal', async () => {
+    mockLogin.mockResolvedValue({ requiresMfa: true, mfaToken: 'opaque-challenge-token' });
+    render(<AuthModal open onOpenChange={mockOnOpenChange} />);
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'admin@example.invalid' } });
+    const password = screen.getByLabelText(/^Password$/i);
+    fireEvent.change(password, { target: { value: 'test-only-password' } });
+    const form = password.closest('form'); if (!form) throw new Error('Expected Login form');
+    fireEvent.submit(form);
+    expect(await screen.findByText(/This account is an administrator account\. Continue through the Admin Portal to complete secure sign-in\./)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Go to Admin Portal' })).toHaveAttribute('href', '/admin/login');
+    expect((screen.getByLabelText(/^Password$/i) as HTMLInputElement).value).toBe('');
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockOnOpenChange).not.toHaveBeenCalledWith(false);
+    expect(document.body.textContent).not.toContain('opaque-challenge-token');
   });
 
   it('preserves unfinished register values across an unauthenticated close and reopen', async () => {

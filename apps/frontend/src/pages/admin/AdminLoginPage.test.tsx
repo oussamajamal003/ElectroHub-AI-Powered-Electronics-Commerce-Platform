@@ -1,13 +1,20 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { BrowserRouter, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { AdminLoginPage } from './AdminLoginPage';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { ApiError } from '@/lib/api';
 
+const { mockStartAuthentication } = vi.hoisted(() => ({ mockStartAuthentication: vi.fn() }));
+vi.mock('@simplewebauthn/browser', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@simplewebauthn/browser')>();
+  return { ...actual, browserSupportsWebAuthn: () => false, startAuthentication: (...args: unknown[]) => mockStartAuthentication(...args) };
+});
+
 vi.mock('@/features/auth/context/AuthContext', () => ({
-  useAuth: vi.fn(),
+  useAdminAuth: vi.fn(),
 }));
 
 const mockNavigate = vi.fn();
@@ -25,9 +32,10 @@ describe('AdminLoginPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useAuth as any).mockReturnValue({
+    (useAdminAuth as any).mockReturnValue({
       login: mockLogin,
       logout: mockLogout,
+      completeAdminSession: vi.fn(),
       isAuthenticated: false,
       user: null,
       isInitializing: false,
@@ -50,7 +58,7 @@ describe('AdminLoginPage', () => {
     expect(screen.getByText('Admin Portal')).toBeInTheDocument();
     expect(screen.getByLabelText(/Email Address/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Password/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Forgot Password\?/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Forgot Password/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Sign In/i })).toBeInTheDocument();
   });
 
@@ -123,13 +131,32 @@ describe('AdminLoginPage', () => {
     expect(passwordInput).toHaveAttribute('type', 'password');
   });
 
+  it('keeps Sign In in the keyboard order after validation errors', async () => {
+    const keyboard = userEvent.setup();
+    renderComponent();
+    const submit = screen.getByRole('button', { name: /^Sign In$/ });
+    fireEvent.submit(submit.closest('form')!);
+    expect(screen.getByText('Email address is required.')).toBeInTheDocument();
+    expect(submit).toBeEnabled();
+    screen.getByLabelText(/^Password$/).focus();
+    await keyboard.tab(); // show/hide password
+    await keyboard.tab();
+    expect(screen.getByRole('link', { name: 'Forgot Password?' })).toHaveFocus();
+    await keyboard.tab();
+    expect(submit).toHaveFocus();
+    expect(mockLogin).not.toHaveBeenCalled();
+  });
+
   it('submits successfully with valid ADMIN credentials', async () => {
     mockLogin.mockResolvedValueOnce({
+      accessToken: 'test-access-token',
+      user: {
       id: 'admin-1',
       email: 'admin@electrohub.com',
       firstName: 'Admin',
       lastName: 'ElectroHub',
       role: 'ADMIN',
+      },
     });
     renderComponent();
 
@@ -154,11 +181,14 @@ describe('AdminLoginPage', () => {
 
   it('denies admin access when valid CUSTOMER credentials are used', async () => {
     mockLogin.mockResolvedValueOnce({
+      accessToken: 'test-customer-token',
+      user: {
       id: 'cust-1',
       email: 'customer@electrohub.com',
       firstName: 'Customer',
       lastName: 'User',
       role: 'CUSTOMER',
+      },
     });
     renderComponent();
 
@@ -200,10 +230,113 @@ describe('AdminLoginPage', () => {
 
     expect(await screen.findByText('Invalid credentials')).toBeInTheDocument();
   });
+  it('moves a verified password to the second-factor step without signing in', async () => {
+    mockLogin.mockResolvedValueOnce({
+      requiresMfa: true,
+      mfaToken: 'challenge-token-1234567890',
+      expiresAt: new Date(Date.now() + 300000).toISOString(),
+      factors: { totp: true, passkey: false, recoveryCode: true },
+      enrollmentRequired: false,
+    });
+    renderComponent();
+
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'admin@electrohub.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password/i), { target: { value: 'AdminPassword123!' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Sign In$/i }));
+
+    expect(await screen.findByRole('heading', { name: "Verify it's you" })).toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockLogout).not.toHaveBeenCalled();
+  });
+
+  it('presents MFA methods as a keyboard-operable selector without changing the initial method', async () => {
+    mockLogin.mockResolvedValueOnce({
+      requiresMfa: true,
+      mfaToken: 'challenge-token-1234567890',
+      expiresAt: new Date(Date.now() + 300000).toISOString(),
+      factors: { totp: true, passkey: true, recoveryCode: true },
+      enrollmentRequired: false,
+    });
+    renderComponent();
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'admin@electrohub.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password/i), { target: { value: 'AdminPassword123!' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Sign In$/i }));
+
+    const authenticatorTab = await screen.findByRole('tab', { name: 'Authenticator app' });
+    const passkeyTab = screen.getByRole('tab', { name: 'Passkey' });
+    const recoveryTab = screen.getByRole('tab', { name: 'Recovery code' });
+    expect(authenticatorTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByLabelText('6-digit code')).toHaveAttribute('autocomplete', 'one-time-code');
+
+    authenticatorTab.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(passkeyTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: 'Use passkey' })).toBeInTheDocument();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(recoveryTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByLabelText('Recovery code', { selector: 'input' })).toBeInTheDocument();
+    await userEvent.keyboard('{Home}');
+    expect(authenticatorTab).toHaveFocus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(passkeyTab).toHaveFocus();
+  });
+
+  it('keeps passkey sign-in unavailable when the browser does not support WebAuthn', async () => {
+    mockLogin.mockResolvedValueOnce({
+      requiresMfa: true,
+      mfaToken: 'challenge-token-1234567890',
+      expiresAt: new Date(Date.now() + 300000).toISOString(),
+      factors: { totp: true, passkey: true, recoveryCode: true },
+      enrollmentRequired: false,
+    });
+    renderComponent();
+
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'admin@electrohub.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password/i), { target: { value: 'AdminPassword123!' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Sign In$/i }));
+    await screen.findByRole('heading', { name: "Verify it's you" });
+
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Passkey' }));
+    const passkeyButton = await screen.findByRole('button', { name: 'Use passkey' });
+    expect(passkeyButton).toBeDisabled();
+    expect(passkeyButton.closest('[role="tabpanel"]')).toHaveTextContent(/Passkeys are not available in this browser/);
+    fireEvent.click(passkeyButton);
+    expect(mockStartAuthentication).not.toHaveBeenCalled();
+  });
+
+  describe('notice after the profile ended every session', () => {
+    const renderSignedOut = (state: unknown) => {
+      (useAdminAuth as any).mockReturnValue({ login: mockLogin, logout: mockLogout, isAuthenticated: false, user: null, isInitializing: false });
+      render(<MemoryRouter initialEntries={[{ pathname: '/admin/login', state }]}><Routes><Route path="/admin/login" element={<AdminLoginPage />} /></Routes></MemoryRouter>);
+    };
+
+    it('explains a password change and an account deletion with fixed copy', () => {
+      renderSignedOut({ notice: 'PASSWORD_CHANGED' });
+      expect(screen.getByRole('status')).toHaveTextContent('Your password was changed and every session was signed out.');
+    });
+
+    it('confirms a deletion and never renders text supplied through navigation state', () => {
+      renderSignedOut({ notice: 'ACCOUNT_DELETED' });
+      expect(screen.getByRole('status')).toHaveTextContent('Your administrator account was deleted and every session was signed out.');
+    });
+
+    it('shows a notice handed over through session storage once (the route guard may replace navigation state)', () => {
+      window.sessionStorage.setItem('eh.admin-sign-in-notice', 'PASSWORD_CHANGED');
+      renderSignedOut(null);
+      expect(screen.getByRole('status')).toHaveTextContent('Your password was changed');
+      expect(window.sessionStorage.getItem('eh.admin-sign-in-notice')).toBeNull();
+    });
+
+    it('ignores an unknown notice', () => {
+      renderSignedOut({ notice: '<img src=x onerror=alert(1)>' });
+      expect(screen.queryByRole('status')).toBeNull();
+    });
+  });
+
   describe('return path after sign-in', () => {
     const Landing = () => { const location = useLocation(); return <p>at {location.pathname + location.search}</p>; };
     const renderSignedIn = (state: unknown) => {
-      (useAuth as any).mockReturnValue({ login: mockLogin, logout: mockLogout, isAuthenticated: true, user: { role: 'ADMIN' }, isInitializing: false });
+      (useAdminAuth as any).mockReturnValue({ login: mockLogin, logout: mockLogout, isAuthenticated: true, user: { role: 'ADMIN' }, isInitializing: false });
       render(<MemoryRouter initialEntries={[{ pathname: '/admin/login', state }]}>
         <Routes><Route path="/admin/login" element={<AdminLoginPage />} /><Route path="*" element={<Landing />} /></Routes>
       </MemoryRouter>);

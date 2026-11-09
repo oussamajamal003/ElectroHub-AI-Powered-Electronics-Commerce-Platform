@@ -9,9 +9,15 @@ import { CustomerScrollRestoration } from './CustomerScrollRestoration';
 import { usePaymentLock } from '@/features/checkout/PaymentLockContext';
 import { DiscoveryProvider } from '@/features/search/discovery/DiscoveryProvider';
 import { ShopFooterLinks } from './ShopFooterLinks';
+import { useStorefrontSession } from '@/features/analytics/useStorefrontSession';
+import { useStorefrontProfile } from '@/features/storefront/api';
+import { useEffect } from 'react';
 
 export function CustomerLayout() {
   const { isLocked } = usePaymentLock();
+  const { data: storeProfile } = useStorefrontProfile();
+  useStorefrontSession();
+  useEffect(() => { if (storeProfile?.storeName) document.title = `${storeProfile.storeName} | Electronics`; }, [storeProfile?.storeName]);
 
   return (
     <DiscoveryProvider disabled={isLocked}>
@@ -47,7 +53,7 @@ export function CustomerLayout() {
             <div className={styles.brandInfo}>
               <Link className={styles.brand} to="/">
                 <span className={styles.brandMark} aria-hidden="true"><Zap size={16} /></span>
-                <span>Electro<span className={styles.brandHub}>Hub</span></span>
+                <span>{storeProfile?.storeName ?? <>Electro<span className={styles.brandHub}>Hub</span></>}</span>
               </Link>
               <p>Your destination for the<br />latest consumer electronics.</p>
             </div>
@@ -82,7 +88,7 @@ export function CustomerLayout() {
             </nav>
           </div>
           <div className={styles.footerBottom}>
-            <span>© 2026 ElectroHub. All rights reserved.</span>
+            <span>© {new Date().getFullYear()} {storeProfile?.storeName ?? 'ElectroHub'}. All rights reserved.</span>
           </div>
         </div>
       </Footer>

@@ -19,6 +19,8 @@
     "email:pg": "node scripts/commerce-email-pg.cjs",
     "payment:dev:preflight": "node scripts/dev-payment-runtime.cjs --preflight",
     "payment:dev": "node scripts/dev-payment-runtime.cjs --start --allow-dev-recovery",
+    "payment:dev:checkout:preflight": "node scripts/dev-payment-runtime.cjs --preflight --recovery-mode=checkout",
+    "payment:dev:checkout": "node scripts/dev-payment-runtime.cjs --start --allow-dev-checkout --recovery-mode=checkout",
     "dev:isolated": "node scripts/dev-isolated.cjs backend",
     "dev:isolated:real-email": "node scripts/dev-isolated.cjs backend --real-email",
     "dev:isolated:all-recipients": "node scripts/dev-isolated.cjs backend --real-email --all-recipients",
@@ -31,6 +33,9 @@
     "lint": "eslint src/ --ext .ts",
     "typecheck": "tsc --noEmit",
     "db:seed": "npx prisma db seed",
+    "admin:security": "tsx scripts/admin-security.ts",
+    "test:admin-security:pg": "node scripts/admin-security-pg.cjs",
+    "qa:task05-2:browser-stack": "node scripts/task05-2-browser-stack.cjs",
     "catalog:expansion": "tsx scripts/catalog-expansion.ts",
     "catalog:expansion:finalize-media": "tsx scripts/catalog-expansion-finalize-media.ts",
     "catalog:expansion:api": "tsx scripts/catalog-expansion-api-smoke.ts"
@@ -38,6 +43,7 @@
   "dependencies": {
     "@prisma/adapter-pg": "^6.12.0",
     "@prisma/client": "^6.12.0",
+    "@simplewebauthn/server": "14.0.3",
     "bcrypt": "^6.0.0",
     "bidi-js": "1.1.0",
     "cookie-parser": "^1.4.7",

@@ -1,49 +1,68 @@
 import { authApi } from './api/auth';
-import { setAccessToken } from '@/lib/api';
+import { ApiError, setAccessToken, type AuthScope } from '@/lib/api';
 import type { User } from './types';
 
-const userCacheKey = 'electrohub:cached-user';
-let prepared: Promise<User> | null = null;
-let restorePromise: Promise<User> | null = null;
+/** Task 05.2: each scope keeps its own non-authoritative identity hint, so one portal can never show or restore the other's identity. */
+export const scopeRole: Record<AuthScope, User['role']> = { admin: 'ADMIN', customer: 'CUSTOMER' };
+export const cachedUserKey = (scope: AuthScope) => scope === 'admin' ? 'electrohub:admin:cached-user' : 'electrohub:cached-user';
+export const headerIdentityKey = (scope: AuthScope) => scope === 'admin' ? 'electrohub:admin:header-identity' : 'electrohub:header-identity';
 
-export function readCachedUser(): User | null {
+const prepared: Partial<Record<AuthScope, Promise<User>>> = {};
+const restores: Partial<Record<AuthScope, Promise<User>>> = {};
+
+export function readCachedUser(scope: AuthScope = 'customer'): User | null {
+  const key = cachedUserKey(scope);
   try {
-    const stored = sessionStorage.getItem(userCacheKey) || localStorage.getItem(userCacheKey);
+    const stored = sessionStorage.getItem(key) || localStorage.getItem(key);
     if (!stored) return null;
     const user: unknown = JSON.parse(stored);
     if (!user || typeof user !== 'object') return null;
     const value = user as Record<string, unknown>;
     if (typeof value.id !== 'string' || typeof value.email !== 'string') return null;
+    // A hint of the other portal's role (for example an administrator cached before the scopes were separated) is never this scope's identity.
+    if (value.role !== scopeRole[scope]) {
+      for (const stale of [key, headerIdentityKey(scope)]) {
+        sessionStorage.removeItem(stale);
+        localStorage.removeItem(stale);
+      }
+      return null;
+    }
     return user as User;
   } catch {
     return null;
   }
 }
 
-function startRestore(): Promise<User> {
+function startRestore(scope: AuthScope): Promise<User> {
   return (async () => {
-    const { accessToken, user: refreshed } = await authApi.refreshSession();
-    setAccessToken(accessToken);
+    const { accessToken, user: refreshed } = await authApi.refreshSession(scope);
+    setAccessToken(accessToken, scope);
     // The rotation response carries the same identity /me returns; older servers omit it, so /me stays the fallback.
-    if (refreshed && typeof refreshed.id === 'string' && typeof refreshed.email === 'string') return refreshed;
-    const { user } = await authApi.getCurrentUser();
+    const user = refreshed && typeof refreshed.id === 'string' && typeof refreshed.email === 'string'
+      ? refreshed : (await authApi.getCurrentUser(scope)).user;
+    // Fail closed: a scope only ever restores its own role.
+    if (user.role !== scopeRole[scope]) {
+      setAccessToken(null, scope);
+      throw new ApiError(401, 'Your session has expired. Please sign in again.');
+    }
     return user;
   })();
 }
 
 // Start only for an existing identity hint. It authorizes nothing: refresh and
 // /me still verify the session, and the provider consumes their result normally.
-export function preloadSessionRestore(): void {
-  if (!readCachedUser() || prepared || restorePromise) return;
-  prepared = startRestore();
-  void prepared.catch(() => undefined);
+export function preloadSessionRestore(scope: AuthScope = 'customer'): void {
+  if (!readCachedUser(scope) || prepared[scope] || restores[scope]) return;
+  const request = startRestore(scope);
+  prepared[scope] = request;
+  void request.catch(() => undefined);
 }
 
-export function restoreSession(): Promise<User> {
-  if (!restorePromise) {
-    const request = prepared ?? startRestore();
-    prepared = null;
-    restorePromise = request.finally(() => { restorePromise = null; });
+export function restoreSession(scope: AuthScope = 'customer'): Promise<User> {
+  if (!restores[scope]) {
+    const request = prepared[scope] ?? startRestore(scope);
+    delete prepared[scope];
+    restores[scope] = request.finally(() => { delete restores[scope]; });
   }
-  return restorePromise;
+  return restores[scope]!;
 }

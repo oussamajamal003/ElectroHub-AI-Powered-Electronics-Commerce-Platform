@@ -44,21 +44,21 @@ describe('apiBinary transport', () => {
   it('refreshes once after a 401 and retries the document with the new bearer', async () => {
     setAccessToken('expired');
     const fetchMock = vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
-      if (url === '/api/auth/refresh') return json(200, { accessToken: 'fresh' });
+      if (url === '/api/auth/customer/refresh') return json(200, { accessToken: 'fresh' });
       return (init.headers as Headers).get('Authorization') === 'Bearer fresh'
         ? pdfResponse() : json(401, { error: { code: 'UNAUTHENTICATED', message: 'Expired.' } });
     });
     vi.stubGlobal('fetch', fetchMock);
     const result = await apiBinary(invoicePath, options);
     expect(result.byteLength).toBe(pdfBytes().byteLength);
-    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([invoicePath, '/api/auth/refresh', invoicePath]);
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([invoicePath, '/api/auth/customer/refresh', invoicePath]);
   });
 
   it('shares ONE refresh between a concurrent JSON request and a binary request that both receive 401', async () => {
     setAccessToken('expired');
     let refreshCalls = 0;
     const fetchMock = vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
-      if (url === '/api/auth/refresh') { refreshCalls++; return json(200, { accessToken: 'fresh' }); }
+      if (url === '/api/auth/customer/refresh') { refreshCalls++; return json(200, { accessToken: 'fresh' }); }
       if ((init.headers as Headers).get('Authorization') !== 'Bearer fresh') return json(401, { error: 'Expired' });
       return url === '/api/products' ? json(200, { data: [] }) : pdfResponse();
     });

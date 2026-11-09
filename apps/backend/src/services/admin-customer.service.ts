@@ -66,8 +66,9 @@ export class AdminCustomerService {
     const and: Prisma.UserWhereInput[] = [customerWhere];
     if (query.q) and.push({ OR: [{ email: { contains: query.q, mode: 'insensitive' } }, { firstName: { contains: query.q, mode: 'insensitive' } },
       { lastName: { contains: query.q, mode: 'insensitive' } }] });
-    // Anonymized (deleted) accounts are stored inactive but belong to neither filter: they can never be reactivated.
-    if (query.status) and.push({ isActive: query.status === 'ACTIVE', NOT: { email: { endsWith: '@deleted.invalid' } } });
+    // Deleted accounts have their own filter; ordinary Active/Deactivated filters exclude them.
+    if (query.status === 'DELETED') and.push({ email: { endsWith: '@deleted.invalid' } });
+    else if (query.status) and.push({ isActive: query.status === 'ACTIVE', NOT: { email: { endsWith: '@deleted.invalid' } } });
     const where: Prisma.UserWhereInput = { AND: and };
     const orderBy: Prisma.UserOrderByWithRelationInput[] = query.sort === 'name'
       ? [{ firstName: query.order }, { lastName: query.order }, { id: 'asc' }] : [{ [query.sort]: query.order }, { id: 'asc' }];

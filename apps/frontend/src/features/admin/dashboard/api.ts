@@ -6,7 +6,7 @@ import type { AdminOrderRow } from '../orders/api';
 export interface AdminAlerts { lowStock: number; outOfStock: number; awaitingFulfillment: number; preparing: number; outForDelivery: number; generatedAt: string }
 export interface DashboardOverview {
   generatedAt: string;
-  window: { days: number; since: string; timezone: 'UTC' };
+  window: { days: number; since: string; timezone: string };
   revenue: (Money & { payments: number })[];
   revenueSeries: (Money & { day: string; payments: number })[];
   orders: { total: number; inWindow: number; byStatus: Record<string, number> };

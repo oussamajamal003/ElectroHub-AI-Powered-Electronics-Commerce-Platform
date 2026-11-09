@@ -1,3 +1,4 @@
+import { currentShippingSnapshot } from '../shipping-config.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@prisma/client';
 import { CartService } from '../cart.service.js';
@@ -6,6 +7,7 @@ import { CartService } from '../cart.service.js';
 // (each is at least one database statement; `begin`/`commit` are the transaction envelope). This proves how many
 // sequential database round trips the code path issues. It does NOT measure latency: that needs a real database.
 const calls = vi.hoisted(() => ({ list: [] as string[] }));
+vi.mock('../shipping-config.js', async original => ({ ...await original<typeof import('../shipping-config.js')>(), loadShippingConfig: vi.fn(async () => currentShippingSnapshot()) }));
 vi.mock('../../lib/prisma.js', () => ({ prisma: {} }));
 vi.mock('../../utils/logger.js', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
 

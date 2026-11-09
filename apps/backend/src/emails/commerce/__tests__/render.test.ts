@@ -26,6 +26,19 @@ describe('fixtures', () => {
   });
 });
 
+describe('seller identity', () => {
+  it('renders the seller captured in an event snapshot and keeps the legacy fallback for old snapshots', () => {
+    const old = render('orderConfirmed');
+    const snapshot = { ...commerceEmailFixtures.orderConfirmed, seller: { storeName: 'Northwind Electronics', supportEmail: 'help@example.com',
+      supportPhone: null, addressLine1: null, addressLine2: null, city: null, region: null, postalCode: null, country: null } };
+    const updated = renderCommerceEmail(snapshot, ctx, TEMPLATE_VERSION);
+    expect(old.html).toContain('ElectroHub');
+    expect(updated.html).toContain('Northwind Electronics');
+    expect(updated.html).toContain('help@example.com');
+    expect(updated.text).toContain('Northwind Electronics');
+  });
+});
+
 describe('subjects and headings', () => {
   const expected: Array<[CommerceEmailFixtureName, string, string]> = [
     ['orderConfirmed', `Order confirmed — ${REFERENCE}`, 'Your order is confirmed'],

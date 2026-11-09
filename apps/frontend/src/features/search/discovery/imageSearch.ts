@@ -28,10 +28,10 @@ export const IMAGE_SEARCH_ENDPOINT = '/api/search/image';
 export const imageSearchEnabled = () => import.meta.env.VITE_IMAGE_SEARCH_ENABLED === 'true';
 
 /** Products in relevance order (index 0 is the best match). No similarity score is exposed to the UI. */
-export interface ImageSearchResponse { data: { items: ProductSummary[] } }
+export interface ImageSearchResponse { data: { items: ProductSummary[] }; analyticsToken?: string }
 
 export type ImageSearchOutcome =
-  | { status: 'success'; items: ProductSummary[] }
+  | { status: 'success'; items: ProductSummary[]; analyticsToken?: string }
   | { status: 'unavailable' }
   | { status: 'invalid'; message: string }
   | { status: 'timeout' }
@@ -53,7 +53,8 @@ export async function searchByImage(file: File, signal: AbortSignal): Promise<Im
     body.append('image', file, file.name || 'photo');
     const response = await apiClient<ImageSearchResponse>(IMAGE_SEARCH_ENDPOINT, { method: 'POST', data: body, signal: timeout.signal });
     const items = response?.data?.items;
-    return isProductList(items) ? { status: 'success', items } : { status: 'error' };
+    const analyticsToken = typeof response?.analyticsToken === 'string' && response.analyticsToken.length <= 4096 ? response.analyticsToken : undefined;
+    return isProductList(items) ? { status: 'success', items, ...(analyticsToken ? { analyticsToken } : {}) } : { status: 'error' };
   } catch (failure) {
     if (signal.aborted) return { status: 'cancelled' };
     if (timeout.signal.aborted || isAbortError(failure)) return { status: 'timeout' };
@@ -69,4 +70,17 @@ export async function searchByImage(file: File, signal: AbortSignal): Promise<Im
     clearTimeout(timer);
     signal.removeEventListener('abort', onAbort);
   }
+}
+
+/**
+ * Task 05.2: report that a shopper opened one of the visual results. The server only accepts it with the signed token it issued for
+ * this exact result list, deduplicates it, and stores no image or identity. Fire-and-forget: `keepalive` lets it outlive the navigation
+ * it accompanies, and any failure is ignored so analytics can never block or break the click.
+ */
+export function reportImageResultSelected(analyticsToken: string | undefined, productId: string): void {
+  if (!analyticsToken || typeof fetch !== 'function') return;
+  try {
+    void fetch('/api/analytics/events', { method: 'POST', keepalive: true, credentials: 'omit', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'image_search.result_selected', token: analyticsToken, productId }) }).catch(() => undefined);
+  } catch { /* analytics must never affect navigation */ }
 }

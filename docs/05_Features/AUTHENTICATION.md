@@ -434,6 +434,15 @@ The backend is responsible for:
 
 ---
 
+## 18A. Independent Admin and Customer sessions (Task 05.2)
+
+The Admin Console and the storefront are two independent credential scopes in one browser:
+
+- Separate HttpOnly, SameSite=Lax refresh cookies on separate paths: `electrohub_admin_refresh` (`/api/auth/admin`) and `electrohub_customer_refresh` (`/api/auth/customer`). New refresh secrets carry a server-verified `admin.` / `customer.` prefix; a wrong-scope or unscoped token is rejected before any lookup, so it can neither refresh nor revoke the other portal's session family.
+- The retired shared `electrohub_refresh` cookie is only ever expired (`POST /api/auth/refresh` answers 401, `POST /api/auth/logout` clears it); it never authenticates either portal. One sign-in per portal is required after the upgrade.
+- The frontend keeps two providers (`AuthProvider`/`useAuth` for the storefront, `AdminAuthProvider`/`useAdminAuth` for the console), a per-scope in-memory token, refresh single-flight, Web Lock, expiry event, identity-hint keys and query cache. `/api/admin/*` and `/api/auth/admin/*` use the ADMIN scope; everything else uses CUSTOMER.
+- Signing out of one portal revokes only that portal's session family. Account-wide security operations (password change/reset, deletion, MFA reset, deactivation) still revoke every session of the account.
+
 ## 19. Authentication API
 
 The authentication API may include:
@@ -441,8 +450,10 @@ The authentication API may include:
 ```text
 POST /api/auth/register
 POST /api/auth/login
-POST /api/auth/refresh
-POST /api/auth/logout
+POST /api/auth/customer/refresh   (storefront session; cookie electrohub_customer_refresh)
+POST /api/auth/customer/logout
+POST /api/auth/admin/refresh      (Admin Console session; cookie electrohub_admin_refresh)
+POST /api/auth/admin/logout
 POST /api/auth/otp/request
 POST /api/auth/otp/verify
 PATCH /api/auth/me

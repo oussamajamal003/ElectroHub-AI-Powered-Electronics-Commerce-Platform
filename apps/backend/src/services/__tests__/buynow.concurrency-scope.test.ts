@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { currentShippingSnapshot } from '../shipping-config.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { PaymentService } from '../payment.service.js';
@@ -7,6 +8,7 @@ import { InventoryService } from '../inventory.service.js';
 import type { Attempt, PaymentProvider, ProviderIntent } from '../payment.domain.js';
 import { buyNowScopeId, cartRevision } from '../checkout.domain.js';
 
+vi.mock('../shipping-config.js', async original => ({ ...await original<typeof import('../shipping-config.js')>(), loadShippingConfig: vi.fn(async () => currentShippingSnapshot()) }));
 vi.mock('../../lib/prisma.js', () => ({ prisma: {} }));
 vi.mock('../stripe.provider.js', () => ({ stripeProvider: {} }));
 
@@ -66,6 +68,7 @@ describe('Buy Now Concurrency, Scope Collisions & Nullable Cart Recovery', () =>
     });
 
     db = {
+      storeSettings: { findUnique: vi.fn().mockResolvedValue(null) },
       user: {
         findFirst: vi.fn().mockImplementation(async ({ where }) => {
           if (where.id === userId && where.isActive) return { id: userId, role: { name: 'CUSTOMER' } };
@@ -340,10 +343,22 @@ describe('Buy Now Concurrency, Scope Collisions & Nullable Cart Recovery', () =>
     };
 
     inventory = new InventoryService();
-    vi.spyOn(inventory, 'decreaseStock').mockResolvedValue(undefined as any);
-    vi.spyOn(inventory, 'increaseStock').mockResolvedValue(undefined as any);
+    // Stock transitions now publish a committed inventory snapshot to the
+    // stock-alert outbox. Keep this focused Buy Now test double aligned with
+    // InventoryService's real return contract.
+    vi.spyOn(inventory, 'decreaseStock').mockResolvedValue({
+      id: 'inv-a', productId: productAId, quantity: 9, lowStockAt: 2, status: 'IN_STOCK',
+    } as any);
+    vi.spyOn(inventory, 'increaseStock').mockResolvedValue({
+      id: 'inv-a', productId: productAId, quantity: 10, lowStockAt: 2, status: 'IN_STOCK',
+    } as any);
 
-    paymentService = new PaymentService(db as unknown as PrismaClient, provider, inventory);
+    paymentService = new PaymentService(
+      db as unknown as PrismaClient,
+      provider,
+      inventory,
+      () => ({ allowed: true, target: 'disposable', identity: 'unit-test', reason: 'disposable-target' }),
+    );
     orderService = new OrderService(db as unknown as PrismaClient, inventory);
   });
 

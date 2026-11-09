@@ -1,3 +1,4 @@
+import { currentShippingSnapshot } from '../shipping-config.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { PaymentService, SUBMIT_LEASE_WAIT_MS } from '../payment.service.js';
@@ -7,6 +8,7 @@ import { currentCart } from '../cart.service.js';
 import { cartRevision, checkoutRequestSchema, requestHash } from '../checkout.domain.js';
 import type { Attempt, PaymentProvider, ProviderIntent } from '../payment.domain.js';
 
+vi.mock('../shipping-config.js', async original => ({ ...await original<typeof import('../shipping-config.js')>(), loadShippingConfig: vi.fn(async () => currentShippingSnapshot()) }));
 vi.mock('../../lib/prisma.js', () => ({ prisma: {} }));
 vi.mock('../stripe.provider.js', () => ({ stripeProvider: {} }));
 vi.mock('../cart.service.js', async original => ({ ...await original<typeof import('../cart.service.js')>(), currentCart: vi.fn() }));
@@ -26,10 +28,11 @@ let attempt: Attempt;
 const provider = { account: vi.fn(), create: vi.fn(), retrieve: vi.fn(), capture: vi.fn(), cancel: vi.fn(), refund: vi.fn(), retrieveRefund: vi.fn() } satisfies PaymentProvider;
 const db = { paymentAttempt: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() }, paymentWork: { update: vi.fn() },
   paymentAttemptItem: { findMany: vi.fn(), update: vi.fn() }, user: { findFirst: vi.fn() }, order: { findUnique: vi.fn(), create: vi.fn() },
-  cartItem: { deleteMany: vi.fn() }, $queryRaw: vi.fn(), $transaction: vi.fn() };
+  cartItem: { deleteMany: vi.fn() }, storeSettings: { findUnique: vi.fn().mockResolvedValue(null) }, $queryRaw: vi.fn(), $transaction: vi.fn() };
 const inventory = new InventoryService();
 beforeEach(() => {
   vi.resetAllMocks();
+  db.storeSettings.findUnique.mockResolvedValue(null);
   const now = new Date();
   attempt = { id: attemptId, userId, cartId, cartIdentity: cartId, activeCartId: cartId, idempotencyKey: attemptId,
     request, requestHash: requestHash(request), revision: revisionA, state: 'AWAITING_INPUT', cancelRequested: false, orderId: null,

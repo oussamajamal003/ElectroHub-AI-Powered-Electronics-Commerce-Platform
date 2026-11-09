@@ -1,0 +1,36 @@
+@use '../../../styles/abstracts/variables' as *;
+
+// Shared by ordinary and searchable selectors; the Pending status selector is the visual reference.
+@mixin popup {
+  background-color: $color-background;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  box-shadow: $shadow-lg;
+  z-index: $z-page-overlay;
+}
+
+@mixin option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: $spacing-2 $spacing-6 $spacing-2 $spacing-8;
+  font-family: $font-family-base;
+  font-size: $font-size-base;
+  line-height: $line-height-normal;
+  white-space: normal;
+  color: $color-text-primary;
+  border-radius: $radius-sm;
+  user-select: none;
+}
+
+@mixin selected {
+  background-color: $color-surface;
+  color: $color-primary;
+  font-weight: $font-weight-semibold;
+}
+
+@mixin highlighted {
+  background-color: $color-primary;
+  color: $color-text-inverse;
+}

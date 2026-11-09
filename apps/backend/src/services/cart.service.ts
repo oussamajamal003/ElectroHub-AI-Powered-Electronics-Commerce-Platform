@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { projectInventory, validateInventoryPurchase } from './inventory.service.js';
 import { cartRevision, buyNowScopeId, type BuyNowInput } from './checkout.domain.js';
+import { loadShippingConfig } from './shipping-config.js';
 import { lockCart, lockCartForUser } from './cart.lock.js';
 import { isSerializationConflict } from './transaction-conflict.js';
 import { logger } from '../utils/logger.js';
@@ -71,6 +72,7 @@ async function loadProducts(productIds: string[], client: Prisma.TransactionClie
 }
 
 export async function currentCart(userId: string, client: Prisma.TransactionClient = prisma) {
+  await loadShippingConfig(client);
   const cart = await client.cart.findUnique({ where: { userId }, select: { id: true,
     items: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { id: true, productId: true, quantity: true } },
   } });
@@ -89,6 +91,7 @@ const cartResponseSelect = {
  * loadProducts' `isTestFixture: false` filter did. Payment and order paths keep using currentCart unchanged.
  */
 export async function cartResponse(userId: string, client: Prisma.TransactionClient = prisma) {
+  await loadShippingConfig(client);
   const cart = await client.cart.findUnique({ where: { userId }, select: cartResponseSelect });
   return formatCart(cart?.items.map(item => ({ id: item.id, productId: item.productId, quantity: item.quantity,
     product: item.product.isTestFixture ? null : item.product })) ?? [], cart?.id ?? userId);
@@ -100,12 +103,14 @@ export function emptyCart(cartId: string) {
 
 /** Batch projection for an owned saved purchase; no active Cart reads or writes. */
 export async function purchaseItemsProjection(items: CartInputItem[], client: Prisma.TransactionClient = prisma) {
+  await loadShippingConfig(client);
   const products = await loadProducts(items.map(item => item.productId), client);
   return { products, data: formatCart(items.map(item => ({ id: null, ...item, product: products.get(item.productId) ?? null })), 'saved-purchase') };
 }
 
 /** Server-verified, read-only projection of one BUY_NOW line (live price/availability); never reads or writes Cart items. */
 export async function buyNowProjection(userId: string, buyNow: BuyNowInput, client: Prisma.TransactionClient = prisma) {
+  await loadShippingConfig(client);
   const products = await loadProducts([buyNow.productId], client);
   const product = products.get(buyNow.productId) ?? null;
   return { products, data: formatCart([{ id: null, productId: buyNow.productId, quantity: buyNow.quantity, product }], buyNowScopeId(userId)) };

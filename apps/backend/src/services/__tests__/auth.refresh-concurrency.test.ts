@@ -101,20 +101,20 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
 
     it('T1 → T2 → T3 share one family; logout with the oldest token revokes every generation from another instance', async () => {
       await login('other-device');
-      await login('gen-1');
-      const gen2 = (await service.refreshSession('gen-1')).refreshToken!;
-      const gen3 = (await service.refreshSession(gen2)).refreshToken!;
+      await login('customer.gen-1');
+      const gen2 = (await service.refreshSession('customer.gen-1', 'customer')).refreshToken!;
+      const gen3 = (await service.refreshSession(gen2, 'customer')).refreshToken!;
 
-      const [t1, t2, t3] = [db.byHash(sha('gen-1'))!, db.byHash(sha(gen2))!, db.byHash(sha(gen3))!];
+      const [t1, t2, t3] = [db.byHash(sha('customer.gen-1'))!, db.byHash(sha(gen2))!, db.byHash(sha(gen3))!];
       expect(new Set([t1.familyId, t2.familyId, t3.familyId]).size).toBe(1);
       expect([t1.replacedByTokenHash, t2.replacedByTokenHash, t3.replacedByTokenHash]).toEqual([sha(gen2), sha(gen3), null]);
 
       // Durable traversal: only the live generation resolves as a successor.
-      expect(await repo.findRotationSuccessor(sha('gen-1'))).toBeNull();
+      expect(await repo.findRotationSuccessor(sha('customer.gen-1'))).toBeNull();
       expect((await repo.findRotationSuccessor(sha(gen2)))?.tokenHash).toBe(sha(gen3));
 
       // A different AuthRepository instance holds none of the first instance's memory: state is only in the database.
-      await new AuthRepository().revokeRefreshTokenFamily(sha('gen-1'));
+      await new AuthRepository().revokeRefreshTokenFamily(sha('customer.gen-1'));
 
       for (const row of [t1, t2, t3]) {
         const stored = db.byHash(row.tokenHash)!;
@@ -138,7 +138,7 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
 
   describe('F1 rollback versus logout', () => {
     it('logout that starts in the window after the rollback released the lock sees only committed state', async () => {
-      await login('raw-1');
+      await login('customer.raw-1');
       const boom = new Error('injected failure after successor was staged');
       let logout: Promise<unknown> | undefined;
       let failed = false;
@@ -149,16 +149,16 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
         }
         // PostgreSQL has rolled back and released the lock; the rotation caller has not yet seen the error.
         if (event.type === 'lockReleased' && event.outcome === 'rollback' && !logout) {
-          logout = repo.revokeRefreshTokenFamily(sha('raw-1'));
+          logout = repo.revokeRefreshTokenFamily(sha('customer.raw-1'));
           await logout;
         }
       };
 
-      await expect(repo.rotateRefreshToken(USER_ID, sha('raw-1'), sha('raw-2'), future())).rejects.toBe(boom);
+      await expect(repo.rotateRefreshToken(USER_ID, sha('customer.raw-1'), sha('customer.raw-2'), future())).rejects.toBe(boom);
 
-      expect(db.byHash(sha('raw-2'))).toBeUndefined();
+      expect(db.byHash(sha('customer.raw-2'))).toBeUndefined();
       expect(db.rowsByUser(USER_ID)).toHaveLength(1);
-      const t1 = db.byHash(sha('raw-1'))!;
+      const t1 = db.byHash(sha('customer.raw-1'))!;
       expect(t1.isRevoked).toBe(true);
       expect(t1.expiresAt.getTime()).toBe(EPOCH);
       expect(t1.replacedByTokenHash).toBeNull();
@@ -169,7 +169,7 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
 
   describe('F2 rollback versus refresh', () => {
     it('a refresh in the release window sees no successor and rotates from committed state', async () => {
-      await login('raw-1');
+      await login('customer.raw-1');
       const boom = new Error('injected failure after successor was staged');
       let failed = false;
       let probed = false;
@@ -182,33 +182,33 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
         }
         if (event.type === 'lockReleased' && event.outcome === 'rollback' && !probed) {
           probed = true;
-          successorInWindow = await repo.findRotationSuccessor(sha('raw-1'));
-          refreshInWindow = await service.refreshSession('raw-1');
+          successorInWindow = await repo.findRotationSuccessor(sha('customer.raw-1'));
+          refreshInWindow = await service.refreshSession('customer.raw-1', 'customer');
         }
       };
 
-      await expect(repo.rotateRefreshToken(USER_ID, sha('raw-1'), sha('rolled-back'), future())).rejects.toBe(boom);
+      await expect(repo.rotateRefreshToken(USER_ID, sha('customer.raw-1'), sha('customer.rolled-back'), future())).rejects.toBe(boom);
 
       expect(successorInWindow).toBeNull();
       expect(refreshInWindow?.refreshToken).toEqual(expect.any(String));
-      expect(db.byHash(sha('rolled-back'))).toBeUndefined();
+      expect(db.byHash(sha('customer.rolled-back'))).toBeUndefined();
       const live = liveRows();
       expect(live).toHaveLength(1);
       expect(live[0].tokenHash).toBe(sha(refreshInWindow!.refreshToken!));
-      expect(db.byHash(sha('raw-1'))!.replacedByTokenHash).toBe(live[0].tokenHash);
+      expect(db.byHash(sha('customer.raw-1'))!.replacedByTokenHash).toBe(live[0].tokenHash);
       expectConsistentLocking();
     });
   });
 
   describe('F3 successful rotation versus logout', () => {
     it('rotation wins the lock: logout waits for the commit and then revokes the new successor too', async () => {
-      await login('raw-1');
+      await login('customer.raw-1');
       const pause = pauseOnce(isStatement('refreshToken.create'));
-      const rotation = repo.rotateRefreshToken(USER_ID, sha('raw-1'), sha('raw-2'), future());
+      const rotation = repo.rotateRefreshToken(USER_ID, sha('customer.raw-1'), sha('customer.raw-2'), future());
       await pause.reached;
 
       let logoutSettled = false;
-      const logout = repo.revokeRefreshTokenFamily(sha('raw-1')).then(() => { logoutSettled = true; });
+      const logout = repo.revokeRefreshTokenFamily(sha('customer.raw-1')).then(() => { logoutSettled = true; });
       await settle();
       expect(logoutSettled).toBe(false);
 
@@ -222,12 +222,12 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
     });
 
     it('logout wins the lock: the waiting rotation finds the token revoked and mints nothing', async () => {
-      await login('raw-1');
+      await login('customer.raw-1');
       const pause = pauseOnce(isStatement('refreshToken.updateMany'));
-      const logout = repo.revokeRefreshTokenFamily(sha('raw-1'));
+      const logout = repo.revokeRefreshTokenFamily(sha('customer.raw-1'));
       await pause.reached;
 
-      const refresh = service.refreshSession('raw-1');
+      const refresh = service.refreshSession('customer.raw-1', 'customer');
       const outcome = refresh.then(() => 'resolved', (error: { code?: string }) => error.code);
       await settle();
 
@@ -243,9 +243,9 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
 
   describe('F4 two simultaneous refreshes of the same token', () => {
     it('commits exactly one successor; the loser receives no token of any kind (409) and nothing is revoked', async () => {
-      await login('raw-1');
+      await login('customer.raw-1');
 
-      const results = await Promise.allSettled([service.refreshSession('raw-1'), service.refreshSession('raw-1')]);
+      const results = await Promise.allSettled([service.refreshSession('customer.raw-1', 'customer'), service.refreshSession('customer.raw-1', 'customer')]);
 
       const winners = results.filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof service.refreshSession>>> => result.status === 'fulfilled');
       const losers = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
@@ -257,8 +257,8 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
       expect(db.rowsByUser(USER_ID)).toHaveLength(2);
       const successor = db.byHash(sha(winners[0].value.refreshToken))!;
       expect(db.isLive(successor)).toBe(true);
-      expect(successor.familyId).toBe(db.byHash(sha('raw-1'))!.familyId);
-      expect(db.byHash(sha('raw-1'))!.replacedByTokenHash).toBe(successor.tokenHash);
+      expect(successor.familyId).toBe(db.byHash(sha('customer.raw-1'))!.familyId);
+      expect(db.byHash(sha('customer.raw-1'))!.replacedByTokenHash).toBe(successor.tokenHash);
       expect(liveRows()).toHaveLength(1); // the loser caused no revocation
       expectConsistentLocking();
     });
@@ -266,11 +266,11 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
 
   describe('replay detection (R3)', () => {
     it('immediate replay of a rotated token authenticates nothing, revokes nothing and creates no second successor', async () => {
-      await login('raw-1');
+      await login('customer.raw-1');
       await login('other-device');
-      const next = (await service.refreshSession('raw-1')).refreshToken!;
+      const next = (await service.refreshSession('customer.raw-1', 'customer')).refreshToken!;
 
-      await expect(service.refreshSession('raw-1')).rejects.toMatchObject({ statusCode: 409, code: 'REFRESH_ROTATION_IN_PROGRESS' });
+      await expect(service.refreshSession('customer.raw-1', 'customer')).rejects.toMatchObject({ statusCode: 409, code: 'REFRESH_ROTATION_IN_PROGRESS' });
 
       expect(liveRows()).toHaveLength(2); // the successor and the other device's session both survive
       expect(db.isLive(db.byHash(sha(next))!)).toBe(true);
@@ -279,12 +279,12 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
     });
 
     it('replay after the window revokes only the replayed session family and leaves other devices alone', async () => {
-      await login('raw-1');
+      await login('customer.raw-1');
       await login('other-device');
-      const next = (await service.refreshSession('raw-1')).refreshToken!;
-      db.byHash(sha('raw-1'))!.updatedAt = new Date(Date.now() - 11_000);
+      const next = (await service.refreshSession('customer.raw-1', 'customer')).refreshToken!;
+      db.byHash(sha('customer.raw-1'))!.updatedAt = new Date(Date.now() - 11_000);
 
-      await expect(service.refreshSession('raw-1')).rejects.toMatchObject({ code: 'REFRESH_TOKEN_REUSED' });
+      await expect(service.refreshSession('customer.raw-1', 'customer')).rejects.toMatchObject({ code: 'REFRESH_TOKEN_REUSED' });
 
       expect(db.byHash(sha(next))!.expiresAt.getTime()).toBe(EPOCH);        // the compromised family, successor included
       expect(db.isLive(db.byHash(sha('other-device'))!)).toBe(true);        // another session is untouched
@@ -293,20 +293,20 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
     });
 
     it('after reuse revokes the family, the legitimate holder of the successor can no longer refresh', async () => {
-      await login('raw-1');
-      const next = (await service.refreshSession('raw-1')).refreshToken!;
-      db.byHash(sha('raw-1'))!.updatedAt = new Date(Date.now() - 11_000);
-      await expect(service.refreshSession('raw-1')).rejects.toMatchObject({ code: 'REFRESH_TOKEN_REUSED' });
+      await login('customer.raw-1');
+      const next = (await service.refreshSession('customer.raw-1', 'customer')).refreshToken!;
+      db.byHash(sha('customer.raw-1'))!.updatedAt = new Date(Date.now() - 11_000);
+      await expect(service.refreshSession('customer.raw-1', 'customer')).rejects.toMatchObject({ code: 'REFRESH_TOKEN_REUSED' });
 
-      await expect(service.refreshSession(next)).rejects.toMatchObject({ statusCode: 401 });
+      await expect(service.refreshSession(next, 'customer')).rejects.toMatchObject({ statusCode: 401 });
     });
 
     it('logout racing a concurrent refresh never leaves a live session and never revokes other devices', async () => {
-      await login('raw-1');
+      await login('customer.raw-1');
       await login('other-device');
-      const outcomes = await Promise.allSettled([service.logout('raw-1'), service.refreshSession('raw-1')]);
+      const outcomes = await Promise.allSettled([service.logout('customer.raw-1', 'customer'), service.refreshSession('customer.raw-1', 'customer')]);
       expect(outcomes[0].status).toBe('fulfilled');
-      const family = db.byHash(sha('raw-1'))!.familyId;
+      const family = db.byHash(sha('customer.raw-1'))!.familyId;
       expect(db.rowsByUser(USER_ID).filter(row => row.familyId === family && db.isLive(row))).toHaveLength(0);
       expect(db.isLive(db.byHash(sha('other-device'))!)).toBe(true);
     });
@@ -323,40 +323,40 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
     ];
 
     it.each(revokers)('rotation commits first, then %s revokes the successor as well', async (_name, revoke) => {
-      await login('raw-1');
+      await login('customer.raw-1');
       const pause = pauseOnce(isStatement('refreshToken.create'));
-      const rotation = repo.rotateRefreshToken(USER_ID, sha('raw-1'), sha('raw-2'), future());
+      const rotation = repo.rotateRefreshToken(USER_ID, sha('customer.raw-1'), sha('customer.raw-2'), future());
       await pause.reached;
 
       const revocation = revoke();
       await settle();
       // Committed view while the rotation is still open: only T1 exists and is live; the successor is invisible.
-      expect(liveRows().map((row) => row.tokenHash)).toEqual([sha('raw-1')]);
-      expect(db.byHash(sha('raw-2'))).toBeUndefined();
+      expect(liveRows().map((row) => row.tokenHash)).toEqual([sha('customer.raw-1')]);
+      expect(db.byHash(sha('customer.raw-2'))).toBeUndefined();
 
       pause.release();
       await expect(rotation).resolves.toBe(true);
       await revocation;
 
-      expect(db.byHash(sha('raw-2'))).toBeDefined();
+      expect(db.byHash(sha('customer.raw-2'))).toBeDefined();
       expect(liveRows()).toHaveLength(0);
       expectConsistentLocking();
     });
 
     it.each(revokers)('%s commits first, then the waiting rotation mints nothing', async (_name, revoke) => {
-      await login('raw-1');
+      await login('customer.raw-1');
       const pause = pauseOnce(isStatement('refreshToken.updateMany'));
       const revocation = revoke();
       await pause.reached;
 
-      const rotation = repo.rotateRefreshToken(USER_ID, sha('raw-1'), sha('raw-2'), future());
+      const rotation = repo.rotateRefreshToken(USER_ID, sha('customer.raw-1'), sha('customer.raw-2'), future());
       await settle();
 
       pause.release();
       await revocation;
       await expect(rotation).resolves.toBe(false);
 
-      expect(db.byHash(sha('raw-2'))).toBeUndefined();
+      expect(db.byHash(sha('customer.raw-2'))).toBeUndefined();
       expect(liveRows()).toHaveLength(0);
       expectConsistentLocking();
     });
@@ -445,7 +445,7 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
       const session = await signIn('new-password');
 
       expect(session.accessToken).toEqual(expect.any(String));
-      expect(session.refreshToken).toMatch(/^[0-9a-f]{128}$/);
+      expect(session.refreshToken).toMatch(/^customer.[0-9a-f]{128}$/);
       expect(session.user).toMatchObject({ id: USER_ID, role: 'CUSTOMER' });
       const issued = db.byHash(sha(session.refreshToken!))!;
       expect(db.isLive(issued)).toBe(true);
@@ -459,7 +459,7 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
       const b = await signIn('old-password');
       expect(db.byHash(sha(a.refreshToken!))!.familyId).not.toBe(db.byHash(sha(b.refreshToken!))!.familyId);
 
-      await service.logout(a.refreshToken!);
+      await service.logout(a.refreshToken!, 'customer');
 
       expect(db.isLive(db.byHash(sha(a.refreshToken!))!)).toBe(false);
       expect(db.isLive(db.byHash(sha(b.refreshToken!))!)).toBe(true);
@@ -518,9 +518,9 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
     });
 
     it('rotation holds the lifecycle locks first: a waiting deactivation removes the committed successor too', async () => {
-      await login('raw-1');
+      await login('customer.raw-1');
       const pause = pauseOnce(isStatement('refreshToken.create'));
-      const rotation = repo.rotateRefreshToken(USER_ID, sha('raw-1'), sha('raw-2'), future());
+      const rotation = repo.rotateRefreshToken(USER_ID, sha('customer.raw-1'), sha('customer.raw-2'), future());
       await pause.reached;
 
       const deactivation = deactivateAccount();
@@ -544,20 +544,20 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
     });
 
     it('an old-version rotation cannot commit: its successor INSERT fails and the revocation rolls back', async () => {
-      await login('raw-1');
+      await login('customer.raw-1');
       await expect(db.prisma.$transaction(async (tx) => {
         const client = tx as typeof db.prisma;
         await client.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('user_token_lifecycle'), hashtext(${USER_ID}))`;
-        await client.refreshToken.updateMany({ where: { tokenHash: sha('raw-1') }, data: { isRevoked: true } });
-        await client.refreshToken.create({ data: { userId: USER_ID, tokenHash: sha('raw-2'), expiresAt: future() } });
+        await client.refreshToken.updateMany({ where: { tokenHash: sha('customer.raw-1') }, data: { isRevoked: true } });
+        await client.refreshToken.create({ data: { userId: USER_ID, tokenHash: sha('customer.raw-2'), expiresAt: future() } });
       })).rejects.toThrow(/not-null violation/);
-      expect(liveRows().map((row) => row.tokenHash)).toEqual([sha('raw-1')]);
+      expect(liveRows().map((row) => row.tokenHash)).toEqual([sha('customer.raw-1')]);
     });
 
     it('password-reset completion revokes the whole user session set, successors included', async () => {
-      await login('device-a');
-      await login('device-b');
-      const next = (await service.refreshSession('device-a')).refreshToken!;
+      await login('customer.device-a');
+      await login('customer.device-b');
+      const next = (await service.refreshSession('customer.device-a', 'customer')).refreshToken!;
       db.resetTokens.push({ userId: USER_ID, tokenHash: 'reset-hash', expiresAt: future(), consumedAt: null });
 
       expect(await repo.completePasswordReset(USER_ID, 'reset-hash', 'new-hash', new Date())).toBe(true);
@@ -616,7 +616,7 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
 
   describe('F7 database failures and ambiguous outcomes', () => {
     const expectOldTokenUntouched = () => {
-      const t1 = db.byHash(sha('raw-1'))!;
+      const t1 = db.byHash(sha('customer.raw-1'))!;
       expect(db.isLive(t1)).toBe(true);
       expect(t1.replacedByTokenHash).toBeNull();
       expect(db.rowsByUser(USER_ID)).toHaveLength(1);
@@ -624,22 +624,22 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
     };
 
     it('failure before the successor is inserted rolls back and surfaces the original error', async () => {
-      await login('raw-1');
+      await login('customer.raw-1');
       const failure = new Error('injected failure before insert');
       failOnce(isStatement('refreshToken.updateMany'), failure);
 
-      await expect(repo.rotateRefreshToken(USER_ID, sha('raw-1'), sha('raw-2'), future())).rejects.toBe(failure);
+      await expect(repo.rotateRefreshToken(USER_ID, sha('customer.raw-1'), sha('customer.raw-2'), future())).rejects.toBe(failure);
       expectOldTokenUntouched();
     });
 
     it('a real constraint violation on the successor insert rolls back the old-token revocation', async () => {
-      await login('raw-1');
-      await login('raw-2'); // collides with the hash the rotation tries to insert
+      await login('customer.raw-1');
+      await login('customer.raw-2'); // collides with the hash the rotation tries to insert
       const before = db.rowsByUser(USER_ID).length;
 
-      await expect(repo.rotateRefreshToken(USER_ID, sha('raw-1'), sha('raw-2'), future())).rejects.toThrow(/unique violation/);
+      await expect(repo.rotateRefreshToken(USER_ID, sha('customer.raw-1'), sha('customer.raw-2'), future())).rejects.toThrow(/unique violation/);
 
-      const t1 = db.byHash(sha('raw-1'))!;
+      const t1 = db.byHash(sha('customer.raw-1'))!;
       expect(db.isLive(t1)).toBe(true);
       expect(t1.replacedByTokenHash).toBeNull();
       expect(db.rowsByUser(USER_ID)).toHaveLength(before);
@@ -647,28 +647,28 @@ describe('refresh-token concurrency (model-based, deterministic)', () => {
     });
 
     it('a serialization conflict at commit leaves no speculative successor and keeps the error identity', async () => {
-      await login('raw-1');
+      await login('customer.raw-1');
       const conflict = Object.assign(new Error('could not serialize access due to concurrent update'), { code: 'P2034' });
       failOnce((event) => event.type === 'commit', conflict);
 
-      await expect(repo.rotateRefreshToken(USER_ID, sha('raw-1'), sha('raw-2'), future())).rejects.toBe(conflict);
+      await expect(repo.rotateRefreshToken(USER_ID, sha('customer.raw-1'), sha('customer.raw-2'), future())).rejects.toBe(conflict);
       expectOldTokenUntouched();
-      expect(await repo.findRotationSuccessor(sha('raw-1'))).toBeNull();
+      expect(await repo.findRotationSuccessor(sha('customer.raw-1'))).toBeNull();
     });
 
     it('an ambiguous commit is not reported as a definite failure, and a retry resolves from committed state', async () => {
-      await login('raw-1');
+      await login('customer.raw-1');
       const lostAck = Object.assign(new Error('connection terminated while waiting for commit result'), { code: 'P1017' });
       db.ambiguousCommitError = lostAck;
 
       // The caller gets the raw infrastructure error (HTTP 5xx, cookie preserved) rather than a 401 "revoked".
-      await expect(service.refreshSession('raw-1')).rejects.toBe(lostAck);
+      await expect(service.refreshSession('customer.raw-1', 'customer')).rejects.toBe(lostAck);
       expect(db.rowsByUser(USER_ID)).toHaveLength(2); // the commit did apply
 
       // The client lost the response and still holds the old cookie. A superseded token authenticates nothing: inside the window it gets a
       // retry signal (409), with no token, no revocation and no second successor. (Without the new cookie the session ends when the window
       // lapses; that residual cost of a lost acknowledgement is documented, not hidden by issuing tokens to a superseded credential.)
-      await expect(service.refreshSession('raw-1')).rejects.toMatchObject({ statusCode: 409, code: 'REFRESH_ROTATION_IN_PROGRESS' });
+      await expect(service.refreshSession('customer.raw-1', 'customer')).rejects.toMatchObject({ statusCode: 409, code: 'REFRESH_ROTATION_IN_PROGRESS' });
       expect(db.rowsByUser(USER_ID)).toHaveLength(2);
       expect(liveRows()).toHaveLength(1);
       expect(db.rowsByUser(USER_ID).every((row) => row.expiresAt.getTime() !== EPOCH)).toBe(true);

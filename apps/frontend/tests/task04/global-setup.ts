@@ -11,8 +11,8 @@ const stateFile = path.join(acceptanceDirectory, 'fixture.state.json');
 const tokenFile = path.join(backendDirectory, '.cache/dev-runtime-token.txt');
 const lockFile = path.join(acceptanceDirectory, 'real-dev-playwright.lock');
 const diagnosticPath = '/api/internal/development-runtime';
-const apiOrigin = 'http://127.0.0.1:5000';
-const frontendOrigin = 'http://127.0.0.1:3000';
+const apiOrigin = 'http://localhost:5000';
+const frontendOrigin = 'http://localhost:3000';
 
 type RuntimeDiagnostic = {
   data?: {

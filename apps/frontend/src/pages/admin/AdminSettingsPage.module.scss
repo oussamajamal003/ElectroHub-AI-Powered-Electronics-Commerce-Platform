@@ -1,0 +1,65 @@
+@use '@/styles/abstracts' as *;
+
+// Settings page layout. Forms reuse the admin panel, field and action classes from features/admin/shared/AdminPages.module.scss.
+
+.stack {
+  display: grid;
+  gap: $spacing-6;
+  min-width: 0;
+  align-content: start;
+}
+
+// The tab strip spans the content width and wraps on narrow screens instead of scrolling sideways.
+.tabs {
+  flex-wrap: wrap;
+  max-width: 100%;
+  gap: $spacing-1;
+  padding: $spacing-1;
+  border: 1px solid $color-border;
+  background: $color-surface;
+
+  button {
+    gap: $spacing-2;
+    margin: 0;
+    border-bottom: 2px solid transparent;
+    font-weight: $font-weight-medium;
+
+    &[data-state='active'] {
+      background: $color-background;
+      border-bottom-color: $color-primary;
+      color: $color-primary;
+      font-weight: $font-weight-semibold;
+    }
+  }
+}
+
+.dirty {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-3;
+  margin: $spacing-3 0 0;
+  padding: $spacing-3 $spacing-4;
+  border: 1px solid $color-warning-border;
+  border-left: 3px solid $color-warning;
+  background: $color-warning-background;
+  color: $color-warning-foreground;
+  font-size: $font-size-sm;
+
+  > svg { flex: none; margin-top: 2px; }
+}
+
+.dirtyCopy {
+  display: grid;
+  gap: 2px;
+
+  strong { font-weight: $font-weight-semibold; }
+  span { color: $color-text-secondary; }
+}
+
+.businessDetails {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: $spacing-4;
+  dt { font-weight: $font-weight-semibold; }
+  dd { margin: $spacing-1 0 0; overflow-wrap: anywhere; }
+}

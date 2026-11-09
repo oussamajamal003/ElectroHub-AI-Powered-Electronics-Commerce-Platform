@@ -1,10 +1,10 @@
 import type { ProductSummary } from '@/features/products/types';
 
 /** Task 04.4 public recommendation contract (Express `recommendation.service.ts`). */
-export type RecommendationMode = 'SIMILAR_PRODUCTS' | 'YOU_MAY_ALSO_LIKE' | 'RECOMMENDED_FOR_YOU' | 'FREQUENTLY_BOUGHT_TOGETHER' | 'POPULAR_PRODUCTS';
+export type RecommendationMode = 'SIMILAR_PRODUCTS' | 'YOU_MAY_ALSO_LIKE' | 'RECOMMENDED_FOR_YOU' | 'FREQUENTLY_BOUGHT_TOGETHER' | 'POPULAR_PRODUCTS' | 'FEATURED_PRODUCTS';
 export type RecommendationStrategy =
   | 'EMBEDDING_SIMILARITY' | 'BEHAVIOR_EMBEDDING' | 'HYBRID_EMBEDDING' | 'CO_PURCHASE' | 'MEASURED_POPULARITY'
-  | 'FALLBACK_CATEGORY' | 'FALLBACK_POPULAR' | 'FALLBACK_NEW_ARRIVALS' | 'NO_DATA';
+  | 'FALLBACK_CATEGORY' | 'FALLBACK_POPULAR' | 'FALLBACK_NEW_ARRIVALS' | 'MERCHANDISED_PIN' | 'NO_DATA';
 export type RecommendationSurface = 'product_detail' | 'home' | 'cart';
 
 export interface RecommendationSection {
@@ -19,7 +19,8 @@ export interface RecommendationSection {
   algorithmVersion: string;
   context: { categoryName: string; categorySlug: string } | null;
   impressionToken: string | null;
-  items: { rank: number; product: ProductSummary }[];
+  /** Present (true) only for an administrator-pinned product; organic items omit it. */
+  items: { rank: number; product: ProductSummary; featured?: true }[];
 }
 
 export interface ProductRecommendations { sections: RecommendationSection[] }

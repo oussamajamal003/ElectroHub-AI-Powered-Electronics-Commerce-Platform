@@ -18,12 +18,14 @@ export interface LayoutOptions {
   /** Trusted HTML built by the template builders; every dynamic value inside it must already be escaped. */
   bodyHtml: string;
   cta: LayoutCta;
+  storeName?: string;
+  supportEmail?: string | null;
+  supportPhone?: string | null;
 }
 
 export const FONT_STACK = `Poppins, 'Segoe UI', Arial, Helvetica, sans-serif`;
 export const MONO_STACK = `'JetBrains Mono', Consolas, 'Courier New', monospace`;
-const FOOTER_TEXT = 'You received this email because you placed an order with ElectroHub. '
-  + 'You can find the latest information in Order Details.';
+const LEGACY_STORE_NAME = 'ElectroHub';
 
 const TONE_STYLES: Readonly<Record<StatusTone, { background: string; color: string; icon: string }>> = {
   success: { background: '#F0FDF4', color: '#15803D', icon: '✓' },
@@ -47,6 +49,10 @@ export function renderLayout(options: LayoutOptions): string {
   const url = escapeHtml(options.cta.url);
   const preheader = escapeHtml(options.preheader);
   const heading = escapeHtml(options.heading);
+  const storeName = escapeHtml(options.storeName || LEGACY_STORE_NAME);
+  const footerText = `You received this email because you placed an order with ${options.storeName || LEGACY_STORE_NAME}. `
+    + 'You can find the latest information in Order Details.'
+    + (options.supportEmail || options.supportPhone ? ` For help, contact ${[options.supportEmail, options.supportPhone].filter(Boolean).join(' · ')}.` : '');
   const spacer = '&#847;&#8203;'.repeat(40);
   return [
     '<!doctype html>',
@@ -68,7 +74,7 @@ export function renderLayout(options: LayoutOptions): string {
       + 'style="width:100%;max-width:600px;background-color:#FFFFFF;border:1px solid #E2E8F0;border-top:3px solid #2563EB;">',
     '<tr>',
     '<td class="eh-inner" style="padding:32px;font-family:' + FONT_STACK + ';color:#0F172A;">',
-    `<p style="margin:0 0 24px 0;font-family:${FONT_STACK};font-size:20px;line-height:28px;font-weight:700;color:#0F172A;">ElectroHub</p>`,
+    `<p style="margin:0 0 24px 0;font-family:${FONT_STACK};font-size:20px;line-height:28px;font-weight:700;color:#0F172A;">${storeName}</p>`,
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
       + `style="background-color:${tone.background};">`,
     '<tr>',
@@ -98,7 +104,7 @@ export function renderLayout(options: LayoutOptions): string {
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:32px 0 0 0;">',
     '<tr>',
     '<td style="padding:16px 0 0 0;border-top:1px solid #E2E8F0;font-family:' + FONT_STACK + ';font-size:14px;line-height:20px;color:#475569;">',
-    FOOTER_TEXT,
+    escapeHtml(footerText),
     '</td>',
     '</tr>',
     '</table>',

@@ -16,6 +16,7 @@ import { MAX_RETRY_AGE_MS, MAX_SEND_ATTEMPTS, TEMPLATE_VERSION, classifySendResu
 import { DB_NOW } from './commerce-email.producer.js';
 import type { CommerceEmailConfig } from './commerce-email.config.js';
 import { logSafely } from '../utils/logger.js';
+import { LEGACY_STORE_IDENTITY } from './store-identity.js';
 
 export interface OutgoingCommerceEmail { to: string; subject: string; html: string; text: string; tags: string[] }
 export interface CommerceEmailTransport { readonly name: 'BREVO' | 'CAPTURE'; send(message: OutgoingCommerceEmail): Promise<ProviderSendResult> }
@@ -89,7 +90,7 @@ export class CommerceEmailDispatcher {
     const parsed = commerceEmailSnapshot.safeParse(row.snapshot);
     let message: RenderedCommerceEmail | null = null;
     if (parsed.success && parsed.data.type === row.type && row.recipient) {
-      try { message = this.render(parsed.data, { origin: this.config.origin! }, row.templateVersion); } catch { message = null; }
+      try { message = this.render(parsed.data, { origin: this.config.origin!, seller: parsed.data.seller ?? LEGACY_STORE_IDENTITY }, row.templateVersion); } catch { message = null; }
     }
     // Quarantine: an unrenderable event is never sent, and never retried into a provider call.
     if (!message || !row.recipient) return this.quarantine(claim, parsed.success ? 'RENDER_FAILED' : 'SNAPSHOT_INVALID', log);

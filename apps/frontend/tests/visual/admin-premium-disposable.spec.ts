@@ -490,7 +490,7 @@ test('UX-16/17: sign-out confirmation and linked-card hover', async ({ page, req
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
   await dialog.getByRole('button', { name: 'Sign out' }).click();
   await page.waitForURL(url => url.pathname === '/admin/login');
-  const refresh = (await page.request.post(`${state!.backend}/api/auth/refresh`)).status();
+  const refresh = (await page.request.post(`${state!.backend}/api/auth/admin/refresh`)).status();
   const ok17 = rest !== hover.transform && hover.shadow !== 'none' && staticCard !== 'pointer';
   const ok16 = stayed && refresh === 401;
   record('UX-16', 'Sign out asks first; Cancel keeps the session; confirm ends it', `cancel stayed on /admin=${stayed}; confirm → /admin/login; refresh → ${refresh}`, 'ux16-signout-dialog.png', ok16 ? 'PASS' : 'FAIL');

@@ -93,6 +93,7 @@ describe('ELECTROHUB — P1 Cart/Wishlist Performance & Sync Tests', () => {
       let releaseCart!: () => void;
       const cartGate = new Promise<void>(resolve => { releaseCart = resolve; });
       vi.mocked(apiClient).mockImplementation(async (endpoint) => {
+        if (endpoint === '/api/store/profile') return { data: { storeName: 'ElectroHub', currency: 'USD' } } as never;
         if (endpoint === '/api/wishlist') {
           return {
             data: {
@@ -118,11 +119,12 @@ describe('ELECTROHUB — P1 Cart/Wishlist Performance & Sync Tests', () => {
         expect(screen.queryByText('2', { exact: true })).not.toBeInTheDocument();
       };
 
-      // Unverified identity: no count of any kind (not the cached 2/3, not 0), and no protected reads.
+      // Unverified identity: no count of any kind (not the cached 2/3, not 0), and no protected Cart/Wishlist reads.
       assertCartNumberFree();
       expect(screen.getByRole('link', { name: 'Wishlist' })).toBeInTheDocument();
       expect(screen.queryByText('3', { exact: true })).not.toBeInTheDocument();
-      expect(apiClient).not.toHaveBeenCalled();
+      expect(apiClient).toHaveBeenCalledTimes(1);
+      expect(apiClient).toHaveBeenCalledWith('/api/store/profile', expect.any(Object));
 
       vi.mocked(useAuth).mockReturnValue({
         user,

@@ -37,6 +37,38 @@ async function axe(page: Page) {
     { runOnly: ['wcag2a', 'wcag2aa', 'wcag21aa'] })).violations.map((v: { id: string; nodes: unknown[] }) => `${v.id} (${v.nodes.length})`));
 }
 const tracking = (reference: string) => `${base}/orders/${reference}/tracking`;
+test('restricted orders show notices without tracking data', async ({ page }) => {
+  const login = await page.request.post(`${base}/api/auth/login`, { data: { email: fixtures!.customer.email, password: fixtures!.customer.password } });
+  expect(login.status()).toBe(200);
+  const { accessToken } = await login.json() as { accessToken: string };
+  for (const [key, notice] of [
+    ['awaitingCapture', 'Tracking isn’t available yet'], ['legacyUnpaid', 'Tracking isn’t available yet'],
+    ['cancelled', 'This order was cancelled'], ['otherCustomer', 'Order not found'], ['unknown', 'Order not found'],
+  ] as const) {
+    const reference = key === 'unknown' ? 'ORD-00000000-0000-4000-8000-000000000000' : fixtures!.orders[key];
+    const response = await page.request.get(`${base}/api/orders/${reference}/delivery`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const body = await response.json();
+    if (key === 'unknown' || key === 'otherCustomer') {
+      expect(response.status()).toBe(404);
+      expect(body).toEqual({ error: { code: 'ORDER_NOT_FOUND', message: 'Order not found.' } });
+    } else {
+      expect(response.status()).toBe(200);
+      expect(body.data).toMatchObject({ trackingReference: null, location: null, map: null, timeline: [], revision: 0,
+        deliveredAt: null, isSimulated: false, eta: { estimatedAt: null, updatedAt: null } });
+    }
+    await page.goto(tracking(reference));
+    await expect(page.getByRole('heading', { name: notice, exact: true })).toBeVisible();
+    for (const name of ['Delivery overview', 'Delivery progress', 'Delivery history']) {
+      await expect(page.getByRole('region', { name, exact: true })).toHaveCount(0);
+    }
+    await expect(page.locator('.leaflet-container')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /copy tracking reference/i })).toHaveCount(0);
+    await page.screenshot({ path: path.join(shots, `restricted-${key}-1440.png`), fullPage: true });
+    await noOverflow(page);
+  }
+});
 async function openTracking(page: Page, reference: string) {
   await page.goto(tracking(reference));
   await expect(page.getByRole('heading', { level: 1, name: new RegExp(`Track order ${reference}`) })).toBeVisible();

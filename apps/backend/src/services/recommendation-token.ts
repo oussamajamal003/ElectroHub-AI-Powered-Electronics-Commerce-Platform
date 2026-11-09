@@ -12,6 +12,8 @@ export interface ImpressionClaims {
   strategy: string;
   surface: string;
   productIds: string[];
+  /** Task 05.2: administrator-pinned products inside this batch, so their events are attributed to merchandising, not the engine. */
+  featuredProductIds?: string[];
   expiresAt: number;
 }
 
@@ -27,6 +29,8 @@ export function issueImpressionToken(claims: Omit<ImpressionClaims, 'batchId' | 
   const full: ImpressionClaims = { ...claims, batchId: crypto.randomUUID(), expiresAt: now + IMPRESSION_TOKEN_TTL_MS };
   const payload = Buffer.from(JSON.stringify({
     v: VERSION, b: full.batchId, m: full.mode, st: full.strategy, s: full.surface, p: full.productIds, e: full.expiresAt,
+    // Additive optional claim: tokens issued before Task 05.2 (no `f`) verify exactly as before.
+    ...(full.featuredProductIds?.length ? { f: full.featuredProductIds } : {}),
   })).toString('base64url');
   return `${payload}.${sign(payload)}`;
 }
@@ -44,7 +48,9 @@ export function verifyImpressionToken(token: string, now = Date.now()): Impressi
     if (body.v !== VERSION || typeof body.e !== 'number' || body.e < now) return null;
     if (typeof body.b !== 'string' || typeof body.m !== 'string' || typeof body.st !== 'string' || typeof body.s !== 'string') return null;
     if (!Array.isArray(body.p) || !body.p.every(id => typeof id === 'string')) return null;
-    return { batchId: body.b, mode: body.m, strategy: body.st, surface: body.s, productIds: body.p as string[], expiresAt: body.e };
+    if (body.f !== undefined && (!Array.isArray(body.f) || !body.f.every(id => typeof id === 'string' && (body.p as string[]).includes(id)))) return null;
+    return { batchId: body.b, mode: body.m, strategy: body.st, surface: body.s, productIds: body.p as string[], expiresAt: body.e,
+      ...(Array.isArray(body.f) ? { featuredProductIds: body.f as string[] } : {}) };
   } catch {
     return null;
   }

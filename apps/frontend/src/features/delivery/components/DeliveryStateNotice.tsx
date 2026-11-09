@@ -7,7 +7,7 @@ const NOTICES: Record<string, { icon: LucideIcon; title: string; text: string; t
     text: 'We are finalizing your order and confirming your payment. Please do not pay again. Tracking appears after confirmation.' },
   notStarted: { icon: PackageCheck, title: 'Tracking hasn’t started',
     text: 'Detailed tracking begins once your order is being prepared. We will show each step as it is recorded.' },
-  cancelled: { icon: XCircle, title: 'This order was cancelled', text: 'There is nothing left to deliver. Any recorded delivery history is kept below.', tone: 'error' },
+  cancelled: { icon: XCircle, title: 'This order was cancelled', text: 'There is nothing left to deliver. Delivery tracking is unavailable for cancelled orders.', tone: 'error' },
   failed: { icon: AlertTriangle, title: 'Tracking could not be loaded', text: 'Your order is safe. Please try again.', tone: 'error' },
   noEta: { icon: Calendar, title: 'No estimate yet', text: 'We will show an arrival estimate once one is recorded. The checkout window still applies.' },
   noLocation: { icon: MapPin, title: 'No location yet', text: 'Location appears once your order is out for delivery.' },

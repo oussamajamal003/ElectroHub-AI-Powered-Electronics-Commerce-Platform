@@ -3,15 +3,15 @@ import { prisma } from '../lib/prisma.js';
 import { AdminInventoryService } from './admin-inventory.service.js';
 import { projectOrderRow } from './admin-order.service.js';
 import { deriveStockStatus } from './inventory.service.js';
+import { addLocalDays, localDayWindow, storeTimeZone } from './reporting-timezone.js';
 
 /**
  * Task 05.1 operational overview: bounded aggregates over the canonical tables only (no analytics warehouse, no growth percentages).
- * Revenue = amount of stored SUCCEEDED payments whose paidAt falls in the window (UTC days), grouped by currency, never summed
+ * Revenue = amount of stored SUCCEEDED payments whose paidAt falls in the window (store-local days), grouped by currency, never summed
  * across currencies. Refunded payments have status REFUNDED and are therefore excluded; pending/processing/failed never count.
- * Trends compare the selected window (UTC days, today included) with the same number of days before it, and count what was added today.
+ * Trends compare the selected window (store-local days, today included) with the same number of local days before it, and count what was added today.
  */
 const ORDER_STATUSES: OrderStatus[] = ['AWAITING_CAPTURE', 'CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
-const DAY = 24 * 60 * 60 * 1000;
 
 export class AdminDashboardService {
   constructor(private readonly db: PrismaClient = prisma, private readonly inventory = new AdminInventoryService(),
@@ -31,10 +31,9 @@ export class AdminDashboardService {
   }
 
   /** Card trends: the window vs the window before it, plus today. Revenue stays per currency; the others count new rows. */
-  private async trends(today: number, days: number) {
-    const current = new Date(today - (days - 1) * DAY);
-    const previous = new Date(today - (2 * days - 1) * DAY);
-    const start = new Date(today);
+  private async trends(start: Date, days: number, timezone: string) {
+    const current = addLocalDays(start, -(days - 1), timezone);
+    const previous = addLocalDays(current, -days, timezone);
     const counts = (count: (where: { gte: Date; lt?: Date }) => Promise<number>) => Promise.all([
       count({ gte: current }), count({ gte: previous, lt: current }), count({ gte: start }),
     ]).then(([last30, prior30, added]) => ({ current: last30, previous: prior30, today: added }));
@@ -59,18 +58,19 @@ export class AdminDashboardService {
 
   async overview(days: number) {
     const now = this.clock();
-    const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-    const since = new Date(today - (days - 1) * DAY);
+    const settings = this.db.storeSettings ? await this.db.storeSettings.findUnique({ where: { id: 'default' }, select: { timezone: true } }) : null;
+    const timezone = storeTimeZone(settings?.timezone);
+    const { today, since, end } = localDayWindow(now, days, timezone);
     const [revenue, series, statusGroups, ordersInWindow, products, activeProducts, customers, activeCustomers, recent, lowStockRows, fulfillment, stock, trends] =
       await Promise.all([
-        this.db.payment.groupBy({ by: ['currency'], where: { status: 'SUCCEEDED', paidAt: { gte: since } }, _sum: { amount: true },
+        this.db.payment.groupBy({ by: ['currency'], where: { status: 'SUCCEEDED', paidAt: { gte: since, lt: end } }, _sum: { amount: true },
           _count: { _all: true }, orderBy: { currency: 'asc' } }),
-        this.db.$queryRaw<{ day: Date; currency: string; amount: Prisma.Decimal; orders: bigint }[]>(Prisma.sql`
-          SELECT date_trunc('day', "paidAt") AS day, "currency", SUM("amount") AS amount, COUNT(*) AS orders
-          FROM "payments" WHERE "status" = 'SUCCEEDED' AND "paidAt" >= ${since}
+        this.db.$queryRaw<{ day: string; currency: string; amount: Prisma.Decimal; orders: bigint }[]>(Prisma.sql`
+          SELECT to_char(date_trunc('day', "paidAt" AT TIME ZONE 'UTC' AT TIME ZONE ${timezone}), 'YYYY-MM-DD') AS day, "currency", SUM("amount") AS amount, COUNT(*) AS orders
+          FROM "payments" WHERE "status" = 'SUCCEEDED' AND "paidAt" >= ${since} AND "paidAt" < ${end}
           GROUP BY 1, 2 ORDER BY 1 ASC`),
         this.db.order.groupBy({ by: ['status'], _count: { _all: true } }),
-        this.db.order.count({ where: { createdAt: { gte: since } } }),
+        this.db.order.count({ where: { createdAt: { gte: since, lt: end } } }),
         this.db.product.count({ where: { isTestFixture: false } }),
         this.db.product.count({ where: { isTestFixture: false, status: 'ACTIVE', category: { isActive: true }, inventory: { quantity: { gt: 0 } } } }),
         this.db.user.count({ where: { role: { name: 'CUSTOMER' }, NOT: { email: { endsWith: '@deleted.invalid' } } } }),
@@ -84,14 +84,14 @@ export class AdminDashboardService {
           select: { id: true, name: true, sku: true, inventory: { select: { quantity: true, lowStockAt: true } } } }),
         this.fulfillment(),
         this.inventory.summary(),
-        this.trends(today, days),
+        this.trends(today, days, timezone),
       ]);
     const statusCounts = Object.fromEntries(ORDER_STATUSES.map(status => [status, statusGroups.find(group => group.status === status)?._count._all ?? 0]));
     return {
       generatedAt: now.toISOString(),
-      window: { days, since: since.toISOString(), timezone: 'UTC' },
+      window: { days, since: since.toISOString(), timezone },
       revenue: revenue.map(row => ({ currency: row.currency, amount: (row._sum.amount ?? new Prisma.Decimal(0)).toFixed(2), payments: row._count._all })),
-      revenueSeries: series.map(row => ({ day: row.day.toISOString().slice(0, 10), currency: row.currency,
+      revenueSeries: series.map(row => ({ day: row.day, currency: row.currency,
         amount: new Prisma.Decimal(row.amount).toFixed(2), payments: Number(row.orders) })),
       orders: { total: Object.values(statusCounts).reduce((sum, count) => sum + count, 0), inWindow: ordersInWindow, byStatus: statusCounts },
       products: { total: products, sellable: activeProducts },

@@ -18,7 +18,7 @@ type QueryValues = Record<string, string | number | undefined | null>;
  * superseded request aborted through React Query's signal, and the neighbouring pages prefetched once the current page is real data so
  * Next/Previous usually render without waiting.
  */
-export function useAdminList<R extends ListResponse<unknown>, P extends { page: number } = { page: number }>(path: string, key: (search: string) => readonly unknown[], params: P) {
+export function useAdminList<R extends ListResponse<unknown>, P extends { page: number } = { page: number }>(path: string, key: (search: string) => readonly unknown[], params: P, enabled = true) {
   const values = params as unknown as QueryValues;
   const client = useQueryClient();
   const search = queryString({ ...values, pageSize: PAGE_SIZE });
@@ -27,6 +27,7 @@ export function useAdminList<R extends ListResponse<unknown>, P extends { page: 
     queryFn: ({ signal }) => apiClient<R>(`${path}${search}`, { signal }),
     placeholderData: keepPreviousData,
     staleTime: LIST_STALE_MS,
+    enabled,
   });
   const meta = query.data?.meta;
   const settled = Boolean(meta) && !query.isPlaceholderData;

@@ -1,14 +1,16 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, Outlet, useLocation } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { adminQueryClient } from '@/lib/query';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { WishlistProvider } from '@/features/wishlist/WishlistProvider';
 import { WishlistPage } from '@/pages/customer/WishlistPage';
-import { AuthProvider } from '@/features/auth/context/AuthContext';
+import { AdminAuthProvider, AuthProvider } from '@/features/auth/context/AuthContext';
 import { CartProvider } from '@/features/cart/CartProvider';
 import { CustomerLayout } from '@/layouts/CustomerLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
-import { AdminLoginPage } from '@/pages/admin/AdminLoginPage';
 import { AdminPageSkeleton } from '@/features/admin/shared/AdminUi';
+import { AdministratorsAccessGate } from '@/pages/admin/AdministratorsAccessGate';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute/ProtectedRoute';
 import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
 import { CheckoutDraftSession } from '@/features/checkout/CheckoutDraftSession';
@@ -60,13 +62,29 @@ const AdminProductMediaPage = lazy(() => import('@/pages/admin/AdminProductMedia
 const DeliveryTrackingPage = lazy(() => import('@/features/delivery/DeliveryTrackingPage').then(module => ({ default: module.DeliveryTrackingPage })));
 const AdminDeliveriesPage = lazy(() => import('@/pages/admin/AdminDeliveriesPage').then(module => ({ default: module.AdminDeliveriesPage })));
 const AdminDeliveryDetailPage = lazy(() => import('@/pages/admin/AdminDeliveryDetailPage').then(module => ({ default: module.AdminDeliveryDetailPage })));
+// Task 05.2 (the admin login now carries WebAuthn/QR code: lazy, so storefront visitors never download it)
+const AdminLoginPage = lazy(() => import('@/pages/admin/AdminLoginPage').then(module => ({ default: module.AdminLoginPage })));
+const AdminAnalyticsPage = lazy(() => import('@/pages/admin/AdminAnalyticsPage').then(module => ({ default: module.AdminAnalyticsPage })));
+const AdminRecommendationsPage = lazy(() => import('@/pages/admin/AdminRecommendationsPage').then(module => ({ default: module.AdminRecommendationsPage })));
+const AdminSettingsPage = lazy(() => import('@/pages/admin/AdminSettingsPage').then(module => ({ default: module.AdminSettingsPage })));
+const AdminAdministratorsPage = lazy(() => import('@/pages/admin/AdminAdministratorsPage').then(module => ({ default: module.AdminAdministratorsPage })));
+const AdminProfilePage = lazy(() => import('@/pages/admin/AdminProfilePage').then(module => ({ default: module.AdminProfilePage })));
+const AdminSecurityPage = lazy(() => import('@/pages/admin/AdminSecurityPage').then(module => ({ default: module.AdminSecurityPage })));
+const AdminSessionsPage = lazy(() => import('@/pages/admin/AdminSessionsPage').then(module => ({ default: module.AdminSessionsPage })));
+const AdminInvitePage = lazy(() => import('@/pages/admin/AdminInvitePage').then(module => ({ default: module.AdminInvitePage })));
+const AdminForgotPasswordPage = lazy(() => import('@/pages/admin/AdminForgotPasswordPage').then(module => ({ default: module.AdminForgotPasswordPage })));
+const AdminActivatePage = lazy(() => import('@/pages/admin/AdminActivatePage').then(module => ({ default: module.AdminActivatePage })));
 const route = (content: React.ReactNode) => <Suspense fallback={<ElectroHubLoader page />}>{content}</Suspense>;
 // Inside the admin shell a page's code chunk loads behind a page-shaped skeleton; the full-page loader is kept for a whole-app reload.
 const adminRoute = (content: React.ReactNode) => <Suspense fallback={<AdminPageSkeleton />}>{content}</Suspense>;
 
+/** Task 05.2: every /admin page reads and writes the administrator's own query cache, never the storefront's. */
+function AdminQueryBoundary() { return <QueryClientProvider client={adminQueryClient}><Outlet /></QueryClientProvider>; }
+
 export function AppRoutes() {
   return (
     <AuthProvider>
+      <AdminAuthProvider queryClient={adminQueryClient}>
       <CartProvider>
       <WishlistProvider>
       <PaymentLockProvider>
@@ -103,8 +121,15 @@ export function AppRoutes() {
           </Route>
         </Route>
 
+        <Route element={<AdminQueryBoundary />}>
         {/* Admin Public Routes */}
-        <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route path="/admin/login" element={<Suspense fallback={null}><AdminLoginPage /></Suspense>} />
+        {/* Task 05.2: invitation acceptance is token-bound (URL fragment) and continues into mandatory MFA enrollment. */}
+        <Route path="/admin/invite" element={<Suspense fallback={null}><AdminInvitePage /></Suspense>} />
+        <Route path="/admin/forgot-password" element={<Suspense fallback={null}><AdminForgotPasswordPage /></Suspense>} />
+        <Route path="/admin/activate" element={<Suspense fallback={null}><AdminActivatePage /></Suspense>} />
+        {/* Operator-issued seed administrator setup (shared DEV / disposable). The server refuses it in production (route not mounted). */}
+        <Route path="/admin/provision" element={<Suspense fallback={null}><AdminActivatePage mode="provisioning" /></Suspense>} />
 
         {/* Admin Protected Routes */}
         {/* Task 05.1: deep links survive sign-in (preserveReturnPath); signing out returns to the admin login, not the storefront. */}
@@ -123,8 +148,17 @@ export function AppRoutes() {
             <Route path="/admin/customers/:userId" element={adminRoute(<AdminCustomerDetailPage />)} />
             <Route path="/admin/deliveries" element={adminRoute(<AdminDeliveriesPage />)} />
             <Route path="/admin/deliveries/:orderReference" element={adminRoute(<AdminDeliveryDetailPage />)} />
+            <Route path="/admin/recommendations" element={adminRoute(<AdminRecommendationsPage />)} />
+            <Route path="/admin/analytics" element={adminRoute(<AdminAnalyticsPage />)} />
+            <Route path="/admin/settings" element={adminRoute(<AdminSettingsPage />)} />
+            <Route path="/admin/settings/administrators" element={adminRoute(<AdministratorsAccessGate><AdminAdministratorsPage /></AdministratorsAccessGate>)} />
+            <Route path="/admin/profile" element={adminRoute(<AdminProfilePage />)} />
+            <Route path="/admin/profile/security" element={adminRoute(<AdminSecurityPage />)} />
+            <Route path="/admin/profile/sessions" element={adminRoute(<AdminSessionsPage />)} />
             <Route path="/admin/*" element={adminRoute(<AdminNotFoundPage />)} />
           </Route>
+        </Route>
+
         </Route>
 
         {/* Fallback */}
@@ -133,6 +167,7 @@ export function AppRoutes() {
       </PaymentLockProvider>
       </WishlistProvider>
       </CartProvider>
+      </AdminAuthProvider>
     </AuthProvider>
   );
 }

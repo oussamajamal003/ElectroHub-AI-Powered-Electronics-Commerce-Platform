@@ -24,6 +24,7 @@ function database() {
     brand: { findMany: vi.fn().mockResolvedValue([]) },
     payment: { groupBy: vi.fn().mockResolvedValue([]) },
     inventory: { create: vi.fn(), update: vi.fn() },
+    stockAlertEvent: { create: vi.fn().mockResolvedValue({ id: 'stock-event-1' }) },
     orderItem: { groupBy: vi.fn().mockResolvedValue([]) },
     category: { delete: vi.fn(), create: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
     productSpecification: { deleteMany: vi.fn(), createMany: vi.fn() },
@@ -128,6 +129,26 @@ describe('admin list filters match their counts', () => {
     expect(result.meta.statusCounts).toEqual({ CONFIRMED: 2 });
   });
 
+  it('uses an exact order-reference lookup and ignores stale text, page, customer, status and payment filters', async () => {
+    const db = database();
+    const service = new AdminOrderService(db as unknown as PrismaClient, {} as never);
+    await service.list({ orderReference: `ORD-${PRODUCT.toUpperCase()}`, q: 'another order', page: 8, pageSize: 20, order: 'desc', sort: 'createdAt',
+      status: 'CANCELLED', payment: 'FAILED', customerId: CUSTOMER });
+    const exact = { AND: [{ id: PRODUCT }] };
+    expect(db.order.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: exact, skip: 0, take: 20 }));
+    expect(db.order.count).toHaveBeenCalledWith({ where: exact });
+    expect(db.order.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: exact }));
+  });
+
+  it('filters deleted customers without including ordinary deactivated accounts', async () => {
+    const db = database();
+    db.$queryRaw.mockResolvedValue([]);
+    await new AdminCustomerService(db as unknown as PrismaClient).list({ q: undefined, page: 1, pageSize: 20, order: 'desc', sort: 'createdAt', status: 'DELETED' });
+    expect(db.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { AND: [
+      { role: { name: 'CUSTOMER' } }, { email: { endsWith: '@deleted.invalid' } },
+    ] } }));
+  });
+
   it('lists anonymized (deleted) accounts under neither the ACTIVE nor the INACTIVE filter', async () => {
     const db = database();
     db.$queryRaw.mockResolvedValue([]);
@@ -148,8 +169,9 @@ describe('AdminDashboardService.overview', () => {
     expect(overview.inventory).toMatchObject({ outOfStock: 3, untracked: 4 });
     expect(overview.fulfillment).toEqual({ awaitingFulfillment: 0, preparing: 0, outForDelivery: 0 });
     const sql = String(db.$queryRaw.mock.calls[0]![0].strings.join(''));
-    expect(sql).toContain(`date_trunc('day', "paidAt")`);
-    expect(sql).not.toContain('AT TIME ZONE');
+    expect(sql).toContain(`date_trunc('day', "paidAt" AT TIME ZONE 'UTC' AT TIME ZONE`);
+    expect(sql).toContain(`to_char(date_trunc('day'`);
+    expect(sql).toContain('AT TIME ZONE');
   });
 });
 

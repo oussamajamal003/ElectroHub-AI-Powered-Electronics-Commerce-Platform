@@ -20,7 +20,8 @@ import { OtpPurpose } from '@prisma/client';
 
 const authService = new AuthService();
 
-const COOKIE_NAME = 'electrohub_refresh';
+type Scope = 'admin' | 'customer';
+const cookieName = (scope: Scope) => 'electrohub_' + scope + '_refresh';
 
 function respondWithOtpError(error: unknown, res: Response): boolean {
   if (error instanceof OtpVerificationError) {
@@ -45,37 +46,24 @@ function respondWithOtpDeliveryError(error: unknown, res: Response): boolean {
 /**
  * Helper to set HttpOnly cookie securely.
  */
-export function setRefreshCookie(res: Response, token: string) {
-  res.cookie(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax', // Use 'none' if backend and frontend are on different domains in production
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    path: '/api/auth', // Path scoped to /api/auth so both refresh and logout receive the cookie
-  });
-  // Proactively clear legacy path cookie to prevent duplicate cookie ambiguity in browser
-  res.clearCookie(COOKIE_NAME, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/api/auth/refresh',
-  });
+function cookieOptions(path: string) {
+  return { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const, path };
 }
-
-export function clearRefreshCookie(res: Response) {
-  res.clearCookie(COOKIE_NAME, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/api/auth',
-  });
-  // Clear legacy path as well to prevent orphaned cookies on existing clients
-  res.clearCookie(COOKIE_NAME, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/api/auth/refresh',
-  });
+function retireLegacyCookies(res: Response) {
+  for (const path of ['/api/auth', '/api/auth/refresh']) res.clearCookie('electrohub_refresh', cookieOptions(path));
+}
+/** Retires the pre-isolation shared cookie: it is only ever expired, never read, so it can authenticate neither portal. */
+export const retireLegacySession = (status: 200 | 401) => (_req: Request, res: Response) => {
+  retireLegacyCookies(res);
+  res.status(status).json(status === 200 ? { message: 'Logged out successfully' } : { error: 'Sign in again' });
+};
+export function setRefreshCookie(res: Response, token: string, scope: Scope = 'customer') {
+  retireLegacyCookies(res);
+  res.cookie(cookieName(scope), token, { ...cookieOptions('/api/auth/' + scope), maxAge: 7 * 24 * 60 * 60 * 1000 });
+}
+export function clearRefreshCookie(res: Response, scope: Scope = 'customer') {
+  retireLegacyCookies(res);
+  res.clearCookie(cookieName(scope), cookieOptions('/api/auth/' + scope));
 }
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
@@ -110,6 +98,13 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     if ('requiresVerification' in result && result.requiresVerification) {
       logger.info('AUTH_LOGIN_REQUIRES_VERIFICATION', { email: result.email });
       return res.status(403).json(result);
+    }
+
+    // Task 05.2: an ADMIN password opens only a restricted MFA transaction — no cookie, no access token.
+    if ('requiresMfa' in result) {
+      logger.info('AUTH_LOGIN_MFA_REQUIRED', { enrollmentRequired: result.enrollmentRequired });
+      res.set('Cache-Control', 'no-store');
+      return res.status(200).json(result);
     }
 
     if (!('accessToken' in result) || !result.refreshToken || !result.user) {
@@ -208,19 +203,19 @@ export const changeVerificationEmail = async (req: Request, res: Response, next:
   }
 };
 
-export const refresh = async (req: Request, res: Response, next: NextFunction) => {
+export const refreshFor = (scope: Scope) => async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const rawRefreshToken = req.cookies[COOKIE_NAME];
+    const rawRefreshToken = req.cookies[cookieName(scope)];
     
     if (!rawRefreshToken || typeof rawRefreshToken !== 'string' || !rawRefreshToken.trim()) {
       logger.warn('AUTH_REFRESH_FAILURE', { reason: 'Refresh token missing' });
       return res.status(401).json({ error: 'Refresh token missing' });
     }
 
-    const result = await authService.refreshSession(rawRefreshToken);
+    const result = await authService.refreshSession(rawRefreshToken, scope);
     
     if (result.refreshToken) {
-      setRefreshCookie(res, result.refreshToken);
+      setRefreshCookie(res, result.refreshToken, scope);
     }
 
     logger.info('AUTH_REFRESH_SUCCESS', { userId: result.userId });
@@ -243,7 +238,7 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
           error.message === 'Invalid refresh token' ||
           error.message === 'User inactive or not found'))
     ) {
-      clearRefreshCookie(res);
+      clearRefreshCookie(res, scope);
       logger.warn('AUTH_REFRESH_FAILURE', { reason: error.message });
       return res.status(401).json({ error: 'Invalid or expired refresh token' });
     }
@@ -251,18 +246,18 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
   }
 };
 
-export const logout = async (req: Request, res: Response) => {
+export const logoutFor = (scope: Scope) => async (req: Request, res: Response) => {
   try {
-    const rawRefreshToken = req.cookies[COOKIE_NAME];
+    const rawRefreshToken = req.cookies[cookieName(scope)];
     if (rawRefreshToken) {
-      await authService.logout(rawRefreshToken);
+      await authService.logout(rawRefreshToken, scope);
     }
     logger.info('AUTH_LOGOUT_SUCCESS');
   } catch (error) {
     logger.error('AUTH_LOGOUT_FAILURE', { operation: 'auth.logout.failed', error });
     // If logout fails for some reason, ignore it since we're clearing the cookie anyway
   } finally {
-    clearRefreshCookie(res);
+    clearRefreshCookie(res, scope);
     res.status(200).json({ message: 'Logged out successfully' });
   }
 };
@@ -293,6 +288,12 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
 
     const data = req.body;
     const parsedData = updateProfileSchema.parse(data);
+
+    // Role is freshly resolved from the database by requireAuth. ADMIN email changes belong to the
+    // MFA-assured /api/admin/me/email-change workflow, never the shared customer profile endpoint.
+    if (req.user?.role === 'ADMIN' && Object.prototype.hasOwnProperty.call(parsedData, 'email')) {
+      return res.status(403).json({ error: { code: 'ADMIN_ENDPOINT_REQUIRED', message: 'Administrators change email from the admin profile security flow.' } });
+    }
 
     const user = await authService.updateProfile(userId, parsedData);
     logger.info('AUTH_UPDATE_PROFILE_SUCCESS', { userId });
@@ -378,6 +379,9 @@ export const verifyResetOtp = async (req: Request, res: Response, next: NextFunc
 
 export const verifyPendingEmailChange = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (req.user?.role === 'ADMIN') {
+      return res.status(403).json({ error: { code: 'ADMIN_ENDPOINT_REQUIRED', message: 'Administrators verify email changes through the admin security flow.' } });
+    }
     const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -398,6 +402,9 @@ export const verifyPendingEmailChange = async (req: Request, res: Response, next
 
 export const resendPendingEmailChange = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (req.user?.role === 'ADMIN') {
+      return res.status(403).json({ error: { code: 'ADMIN_ENDPOINT_REQUIRED', message: 'Administrators resend email verification through the admin security flow.' } });
+    }
     const userId = req.user?.userId;
     if (!userId) return res.status(401).json({ error: 'Not authenticated' });
     const result = await authService.resendPendingEmailChange(userId);
@@ -417,6 +424,11 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
+    // Task 05.2: administrators change their password at /api/admin/me/password, which requires a recent MFA step-up. This shared
+    // route must not become a way around it.
+    if (req.user?.role === 'ADMIN') {
+      return res.status(403).json({ error: 'Administrators change their password from the admin console.', code: 'ADMIN_ENDPOINT_REQUIRED' });
+    }
     const data = changePasswordSchema.parse(req.body);
     await authService.changePassword(userId, data.currentPassword, data.newPassword);
 

@@ -1,11 +1,19 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach } from 'vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
+
+// findBy*/waitFor default to 1 s. Lazy routes and React Query settle well inside that alone, but the full suite runs ~160 files in
+// parallel workers and a busy machine pushed a few of them past 1 s (routing home heading, checkout, settings). 5 s keeps a
+// real hang failing fast while removing load-dependent flakes; the per-test limit stays 60 s.
+configure({ asyncUtilTimeout: 5000 });
 
 // Automatically cleanup DOM after each test
 afterEach(() => {
   cleanup();
 });
+
+// jsdom does not implement scrolling; the admin layout scrolls to the top on navigation.
+if (typeof window !== 'undefined') window.scrollTo = (() => undefined) as typeof window.scrollTo;
 
 // Mock ResizeObserver
 global.ResizeObserver = class ResizeObserver {

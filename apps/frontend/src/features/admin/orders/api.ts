@@ -23,10 +23,10 @@ export interface AdminOrderDetail {
   delivery: { availability: string; paymentEligible: boolean; canStart: boolean; allowedNextStatus: string | null; revision: number | null;
     trackingReference: string | null; estimatedAt: string | null; deliveredAt: string | null; isSimulated: boolean };
 }
-export interface OrderListParams { q?: string; page: number; status?: string; payment?: string; customerId?: string; sort: string; order: string }
+export interface OrderListParams { q?: string; page: number; status?: string; payment?: string; customerId?: string; orderReference?: string; sort: string; order: string }
 
-export function useAdminOrders(params: OrderListParams) {
-  return useAdminList<ListResponse<AdminOrderRow, { statusCounts: Partial<Record<OrderStatus, number>> }>>('/api/admin/orders', adminKeys.orderList, params);
+export function useAdminOrders(params: OrderListParams, enabled = true) {
+  return useAdminList<ListResponse<AdminOrderRow, { statusCounts: Partial<Record<OrderStatus, number>> }>>('/api/admin/orders', adminKeys.orderList, params, enabled);
 }
 
 export function useAdminOrder(orderReference: string | undefined) {

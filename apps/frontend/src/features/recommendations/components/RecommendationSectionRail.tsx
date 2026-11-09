@@ -15,6 +15,12 @@ interface Props extends Pick<RecommendationRailProps, 'id' | 'columns' | 'headin
   recordPersonalClicks?: boolean;
 }
 
+/** Ids the server flagged as administrator pins in this section, or undefined when there are none. */
+function featuredIds(section?: RecommendationSection): ReadonlySet<string> | undefined {
+  const ids = section?.items.filter(item => item.featured).map(item => item.product.id) ?? [];
+  return ids.length > 0 ? new Set(ids) : undefined;
+}
+
 /** Renders one server section with truthful copy, real cart/wishlist actions and viewability/click attribution. */
 export function RecommendationSectionRail({ section, loading, error, loadingTitle, recordPersonalClicks = false, ...rail }: Props) {
   const { navigate, cardActions } = useStoreCardActions();
@@ -29,6 +35,7 @@ export function RecommendationSectionRail({ section, loading, error, loadingTitl
       ? `${copy.description} Recommendations are temporarily unavailable; showing your last personalized results.`
       : copy?.description}
     products={section?.items.map(item => item.product) ?? []} loading={loading} error={error}
+    featuredIds={featuredIds(section)}
     cardRef={tracking.observe}
     onNavigate={(href, product) => {
       // Navigation first; attribution is fire-and-forget and can never delay or block it.

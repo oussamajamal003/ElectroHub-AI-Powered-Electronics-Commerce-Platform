@@ -30,6 +30,8 @@ export interface RecommendationRailProps {
   onNavigate?: (href: string, product: ProductSummary) => void;
   onRemove?: (productId: string) => void;
   removeDisabled?: boolean;
+  /** Administrator-pinned products; each gets a visible "Featured" label (text, not colour alone). */
+  featuredIds?: ReadonlySet<string>;
   /** Ref for viewability tracking of each card wrapper. */
   cardRef?: (productId: string) => (element: HTMLElement | null) => void;
   footer?: ReactNode;
@@ -43,7 +45,7 @@ export interface RecommendationRailProps {
 export function RecommendationRail({
   id, title, description, products, loading = false, error = false, onRetry, skeletonCount = 4, columns = 4, action,
   headingLevel = 'h2', wishlistIds, wishlistPending, onToggleWishlist, onAddToCart, onNavigate, cardRef, footer,
-  onRemove, removeDisabled = false,
+  onRemove, removeDisabled = false, featuredIds,
 }: RecommendationRailProps) {
   const Heading = headingLevel;
   const showSkeleton = loading && products.length === 0;
@@ -69,6 +71,7 @@ export function RecommendationRail({
     </p>}
     {products.length > 0 && <ul className={gridClass} aria-label={title ?? 'Recommendations'}>
       {products.map(product => <li key={product.id} ref={cardRef?.(product.id)} className={`${styles.item} ${onRemove ? styles.itemWithRemove : ''}`}>
+        {featuredIds?.has(product.id) && <span className={styles.featuredBadge}>Featured</span>}
         <ProductCard {...productCardProps(product)}
           isWishlisted={wishlistIds?.includes(product.id)} wishlistPending={wishlistPending?.includes(product.id)}
           onToggleWishlist={onToggleWishlist ? (_, summary) => onToggleWishlist(product.id, summary ?? product) : undefined}

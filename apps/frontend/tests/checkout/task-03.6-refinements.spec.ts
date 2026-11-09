@@ -195,7 +195,7 @@ test.describe('Task 03.6 UI/UX Refinements', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await harness(page);
     let releaseRefresh!: () => void;
-    await page.route('**/api/auth/refresh', async route => {
+    await page.route('**/api/auth/customer/refresh', async route => {
       await new Promise<void>(resolve => { releaseRefresh = resolve; });
       await route.fulfill({ json: { accessToken: 'intercepted-ui-test-token' } });
     });
@@ -213,7 +213,7 @@ test.describe('Task 03.6 UI/UX Refinements', () => {
     await newTab.setViewportSize({ width: 390, height: 844 });
     await harness(newTab);
     let releaseRefresh!: () => void;
-    await newTab.route('**/api/auth/refresh', async route => {
+    await newTab.route('**/api/auth/customer/refresh', async route => {
       await new Promise<void>(resolve => { releaseRefresh = resolve; });
       await route.fulfill({ json: { accessToken: 'intercepted-ui-test-token' } });
     });

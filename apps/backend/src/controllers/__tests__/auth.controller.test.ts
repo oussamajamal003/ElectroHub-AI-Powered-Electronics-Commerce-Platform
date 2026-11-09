@@ -18,6 +18,7 @@ vi.mock('../../lib/prisma.js', () => ({
       findFirst: vi.fn(),
     },
     $transaction: vi.fn(),
+    $queryRaw: vi.fn(),
   },
 }));
 
@@ -34,7 +35,7 @@ vi.mock('../../utils/logger.js', () => ({
 it('records a swallowed logout failure while preserving its successful cookie response', async () => {
   const failure = new Error('Synthetic logout storage failure');
   const logout = vi.spyOn(AuthService.prototype, 'logout').mockRejectedValueOnce(failure);
-  const response = await request(app).post('/api/auth/logout').set('Cookie', 'electrohub_refresh=fixture');
+  const response = await request(app).post('/api/auth/customer/logout').set('Cookie', 'electrohub_customer_refresh=customer.fixture');
   expect(response.status).toBe(200);
   expect(logger.error).toHaveBeenCalledWith('AUTH_LOGOUT_FAILURE', expect.objectContaining({ error: failure }));
   logout.mockRestore();
@@ -129,12 +130,32 @@ describe('Auth Controller - /api/auth/me', () => {
     expect(res.status).toBe(500);
     expect(res.body.error.code).toBe('INTERNAL_SERVER_ERROR');
   });
+
+  it('blocks all shared customer email-change endpoints for an authenticated ADMIN before any profile or OTP mutation', async () => {
+    const adminId = '11111111-1111-4111-8111-111111111111';
+    const familyId = '22222222-2222-4222-8222-222222222222';
+    vi.mocked(prisma.user.findFirst).mockResolvedValue({ ...validUser, role: { ...validUser.role, name: 'ADMIN' } } as never);
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ familyId, mfaMethod: 'TOTP', mfaVerifiedAt: new Date(), stepUpAt: null, lastSeenAt: new Date() }] as never);
+    const token = generateAccessToken({ userId: adminId, role: 'ADMIN', sessionId: familyId });
+
+    const responses = await Promise.all([
+      request(app).patch('/api/auth/me').set('Authorization', `Bearer ${token}`).send({ email: 'new@example.test' }),
+      request(app).post('/api/auth/me/verify-email-change').set('Authorization', `Bearer ${token}`).send({ code: '123456' }),
+      request(app).post('/api/auth/me/resend-email-change').set('Authorization', `Bearer ${token}`),
+    ]);
+
+    for (const response of responses) {
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('ADMIN_ENDPOINT_REQUIRED');
+    }
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
 });
 
 describe('Auth refresh cookie preservation', () => {
   it('keeps the refresh cookie on a transient backend failure', async () => {
     const refresh = vi.spyOn(AuthService.prototype, 'refreshSession').mockRejectedValueOnce(new Error('Temporary database failure'));
-    const response = await request(app).post('/api/auth/refresh').set('Cookie', 'electrohub_refresh=valid-token');
+    const response = await request(app).post('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=valid-token');
     expect(response.status).toBe(500);
     expect(response.headers['set-cookie']).toBeUndefined();
     refresh.mockRestore();
@@ -142,25 +163,25 @@ describe('Auth refresh cookie preservation', () => {
 
   it('clears the cookie for a confirmed invalid refresh token', async () => {
     const refresh = vi.spyOn(AuthService.prototype, 'refreshSession').mockRejectedValueOnce(new Error('Invalid or expired refresh token'));
-    const response = await request(app).post('/api/auth/refresh').set('Cookie', 'electrohub_refresh=invalid-token');
+    const response = await request(app).post('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=invalid-token');
     expect(response.status).toBe(401);
     expect(response.headers['set-cookie']).toBeDefined();
     refresh.mockRestore();
   });
 
   it('returns 401 when refresh token cookie is missing', async () => {
-    const response = await request(app).post('/api/auth/refresh');
+    const response = await request(app).post('/api/auth/customer/refresh');
     expect(response.status).toBe(401);
     expect(response.body).toEqual({ error: 'Refresh token missing' });
   });
 
   it('rejects whitespace-only or empty refresh token cookie with 401', async () => {
-    const response = await request(app).post('/api/auth/refresh').set('Cookie', 'electrohub_refresh=   ');
+    const response = await request(app).post('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=   ');
     expect(response.status).toBe(401);
     expect(response.body).toEqual({ error: 'Refresh token missing' });
   });
 
-  it('sets cookie scoped to Path=/api/auth upon successful rotation', async () => {
+  it('sets a customer-scoped cookie upon successful rotation', async () => {
     const refresh = vi.spyOn(AuthService.prototype, 'refreshSession').mockResolvedValueOnce({
       accessToken: 'new-access-token-123',
       refreshToken: 'new-raw-refresh-token-456',
@@ -168,28 +189,29 @@ describe('Auth refresh cookie preservation', () => {
       user: { id: 'usr-123', email: 'a@example.invalid', firstName: 'A', lastName: 'B', role: 'CUSTOMER', authMethods: { password: true, google: false } },
     });
 
-    const response = await request(app).post('/api/auth/refresh').set('Cookie', 'electrohub_refresh=valid-old-token');
+    const response = await request(app).post('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=valid-old-token');
     expect(response.status).toBe(200);
     // The identity rides along (same shape as /me); the refresh token itself never appears in the body.
     expect(response.body).toEqual({ accessToken: 'new-access-token-123',
       user: { id: 'usr-123', email: 'a@example.invalid', firstName: 'A', lastName: 'B', role: 'CUSTOMER', authMethods: { password: true, google: false } } });
     expect(JSON.stringify(response.body)).not.toContain('new-raw-refresh-token-456');
     expect(response.headers['set-cookie']).toBeDefined();
-    expect(response.headers['set-cookie'][0]).toContain('Path=/api/auth');
-    expect(response.headers['set-cookie'][0]).toContain('HttpOnly');
+    const issued = (response.headers['set-cookie'] as unknown as string[]).find(c => c.startsWith('electrohub_customer_refresh='))!;
+    expect(issued).toContain('Path=/api/auth/customer');
+    expect(issued).toContain('HttpOnly');
     refresh.mockRestore();
   });
 
-  it('clears both /api/auth and legacy /api/auth/refresh cookies on logout', async () => {
+  it('clears only the customer cookie and expires the legacy cookie on customer logout', async () => {
     const logoutSpy = vi.spyOn(AuthService.prototype, 'logout').mockResolvedValueOnce();
 
-    const response = await request(app).post('/api/auth/logout').set('Cookie', 'electrohub_refresh=valid-cookie-to-logout');
+    const response = await request(app).post('/api/auth/customer/logout').set('Cookie', 'electrohub_customer_refresh=customer.valid-cookie-to-logout');
     expect(response.status).toBe(200);
-    expect(logoutSpy).toHaveBeenCalledWith('valid-cookie-to-logout');
+    expect(logoutSpy).toHaveBeenCalledWith('customer.valid-cookie-to-logout', 'customer');
     expect(response.headers['set-cookie']).toBeDefined();
     const rawSetCookies = response.headers['set-cookie'];
     const setCookies = Array.isArray(rawSetCookies) ? rawSetCookies : [String(rawSetCookies)];
-    expect(setCookies.some((c: string) => c.includes('Path=/api/auth;') || c.includes('Path=/api/auth'))).toBe(true);
+    expect(setCookies.some((c: string) => c.includes('Path=/api/auth;') || c.includes('Path=/api/auth/customer'))).toBe(true);
     expect(setCookies.some((c: string) => c.includes('Path=/api/auth/refresh'))).toBe(true);
     logoutSpy.mockRestore();
   });
@@ -198,7 +220,7 @@ describe('Auth refresh cookie preservation', () => {
     const refresh = vi.spyOn(AuthService.prototype, 'refreshSession').mockRejectedValueOnce(
       new AppError('Session refresh already in progress. Retry.', 409, 'REFRESH_ROTATION_IN_PROGRESS'));
 
-    const response = await request(app).post('/api/auth/refresh').set('Cookie', 'electrohub_refresh=recently-rotated-token');
+    const response = await request(app).post('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=recently-rotated-token');
     expect(response.status).toBe(409);
     expect(response.headers['retry-after']).toBe('1');
     expect(response.body).toEqual({ error: { code: 'REFRESH_ROTATION_IN_PROGRESS', message: 'Session refresh already in progress. Retry.' } });
@@ -213,11 +235,11 @@ describe('Auth refresh cookie preservation', () => {
       new AppError('Invalid or expired refresh token', 401, 'REFRESH_TOKEN_REUSED')
     );
 
-    const response = await request(app).post('/api/auth/refresh').set('Cookie', 'electrohub_refresh=stolen-token');
+    const response = await request(app).post('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=stolen-token');
     expect(response.status).toBe(401);
     expect(response.body).toEqual({ error: 'Invalid or expired refresh token' });
     expect(response.headers['set-cookie']).toBeDefined();
-    expect(response.headers['set-cookie'][0]).toContain('electrohub_refresh=;');
+    expect((response.headers['set-cookie'] as unknown as string[]).some(c => c.startsWith('electrohub_customer_refresh=;'))).toBe(true);
     refresh.mockRestore();
   });
 
@@ -226,7 +248,7 @@ describe('Auth refresh cookie preservation', () => {
       new AppError('Invalid or expired refresh token', 401, 'SESSION_REVOKED')
     );
 
-    const response = await request(app).post('/api/auth/refresh').set('Cookie', 'electrohub_refresh=logged-out-token');
+    const response = await request(app).post('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=logged-out-token');
     expect(response.status).toBe(401);
     expect(response.body).toEqual({ error: 'Invalid or expired refresh token' });
     expect(response.headers['set-cookie']).toBeDefined();

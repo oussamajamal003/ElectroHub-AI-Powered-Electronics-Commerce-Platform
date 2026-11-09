@@ -19,12 +19,14 @@ const otpFailureMessages: Record<OtpFailureCode, string> = {
 export class OtpVerificationError extends Error {
   readonly statusCode: number;
   readonly code: OtpFailureCode;
+  readonly attemptsRemaining?: number;
 
-  constructor(code: OtpFailureCode) {
+  constructor(code: OtpFailureCode, attemptsRemaining?: number) {
     super(otpFailureMessages[code]);
     this.name = 'OtpVerificationError';
     this.code = code;
     this.statusCode = code === 'OTP_ATTEMPTS_EXHAUSTED' ? 429 : 400;
+    this.attemptsRemaining = attemptsRemaining;
   }
 }
 

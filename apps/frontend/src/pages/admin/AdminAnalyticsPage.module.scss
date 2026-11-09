@@ -1,0 +1,167 @@
+@use '@/styles/abstracts' as *;
+
+// Task 05.2 administrator analytics. Shared page layout, KPI and table surfaces come from AdminPages / AdminUi.
+
+.toolbar { display: grid; gap: $spacing-3; min-width: 0; }
+
+.periodGroup { display: inline-flex; flex-wrap: wrap; gap: $spacing-1; padding: $spacing-1; width: fit-content; max-width: 100%;
+  background: $color-surface; border: 1px solid $color-border; border-radius: $radius-lg; }
+
+.periodOption { min-height: 2.5rem; padding: 0 $spacing-4; border: 1px solid transparent; border-radius: $radius-md;
+  background: transparent; color: $color-text-secondary; font: inherit; font-size: $font-size-sm; font-weight: $font-weight-medium; cursor: pointer;
+  transition: background-color $transition-fast, color $transition-fast;
+  &:hover { color: $color-text-primary; background: $color-surface; }
+  &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { transition: none; } }
+
+.periodOptionActive, .periodOptionActive:hover { background: $color-primary; color: $color-text-inverse; }
+
+.windowNote { margin: 0; font-size: $font-size-xs; color: $color-text-muted; }
+
+.panel { display: grid; align-content: start; gap: $spacing-4; min-width: 0; padding: $spacing-6; background: $color-background;
+  border: 1px solid $color-border; border-radius: $radius-lg; }
+
+.panelHeader { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: $spacing-3; min-width: 0; }
+.panelHeading { display: grid; gap: $spacing-1; min-width: 0; }
+.panelTitle { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; color: $color-text-primary; }
+.panelHint { margin: 0; font-size: $font-size-sm; color: $color-text-secondary; overflow-wrap: anywhere; }
+
+.skeleton { display: grid; gap: $spacing-4; min-width: 0;
+  span { display: block; border-radius: $radius-sm; background: $color-surface; animation: pulse 1.6s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { span { animation: none; } } }
+.skeletonKpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: $spacing-3;
+  span { height: 5.25rem; }
+  @media (max-width: 640px) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.skeletonRows { display: grid; gap: $spacing-2;
+  span { height: 2.75rem; } }
+.skeletonBars { display: grid; gap: $spacing-4;
+  span { height: 2.25rem; } }
+.skeletonChart { display: flex; align-items: flex-end; height: 9rem; padding: $spacing-3; border: 1px solid $color-border;
+  span { width: 100%; height: 72%; } }
+.skeletonWide { height: 1.25rem; }
+@keyframes pulse { 50% { opacity: .5; } }
+
+.muted { color: $color-text-secondary; }
+.growth { display: inline-flex; align-items: center; gap: $spacing-1; font-size: $font-size-xs; font-weight: $font-weight-medium; }
+.up { color: $color-success-foreground; }
+.down { color: $color-error-foreground; }
+
+.kpis { display: grid; gap: $spacing-4; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0;
+  @media (min-width: 1024px) { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.subsection { display: grid; gap: $spacing-3; min-width: 0; }
+.subsectionTitle { margin: 0; font-size: $font-size-base; font-weight: $font-weight-semibold; color: $color-text-primary; }
+
+.drill { display: inline-flex; align-items: center; gap: $spacing-1; color: $color-primary; font-size: $font-size-sm;
+  font-weight: $font-weight-medium; text-decoration: none; min-height: 2.5rem;
+  &:hover { text-decoration: underline; }
+  &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; border-radius: $radius-sm; } }
+
+.twoColumn { display: grid; align-items: start; gap: $spacing-6; grid-template-columns: minmax(0, 1fr); min-width: 0;
+  @media (min-width: 1024px) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Products and categories carry four non-wrapping columns each: side by side only where both fit without in-card scrolling. */
+.twoColumnWide { @media (min-width: 1024px) and (max-width: 1599px) { grid-template-columns: minmax(0, 1fr); } }
+
+// Revenue chart: decorative SVG plus focusable point buttons placed by percentage, so keyboard users can reach each period.
+.chart { display: grid; gap: $spacing-2; min-width: 0; }
+.chartFrame { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: $spacing-3; min-width: 0; }
+.yAxis { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; font-family: $font-family-mono;
+  font-size: $font-size-xs; color: $color-text-muted; white-space: nowrap; }
+.plot { position: relative; min-width: 0; height: 12rem; }
+.svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.baseline { stroke: $color-border; stroke-width: 1; }
+.bar2 { fill: rgba($color-primary, .25); transition: fill $transition-fast; }
+.bar2Active { fill: $color-primary; }
+@media (prefers-reduced-motion: reduce) { .bar2 { transition: none; } }
+/* Invisible full-height hit column over each bar with paid orders: hover/focus highlights the bar and fills the readout. */
+.point { position: absolute; padding: 0; border: 0; background: transparent; cursor: pointer;
+  &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; } }
+.pointActive { background: rgba($color-primary, .04); }
+.xAxis { display: flex; justify-content: space-between; padding-left: 3.5rem; font-size: $font-size-xs; color: $color-text-muted; gap: $spacing-2; }
+.readout { margin: 0; min-height: 1.25rem; font-size: $font-size-sm; color: $color-text-secondary; }
+
+
+.statRow { display: grid; gap: $spacing-4; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0;
+  @media (min-width: 1024px) { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); } }
+.stat { display: grid; gap: $spacing-1; min-width: 0; margin: 0;
+  dt { font-size: $font-size-xs; color: $color-text-secondary; }
+  dd { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; color: $color-text-primary; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; } }
+.statNote { margin: 0; font-size: $font-size-xs; color: $color-text-muted; overflow-wrap: anywhere; }
+.coverage { margin: 0; font-size: $font-size-sm; color: $color-text-secondary; overflow-wrap: anywhere; }
+
+.statusList { display: grid; gap: 0; margin: 0; padding: 0; list-style: none;
+  li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 $spacing-3; min-height: 2.75rem;
+    border-bottom: 1px solid $color-border; }
+  li:last-child { border-bottom: 0; }
+  strong { font-variant-numeric: tabular-nums; color: $color-text-primary; } }
+.statusTrack { grid-column: 1 / -1; display: block; height: .375rem; margin: 0 0 $spacing-2; background: $color-surface; }
+.statusFill { display: block; height: 100%; background: $color-primary; }
+.statusNote { margin: 0 0 $spacing-1; color: $color-text-muted; font-size: $font-size-xs; }
+.outcomeList { display: grid; gap: $spacing-3; margin: 0; padding: 0; list-style: none; }
+.outcomeRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: $spacing-2 $spacing-3; align-items: center; }
+.outcomeTrack { grid-column: 1 / -1; height: .5rem; background: $color-surface; }
+.outcomeFill { display: block; height: 100%; background: $color-success; }
+.outcomeSecondary { background: $color-warning; }
+.outcomeTertiary { background: $color-error; }
+/* Identity swatch beside a breakdown label: colour is never the only cue, the label and count sit next to it. */
+.legendDot { display: inline-block; flex: none; width: .625rem; height: .625rem; margin-right: $spacing-2; border-radius: $radius-full; vertical-align: middle; }
+.breakdownGrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: $spacing-4; min-width: 0; align-items: start;
+  @media (min-width: 1280px) { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.currencyRevenue { display: grid; gap: $spacing-1; }
+.currencyRevenueRow { display: flex; justify-content: space-between; gap: $spacing-3; font-size: $font-size-xs; }
+.currencyRevenueRow strong { color: $color-text-primary; font-family: $font-family-mono; font-variant-numeric: tabular-nums; }
+
+.productCell { display: inline-flex; flex-wrap: wrap; align-items: center; gap: $spacing-2; min-width: 0; overflow-wrap: anywhere; }
+
+.rankedProducts { display: grid; gap: $spacing-2; margin: 0; padding: 0; list-style: none; }
+.productRank { display: grid; grid-template-columns: 2.25rem 2.75rem minmax(0, 1fr) auto; align-items: center; gap: $spacing-3;
+  padding: $spacing-3; border: 1px solid $color-border; border-radius: $radius-md; min-width: 0; }
+.rankNumber { color: $color-text-muted; font-family: $font-family-mono; font-size: $font-size-xs; font-variant-numeric: tabular-nums; }
+.productThumbnail { width: 2.75rem; height: 2.75rem; border: 1px solid $color-border; border-radius: $radius-sm; }
+.productDetails { display: grid; gap: $spacing-1; min-width: 0; }
+.productName, .categoryName { color: $color-text-primary; font-weight: $font-weight-medium; overflow-wrap: anywhere; text-decoration: none;
+  &:hover { color: $color-primary; text-decoration: underline; }
+  &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; border-radius: $radius-sm; } }
+.productBarTrack, .categoryTrack { display: block; height: .375rem; overflow: hidden; background: $color-surface; }
+.productBar, .categoryFill { display: block; height: 100%; background: $color-primary; }
+.productBar { transition: width $transition-fast; }
+.productMeta, .categoryMeta { display: flex; flex-wrap: wrap; gap: $spacing-2 $spacing-4; color: $color-text-muted; font-size: $font-size-xs; }
+.productAmount, .categoryAmount { color: $color-text-primary; font-family: $font-family-mono; font-size: $font-size-sm; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.categoryList { display: grid; gap: $spacing-4; min-width: 0; }
+.categoryRow { display: grid; gap: $spacing-2; min-width: 0; }
+.categoryHeading { display: flex; align-items: baseline; justify-content: space-between; gap: $spacing-3; min-width: 0; }
+.categoryName { min-width: 0; }
+.categoryTrack { height: .5rem; }
+.categoryFill { min-width: 0; }
+.categoryMeta { justify-content: space-between; }
+
+@media (max-width: 520px) {
+  .productRank { grid-template-columns: 1.75rem 2.5rem minmax(0, 1fr); gap: $spacing-2; }
+  .productThumbnail { width: 2.5rem; height: 2.5rem; }
+  .productAmount { grid-column: 3; }
+  .categoryHeading { align-items: flex-start; flex-direction: column; gap: $spacing-1; }
+}
+
+/* Repeat customers, orders per customer and session duration: three equal cards on wide screens, stacked below 1024px. */
+.threeColumn { display: grid; gap: $spacing-6; grid-template-columns: minmax(0, 1fr); min-width: 0;
+  @media (min-width: 1024px) { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* Customer growth: running total and per-bucket bars side by side on wide screens. */
+.growthCharts { display: grid; gap: $spacing-6; grid-template-columns: minmax(0, 1fr); min-width: 0;
+  @media (min-width: 1024px) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.bars { display: grid; gap: $spacing-2; min-width: 0; }
+.barTrack { display: flex; align-items: flex-end; gap: 2px; height: 6rem; min-width: 0; }
+.bar { flex: 1 1 0; min-width: 2px; background: $color-primary; border-radius: 2px 2px 0 0; opacity: .85; }
+.miniCard { display: grid; align-content: start; gap: $spacing-2; min-width: 0; }
+.bigFigure { display: flex; flex-wrap: wrap; align-items: baseline; gap: $spacing-2; margin: 0; font-size: $font-size-3xl; font-weight: $font-weight-bold;
+  color: $color-text-primary; font-variant-numeric: tabular-nums;
+  span { font-size: $font-size-sm; font-weight: $font-weight-regular; color: $color-text-secondary; } }
+.growthChart { display: block; width: 100%; height: 6rem; margin-top: $spacing-2; }
+.growthArea { fill: rgba($color-primary, .12); }
+.growthLine { fill: none; stroke: $color-primary; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.donut { position: relative; justify-self: center; width: 8rem; height: 8rem;
+  svg { display: block; width: 100%; height: 100%; }
+  strong { position: absolute; inset: 0; display: grid; place-items: center; font-size: $font-size-xl; font-weight: $font-weight-bold; color: $color-text-primary; } }
+.donutTrack { fill: none; stroke: $color-border; stroke-width: 10; }
+/* Slot 7 of the shared chart palette (chartColors.ts): distinct from the brand-blue growth line beside it. */
+.donutValue { fill: none; stroke: #6250d6; stroke-width: 10; stroke-linecap: round; }
+.skeletonDonut { justify-self: center; width: 8rem; height: 8rem; border-radius: $radius-full; }

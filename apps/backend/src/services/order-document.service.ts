@@ -41,6 +41,7 @@ export interface OrderDocumentsDto { orderReference: string; documents: OrderDoc
 /** Allowlisted columns only: no request hash, provider secrets, work state, email payloads, phone or coordinates. */
 const documentSelect = {
   id: true, userId: true, status: true, currency: true, subtotal: true, shippingCost: true, total: true, createdAt: true,
+  storeIdentitySnapshot: true,
   deliveryMethod: true, estimatedDeliveryStart: true, estimatedDeliveryEnd: true, shippingRecipient: true, shippingLine1: true,
   shippingLine2: true, shippingCity: true, shippingState: true, shippingPostalCode: true, shippingCountry: true,
   // One extra row detects an over-limit order without loading an unbounded relation.

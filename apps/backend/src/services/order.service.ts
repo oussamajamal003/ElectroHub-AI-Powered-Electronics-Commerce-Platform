@@ -3,14 +3,17 @@ import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { currentCart, emptyCart, MAX_CART_LINES, MAX_CART_QUANTITY } from './cart.service.js';
 import { lockCartForUser } from './cart.lock.js';
-import { InventoryService, validateInventoryPurchase, type LockedInventorySnapshot } from './inventory.service.js';
+import { InventoryService, deriveStockStatus, validateInventoryPurchase, type LockedInventorySnapshot } from './inventory.service.js';
+import { StockAlertService } from './stock-alert.service.js';
 import { attemptSchema, businessDate, buyNowScopeId, checkoutRequestSchema, requestHash, savedAmountsMatch, savedPurchaseTerms } from './checkout.domain.js';
+import { loadShippingConfig } from './shipping-config.js';
 import { isSerializationConflict } from './transaction-conflict.js';
 import { verifyAuthorization, type ProviderIntent } from './payment.domain.js';
 import { performance } from 'node:perf_hooks';
 import { timeDbStage } from '../lib/db-request-metrics.js';
 import { logger, logSafely } from '../utils/logger.js';
 import { CONFIRMATION_EMAIL_TYPES, projectEmailConfirmation, type EmailConfirmationSummary } from './commerce-email.domain.js';
+import { readStoreIdentitySnapshot } from './store-identity.js';
 
 const include = { items: { orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }] }, payment: true } satisfies Prisma.OrderInclude;
 type StoredOrder = Prisma.OrderGetPayload<{ include: typeof include }>;
@@ -62,7 +65,8 @@ export function parseOrderReference(reference: string) {
 }
 
 export class OrderService {
-  constructor(private readonly database: PrismaClient = prisma, private readonly inventory = new InventoryService()) {}
+  constructor(private readonly database: PrismaClient = prisma, private readonly inventory = new InventoryService(),
+    private readonly stockAlerts = new StockAlertService(database)) {}
 
   async list(userId: string, { page, pageSize }: { page: number; pageSize: number }) {
     const where = { userId };
@@ -158,6 +162,7 @@ export class OrderService {
     const preflightTimings = stageTimings;
 
     for (let retry = 0; retry < 3; retry++) {
+      const stockEventIds: string[] = [];
       stageTimings = [];
       const transactionRequestedAt = performance.now();
       let callbackEnteredAt = 0;
@@ -245,8 +250,10 @@ export class OrderService {
               item.status === 'ACTIVE' && category.isActive);
           }
           // Shared with saved-purchase retry (PaymentService.resume) so both gates apply identical terms.
+          // The configured snapshot used for the revision and the terms below is loaded inside this transaction's read path.
+          const shipping = await loadShippingConfig(tx);
           const terms = savedPurchaseTerms({ scopeId: buyNowScope ? buyNowScopeId(userId) : (cartId as string),
-            expectedRevision: request.expectedRevision, deliveryMethod: transactionRequest.deliveryMethod, lines });
+            expectedRevision: request.expectedRevision, deliveryMethod: transactionRequest.deliveryMethod, lines, shipping });
           if (!terms.revisionMatches) throw new AppError('Your cart or prices changed. Review the current total before placing your order.', 409, 'CHECKOUT_CHANGED');
           if (!terms.delivery || !terms.totals) throw new AppError('Choose an available delivery method.', 400, 'CHECKOUT_INVALID_DELIVERY');
           const { delivery, totals } = terms;
@@ -260,9 +267,11 @@ export class OrderService {
           });
           const { totals, delivery } = validated;
           const now = new Date(); const shipping = transactionRequest.shipping;
+          const storeIdentitySnapshot = await readStoreIdentitySnapshot(tx);
           const order = await measureStage('order_payment_items_create', 1, () => tx.order.create({ data: {
             userId, checkoutAttemptId, checkoutRequestHash: hash, deliveryMethod: delivery.id, paymentMethod: transactionRequest.paymentMethod,
             subtotal: totals.subtotal, shippingCost: totals.shipping, total: totals.total, currency: 'USD', status: 'AWAITING_CAPTURE',
+            storeIdentitySnapshot,
             payment: { create: { provider: 'STRIPE', providerPaymentId: intent.id, status: 'PROCESSING', amount: attempt.total, currency: 'USD' } },
             shippingRecipient: shipping.recipient, shippingLine1: shipping.line1, shippingLine2: shipping.line2 || null,
             shippingCity: shipping.city, shippingState: shipping.state || null, shippingPostalCode: shipping.postalCode,
@@ -279,8 +288,13 @@ export class OrderService {
           for (const id of ids) {
             const item = lines.find(line => line.productId === id);
             const lockedInventory = inventoryByProduct.get(id);
-            if (item && lockedInventory) await measureStage('inventory_decrement', 1, () =>
-              this.inventory.decreaseStock(id, item.quantity, tx, lockedInventory));
+            if (item && lockedInventory) {
+              const updated = await measureStage('inventory_decrement', 1, () => this.inventory.decreaseStock(id, item.quantity, tx, lockedInventory));
+              const lowStockAt = lockedInventory.lowStockAt ?? 5;
+              const eventId = await this.stockAlerts.record(tx, { productId: id, previousStatus: deriveStockStatus(lockedInventory.quantity, lowStockAt),
+                status: updated.status, quantity: updated.quantity, lowStockAt });
+              if (eventId) stockEventIds.push(eventId);
+            }
           }
           // BUY_NOW must never clear or mutate the persistent Cart.
           if (!buyNowScope && !attempt.submittedAt && cartId) await measureStage('cart_cleanup', 1, () => tx.cartItem.deleteMany({ where: { cartId } }));
@@ -305,6 +319,7 @@ export class OrderService {
             commitAndResolutionMs: Math.round((transactionResolvedAt - callbackFinishedAt) * 100) / 100,
             transactionDurationMs: Math.round((transactionResolvedAt - transactionRequestedAt) * 100) / 100 });
         }
+        for (const eventId of stockEventIds) this.stockAlerts.afterCommit(eventId);
         return committed;
       } catch (error) {
         const failedAt = performance.now();

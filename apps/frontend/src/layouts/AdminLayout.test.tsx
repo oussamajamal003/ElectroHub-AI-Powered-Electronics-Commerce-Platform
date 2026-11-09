@@ -2,12 +2,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdminLayout } from './AdminLayout';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { useAdminAlerts } from '@/features/admin/dashboard/api';
 import { SIDEBAR_PREFERENCE_KEY } from '@/features/admin/shell/navigation';
 
-vi.mock('@/features/auth/context/AuthContext', () => ({ useAuth: vi.fn() }));
+vi.mock('@/features/auth/context/AuthContext', () => ({ useAdminAuth: vi.fn() }));
 vi.mock('@/features/admin/dashboard/api', () => ({ useAdminAlerts: vi.fn() }));
+vi.mock('@/features/admin/dashboard/useAdminInventoryLiveUpdates', () => ({ useAdminInventoryLiveUpdates: vi.fn() }));
 
 const logout = vi.fn();
 const renderAt = (path: string) => render(<MemoryRouter initialEntries={[path]}>
@@ -18,17 +19,18 @@ describe('AdminLayout shell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.localStorage.clear();
-    vi.mocked(useAuth).mockReturnValue({ user: { id: 'a', email: 'admin@example.test', firstName: 'Ada', lastName: 'Admin', role: 'ADMIN' }, logout } as unknown as ReturnType<typeof useAuth>);
+    vi.mocked(useAdminAuth).mockReturnValue({ user: { id: 'a', email: 'admin@example.test', firstName: 'Ada', lastName: 'Admin', role: 'ADMIN' }, logout } as unknown as ReturnType<typeof useAdminAuth>);
     vi.mocked(useAdminAlerts).mockReturnValue({ data: { data: { lowStock: 2, outOfStock: 1, awaitingFulfillment: 3, preparing: 0, outForDelivery: 4, generatedAt: '' } },
       isPending: false, isError: false } as unknown as ReturnType<typeof useAdminAlerts>);
   });
 
-  it('lists only implemented 05.1 modules and marks the current one', () => {
+  it('lists only implemented modules (05.1 operations + 05.2 growth/administration) and marks the current one', () => {
     renderAt('/admin/inventory');
     const nav = screen.getByRole('navigation', { name: 'Admin navigation' });
     const labels = within(nav).getAllByRole('link').map(link => link.textContent);
-    expect(labels).toEqual(['Dashboard', 'Products', 'Categories', 'Inventory', 'Orders', 'Delivery', 'Customers']);
-    expect(within(nav).queryByText(/analytics|settings/i)).toBeNull();
+    expect(labels).toEqual(['Dashboard', 'Products', 'Categories', 'Inventory', 'Orders', 'Delivery', 'Customers', 'Recommendations', 'Analytics', 'Settings']);
+    // Personal account destinations live in the avatar menu, never in the main navigation.
+    expect(within(nav).queryByText(/profile|security|sessions/i)).toBeNull();
     expect(within(nav).getByRole('link', { name: 'Inventory' })).toHaveAttribute('aria-current', 'page');
     expect(within(nav).getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current');
   });
@@ -44,6 +46,15 @@ describe('AdminLayout shell', () => {
     expect(window.localStorage.getItem(SIDEBAR_PREFERENCE_KEY)).toBe('1');
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(screen.getByRole('navigation', { name: 'Admin navigation' })).getByRole('link', { name: 'Orders' })).toBeInTheDocument();
+  });
+
+  it('opens another admin page at its top', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    renderAt('/admin/analytics');
+    scrollTo.mockClear();
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Admin navigation' })).getByRole('link', { name: 'Products' }));
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'instant' });
+    scrollTo.mockRestore();
   });
 
   const openSignOut = async () => {

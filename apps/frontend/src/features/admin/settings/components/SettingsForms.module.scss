@@ -1,0 +1,93 @@
+@use '@/styles/abstracts' as *;
+
+// Checkbox groups inside the Settings forms (Notifications and Shipping delivery options).
+.group {
+  display: grid;
+  gap: $spacing-3;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+
+  legend {
+    padding: 0;
+    margin-bottom: $spacing-2;
+  }
+}
+
+.option {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: $spacing-3;
+  min-width: 0;
+  cursor: pointer;
+  font-size: $font-size-base;
+  color: $color-text-primary;
+  line-height: $line-height-normal;
+}
+
+.optionText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.groupHeading {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-bottom: $spacing-2;
+  border-bottom: 1px solid $color-border;
+  color: $color-text-primary;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+}
+
+// Keep form actions after the fields so they do not obscure delivery options on short screens.
+.formActions {
+  position: static;
+  border-top: 1px solid $color-border;
+  background: transparent;
+}
+
+.quoteForm {
+  display: grid;
+  grid-template-columns: minmax(0, 14rem) auto;
+  justify-content: start;
+  align-items: start;
+  gap: $spacing-2;
+
+  > button {
+    // Match the input below its label, including when a validation message appears.
+    margin-top: calc(#{$font-size-sm} * #{$line-height-normal} + #{$spacing-2});
+  }
+
+  @media (max-width: 360px) {
+    grid-template-columns: minmax(0, 1fr);
+    > button { margin-top: 0; justify-self: start; }
+  }
+}
+
+.previewList {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: $spacing-3;
+    align-items: baseline;
+    padding: $spacing-3 0;
+    border-bottom: 1px solid $color-border;
+  }
+}
+
+.previewPrice {
+  font-family: $font-family-mono;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  white-space: nowrap;
+}

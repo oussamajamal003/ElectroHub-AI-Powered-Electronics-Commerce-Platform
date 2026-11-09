@@ -10,6 +10,7 @@ import { OrderStatusPill, PaymentPill } from '@/features/admin/shared/labels';
 import { ORDER_STATUSES, orderStatusLabel } from '@/features/admin/shared/statusLabels';
 import { formatCount, formatDate, formatDateTime, formatMoney, formatMoneyList, shortReference } from '@/features/admin/shared/format';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { seriesColor } from '@/features/admin/shared/chartColors';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
 
 const WINDOWS = [7, 30, 90] as const;
@@ -30,9 +31,12 @@ function RevenueChart({ overview }: { overview: DashboardOverview }) {
   const currency = overview.revenue[0]?.currency ?? 'USD';
   const days = useMemo(() => {
     const byDay = new Map(overview.revenueSeries.filter(row => row.currency === currency).map(row => [row.day, Number(row.amount)]));
-    const start = new Date(overview.window.since);
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: overview.window.timezone, year: 'numeric', month: '2-digit', day: '2-digit' })
+      .formatToParts(new Date(overview.window.since));
+    const start = Date.UTC(Number(parts.find(part => part.type === 'year')!.value), Number(parts.find(part => part.type === 'month')!.value) - 1,
+      Number(parts.find(part => part.type === 'day')!.value));
     return Array.from({ length: overview.window.days }, (_, index) => {
-      const day = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + index)).toISOString().slice(0, 10);
+      const day = new Date(start + index * 86_400_000).toISOString().slice(0, 10);
       return { day, amount: byDay.get(day) ?? 0 };
     });
   }, [overview, currency]);
@@ -123,7 +127,7 @@ export function AdminDashboardPage() {
 
   return <div className={styles.page}>
     <PageHeader title="Dashboard" crumbs={[{ label: 'Dashboard' }]}
-      description={overview ? `Store activity for the last ${overview.window.days} days (UTC). Updated ${formatDateTime(overview.generatedAt)}.` : 'Store activity at a glance.'}
+      description={overview ? `Store activity for the last ${overview.window.days} days (${overview.window.timezone}). Updated ${formatDateTime(overview.generatedAt)}.` : 'Store activity at a glance.'}
       actions={<div className={styles.segmented} role="group" aria-label="Reporting window">
         {WINDOWS.map(value => <button key={value} type="button" className={styles.segment} aria-pressed={days === value}
           onClick={() => setParams(value === 30 ? {} : { days: String(value) }, { replace: true })}>{value} days</button>)}
@@ -185,12 +189,12 @@ export function AdminDashboardPage() {
         <section className={styles.panel} aria-labelledby="status-title">
           <h2 id="status-title" className={styles.panelTitle}>Orders by status</h2>
           {overview ? <ul className={styles.statusList}>
-            {ORDER_STATUSES.map(status => {
+            {ORDER_STATUSES.map((status, index) => {
               const count = overview.orders.byStatus[status] ?? 0;
               return <li key={status} className={styles.statusRow}>
-                <Link className={styles.rowLink} to={`/admin/orders?status=${status}`}>{orderStatusLabel[status]}</Link>
+                <Link className={styles.rowLink} to={`/admin/orders?status=${status}`}><span className={styles.legendDot} style={{ background: seriesColor(index) }} aria-hidden="true" />{orderStatusLabel[status]}</Link>
                 <span className={styles.money}>{formatCount(count)}</span>
-                <span className={styles.meter} aria-hidden="true"><span style={{ width: overview.orders.total ? `${(count / overview.orders.total) * 100}%` : 0 }} /></span>
+                <span className={styles.meter} aria-hidden="true"><span style={{ width: overview.orders.total ? `${(count / overview.orders.total) * 100}%` : 0, background: seriesColor(index) }} /></span>
               </li>;
             })}
           </ul> : <p className={styles.panelHint} role="status">Loading…</p>}

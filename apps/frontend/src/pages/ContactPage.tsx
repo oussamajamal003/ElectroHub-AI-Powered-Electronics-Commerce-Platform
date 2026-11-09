@@ -1,6 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { Clock3, Mail, MapPin, Phone } from 'lucide-react';
+import { Mail, MapPin, Phone } from 'lucide-react';
 import { SectionReveal, StaggerContainer, StaggerItem } from '@/components/motion/Motion';
+import { sendContactMessage, useStorefrontProfile } from '@/features/storefront/api';
+import { useMutation } from '@tanstack/react-query';
+import { ApiError } from '@/lib/api';
 import styles from './CompanyPages.module.scss';
 
 const fields = ['Name', 'Email', 'Subject', 'Message'] as const;
@@ -12,8 +15,11 @@ export function ContactPage() {
   const [values, setValues] = useState<FormValues>(initialValues);
   const [errors, setErrors] = useState<Partial<FormValues>>({});
   const [submitted, setSubmitted] = useState(false);
+  const profileQuery = useStorefrontProfile();
+  const { data: profile } = profileQuery;
+  const contact = useMutation({ mutationFn: sendContactMessage });
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextErrors: Partial<FormValues> = {};
     for (const field of fields) {
@@ -21,23 +27,30 @@ export function ContactPage() {
     }
     if (values.Email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.Email.trim())) nextErrors.Email = 'Enter a valid email address.';
     setErrors(nextErrors);
-    setSubmitted(Object.keys(nextErrors).length === 0);
+    if (Object.keys(nextErrors).length) return;
+    try { await contact.mutateAsync({ name: values.Name.trim(), email: values.Email.trim(), subject: values.Subject.trim(), message: values.Message.trim() }); setSubmitted(true); }
+    catch { setSubmitted(false); }
   }
 
+  const address = [profile?.addressLine1, profile?.addressLine2, profile?.city, profile?.region, profile?.postalCode, profile?.country].filter(Boolean).join(', ');
+  const cards = [
+    ...(profile?.supportEmail ? [{ title: 'Email', text: profile.supportEmail, href: `mailto:${profile.supportEmail}`, icon: Mail }] : []),
+    ...(profile?.supportPhone ? [{ title: 'Phone', text: profile.supportPhone, href: `tel:${profile.supportPhone.replace(/[^+\d]/g, '')}`, icon: Phone }] : []),
+    ...(address ? [{ title: 'Location', text: address, icon: MapPin }] : []),
+  ];
+
   return <div className={styles.page}>
-    <SectionReveal><section className={styles.hero}><h1>Let's talk</h1><p>Questions about ElectroHub? Explore the demo contact details below or try the form.</p></section></SectionReveal>
+    <SectionReveal><section className={styles.hero}><h1>Let's talk</h1><p>Questions about {profile?.storeName ?? 'ElectroHub'}? Get in touch with our team.</p></section></SectionReveal>
     <div className={styles.content}><div className={styles.contactLayout}>
-      <section aria-labelledby="contact-options"><SectionReveal><h2 id="contact-options">Contact information</h2><p>These details are examples for this storefront demo.</p></SectionReveal><StaggerContainer className={styles.contactCards}>
-        {[
-          { title: 'Email', text: 'demo@example.com (example only)', icon: Mail },
-          { title: 'Phone', text: '+1 (555) 010-0000 (example only)', icon: Phone },
-          { title: 'Support Hours', text: 'Mon–Fri, 9:00–17:00 (example only)', icon: Clock3 },
-          { title: 'Location', text: 'Online storefront demo; no physical office', icon: MapPin },
-        ].map(({ title, text, icon: Icon }, index) => <StaggerItem key={title} index={index}><article className={styles.card}><Icon aria-hidden="true" /><h3>{title}</h3><p>{text}</p></article></StaggerItem>)}
+      <section aria-labelledby="contact-options"><SectionReveal><h2 id="contact-options">Contact information</h2><p>We’re here to help.</p>
+        {profileQuery.isPending && <p role="status">Loading store contact details…</p>}
+        {profileQuery.isError && !profileQuery.data && <p role="alert">Store contact details are temporarily unavailable. You can still send a message using the form.</p>}
+      </SectionReveal><StaggerContainer className={styles.contactCards}>
+        {cards.map(({ title, text, href, icon: Icon }, index) => <StaggerItem key={title} index={index}><article className={styles.card}><Icon aria-hidden="true" /><h3>{title}</h3><p>{href ? <a href={href}>{text}</a> : text}</p></article></StaggerItem>)}
       </StaggerContainer></section>
-      <SectionReveal><form className={styles.form} onSubmit={handleSubmit} noValidate><h2>Send a message</h2><p>This form is a demo and does not deliver messages.</p>
+      <SectionReveal><form className={styles.form} onSubmit={handleSubmit} noValidate><h2>Send a message</h2><p>Send a message to our support team.</p>
         {fields.map(field => <div className={styles.field} key={field}><label htmlFor={`contact-${field}`}>{field}</label>{field === 'Message' ? <textarea id={`contact-${field}`} value={values[field]} aria-invalid={!!errors[field]} aria-describedby={errors[field] ? `contact-${field}-error` : undefined} onChange={event => { setValues({ ...values, [field]: event.target.value }); setSubmitted(false); }} /> : <input id={`contact-${field}`} type={field === 'Email' ? 'email' : 'text'} value={values[field]} aria-invalid={!!errors[field]} aria-describedby={errors[field] ? `contact-${field}-error` : undefined} onChange={event => { setValues({ ...values, [field]: event.target.value }); setSubmitted(false); }} />}{errors[field] && <p className={styles.error} id={`contact-${field}-error`}>{errors[field]}</p>}</div>)}
-        <button className={styles.submit} type="submit">Send Message</button>{submitted && <p role="status" className={styles.notice}>Contact submission is currently a demo and is not connected to a delivery service.</p>}
+        <button className={styles.submit} type="submit" disabled={contact.isPending}>{contact.isPending ? 'Sending…' : 'Send Message'}</button>{submitted && <p role="status" className={styles.notice}>Your message has been sent.</p>}{contact.isError && <p role="alert" className={styles.error}>{contact.error instanceof ApiError ? contact.error.message : 'We could not send your message. Please try again.'}</p>}
       </form></SectionReveal>
     </div></div>
   </div>;

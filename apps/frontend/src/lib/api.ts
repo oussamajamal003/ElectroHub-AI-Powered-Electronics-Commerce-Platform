@@ -6,16 +6,28 @@ export class ApiError extends Error {
   }
 }
 
-interface FetchOptions extends RequestInit { data?: unknown }
-let accessToken: string | null = null;
-let refreshPromise: Promise<string | null> | null = null;
+/**
+ * Task 05.2 session isolation: the Admin Console and the storefront are two independent credential scopes in one browser. Each owns its
+ * own in-memory access token, single-flight refresh, cross-document refresh lock and expiry event, and refreshes only through its own
+ * role-specific endpoint and HttpOnly cookie. Nothing here guesses a scope from "whoever signed in last".
+ */
+export type AuthScope = 'admin' | 'customer';
+interface FetchOptions extends RequestInit { data?: unknown; /** Overrides the scope derived from the endpoint (rarely needed). */ scope?: AuthScope }
+const sessions: Record<AuthScope, { token: string | null; refresh: Promise<string | null> | null }> = {
+  admin: { token: null, refresh: null }, customer: { token: null, refresh: null } };
 
-export function setAccessToken(token: string | null) { accessToken = token; }
+/** Administrator APIs (and the pre-auth administrator MFA endpoints) are ADMIN scope; every other endpoint is CUSTOMER scope. */
+export function scopeForEndpoint(endpoint: string): AuthScope {
+  return /^\/?api\/(?:admin|auth\/admin)(?:\/|\?|$)/.test(endpoint) ? 'admin' : 'customer';
+}
+
+export function setAccessToken(token: string | null, scope: AuthScope = 'customer') { sessions[scope].token = token; }
 /** Task 04.7: the live delivery socket authenticates with the same in-memory token (never stored, never in a URL). */
-export function getAccessToken() { return accessToken; }
+export function getAccessToken(scope: AuthScope = 'customer') { return sessions[scope].token; }
 
-function notifySessionExpired() {
-  if (typeof window !== 'undefined') window.dispatchEvent(new Event('electrohub:session-expired'));
+export const SESSION_EXPIRED_EVENT = 'electrohub:session-expired';
+function notifySessionExpired(scope: AuthScope) {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT, { detail: { scope } }));
 }
 
 function safeMessage(status: number) {
@@ -27,15 +39,38 @@ function safeMessage(status: number) {
   return 'Request failed. Please try again.';
 }
 
+/** Task 05.2: an administrator session that was revoked, expired or lost its MFA assurance ends the session like any other 401. */
+const ADMIN_SESSION_INVALID = 'ADMIN_SESSION_INVALID';
+function errorCodeOf(payload: unknown): string | undefined {
+  const error = payload && typeof payload === 'object' ? (payload as Record<string, unknown>).error : undefined;
+  const structured = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+  return typeof structured.code === 'string' ? structured.code : undefined;
+}
+
+// Inspect a 401 without teeing its stream. The final error reader reuses the same parsed body.
+const jsonPayloads = new WeakMap<Response, Promise<unknown>>();
+function jsonPayload(response: Response): Promise<unknown> {
+  let payload = jsonPayloads.get(response);
+  if (!payload) {
+    payload = (response.headers.get('content-type') ?? '').includes('application/json')
+      ? response.json().catch(() => null) : Promise.resolve(null);
+    jsonPayloads.set(response, payload);
+  }
+  return payload;
+}
+
 async function readResponse<T>(response: Response): Promise<T> {
   if (response.status === 204 || response.status === 205) return undefined as T;
-  const contentType = response.headers.get('content-type') ?? '';
-  const payload: unknown = contentType.includes('application/json') ? await response.json().catch(() => null) : null;
+  const payload = await jsonPayload(response);
   if (!response.ok) {
     const body = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
     const error = body.error;
     const structured = error && typeof error === 'object' ? error as Record<string, unknown> : {};
     const code = typeof structured.code === 'string' ? structured.code : undefined;
+    if (response.status === 401 && code === ADMIN_SESSION_INVALID) {
+      setAccessToken(null, 'admin');
+      notifySessionExpired('admin');
+    }
     const candidate = typeof structured.message === 'string' ? structured.message :
       typeof error === 'string' ? error : typeof body.message === 'string' ? body.message : undefined;
     const safe = response.status < 500 && candidate && !/(prisma|sql|stack|\\|\/users\/|database|certificate|secret)/i.test(candidate);
@@ -79,15 +114,15 @@ async function fetchRefreshUnlocked(url: string, baseInit: RequestInit): Promise
  * that is unloading releases its lock automatically. The wait is bounded so a wedged holder can never block sign-in; without the API (or on
  * timeout) behavior is unchanged. This does not recover a rotated cookie whose response was lost: that stays a clean re-authentication.
  */
-const REFRESH_LOCK_NAME = 'electrohub:auth-refresh';
+const refreshLockName = (scope: AuthScope) => `electrohub:auth-refresh:${scope}`;
 const REFRESH_LOCK_WAIT_MS = 8_000;
-async function fetchRefresh(url: string, init: RequestInit): Promise<Response> {
+async function fetchRefresh(scope: AuthScope, url: string, init: RequestInit): Promise<Response> {
   const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
   if (!locks || typeof locks.request !== 'function') return fetchRefreshUnlocked(url, init);
   const waitAbort = new AbortController();
   const timer = setTimeout(() => waitAbort.abort(), REFRESH_LOCK_WAIT_MS);
   try {
-    return await locks.request(REFRESH_LOCK_NAME, { signal: waitAbort.signal }, async () => {
+    return await locks.request(refreshLockName(scope), { signal: waitAbort.signal }, async () => {
       clearTimeout(timer);
       return fetchRefreshUnlocked(url, init);
     });
@@ -98,34 +133,35 @@ async function fetchRefresh(url: string, init: RequestInit): Promise<Response> {
     clearTimeout(timer);
   }
 }
-const postRefresh = (init: RequestInit) => fetchRefresh('/api/auth/refresh', init);
+export const refreshPath = (scope: AuthScope) => `/api/auth/${scope}/refresh`;
 
-async function refreshSession(): Promise<string | null> {
-  if (!refreshPromise) {
-    refreshPromise = (async () => {
+async function refreshSession(scope: AuthScope): Promise<string | null> {
+  const session = sessions[scope];
+  if (!session.refresh) {
+    session.refresh = (async () => {
       try {
-        const response = await postRefresh({ method: 'POST', credentials: 'include' });
+        const response = await fetchRefresh(scope, refreshPath(scope), { method: 'POST', credentials: 'include' });
         if (response.status === 401 || response.status === 403) {
-          setAccessToken(null);
-          notifySessionExpired();
+          setAccessToken(null, scope);
+          notifySessionExpired(scope);
           return null;
         }
         if (!response.ok) throw new ApiError(response.status, safeMessage(response.status));
         const body = await readResponse<{ accessToken: string }>(response);
         const token = typeof body?.accessToken === 'string' ? body.accessToken : null;
-        setAccessToken(token);
+        setAccessToken(token, scope);
         return token;
       } catch (error) {
         if (error instanceof ApiError) throw error;
         throw new ApiError(0, 'Unable to connect. Please try again.');
       }
-    })().finally(() => { refreshPromise = null; });
+    })().finally(() => { session.refresh = null; });
   }
-  return refreshPromise;
+  return session.refresh;
 }
 
 /** Task 04.7: the socket's session:expired / UNAUTHENTICATED path reuses the single-flight refresh (null when the session is over). */
-export function refreshAccessToken(): Promise<string | null> { return refreshSession(); }
+export function refreshAccessToken(scope: AuthScope = 'customer'): Promise<string | null> { return refreshSession(scope); }
 
 export function isAbortError(error: unknown): boolean {
   if (!error) return false;
@@ -139,20 +175,28 @@ export function isAbortError(error: unknown): boolean {
 /** Shared transport: bearer attachment, one bounded refresh on 401 and abort/connection error mapping (JSON and binary callers). */
 async function send(endpoint: string, options: FetchOptions, extra: RequestInit = {}): Promise<Response> {
   const url = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const { data, ...requestOptions } = options;
+  const { data, scope: explicitScope, ...requestOptions } = options;
+  const scope = explicitScope ?? scopeForEndpoint(url);
   const headers = new Headers(options.headers);
   if (data !== undefined && !(data instanceof FormData)) headers.set('Content-Type', 'application/json');
-  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+  const requestToken = sessions[scope].token;
+  if (requestToken) headers.set('Authorization', `Bearer ${requestToken}`);
   const privateCollection = /^\/api\/(?:cart|wishlist|auth\/me)(?:\/|\?|$)/.test(url);
   const config: RequestInit = { ...requestOptions, headers, credentials: 'include',
     ...(privateCollection ? { cache: 'no-store' as const } : {}), ...extra };
   if (data !== undefined) config.body = data instanceof FormData ? data : JSON.stringify(data);
   let response: Response;
   try {
-    response = url.split('?')[0] === '/api/auth/refresh' ? await fetchRefresh(url, config) : await fetch(url, config);
-    if (response.status === 401 && !/\/api\/auth\/(me|refresh|login|logout)(?:\?|$)/.test(url)) {
+    const path = url.split('?')[0];
+    response = path === refreshPath('admin') || path === refreshPath('customer')
+      ? await fetchRefresh(path === refreshPath('admin') ? 'admin' : 'customer', url, config) : await fetch(url, config);
+    // Pre-auth administrator endpoints answer 401 for wrong or expired challenges: those are never a reason to refresh the session.
+    if (response.status === 401 && !/\/api\/auth\/(me|login|logout)(?:\?|$)|\/api\/auth\/(admin|customer)\/(refresh|logout)|\/api\/auth\/admin\//.test(url)
+      && errorCodeOf(await jsonPayload(response)) !== ADMIN_SESSION_INVALID) {
       if (options.signal?.aborted) throw new DOMException('The user aborted a request.', 'AbortError');
-      const token = await refreshSession();
+      // A slow 401 may arrive after another request has already completed the shared rotation.
+      const current = sessions[scope].token;
+      const token = current && current !== requestToken ? current : await refreshSession(scope);
       if (options.signal?.aborted) throw new DOMException('The user aborted a request.', 'AbortError');
       if (!token) throw new ApiError(401, safeMessage(401));
       headers.set('Authorization', `Bearer ${token}`);

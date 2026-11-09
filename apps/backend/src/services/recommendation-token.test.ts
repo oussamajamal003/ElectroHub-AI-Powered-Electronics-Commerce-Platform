@@ -86,3 +86,13 @@ describe('recommendation impression tokens', () => {
     expect(JSON.stringify(body)).not.toMatch(/user|email|session|sub/i);
   });
 });
+
+describe('Task 05.2 featured-pin attribution claim', () => {
+  it('round-trips featuredProductIds and keeps tokens without it valid', async () => {
+    const { issueImpressionToken: issue, verifyImpressionToken: verify } = await import('./recommendation-token.js');
+    const ids = ['8f9b6a3e-1c2d-4e5f-8a9b-0c1d2e3f4a5b', '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d'];
+    expect(verify(issue({ mode: 'POPULAR_PRODUCTS', strategy: 'MEASURED_POPULARITY', surface: 'home', productIds: ids, featuredProductIds: [ids[0]] }))?.featuredProductIds)
+      .toEqual([ids[0]]);
+    expect(verify(issue({ mode: 'POPULAR_PRODUCTS', strategy: 'MEASURED_POPULARITY', surface: 'home', productIds: ids }))?.featuredProductIds).toBeUndefined();
+  });
+});

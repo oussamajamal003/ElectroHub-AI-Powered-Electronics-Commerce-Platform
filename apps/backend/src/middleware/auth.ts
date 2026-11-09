@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken, JwtPayload } from '../utils/jwt.js';
 import { logger } from '../utils/logger.js';
 import { prisma } from '../lib/prisma.js';
+import { findActiveAdminSession, touchAdminSession, type ActiveAdminSession } from '../services/admin-session.js';
 
 // Extend Express Request type to include user
 declare global {
@@ -9,6 +10,8 @@ declare global {
   namespace Express {
     interface Request {
       user?: JwtPayload;
+      /** Set by requireAuth for ADMIN accounts only: the verified, unrevoked MFA session this request runs under. */
+      adminSession?: ActiveAdminSession;
     }
   }
 }
@@ -49,6 +52,18 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       logger.warn('AUTH_UNAUTHORIZED', { reason: 'Account is unavailable' });
       res.status(401).json({ error: 'Unauthenticated' });
       return;
+    }
+    // Task 05.2: an ADMIN identity is honoured only through a live MFA-assured session family. A token without the session
+    // claim (pre-MFA legacy token, or a CUSTOMER token whose account was promoted) never reaches any route as ADMIN.
+    if (user.role.name === 'ADMIN') {
+      const session = payload.sessionId ? await findActiveAdminSession(payload.sessionId, user.id) : null;
+      if (!session) {
+        logger.warn('AUTH_UNAUTHORIZED', { reason: 'Administrator session is not MFA-assured or was revoked', userId: user.id });
+        res.status(401).json({ error: { code: 'ADMIN_SESSION_INVALID', message: 'Your administrator session has ended. Sign in again.' } });
+        return;
+      }
+      req.adminSession = session;
+      touchAdminSession(session);
     }
     req.user = { ...payload, role: user.role.name };
     next();

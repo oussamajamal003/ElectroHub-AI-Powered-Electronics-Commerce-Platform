@@ -44,6 +44,16 @@ Vite validates loopback targets and reserved port pairs. CLI `--port` is honoure
 
 `npm run dev --workspace=@electrohub/backend` remains the watched, **payment-restricted** shared-DEV mode. It is not read-only for ordinary authenticated cart/auth actions. It does not run shared payment recovery. Never copy a deployment approval into it.
 
+## Local AI image search
+
+Start the AI service from `apps/ai-service` with `venv\Scripts\python.exe -m app`. Use the model and relevance artifact directories configured together in that service's `.env`; inherited shell variables override the file. Clear stale `AI_MODEL_ARTIFACT_DIR` / `AI_RELEVANCE_ARTIFACT_DIR` overrides before starting when the `.env` pair is intended.
+
+In particular, `models/relevance-imagenet-v1` is incompatible with the `siglip2-b16-p256-d1` encoder. That combination fails closed with `ArtifactRejectedError` (relevance gate calibrated for a different model version), leaving image search at `MODEL_NOT_LOADED` and the public endpoint at `503 IMAGE_SEARCH_UNAVAILABLE`. Use the configured compatible relevance artifact, not a disabled relevance gate, and restart the AI process after correcting its launch environment.
+
+Verify authenticated `/internal/v1/ready` reports `features.imageSearch.available: true`, then upload an image to `/api/search/image` through the frontend proxy. `/health` alone does not prove model or index readiness. The image endpoint permits 20 requests per IP per five minutes; honor `Retry-After` when testing instead of weakening the limiter.
+
+Incident verification (2026-11-06): reproduced the incompatible-artifact rejection; the configured SigLIP/D3 pair loaded successfully after restart. Model/index readiness and camera-image uploads through both `:5000` and `:3000` returned HTTP 200 with catalog matches. No model, index, database or application-code changes were required.
+
 ## Isolated QA
 
 ```powershell
@@ -72,6 +82,10 @@ npm run dev -- --host 127.0.0.1 --strictPort
 Use separate browser contexts/profiles for DEV and QA. Localhost cookies are shared across ports; port numbers do not isolate sessions. Do not run simultaneous DEV/QA sign-ins in one browser cookie jar.
 
 ## Browser and regression checks
+
+Settings breadcrumbs use `Dashboard → Settings → current section` for Store, Notifications, Shipping, the Administrators tab and the standalone Administrators page (including its loading state). The Settings ancestor links to `/admin/settings`. Regression coverage lives in `AdminSettingsPage.test.tsx` and `AdminAdministratorsPage.test.tsx`; `scripts/administrators-loading-qa.cjs` also clicks the breadcrumb and verifies navigation at desktop and mobile widths.
+
+Administrators loading regression: `node scripts/administrators-loading-qa.cjs` from the repository root checks the running frontend on `:3000` with mocked API responses only. It holds the profile response pending, checks four existing DataTable skeleton rows and the absence of invitation controls, then releases the profile and checks the loaded transition. Captures are written to `.cache/administrators-loading/pending-{1920,390}.png`. On 2026-11-06, both 1920×900 and 390×900 passed and the captures were inspected: skeleton rows replace the previously blank content area, retaining the existing horizontally scrollable mobile table. The supplied blank-page screenshot and repository settings reference informed this fix; no dedicated Administrators loading frame was available. The component regression is `src/pages/admin/AdminAdministratorsPage.test.tsx` in the frontend workspace.
 
 The private `GET /api/internal/development-runtime` diagnostic requires loopback access and a per-launch bearer token, is unavailable in production, and returns only runtime mode, random instance identity and database/TLS readiness. Tokens are in ignored `.cache/dev-runtime-token.txt` (supervised DEV) or `.isolated/runtime-token.txt` (QA); never paste them into logs or documentation. No diagnostic grants payment authority.
 
@@ -127,10 +141,17 @@ Manual equivalent of the default: `--allow-email-allowlist` plus `COMMERCE_EMAIL
 
 **Normal Test Mode checkout (MAIN DEV).**
 - **Why checkout fails on the watched API:** `npm run dev` is the payment-restricted API and always reports `paymentsEnabled:false`, so checkout shows `PAYMENT_MUTATIONS_DISABLED`.
-- **To check out,** stop the watched API and run `node scripts/dev-payment-runtime.cjs --start --allow-dev-checkout --recovery-mode=checkout --accepted-backlog-attempt=<isolated id>`. A `--preflight` variant runs the same checks without starting.
+- **Read-only preflight:** from the repository root, run `npm run payment:dev:checkout:preflight --workspace=@electrohub/backend`.
+- **Preflight `Migration ledger contains a pending, failed, or rolled-back migration`:** the guard requires `logs IS NULL` on every `_prisma_migrations` row. A row applied through other tooling can carry `logs = ''` (seen 2026-11-09 on `20261113000000_stock_alert_outbox`; checksum and `finished_at` were correct). Verify the row read-only, then clear only that value with one authorized `UPDATE ... SET logs = NULL WHERE migration_name = '<name>' AND logs = ''`. Never weaken the guard.
+- **Preflight `DEV backend port has an existing owner`:** the watched restricted API owns port 5000. The supervisor never replaces it; stop it deliberately (your own dev terminal) and have separate exact authorization before `--start`.
+- **Checkout page recovery:** after the supervised runtime is up, **Check availability again** performs an uncached capability read, clears the stale refusal, restarts the existing eligible payment setup and never submits a card. A failed read keeps the unavailable notice and shows a retry message.
+- **Start checkout mode:** after preflight passes and the existing port owner is stopped safely, run `npm run payment:dev:checkout --workspace=@electrohub/backend`. These named commands call the same supervisor as the direct `node scripts/dev-payment-runtime.cjs` invocation; they add no payment authority of their own.
+  - If preflight identifies a specific isolated backlog row, use only its already verified and separately approved ID: append `-- --accepted-backlog-attempt=<uuid>` to the npm command. Never invent an ID or bypass the backlog gate.
+  - If the branch contains a migration absent from shared DEV, preflight must refuse startup. Do not skip the migration check; use a schema-matching checkout or complete the migration through its separately authorized procedure first.
   - It runs the same DEV identity, TLS, migration, Stripe Test account and backlog gates.
   - It supervises the payment-enabled API plus the signed webhook listener.
   - It starts **no recovery worker** and keeps in-process recovery off. A stalled attempt stays Processing until a separately authorized `exact-attempt` run.
+- **Browser routing:** keep the frontend on `http://localhost:3000` with its Vite API proxy pointed at the supervised `http://localhost:5000` API. Use the private development-runtime diagnostic to confirm direct and proxied requests attest the same instance; never expose its bearer token.
 - **Ctrl+C** returns to restricted mode, after which `npm run dev` may be restarted.
 - **Only one owner of :5000 at a time.** Switching modes is always: stop, then preflight, then start.
 

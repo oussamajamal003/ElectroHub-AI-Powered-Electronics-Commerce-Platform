@@ -200,7 +200,7 @@ describe.skipIf(!enabled).sequential('Task 04.5 DeliveryService on real PostgreS
     expect(await prisma.deliveryEvent.count({ where: { deliveryId: delivery.id } })).toBe(2);
   });
 
-  it('T5-05 cancelled after tracking: CANCELLED with recorded history kept, every write rejected', async () => {
+  it('T5-05 cancelled after tracking: CANCELLED with customer history withheld, every write rejected', async () => {
     const order = await fixtures.order(customer.id, 'CONFIRMED', 'SUCCEEDED');
     await service.start(admin.id, order.reference);
     await service.applyUpdate(admin.id, order.reference, { expectedRevision: 1, status: 'PREPARING' });
@@ -209,7 +209,7 @@ describe.skipIf(!enabled).sequential('Task 04.5 DeliveryService on real PostgreS
     await prisma.payment.update({ where: { orderId: order.id }, data: { status: 'REFUNDED', refundedAt: new Date() } });
     const view = await service.getCustomerSnapshot(customer.id, order.reference);
     expect(view).toMatchObject({ availability: 'CANCELLED', status: 'CANCELLED', location: null, trackingReference: null });
-    expect(view.timeline.map(entry => entry.type)).toEqual(['STATUS_CHANGED', 'TRACKING_STARTED']);
+    expect(view.timeline).toEqual([]);
     expect(await code(service.applyUpdate(admin.id, order.reference, { expectedRevision: 2, status: 'OUT_FOR_DELIVERY' }))).toBe('DELIVERY_ORDER_CANCELLED');
     expect(await code(service.start(admin.id, order.reference))).toBe('DELIVERY_ORDER_CANCELLED');
     expect((await prisma.delivery.findUniqueOrThrow({ where: { orderId: order.id } })).status).toBe('PREPARING');

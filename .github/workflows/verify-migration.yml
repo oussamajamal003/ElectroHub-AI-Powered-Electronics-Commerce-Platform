@@ -61,3 +61,10 @@ jobs:
         run: |
           cd apps/backend
           npx prisma migrate status
+
+      - name: Verify repeat deploy is a no-op (disposable database)
+        run: |
+          cd apps/backend
+          output="$(npx prisma migrate deploy)"
+          printf '%s\n' "$output"
+          printf '%s\n' "$output" | grep -F 'No pending migrations to apply.'

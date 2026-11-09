@@ -54,10 +54,10 @@ test('mobile sign-out closes navigation and sends one logout request', async ({ 
   const user = { id: 'demo', firstName: 'Demo', lastName: 'User', email: 'demo@example.com', role: 'CUSTOMER' };
   // Session restore is refresh-first and only runs for a cached identity hint.
   await page.addInitScript(([key, cached]) => sessionStorage.setItem(key, JSON.stringify(cached)), [cachedUserKey, user] as const);
-  await page.route('**/api/auth/refresh', route => route.fulfill({ json: refreshedSession(user) }));
+  await page.route('**/api/auth/customer/refresh', route => route.fulfill({ json: refreshedSession(user) }));
   await page.route('**/api/auth/me', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user }) }));
   let logoutRequests = 0;
-  await page.route('**/api/auth/logout', route => {
+  await page.route('**/api/auth/customer/logout', route => {
     logoutRequests += 1;
     return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
   });

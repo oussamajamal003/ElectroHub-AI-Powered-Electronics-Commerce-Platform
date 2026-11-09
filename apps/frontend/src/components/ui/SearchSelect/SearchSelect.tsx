@@ -36,7 +36,7 @@ export interface SearchSelectProps {
  * A select for long lists (categories, brands): a button that opens a search field over a listbox (WAI-ARIA combobox pattern with
  * aria-activedescendant). Arrow keys, Home/End, Enter, Escape and type-to-search work; the selected option scrolls into view; the
  * popup is never narrower than the trigger nor wider than the viewport, opens upward when there is no room below, and long labels
- * stay on one line with an ellipsis (full text in the title).
+ * wrap within the available width so their full text remains visible.
  */
 export function SearchSelect({ label, hideLabel, value, onValueChange, options, placeholder = 'Select…', searchPlaceholder = 'Search',
   emptyText = 'No matches', error, helperText, required, disabled, fullWidth, className, triggerClassName }: SearchSelectProps) {

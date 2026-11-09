@@ -10,9 +10,9 @@ export type DocumentDisposition = 'inline' | 'attachment';
 export const DOCUMENT_POLICY = 'COMMERCIAL_V1' as const;
 export const SNAPSHOT_VERSION = 1 as const;
 /** Bump when the visual template changes; old bytes are not retrievable in on-demand mode (§6.1). */
-export const TEMPLATE_VERSION = 'commercial-template-1.0.0';
-/** Brand-only seller profile: no registered legal entity, address, phone or tax number is asserted. */
-export const SELLER_PROFILE_VERSION = 'electrohub-brand-1';
+export const TEMPLATE_VERSION = 'commercial-template-1.1.0';
+/** Snapshot of configured store contact identity; this is not a registered legal seller or tax profile. */
+export const SELLER_PROFILE_VERSION = 'store-identity-snapshot-v1';
 
 export const DOCUMENT_LIMITS = {
   maxItems: 100,
@@ -51,6 +51,10 @@ export interface DocumentSnapshotV1 {
   templateVersion: string;
   assetVersion: string;
   sellerProfileVersion: string;
+  seller: {
+    storeName: string; supportEmail: string | null; supportPhone: string | null; addressLine1: string | null; addressLine2: string | null;
+    city: string | null; region: string | null; postalCode: string | null; country: string | null;
+  };
   /** This deployment only processes Stripe Test Mode payments (§5.1); printed on every output. */
   testTransaction: boolean;
   orderReference: string;

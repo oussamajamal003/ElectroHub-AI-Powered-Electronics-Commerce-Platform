@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { parseOrderReference } from '../services/order.service.js';
 import { logSafely } from '../utils/logger.js';
 import { realtimeMetrics } from './realtime-metrics.js';
-import { lookupActiveUser, socketAuthMiddleware, socketError, type SocketIdentity, type UserLookup } from './socket-auth.js';
+import { liveAdminSession, lookupActiveUser, socketAuthMiddleware, socketError, type AdminSessionCheck, type SocketIdentity, type UserLookup } from './socket-auth.js';
 
 /**
  * Task 04.7 `/delivery` namespace (architecture §8.1–§8.2). A hint channel, never a store: clients always re-read REST on (re)connect.
@@ -13,6 +13,8 @@ import { lookupActiveUser, socketAuthMiddleware, socketError, type SocketIdentit
 export const DELIVERY_NAMESPACE = '/delivery';
 export const orderRoom = (orderId: string) => `delivery:order:${orderId}`;
 export const userRoom = (userId: string) => `user:${userId}`;
+/** Server-selected room for MFA-assured administrators. Customers never join it. */
+export const adminInventoryRoom = 'admin:inventory';
 const REFERENCE = /^ORD-[0-9A-F-]{36}$/;
 
 export type GatewayLimits = { connectionsPerUser: number; subscriptionsPerSocket: number; subscribesPerMinute: number };
@@ -32,9 +34,10 @@ export const resolveSubscribableOrder: OrderResolver = async (identity, referenc
 export interface DeliveryGateway { io: Server; namespace: Namespace; disconnectUser(userId: string, reason: string): void; close(): Promise<void> }
 
 export function attachDeliveryGateway(server: HttpServer, options: { corsOrigin: string | string[]; lookup?: UserLookup; resolveOrder?: OrderResolver;
-  limits?: Partial<GatewayLimits>; clock?: () => number }): DeliveryGateway {
+  limits?: Partial<GatewayLimits>; clock?: () => number; adminSession?: AdminSessionCheck }): DeliveryGateway {
   const limits = { ...DEFAULT_LIMITS, ...options.limits };
   const lookup = options.lookup ?? lookupActiveUser;
+  const adminSession = options.adminSession ?? liveAdminSession;
   const resolveOrder = options.resolveOrder ?? resolveSubscribableOrder;
   const clock = options.clock ?? Date.now;
   const io = new Server(server, { path: '/socket.io', cors: { origin: options.corsOrigin, credentials: true }, transports: ['websocket', 'polling'],
@@ -52,7 +55,7 @@ export function attachDeliveryGateway(server: HttpServer, options: { corsOrigin:
     if (remaining > 0) perUser.set(userId, remaining); else perUser.delete(userId);
   };
 
-  namespace.use(socketAuthMiddleware(lookup));
+  namespace.use(socketAuthMiddleware(lookup, options.adminSession));
   namespace.use((socket, next) => {
     const { userId } = socket.data.identity as SocketIdentity;
     if ((perUser.get(userId) ?? 0) >= limits.connectionsPerUser) {
@@ -69,6 +72,7 @@ export function attachDeliveryGateway(server: HttpServer, options: { corsOrigin:
     realtimeMetrics.increment('connections_accepted');
     realtimeMetrics.adjust('connected_sockets', 1);
     void socket.join(userRoom(identity.userId));
+    if (identity.role === 'ADMIN') void socket.join(adminInventoryRoom);
     const subscriptions = new Set<string>();
     const attempts: number[] = [];
 
@@ -90,7 +94,9 @@ export function attachDeliveryGateway(server: HttpServer, options: { corsOrigin:
       try {
         // Role and active state are re-evaluated on every subscribe, never trusted from the handshake.
         const user = await lookup(identity.userId);
-        if (!user) { realtimeMetrics.increment('subscribe_denied'); reply({ ok: false, code: 'UNAUTHENTICATED' }); socket.disconnect(true); return; }
+        if (!user || (user.role === 'ADMIN' && !(identity.sessionId && await adminSession(identity.sessionId, identity.userId)))) {
+          realtimeMetrics.increment('subscribe_denied'); reply({ ok: false, code: 'UNAUTHENTICATED' }); socket.disconnect(true); return;
+        }
         const order = await resolveOrder({ userId: identity.userId, role: user.role }, reference);
         if (!order || !socket.connected) { realtimeMetrics.increment('subscribe_denied'); return reply({ ok: false, code: 'NOT_FOUND' }); }
         const room = orderRoom(order.orderId);

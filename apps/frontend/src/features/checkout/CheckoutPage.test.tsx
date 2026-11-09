@@ -1339,4 +1339,92 @@ describe('payment-write-disabled environment', () => {
     expect(await screen.findByText(/switched off on this server/)).toBeVisible();
     expect(setups).toBe(0); expect(actions.confirm).not.toHaveBeenCalled();
   });
+
+  it('rechecks backend authority before retrying payment setup after the runtime becomes ready', async () => {
+    let capabilityReads = 0; let setups = 0;
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint === '/api/checkout') return { data: quote } as never;
+      if (endpoint === '/api/checkout/payment-capability') {
+        capabilityReads++;
+        return { data: { paymentsEnabled: capabilityReads > 1 } } as never;
+      }
+      if (endpoint === '/api/checkout/payment-attempts') {
+        setups++;
+        throw new ApiError(503, 'Payments are unavailable in this environment.', undefined, 'PAYMENT_MUTATIONS_DISABLED');
+      }
+      throw new Error(`Unexpected test request ${endpoint}`);
+    });
+    reviewedDraft(); show('/checkout?step=payment');
+    expect(await screen.findByText(/switched off on this server/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Check availability again' }));
+    await waitFor(() => expect(capabilityReads).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(setups).toBe(1));
+    expect(screen.getByText(/switched off on this server/)).toBeVisible();
+    expect(actions.confirm).not.toHaveBeenCalled();
+  });
+
+  it('recovers without a reload after a setup refusal once the runtime is enabled, starting setup again and never submitting', async () => {
+    let enabled = false; let setups = 0;
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint === '/api/checkout') return { data: quote } as never;
+      if (endpoint === '/api/checkout/payment-capability') return { data: { paymentsEnabled: true } } as never;
+      if (endpoint === '/api/checkout/payment-attempts') {
+        setups++;
+        if (!enabled) throw new ApiError(503, 'Payments are unavailable in this environment.', undefined, 'PAYMENT_MUTATIONS_DISABLED');
+        return { data: setup } as never;
+      }
+      throw new Error(`Unexpected test request ${endpoint}`);
+    });
+    reviewedDraft(); show('/checkout?step=payment');
+    expect(await screen.findByText(/switched off on this server/)).toBeVisible();
+    enabled = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Check availability again' }));
+    await waitFor(() => expect(screen.queryByText(/switched off on this server/)).not.toBeInTheDocument());
+    await waitFor(() => expect(setups).toBe(2));
+    expect(actions.confirm).not.toHaveBeenCalled();
+  });
+
+  it('keeps the truthful notice while still disabled and shows an actionable error when the capability read fails', async () => {
+    let mode: 'disabled' | 'fail' = 'disabled';
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint === '/api/checkout') return { data: quote } as never;
+      if (endpoint === '/api/checkout/payment-capability') {
+        if (mode === 'fail') throw new ApiError(500, 'Server error');
+        return { data: { paymentsEnabled: false } } as never;
+      }
+      throw new Error(`Unexpected test request ${endpoint}`);
+    });
+    reviewedDraft(); show('/checkout?step=payment');
+    expect(await screen.findByText(/switched off on this server/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Check availability again' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Check availability again' })).toBeEnabled());
+    expect(screen.getByText(/switched off on this server/)).toBeVisible();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    mode = 'fail';
+    fireEvent.click(screen.getByRole('button', { name: 'Check availability again' }));
+    expect(await screen.findByText('Payment availability could not be checked. Please try again.')).toBeVisible();
+    expect(screen.getByText(/switched off on this server/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Check availability again' })).toBeEnabled();
+  });
+
+  it('does not start duplicate capability reads on rapid repeated clicks', async () => {
+    let reads = 0; let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint === '/api/checkout') return { data: quote } as never;
+      if (endpoint === '/api/checkout/payment-capability') {
+        reads++;
+        if (reads > 1) await gate;
+        return { data: { paymentsEnabled: false } } as never;
+      }
+      throw new Error(`Unexpected test request ${endpoint}`);
+    });
+    reviewedDraft(); show('/checkout?step=payment');
+    const button = await screen.findByRole('button', { name: 'Check availability again' });
+    const before = reads;
+    fireEvent.click(button); fireEvent.click(button); fireEvent.click(button);
+    await waitFor(() => expect(reads).toBeGreaterThan(before));
+    expect(reads - before).toBe(1);
+    release();
+  });
 });

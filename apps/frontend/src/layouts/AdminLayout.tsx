@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation, useMatch } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useMatch, useNavigationType } from 'react-router-dom';
 import clsx from 'clsx';
-import { AlertTriangle, Bell, ExternalLink, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, Truck, ClipboardList } from 'lucide-react';
-import { useAuth } from '@/features/auth/context/AuthContext';
+import { AlertTriangle, Bell, ExternalLink, LogOut, Menu, PackageX, PanelLeftClose, PanelLeftOpen, Truck, ClipboardList, UserRound, ShieldCheck, MonitorSmartphone } from 'lucide-react';
+import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/Drawer';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/DropdownMenu';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { ADMIN_NAVIGATION, SIDEBAR_PREFERENCE_KEY, type AdminNavItem } from '@/features/admin/shell/navigation';
 import { useAdminAlerts } from '@/features/admin/dashboard/api';
+import { useAdminInventoryLiveUpdates } from '@/features/admin/dashboard/useAdminInventoryLiveUpdates';
 import { AdminToastProvider, ConfirmDialog } from '@/features/admin/shared/AdminUi';
 import { formatCount, initials } from '@/features/admin/shared/format';
 import styles from './AdminLayout.module.scss';
@@ -68,7 +69,7 @@ function AlertsMenu() {
         {attention > 0 && <span className={styles.badge} aria-hidden="true">{attention > 99 ? '99+' : attention}</span>}
       </button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" sideOffset={8} className={styles.menu}>
+    <DropdownMenuContent align="end" sideOffset={8} className={`${styles.menu} ${styles.animatedMenu}`}>
       <DropdownMenuLabel className={styles.menuLabel}>Operational alerts</DropdownMenuLabel>
       <DropdownMenuSeparator />
       {alerts.isPending && <p className={styles.menuNote} role="status">Loading alerts…</p>}
@@ -87,7 +88,7 @@ function AlertsMenu() {
 
 /** Avatar-only trigger; the name, email and actions live in the menu. Sign out asks first, then uses the existing AuthContext logout. */
 function ProfileMenu() {
-  const { user, logout } = useAuth();
+  const { user, logout } = useAdminAuth();
   const [confirming, setConfirming] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const name = user ? `${user.firstName} ${user.lastName}`.trim() : '';
@@ -105,12 +106,23 @@ function ProfileMenu() {
         <span className={styles.avatar} aria-hidden="true">{initials(name, 'A')}</span>
       </button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" sideOffset={8} className={styles.menu}>
+    <DropdownMenuContent align="end" sideOffset={8} className={`${styles.menu} ${styles.animatedMenu}`}>
       <DropdownMenuLabel className={styles.profileLabel}>
         <strong>{name || 'Administrator'}</strong>
         {user?.email && <span>{user.email}</span>}
         <span className={styles.rolePill}>Administrator</span>
       </DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      {/* Task 05.2 personal account destinations (per administrator; store-wide configuration lives under Settings). */}
+      <DropdownMenuItem asChild>
+        <Link to="/admin/profile" className={styles.menuLink}><UserRound aria-hidden="true" /> My profile</Link>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link to="/admin/profile/security" className={styles.menuLink}><ShieldCheck aria-hidden="true" /> Security</Link>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link to="/admin/profile/sessions" className={styles.menuLink}><MonitorSmartphone aria-hidden="true" /> Sessions &amp; login history</Link>
+      </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem asChild>
         <a href="/" target="_blank" rel="noopener noreferrer" className={styles.menuLink}><ExternalLink aria-hidden="true" /> View storefront</a>
@@ -130,12 +142,20 @@ export function AdminLayout() {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  useAdminInventoryLiveUpdates();
 
   useEffect(() => {
     try { window.localStorage.setItem(SIDEBAR_PREFERENCE_KEY, collapsed ? '1' : '0'); } catch { /* preference only */ }
   }, [collapsed]);
   // A navigation (including back/forward) always closes the mobile drawer.
   useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
+  // Opening another admin page (a link, a drill-down, the sidebar) starts at its top. Back/forward keep the browser's position, and
+  // query-only changes on the same page (filters, pager) are left to the page itself.
+  const navigationType = useNavigationType();
+  useLayoutEffect(() => {
+    if (navigationType !== 'POP') window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   return <AdminToastProvider>
     <div className={clsx(styles.shell, collapsed && styles.shellCollapsed)}>

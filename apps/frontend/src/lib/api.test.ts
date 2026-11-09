@@ -50,7 +50,7 @@ describe('central API client', () => {
   it('shares one silent refresh across concurrent 401 requests and retries once', async () => {
     let refreshCalls = 0;
     const fetchMock = vi.fn().mockImplementation(async (url: string, options: RequestInit) => {
-      if (url === '/api/auth/refresh') { refreshCalls++; return json(200, { accessToken: 'replacement' }); }
+      if (url === '/api/auth/customer/refresh') { refreshCalls++; return json(200, { accessToken: 'replacement' }); }
       const headers = options.headers as Headers;
       return headers.get('Authorization') === 'Bearer replacement' ? json(200, { data: url }) : json(401, { error: 'Expired' });
     });
@@ -65,7 +65,7 @@ describe('central API client', () => {
     try {
       let refreshCalls = 0;
       const fetchMock = vi.fn().mockImplementation(async (url: string, options: RequestInit) => {
-        if (url === '/api/auth/refresh') {
+        if (url === '/api/auth/customer/refresh') {
           refreshCalls++;
           return refreshCalls < 3 ? json(409, { error: { code: 'REFRESH_ROTATION_IN_PROGRESS', message: 'Retry.' } }, { 'retry-after': '1' }) : json(200, { accessToken: 'winner-token' });
         }
@@ -84,10 +84,40 @@ describe('central API client', () => {
       window.removeEventListener('electrohub:session-expired', onExpired);
     } finally { vi.useRealTimers(); }
   });
+  it('reuses the replacement token when an older request returns 401 after the shared refresh finishes', async () => {
+    setAccessToken('expired');
+    let release: ((response: Response) => void) | undefined;
+    let refreshCalls = 0;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
+      if (url === '/api/auth/customer/refresh') { refreshCalls++; return json(200, { accessToken: 'fresh' }); }
+      if ((init.headers as Headers).get('Authorization') === 'Bearer fresh') return json(200, { data: url });
+      if (url === '/api/slow') return new Promise<Response>(resolve => { release = resolve; });
+      return json(401, { error: 'Expired' });
+    }));
+    const slow = apiClient('/api/slow');
+    await expect(apiClient('/api/fast')).resolves.toEqual({ data: '/api/fast' });
+    release?.(json(401, { error: 'Expired' }));
+    await expect(slow).resolves.toEqual({ data: '/api/slow' });
+    expect(refreshCalls).toBe(1);
+  });
+  it('does not refresh a revoked administrator session and retains the structured error', async () => {
+    setAccessToken('revoked', 'admin');
+    const fetchMock = vi.fn().mockResolvedValue(json(401, { error: { code: 'ADMIN_SESSION_INVALID', message: 'Sign in again.' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const expired = vi.fn();
+    window.addEventListener('electrohub:session-expired', expired);
+    try {
+      await expect(apiClient('/api/admin/me/profile')).rejects.toMatchObject({ status: 401, code: 'ADMIN_SESSION_INVALID' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(expired).toHaveBeenCalledTimes(1);
+      await apiClient('/api/public').catch(() => undefined);
+      expect((fetchMock.mock.calls[1]?.[1]?.headers as Headers).has('Authorization')).toBe(false);
+    } finally { window.removeEventListener('electrohub:session-expired', expired); }
+  });
   it('stops retrying a 409 refresh after a bounded number of attempts and surfaces it without signing out', async () => {
     vi.useFakeTimers();
     try {
-      const fetchMock = vi.fn().mockImplementation(async (url: string) => url === '/api/auth/refresh'
+      const fetchMock = vi.fn().mockImplementation(async (url: string) => url === '/api/auth/customer/refresh'
         ? json(409, { error: { code: 'REFRESH_ROTATION_IN_PROGRESS', message: 'Retry.' } }) : json(401, { error: 'Expired' }));
       vi.stubGlobal('fetch', fetchMock);
       const onExpired = vi.fn();
@@ -95,7 +125,7 @@ describe('central API client', () => {
       const pending = apiClient('/api/products').catch((error: unknown) => error);
       await vi.advanceTimersByTimeAsync(9_000);
       expect(await pending).toBeInstanceOf(ApiError);
-      expect(fetchMock.mock.calls.filter(([url]) => url === '/api/auth/refresh')).toHaveLength(4); // first try plus three retries
+      expect(fetchMock.mock.calls.filter(([url]) => url === '/api/auth/customer/refresh')).toHaveLength(4); // first try plus three retries
       expect(onExpired).not.toHaveBeenCalled();
       window.removeEventListener('electrohub:session-expired', onExpired);
     } finally { vi.useRealTimers(); }
@@ -111,17 +141,17 @@ describe('central API client', () => {
     } } });
     let inFlight = 0; let maxInFlight = 0; let calls = 0;
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => {
-      if (url !== '/api/auth/refresh') return json(200, { ok: true });
+      if (url !== '/api/auth/customer/refresh') return json(200, { ok: true });
       calls++; inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
       await new Promise(resolve => setTimeout(resolve, 5));
       inFlight--;
       return json(200, { accessToken: `t${calls}` });
     }));
     // Two separate "documents" each issue their own refresh (the in-memory single-flight cannot see across them).
-    await Promise.all([apiClient('/api/auth/refresh', { method: 'POST' }), apiClient('/api/auth/refresh', { method: 'POST' })]);
+    await Promise.all([apiClient('/api/auth/customer/refresh', { method: 'POST' }), apiClient('/api/auth/customer/refresh', { method: 'POST' })]);
     expect(calls).toBe(2);
     expect(maxInFlight).toBe(1);
-    expect(held).toEqual(['electrohub:auth-refresh', 'electrohub:auth-refresh']);
+    expect(held).toEqual(['electrohub:auth-refresh:customer', 'electrohub:auth-refresh:customer']);
   });
   it('falls back to an unlocked refresh when the lock wait times out so a wedged holder cannot block sign-in', async () => {
     vi.useFakeTimers();
@@ -131,7 +161,7 @@ describe('central API client', () => {
       }) } });
       const fetchMock = vi.fn().mockResolvedValue(json(200, { accessToken: 'ok' }));
       vi.stubGlobal('fetch', fetchMock);
-      const pending = apiClient('/api/auth/refresh', { method: 'POST' });
+      const pending = apiClient('/api/auth/customer/refresh', { method: 'POST' });
       await vi.advanceTimersByTimeAsync(8_100);
       await expect(pending).resolves.toEqual({ accessToken: 'ok' });
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -140,7 +170,7 @@ describe('central API client', () => {
   it('sends refresh as keepalive so a navigation cannot cancel it and lose the rotated cookie, but not ordinary requests', async () => {
     const fetchMock = vi.fn().mockImplementation(async () => json(200, { accessToken: 'ok' }));
     vi.stubGlobal('fetch', fetchMock);
-    await apiClient('/api/auth/refresh', { method: 'POST' });
+    await apiClient('/api/auth/customer/refresh', { method: 'POST' });
     await apiClient('/api/products');
     expect(fetchMock.mock.calls[0]?.[1]?.keepalive).toBe(true);
     expect(fetchMock.mock.calls[1]?.[1]?.keepalive).toBeUndefined();
@@ -149,7 +179,7 @@ describe('central API client', () => {
     setAccessToken('old-sensitive-token');
     let releaseRefresh: ((response: Response) => void) | undefined;
     const fetchMock = vi.fn().mockImplementation((url: string, options: RequestInit) => {
-      if (url === '/api/auth/refresh') return new Promise<Response>(resolve => { releaseRefresh = resolve; });
+      if (url === '/api/auth/customer/refresh') return new Promise<Response>(resolve => { releaseRefresh = resolve; });
       if (url === '/api/public') return Promise.resolve(json(200, { ok: true }));
       expect((options.headers as Headers).get('Authorization')).toBe('Bearer old-sensitive-token');
       return Promise.resolve(json(401, { error: 'Expired' }));
@@ -160,7 +190,7 @@ describe('central API client', () => {
     const first = apiClient('/api/products');
     const second = apiClient('/api/categories');
     await vi.waitFor(() => expect(releaseRefresh).toBeDefined());
-    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/auth/refresh')).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/auth/customer/refresh')).toHaveLength(1);
     releaseRefresh?.(json(401, { error: 'No session' }));
     await expect(Promise.all([first, second])).rejects.toMatchObject({ status: 401 });
     expect(onExpired).toHaveBeenCalledTimes(1);
@@ -173,7 +203,7 @@ describe('central API client', () => {
     const onExpired = vi.fn();
     window.addEventListener('electrohub:session-expired', onExpired);
     const fetchMock = vi.fn().mockImplementation(async (url: string, options: RequestInit) => {
-      if (url === '/api/auth/refresh') return json(503, { error: 'Unavailable' });
+      if (url === '/api/auth/customer/refresh') return json(503, { error: 'Unavailable' });
       if (url === '/api/protected') return json(401, { error: 'Expired access token' });
       expect((options.headers as Headers).get('Authorization')).toBe('Bearer valid-token');
       return json(200, { ok: true });
@@ -188,7 +218,7 @@ describe('central API client', () => {
     setAccessToken('old-token');
     let protectedCalls = 0; let refreshCalls = 0;
     const fetchMock = vi.fn().mockImplementation(async (url: string) => {
-      if (url === '/api/auth/refresh') { refreshCalls++; return json(200, { accessToken: 'new-token' }); }
+      if (url === '/api/auth/customer/refresh') { refreshCalls++; return json(200, { accessToken: 'new-token' }); }
       protectedCalls++; return json(401, { error: 'Still unauthorized' });
     });
     vi.stubGlobal('fetch', fetchMock);

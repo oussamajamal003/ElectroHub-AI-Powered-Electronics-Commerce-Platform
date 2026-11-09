@@ -12,6 +12,7 @@ import { commerceEmailConfig, safeEmailImageUrl } from './commerce-email.config.
 import { SNAPSHOT_VERSION, TEMPLATE_VERSION, commerceEmailSnapshot, eventKeys, orderReference, usableRecipient,
   type CommerceEmailType, type SuppressionReason } from './commerce-email.domain.js';
 import { logSafely } from '../utils/logger.js';
+import { parseStoreIdentitySnapshot } from './store-identity.js';
 
 type Tx = Prisma.TransactionClient;
 /** Database time in UTC, matching how Prisma stores `TIMESTAMP(3)` values. */
@@ -99,7 +100,8 @@ const delivery = (order: OrderFacts) => ({ method: order.deliveryMethod,
   label: deliveryMethods.find(method => method.id === order.deliveryMethod)?.label ?? order.deliveryMethod,
   estimatedStart: dateOnly(order.estimatedDeliveryStart), estimatedEnd: dateOnly(order.estimatedDeliveryEnd) });
 const common = (order: OrderFacts, occurredAt: Date) => ({ v: SNAPSHOT_VERSION, orderReference: orderReference(order.id),
-  occurredAt: occurredAt.toISOString(), recipientName: firstName(order.user.firstName) });
+  occurredAt: occurredAt.toISOString(), recipientName: firstName(order.user.firstName),
+  seller: parseStoreIdentitySnapshot(order.storeIdentitySnapshot) });
 
 /**
  * ORDER_CONFIRMED + PAYMENT_CONFIRMED, from the committed Order's immutable purchase snapshot and the verified Payment, inside the

@@ -28,6 +28,7 @@ export interface SendTransactionalEmailOptions {
   templateId?: number;
   params?: Record<string, unknown>;
   sender?: BrevoEmailAddress;
+  replyTo?: BrevoEmailAddress;
 }
 
 /**

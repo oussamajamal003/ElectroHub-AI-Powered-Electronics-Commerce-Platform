@@ -107,8 +107,8 @@ function customerFields(order: LoadedOrder, timeline: TimelineEntry[], now: Date
       updatedAt: delivery.locationUpdatedAt!.toISOString(), source: delivery.locationSource ?? 'MANUAL' } : null,
     deliveredAt: iso(delivery?.deliveredAt),
     isSimulated: delivery?.isSimulated ?? false,
-    // Cancelled orders keep the history that was genuinely recorded before cancellation; nothing is added for them.
-    timeline: state === 'AVAILABLE' || state === 'CANCELLED' ? timeline : [],
+    // Restricted orders expose the notice state only; recorded events remain available to administrators.
+    timeline: state === 'AVAILABLE' ? timeline : [],
     serverTime: now.toISOString(),
   };
 }
@@ -343,7 +343,7 @@ export class DeliveryService {
     const visible = event && (event.type === 'TRACKING_STARTED' || event.changes.some(change => change !== 'LOCATION'));
     return { orderId, orderReference: fields.orderReference, revision: fields.revision, occurredAt: (event?.occurredAt ?? now).toISOString(),
       snapshot: { ...fields, map: map ? { origin: map.origin, destination: map.destination, pathKind: map.pathKind } : null },
-      timelineEntries: visible && fields.availability !== 'PAYMENT_PENDING' ? customerTimeline([event]) : [], source: event?.source ?? 'SYSTEM' };
+      timelineEntries: visible && fields.availability === 'AVAILABLE' ? customerTimeline([event]) : [], source: event?.source ?? 'SYSTEM' };
   }
 
   private applyLocation(delivery: DeliveryRow, status: OrderStatus, location: DeliveryUpdateInput['location'], now: Date,

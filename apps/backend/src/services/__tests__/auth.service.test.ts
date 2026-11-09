@@ -6,6 +6,12 @@ import { prisma } from '../../lib/prisma.js';
 import { hashPassword } from '../../utils/hash.js';
 import { User, RefreshToken } from '@prisma/client';
 
+// Task 05.2: ADMIN logins are delegated to the MFA service (covered by its own suites); here we only assert the hand-off.
+vi.mock('../admin-mfa.service.js', () => ({
+  adminMfaService: { startLogin: vi.fn().mockResolvedValue({ requiresMfa: true, mfaToken: 'restricted-transaction-token', enrollmentRequired: false,
+    expiresAt: new Date(), factors: { totp: true, passkey: false, recoveryCode: true } }) },
+}));
+
 // Mock the prisma client
 vi.mock('../../lib/prisma.js', () => ({
   prisma: {
@@ -44,6 +50,10 @@ vi.mock('../../lib/prisma.js', () => ({
     },
     securityEvent: {
       create: vi.fn(),
+    },
+    adminSession: {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
     $executeRaw: vi.fn().mockResolvedValue(1),
     $queryRaw: vi.fn().mockResolvedValue([]),
@@ -137,7 +147,7 @@ describe('AuthService', () => {
       vi.mocked(prisma.refreshToken.create).mockResolvedValueOnce({} as unknown as RefreshToken);
 
       const result = await authService.login('test@example.com', passwordPlain);
-      if ('requiresVerification' in result) throw new Error('Expected success');
+      if (!('accessToken' in result)) throw new Error('Expected success');
 
       expect(result.accessToken).toBeDefined();
       expect(result.refreshToken).toBeDefined();
@@ -194,7 +204,7 @@ describe('AuthService', () => {
       await expect(authService.login('unknown@electrohub.com', 'password123')).rejects.toThrow('Invalid credentials');
     });
 
-    it('should login valid ADMIN successfully with role ADMIN', async () => {
+    it('returns only a restricted MFA transaction for a valid ADMIN password (no tokens, no session)', async () => {
       const passwordPlain = 'admin123!';
       const passwordHashed = await hashPassword(passwordPlain);
       
@@ -212,16 +222,12 @@ describe('AuthService', () => {
         role: { id: 'role-admin', name: 'ADMIN', description: '', createdAt: new Date(), updatedAt: new Date() }
       } as unknown as User);
 
-      // Account re-read under the lifecycle lock when the session is issued
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({ passwordHash: passwordHashed, isActive: true, roleId: 'role-admin', emailVerifiedAt: new Date() } as unknown as User);
-      vi.mocked(prisma.refreshToken.create).mockResolvedValueOnce({} as unknown as RefreshToken);
-
       const result = await authService.login('admin@electrohub.com', passwordPlain);
-      if ('requiresVerification' in result) throw new Error('Expected success');
 
-      expect(result.accessToken).toBeDefined();
-      expect(result.user?.role).toBe('ADMIN');
-      expect(result.user?.email).toBe('admin@electrohub.com');
+      expect(result).toMatchObject({ requiresMfa: true, mfaToken: 'restricted-transaction-token' });
+      expect('accessToken' in result).toBe(false);
+      expect('refreshToken' in result).toBe(false);
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
     });
 
     it('registration unconditionally assigns CUSTOMER role server-side', async () => {
@@ -260,7 +266,7 @@ describe('AuthService', () => {
   });
 
   describe('refreshSession', () => {
-    const rawToken = 'valid-test-refresh-token';
+    const rawToken = 'customer.valid-test-refresh-token';
     const mockUser = {
       id: '11111111-1111-4111-8111-111111111111',
       email: 'test@example.com',
@@ -298,7 +304,7 @@ describe('AuthService', () => {
       vi.mocked(prisma.refreshToken.updateMany).mockResolvedValueOnce({ count: 1 });
       vi.mocked(prisma.refreshToken.create).mockResolvedValueOnce({ id: 'tok-2' } as unknown as RefreshToken);
 
-      const result = await authService.refreshSession(rawToken);
+      const result = await authService.refreshSession(rawToken, 'customer');
 
       expect(result.accessToken).toBeDefined();
       expect(result.refreshToken).toBeDefined();
@@ -326,7 +332,7 @@ describe('AuthService', () => {
       vi.mocked(prisma.refreshToken.create).mockResolvedValueOnce({ id: 'tok-2' } as unknown as RefreshToken);
       vi.mocked(prisma.oAuthAccount.findFirst).mockRejectedValueOnce(new Error('transient'));
       try {
-        const result = await authService.refreshSession(rawToken);
+        const result = await authService.refreshSession(rawToken, 'customer');
         expect(result.accessToken).toBeDefined();
         expect(result.refreshToken).toBeDefined();
         expect(result.user).toBeNull();
@@ -344,7 +350,7 @@ describe('AuthService', () => {
         updatedAt: new Date(),
       } as unknown as RefreshToken);
 
-      await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({
+      await expect(authService.refreshSession(rawToken, 'customer')).rejects.toMatchObject({
         statusCode: 401,
         code: 'EXPIRED_REFRESH_TOKEN',
       });
@@ -353,7 +359,7 @@ describe('AuthService', () => {
     it('should reject an unknown refresh token with 401 AppError', async () => {
       vi.mocked(prisma.refreshToken.findUnique).mockResolvedValueOnce(null);
 
-      await expect(authService.refreshSession('unknown-token')).rejects.toMatchObject({
+      await expect(authService.refreshSession('customer.unknown-token', 'customer')).rejects.toMatchObject({
         statusCode: 401,
         code: 'INVALID_REFRESH_TOKEN',
       });
@@ -375,7 +381,7 @@ describe('AuthService', () => {
         isActive: false,
       } as unknown as User);
 
-      await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({
+      await expect(authService.refreshSession(rawToken, 'customer')).rejects.toMatchObject({
         statusCode: 401,
         code: 'USER_INACTIVE',
       });
@@ -403,60 +409,60 @@ describe('AuthService', () => {
 
       it('genuine concurrency: a token rotated seconds ago gets NO token and NO revocation, only a retry signal (409)', async () => {
         const spies = arrange(row({ updatedAt: new Date(Date.now() - 2_000) }));
-        await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({ statusCode: 409, code: 'REFRESH_ROTATION_IN_PROGRESS' });
+        await expect(authService.refreshSession(rawToken, 'customer')).rejects.toMatchObject({ statusCode: 409, code: 'REFRESH_ROTATION_IN_PROGRESS' });
         expect(spies.revokeFamily).not.toHaveBeenCalled(); expect(spies.revokeAll).not.toHaveBeenCalled();
         expect(spies.findUser).not.toHaveBeenCalled(); expect(spies.rotate).not.toHaveBeenCalled(); // no access token minted, no successor created
       });
 
       it('immediate stolen-token replay never authenticates: the superseded token yields no access token on its own', async () => {
         const spies = arrange(row({ updatedAt: new Date(Date.now() - 500) }));
-        const outcome = await authService.refreshSession(rawToken).then(value => ({ value }), error => ({ error }));
+        const outcome = await authService.refreshSession(rawToken, 'customer').then(value => ({ value }), error => ({ error }));
         expect('value' in outcome).toBe(false);
         expect(spies.findUser).not.toHaveBeenCalled();
       });
 
       it('delayed replay (outside the window) revokes only that session family, never every session of the user', async () => {
         const spies = arrange(row({ updatedAt: new Date(Date.now() - 30_000) }));
-        await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({ statusCode: 401, code: 'REFRESH_TOKEN_REUSED' });
+        await expect(authService.refreshSession(rawToken, 'customer')).rejects.toMatchObject({ statusCode: 401, code: 'REFRESH_TOKEN_REUSED' });
         expect(spies.revokeFamily).toHaveBeenCalledTimes(1); expect(spies.revokeAll).not.toHaveBeenCalled();
         expect(spies.findUser).not.toHaveBeenCalled();
       });
 
       it('a revoked token with no rotation pointer inside the window is reuse, not concurrency', async () => {
         const spies = arrange(row({ replacedByTokenHash: null, updatedAt: new Date(Date.now() - 1_000) }));
-        await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({ statusCode: 401, code: 'REFRESH_TOKEN_REUSED' });
+        await expect(authService.refreshSession(rawToken, 'customer')).rejects.toMatchObject({ statusCode: 401, code: 'REFRESH_TOKEN_REUSED' });
         expect(spies.revokeFamily).toHaveBeenCalledTimes(1);
       });
 
       it('inside the window but with the session family already dead is reuse (401), never a retry signal', async () => {
         const spies = arrange(row({}), { familyAlive: false });
-        await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({ statusCode: 401, code: 'REFRESH_TOKEN_REUSED' });
+        await expect(authService.refreshSession(rawToken, 'customer')).rejects.toMatchObject({ statusCode: 401, code: 'REFRESH_TOKEN_REUSED' });
         expect(spies.revokeFamily).toHaveBeenCalledTimes(1);
       });
 
       it('a token revoked by logout or password change (expiry in the past) is rejected as expired without reuse revocation', async () => {
         const spies = arrange(row({ expiresAt: new Date(0), replacedByTokenHash: null }));
-        await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({ statusCode: 401, code: 'EXPIRED_REFRESH_TOKEN' });
+        await expect(authService.refreshSession(rawToken, 'customer')).rejects.toMatchObject({ statusCode: 401, code: 'EXPIRED_REFRESH_TOKEN' });
         expect(spies.revokeFamily).not.toHaveBeenCalled(); expect(spies.revokeAll).not.toHaveBeenCalled();
       });
 
       it('losing the atomic rotation race returns 409 while the family is alive and issues no token and no second successor', async () => {
         const spies = arrange(row({ isRevoked: false, replacedByTokenHash: null }));
         spies.rotate.mockResolvedValueOnce(false);
-        await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({ statusCode: 409, code: 'REFRESH_ROTATION_IN_PROGRESS' });
+        await expect(authService.refreshSession(rawToken, 'customer')).rejects.toMatchObject({ statusCode: 409, code: 'REFRESH_ROTATION_IN_PROGRESS' });
         expect(spies.rotate).toHaveBeenCalledTimes(1);
       });
 
       it('losing the atomic rotation race after the family died is a plain 401', async () => {
         const spies = arrange(row({ isRevoked: false, replacedByTokenHash: null }), { familyAlive: false });
         spies.rotate.mockResolvedValueOnce(false);
-        await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({ statusCode: 401, code: 'SESSION_REVOKED' });
+        await expect(authService.refreshSession(rawToken, 'customer')).rejects.toMatchObject({ statusCode: 401, code: 'SESSION_REVOKED' });
       });
 
       it('a normally active token still rotates exactly once and returns both tokens', async () => {
         const spies = arrange(row({ isRevoked: false, replacedByTokenHash: null }));
-        const result = await authService.refreshSession(rawToken);
-        expect(result.accessToken).toBeTruthy(); expect(result.refreshToken).toMatch(/^[0-9a-f]{128}$/);
+        const result = await authService.refreshSession(rawToken, 'customer');
+        expect(result.accessToken).toBeTruthy(); expect(result.refreshToken).toMatch(/^customer.[0-9a-f]{128}$/);
         expect(spies.rotate).toHaveBeenCalledTimes(1);
       });
     });
@@ -467,7 +473,7 @@ describe('AuthService', () => {
         .mockResolvedValueOnce({ familyId: FAMILY_ID } as unknown as RefreshToken);
       vi.mocked(prisma.refreshToken.updateMany).mockResolvedValueOnce({ count: 3 });
 
-      await authService.logout('raw-logout-token');
+      await authService.logout('customer.raw-logout-token', 'customer');
 
       expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
         where: { userId: mockUser.id, familyId: FAMILY_ID },
@@ -480,7 +486,7 @@ describe('AuthService', () => {
     it('should do nothing on logout with an unknown token', async () => {
       vi.mocked(prisma.refreshToken.findUnique).mockResolvedValueOnce(null);
 
-      await authService.logout('unknown-logout-token');
+      await authService.logout('customer.unknown-logout-token', 'customer');
 
       expect(prisma.$transaction).not.toHaveBeenCalled();
       expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
@@ -492,12 +498,14 @@ describe('AuthService', () => {
         .mockResolvedValueOnce({ familyId: FAMILY_ID } as unknown as RefreshToken);
       vi.mocked(prisma.refreshToken.updateMany).mockRejectedValueOnce(new Error('PostgreSQL connection dropped'));
 
-      await expect(authService.logout('failing-db-token')).rejects.toThrow('PostgreSQL connection dropped');
+      await expect(authService.logout('customer.failing-db-token', 'customer')).rejects.toThrow('PostgreSQL connection dropped');
     });
 
     it('should invalidate all user sessions with expired timestamps on password change', async () => {
       const validHash = await hashPassword('password123');
-      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({ ...mockUser, passwordHash: validHash } as unknown as User);
+      vi.mocked(prisma.user.findUnique)
+        .mockResolvedValueOnce({ ...mockUser, passwordHash: validHash } as unknown as User)
+        .mockResolvedValueOnce({ passwordHash: validHash } as unknown as User); // latest hash re-read under the lifecycle lock
       vi.mocked(prisma.refreshToken.updateMany).mockResolvedValueOnce({ count: 4 });
 
       await authService.changePassword(mockUser.id, 'password123', 'newpassword456');
@@ -509,6 +517,15 @@ describe('AuthService', () => {
       expect(prisma.$executeRaw).toHaveBeenCalled();
     });
 
+    it('rejects a new password equal to the current one and writes nothing (regression: reuse was accepted)', async () => {
+      const validHash = await hashPassword('password123');
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({ ...mockUser, passwordHash: validHash } as unknown as User);
+      vi.mocked(prisma.refreshToken.updateMany).mockClear();
+
+      await expect(authService.changePassword(mockUser.id, 'password123', 'password123')).rejects.toMatchObject({ code: 'PASSWORD_REUSED', statusCode: 422 });
+      expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
+    });
+
     it('should take the user lifecycle advisory lock before any refresh_tokens statement during rotation', async () => {
       vi.mocked(prisma.refreshToken.findUnique).mockResolvedValueOnce(activeRow());
       vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(mockUser as unknown as User);
@@ -516,7 +533,7 @@ describe('AuthService', () => {
       vi.mocked(prisma.refreshToken.updateMany).mockResolvedValueOnce({ count: 1 });
       vi.mocked(prisma.refreshToken.create).mockResolvedValueOnce({ id: 'tok-2' } as unknown as RefreshToken);
 
-      await authService.refreshSession(rawToken);
+      await authService.refreshSession(rawToken, 'customer');
 
       const lockOrder = vi.mocked(prisma.$executeRaw).mock.invocationCallOrder[0];
       expect(lockOrder).toBeLessThan(vi.mocked(prisma.refreshToken.findFirst).mock.invocationCallOrder[0]);
@@ -535,7 +552,7 @@ describe('AuthService', () => {
       // Racing password change committed first: the token is no longer eligible inside our transaction
       vi.mocked(prisma.refreshToken.findFirst).mockResolvedValueOnce(null);
 
-      await expect(authService.refreshSession(rawToken)).rejects.toMatchObject({
+      await expect(authService.refreshSession(rawToken, 'customer')).rejects.toMatchObject({
         statusCode: 401,
         code: 'SESSION_REVOKED',
       });
@@ -550,7 +567,7 @@ describe('AuthService', () => {
       const failure = new Error('PostgreSQL transaction serialization failure');
       vi.mocked(prisma.$transaction).mockRejectedValueOnce(failure);
 
-      await expect(authService.refreshSession(rawToken)).rejects.toBe(failure);
+      await expect(authService.refreshSession(rawToken, 'customer')).rejects.toBe(failure);
     });
 
     it('should not swallow a failed statement and keep using the transaction (no pre-migration fallback)', async () => {
@@ -560,7 +577,7 @@ describe('AuthService', () => {
       const missingColumn = new Error('column "replacedByTokenHash" of relation "refresh_tokens" does not exist');
       vi.mocked(prisma.refreshToken.updateMany).mockRejectedValueOnce(missingColumn);
 
-      await expect(authService.refreshSession(rawToken)).rejects.toBe(missingColumn);
+      await expect(authService.refreshSession(rawToken, 'customer')).rejects.toBe(missingColumn);
 
       // The transaction stops at the failing statement: nothing is inserted after it.
       expect(prisma.refreshToken.create).not.toHaveBeenCalled();
@@ -585,5 +602,17 @@ describe('AuthService', () => {
 
       await expect(authService['repository'].findRotationSuccessor(sha('any'))).rejects.toBe(failure);
     });
+  });
+
+  it('rejects ADMIN email initiation, verification and resend at the customer service boundary', async () => {
+    const admin = { id: '11111111-1111-4111-8111-111111111111', email: 'admin@example.test', pendingEmail: 'pending@example.test',
+      passwordHash: 'hash', firstName: 'Admin', lastName: 'User', isActive: true, role: { name: 'ADMIN' } };
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(admin as never);
+
+    await expect(authService.updateProfile(admin.id, { email: 'new@example.test' })).rejects.toMatchObject({ code: 'ADMIN_ENDPOINT_REQUIRED', statusCode: 403 });
+    await expect(authService.verifyPendingEmailChange(admin.id, '123456')).rejects.toMatchObject({ code: 'ADMIN_ENDPOINT_REQUIRED', statusCode: 403 });
+    await expect(authService.resendPendingEmailChange(admin.id)).rejects.toMatchObject({ code: 'ADMIN_ENDPOINT_REQUIRED', statusCode: 403 });
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.otpChallenge.updateMany).not.toHaveBeenCalled();
   });
 });

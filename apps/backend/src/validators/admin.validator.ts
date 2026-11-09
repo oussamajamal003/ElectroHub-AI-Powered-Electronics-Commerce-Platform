@@ -66,6 +66,21 @@ export const productUpdateSchema = z.object({
 
 export const statusChangeSchema = z.object({ status: z.enum(['ACTIVE', 'INACTIVE']), expectedUpdatedAt }).strict();
 
+/** Bounded bulk archive/reactivate: each row carries the version the admin saw. Ids are compared case-insensitively (UUIDs are). */
+export const MAX_BULK_PRODUCTS = 50;
+export const bulkStatusSchema = z.object({
+  status: z.enum(['ACTIVE', 'INACTIVE']),
+  items: z.array(z.object({ id: uuidSchema.transform(value => value.toLowerCase()), expectedUpdatedAt }).strict())
+    .min(1).max(MAX_BULK_PRODUCTS)
+    .superRefine((items, context) => {
+      const seen = new Set<string>();
+      items.forEach((item, index) => {
+        if (seen.has(item.id)) context.addIssue({ code: 'custom', message: 'Each product can be selected only once.', path: [index, 'id'] });
+        seen.add(item.id);
+      });
+    }),
+}).strict();
+
 // ─── Categories ─────────────────────────────────────────
 export const categoryListSchema = z.object({
   ...listBase,
@@ -105,6 +120,8 @@ export const orderListSchema = z.object({
   status: z.enum(['AWAITING_CAPTURE', 'CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED']).optional(),
   payment: z.enum(PAYMENT_STATES).optional(),
   customerId: uuidSchema.optional(),
+  /** Exact, authenticated Admin Console deep link; when present it takes precedence over list filters and free-text search. */
+  orderReference: z.string().regex(/^ORD-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i).optional(),
   sort: z.enum(['createdAt', 'total']).prefault('createdAt'),
   order: z.enum(['asc', 'desc']).prefault('desc'),
 }).strict();
@@ -112,7 +129,7 @@ export const orderListSchema = z.object({
 // ─── Customers ──────────────────────────────────────────
 export const customerListSchema = z.object({
   ...listBase,
-  status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'DELETED']).optional(),
   sort: z.enum(['createdAt', 'name', 'email']).prefault('createdAt'),
   order: z.enum(['asc', 'desc']).prefault('desc'),
 }).strict();

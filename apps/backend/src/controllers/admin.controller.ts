@@ -7,7 +7,7 @@ import { AdminOrderService } from '../services/admin-order.service.js';
 import { AdminCustomerService } from '../services/admin-customer.service.js';
 import { AdminDashboardService } from '../services/admin-dashboard.service.js';
 import { categoryCreateSchema, categoryListSchema, categoryStatusSchema, categoryUpdateSchema, customerListSchema, customerStatusSchema,
-  dashboardSchema, inventoryAdjustmentSchema, inventoryListSchema, inventoryThresholdSchema, orderListSchema, productCreateSchema,
+  bulkStatusSchema, dashboardSchema, inventoryAdjustmentSchema, inventoryListSchema, inventoryThresholdSchema, orderListSchema, productCreateSchema,
   productListSchema, productUpdateSchema, statusChangeSchema, uuidSchema } from '../validators/admin.validator.js';
 
 const catalog = new AdminCatalogService();
@@ -60,6 +60,10 @@ export const adminController = {
   setProductStatus: action(async req => {
     const body = parse(statusChangeSchema, req.body);
     return { data: await catalog.setProductStatus(actor(req), id(req), body.status, body.expectedUpdatedAt) };
+  }),
+  bulkSetProductStatus: action(async req => {
+    const body = parse(bulkStatusSchema, req.body);
+    return { data: await catalog.bulkSetProductStatus(actor(req), body.status, body.items) };
   }),
   deleteProduct: action(async (req, res) => { noQuery(req); await catalog.deleteProduct(actor(req), id(req)); res.status(204).end(); }),
   // Categories

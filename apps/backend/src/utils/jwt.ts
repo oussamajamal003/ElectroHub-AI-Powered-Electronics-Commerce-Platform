@@ -10,6 +10,11 @@ const VALID_ROLES = new Set(['CUSTOMER', 'ADMIN']);
 export interface JwtPayload {
   userId: string;
   role: string;
+  /**
+   * Task 05.2: the refresh session family an administrator access token belongs to. Present only on tokens minted for an
+   * MFA-assured AdminSession; requireAuth refuses any ADMIN access token without it and re-checks the session on every request.
+   */
+  sessionId?: string;
 }
 
 /**
@@ -39,7 +44,9 @@ export function verifyAccessToken(token: string): JwtPayload {
     throw new jwt.JsonWebTokenError('Invalid access token claims');
   }
 
-  return { userId: payload.userId, role: payload.role };
+  return payload.sessionId === undefined
+    ? { userId: payload.userId, role: payload.role }
+    : { userId: payload.userId, role: payload.role, sessionId: payload.sessionId };
 }
 
 function isJwtPayload(value: unknown): value is JwtPayload & { exp?: number; iat?: number } {
@@ -50,6 +57,7 @@ function isJwtPayload(value: unknown): value is JwtPayload & { exp?: number; iat
     typeof claims.userId === 'string' &&
     USER_ID_PATTERN.test(claims.userId) &&
     typeof claims.role === 'string' &&
-    VALID_ROLES.has(claims.role)
+    VALID_ROLES.has(claims.role) &&
+    (claims.sessionId === undefined || (typeof claims.sessionId === 'string' && USER_ID_PATTERN.test(claims.sessionId)))
   );
 }

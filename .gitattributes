@@ -11,3 +11,4 @@ apps/backend/prisma/migrations/20261029010000_recommendation_retention_index/mig
 apps/backend/prisma/migrations/20261029020000_recommendation_consent_consistency/migration.sql text eol=lf
 # Task 03.9 packaged PDF fonts: byte-exact (verified against the SHA-256 asset manifest at runtime).
 apps/backend/assets/documents/fonts/*.ttf binary
+apps/backend/prisma/migrations/20261105000000_admin_security_settings_analytics/migration.sql text eol=lf

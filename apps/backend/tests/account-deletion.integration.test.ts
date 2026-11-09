@@ -100,14 +100,14 @@ describe('customer account deletion lifecycle', () => {
     const wrongStart = await agent.post('/api/auth/google/deletion-reauth/start').set(headers).send({ channel: crypto.randomUUID() }).expect(200);
     const wrongCallback = await agent.get('/api/auth/google/callback').query({ state: new URL(wrongStart.body.authorizationUrl).searchParams.get('state'), code: 'test-code' }).expect(200);
     expect(wrongCallback.text).toContain('failure');
-    expect(wrongCallback.headers['set-cookie']?.some((cookie: string) => cookie.startsWith('electrohub_refresh='))).not.toBe(true);
+    expect(wrongCallback.headers['set-cookie']?.some((cookie: string) => cookie.startsWith('electrohub_customer_refresh='))).not.toBe(true);
 
     verify.mockResolvedValueOnce(identity);
     const matchingStart = await agent.post('/api/auth/google/deletion-reauth/start').set(headers).send({ channel: crypto.randomUUID() }).expect(200);
     const matchingCallback = await agent.get('/api/auth/google/callback').query({ state: new URL(matchingStart.body.authorizationUrl).searchParams.get('state'), code: 'test-code' }).expect(200);
     expect(matchingCallback.text).toContain('success');
     expect(matchingCallback.headers['set-cookie']?.some((cookie: string) => cookie.startsWith('electrohub_account_deletion_proof='))).toBe(true);
-    expect(matchingCallback.headers['set-cookie']?.some((cookie: string) => cookie.startsWith('electrohub_refresh='))).not.toBe(true);
+    expect(matchingCallback.headers['set-cookie']?.some((cookie: string) => cookie.startsWith('electrohub_customer_refresh='))).not.toBe(true);
     expect((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).isActive).toBe(true);
     verify.mockRestore();
   }, 30000);
@@ -144,7 +144,7 @@ describe('customer account deletion lifecycle', () => {
     expect(await prisma.securityEvent.findFirst({ where: { type: 'ACCOUNT_DELETED', userId, createdAt: { gte: startedAt } } })).not.toBeNull();
 
     await request(app).get('/api/auth/me').set('Authorization', `Bearer ${accessToken}`).expect(401);
-    await request(app).post('/api/auth/refresh').set('Cookie', `electrohub_refresh=${refreshToken}`).expect(401);
+    await request(app).post('/api/auth/customer/refresh').set('Cookie', `electrohub_customer_refresh=${refreshToken}`).expect(401);
     await agent.delete('/api/account').set(headers).send({ confirmation: 'DELETE' }).expect(401);
   }, 60000);
 });

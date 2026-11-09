@@ -28,5 +28,5 @@ describe('startup failure flush deadline', () => {
     expect(disconnect).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(2000);
     expect(exit).toHaveBeenCalledWith(1);
-  });
+  }, 30_000); // cold dynamic import of the bootstrap graph can exceed vitest's 5 s default on a loaded CI runner; assertions are unchanged
 });

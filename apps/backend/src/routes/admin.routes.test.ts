@@ -9,12 +9,15 @@ const ids = vi.hoisted(() => ({ admin: '8f2813b4-a388-44d3-b51e-5d4c40386677', p
   customer: '3e7dd3c4-7b2f-4c9b-9f6a-4d0f3b2c1e33', role: 'ADMIN', active: true }));
 const db = vi.hoisted(() => ({ user: { findFirst: vi.fn() } }));
 const catalog = vi.hoisted(() => ({ listProducts: vi.fn(), getProduct: vi.fn(), options: vi.fn(), createProduct: vi.fn(), updateProduct: vi.fn(),
-  setProductStatus: vi.fn(), listCategories: vi.fn(), createCategory: vi.fn(), updateCategory: vi.fn(), setCategoryStatus: vi.fn(), deleteCategory: vi.fn(), deleteProduct: vi.fn() }));
+  setProductStatus: vi.fn(), bulkSetProductStatus: vi.fn(), listCategories: vi.fn(), createCategory: vi.fn(), updateCategory: vi.fn(), setCategoryStatus: vi.fn(), deleteCategory: vi.fn(), deleteProduct: vi.fn() }));
 const inventory = vi.hoisted(() => ({ list: vi.fn(), adjust: vi.fn(), setThreshold: vi.fn() }));
 const orders = vi.hoisted(() => ({ list: vi.fn(), detail: vi.fn() }));
 const customers = vi.hoisted(() => ({ list: vi.fn(), detail: vi.fn(), setStatus: vi.fn() }));
 const dashboard = vi.hoisted(() => ({ overview: vi.fn(), alerts: vi.fn() }));
+const sessions = vi.hoisted(() => ({ session: '5a1e2c3d-4b5f-4a6b-8c7d-9e0f1a2b3c4d', find: vi.fn() }));
 vi.mock('../lib/prisma.js', () => ({ prisma: db }));
+// An ADMIN access token is honoured only with a live, MFA-assured session family (requireAuth re-checks it on every request).
+vi.mock('../services/admin-session.js', () => ({ findActiveAdminSession: sessions.find, touchAdminSession: vi.fn() }));
 vi.mock('../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, logSafely: vi.fn() }));
 vi.mock('../services/admin-catalog.service.js', () => ({ AdminCatalogService: class { constructor() { return catalog; } } }));
 vi.mock('../services/admin-inventory.service.js', () => ({ AdminInventoryService: class { constructor() { return inventory; } } }));
@@ -26,7 +29,7 @@ const app = express();
 app.use(express.json());
 app.use('/api', adminRoutes);
 app.use(errorHandler);
-const token = (role = 'ADMIN') => generateAccessToken({ userId: ids.admin, role });
+const token = (role = 'ADMIN') => generateAccessToken(role === 'ADMIN' ? { userId: ids.admin, role, sessionId: sessions.session } : { userId: ids.admin, role });
 const as = <T extends request.Test>(test: T, role = 'ADMIN') => test.auth(token(role), { type: 'bearer' });
 const page = { page: 1, pageSize: 20, total: 0, totalPages: 0 };
 const stamp = '2026-11-01T10:00:00.000Z';
@@ -36,6 +39,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   ids.role = 'ADMIN'; ids.active = true;
   db.user.findFirst.mockImplementation(async () => ids.active ? { id: ids.admin, role: { name: ids.role } } : null);
+  sessions.find.mockResolvedValue({ familyId: sessions.session, userId: ids.admin } as never);
   for (const fn of [catalog.listProducts, catalog.listCategories, inventory.list, orders.list, customers.list]) fn.mockResolvedValue({ data: [], meta: page });
 });
 
@@ -87,6 +91,11 @@ describe('admin operations API authorization', () => {
 });
 
 describe('admin operations API validation', () => {
+  it('accepts the deleted customer filter', async () => {
+    expect((await as(request(app).get('/api/admin/customers?status=DELETED'))).status).toBe(200);
+    expect(customers.list).toHaveBeenCalledWith(expect.objectContaining({ status: 'DELETED' }));
+  });
+
   it('whitelists list queries and rejects unknown or out-of-range parameters', async () => {
     for (const query of ['pageSize=51', 'page=0', 'sort=password', 'status=DELETED', 'role=ADMIN', 'stock=SOME']) {
       expect((await as(request(app).get(`/api/admin/catalog/products?${query}`))).status, query).toBe(400);
@@ -139,6 +148,49 @@ describe('admin operations API validation', () => {
     expect((await as(request(app).get('/api/admin/dashboard/overview?days=365'))).status).toBe(400);
     expect((await as(request(app).get('/api/admin/dashboard/overview?days=7'))).status).toBe(200);
     expect(dashboard.overview).toHaveBeenCalledWith(7);
+  });
+});
+
+describe('admin operations API bulk product status', () => {
+  const bulkPath = '/api/admin/catalog/products/bulk-status';
+  const item = (id: string) => ({ id, expectedUpdatedAt: stamp });
+
+  it('rejects anonymous, session-less ADMIN and CUSTOMER callers before parsing or any service call', async () => {
+    expect((await request(app).post(bulkPath).send({ status: 'INACTIVE', items: [item(ids.product)] })).status).toBe(401);
+    const legacy = generateAccessToken({ userId: ids.admin, role: 'ADMIN' });
+    expect((await request(app).post(bulkPath).auth(legacy, { type: 'bearer' }).send({ status: 'INACTIVE', items: [item(ids.product)] })).status).toBe(401);
+    ids.role = 'CUSTOMER';
+    expect((await as(request(app).post(bulkPath).send({ status: 'INACTIVE', items: [item(ids.product)] }))).status).toBe(403);
+    expect(catalog.bulkSetProductStatus).not.toHaveBeenCalled();
+  });
+
+  it('answers 400 for duplicates, empty or oversized batches, all-matching shapes and extra fields', async () => {
+    const send = (body: object) => as(request(app).post(bulkPath).send(body));
+    expect((await send({ status: 'INACTIVE', items: [item(ids.product), item(ids.product.toUpperCase())] })).status).toBe(400);
+    expect((await send({ status: 'INACTIVE', items: [] })).status).toBe(400);
+    const oversized = Array.from({ length: 51 }, (_, index) => item(`00000000-0000-4000-8000-${String(index).padStart(12, '0')}`));
+    expect((await send({ status: 'INACTIVE', items: oversized })).status).toBe(400);
+    expect((await send({ status: 'INACTIVE', allMatching: true, items: [item(ids.product)] })).status).toBe(400);
+    expect((await send({ status: 'INACTIVE', items: [{ id: ids.product, expectedUpdatedAt: stamp, price: '1' }] })).status).toBe(400);
+    const missingVersion = await send({ status: 'INACTIVE', items: [{ id: ids.product }] });
+    expect(missingVersion.body.error.fields).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'items.0.expectedUpdatedAt' })]));
+    expect(catalog.bulkSetProductStatus).not.toHaveBeenCalled();
+  });
+
+  it('passes the authenticated admin and normalized items to the service and answers 200 with per-item results and a summary', async () => {
+    const data = {
+      results: [
+        { id: ids.product, outcome: 'UPDATED', message: 'Archived.' },
+        { id: ids.customer, outcome: 'NOT_FOUND', message: 'Product not found.' },
+      ],
+      summary: { updated: 1, unchanged: 0, conflict: 0, notFound: 1, rejected: 0 },
+    };
+    catalog.bulkSetProductStatus.mockResolvedValue(data);
+    const response = await as(request(app).post(bulkPath).send({ status: 'INACTIVE', items: [item(ids.product.toUpperCase())] }));
+    expect(response.status).toBe(200);
+    expect(response.headers['cache-control']).toBe('private, no-store');
+    expect(response.body).toEqual({ data });
+    expect(catalog.bulkSetProductStatus).toHaveBeenCalledWith(ids.admin, 'INACTIVE', [{ id: ids.product, expectedUpdatedAt: stamp }]);
   });
 });
 

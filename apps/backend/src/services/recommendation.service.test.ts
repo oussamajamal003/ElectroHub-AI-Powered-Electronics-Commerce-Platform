@@ -562,6 +562,14 @@ describe('recordEvents', () => {
       skipDuplicates: true,
     });
   });
+
+  it('Task 05.2: attributes a pinned item inside an organic rail to MERCHANDISED_PIN, never to the engine strategy', async () => {
+    db.recommendationEvent.createMany.mockResolvedValue({ count: 2 });
+    const mixed = issueImpressionToken({ mode: 'POPULAR_PRODUCTS', strategy: 'MEASURED_POPULARITY', surface: 'home', productIds: [B, C], featuredProductIds: [B] });
+    await service().recordEvents(mixed, [{ productId: B, type: 'CLICK' }, { productId: C, type: 'CLICK' }]);
+    const rows = db.recommendationEvent.createMany.mock.calls.at(-1)![0].data as { productId: string; strategy: string }[];
+    expect(rows.map(row => [row.productId, row.strategy])).toEqual([[B, 'MERCHANDISED_PIN'], [C, 'MEASURED_POPULARITY']]);
+  });
 });
 
 describe('preferences and activity', () => {
