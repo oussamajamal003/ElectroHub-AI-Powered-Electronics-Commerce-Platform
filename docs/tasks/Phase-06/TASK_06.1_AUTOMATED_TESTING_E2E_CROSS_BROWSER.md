@@ -37,9 +37,13 @@ routes (`/api/__e2e/*`) exist only under `NODE_ENV=test` and require a support t
 
 ### 2.3 CI
 
-`.github/workflows/ci.yml` job **Release E2E / Chromium, Firefox, WebKit**: disposable PostgreSQL action → `npm ci` → Prisma generate →
-`playwright install --with-deps chromium firefox webkit` → `npm run test:release` → uploads `playwright-report/release` and
-`test-results/release` (14 days). No secrets are referenced; `check-workflow-policy.cjs` passes.
+`.github/workflows/ci.yml` job **Release E2E**, a three-way matrix sharded by engine (**Release E2E / Chromium**, **/ Firefox**, **/ WebKit**),
+each on its own runner and disposable PostgreSQL: `npm ci` → disposable PostgreSQL action → Prisma generate → cached
+`playwright install --with-deps <engine>` → `npm run test:release -- --project=…` (Chromium: `chromium-desktop` + `tablet-chromium-768`;
+Firefox: `firefox-desktop` + `wide-firefox-1920`; WebKit: `webkit-desktop` + `mobile-webkit-390`) → uploads `playwright-report/release` and
+`test-results/release` as `release-e2e-report-<engine>` (14 days). The shards together run all six projects (3 × 42 = 126 tests), and the
+fixtures are per project, so no two shards share accounts. Sharding replaced a single serial job of about 13 minutes. No secrets are
+referenced; `check-workflow-policy.cjs` passes.
 
 Commands: `npm run test:release` (apps/frontend), `npm run test:release:db -- start|stop|status` and `npm run test:release:stack` (apps/backend).
 

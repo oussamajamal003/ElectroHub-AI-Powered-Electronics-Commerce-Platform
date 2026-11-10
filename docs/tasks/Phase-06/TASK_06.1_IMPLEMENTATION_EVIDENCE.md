@@ -98,7 +98,11 @@ unavailable — no AI service). CI builds have no frontend env file, so there th
 
 ## 4. CI
 
-New job **Release E2E / Chromium, Firefox, WebKit** in `.github/workflows/ci.yml`. Remote result: _recorded after push_.
+New job **Release E2E** in `.github/workflows/ci.yml`. Remote result: _recorded after push_.
+
+The job first ran as one serial job, **Release E2E / Chromium, Firefox, WebKit**, which took about 13 minutes (run 42816810716: suite 9 min 36 s,
+browser install 1 min 50 s). Summed test time per engine in that run: Chromium 309 s, Firefox 360 s, WebKit 434 s. The job is now sharded
+into three parallel engine jobs, with a per-engine browser cache, and runs the same 126 tests.
 
 ## 5. Visual QA
 
