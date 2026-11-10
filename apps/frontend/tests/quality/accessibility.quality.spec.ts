@@ -18,7 +18,8 @@ async function audit(page: Page, testInfo: TestInfo, label: string) {
     return engine.run(document.querySelector('[role="dialog"]') ?? document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } });
   });
   await testInfo.attach(`${label}-axe.json`, { body: JSON.stringify(result), contentType: 'application/json' });
-  expect(result.violations.map(v => ({ id: v.id, impact: v.impact, nodes: v.nodes.map(n => n.target) })), label).toEqual([]);
+  // Keep auditing subsequent templates after a violation; soft assertions still fail the test and CI.
+  expect.soft(result.violations.map(v => ({ id: v.id, impact: v.impact, nodes: v.nodes.map(n => n.target) })), label).toEqual([]);
 }
 async function capture(page: Page, info: TestInfo, label: string) {
   await expectNoHorizontalOverflow(page, label);
@@ -42,8 +43,8 @@ test('@responsive keyboard skip link, visible focus, search containment and focu
   const dialog = page.getByRole('dialog', { name: 'Search ElectroHub' });
   const box = dialog.getByRole('combobox', { name: 'Search products' });
   await expect(box).toBeFocused();
-  for (let index = 0; index < 12; index++) {
-    await page.keyboard.press(index % 2 ? 'Shift+Tab' : 'Tab');
+  for (let index = 0; index < 24; index++) {
+    await page.keyboard.press(index < 12 ? 'Tab' : 'Shift+Tab');
     expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
   }
   await capture(page, info, 'search-keyboard');
@@ -59,6 +60,7 @@ test('@responsive storefront templates, empty states and authentication semantic
     await page.goto(url);
     await expect(page.getByRole('main')).toBeVisible();
     await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+    await expect(page).toHaveTitle(new RegExp('ElectroHub'));
     await capture(page, info, label);
     await audit(page, info, label);
   }
@@ -103,6 +105,7 @@ test('@responsive admin MFA, tables, settings and navigation semantics', async (
   await signInAdmin(page, admins(info).ownerEmail);
   for (const url of ['/admin', '/admin/products', '/admin/products/new', '/admin/categories', '/admin/inventory', '/admin/orders',
     '/admin/deliveries', '/admin/customers', '/admin/recommendations', '/admin/analytics', '/admin/settings',
+    '/admin/settings?tab=shipping', '/admin/settings?tab=notifications',
     '/admin/settings/administrators', '/admin/profile', '/admin/profile/security', '/admin/profile/sessions']) {
     await page.goto(url);
     await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
@@ -124,4 +127,20 @@ test('product API outage terminates loading and supports recovery', async ({ pag
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1, name: item.name })).toBeVisible();
   await audit(page, info, 'product-recovered');
+});
+
+test('slow suggestions announce loading and settle to real results', async ({ page }, info) => {
+  let release: (() => void) | undefined;
+  const responseGate = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/search/suggestions?*', async route => { await responseGate; await route.continue(); });
+  try {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await page.getByRole('combobox', { name: 'Search products' }).fill('aurora');
+    await expect(page.getByRole('dialog').getByRole('status')).toHaveText('Loading suggestions');
+    await capture(page, info, 'slow-suggestions');
+    release?.();
+    await expect(page.getByRole('option', { name: /Aurora/ }).first()).toBeVisible();
+    await audit(page, info, 'slow-suggestions-recovered');
+  } finally { release?.(); }
 });

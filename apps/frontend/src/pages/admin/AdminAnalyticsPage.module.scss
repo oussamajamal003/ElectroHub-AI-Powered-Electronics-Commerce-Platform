@@ -84,6 +84,7 @@
 .statRow { display: grid; gap: $spacing-4; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0;
   @media (min-width: 1024px) { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); } }
 .stat { display: grid; gap: $spacing-1; min-width: 0; margin: 0;
+  > dl { display: grid; gap: $spacing-1; margin: 0; }
   dt { font-size: $font-size-xs; color: $color-text-secondary; }
   dd { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; color: $color-text-primary; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; } }
 .statNote { margin: 0; font-size: $font-size-xs; color: $color-text-muted; overflow-wrap: anywhere; }

@@ -11,13 +11,13 @@ import { DiscoveryProvider } from '@/features/search/discovery/DiscoveryProvider
 import { ShopFooterLinks } from './ShopFooterLinks';
 import { useStorefrontSession } from '@/features/analytics/useStorefrontSession';
 import { useStorefrontProfile } from '@/features/storefront/api';
-import { useEffect } from 'react';
+import { usePageTitle } from './usePageTitle';
 
 export function CustomerLayout() {
   const { isLocked } = usePaymentLock();
   const { data: storeProfile } = useStorefrontProfile();
   useStorefrontSession();
-  useEffect(() => { if (storeProfile?.storeName) document.title = `${storeProfile.storeName} | Electronics`; }, [storeProfile?.storeName]);
+  usePageTitle('customer-main', storeProfile?.storeName ?? 'ElectroHub');
 
   return (
     <DiscoveryProvider disabled={isLocked}>
