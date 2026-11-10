@@ -5,5 +5,7 @@
   &[aria-pressed='true'], &:hover { color: $color-error; border-color: $color-error; }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
   &[data-pending='true'] { border-style: dashed; }
+  &:disabled { cursor: progress; }
+  &:disabled:not([aria-pressed='true']):hover { color: $color-text-secondary; border-color: $color-border; }
 }
 @media (prefers-reduced-motion: reduce) { .button { transition: none; } }

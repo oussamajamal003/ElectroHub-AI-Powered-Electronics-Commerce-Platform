@@ -31,7 +31,7 @@ describe('Product details loading and review auth state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useCart).mockReturnValue({ addItem: vi.fn() } as unknown as ReturnType<typeof useCart>);
-    vi.mocked(useAuth).mockReturnValue({ isInitializing: true, isAuthenticated: false } as ReturnType<typeof useAuth>);
+    vi.mocked(useAuth).mockReturnValue({ isInitializing: true, isAuthenticated: false, isSessionVerified: true } as ReturnType<typeof useAuth>);
     vi.mocked(useProduct).mockReturnValue({ data: { data: product }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
     vi.mocked(useReviews).mockReturnValue({ data: { data: [], meta: { page: 1, pageSize: 10, total: 0, totalPages: 0 } }, isPending: false, isError: false } as unknown as ReturnType<typeof useReviews>);
     vi.mocked(useMyReview).mockReturnValue({ isPending: true } as ReturnType<typeof useMyReview>);
@@ -70,6 +70,7 @@ describe('Product details loading and review auth state', () => {
   });
 
   it('Buy Now does not mutate the persistent Cart and navigates to Buy Now checkout with selected quantity', async () => {
+    vi.mocked(useAuth).mockReturnValue({ isInitializing: false, isAuthenticated: false, isSessionVerified: true } as ReturnType<typeof useAuth>);
     const addItem = vi.fn();
     vi.mocked(useCart).mockReturnValue({ addItem, data: { items: [{ productId: 'other', quantity: 2 }] } } as unknown as ReturnType<typeof useCart>);
     vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, purchasable: true, stockStatus: 'IN_STOCK' } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
@@ -89,6 +90,7 @@ describe('Product details loading and review auth state', () => {
     expect(description.compareDocumentPosition(stock) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
   it('Add to Cart adds to persistent Cart without navigating away', async () => {
+    vi.mocked(useAuth).mockReturnValue({ isInitializing: false, isAuthenticated: false, isSessionVerified: true } as ReturnType<typeof useAuth>);
     const addItem = vi.fn().mockResolvedValue(undefined);
     vi.mocked(useCart).mockReturnValue({ addItem } as unknown as ReturnType<typeof useCart>);
     vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, purchasable: true, stockStatus: 'IN_STOCK' } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
@@ -97,6 +99,7 @@ describe('Product details loading and review auth state', () => {
     expect(screen.queryByRole('heading', { name: 'Buy Now Checkout destination' })).not.toBeInTheDocument();
   });
   it('keeps an addition pending once and restores the button after a stock rejection', async () => {
+    vi.mocked(useAuth).mockReturnValue({ isInitializing: false, isAuthenticated: false, isSessionVerified: true } as ReturnType<typeof useAuth>);
     let reject!: (reason: Error) => void;
     const addItem = vi.fn(() => new Promise<void>((_resolve, fail) => { reject = fail; }));
     vi.mocked(useCart).mockReturnValue({ addItem } as unknown as ReturnType<typeof useCart>);
@@ -109,6 +112,25 @@ describe('Product details loading and review auth state', () => {
     await act(async () => reject(new ApiError(409, 'Only 1 item is available.', undefined, 'CART_STOCK_CONFLICT')));
     expect(screen.getByRole('button', { name: 'Add to Cart' })).toBeEnabled();
     expect(screen.getByText('Only 1 item is available.')).toBeInTheDocument();
+  });
+
+  it('keeps purchase actions pending while the stored session is re-verified, then enables them (Task 06.1 D-1)', () => {
+    const addItem = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(useCart).mockReturnValue({ addItem } as unknown as ReturnType<typeof useCart>);
+    vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, purchasable: true, stockStatus: 'IN_STOCK' } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
+    vi.mocked(useAuth).mockReturnValue({ isInitializing: true, isAuthenticated: false, isSessionVerified: false, sessionUnavailable: false } as ReturnType<typeof useAuth>);
+    const view = renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Add to Cart' }));
+    expect(screen.getByRole('button', { name: 'Add to Cart' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Buy Now' })).toBeDisabled();
+    expect(addItem).not.toHaveBeenCalled();
+    expect(screen.queryByText('Could not add this product. Check availability and try again.')).not.toBeInTheDocument();
+
+    vi.mocked(useAuth).mockReturnValue({ isInitializing: false, isAuthenticated: true, isSessionVerified: true, sessionUnavailable: false } as ReturnType<typeof useAuth>);
+    view.rerender(<QueryClientProvider client={testQueryClient}><MemoryRouter initialEntries={['/products/test-tablet']}><Routes><Route path="/products/:slug" element={<ProductDetailPage />} /></Routes></MemoryRouter></QueryClientProvider>);
+    expect(screen.getByRole('button', { name: 'Add to Cart' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Add to Cart' }));
+    expect(addItem).toHaveBeenCalledWith('p-1', 1);
   });
 
   it('renders a structural detail skeleton instead of plain text', () => {

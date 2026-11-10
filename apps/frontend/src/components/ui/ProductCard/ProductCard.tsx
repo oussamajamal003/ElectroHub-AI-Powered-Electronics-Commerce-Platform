@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ProductImage } from '../ProductImage';
 import { Rating } from '../Rating/Rating';
 import { ApiError } from '@/lib/api';
+import { useCustomerSessionPending } from '@/features/auth/context/AuthContext';
 import type { ProductSummary } from '@/features/products/types';
 import styles from './ProductCard.module.scss';
 import { StatusBadge } from '../StatusBadge';
@@ -66,6 +67,9 @@ export function ProductCard({
 }: ProductCardProps) {
   const stock = stockPresentation(stockStatus === undefined ? availability === 'AVAILABLE' ? 'IN_STOCK' : null : stockStatus);
   const unavailable = stockStatus === 'OUT_OF_STOCK' || purchasable === false || availability === 'UNAVAILABLE';
+  // After a page load the stored session is re-verified before cart/wishlist writes are accepted; until then both actions wait
+  // instead of failing (cart) or silently ignoring (wishlist) a quick click (Task 06.1 R-1).
+  const sessionPending = useCustomerSessionPending();
   const [cartState, setCartState] = useState<'idle' | 'adding' | 'added' | 'error'>('idle');
   const [cartError, setCartError] = useState('Could not add item. Please try again.');
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -112,7 +116,7 @@ export function ProductCard({
       <div className={styles.imageArea}>
         <div className={styles.primaryImage}><ProductImage src={imageUrl} alt={title} className={styles.image} loading="lazy" decoding="async" /></div>
         {secondaryImageUrl && secondaryImageUrl !== imageUrl && <div className={styles.secondaryImage} aria-hidden="true"><ProductImage src={secondaryImageUrl} alt="" className={styles.image} loading="lazy" decoding="async" /></div>}
-        {showActions && onToggleWishlist && <WishlistButton title={title} saved={isWishlisted} pending={wishlistPending}
+        {showActions && onToggleWishlist && <WishlistButton title={title} saved={isWishlisted} pending={wishlistPending || sessionPending} disabled={sessionPending}
           className={styles.wishlistBtn} onToggle={() => wishlistProduct ? onToggleWishlist(id, wishlistProduct) : onToggleWishlist(id)} />}
       </div>
 
@@ -146,7 +150,8 @@ export function ProductCard({
           type="button"
           className={styles.addBtn}
           onClick={handleAddToCart}
-          disabled={unavailable || cartState === 'adding'}
+          disabled={unavailable || cartState === 'adding' || sessionPending}
+          aria-busy={sessionPending || cartState === 'adding' || undefined}
           aria-label={`Add ${title} to cart`}
         >
           {unavailable ? stockStatus === 'OUT_OF_STOCK' ? 'Out of stock' : 'Unavailable' : cartState === 'adding' ? 'Adding…' : cartState === 'added' ? 'Added ✓' : cartState === 'error' ? 'Try again' : 'Add to Cart'}

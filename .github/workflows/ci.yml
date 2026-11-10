@@ -133,6 +133,60 @@ jobs:
       - name: Check workflows cannot deploy migrations or use shared-database credentials
         run: node .github/scripts/check-workflow-policy.cjs
 
+  release-e2e:
+    name: Release E2E / ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Task 06.1 release-critical journeys against the real backend and a disposable PostgreSQL. The stack runs hermetically
+    # (ELECTROHUB_ENV_FILES=none, NODE_ENV=test, per-run random secrets): no Stripe, Brevo, AI or shared-database credential exists here.
+    # Sharded by browser engine: each job has its own runner and disposable PostgreSQL, installs one engine and runs that engine's two
+    # projects (fixtures are per project, so shards never share accounts). All six projects still run on every push / pull request.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { engine: chromium, label: Chromium, projects: '--project=chromium-desktop --project=tablet-chromium-768' }
+          - { engine: firefox, label: Firefox, projects: '--project=firefox-desktop --project=wide-firefox-1920' }
+          - { engine: webkit, label: WebKit, projects: '--project=webkit-desktop --project=mobile-webkit-390' }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.11.0'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Start disposable PostgreSQL
+        uses: ./.github/actions/disposable-postgres
+      - name: Generate Prisma Client
+        run: npm run prisma:generate --workspace=@electrohub/backend
+      - name: Resolve Playwright version
+        id: playwright
+        working-directory: apps/frontend
+        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.engine }}
+      - name: Install Playwright browser and OS dependencies
+        working-directory: apps/frontend
+        # The browser download is skipped on a cache hit; OS packages are always installed (they are not cached).
+        run: npx playwright install --with-deps ${{ matrix.engine }}
+      - name: Release suite (${{ matrix.label }} projects)
+        working-directory: apps/frontend
+        run: npm run test:release -- ${{ matrix.projects }}
+      - name: Upload release report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-e2e-report-${{ matrix.engine }}
+          path: |
+            apps/frontend/playwright-report/release
+            apps/frontend/test-results/release
+          retention-days: 14
+
   backend-test:
     name: Backend / Test
     runs-on: ubuntu-latest

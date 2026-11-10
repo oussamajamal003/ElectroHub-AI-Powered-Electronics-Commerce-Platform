@@ -190,6 +190,8 @@ describe.skipIf(!disposableMode)('real PostgreSQL payment lifecycle acceptance K
       provider.setStatus(purchase.attempt.id, 'requires_capture'); // authorized without a submit step: the legacy path
       provider.fail('capture-rejected');
       const stall = provider.stallRetrieveAfterNextCancel();
+      // setup's own first pass reschedules the work (payment.service: ~10 s later); act as the runner's next tick, as settle() does.
+      await db.paymentWork.updateMany({ where: { attemptId: purchase.attempt.id, state: 'READY' }, data: { nextRunAt: new Date(Date.now() - 1_000) } });
       const running = purchase.payment.process(purchase.attempt.id);
       await stall.entered;
       expect((await cart.get(userId)).items).toHaveLength(0); // committed: the Cart was cleared with the purchase
@@ -234,16 +236,17 @@ describe.skipIf(!disposableMode)('real PostgreSQL payment lifecycle acceptance K
     expect(expected).toContain('20261013000000_refresh_token_rotation_lineage');
 
     const columns = await db.$queryRaw<Array<{ column_name: string; data_type: string; is_nullable: string; column_default: string | null }>>(Prisma.sql`
-      SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns
+      SELECT column_name::text AS column_name, data_type::text AS data_type, is_nullable::text AS is_nullable, column_default::text AS column_default
+      FROM information_schema.columns
       WHERE table_schema = ${run.schema} AND table_name = 'refresh_tokens' AND column_name IN ('familyId', 'replacedByTokenHash')`);
     const family = columns.find(column => column.column_name === 'familyId');
     expect(family).toMatchObject({ data_type: 'uuid', is_nullable: 'NO', column_default: null });
     expect(columns.find(column => column.column_name === 'replacedByTokenHash')).toMatchObject({ is_nullable: 'YES' });
     const indexes = await db.$queryRaw<Array<{ indexname: string }>>(Prisma.sql`
-      SELECT indexname FROM pg_indexes WHERE schemaname = ${run.schema} AND tablename = 'refresh_tokens'`);
+      SELECT indexname::text AS indexname FROM pg_indexes WHERE schemaname = ${run.schema} AND tablename = 'refresh_tokens'`);
     expect(indexes.map(index => index.indexname)).toEqual(expect.arrayContaining(['refresh_tokens_familyId_idx', 'refresh_tokens_replacedByTokenHash_key']));
     const checks = await db.$queryRaw<Array<{ conname: string }>>(Prisma.sql`
-      SELECT c.conname FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid JOIN pg_namespace n ON n.oid = t.relnamespace
+      SELECT c.conname::text AS conname FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid JOIN pg_namespace n ON n.oid = t.relnamespace
       WHERE n.nspname = ${run.schema} AND t.relname = 'refresh_tokens' AND c.contype = 'c'`);
     expect(checks.map(check => check.conname)).toContain('refresh_tokens_no_self_replacement_check');
   });

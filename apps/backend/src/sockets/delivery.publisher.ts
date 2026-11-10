@@ -16,24 +16,24 @@ export const toPublishChanges = (changes: DeliveryEventChange[]) => changes.map(
 let gateway: DeliveryGateway | null = null;
 let service = new DeliveryService();
 
+/**
+ * Callers fire-and-forget, and each publish reads the projection asynchronously, so two commits close together (a simulation tick and
+ * the stop, two admin PATCHes) could emit in the order their reads finished: revision 4 before 3 (Task 06.1 R-5). Publishes for one
+ * order run one after another; each read starts after the previous emit, so the revisions a room sees never decrease. Orders are
+ * independent, and the entry is dropped once its queue drains.
+ */
+const queues = new Map<string, Promise<void>>();
+
 export const DeliveryPublisher = {
   attach(next: DeliveryGateway | null, deliveryService: DeliveryService = new DeliveryService()) { gateway = next; service = deliveryService; },
   get gateway() { return gateway; },
 
-  async afterCommit(orderId: string, changed: PublishChange[]): Promise<void> {
-    const target = gateway;
-    if (!target || changed.length === 0) return;
-    try {
-      const projection = await service.getRealtimeProjection(orderId);
-      if (!projection) return;
-      target.namespace.to(orderRoom(orderId)).emit('delivery:updated', { v: 1, orderReference: projection.orderReference, revision: projection.revision,
-        occurredAt: projection.occurredAt, changed, snapshot: projection.snapshot, timelineEntry: projection.timelineEntries[0] ?? null,
-        timelineEntries: projection.timelineEntries, source: projection.source === 'SIMULATION' ? 'SIMULATION' : 'ADMIN' });
-      realtimeMetrics.increment('published');
-    } catch (error) {
-      realtimeMetrics.increment('publish_failed');
-      logSafely('warn', 'Delivery publish failed', { event: 'DELIVERY_PUBLISH_FAILED', errorName: error instanceof Error ? error.name : 'Unknown' });
-    }
+  afterCommit(orderId: string, changed: PublishChange[]): Promise<void> {
+    if (!gateway || changed.length === 0) return Promise.resolve();
+    const next = (queues.get(orderId) ?? Promise.resolve()).then(() => publish(orderId, changed));
+    queues.set(orderId, next);
+    void next.then(() => { if (queues.get(orderId) === next) queues.delete(orderId); });
+    return next;
   },
 
   revoked(orderId: string, orderReference: string, reason: 'ACCESS_REVOKED' | 'ORDER_CANCELLED') {
@@ -51,3 +51,20 @@ export const DeliveryPublisher = {
     try { gateway?.disconnectUser(userId, reason); } catch { realtimeMetrics.increment('publish_failed'); }
   },
 };
+
+/** Never rejects, so one failed publish cannot stall the order's queue. */
+async function publish(orderId: string, changed: PublishChange[]): Promise<void> {
+  const target = gateway;
+  if (!target) return;
+  try {
+    const projection = await service.getRealtimeProjection(orderId);
+    if (!projection) return;
+    target.namespace.to(orderRoom(orderId)).emit('delivery:updated', { v: 1, orderReference: projection.orderReference, revision: projection.revision,
+      occurredAt: projection.occurredAt, changed, snapshot: projection.snapshot, timelineEntry: projection.timelineEntries[0] ?? null,
+      timelineEntries: projection.timelineEntries, source: projection.source === 'SIMULATION' ? 'SIMULATION' : 'ADMIN' });
+    realtimeMetrics.increment('published');
+  } catch (error) {
+    realtimeMetrics.increment('publish_failed');
+    logSafely('warn', 'Delivery publish failed', { event: 'DELIVERY_PUBLISH_FAILED', errorName: error instanceof Error ? error.name : 'Unknown' });
+  }
+}

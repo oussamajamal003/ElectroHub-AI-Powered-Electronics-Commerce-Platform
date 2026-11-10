@@ -5,6 +5,7 @@
  * dispatch uses an in-memory transport double (no Brevo). IDs map to the task's T01–T25 and DB01–DB10.
  */
 import { randomUUID } from 'node:crypto';
+import { readdirSync } from 'node:fs';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PaymentService } from '../payment.service.js';
@@ -89,7 +90,8 @@ describe.skipIf(!enabled)('Task 03.8 commerce email — real PostgreSQL', () => 
     const [row] = await db.$queryRaw<{ name: string; migrations: bigint }[]>(Prisma.sql`SELECT current_database()::text AS "name",
       (SELECT count(*) FROM "_prisma_migrations" WHERE "finished_at" IS NOT NULL AND "rolled_back_at" IS NULL) AS "migrations"`);
     expect(row!.name).toMatch(/^electrohub_disposable_email_[0-9a-f]{8}$/);
-    expect(Number(row!.migrations)).toBe(20);
+    // Every repository migration, not a count frozen when this suite was written.
+    expect(Number(row!.migrations)).toBe(readdirSync('prisma/migrations').filter(entry => /^\d/.test(entry)).length);
   });
   afterAll(async () => { await db?.$disconnect(); });
 

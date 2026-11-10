@@ -5,7 +5,7 @@ import { catalogSignal, queryKeys } from '@/lib/query';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { MAX_CART_LINES, MAX_CART_QUANTITY, clearGuestCart, readAuthenticatedCartCount, readGuestCart, writeAuthenticatedCartCount, writeGuestCart } from './storage';
 import type { CartData, CartInputItem } from './types';
-import { CartContext } from './context';
+import { CartContext, SESSION_CHECK_MESSAGE } from './context';
 
 const EMPTY_CART: CartData = { revision: '', items: [], totalQuantity: 0, subtotal: '0.00', shipping: '0.00', total: '0.00', currency: 'USD', canCheckout: false };
 const readServerCart = (signal?: AbortSignal) => apiClient<{ data: CartData }>('/api/cart', { signal });
@@ -217,7 +217,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const addItem = async (productId: string, quantity = 1) => {
-    if (!isSessionVerified) throw new Error('Checking your session. Please try again.');
+    if (!isSessionVerified) throw new Error(SESSION_CHECK_MESSAGE);
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_CART_QUANTITY) throw new Error('Invalid quantity.');
 
     const currentLine = dataWithQuantities?.items.find(item => item.productId === productId);

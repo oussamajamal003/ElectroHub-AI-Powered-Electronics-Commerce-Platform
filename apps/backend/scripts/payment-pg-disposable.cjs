@@ -13,7 +13,10 @@
  *      (CN=electrohub-ci-ca, valid at most 48 hours, issued within the last 48 hours); a hosted or general-purpose
  *      server cannot present such a certificate;
  *   3. be a dedicated, fresh instance: PostgreSQL 17, connected over TLS as `postgres`, no other databases, no other
- *      login roles, no hosted-platform roles or schemas, and no relations outside the run schema.
+ *      login roles, no hosted-platform roles or schemas, and no relations at all.
+ * The run then marks the database, applies every repository migration to its `public` schema (the Task 04.2 pgvector
+ * migrations reference `public.*` and cannot be replayed into a side schema; Task 06.1 R-7), runs the suite, and resets the
+ * marked database to empty so the instance is fresh again.
  * Any failed or unverifiable check blocks the run before a write.
  *
  *   node scripts/payment-pg-disposable.cjs --check-config   # offline: configuration and CA proof only
@@ -38,6 +41,9 @@ const FORBIDDEN_TARGET_TEXT = ['supabase', 'pooler', 'pzxekjybdiulzmssalfo', 'ye
 const PLATFORM_ROLES = ['supabase_admin', 'supabase_auth_admin', 'supabase_storage_admin', 'supabase_read_only_user',
   'authenticator', 'anon', 'authenticated', 'service_role', 'pgbouncer', 'dashboard_user'];
 const PLATFORM_SCHEMAS = ['auth', 'storage', 'realtime', 'supabase_migrations', 'vault', 'graphql', 'graphql_public', 'extensions'];
+/** Objects the repository's own migrations create outside `public` (Task 04.2 pgvector, Task 04.3 media). Tolerated only after migration. */
+const MIGRATION_SCHEMAS = ['ai', 'extensions'];
+const MIGRATION_ROLES = ['ai_vector_reader', 'ai_vector_ingest', 'ai_media_worker'];
 const LIVE_STRIPE = /(?:sk|rk|pk)_live_[A-Za-z0-9]+/i;
 const SCENARIOS = 'ABCDEFGHIJKLMNOPQRS'.split('');
 const TEST_FILES = [
@@ -73,8 +79,8 @@ function scrubbedEnvironment(env) {
  * Each entrypoint expects its own scope, so approval of one cannot start the other.
  */
 const AUTH_SCOPES = {
-  'scenarios-A-S': 'scenarios-A-S:fixtures+drop-run-schema',
-  'scenarios-A-J': 'scenarios-A-J:fixtures+drop-run-schema',
+  'scenarios-A-S': 'scenarios-A-S:fixtures+reset-run-database',
+  'scenarios-A-J': 'scenarios-A-J:fixtures+reset-run-database',
   'stripe-live': 'stripe-live-suite:disposable-fixtures-owned-ids',
 };
 function expectedAuthorization(database, scope = 'scenarios-A-S') {
@@ -89,7 +95,7 @@ function quoteIdentifier(value) {
 
 function newRunIdentity(random = crypto.randomBytes) {
   const runId = random(6).toString('hex');
-  return { runId, schema: `pgrun_${runId}`, marker: `electrohub-disposable-run:${runId}` };
+  return { runId, schema: 'public', marker: `electrohub-disposable-run:${runId}` };
 }
 
 /** Inspects the per-run CA certificate. Returns an error string or null. */
@@ -161,7 +167,8 @@ function validateConfiguration(env = process.env, { read = fs.readFileSync, now 
 function runUrl(config, schema) {
   const url = new URL(config.url);
   url.searchParams.set('schema', schema);
-  url.searchParams.set('options', `-csearch_path=${schema}`);
+  // A side schema needs search_path pinned; `public` is Prisma's default, and the app's database-target guard rejects `options`.
+  if (schema !== 'public') url.searchParams.set('options', `-csearch_path=${schema}`);
   url.searchParams.set('connection_limit', '4');
   return url.toString();
 }
@@ -215,6 +222,8 @@ function createClient(config) {
 /**
  * Server-side proof that the connected instance is a dedicated, fresh disposable PostgreSQL 17. The client must have
  * connected with certificate verification against the per-run CA. `allowedSchema` is the run schema (null before provisioning).
+ * With `allowedSchema === 'public'` (after migration) the repository's own migration schemas and NOLOGIN roles are tolerated;
+ * nothing else is.
  * Throws failure(label) on any unmet condition; returns a small sanitized summary.
  */
 async function verifyDisposableServer(client, { expectedDatabase, allowedSchema = null } = {}) {
@@ -225,13 +234,14 @@ async function verifyDisposableServer(client, { expectedDatabase, allowedSchema 
       SELECT current_database() AS db, current_user AS usr, current_setting('server_version') AS version,
         (SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()) AS ssl,
         (SELECT count(*)::int FROM pg_database WHERE datname NOT IN ('postgres', 'template0', 'template1', current_database())) AS other_databases,
-        (SELECT count(*)::int FROM pg_roles WHERE rolname !~ '^pg_' AND rolname <> current_user) AS other_roles,
+        (SELECT count(*)::int FROM pg_roles WHERE rolname !~ '^pg_' AND rolname <> current_user
+          AND NOT ($4::boolean AND rolname = ANY($5::text[]) AND NOT rolcanlogin AND NOT rolsuper)) AS other_roles,
         (SELECT count(*)::int FROM pg_roles WHERE rolname = ANY($1::text[])) AS platform_roles,
-        (SELECT count(*)::int FROM pg_namespace WHERE nspname = ANY($2::text[])) AS platform_schemas,
+        (SELECT count(*)::int FROM pg_namespace WHERE nspname = ANY($2::text[]) AND NOT ($4::boolean AND nspname = ANY($6::text[]))) AS platform_schemas,
         (SELECT count(*)::int FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE c.relkind IN ('r', 'p', 'v', 'm', 'S') AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
-            AND ($3::text IS NULL OR n.nspname <> $3::text)) AS foreign_relations`,
-    [PLATFORM_ROLES, PLATFORM_SCHEMAS, allowedSchema]);
+            AND ($3::text IS NULL OR n.nspname <> $3::text) AND NOT ($4::boolean AND n.nspname = ANY($6::text[]))) AS foreign_relations`,
+    [PLATFORM_ROLES, PLATFORM_SCHEMAS, allowedSchema, allowedSchema === 'public', MIGRATION_ROLES, MIGRATION_SCHEMAS]);
     row = result.rows[0];
     await client.query('ROLLBACK');
   } catch {
@@ -248,125 +258,42 @@ async function verifyDisposableServer(client, { expectedDatabase, allowedSchema 
   return { database: row.db, version: row.version };
 }
 
-function runSchemaMarkerSql(schema, marker) {
-  return { create: `CREATE SCHEMA ${quoteIdentifier(schema)}`, comment: `COMMENT ON SCHEMA ${quoteIdentifier(schema)} IS '${marker}'` };
-}
-
-/** Creates the schema and its ownership marker atomically: a schema without a marker can never exist. */
-async function provisionSchema(client, { schema, marker }) {
-  const sql = runSchemaMarkerSql(schema, marker);
-  await client.query('BEGIN');
-  try {
-    await client.query(sql.create);
-    await client.query(sql.comment);
-    await client.query('COMMIT');
-  } catch (error) {
-    try { await client.query('ROLLBACK'); } catch { /* the connection is discarded by the caller */ }
-    throw error;
-  }
-}
-
-/** Marks the (disposable) database itself for runs that use its public schema; a marker comment is the ownership record. */
+/** Marks the (disposable) database itself; the marker comment is the run's ownership record for cleanup. */
 async function markDatabase(client, database, marker) {
   if (!DATABASE_NAME.test(database) || !/^electrohub-disposable-run:[a-f0-9]{12}$/.test(marker)) throw failure('MARKER_INVALID');
   await client.query(`COMMENT ON DATABASE ${quoteIdentifier(database)} IS '${marker}'`);
 }
 
-function quoteCatalogIdentifier(value) {
-  if (typeof value !== 'string' || value.length === 0 || value.length > 63 || value.includes('\0')) throw failure('CLEANUP_CATALOG_IDENTIFIER_INVALID');
-  return `"${value.replaceAll('"', '""')}"`;
-}
-
-function qualifiedCatalogName(schema, name) {
-  return `${quoteCatalogIdentifier(schema)}.${quoteCatalogIdentifier(name)}`;
-}
-
-async function dropCatalogObjects(client, schema, schemaOid) {
-  const relations = (await client.query(`SELECT relname, relkind FROM pg_class WHERE relnamespace = $1`, [schemaOid])).rows;
-  const dropRelations = async (kind, statement) => {
-    const names = relations.filter(row => row.relkind === kind).map(row => qualifiedCatalogName(schema, row.relname));
-    if (names.length) await client.query(`${statement} ${names.join(', ')} RESTRICT`);
-  };
-
-  // Remove schema-owned dependents before base tables. Indexes, constraints,
-  // triggers and TOAST are owned by their relation and disappear with it.
-  await dropRelations('v', 'DROP VIEW');
-  await dropRelations('m', 'DROP MATERIALIZED VIEW');
-  await dropRelations('f', 'DROP FOREIGN TABLE');
-  const tables = relations.filter(row => row.relkind === 'r' || row.relkind === 'p')
-    .map(row => qualifiedCatalogName(schema, row.relname));
-  if (tables.length) await client.query(`DROP TABLE ${tables.join(', ')} RESTRICT`);
-
-  const sequences = (await client.query(`SELECT relname FROM pg_class WHERE relnamespace = $1 AND relkind = 'S'`, [schemaOid])).rows
-    .map(row => qualifiedCatalogName(schema, row.relname));
-  if (sequences.length) await client.query(`DROP SEQUENCE ${sequences.join(', ')} RESTRICT`);
-
-  const routines = (await client.query(`SELECT p.proname, p.prokind, pg_get_function_identity_arguments(p.oid) AS identity_args
-    FROM pg_proc p WHERE p.pronamespace = $1`, [schemaOid])).rows;
-  for (const kind of ['a', 'p', 'f', 'w']) {
-    const keyword = kind === 'a' ? 'AGGREGATE' : kind === 'p' ? 'PROCEDURE' : 'FUNCTION';
-    const names = routines.filter(row => row.prokind === kind).map(row =>
-      `${qualifiedCatalogName(schema, row.proname)}(${row.identity_args})`);
-    if (names.length) await client.query(`DROP ${keyword} ${names.join(', ')} RESTRICT`);
-  }
-
-  const types = (await client.query(`SELECT typname, typtype, typelem FROM pg_type WHERE typnamespace = $1 AND typtype <> 'p'`, [schemaOid])).rows;
-  // Prisma migrations create enums. Domains and standalone composites are not
-  // part of this schema contract; fail closed if a future migration adds one.
-  const ownedTypes = types.filter(row => String(row.typelem) === '0'); // arrays are internal companions of their base type
-  if (ownedTypes.some(row => row.typtype !== 'e')) throw failure('CLEANUP_UNSUPPORTED_SCHEMA_TYPE');
-  const enums = ownedTypes.map(row => qualifiedCatalogName(schema, row.typname));
-  if (enums.length) await client.query(`DROP TYPE ${enums.join(', ')} RESTRICT`);
-
-  const remaining = await client.query(`SELECT
-      (SELECT count(*)::int FROM pg_class WHERE relnamespace = $1) AS classes,
-      (SELECT count(*)::int FROM pg_type WHERE typnamespace = $1 AND typtype <> 'p') AS types,
-      (SELECT count(*)::int FROM pg_proc WHERE pronamespace = $1) AS routines`, [schemaOid]);
-  const row = remaining.rows[0];
-  if (!row || row.classes !== 0 || row.types !== 0 || row.routines !== 0) throw failure('CLEANUP_SCHEMA_OBJECTS_REMAIN');
-}
-
-/** Drops only the exact, owned and marked run schema. RESTRICT is the final
- * dependency fence. Schema-owned objects are removed in one transaction, so
- * any failed qualified RESTRICT statement rolls the complete cleanup back. */
-async function dropRunSchema(client, { schema, marker }) {
-  const match = /^pgrun_([a-f0-9]{12})$/.exec(schema ?? '');
-  if (!match || marker !== `electrohub-disposable-run:${match[1]}`) throw failure('CLEANUP_IDENTITY_INVALID');
-  await client.query('BEGIN');
+/**
+ * Returns the proved disposable instance to its fresh, empty state after a run (Task 06.1 R-7). Connects to the instance's
+ * `postgres` maintenance database, refuses unless the run database still carries THIS run's marker, then drops and recreates
+ * it (removing every migrated schema, including `ai` / `extensions`) and drops only the NOLOGIN roles the repository's own
+ * migrations create. Verifies the result: the database exists unmarked and none of those roles remain.
+ */
+async function resetRunDatabase(config, { marker }, { create = createClient } = {}) {
+  if (!DATABASE_NAME.test(config.database) || !/^electrohub-disposable-run:[a-f0-9]{12}$/.test(marker ?? '')) throw failure('CLEANUP_IDENTITY_INVALID');
+  const maintenance = new URL(config.url);
+  maintenance.pathname = '/postgres';
+  const client = create({ ...config, url: maintenance.toString() });
+  await client.connect();
   try {
-    const found = await client.query(`SELECT n.oid, n.nspowner::regrole::text AS owner,
-        obj_description(n.oid, 'pg_namespace') AS comment, current_user AS current_role
-      FROM pg_namespace n WHERE n.nspname = $1`, [schema]);
-    if (found.rowCount === 0) {
-      await client.query('COMMIT');
-      return 'absent';
-    }
-    const row = found.rows[0];
-    if (row.owner !== row.current_role) throw failure('CLEANUP_OWNER_MISMATCH');
-    if (row.comment !== marker) throw failure('CLEANUP_MARKER_MISMATCH');
-    const dependencies = await client.query(`WITH objects(classid, objid, namespace_oid) AS (
-        SELECT 'pg_class'::regclass, c.oid, c.relnamespace FROM pg_class c
-        UNION ALL SELECT 'pg_type'::regclass, t.oid, t.typnamespace FROM pg_type t
-        UNION ALL SELECT 'pg_proc'::regclass, p.oid, p.pronamespace FROM pg_proc p
-        UNION ALL SELECT 'pg_constraint'::regclass, c.oid, c.connamespace FROM pg_constraint c
-        UNION ALL SELECT 'pg_rewrite'::regclass, r.oid, c.relnamespace FROM pg_rewrite r JOIN pg_class c ON c.oid = r.ev_class
-      )
-      SELECT count(*)::int AS count
-      FROM pg_depend d
-      JOIN objects referenced ON referenced.classid = d.refclassid AND referenced.objid = d.refobjid
-      JOIN objects dependent ON dependent.classid = d.classid AND dependent.objid = d.objid
-      WHERE referenced.namespace_oid = $1 AND dependent.namespace_oid <> $1
-        AND NOT (dependent.namespace_oid = 'pg_toast'::regnamespace AND d.deptype = 'i')`, [row.oid]);
-    if (dependencies.rows[0]?.count !== 0) throw failure('CLEANUP_EXTERNAL_DEPENDENCY');
-    await dropCatalogObjects(client, schema, row.oid);
-    await client.query(`DROP SCHEMA ${quoteIdentifier(schema)} RESTRICT`);
-    const after = await client.query('SELECT to_regnamespace($1) AS present', [schema]);
-    if (after.rows[0]?.present !== null) throw failure('CLEANUP_NOT_VERIFIED');
-    await client.query('COMMIT');
-    return 'dropped';
-  } catch (error) {
-    try { await client.query('ROLLBACK'); } catch { /* preserve the cleanup failure; caller reports uncertainty */ }
-    throw error;
+    const found = await client.query(`SELECT shobj_description(oid, 'pg_database') AS marker FROM pg_database WHERE datname = $1`, [config.database]);
+    if (found.rowCount !== 1) throw failure('CLEANUP_DATABASE_ABSENT');
+    if (found.rows[0].marker !== marker) throw failure('CLEANUP_MARKER_MISMATCH');
+    await client.query(`DROP DATABASE ${quoteIdentifier(config.database)} WITH (FORCE)`);
+    await client.query(`CREATE DATABASE ${quoteIdentifier(config.database)}`);
+    const roles = (await client.query('SELECT rolname FROM pg_roles WHERE rolname = ANY($1::text[]) AND NOT rolcanlogin AND NOT rolsuper',
+      [MIGRATION_ROLES])).rows.map(row => row.rolname);
+    for (const role of roles) await client.query(`DROP ROLE ${quoteIdentifier(role)}`);
+    const after = await client.query(`SELECT
+        (SELECT shobj_description(oid, 'pg_database') FROM pg_database WHERE datname = $1) AS marker,
+        (SELECT count(*)::int FROM pg_database WHERE datname = $1) AS databases,
+        (SELECT count(*)::int FROM pg_roles WHERE rolname = ANY($2::text[])) AS roles`, [config.database, MIGRATION_ROLES]);
+    const row = after.rows[0];
+    if (!row || row.databases !== 1 || row.marker !== null || row.roles !== 0) throw failure('CLEANUP_NOT_VERIFIED');
+    return 'reset';
+  } finally {
+    try { await client.end(); } catch { /* connection already closed */ }
   }
 }
 
@@ -525,11 +452,12 @@ async function main(argv = process.argv.slice(2)) {
   let failed = false;
   let treeStopped = true;
   let probeFile = null;
+  let clientEnded = false;
   try {
     await client.connect();
     const proof = await verifyDisposableServer(client, { expectedDatabase: config.database });
     console.log(`DISPOSABLE TARGET PROVED: PostgreSQL ${proof.version}, database ${proof.database}, verified TLS, dedicated and empty.`);
-    await provisionSchema(client, identity);
+    await markDatabase(client, config.database, identity.marker);
     provisioned = true;
     probeFile = writeProbeFile(config.database, identity.schema);
     for (const stage of stageDefinitions(config, identity, process.env, { probeFile, scope })) {
@@ -540,7 +468,7 @@ async function main(argv = process.argv.slice(2)) {
       }
       console.log(`${stage.name.toUpperCase()} PASS`);
     }
-    console.log(`DISPOSABLE SUITE PASS: ${suite.scenarios.length} scenarios (${scope.slice('scenarios-'.length)}) passed on real PostgreSQL in schema ${identity.schema}.`);
+    console.log(`DISPOSABLE SUITE PASS: ${suite.scenarios.length} scenarios (${scope.slice('scenarios-'.length)}) passed on real PostgreSQL (database ${config.database}, schema ${identity.schema}).`);
   } catch (error) {
     failed = true;
     if (error && error.treeStopped === false) treeStopped = false;
@@ -555,23 +483,25 @@ async function main(argv = process.argv.slice(2)) {
     if (probeFile && treeStopped) { try { fs.rmSync(probeFile, { force: true }); } catch { /* temp probe only */ } }
     if (provisioned && !treeStopped) {
       // Ownership of live processes is uncertain: never drop anything. The marker identifies the residue for the owner.
-      console.error(`CLEANUP SKIPPED: child termination could not be confirmed; schema ${identity.schema} (marker ${identity.marker}) may remain in the disposable instance.`);
+      console.error(`CLEANUP SKIPPED: child termination could not be confirmed; database ${config.database} (marker ${identity.marker}) keeps the run's objects.`);
     } else if (provisioned) {
       try {
-        const result = await dropRunSchema(client, identity);
-        console.log(`CLEANUP PASS: run schema ${result}.`);
+        clientEnded = true;
+        try { await client.end(); } catch { /* the reset terminates every session on the run database anyway */ }
+        const result = await resetRunDatabase(config, identity);
+        console.log(`CLEANUP PASS: run database ${result}.`);
       } catch (error) {
         failed = true;
-        console.error(`CLEANUP FAIL: ${error && error.label ? error.label : 'CLEANUP_FAILED'}; the run schema may remain in the disposable instance.`);
+        console.error(`CLEANUP FAIL: ${error && error.label ? error.label : 'CLEANUP_FAILED'}; the run database may keep its objects.`);
       }
     }
-    try { await client.end(); } catch { /* connection already closed */ }
+    if (!clientEnded) { try { await client.end(); } catch { /* connection already closed */ } }
   }
   if (failed) process.exitCode = 1;
 }
 
 module.exports = { SCENARIOS, TEST_FILES, SUITES, selectedScope, AUTH_SCOPES, markDatabase, strictCliUrl, probeSql, writeProbeFile, expectedAuthorization, inspectCa, validateConfiguration, runUrl, newRunIdentity, createClient,
-  verifyDisposableServer, provisionSchema, dropRunSchema, verifyReport, runStage, killTree, groupAlive, scrubbedEnvironment,
+  verifyDisposableServer, resetRunDatabase, MIGRATION_ROLES, MIGRATION_SCHEMAS, verifyReport, runStage, killTree, groupAlive, scrubbedEnvironment,
   stageDefinitions, quoteIdentifier, failure };
 
 if (require.main === module) main().catch(() => { console.error('FATAL: DISPOSABLE_RUNNER_FAILED'); process.exitCode = 1; });

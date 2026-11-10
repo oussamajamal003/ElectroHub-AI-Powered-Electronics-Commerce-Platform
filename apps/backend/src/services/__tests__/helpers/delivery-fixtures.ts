@@ -18,7 +18,15 @@ export function deliveryFixtures(label: string) {
     const row = await prisma.user.create({ data: { roleId: roleRow.id, email: `delivery-qa-${name}-${suffix}@example.invalid`,
       firstName: 'Delivery', lastName: `QA ${name}` } });
     userIds.push(row.id);
-    return row;
+    if (role === 'CUSTOMER') return { ...row, sessionId: undefined as string | undefined };
+    // Task 05.2: an ADMIN access token is honoured only with a live, MFA-assured admin session (refresh family + AdminSession),
+    // as AuthService.createSession creates them after MFA. Both rows cascade when the user is deleted.
+    const familyId = randomUUID();
+    await prisma.refreshToken.create({ data: { userId: row.id, familyId, tokenHash: `delivery-qa-${randomUUID()}`,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) } });
+    const now = new Date();
+    await prisma.adminSession.create({ data: { familyId, userId: row.id, mfaMethod: 'TOTP', mfaVerifiedAt: now, lastSeenAt: now } });
+    return { ...row, sessionId: familyId as string | undefined };
   }
 
   async function order(userId: string, status: OrderStatus, payment: PaymentStatus | null) {

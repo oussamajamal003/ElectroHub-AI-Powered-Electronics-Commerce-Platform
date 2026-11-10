@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { envDiagnostics, validateEnvironment } from '../src/config/env.js';
+import { envDiagnostics, selectEnvFiles, validateEnvironment } from '../src/config/env.js';
 
 describe('Environment loading', () => {
   it('loads the isolated test environment file under NODE_ENV=test', () => {
@@ -7,6 +7,15 @@ describe('Environment loading', () => {
     expect(envDiagnostics.loadedEnvFiles).toContain('.env.test.local');
     expect(envDiagnostics.selectedEnvFiles).not.toContain('.env.local');
     expect(envDiagnostics.loadedEnvFiles).not.toContain('.env.local');
+  });
+
+  it('loads no env file at all for a hermetic stack (ELECTROHUB_ENV_FILES=none) and only that exact value opts out', () => {
+    expect(selectEnvFiles('test', 'none')).toEqual([]);
+    expect(selectEnvFiles('development', 'none')).toEqual([]);
+    expect(selectEnvFiles('test', undefined)).toEqual(['.env', '.env.test.local']);
+    expect(selectEnvFiles('test', 'NONE')).toEqual(['.env', '.env.test.local']);
+    expect(selectEnvFiles('production', '')).toEqual(['.env', '.env.production.local']);
+    expect(selectEnvFiles('unknown', undefined)).toEqual(['.env', '.env.local']);
   });
 
   it.each([

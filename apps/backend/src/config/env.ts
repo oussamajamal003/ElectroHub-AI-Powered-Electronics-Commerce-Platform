@@ -15,9 +15,17 @@ const envFilesByEnvironment = {
   production: ['.env', '.env.production.local'],
 } as const;
 
-const selectedEnvFiles =
-  envFilesByEnvironment[nodeEnv as keyof typeof envFilesByEnvironment] ??
-  envFilesByEnvironment.development;
+/**
+ * Env files for an environment. `ELECTROHUB_ENV_FILES=none` (Task 06.1) loads no file at all, so a hermetic test stack (the release
+ * E2E suite) is configured only by the environment its launcher passes and can never inherit a developer's shared DEV database URL,
+ * provider keys or storage credentials from `.env`. It can only remove configuration sources, never add one.
+ */
+export function selectEnvFiles(environmentName: string, filesMode: string | undefined): readonly string[] {
+  if (filesMode === 'none') return [];
+  return envFilesByEnvironment[environmentName as keyof typeof envFilesByEnvironment] ?? envFilesByEnvironment.development;
+}
+
+const selectedEnvFiles = selectEnvFiles(nodeEnv, process.env.ELECTROHUB_ENV_FILES);
 
 const fileEnvironment: Record<string, string> = {};
 const loadedEnvFiles = selectedEnvFiles.filter((fileName, index) => {
