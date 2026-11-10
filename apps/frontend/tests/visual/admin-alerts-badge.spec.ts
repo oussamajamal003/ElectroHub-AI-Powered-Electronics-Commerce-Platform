@@ -13,7 +13,7 @@ async function fakeAdmin(page: Page, initial = { lowStock: 2, outOfStock: 1, awa
   };
   await page.route('**/api/auth/admin/refresh', route => route.fulfill({ json: { accessToken: 'visual-admin-token' } }));
   await page.route('**/api/auth/me', route => route.fulfill({ json: { user: { id: 'admin-1', email: 'admin@electrohub.test', firstName: 'Ada', lastName: 'Admin', role: 'ADMIN' } } }));
-  await page.route('**/api/admin/**', route => route.fulfill({ json: { data: [], meta: { page: 1, pageSize: 20, total: 0, totalPages: 0 } } }));
+  await page.route(/^https?:\/\/[^/]+\/api\/admin\//, route => route.fulfill({ json: { data: [], meta: { page: 1, pageSize: 20, total: 0, totalPages: 0 } } }));
   await page.route('**/api/admin/dashboard/alerts', route => route.fulfill({ json: snapshot() }));
   await page.route('**/api/admin/dashboard/alerts/acknowledge', async route => {
     acks.push(route.request().postDataJSON());
@@ -36,7 +36,7 @@ test('unread badge clears when the alerts are opened, survives refresh and navig
   await bell(page).click();
   await expect(page.getByText('Operational alerts')).toBeVisible();
   await expect(page.getByText(/2 new/)).toBeVisible();          // this session's markers
-  await expect(page.getByText('Low stock')).toBeVisible();      // read history stays
+  await expect(page.getByRole('menuitem', { name: /Low stock/ })).toBeVisible();      // read history stays
   await expect.poll(() => acks.length).toBe(1);
   await expect(bell(page)).toHaveAccessibleName(/Alerts: no unread, 6 items need attention/);
   await expect(bell(page)).not.toContainText('6');

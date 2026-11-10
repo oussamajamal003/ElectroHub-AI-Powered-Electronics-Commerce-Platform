@@ -29,7 +29,7 @@ async function stepScroll(page: Page, from: number, to: number, step = 300) {
 
 for (const [name, path] of [['About', '/about'], ['Home', '/']] as const) {
   test(`${name}: revealed content is never hidden or replayed when scrolling down, then up, then down again`, async ({ page }) => {
-    await page.route('**/api/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], meta: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }) }));
+    await page.route(/^https?:\/\/[^/]+\/api\//, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], meta: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }) }));
     await page.goto(path, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(500);
     const height = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
@@ -61,7 +61,7 @@ for (const [name, path] of [['About', '/about'], ['Home', '/']] as const) {
   });
 
   test(`${name}: rapid reverse scrolling leaves nothing hidden`, async ({ page }) => {
-    await page.route('**/api/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], meta: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }) }));
+    await page.route(/^https?:\/\/[^/]+\/api\//, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], meta: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }) }));
     await page.goto(path, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(400);
     const height = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
@@ -79,7 +79,7 @@ for (const [name, path] of [['About', '/about'], ['Home', '/']] as const) {
 
 test('reduced motion: nothing is hidden or animated, at any scroll position', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.route('**/api/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
+  await page.route(/^https?:\/\/[^/]+\/api\//, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
   await page.goto('/about', { waitUntil: 'domcontentloaded' });
   const height = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
   for (const y of [0, height / 2, height, 0]) {
@@ -94,7 +94,7 @@ test('reduced motion: nothing is hidden or animated, at any scroll position', as
 
 test('mobile (390px): scroll down and back up without hiding content or horizontal overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
-  await page.route('**/api/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
+  await page.route(/^https?:\/\/[^/]+\/api\//, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
   await page.goto('/about', { waitUntil: 'domcontentloaded' });
   const height = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
   await stepScroll(page, 0, height, 260);
@@ -108,7 +108,7 @@ test('mobile (390px): scroll down and back up without hiding content or horizont
 });
 
 test('navigation and reload keep a restored scroll position fully visible', async ({ page }) => {
-  await page.route('**/api/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
+  await page.route(/^https?:\/\/[^/]+\/api\//, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
   await page.goto('/about', { waitUntil: 'domcontentloaded' });
   const height = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
   await page.evaluate(h => window.scrollTo(0, h), height);

@@ -20,7 +20,7 @@ async function world(page: Page) {
     return { items, revision: `r${subtotal}`.padEnd(64, '0'), totalQuantity: items.reduce((s, i) => s + i.quantity, 0), subtotal, shipping: '0.00', total: subtotal, currency: 'USD', canCheckout: items.length > 0 };
   };
   await page.addInitScript(value => sessionStorage.setItem('electrohub:cached-user', JSON.stringify(value)), user);
-  await page.route('**/api/**', async route => {
+  await page.route(/^https?:\/\/[^/]+\/api\//, async route => {
     const path = new URL(route.request().url()).pathname; const method = route.request().method();
     const json = (data: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
     if (path === '/api/auth/customer/refresh') return json({ accessToken: 'intercepted', user });
