@@ -47,3 +47,7 @@ Source review found the refresh and transaction flags listed above. Access token
 - Known risk: an image-search request started while opted in can complete after withdrawal and still record its already-authorized server outcome. Server logs and account-personalization choices are separate. Further audit of recommendation and third-party flows is required before release.
 
 References: https://www.dataprotection.ie/en/dpc-guidance/guidance-cookies-and-other-tracking-technologies ; https://ico.org.uk/for-organisations/direct-marketing-and-privacy-and-electronic-communications/guidance-on-the-use-of-storage-and-access-technologies/how-do-we-manage-consent-in-practice/ ; https://developer.mozilla.org/en-US/docs/Web/Security/Practical_implementation_guides/Cookies ; https://legallaw.ul.edu.lb/OriginalLawPage.aspx?lawId=278573
+
+Draft PR: https://github.com/oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerce-Platform/pull/56
+
+GitHub reported no PR workflow runs or combined status entries for initial head `5500201` when checked; CI is not verified.
