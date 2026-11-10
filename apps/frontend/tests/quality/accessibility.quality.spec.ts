@@ -111,6 +111,25 @@ test('@responsive admin MFA, tables, settings and navigation semantics', async (
     await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
     await capture(page, info, url.replaceAll('/', '-'));
     await audit(page, info, url);
+    if (url === '/admin/products') {
+      await page.getByRole('searchbox', { name: 'Search products' }).fill('Aurora');
+      const reset = page.getByRole('button', { name: /Reset/ });
+      await expect(reset).toBeEnabled();
+      await audit(page, info, 'active-admin-filters');
+      await reset.focus();
+      await reset.press('Enter');
+      await expect(page.getByRole('searchbox', { name: 'Search products' })).toHaveValue('');
+    }
+    if (url === '/admin/profile/sessions') {
+      for (const table of await page.getByTestId('data-table').all()) {
+        if (await table.evaluate(el => el.scrollWidth > el.clientWidth)) {
+          await table.focus();
+          const before = await table.evaluate(el => el.scrollLeft);
+          await table.press('ArrowRight');
+          await expect.poll(() => table.evaluate(el => el.scrollLeft)).toBeGreaterThan(before);
+        }
+      }
+    }
   }
 });
 

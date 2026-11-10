@@ -107,7 +107,7 @@
 
 .variant-secondary {
   background-color: $color-accent;
-  color: $color-text-inverse;
+  color: $color-secondary;
 
   &:hover:not(:disabled) {
     background-color: color.adjust($color-accent, $lightness: -10%);
