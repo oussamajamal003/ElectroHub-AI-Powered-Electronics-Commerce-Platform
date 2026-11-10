@@ -113,15 +113,17 @@ plus dark auth dialog and alerts menu; synthetic fixture data only).
 | `npm run build --workspace=@electrohub/frontend` | PASS |
 | `npx playwright test -c playwright.dark-mode.config.ts` | PASS — 138/138 (46 Chromium, 46 Firefox, 46 WebKit) |
 | `npx storybook build` | PASS |
-| `node scripts/frontend-budget.mjs` | FAIL — **pre-existing**: parent `028f0a4` also fails (largest chunk 360,519 B gz > 300,000). This branch: 359,764 B / total 684,856 B (parent 691,126 B). |
+| `node scripts/frontend-budget.mjs` | Local container build exceeded the 300,000 B gzip chunk limit (359,764 B; parent `028f0a4` 360,519 B locally). **CI's Production JavaScript budget step PASSED on `e5ba290`** — the local over-limit result is environment-specific and is not a CI failure. |
 
 CSS cost of the token system: +3.3 KB gzip (+46 KB raw) vs. the pre-change build.
 
 ## 14. CI results
 
-`ci.yml` runs on pushes to `feature/**`. Remote CI status for `feature/06.2-premium-dark-mode-cloud` is recorded in the PR; it was not
-available when this document was written. The 06.2 `test:quality` gate needs Docker + the pgvector image (unavailable in this cloud
-container) — **LOCAL MODE / CI VERIFICATION REQUIRED**.
+Development CI run [42856557829](https://github.com/oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerce-Platform/actions/runs/42856557829)
+on `e5ba290`: **all 18 jobs passed** — frontend typecheck/lint/test/build + JS budget, Release E2E Chromium/Firefox/WebKit including the 06.2
+`test:quality` accessibility/keyboard/responsive gate, backend, AI service, Docker, payment PostgreSQL integration, migration policy and
+the Required / Quality Gate. Security Audit passed. An earlier red run (`9380bf4`) was the parent's `scrollable-region-focusable`
+failure, fixed by merging the parent's own fix `eb438d1`.
 
 ## 15. Light-mode regression results
 
@@ -152,7 +154,7 @@ traced to lazy product photos that had / had not finished loading and the rotati
 
 ## 18. Local-only follow-up checks — LOCAL MODE VERIFICATION REQUIRED
 
-1. `node apps/backend/scripts/release-e2e-db.cjs start`, then `npm run test:quality --workspace=@electrohub/frontend` in light **and**
+1. `test:quality` passed in CI (default/light preference). Still to do: `node apps/backend/scripts/release-e2e-db.cjs start`, then `npm run test:quality --workspace=@electrohub/frontend`
    with `localStorage['electrohub:theme']='dark'`.
 2. Stripe test mode: open checkout payment step, enter test card `4242…`, toggle the theme, confirm the entered card data is kept and the
    element restyles; complete a test payment.
