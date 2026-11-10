@@ -149,4 +149,4 @@ and localized; expect trivial conflicts only if the dark-mode branch edits the s
 
 ## 14. Changed files and PR
 
-See the PR file list (`git diff --stat origin/feature/06.2-accessibility-qa-ci-cd…`). PR link: added in the closing commit below.
+See the PR file list (`git diff --stat origin/feature/06.2-accessibility-qa-ci-cd…`). PR: https://github.com/oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerce-Platform/pull/53 (base `feature/06.2-accessibility-qa-ci-cd`).
