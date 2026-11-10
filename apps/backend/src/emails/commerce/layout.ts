@@ -1,7 +1,9 @@
 /**
- * Shared HTML shell for commerce emails. Table-based, inline critical styles, no images, no scripts, no forms.
+ * Shared HTML shell for commerce emails. Table-based, inline critical styles, no scripts, no forms. The only unconditional image is the ElectroHub brand logo
+ * (`renderEmailHeader`: HTTPS, sized, with alt text and a text fallback); product thumbnails remain separately allow-listed.
  * The only `<style>` rules are progressive enhancements for narrow clients; the content stays readable without them.
  */
+import { renderEmailHeader } from '../brand.js';
 import { escapeHtml } from './escape.js';
 
 export type StatusTone = 'success' | 'progress' | 'neutral';
@@ -19,6 +21,8 @@ export interface LayoutOptions {
   bodyHtml: string;
   cta: LayoutCta;
   storeName?: string;
+  /** Trusted public origin (the commerce email origin); used to resolve the brand logo URL. */
+  origin?: string | null;
   supportEmail?: string | null;
   supportPhone?: string | null;
 }
@@ -49,7 +53,6 @@ export function renderLayout(options: LayoutOptions): string {
   const url = escapeHtml(options.cta.url);
   const preheader = escapeHtml(options.preheader);
   const heading = escapeHtml(options.heading);
-  const storeName = escapeHtml(options.storeName || LEGACY_STORE_NAME);
   const footerText = `You received this email because you placed an order with ${options.storeName || LEGACY_STORE_NAME}. `
     + 'You can find the latest information in Order Details.'
     + (options.supportEmail || options.supportPhone ? ` For help, contact ${[options.supportEmail, options.supportPhone].filter(Boolean).join(' · ')}.` : '');
@@ -74,7 +77,7 @@ export function renderLayout(options: LayoutOptions): string {
       + 'style="width:100%;max-width:600px;background-color:#FFFFFF;border:1px solid #E2E8F0;border-top:3px solid #2563EB;">',
     '<tr>',
     '<td class="eh-inner" style="padding:32px;font-family:' + FONT_STACK + ';color:#0F172A;">',
-    `<p style="margin:0 0 24px 0;font-family:${FONT_STACK};font-size:20px;line-height:28px;font-weight:700;color:#0F172A;">${storeName}</p>`,
+    renderEmailHeader({ origin: options.origin, storeName: options.storeName }),
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
       + `style="background-color:${tone.background};">`,
     '<tr>',

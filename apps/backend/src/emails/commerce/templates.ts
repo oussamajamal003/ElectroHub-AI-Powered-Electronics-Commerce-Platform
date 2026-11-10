@@ -121,7 +121,7 @@ function composeEmail(parts: EmailParts, orderReference: string, ctx: RenderCont
     eventDateLabel: parts.eventDateLabel,
     bodyHtml: parts.blocks.map(block => block.html).join(''),
     cta: { label: CTA_LABEL, url },
-    storeName: seller.storeName, supportEmail: seller.supportEmail, supportPhone: seller.supportPhone,
+    storeName: seller.storeName, origin: ctx.origin, supportEmail: seller.supportEmail, supportPhone: seller.supportPhone,
   });
   const text = [
     seller.storeName,

@@ -1,3 +1,4 @@
+import { renderEmailHeader } from '../emails/brand.js';
 import { EmailDeliveryStatus, EmailType, InventoryStatus, Prisma, type PrismaClient } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { brevoProvider, type BrevoProvider } from '../integrations/brevo/brevo.provider.js';
@@ -14,12 +15,13 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/g, char => ({ '&': 
 const statusLabel = (status: InventoryStatus) => status === 'OUT_OF_STOCK' ? 'OUT OF STOCK' : 'LOW STOCK';
 const alertUrl = (status: InventoryStatus) => `${process.env.FRONTEND_URL || 'http://localhost:3000'}/admin/inventory?status=${status}`;
 
-function emailFor(event: { productName: string; sku: string; status: InventoryStatus; quantity: number; lowStockAt: number }) {
+/** Exported for rendering tests only. */
+export function emailFor(event: { productName: string; sku: string; status: InventoryStatus; quantity: number; lowStockAt: number }) {
   const label = statusLabel(event.status);
   const action = event.status === 'OUT_OF_STOCK' ? 'Restock this product.' : 'Review and replenish inventory.';
   const subject = event.status === 'OUT_OF_STOCK' ? `Out of stock alert — ${event.productName}` : `Low stock alert — ${event.productName}`;
   const text = `Product: ${event.productName}\nSKU: ${event.sku}\nCurrent quantity: ${event.quantity}\n${event.status === 'LOW_STOCK' ? `Low-stock threshold: ${event.lowStockAt}\n` : ''}Status: ${label}\nAction: ${action}\n\n${alertUrl(event.status)}`;
-  const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;color:#0f172a"><h1 style="color:#2563eb">ElectroHub Admin</h1><h2>${label}</h2><p><strong>Product:</strong> ${escapeHtml(event.productName)}<br><strong>SKU:</strong> ${escapeHtml(event.sku)}<br><strong>Current quantity:</strong> ${event.quantity}${event.status === 'LOW_STOCK' ? `<br><strong>Low-stock threshold:</strong> ${event.lowStockAt}` : ''}<br><strong>Status:</strong> ${label}</p><p>${action}</p><p><a href="${escapeHtml(alertUrl(event.status))}">Review inventory</a></p></body></html>`;
+  const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;color:#0f172a">${renderEmailHeader()}<h2>${label}</h2><p><strong>Product:</strong> ${escapeHtml(event.productName)}<br><strong>SKU:</strong> ${escapeHtml(event.sku)}<br><strong>Current quantity:</strong> ${event.quantity}${event.status === 'LOW_STOCK' ? `<br><strong>Low-stock threshold:</strong> ${event.lowStockAt}` : ''}<br><strong>Status:</strong> ${label}</p><p>${action}</p><p><a href="${escapeHtml(alertUrl(event.status))}">Review inventory</a></p></body></html>`;
   return { subject, text, html };
 }
 

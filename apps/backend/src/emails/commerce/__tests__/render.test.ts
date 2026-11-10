@@ -15,6 +15,8 @@ function render(name: CommerceEmailFixtureName) {
   return renderCommerceEmail(commerceEmailFixtures[name], ctx, TEMPLATE_VERSION);
 }
 
+const BRAND_LOGO_TAG = /<img data-brand-logo="electrohub"[^>]*>/;
+
 describe('fixtures', () => {
   it.each(Object.keys(commerceEmailFixtures) as CommerceEmailFixtureName[])('%s parses against its zod schema', name => {
     expect(commerceEmailSnapshot.safeParse(commerceEmailFixtures[name]).success).toBe(true);
@@ -65,7 +67,10 @@ describe('HTML escaping', () => {
 
   it('never emits raw attacker markup from malicious fixtures', () => {
     for (const name of MALICIOUS) {
-      const { html } = render(name);
+      const { html: full } = render(name);
+      // The fixed, configuration-derived brand logo is the only image allowed here; no data-driven markup becomes an element.
+      const html = full.replace(BRAND_LOGO_TAG, '');
+      expect(full.match(BRAND_LOGO_TAG)).toHaveLength(1);
       expect(html).not.toContain('<script');
       expect(html).not.toMatch(/<img/i);
       expect(html).not.toMatch(/<b>/i);
@@ -226,15 +231,16 @@ describe('static safety', () => {
     }
   });
 
-  it('only uses https images with empty alt text', () => {
-    const { html } = render('orderConfirmed25Items');
+  it('only uses https product images with empty alt text, plus the one ElectroHub brand logo', () => {
+    const { html: full } = render('orderConfirmed25Items');
+    const html = full.replace(BRAND_LOGO_TAG, '');
     const images = html.match(/<img\b[^>]*>/g) ?? [];
     expect(images.length).toBeGreaterThan(0);
     for (const tag of images) {
       expect(tag).toMatch(/src="https:\/\/images\.example\.com\//);
       expect(tag).toContain('alt=""');
     }
-    expect(render('orderConfirmedMinimalOptional').html).not.toMatch(/<img\b/);
+    expect(render('orderConfirmedMinimalOptional').html.replace(BRAND_LOGO_TAG, '')).not.toMatch(/<img\b/);
   });
 
   it('has a light color-scheme declaration and a square, single CTA', () => {
