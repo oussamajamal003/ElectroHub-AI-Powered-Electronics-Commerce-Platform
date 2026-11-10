@@ -1,6 +1,9 @@
 import { createContext, useContext } from 'react';
 import type { CartData, CartInputItem } from './types';
 
+/** Thrown by addItem while the stored session is still being re-verified; callers can recognise it instead of guessing a cause. */
+export const SESSION_CHECK_MESSAGE = 'Checking your session. Please try again.';
+
 export interface CartContextValue {
   data: CartData | undefined;
   totalQuantity: number;

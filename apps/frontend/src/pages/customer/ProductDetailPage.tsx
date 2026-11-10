@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/features/auth/context/AuthContext';
-import { useCart } from '@/features/cart/context';
+import { SESSION_CHECK_MESSAGE, useCart } from '@/features/cart/context';
 import { useWishlist } from '@/features/wishlist/context';
 import { WishlistButton } from '@/components/ui/WishlistButton/WishlistButton';
 import { Rating } from '@/components/ui/Rating/Rating';
@@ -55,7 +55,11 @@ export function ProductDetailPage() {
       }
     }
   }, [slug, navigationType]);
-  const { isAuthenticated, isInitializing, user } = useAuth();
+  const { isAuthenticated, isInitializing, user, isSessionVerified, sessionUnavailable } = useAuth();
+  // After a full page load the stored session is re-verified (refresh) before any cart write is accepted. Until then the purchase
+  // actions stay pending instead of failing a quick click with a misleading availability error (Task 06.1 defect D-1), and the
+  // wishlist heart is disabled because the wishlist silently ignores toggles until the session has a verdict (defect D-2).
+  const sessionChecking = !isSessionVerified && !sessionUnavailable;
   const productQuery = useProduct(slug);
   // A stale cached detail may have become non-public (for example, a test fixture).
   // Render only after a fresh server read so a denied product never flashes from cache.
@@ -129,7 +133,8 @@ export function ProductDetailPage() {
       setCartFeedback(`${product.name} added to cart.`);
     } catch (error) {
       setCartFeedback(error instanceof ApiError && error.code === 'CART_STOCK_CONFLICT' || error instanceof Error && /^Only \d+ items? (?:is|are) currently available\.$/.test(error.message)
-        ? error.message : 'Could not add this product. Check availability and try again.');
+        ? error.message : error instanceof Error && error.message === SESSION_CHECK_MESSAGE ? 'We could not confirm your sign-in. Please try again.'
+          : 'Could not add this product. Check availability and try again.');
     } finally { cartAction.current = false; setCartPending(false); }
   };
   // Buy Now purchases only this product/quantity through a server-owned BUY_NOW scope; the persistent Cart is never read or changed.
@@ -153,9 +158,9 @@ export function ProductDetailPage() {
           {product.compareAtPrice && product.discountPercent !== null && <><del>{formatPrice(product.compareAtPrice)}</del><span className={styles.discount}>-{product.discountPercent}%</span></>}
         </div>
         {product.description && <p className={styles.intro} data-testid="product-description">{product.description}</p>}
-        <ProductPurchaseActions product={product} quantity={cartQuantity} remainingQuantity={remainingQuantity} pending={cartPending} feedback={cartFeedback}
+        <ProductPurchaseActions product={product} quantity={cartQuantity} remainingQuantity={remainingQuantity} pending={cartPending || sessionChecking} feedback={cartFeedback}
           onQuantityChange={setCartQuantity} wishlistError={wishlist?.error}
-          wishlistAction={wishlist && <WishlistButton title={product.name} saved={wishlist.productIds.includes(product.id)} pending={wishlist.pending.includes(product.id)} onToggle={() => wishlist.toggle(product.id)} />}
+          wishlistAction={wishlist && <WishlistButton title={product.name} saved={wishlist.productIds.includes(product.id)} pending={sessionChecking || wishlist.pending.includes(product.id)} disabled={sessionChecking} onToggle={() => wishlist.toggle(product.id)} />}
           onAdd={() => addToCart()} onBuyNow={buyNow} />
       </section>
     </div>
