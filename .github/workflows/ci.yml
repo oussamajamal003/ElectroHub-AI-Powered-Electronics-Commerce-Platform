@@ -27,6 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -42,6 +44,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -58,6 +62,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -73,6 +79,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -90,6 +98,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -110,6 +120,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -125,6 +137,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -151,6 +165,8 @@ jobs:
           - { engine: webkit, label: WebKit, projects: '--project=webkit-desktop --project=mobile-webkit-390', quality_extra: '' }
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -205,6 +221,8 @@ jobs:
     # approval-gated .github/workflows/dev-migration.yml.
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -252,6 +270,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -272,6 +292,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -306,6 +328,8 @@ jobs:
     # Builds the runtime image and smoke-tests it on loopback with a throwaway key. No registry push, no secrets.
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Build image
         run: docker build -t electrohub-ai:ci apps/ai-service
       - name: Container smoke
@@ -343,6 +367,8 @@ jobs:
         service: [frontend, backend]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Build locked application image
         run: docker build -f apps/${{ matrix.service }}/Dockerfile -t electrohub-${{ matrix.service }}:ci .
       - name: Frontend deep-link and asset smoke
@@ -365,6 +391,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20.11.0'
@@ -375,11 +403,23 @@ jobs:
         run: npm run prisma:generate --workspace=@electrohub/backend
       - name: Prove fresh disposable identity and run payment concurrency/lifecycle integration
         run: |
+          export ELECTROHUB_ENV_FILES=none NODE_ENV=test
+          export JWT_SECRET="$(openssl rand -hex 48)"
+          export JWT_REFRESH_SECRET="$(openssl rand -hex 48)"
+          export OTP_HASH_SECRET="$(openssl rand -hex 32)"
+          export PAYMENT_PG_DISPOSABLE_REPORT_FILE="$RUNNER_TEMP/payment-integration.json"
           export PAYMENT_PG_DISPOSABLE_URL="${DATABASE_URL%%\?*}"
           export PAYMENT_PG_DISPOSABLE_CA_FILE="$DB_SSL_CA_CERT_PATH"
           export PAYMENT_PG_DISPOSABLE_APPROVED=true
           export PAYMENT_PG_DISPOSABLE_AUTHORIZATION='DISPOSABLE:electrohub_ci:scenarios-A-S:fixtures+reset-run-database'
           node apps/backend/scripts/payment-pg-disposable.cjs --run
+      - name: Payment integration report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: payment-postgres-report
+          path: ${{ runner.temp }}/payment-integration.json
+          retention-days: 14
 
   quality-gate:
     name: Required / Quality Gate

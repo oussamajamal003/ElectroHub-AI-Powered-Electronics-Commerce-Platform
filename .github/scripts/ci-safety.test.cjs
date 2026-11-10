@@ -272,15 +272,16 @@ test('every real workflow in this repository satisfies the policy', () => {
   assert.deepEqual(policy.checkWorkflows(files), []);
 });
 
-test('the real DEV workflow is manual-only and PROD automates develop with scoped secrets', () => {
+test('DEV and PROD are manual-only with scoped secrets and a required release SHA', () => {
   const files = policy.loadWorkflows(path.resolve(__dirname, '../workflows'));
   const dev = files.find((file) => file.name === 'dev-migration.yml');
   const prod = files.find((file) => file.name === 'prod-migration.yml');
   assert.ok(dev);
   assert.ok(prod);
   assert.deepEqual(policy.triggers(dev.text), ['workflow_dispatch']);
-  assert.deepEqual(policy.triggers(prod.text), ['push', 'workflow_dispatch']);
-  assert.deepEqual(policy.getPushBranches(prod.text), ['develop']);
+  assert.deepEqual(policy.triggers(prod.text), ['workflow_dispatch']);
+  assert.equal(policy.getPushBranches(prod.text), null);
+  assert.match(prod.text, /approved_commit:[\s\S]*?required: true/);
   const holders = files.filter((file) => /secrets\.ELECTROHUB_/.test(file.text)).map((file) => file.name);
   assert.deepEqual(holders, ['dev-migration.yml', 'prod-migration.yml']);
   assert.doesNotMatch(prod.text, /APPROVED_MIGRATIONS|approved_migrations|20261029020000_recommendation_consent_consistency/);
@@ -318,24 +319,24 @@ test('shared DEV migration deploy pins the DEV project and uses only the entrypo
   assert.doesNotMatch(shared, /process\.env\.APPROVED_MIGRATIONS/);
 });
 
-test('policy rejects PROD workflow on feature branches, main, or pull requests', () => {
+test('policy rejects automatic PROD triggers or removal of the develop dispatch guard', () => {
   const base = fs.readFileSync(path.resolve(__dirname, '../workflows/prod-migration.yml'), 'utf8');
 
   // Push to main rejected
-  const pushMain = base.replace(/branches:\s*\r?\n\s+-\s+develop/, 'branches:\n      - main');
-  assert.match(policy.checkWorkflow('prod-migration.yml', pushMain).join(), /strictly target the develop branch only/);
+  const pushMain = base.replace('on:', 'on:\n  push:\n    branches: [main]');
+  assert.match(policy.checkWorkflow('prod-migration.yml', pushMain).join(), /workflow_dispatch only/);
 
   // Push to feature branch wildcard rejected
-  const pushFeature = base.replace(/branches:\s*\r?\n\s+-\s+develop/, "branches:\n      - 'feature/**'");
-  assert.match(policy.checkWorkflow('prod-migration.yml', pushFeature).join(), /strictly target the develop branch only/);
+  const pushFeature = base.replace('on:', "on:\n  push:\n    branches: ['feature/**']");
+  assert.match(policy.checkWorkflow('prod-migration.yml', pushFeature).join(), /workflow_dispatch only/);
 
   // Push to multiple branches rejected
-  const pushMulti = base.replace(/branches:\s*\r?\n\s+-\s+develop/, 'branches:\n      - develop\n      - main');
-  assert.match(policy.checkWorkflow('prod-migration.yml', pushMulti).join(), /strictly target the develop branch only/);
+  const missingGuard = base.replace('"$GITHUB_REF" != refs/heads/develop', 'false');
+  assert.match(policy.checkWorkflow('prod-migration.yml', missingGuard).join(), /restrict manual dispatch to develop/);
 
   // Pull request trigger rejected
-  const withPR = base.replace(/on:\s*\r?\n\s+push:/, 'on:\n  pull_request:\n    branches:\n      - develop\n  push:');
-  assert.match(policy.checkWorkflow('prod-migration.yml', withPR).join(), /trigger must be push and\/or workflow_dispatch/);
+  const withPR = base.replace('on:', 'on:\n  pull_request:\n    branches: [develop]');
+  assert.match(policy.checkWorkflow('prod-migration.yml', withPR).join(), /workflow_dispatch only/);
 });
 
 test('policy rejects DEV workflow if push trigger is introduced', () => {

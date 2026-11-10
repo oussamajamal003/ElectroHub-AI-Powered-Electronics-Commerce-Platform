@@ -95,17 +95,9 @@ function checkWorkflow(name, rawText) {
         fail(`DEV workflow must be triggered by workflow_dispatch only (found: ${on.join(', ') || 'none'})`);
       }
     } else if (name === 'prod-migration.yml') {
-      const allowedTriggers = new Set(['push', 'workflow_dispatch']);
-      const hasDisallowed = on.some((t) => !allowedTriggers.has(t));
-      if (hasDisallowed || !on.includes('push')) {
-        fail(`PROD workflow trigger must be push and/or workflow_dispatch (found: ${on.join(', ') || 'none'})`);
-      }
-      if (on.includes('push')) {
-        const branches = getPushBranches(text);
-        if (!branches || branches.length !== 1 || branches[0] !== 'develop') {
-          fail(`PROD workflow push trigger must strictly target the develop branch only (found: ${branches ? branches.join(', ') : 'none'})`);
-        }
-      }
+      if (on.length !== 1 || on[0] !== 'workflow_dispatch') fail('PROD workflow must be workflow_dispatch only');
+      if (!/approved_commit:[\s\S]*?required:\s*true/.test(text)) fail('PROD must require the approved commit input');
+      if (!text.includes('"$GITHUB_REF" != refs/heads/develop')) fail('PROD must restrict manual dispatch to develop');
     }
 
     if (!/^\s+environment:\s*\S+/m.test(text)) fail('deployment job must declare a protected GitHub Environment');
