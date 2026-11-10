@@ -32,10 +32,11 @@ export function CustomerLayout() {
         onClickCapture={isLocked ? e => { e.preventDefault(); e.stopPropagation(); } : undefined}
         onKeyDownCapture={isLocked ? e => { e.preventDefault(); e.stopPropagation(); } : undefined}
       >
+        <a href="#customer-main" className={styles.skipLink}>Skip to content</a>
         <CustomerHeader />
 
       </div>
-      <main style={{ flex: 1 }}>
+      <main id="customer-main" tabIndex={-1} style={{ flex: 1 }}>
         <PaymentNotifications />
         <Outlet />
       </main>

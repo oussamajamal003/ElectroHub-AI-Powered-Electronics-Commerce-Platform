@@ -80,7 +80,7 @@ export function CartPageContent({ cart, pendingPurchases, hasPendingPurchases = 
       {item.availability !== 'AVAILABLE' && <p className={styles.warning} role="status">{item.availability === 'LOW_STOCK' ? `Only ${item.availableQuantity} left. Reduce quantity to continue.` : item.availability === 'OUT_OF_STOCK' ? 'Out of stock. Reduce quantity or remove this item to continue.' : 'This product is unavailable. Remove it to continue.'}</p>}
   </div>;
 
-  return <main className={styles.page}>
+  return <div className={styles.page}>
     <nav className={styles.breadcrumb} aria-label="Breadcrumb"><Link to="/">Home</Link><ChevronRight size={16} aria-hidden="true" /><span aria-current="page">Cart</span></nav>
     <h1>Shopping Cart</h1>
     {pendingPurchases}
@@ -104,7 +104,7 @@ export function CartPageContent({ cart, pendingPurchases, hasPendingPurchases = 
       </aside>
     </div>}
     {cart.data && cart.data.items.length > 0 && suggestions}
-  </main>;
+  </div>;
 }
 
 export function CartPage() {

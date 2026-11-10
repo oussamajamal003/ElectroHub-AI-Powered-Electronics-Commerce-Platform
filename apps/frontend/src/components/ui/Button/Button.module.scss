@@ -158,11 +158,11 @@
 }
 
 .variant-destructive {
-  background-color: $color-error;
+  background-color: $color-error-foreground;
   color: $color-text-inverse;
 
   &:hover:not(:disabled) {
-    background-color: color.adjust($color-error, $lightness: -10%);
+    background-color: color.adjust($color-error-foreground, $lightness: -10%);
   }
 
   &:disabled {

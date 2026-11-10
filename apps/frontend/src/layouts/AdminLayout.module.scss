@@ -32,12 +32,12 @@ $sidebar-rail: 4.5rem;
   &[data-state='open'] { background: $color-surface; color: $color-primary; } }
 .menuButton { display: none; }
 .badge { position: absolute; top: 5px; right: 3px; min-width: 1.125rem; height: 1.125rem; padding: 0 5px; display: grid; place-items: center;
-  border-radius: 999px; box-shadow: 0 0 0 2px $color-background; background: $color-error; color: $color-text-inverse; font-family: $font-family-base;
+  border-radius: 999px; box-shadow: 0 0 0 2px $color-background; background: $color-error-foreground; color: $color-text-inverse; font-family: $font-family-base;
   font-size: 0.625rem; font-weight: $font-weight-semibold; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: .01em; }
 
 .brand { display: inline-flex; align-items: center; gap: $spacing-3; min-width: 0; color: $color-text-primary; text-decoration: none; padding: $spacing-1;
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
-.adminPill { padding: 2px $spacing-2; background: rgba($color-primary, .1); color: $color-primary; font-size: $font-size-xs; font-weight: $font-weight-semibold;
+.adminPill { padding: 2px $spacing-2; background: rgba($color-primary, .1); color: $color-primary-dark; font-size: $font-size-xs; font-weight: $font-weight-semibold;
   letter-spacing: .06em; text-transform: uppercase; }
 
 .profileButton { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; padding: 0; border: 0; border-radius: 50%;

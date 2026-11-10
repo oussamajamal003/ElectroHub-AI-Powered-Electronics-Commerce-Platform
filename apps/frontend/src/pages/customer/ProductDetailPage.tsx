@@ -99,8 +99,8 @@ export function ProductDetailPage() {
       current?.data.id === productId ? { ...current, data: { ...current.data, ...summary } } : current);
   }, [product?.id, reviewQuery.data?.summary, queryClient, slug]);
 
-  if (productQuery.isPending || productQuery.isFetching) return <main className={styles.container} role="status" aria-label="Loading product details"><div aria-hidden="true"><Skeleton width="38%" height={20} /><div className={styles.productTop}><div><div className={styles.detailSkeletonGallery}><Skeleton width="100%" height="100%" /></div><div className={styles.detailSkeletonThumbnails}><Skeleton width={74} height={74} /><Skeleton width={74} height={74} /></div></div><div className={styles.detailSkeletonSummary}><Skeleton width="28%" height={18} /><Skeleton width="90%" height={42} /><Skeleton width="55%" height={20} /><Skeleton width="42%" height={36} /><Skeleton width="82%" height={80} /><Skeleton width="65%" height={20} /></div></div><div className={styles.detailSkeletonTabs}><Skeleton width="100%" height={50} /></div></div></main>;
-  if (!product) return <main className={styles.container}><h1>Product unavailable</h1><p>This product could not be loaded.</p><Button type="button" onClick={() => void productQuery.refetch()}>Retry</Button></main>;
+  if (productQuery.isPending || productQuery.isFetching) return <div className={styles.container} role="status" aria-label="Loading product details"><div aria-hidden="true"><Skeleton width="38%" height={20} /><div className={styles.productTop}><div><div className={styles.detailSkeletonGallery}><Skeleton width="100%" height="100%" /></div><div className={styles.detailSkeletonThumbnails}><Skeleton width={74} height={74} /><Skeleton width={74} height={74} /></div></div><div className={styles.detailSkeletonSummary}><Skeleton width="28%" height={18} /><Skeleton width="90%" height={42} /><Skeleton width="55%" height={20} /><Skeleton width="42%" height={36} /><Skeleton width="82%" height={80} /><Skeleton width="65%" height={20} /></div></div><div className={styles.detailSkeletonTabs}><Skeleton width="100%" height={50} /></div></div></div>;
+  if (!product) return <div className={styles.container}><h1>Product unavailable</h1><p>This product could not be loaded.</p><Button type="button" onClick={() => void productQuery.refetch()}>Retry</Button></div>;
 
   const submitReview = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -144,7 +144,7 @@ export function ProductDetailPage() {
     navigate('/checkout/buy-now');
   };
 
-  return <main className={styles.container}>
+  return <div className={styles.container}>
     {productQuery.isError && <div role="status"><p>Current availability could not be refreshed. The last confirmed product is still visible.</p><Button type="button" variant="ghost" onClick={() => void productQuery.refetch()}>Retry availability</Button></div>}
     <nav className={styles.breadcrumb} aria-label="Breadcrumb"><Link to="/">Home</Link><ChevronRight size={16} aria-hidden="true" /><Link to="/products">Products</Link><ChevronRight size={16} aria-hidden="true" /><Link to={`/products?category=${encodeURIComponent(product.category.slug)}`}>{product.category.name}</Link><ChevronRight size={16} aria-hidden="true" /><span aria-current="page">{product.name}</span></nav>
     <div className={styles.productTop}>
@@ -186,5 +186,5 @@ export function ProductDetailPage() {
       section={section} recordPersonalClicks={personalizationEnabled}
       action={section.strategy === 'FALLBACK_CATEGORY' && section.context
         ? { href: `/products?category=${encodeURIComponent(section.context.categorySlug)}`, label: 'View category' } : undefined} />)}
-  </main>;
+  </div>;
 }

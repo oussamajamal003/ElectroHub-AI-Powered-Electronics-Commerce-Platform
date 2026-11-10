@@ -60,7 +60,7 @@ function OwnedOrderDetails() {
   const notFound = query.error instanceof ApiError && (query.error.status === 404 || query.error.status === 400);
   const crumbs = [{ label: 'Home', to: '/' }, { label: 'Orders', to: backTo }, { label: order?.orderReference ?? 'Order details' }];
 
-  if (!order) return <main className={shared.page}>
+  if (!order) return <div className={shared.page}>
     <OrdersBreadcrumb items={crumbs} />
     {query.isPending ? <><h1 className={shared.visuallyHidden}>Order details</h1><DetailsSkeleton /></>
       : notFound ? <div className={styles.stateArea}><EmptyState className={styles.unavailable} role="alert" icon={<PackageSearch size={40} aria-hidden="true" />}
@@ -69,13 +69,13 @@ function OwnedOrderDetails() {
       : <div className={styles.stateArea}><ErrorState className={styles.unavailable} title="This order could not be loaded." description="Your order is safe. Please try again."
         action={<div className={styles.stateActions}><Button onClick={() => void query.refetch()} isLoading={query.isFetching} disabled={query.isFetching}>Retry</Button>
           <Link className={shared.outlineLink} to={backTo}>Back to Orders</Link></div>} /></div>}
-  </main>;
+  </div>;
 
   const paid = order.paymentState === 'PAID';
   const note = statusNote(order.status, order.paymentState);
   const address = order.shipping;
   const locality = [address.city, address.state, address.postalCode].filter(Boolean).join(', ');
-  return <main className={shared.page}>
+  return <div className={shared.page}>
     <OrdersBreadcrumb items={crumbs} />
     <header className={styles.header}>
       <div className={styles.titleBlock}>
@@ -128,5 +128,5 @@ function OwnedOrderDetails() {
         <Link className={styles.backLink} to={backTo}>Back to Orders</Link>
       </div>
     </div>
-  </main>;
+  </div>;
 }

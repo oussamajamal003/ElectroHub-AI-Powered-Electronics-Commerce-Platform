@@ -27,6 +27,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       endAdornment,
       disabled,
       id,
+      'aria-describedby': describedBy,
+      'aria-invalid': invalid,
       ...props
     },
     ref
@@ -70,9 +72,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             id={inputId}
             ref={ref}
             disabled={disabled}
-            aria-invalid={isError ? 'true' : undefined}
+            aria-invalid={isError ? 'true' : invalid}
             aria-describedby={
-              clsx({
+              clsx(describedBy, {
                 [errorId]: isError,
                 [helperId]: helperText && !isError,
               }) || undefined

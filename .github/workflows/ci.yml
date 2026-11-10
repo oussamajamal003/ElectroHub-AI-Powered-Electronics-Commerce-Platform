@@ -65,9 +65,8 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
-      # Frontend tests are not yet implemented in develop; this check is optional until the testing framework is merged.
       - name: Test
-        run: npm run test --workspace=@electrohub/frontend --if-present
+        run: npm run test --workspace=@electrohub/frontend
 
   frontend-build:
     name: Frontend / Build
@@ -83,6 +82,8 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build --workspace=@electrohub/frontend
+      - name: Production JavaScript budget
+        run: node scripts/frontend-budget.mjs
 
   backend-typecheck:
     name: Backend / Typecheck
@@ -145,9 +146,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { engine: chromium, label: Chromium, projects: '--project=chromium-desktop --project=tablet-chromium-768' }
-          - { engine: firefox, label: Firefox, projects: '--project=firefox-desktop --project=wide-firefox-1920' }
-          - { engine: webkit, label: WebKit, projects: '--project=webkit-desktop --project=mobile-webkit-390' }
+          - { engine: chromium, label: Chromium, projects: '--project=chromium-desktop --project=tablet-chromium-768', quality_extra: '--project=mobile-chromium-320' }
+          - { engine: firefox, label: Firefox, projects: '--project=firefox-desktop --project=wide-firefox-1920', quality_extra: '--project=tablet-firefox-1024' }
+          - { engine: webkit, label: WebKit, projects: '--project=webkit-desktop --project=mobile-webkit-390', quality_extra: '' }
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
@@ -177,6 +178,13 @@ jobs:
       - name: Release suite (${{ matrix.label }} projects)
         working-directory: apps/frontend
         run: npm run test:release -- ${{ matrix.projects }}
+      - name: Accessibility, keyboard and responsive QA
+        working-directory: apps/frontend
+        # A separate stack prevents state or server reuse across suites. No shared credentials.
+        env:
+          RELEASE_E2E_API_PORT: '5212'
+          RELEASE_E2E_FRONTEND_PORT: '3212'
+        run: npm run test:quality -- ${{ matrix.projects }} ${{ matrix.quality_extra }}
       - name: Upload release report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -185,6 +193,8 @@ jobs:
           path: |
             apps/frontend/playwright-report/release
             apps/frontend/test-results/release
+            apps/frontend/playwright-report/quality
+            apps/frontend/test-results/quality
           retention-days: 14
 
   backend-test:
@@ -322,4 +332,64 @@ jobs:
           docker stop -t 15 eh-ai
           test "$(docker inspect -f '{{.State.ExitCode}}' eh-ai)" = 0
           ! docker logs eh-ai 2>&1 | grep -qF -- "$KEY"
+
+  application-docker:
+    name: Docker / ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [frontend, backend]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build locked application image
+        run: docker build -f apps/${{ matrix.service }}/Dockerfile -t electrohub-${{ matrix.service }}:ci .
+      - name: Frontend deep-link and asset smoke
+        if: matrix.service == 'frontend'
+        run: |
+          set -euo pipefail
+          docker run -d --name frontend-smoke -p 127.0.0.1:18080:80 electrohub-frontend:ci
+          trap 'docker rm -f frontend-smoke' EXIT
+          for attempt in $(seq 1 20); do curl -sf http://127.0.0.1:18080/ >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:18080/admin/login | grep -q '<div id="root"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/assets/missing.js)" = 404
+      - name: Backend packaged runtime smoke
+        if: matrix.service == 'backend'
+        run: |
+          docker run --rm --entrypoint node electrohub-backend:ci -e "require('@prisma/client'); require('sharp'); require('fs').accessSync('dist/bootstrap.js'); if(process.getuid()===0)process.exit(1)"
+
+  payment-postgres:
+    name: Integration / Payment PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.11.0'
+          cache: npm
+      - run: npm ci
+      - uses: ./.github/actions/disposable-postgres
+      - name: Generate Prisma client
+        run: npm run prisma:generate --workspace=@electrohub/backend
+      - name: Prove fresh disposable identity and run payment concurrency/lifecycle integration
+        run: |
+          export PAYMENT_PG_DISPOSABLE_URL="${DATABASE_URL%%\?*}"
+          export PAYMENT_PG_DISPOSABLE_CA_FILE="$DB_SSL_CA_CERT_PATH"
+          export PAYMENT_PG_DISPOSABLE_APPROVED=true
+          export PAYMENT_PG_DISPOSABLE_AUTHORIZATION='DISPOSABLE:electrohub_ci:scenarios-A-S:fixtures+reset-run-database'
+          node apps/backend/scripts/payment-pg-disposable.cjs --run
+
+  quality-gate:
+    name: Required / Quality Gate
+    if: ${{ always() }}
+    needs: [frontend-lint, frontend-typecheck, frontend-test, frontend-build, backend-lint, backend-typecheck, backend-test, backend-build, workflow-policy, release-e2e, ai, ai-docker, application-docker, payment-postgres]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every validation job to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node -e "const jobs=JSON.parse(process.env.RESULTS);const bad=Object.entries(jobs).filter(([,job])=>job.result!=='success');for(const [name,job] of bad)console.error(name+': '+job.result);if(bad.length)process.exit(1)"
 

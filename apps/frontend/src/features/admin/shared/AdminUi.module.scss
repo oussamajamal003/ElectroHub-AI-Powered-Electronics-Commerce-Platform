@@ -45,7 +45,7 @@
   &:hover { color: $color-primary; border-color: $color-primary; }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
 .chipActive { background: $color-primary; border-color: $color-primary; color: $color-text-inverse;
-  &:hover { color: $color-text-inverse; background: $color-primary-dark; } .chipCount { color: inherit; background: rgba(#fff, .2); } }
+  &:hover { color: $color-text-inverse; background: $color-primary-dark; } .chipCount { color: inherit; background: $color-primary-dark; } }
 .chipCount { font-family: $font-family-mono; font-size: $font-size-xs; padding: 0 $spacing-1; background: $color-surface; color: $color-text-secondary; }
 .resetButton { display: inline-flex; align-items: center; gap: $spacing-2; min-height: 2.5rem; margin-left: auto; padding: 0 $spacing-4; border: 0;
   background: $color-accent; color: $color-text-inverse; font: inherit; font-size: $font-size-sm; font-weight: $font-weight-semibold; cursor: pointer;

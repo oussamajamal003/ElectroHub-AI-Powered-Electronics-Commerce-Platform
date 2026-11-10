@@ -1,6 +1,18 @@
 @use '@/styles/abstracts/variables' as *;
 @use '@/styles/abstracts/mixins' as *;
 
+.skipLink {
+  position: absolute;
+  top: -100px;
+  left: $spacing-4;
+  z-index: $z-tooltip;
+  padding: $spacing-2 $spacing-4;
+  background: $color-primary;
+  color: $color-text-inverse;
+  @include focus-ring;
+  &:focus { top: $spacing-4; }
+}
+
 .footerContent {
   width: 100%;
   max-width: 120rem;
