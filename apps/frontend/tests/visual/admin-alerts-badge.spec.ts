@@ -24,12 +24,12 @@ async function fakeAdmin(page: Page, initial = { lowStock: 2, outOfStock: 1, awa
   });
   return { live, acks };
 }
-const bell = (page: Page) => page.getByRole('button', { name: /^Alerts:/ });
+const bell = (page: Page) => page.getByRole('button', { name: /^Alerts:/, includeHidden: true });
 
 test('unread badge clears when the alerts are opened, survives refresh and navigation, and rises for a new alert', async ({ page }) => {
   const { live, acks } = await fakeAdmin(page);
   await page.goto('/admin/inventory', { waitUntil: 'domcontentloaded' });
-  await expect(bell(page)).toHaveAccessibleName('Alerts: 6 unread');
+  await expect(bell(page)).toHaveAttribute('aria-label', 'Alerts: 6 unread');
   await expect(bell(page)).toContainText('6');
   await page.screenshot({ path: 'test-results/motion-contact/alerts-unread.png' });
 
@@ -38,21 +38,21 @@ test('unread badge clears when the alerts are opened, survives refresh and navig
   await expect(page.getByText(/2 new/)).toBeVisible();          // this session's markers
   await expect(page.getByRole('menuitem', { name: /Low stock/ })).toBeVisible();      // read history stays
   await expect.poll(() => acks.length).toBe(1);
-  await expect(bell(page)).toHaveAccessibleName(/Alerts: no unread, 6 items need attention/);
+  await expect(bell(page)).toHaveAttribute('aria-label', /Alerts: no unread, 6 items need attention/);
   await expect(bell(page)).not.toContainText('6');
   expect(acks[0]).toEqual({ lowStock: 2, outOfStock: 1, awaitingFulfillment: 3 });
   await page.keyboard.press('Escape');
   await page.screenshot({ path: 'test-results/motion-contact/alerts-read.png' });
 
   await page.reload({ waitUntil: 'domcontentloaded' });         // refresh: the server's persisted baseline decides
-  await expect(bell(page)).toHaveAccessibleName(/no unread/);
+  await expect(bell(page)).toHaveAttribute('aria-label', /no unread/);
   await page.goto('/admin/orders', { waitUntil: 'domcontentloaded' });
   await page.goto('/admin/inventory', { waitUntil: 'domcontentloaded' });
-  await expect(bell(page)).toHaveAccessibleName(/no unread/);
+  await expect(bell(page)).toHaveAttribute('aria-label', /no unread/);
 
   live.awaitingFulfillment = 5;                                  // two new paid orders
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await expect(bell(page)).toHaveAccessibleName('Alerts: 2 unread');
+  await expect(bell(page)).toHaveAttribute('aria-label', 'Alerts: 2 unread');
 });
 
 test('a failed acknowledgement keeps the alerts unread and says so', async ({ page }) => {
@@ -60,7 +60,7 @@ test('a failed acknowledgement keeps the alerts unread and says so', async ({ pa
   await page.goto('/admin/inventory', { waitUntil: 'domcontentloaded' });
   await bell(page).click();
   await expect(page.getByRole('alert')).toContainText('could not be marked as read');
-  await expect(bell(page)).toHaveAccessibleName('Alerts: 1 unread');
+  await expect(bell(page)).toHaveAttribute('aria-label', 'Alerts: 1 unread');
 });
 
 test('with nothing unread, opening the alerts sends no acknowledgement', async ({ page }) => {

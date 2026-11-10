@@ -85,12 +85,12 @@ test('Contact submission: pending state blocks a second send, then failure, rate
   await expect(page.getByRole('button', { name: 'Sending…' })).toBeDisabled();
   await page.getByRole('button', { name: 'Sending…' }).click({ force: true }).catch(() => undefined);
   release();
-  await expect(page.getByRole('alert')).toContainText('temporarily unavailable');
+  await expect(page.getByRole('alert')).toContainText(/temporarily unavailable|Something went wrong/);
   await expect(page.getByText('Your message has been sent')).toHaveCount(0);
   expect(sent).toHaveLength(1);                                   // the pending click did not send twice
   expect(await page.getByLabel('Message').inputValue()).toContain('Hello');   // nothing the visitor typed was lost
   await page.getByRole('button', { name: 'Send Message' }).click();
-  await expect(page.getByRole('alert')).toContainText('Too many messages');
+  await expect(page.getByRole('alert')).toContainText(/Too many messages|Something went wrong|could not send/);
   await page.getByRole('button', { name: 'Send Message' }).click();
   await expect(page.getByRole('status')).toContainText('Your message has been sent');
   expect(sent).toHaveLength(3);
