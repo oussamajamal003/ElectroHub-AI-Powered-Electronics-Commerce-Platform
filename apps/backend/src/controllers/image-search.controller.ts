@@ -37,7 +37,8 @@ export const imageSearchController = {
     const onClose = () => { if (!res.writableFinished) disconnect.abort(); };
     res.once('close', onClose);
     // Task 05.2: one correlation id per served search; analytics rows never contain the image, the request or the user.
-    const correlationId = randomUUID();
+    const analyticsAllowed = req.get('X-ElectroHub-Analytics') === 'consented';
+    const correlationId = analyticsAllowed ? randomUUID() : undefined;
     const startedAt = Date.now();
     try {
       const sniffed = res.locals.sniffedImage as SniffedImage | undefined;
@@ -57,17 +58,17 @@ export const imageSearchController = {
       if (lifecycle) { lifecycle.outcome = 'completed'; lifecycle.modelVersion = body.meta.modelVersion;
         lifecycle.embeddingVersion = body.meta.embeddingVersion; lifecycle.resultCount = body.meta.count; }
       // Fire-and-forget: recording can neither delay nor change this response.
-      recordImageSearchCompleted({ correlationId, resultCount: body.meta.count, durationMs: Date.now() - startedAt });
+      if (correlationId) recordImageSearchCompleted({ correlationId, resultCount: body.meta.count, durationMs: Date.now() - startedAt });
       const productIds = body.data.items.map(item => item.id);
       // Only a search that returned products can be followed by a selection, so only those responses carry a token.
-      const analyticsToken = productIds.length > 0 ? issueAnalyticsToken({ correlationId, productIds }) : undefined;
+      const analyticsToken = correlationId && productIds.length > 0 ? issueAnalyticsToken({ correlationId, productIds }) : undefined;
       res.setHeader('Cache-Control', 'no-store');
       res.status(200).json(analyticsToken ? { ...body, analyticsToken } : body);
     } catch (error) {
       if (signal.aborted || res.writableEnded) return;
       const category = error instanceof ImageSearchError && error.code in FAILURE_CATEGORIES
         ? FAILURE_CATEGORIES[error.code as keyof typeof FAILURE_CATEGORIES] : 'failed';
-      recordImageSearchFailed({ correlationId, category, durationMs: Date.now() - startedAt });
+      if (correlationId) recordImageSearchFailed({ correlationId, category, durationMs: Date.now() - startedAt });
       if (lifecycle) {
         lifecycle.outcome = category;
       }

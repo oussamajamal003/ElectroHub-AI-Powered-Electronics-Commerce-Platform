@@ -1,3 +1,4 @@
+import { analyticsAllowed } from '@/features/privacy/consent';
 import { ApiError, apiClient, isAbortError } from '@/lib/api';
 import type { ProductSummary } from '@/features/products/types';
 
@@ -51,7 +52,7 @@ export async function searchByImage(file: File, signal: AbortSignal): Promise<Im
   try {
     const body = new FormData();
     body.append('image', file, file.name || 'photo');
-    const response = await apiClient<ImageSearchResponse>(IMAGE_SEARCH_ENDPOINT, { method: 'POST', data: body, signal: timeout.signal });
+    const response = await apiClient<ImageSearchResponse>(IMAGE_SEARCH_ENDPOINT, { method: 'POST', data: body, signal: timeout.signal, headers: analyticsAllowed() ? { 'X-ElectroHub-Analytics': 'consented' } : {} });
     const items = response?.data?.items;
     const analyticsToken = typeof response?.analyticsToken === 'string' && response.analyticsToken.length <= 4096 ? response.analyticsToken : undefined;
     return isProductList(items) ? { status: 'success', items, ...(analyticsToken ? { analyticsToken } : {}) } : { status: 'error' };
@@ -78,7 +79,7 @@ export async function searchByImage(file: File, signal: AbortSignal): Promise<Im
  * it accompanies, and any failure is ignored so analytics can never block or break the click.
  */
 export function reportImageResultSelected(analyticsToken: string | undefined, productId: string): void {
-  if (!analyticsToken || typeof fetch !== 'function') return;
+  if (!analyticsAllowed() || !analyticsToken || typeof fetch !== 'function') return;
   try {
     void fetch('/api/analytics/events', { method: 'POST', keepalive: true, credentials: 'omit', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'image_search.result_selected', token: analyticsToken, productId }) }).catch(() => undefined);
