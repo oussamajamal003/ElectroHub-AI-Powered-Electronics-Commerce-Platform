@@ -14,7 +14,8 @@ marked CI. Nothing here was run against a shared DEV or PROD database, Stripe li
 
 | Suite | Command | Result |
 |---|---|---|
-| Frontend Vitest (full) | `npx vitest run` (apps/frontend) | **1407 passed, 1 failed** of 1408 (170 files). The failure, `AdminProductFormPage` "asks before browser Back discards edits…", also failed before any Task 06.1 change, passes **3/3** when run alone and passes in CI: load-sensitive timing, not a regression. |
+| Frontend Vitest (full, after the R-1 fix) | `npx vitest run` (apps/frontend) | **1410 passed** of 1410 (171 files) |
+| Frontend Vitest (full, before the R-1 fix) | `npx vitest run` (apps/frontend) | **1407 passed, 1 failed** of 1408 (170 files). The failure, `AdminProductFormPage` "asks before browser Back discards edits…", also failed before any Task 06.1 change, passes **3/3** when run alone and passes in CI: load-sensitive timing, not a regression. |
 | Changed-area tests | `vitest run` on ProductDetailPage, cart, wishlist, ProductCard, WishlistButton | 79 passed |
 | Backend env loading | `vitest run tests/env.test.ts` | 9 passed (includes the new `ELECTROHUB_ENV_FILES=none` test) |
 | Backend full `test:ci` (disposable DB) | earlier in this task | 2107 passed, 9 failed, 238 skipped. All 9 failures environmental on this workstation (EADDRINUSE :5001 held by a running dev server, timeouts, Windows temp `ENOTEMPTY`); the same SHA passes **Backend / Test** in CI. |
@@ -23,8 +24,39 @@ marked CI. Nothing here was run against a shared DEV or PROD database, Stripe li
 | Lint | `eslint .` (frontend), eslint on changed backend files | 0 errors; 3 pre-existing `react-refresh` warnings in files not touched by this task |
 | Workflow policy | `node .github/scripts/check-workflow-policy.cjs`, `node --test .github/scripts/*.test.cjs` | OK; 26/26 self-tests |
 
-Gated PostgreSQL integration suites (`PAYMENT_PG_TEST_DATABASE_URL`, `DELIVERY_PG_RUN`, `ADMIN_SECURITY_PG_RUN`, `COMMERCE_EMAIL_PG_RUN`,
-`INVENTORY_TEST_DATABASE_URL`) were **not re-run** in this task: NOT VERIFIED here.
+### 2.1 Gated PostgreSQL integration suites (follow-up run)
+
+Each launcher provisions its own throwaway local PostgreSQL cluster on a random loopback port and never reads `.env`.
+
+| Suite | Command (apps/backend) | Result |
+|---|---|---|
+| Admin security (Task 05.x) | `npm run test:admin-security:pg` | **103/103 passed** (8 files) |
+| Delivery HTTP, service and real-time (Tasks 04.5–04.7) | `node scripts/delivery-pg.cjs` | First run **10 failed / 23 passed**. Cause: stale fixtures. Since Task 05.2 an ADMIN token is honoured only with a live, MFA-assured admin session, and these suites minted bare admin JWTs (`ADMIN_SESSION_INVALID`). Fixed in the test helper: `delivery-fixtures.ts` now creates the refresh family and `AdminSession` as `AuthService.createSession` does, and the suites pass its `sessionId`. No product code changed. After the fix: **33/33** in 1 of 3 runs; the other 2 runs had **1 intermittent failure** (R-5). |
+| Commerce email outbox | `node scripts/commerce-email-pg.cjs` | **BLOCKED**: `prisma migrate deploy` stops at `20261024000000_ai_vector_search` because this workstation's local PostgreSQL build has no `vector` extension. This is an environment limitation, not a test result. |
+| Payment (disposable / supervised DEV) | `payment-pg-disposable.cjs`, `PAYMENT_PG_TEST_APPROVED` | **NOT RUN**: needs a fresh CA-proved PostgreSQL 17 target or a supervised DEV schema approval; not faked. |
+| Inventory, FBT recommendations | `INVENTORY_TEST_DATABASE_URL`, `recommendation-fbt-pg.cjs` | **NOT RUN** in this follow-up |
+
+The 1-hour expiry in the first fixture attempt was read as already expired. Raw SQL in `findActiveAdminSession` compares the
+`timestamp` column with `now()` in the cluster's local time zone (+02:00 here). The fixture now uses a 7-day family, as real
+sessions do; see R-6.
+
+### 2.2 AI similarity end to end (follow-up run)
+
+Local only, on the disposable release database:
+- Five release products got catalog photos. `app.ingest stage` indexed them with the local SigLIP2 model `siglip2-b16-p256-d1` (5/5 succeeded), and `activate` made the index active.
+- The FastAPI service ran on loopback with the read-only `ai_vector_reader` role. A second hermetic backend (:5207) was wired to it.
+
+| Check | Result |
+|---|---|
+| API: unseen photos `headphones-01.jpg` and `jblheadphones-01.jpg` → `/api/search/image` | 200; ranked Aurora Studio Headphones, then Pulse Mini Earbuds; no laptops or dock |
+| API: unseen photos `laptop-generic-01.jpg` and `laptops-01.jpg` | 200; Nimbus 14 Ultrabook only |
+| API: `/api/products/<aurora>/recommendations` | `EMBEDDING_SIMILARITY` section ranks Pulse Mini Earbuds first, then both laptops; `CO_PURCHASE` section has the dock (from the seeded order) |
+| Browser: `image-search-ai.release.spec.ts` (`RELEASE_E2E_AI=1`) on chromium, firefox and webkit desktop | **6/6 passed**: results region, expected products shown, excluded products absent, best match ranked first |
+
+Finding during setup: with the fixture categories `release-audio` / `release-laptops`, every hit was correctly dropped by the
+backend's category-hint filter (200, empty list). The products had to be in taxonomy categories. That is designed behaviour, but
+fixtures for AI runs must use real category slugs. Afterwards the database was reseeded, the images and categories removed and both
+AI roles set back to `NOLOGIN`; the inactive index rows remain in the disposable database. Procedure: `docs/08_Quality/E2E.md`.
 
 ## 3. Release E2E runs (Playwright, real stack)
 
@@ -79,10 +111,12 @@ visibility assertions on every `@responsive` page, not by pixel comparison. **Fi
 | D-1 | Add to Cart / Buy Now refused with a misleading message during post-reload session check | Medium | **Fixed** + regression test |
 | D-2 | Wishlist heart clicks silently dropped during the same window | Medium | **Fixed** on the product page + test |
 | D-3 | Admin Delivery list overflowed phones by 110 px | Low | **Fixed**, guarded by `@responsive` admin test |
-| R-1 | Product **cards** (Home, Search, Wishlist page) still call `addItem` during the session check and show "Could not add item. Please try again."; card hearts likewise are not disabled | Low | Open — recommend applying the D-1/D-2 pattern to `ProductCard` consumers |
+| R-1 | Product **cards** (Home, Search, Wishlist page) still call `addItem` during the session check and show "Could not add item. Please try again."; card hearts likewise are not disabled | Low | **Fixed** in the follow-up. The shared `ProductCard` disables Add to Cart and the heart (`aria-busy`) until the session has a verdict (`useCustomerSessionPending`). Unit test `ProductCard.session.test.tsx`. E2E "product cards wait for the post-reload session check…" passes on chromium, firefox and webkit, and fails as expected with the fix reverted. |
 | R-2 | Stripe Test Mode success / decline / webhook paths are not exercised by the release suite (no Stripe key on the hermetic stack) | Medium | Covered elsewhere (backend Stripe/webhook suites, isolated real-Stripe harness); **NOT VERIFIED in this task** |
-| R-3 | AI similarity ranking and personalised recommendations not exercised end-to-end (no AI service on the stack) | Medium | pytest 446/0 locally; E2E **NOT VERIFIED** |
-| R-4 | Gated PG integration suites not re-run | Low | NOT VERIFIED here |
+| R-3 | AI similarity ranking not exercised end to end (no AI service on the stack) | Medium | **Verified locally** (§2.2): API plus browser 6/6 on three engines. Not in CI (no AI service there); personalised (account-history) recommendations still not exercised. |
+| R-4 | Gated PG integration suites not re-run | Low | **Partly closed** (§2.1): admin security 103/103, delivery 33/33 after the fixture fix; commerce email BLOCKED (no local pgvector); payment, inventory and FBT not run |
+| R-5 | Delivery real-time: in a simulation run the customer socket occasionally received revisions out of order (`[1,2,4,3,…]`); the stored events were correct. 2 of 3 runs. | Low | **Open**. The client reconciler ignores older revisions and refetches on a gap, so the customer still converges. The test's in-order assertion was kept, not weakened. Recommend checking whether publish-after-commit can interleave between the tick and the PATCH paths. |
+| R-6 | `findActiveAdminSession` compares a `timestamp` (no time zone) column with `now()`; on a non-UTC database session, expiry shifts by the UTC offset | Info | Harmless on UTC hosts (Supabase); recorded, not changed |
 | H-1 | Harness observation: on a cold stack a reused keep-alive socket was intermittently reset between two back-to-back API requests ("socket hang up"; the second request never reached the server log). Not reproduced outside the suite; harness contexts send `Connection: close`. Browser traffic unaffected. | Low | Mitigated in harness; not claimed as a product defect |
 | H-2 | Local runs are sensitive to workstation resources (3 engines in parallel; disk nearly full during R4). CI runners are the authoritative cross-browser environment. | Info | Documented |
 | H-3 | Each Journey C run advances its project's seeded order one step; after three runs on one stack start the order is Delivered and the test stops with a clear "restart the release stack" message. CI always starts fresh. | Info | By design |

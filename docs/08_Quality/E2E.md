@@ -303,6 +303,14 @@ A full E2E suite may run in a dedicated CI stage when execution time is signific
 
 Task 06.1: the **Release E2E** job (`.github/workflows/ci.yml`) runs `apps/frontend/playwright.release.config.ts` on every push and pull request: the real backend (`NODE_ENV=test`, hermetic `ELECTROHUB_ENV_FILES=none`, per-run secrets) against the disposable PostgreSQL action, six projects (Chromium/Firefox/WebKit desktop, WebKit 390, Chromium 768, Firefox 1920), with the HTML report and failure traces uploaded as an artifact. Coverage and known gaps: [Task 06.1](../tasks/Phase-06/TASK_06.1_AUTOMATED_TESTING_E2E_CROSS_BROWSER.md).
 
+**AI similarity run (local, opt-in).** `tests/release/image-search-ai.release.spec.ts` skips unless `RELEASE_E2E_AI=1`; CI has no AI service. To run it against the disposable release database only:
+
+1. Give the release products storefront photos from `apps/frontend/public/images/catalog/*.jpg` (`product_images`) in **taxonomy categories** (`headphones`, `laptops`, `accessories`). The backend filters image-search hits by the model's category hints, so products in the fixture categories `release-audio` / `release-laptops` are always filtered out.
+2. Enable `LOGIN` with generated passwords for `ai_vector_ingest` and `ai_vector_reader`. Then run `python -m app.ingest stage --artifact-dir models/siglip2-b16-p256-d1 --catalog-root ../frontend/public` with the ingest role, and `activate` with the database owner. Set `AI_ENV_FILE` to an empty file so `apps/ai-service/.env` is never read. On Windows, copy the CA certificate to an ASCII-only path, because libpq cannot open paths that contain the em dash.
+3. Start the AI service (`python -m app`, `AI_ENVIRONMENT=test`, loopback port, read-only `ai_vector_reader` DSN, a generated `AI_SERVICE_API_KEY`). Start a backend with the release stack's hermetic environment plus `AI_SERVICE_URL` / `AI_SERVICE_API_KEY` / `AI_SERVICE_ENVIRONMENT=test` on another port.
+4. Run `RELEASE_E2E_AI=1 RELEASE_E2E_API_PORT=<that port> RELEASE_E2E_FRONTEND_PORT=<free port> npx playwright test -c playwright.release.config.ts tests/release/image-search-ai.release.spec.ts --project=chromium-desktop --project=firefox-desktop --project=webkit-desktop`.
+5. Afterwards, reseed (or restart) the release stack, delete the added images and categories, and set both AI roles back to `NOLOGIN`.
+
 ## 20. Definition of Done
 
 E2E testing is complete when:

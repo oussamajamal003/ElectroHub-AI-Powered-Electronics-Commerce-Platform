@@ -56,7 +56,7 @@ updated Vitest/pytest suites · **NV** = not verified by this task.
 | Search & suggestions | E2E `discovery` | newest query wins under rapid typing; ArrowDown/Enter/Escape; results page ranks laptops, excludes audio; back navigation; empty state; Clear focuses input; 503 shows an error, not a false empty result | — |
 | Product details | E2E `discovery` | heading/SKU/price/stock equal the API; specs tab; quantity bounded by stock; out-of-stock cannot be added; unknown slug → not-found | — |
 | Recommendations | E2E `discovery` ("More in …" category rail excludes the current product and navigates); admin Recommendations page renders | Personalised/AI ranking: NV here (backend + pytest suites) |
-| Image search | E2E `image-search` | unsupported/empty files refused in-browser with no upload; valid photo → truthful "not available / unavailable", never fabricated matches | Similarity ranking: NV (no AI service on this stack; covered by FastAPI pytest) |
+| Image search | E2E `image-search`, opt-in `image-search-ai` | unsupported/empty files refused in-browser with no upload; valid photo → truthful "not available / unavailable", never fabricated matches; with the AI service (`RELEASE_E2E_AI=1`): unseen photos return only visually similar products, best first | Similarity: verified locally on 3 engines; not in CI (no AI service) |
 | Cart | E2E `cart-wishlist` | add / increase / decrease / remove / empty; totals equal server cart; persists across reload; rapid increases capped at stock; guest cart merges on sign-in; failed POST rolls back the count with an inline error | — |
 | Wishlist | E2E `cart-wishlist` | heart `aria-pressed`, header count, persistence, outsider isolation (API), empty state, rapid toggles settle on last intent server-side | — |
 | Checkout | E2E `checkout-orders` | shipping validation (`aria-invalid`); delivery price from server flows into total; progress kept across navigation | — |
@@ -85,8 +85,8 @@ updated Vitest/pytest suites · **NV** = not verified by this task.
 | D-2 | In the same window the wishlist heart accepted clicks that `WishlistProvider.toggle` silently dropped. | Shared `WishlistButton` gains `disabled`; the product page disables the heart until the session is verified. Test: `WishlistButton.test.tsx`. |
 | D-3 | Admin **Delivery** list overflowed a 390 px phone by 110 px (the whole page scrolled sideways). Its page-local `.page` grid lacked the `> * { min-width: 0 }` rule the shared admin page layout has, and its table frame was not a positioning context, so 1 px visually-hidden badge labels escaped the scroller. | `AdminDeliveriesPage.module.scss`: same rule as `features/admin/shared/AdminPages.module.scss`, and `position: relative` on the table frame (as the shared `TableCard`). Measured 0 px overflow at 390, 768 and 1440 on the list and detail pages; guarded by the `@responsive` admin test. |
 
-Residual (not fixed, recorded in the risk register): product **cards** on Home/Search/Wishlist still call `addItem` during that window and show
-the generic "Could not add item. Please try again."
+Follow-up R-1 (fixed): product **cards** on Home/Search/Wishlist called `addItem` during that window and showed the generic "Could not
+add item. Please try again." The shared `ProductCard` now keeps Add to Cart and the heart disabled until the session has a verdict.
 
 ## 5. Security constraints honoured
 
