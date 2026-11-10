@@ -15,13 +15,14 @@ const ACCEPTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 interface Props {
   scope: ProfilePhotoScope;
   userId: string;
+  sessionVerified: boolean;
   initials: string;
   displayName: string;
   size?: 'regular' | 'large';
 }
 
-export function ProfilePhotoManager({ scope, userId, initials, displayName, size = 'regular' }: Props) {
-  const photo = useProfilePhoto(scope, userId);
+export function ProfilePhotoManager({ scope, userId, sessionVerified, initials, displayName, size = 'regular' }: Props) {
+  const photo = useProfilePhoto(scope, userId, sessionVerified);
   const { upload, remove } = useProfilePhotoMutations(scope, userId);
   const fileInput = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);

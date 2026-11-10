@@ -14,8 +14,8 @@ import { useProfilePhoto } from '@/features/profilePhoto/queries';
 import styles from './AccountPage.module.scss';
 
 export function AccountPage() {
-  const { user, isAuthenticated, isInitializing } = useAuth();
-  const profilePhoto = useProfilePhoto('customer', user?.id);
+  const { user, isAuthenticated, isInitializing, isSessionVerified } = useAuth();
+  const profilePhoto = useProfilePhoto('customer', user?.id, isSessionVerified);
   const navigate = useNavigate();
   const [showSignOut, setShowSignOut] = useState(false);
   const reviewsQuery = useMyReviews(Boolean(isAuthenticated));
