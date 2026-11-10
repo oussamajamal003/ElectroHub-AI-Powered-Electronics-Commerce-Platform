@@ -78,7 +78,7 @@ test('configuration fails closed for DEV, PROD, hosted, non-loopback, wrong-name
   assert.match(withUrl(`postgresql://postgres:pw@localhost:55432/${DB}?sslmode=disable`).error, /must not carry query options/);
   assert.match(withUrl('mysql://postgres:pw@localhost:55432/electrohub_ci').error, /PostgreSQL URL/);
   assert.match(withUrl('not a url').error, /not a valid/);
-  assert.match(validate({ ...env, PAYMENT_PG_DISPOSABLE_AUTHORIZATION: 'DISPOSABLE:other:scenarios-A-S:fixtures+drop-run-schema' }).error, /exact database/);
+  assert.match(validate({ ...env, PAYMENT_PG_DISPOSABLE_AUTHORIZATION: 'DISPOSABLE:other:scenarios-A-S:fixtures+reset-run-database' }).error, /exact database/);
   assert.match(validate({ ...env, PAYMENT_PG_DISPOSABLE_CA_FILE: 'relative/ca.crt' }).error, /absolute path/);
   assert.match(validate({ ...env, PAYMENT_PG_DISPOSABLE_CA_FILE: path.join(work, 'missing.crt') }).error, /cannot be read/);
   assert.match(validate({ ...env, NODE_TLS_REJECT_UNAUTHORIZED: '0' }).error, /unsafe TLS override/);
@@ -115,6 +115,13 @@ test('server proof passes only for a dedicated, fresh, TLS-connected PostgreSQL 
   const inRun = scriptedClient(goodRow);
   await disposable.verifyDisposableServer(inRun, { expectedDatabase: DB, allowedSchema: 'pgrun_0123456789ab' });
   assert.equal(inRun.calls[1].params[2], 'pgrun_0123456789ab');
+  assert.equal(inRun.calls[1].params[3], false); // migration-created objects are tolerated only for a migrated public run
+  assert.equal(client.calls[1].params[3], false);
+  const migrated = scriptedClient(goodRow);
+  await disposable.verifyDisposableServer(migrated, { expectedDatabase: DB, allowedSchema: 'public' });
+  assert.deepEqual(migrated.calls[1].params.slice(2), ['public', true, disposable.MIGRATION_ROLES, disposable.MIGRATION_SCHEMAS]);
+  assert.deepEqual(disposable.MIGRATION_SCHEMAS, ['ai', 'extensions']);
+  assert.match(migrated.calls[1].sql, /NOT rolcanlogin AND NOT rolsuper/);
 });
 
 test('server proof rejects each way a target can fail to be a dedicated disposable instance', async () => {
@@ -133,53 +140,42 @@ test('server proof rejects each way a target can fail to be a dedicated disposab
   await assert.rejects(disposable.verifyDisposableServer(scriptedClient(undefined), { expectedDatabase: DB }), /DATABASE_MISMATCH|PROOF/);
 });
 
-test('cleanup drops only the run schema that carries this run marker', async () => {
+test('cleanup resets only the database that carries this run marker, and drops only the migrations\' NOLOGIN roles (R-7)', async () => {
   const identity = disposable.newRunIdentity(() => Buffer.from('0123456789ab', 'hex'));
-  assert.deepEqual(identity, { runId: '0123456789ab', schema: 'pgrun_0123456789ab', marker: 'electrohub-disposable-run:0123456789ab' });
-  const make = (comment, present = null, { owner = 'postgres', currentRole = 'postgres', externalDependencies = 0,
-    relations = [], types = [], routines = [] } = {}) => {
-    const sql = [];
-    return { sql, async query(text) {
-      sql.push(text);
-      if (/FROM pg_namespace n WHERE n.nspname/.test(text)) return comment === undefined ? { rowCount: 0, rows: [] } : { rowCount: 1, rows: [{ oid: 123, comment, owner, current_role: currentRole }] };
-      if (/FROM pg_depend/.test(text)) return { rows: [{ count: externalDependencies }] };
-      if (/AS classes/.test(text)) return { rows: [{ classes: 0, types: 0, routines: 0 }] };
-      if (/SELECT relname, relkind FROM pg_class/.test(text)) return { rows: relations };
-      if (/SELECT relname FROM pg_class/.test(text)) return { rows: relations.filter(row => row.relkind === 'S') };
-      if (/FROM pg_proc p WHERE p\.pronamespace/.test(text)) return { rows: routines };
-      if (/FROM pg_type WHERE typnamespace/.test(text)) return { rows: types };
-      if (/to_regnamespace/.test(text)) return { rows: [{ present }] };
+  assert.deepEqual(identity, { runId: '0123456789ab', schema: 'public', marker: 'electrohub-disposable-run:0123456789ab' });
+  const config = { url: 'postgresql://postgres:pw@localhost:55432/electrohub_ci', database: DB, caPem: 'ca' };
+  const make = (marker, { present = 1, rolesLeft = 0, markerAfter = null, databasesAfter = 1 } = {}) => {
+    const state = { sql: [], params: [], url: null, ended: false };
+    const create = cfg => { state.url = cfg.url; return { async connect() {}, async end() { state.ended = true; }, async query(text, params) {
+      state.sql.push(text); state.params.push(params);
+      if (/AS marker FROM pg_database WHERE datname = \$1/.test(text)) return present ? { rowCount: 1, rows: [{ marker }] } : { rowCount: 0, rows: [] };
+      if (/SELECT rolname FROM pg_roles/.test(text)) return { rows: [{ rolname: 'ai_vector_reader' }, { rolname: 'ai_media_worker' }] };
+      if (/AS databases/.test(text)) return { rows: [{ marker: markerAfter, databases: databasesAfter, roles: rolesLeft }] };
       return { rows: [] };
-    } };
+    } }; };
+    return { state, create };
   };
-  const matching = make(identity.marker, null, { relations: [
-    { relname: '_prisma_migrations', relkind: 'r' }, { relname: 'payment_attempts', relkind: 'r' },
-    { relname: 'payment_attempts_idx', relkind: 'i' }, { relname: 'test_seq', relkind: 'S' },
-    { relname: 'test_view', relkind: 'v' },
-  ], types: [{ typname: 'PaymentAttemptState', typtype: 'e', typelem: 0 }],
-  routines: [{ proname: 'pgtest_raise_after_transfer', prokind: 'f', identity_args: '' }] });
-  assert.equal(await disposable.dropRunSchema(matching, identity), 'dropped');
-  assert.ok(matching.sql.some(text => text === 'DROP SCHEMA "pgrun_0123456789ab" RESTRICT'));
-  assert.ok(!matching.sql.some(text => /CASCADE/i.test(text)));
-  const dependencyCheck = matching.sql.find(text => /FROM pg_depend d/.test(text));
-  assert.match(dependencyCheck, /AND NOT \(dependent\.namespace_oid = 'pg_toast'::regnamespace AND d\.deptype = 'i'\)/,
-    'internal TOAST ownership edges are excluded while RESTRICT remains the final cleanup fence');
-  const cleanupStatements = matching.sql.filter(text => /^DROP (?:VIEW|MATERIALIZED VIEW|FOREIGN TABLE|TABLE|SEQUENCE|AGGREGATE|PROCEDURE|FUNCTION|TYPE|SCHEMA)\b/.test(text));
-  assert.deepEqual(cleanupStatements, [
-    'DROP VIEW "pgrun_0123456789ab"."test_view" RESTRICT',
-    'DROP TABLE "pgrun_0123456789ab"."_prisma_migrations", "pgrun_0123456789ab"."payment_attempts" RESTRICT',
-    'DROP SEQUENCE "pgrun_0123456789ab"."test_seq" RESTRICT',
-    'DROP FUNCTION "pgrun_0123456789ab"."pgtest_raise_after_transfer"() RESTRICT',
-    'DROP TYPE "pgrun_0123456789ab"."PaymentAttemptState" RESTRICT',
-    'DROP SCHEMA "pgrun_0123456789ab" RESTRICT',
-  ]);
-  assert.equal(await disposable.dropRunSchema(make(undefined), identity), 'absent');
-  const foreign = make('electrohub-disposable-run:ffffffffffff');
-  await assert.rejects(disposable.dropRunSchema(foreign, identity), error => error.label === 'CLEANUP_MARKER_MISMATCH');
-  assert.ok(!foreign.sql.some(text => /DROP SCHEMA/.test(text)));
-  await assert.rejects(disposable.dropRunSchema(make(identity.marker, null, { owner: 'other_role' }), identity), error => error.label === 'CLEANUP_OWNER_MISMATCH');
-  await assert.rejects(disposable.dropRunSchema(make(identity.marker, null, { externalDependencies: 1 }), identity), error => error.label === 'CLEANUP_EXTERNAL_DEPENDENCY');
-  await assert.rejects(disposable.dropRunSchema(make(identity.marker, 'pgrun_0123456789ab'), identity), error => error.label === 'CLEANUP_NOT_VERIFIED');
+  const ok = make(identity.marker);
+  assert.equal(await disposable.resetRunDatabase(config, identity, { create: ok.create }), 'reset');
+  assert.equal(new URL(ok.state.url).pathname, '/postgres');
+  assert.ok(ok.state.ended);
+  assert.deepEqual(ok.state.sql.filter(text => /^(DROP|CREATE)/.test(text)), ['DROP DATABASE "electrohub_ci" WITH (FORCE)',
+    'CREATE DATABASE "electrohub_ci"', 'DROP ROLE "ai_vector_reader"', 'DROP ROLE "ai_media_worker"']);
+  const roleQuery = ok.state.sql.findIndex(text => /SELECT rolname FROM pg_roles/.test(text));
+  assert.match(ok.state.sql[roleQuery], /NOT rolcanlogin AND NOT rolsuper/);
+  assert.deepEqual(ok.state.params[roleQuery][0], disposable.MIGRATION_ROLES);
+
+  for (const [variant, label] of [[make('electrohub-disposable-run:ffffffffffff'), 'CLEANUP_MARKER_MISMATCH'], [make(null), 'CLEANUP_MARKER_MISMATCH'],
+    [make(identity.marker, { present: 0 }), 'CLEANUP_DATABASE_ABSENT']]) {
+    await assert.rejects(disposable.resetRunDatabase(config, identity, { create: variant.create }), error => error.label === label);
+    assert.ok(!variant.state.sql.some(text => /^DROP|^CREATE/.test(text)), label);
+    assert.ok(variant.state.ended);
+  }
+  for (const after of [{ rolesLeft: 1 }, { markerAfter: identity.marker }, { databasesAfter: 0 }]) {
+    await assert.rejects(disposable.resetRunDatabase(config, identity, { create: make(identity.marker, after).create }), error => error.label === 'CLEANUP_NOT_VERIFIED');
+  }
+  await assert.rejects(disposable.resetRunDatabase({ ...config, database: 'postgres' }, identity, { create: ok.create }), error => error.label === 'CLEANUP_IDENTITY_INVALID');
+  await assert.rejects(disposable.resetRunDatabase(config, { marker: 'other' }, { create: ok.create }), error => error.label === 'CLEANUP_IDENTITY_INVALID');
   assert.throws(() => disposable.quoteIdentifier('public"; DROP TABLE x;--'), error => error.label === 'IDENTIFIER_INVALID');
 });
 
@@ -187,8 +183,9 @@ test('each run gets fresh, valid, unpredictable identifiers', () => {
   const first = disposable.newRunIdentity();
   const second = disposable.newRunIdentity();
   assert.notEqual(first.runId, second.runId);
-  assert.match(first.schema, /^pgrun_[a-f0-9]{12}$/);
-  assert.doesNotThrow(() => disposable.quoteIdentifier(first.schema));
+  assert.match(first.runId, /^[a-f0-9]{12}$/);
+  assert.equal(first.schema, 'public'); // R-7: the run owns the proved-fresh instance and migrates its public schema
+  assert.match(first.marker, /^electrohub-disposable-run:[a-f0-9]{12}$/);
 });
 
 test('stages: ambient database variables are overridden, Stripe is blank, concurrency and time are bounded, TLS is strict end to end', certOptions, () => {
@@ -214,12 +211,13 @@ test('stages: ambient database variables are overridden, Stripe is blank, concur
     assert.equal(url.searchParams.get('sslaccept'), 'strict');
     assert.equal(url.searchParams.get('sslcert'), config.caFile);
     assert.equal(url.searchParams.get('connection_limit'), '1');
-    assert.equal(url.searchParams.get('options'), `-csearch_path=${identity.schema}`);
+    assert.equal(url.searchParams.get('options'), null); // public: Prisma's default search_path
   }
   assert.ok(probe.args.includes('execute') && probe.args.includes(path.join(work, 'probe.sql')));
   assert.ok(migration.args.includes('deploy') && migration.args.includes('migrate'));
   const testUrl = new URL(tests.env.DATABASE_URL);
-  assert.equal(testUrl.searchParams.get('options'), `-csearch_path=${identity.schema}`);
+  assert.equal(testUrl.searchParams.get('options'), null); // public: the app's database-target guard rejects `options`
+  assert.equal(new URL(disposable.runUrl(config, 'pgrun_0123456789ab')).searchParams.get('options'), '-csearch_path=pgrun_0123456789ab');
   assert.equal(testUrl.searchParams.get('connection_limit'), '4');
   assert.equal(tests.env.PAYMENT_PG_TEST_INTERNAL_RUN, 'disposable');
   assert.equal(tests.env.PAYMENT_PG_TEST_DATABASE_URL, tests.env.DATABASE_URL);
@@ -271,7 +269,7 @@ test('report verification demands every scenario A-S exactly once, passed, none 
 test('A-J scope: its own exact authorization, only the A-J file, only A-J scenarios; A-S approval cannot start it and vice versa', certOptions, () => {
   const ca = makeCa('aj');
   const ajEnv = { ...baseEnv(ca.crt), PAYMENT_PG_DISPOSABLE_AUTHORIZATION: disposable.expectedAuthorization(DB, 'scenarios-A-J') };
-  assert.equal(disposable.expectedAuthorization(DB, 'scenarios-A-J'), 'DISPOSABLE:electrohub_ci:scenarios-A-J:fixtures+drop-run-schema');
+  assert.equal(disposable.expectedAuthorization(DB, 'scenarios-A-J'), 'DISPOSABLE:electrohub_ci:scenarios-A-J:fixtures+reset-run-database');
   assert.ok(validate(ajEnv, { scope: 'scenarios-A-J' }).config);
   assert.match(validate(baseEnv(ca.crt), { scope: 'scenarios-A-J' }).error, /exact database, scenario set/);
   assert.match(validate(ajEnv).error, /exact database, scenario set/);
@@ -390,18 +388,15 @@ test('POSIX containment helpers: group kill targets the negative pid; Windows us
   assert.equal(disposable.groupAlive(9, { platform: 'linux', kill: () => true }), true);
 });
 
-test('schema and ownership marker are created atomically, with rollback on failure', async () => {
+test('the run marks the proved database itself; malformed identifiers never reach SQL', async () => {
   const identity = disposable.newRunIdentity(() => Buffer.from('0123456789ab', 'hex'));
   const calls = [];
-  const good = { async query(text) { calls.push(text); return { rows: [] }; } };
-  await disposable.provisionSchema(good, identity);
-  assert.deepEqual(calls, ['BEGIN', 'CREATE SCHEMA "pgrun_0123456789ab"',
-    "COMMENT ON SCHEMA \"pgrun_0123456789ab\" IS 'electrohub-disposable-run:0123456789ab'", 'COMMIT']);
-  const failing = [];
-  const bad = { async query(text) { failing.push(text); if (/^COMMENT/.test(text)) throw new Error('boom'); return { rows: [] }; } };
-  await assert.rejects(disposable.provisionSchema(bad, identity), /boom/);
-  assert.equal(failing.at(-1), 'ROLLBACK');
-  assert.ok(!failing.includes('COMMIT'));
+  const client = { async query(text) { calls.push(text); return { rows: [] }; } };
+  await disposable.markDatabase(client, DB, identity.marker);
+  assert.deepEqual(calls, ["COMMENT ON DATABASE \"electrohub_ci\" IS 'electrohub-disposable-run:0123456789ab'"]);
+  await assert.rejects(disposable.markDatabase(client, 'postgres', identity.marker), error => error.label === 'MARKER_INVALID');
+  await assert.rejects(disposable.markDatabase(client, DB, "x'; DROP DATABASE y;--"), error => error.label === 'MARKER_INVALID');
+  assert.equal(calls.length, 1);
 });
 
 test('children never inherit variables that select or authorize another execution path', certOptions, () => {

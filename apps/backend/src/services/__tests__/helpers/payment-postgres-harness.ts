@@ -198,7 +198,8 @@ export async function assertDisposableRun(): Promise<DisposableRun> {
   if (!validated.config) throw new Error('Disposable scope configuration failed before fixture writes.');
   const runId = process.env.PAYMENT_PG_DISPOSABLE_RUN_ID ?? '';
   const schema = process.env.PAYMENT_PG_DISPOSABLE_SCHEMA ?? '';
-  if (!/^[a-f0-9]{12}$/.test(runId) || schema !== `pgrun_${runId}`) throw new Error('Disposable run identity is invalid.');
+  // The run owns the whole proved-fresh instance and migrates its `public` schema (Task 06.1 R-7); ownership is the database marker.
+  if (!/^[a-f0-9]{12}$/.test(runId) || schema !== 'public') throw new Error('Disposable run identity is invalid.');
   const expected = scope.runUrl(validated.config, schema);
   const connectionString = process.env.PAYMENT_PG_TEST_DATABASE_URL ?? '';
   if (connectionString !== expected || process.env.DATABASE_URL !== expected || process.env.DIRECT_URL !== expected ||
@@ -207,8 +208,8 @@ export async function assertDisposableRun(): Promise<DisposableRun> {
   try {
     await client.connect();
     await scope.verifyDisposableServer(client, { expectedDatabase: validated.config.database, allowedSchema: schema });
-    const marker = (await client.query("SELECT obj_description(to_regnamespace($1)::oid, 'pg_namespace') AS marker", [schema])).rows[0]?.marker;
-    if (marker !== `electrohub-disposable-run:${runId}`) throw new Error('Disposable run schema marker mismatch.');
+    const marker = (await client.query("SELECT shobj_description(oid, 'pg_database') AS marker FROM pg_database WHERE datname = current_database()")).rows[0]?.marker;
+    if (marker !== `electrohub-disposable-run:${runId}`) throw new Error('Disposable database marker mismatch.');
   } finally {
     await client.end();
   }
@@ -255,9 +256,14 @@ export async function assertRunSchemaIsolation(db: PrismaClient, schema: string)
   const rows = await db.$queryRaw<Array<{ db: string; schema: string; schemas: string[]; path: string }>>(Prisma.sql`
     SELECT current_database()::text AS db, current_schema()::text AS schema, current_schemas(false)::text[] AS schemas, current_setting('search_path') AS path`);
   const row = rows[0];
-  if (!row || row.schema !== schema || row.path !== schema || row.schemas.length !== 1 || row.schemas[0] !== schema) {
+  // A public run keeps PostgreSQL's default search_path ("$user", public); its effective schemas must still be exactly [public].
+  const pathPinned = schema === 'public' ? true : row?.path === schema;
+  if (!row || row.schema !== schema || !pathPinned || row.schemas.length !== 1 || row.schemas[0] !== schema) {
     throw new Error('Disposable run schema pinning failed before fixture writes.');
   }
+  // A disposable run owns the instance and uses its `public` schema, already proved by assertDisposableRun (dedicated instance,
+  // database marker). The absence check below guards side-schema runs on a shared database (the DEV isolated-schema scope).
+  if (schema === 'public') return;
   // Absence is read from the catalog: Prisma's pg adapter reports 42P01 as a generic "No such table" error without the
   // SQLSTATE, so probing with SELECT cannot distinguish "absent" from other failures.
   for (const table of ['payment_attempts', 'payment_work', 'orders', 'payments', 'carts', 'cart_items']) {
