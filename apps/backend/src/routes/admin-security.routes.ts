@@ -5,6 +5,9 @@ import { adminGuard, requireAdminCapability, requireFreshStepUp, requireStepUp }
 import { env } from '../config/env.js';
 
 import { seedProvisioningRoutesEnabled } from '../utils/seed-provisioning-flag.js';
+import { adminProfilePhotoController } from '../controllers/profile-photo.controller.js';
+import { admitProfilePhotoUpload, profilePhotoUpload } from '../middleware/profilePhotoUpload.js';
+import { profilePhotoWriteLimiter } from '../middleware/profilePhotoRateLimit.js';
 export { seedProvisioningRoutesEnabled };
 
 /**
@@ -61,6 +64,9 @@ adminSecurityRouter.use(['/admin/me', '/admin/administrators', '/admin/invitatio
 
 adminSecurityRouter.get('/admin/me/profile', c.profile);
 adminSecurityRouter.patch('/admin/me/profile', writes, c.updateProfile);
+adminSecurityRouter.get('/admin/me/profile-photo', adminProfilePhotoController.get);
+adminSecurityRouter.post('/admin/me/profile-photo', profilePhotoWriteLimiter, admitProfilePhotoUpload, profilePhotoUpload, adminProfilePhotoController.upload);
+adminSecurityRouter.delete('/admin/me/profile-photo', profilePhotoWriteLimiter, adminProfilePhotoController.remove);
 adminSecurityRouter.get('/admin/me/email-change/status', c.emailChangeStatus);
 adminSecurityRouter.post('/admin/me/email-change/request', emailChangeWrites, requireFreshStepUp, c.requestEmailChange);
 adminSecurityRouter.post('/admin/me/email-change/resend', emailChangeWrites, requireFreshStepUp, c.resendEmailChange);

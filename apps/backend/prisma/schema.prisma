@@ -129,6 +129,7 @@ model User {
   passwordHash    String?   @db.VarChar(255)
   firstName       String    @db.VarChar(100)
   lastName        String    @db.VarChar(100)
+  profilePhotoPath String?   @map("profile_photo_path") @db.VarChar(512)
   isActive        Boolean   @default(true)
   emailVerifiedAt DateTime?
 
