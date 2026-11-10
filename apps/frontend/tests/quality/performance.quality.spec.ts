@@ -17,13 +17,27 @@ test('record real API and route timings', async ({ page, request }, info) => {
     }
   }
   const routes = [];
+  await page.addInitScript(() => {
+    const metrics = { lcpMs: 0, cls: 0 };
+    (window as unknown as { qualityMetrics: typeof metrics }).qualityMetrics = metrics;
+    new PerformanceObserver(list => { for (const entry of list.getEntries()) metrics.lcpMs = entry.startTime; })
+      .observe({ type: 'largest-contentful-paint', buffered: true });
+    new PerformanceObserver(list => {
+      for (const entry of list.getEntries()) {
+        const shift = entry as PerformanceEntry & { hadRecentInput: boolean; value: number };
+        if (!shift.hadRecentInput) metrics.cls += shift.value;
+      }
+    }).observe({ type: 'layout-shift', buffered: true });
+  });
   for (const url of ['/', `/products/${product('REL-AURORA-HP').slug}`, '/admin']) {
     if (url === '/admin') await signInAdmin(page, admins(info).ownerEmail);
     const start = performance.now();
     await page.goto(url);
     await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
     const readyMs = Math.round(performance.now() - start);
+    await page.waitForLoadState('networkidle');
     const timing = await page.evaluate(() => ({
+      metrics: (window as unknown as { qualityMetrics: { lcpMs: number; cls: number } }).qualityMetrics,
       navigation: performance.getEntriesByType('navigation').map(entry => entry.toJSON()),
       paint: performance.getEntriesByType('paint').map(entry => entry.toJSON()),
       resources: performance.getEntriesByType('resource').map(entry => {

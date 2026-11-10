@@ -5,6 +5,9 @@ import { admins, distinctClientAddress, expectNoHorizontalOverflow, product, sho
 
 const require = createRequire(import.meta.url);
 async function audit(page: Page, testInfo: TestInfo, label: string) {
+  // Full-page capture can reveal sections and start CSS transitions (notably in Firefox).
+  await expect.poll(() => page.evaluate(() => document.getAnimations().filter(animation =>
+    animation.playState === 'running' && Number.isFinite(animation.effect?.getComputedTiming().endTime)).length)).toBe(0);
   // Contrast must be sampled after the modal's entrance fade, not at a transient opacity.
   const dialog = page.getByRole('dialog');
   if (await dialog.count()) await expect(dialog).toHaveCSS('opacity', '1');
@@ -87,20 +90,38 @@ test('reduced motion keeps discovery usable without active motion', async ({ pag
 test('authenticated orders and profile have accessible semantics', async ({ page }, info) => {
   await page.goto('/');
   await signInCustomer(page, shopper(info, 'orders').email);
-  for (const url of ['/orders', '/account', '/account/profile']) {
+  const reference = shopper(info, 'orders').orderReference;
+  for (const url of ['/orders', `/orders/${reference}`, `/orders/${reference}/tracking`, '/account', '/account/profile']) {
     await page.goto(url);
     await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
     await audit(page, info, url.slice(1));
   }
 });
 
-test('admin MFA, tables, settings and navigation semantics', async ({ page }, info) => {
+test('@responsive admin MFA, tables, settings and navigation semantics', async ({ page }, info) => {
   test.slow();
   await signInAdmin(page, admins(info).ownerEmail);
-  for (const url of ['/admin', '/admin/products', '/admin/inventory', '/admin/orders', '/admin/deliveries', '/admin/settings']) {
+  for (const url of ['/admin', '/admin/products', '/admin/products/new', '/admin/categories', '/admin/inventory', '/admin/orders',
+    '/admin/deliveries', '/admin/customers', '/admin/recommendations', '/admin/analytics', '/admin/settings',
+    '/admin/settings/administrators', '/admin/profile', '/admin/profile/security', '/admin/profile/sessions']) {
     await page.goto(url);
     await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
     await capture(page, info, url.replaceAll('/', '-'));
     await audit(page, info, url);
   }
+});
+
+test('product API outage terminates loading and supports recovery', async ({ page }, info) => {
+  const item = product('REL-AURORA-HP');
+  let unavailable = true;
+  await page.route(`**/api/products/${item.slug}`, route => unavailable
+    ? route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"code":"UNAVAILABLE","message":"Temporarily unavailable"}}' })
+    : route.continue());
+  await page.goto(`/products/${item.slug}`);
+  await expect(page.getByRole('heading', { name: 'Product unavailable' })).toBeVisible();
+  await audit(page, info, 'product-outage');
+  unavailable = false;
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: item.name })).toBeVisible();
+  await audit(page, info, 'product-recovered');
 });

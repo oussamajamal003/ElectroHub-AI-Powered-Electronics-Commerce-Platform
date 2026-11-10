@@ -1,0 +1,583 @@
+{
+  "environment": "Playwright real stack, local loopback, unthrottled; see run command for Vite dev/preview mode",
+  "api": {
+    "/api/products?page=1&pageSize=12": [
+      165,
+      82,
+      68,
+      65,
+      64
+    ],
+    "/api/search/products?q=aurora": [
+      79,
+      54,
+      53,
+      62,
+      50
+    ],
+    "/api/recommendations/popular": [
+      39,
+      41,
+      40,
+      37,
+      38
+    ]
+  },
+  "routes": [
+    {
+      "url": "/",
+      "readyMs": 1047,
+      "metrics": {
+        "lcpMs": 1036,
+        "cls": 0
+      },
+      "navigation": [
+        {
+          "name": "http://localhost:3212/",
+          "entryType": "navigation",
+          "startTime": 0,
+          "duration": 500.10000002384186,
+          "navigationId": 6838,
+          "initiatorType": "navigation",
+          "deliveryType": "",
+          "nextHopProtocol": "http/1.1",
+          "renderBlockingStatus": "non-blocking",
+          "contentType": "text/html",
+          "contentEncoding": "",
+          "workerStart": 0,
+          "workerRouterEvaluationStart": 0,
+          "workerCacheLookupStart": 0,
+          "workerMatchedSourceType": "",
+          "workerFinalSourceType": "",
+          "redirectStart": 0,
+          "redirectEnd": 0,
+          "fetchStart": 0.30000001192092896,
+          "domainLookupStart": 1.899999976158142,
+          "domainLookupEnd": 2.600000023841858,
+          "connectStart": 2.600000023841858,
+          "secureConnectionStart": 0,
+          "connectEnd": 4.600000023841858,
+          "requestStart": 4.800000011920929,
+          "responseStart": 25.19999998807907,
+          "firstInterimResponseStart": 0,
+          "finalResponseHeadersStart": 25.19999998807907,
+          "responseEnd": 26.600000023841858,
+          "transferSize": 855,
+          "encodedBodySize": 555,
+          "decodedBodySize": 555,
+          "responseStatus": 200,
+          "serverTiming": [],
+          "unloadEventStart": 0,
+          "unloadEventEnd": 0,
+          "domInteractive": 41.5,
+          "domContentLoadedEventStart": 500,
+          "domContentLoadedEventEnd": 500,
+          "domComplete": 500.10000002384186,
+          "loadEventStart": 500.10000002384186,
+          "loadEventEnd": 500.10000002384186,
+          "type": "navigate",
+          "redirectCount": 0,
+          "activationStart": 0,
+          "criticalCHRestart": 0,
+          "notRestoredReasons": null,
+          "confidence": {
+            "randomizedTriggerRate": 0.4994798,
+            "value": "high"
+          }
+        }
+      ],
+      "paint": [
+        {
+          "name": "first-paint",
+          "entryType": "paint",
+          "startTime": 704,
+          "duration": 0,
+          "navigationId": 6838,
+          "paintTime": 675,
+          "presentationTime": 704
+        },
+        {
+          "name": "first-contentful-paint",
+          "entryType": "paint",
+          "startTime": 704,
+          "duration": 0,
+          "navigationId": 6838,
+          "paintTime": 675,
+          "presentationTime": 704
+        }
+      ],
+      "resources": [
+        {
+          "name": "/assets/index-0dydgAUr.js",
+          "duration": 358,
+          "transferSize": 278606
+        },
+        {
+          "name": "/assets/index-FTMQnrJ_.css",
+          "duration": 101,
+          "transferSize": 26814
+        },
+        {
+          "name": "/assets/HomePage-DGhXy5Dl.js",
+          "duration": 47,
+          "transferSize": 4498
+        },
+        {
+          "name": "/assets/package-search-PCMUfcOl.js",
+          "duration": 46,
+          "transferSize": 953
+        },
+        {
+          "name": "/assets/queries-Cn_R95ip.js",
+          "duration": 101,
+          "transferSize": 1438
+        },
+        {
+          "name": "/assets/RecommendationRail-yHhRuT6b.js",
+          "duration": 119,
+          "transferSize": 3748
+        },
+        {
+          "name": "/assets/RecommendationRail-m9ml_DRx.css",
+          "duration": 59,
+          "transferSize": 960
+        },
+        {
+          "name": "/assets/RecommendationSectionRail-Lw-Tca18.js",
+          "duration": 133,
+          "transferSize": 1602
+        },
+        {
+          "name": "/assets/labels-iuuH4SC2.js",
+          "duration": 158,
+          "transferSize": 942
+        },
+        {
+          "name": "/assets/Motion-r4fE_PQh.js",
+          "duration": 247,
+          "transferSize": 1537
+        },
+        {
+          "name": "/assets/Motion-5V5n3mHE.css",
+          "duration": 94,
+          "transferSize": 833
+        },
+        {
+          "name": "/assets/chevron-down-BArEWcLC.js",
+          "duration": 214,
+          "transferSize": 596
+        },
+        {
+          "name": "/assets/HomePage-CwnL_un0.css",
+          "duration": 118,
+          "transferSize": 3052
+        },
+        {
+          "name": "/api/store/profile",
+          "duration": 269,
+          "transferSize": 491
+        },
+        {
+          "name": "/api/categories",
+          "duration": 303,
+          "transferSize": 645
+        },
+        {
+          "name": "/api/auth/customer/refresh",
+          "duration": 166,
+          "transferSize": 333
+        },
+        {
+          "name": "/images/catalog/laptops.jpg",
+          "duration": 85,
+          "transferSize": 122736
+        },
+        {
+          "name": "/api/products",
+          "duration": 174,
+          "transferSize": 3611
+        },
+        {
+          "name": "/api/products/deals",
+          "duration": 183,
+          "transferSize": 352
+        },
+        {
+          "name": "/images/catalog/variety/macbook13-01.jpg",
+          "duration": 122,
+          "transferSize": 97407
+        },
+        {
+          "name": "/api/recommendations/popular",
+          "duration": 195,
+          "transferSize": 2027
+        }
+      ]
+    },
+    {
+      "url": "/products/aurora-studio-headphones",
+      "readyMs": 805,
+      "metrics": {
+        "lcpMs": 784,
+        "cls": 0.03940162037037037
+      },
+      "navigation": [
+        {
+          "name": "http://localhost:3212/products/aurora-studio-headphones",
+          "entryType": "navigation",
+          "startTime": 0,
+          "duration": 93,
+          "navigationId": 3720,
+          "initiatorType": "navigation",
+          "deliveryType": "",
+          "nextHopProtocol": "http/1.1",
+          "renderBlockingStatus": "non-blocking",
+          "contentType": "text/html",
+          "contentEncoding": "",
+          "workerStart": 0,
+          "workerRouterEvaluationStart": 0,
+          "workerCacheLookupStart": 0,
+          "workerMatchedSourceType": "",
+          "workerFinalSourceType": "",
+          "redirectStart": 0,
+          "redirectEnd": 0,
+          "fetchStart": 2.199999988079071,
+          "domainLookupStart": 2.199999988079071,
+          "domainLookupEnd": 2.199999988079071,
+          "connectStart": 2.199999988079071,
+          "secureConnectionStart": 0,
+          "connectEnd": 2.199999988079071,
+          "requestStart": 3.5,
+          "responseStart": 19.30000001192093,
+          "firstInterimResponseStart": 0,
+          "finalResponseHeadersStart": 19.30000001192093,
+          "responseEnd": 19.900000035762787,
+          "transferSize": 855,
+          "encodedBodySize": 555,
+          "decodedBodySize": 555,
+          "responseStatus": 200,
+          "serverTiming": [],
+          "unloadEventStart": 44.19999998807907,
+          "unloadEventEnd": 44.19999998807907,
+          "domInteractive": 60.60000002384186,
+          "domContentLoadedEventStart": 90.90000003576279,
+          "domContentLoadedEventEnd": 91,
+          "domComplete": 93,
+          "loadEventStart": 93,
+          "loadEventEnd": 93,
+          "type": "navigate",
+          "redirectCount": 0,
+          "activationStart": 0,
+          "criticalCHRestart": 0,
+          "notRestoredReasons": null,
+          "confidence": {
+            "randomizedTriggerRate": 0.4994798,
+            "value": "low"
+          }
+        }
+      ],
+      "paint": [
+        {
+          "name": "first-paint",
+          "entryType": "paint",
+          "startTime": 204,
+          "duration": 0,
+          "navigationId": 3720,
+          "paintTime": 174.69999998807907,
+          "presentationTime": 204
+        },
+        {
+          "name": "first-contentful-paint",
+          "entryType": "paint",
+          "startTime": 204,
+          "duration": 0,
+          "navigationId": 3720,
+          "paintTime": 174.69999998807907,
+          "presentationTime": 204
+        }
+      ],
+      "resources": [
+        {
+          "name": "/assets/index-0dydgAUr.js",
+          "duration": 17,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/index-FTMQnrJ_.css",
+          "duration": 27,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/ProductDetailPage-B4qLc-Zn.js",
+          "duration": 75,
+          "transferSize": 6598
+        },
+        {
+          "name": "/assets/Tabs-f3MgXauz.js",
+          "duration": 104,
+          "transferSize": 1607
+        },
+        {
+          "name": "/assets/Tabs-CuKUvtNG.css",
+          "duration": 119,
+          "transferSize": 1290
+        },
+        {
+          "name": "/assets/Select-LmRJiona.js",
+          "duration": 212,
+          "transferSize": 7981
+        },
+        {
+          "name": "/assets/chevron-down-BArEWcLC.js",
+          "duration": 200,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/check-C9ngA4VZ.js",
+          "duration": 211,
+          "transferSize": 593
+        },
+        {
+          "name": "/assets/Select-BCOYdxnP.css",
+          "duration": 133,
+          "transferSize": 1478
+        },
+        {
+          "name": "/assets/queries-Cn_R95ip.js",
+          "duration": 252,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/RecommendationRail-yHhRuT6b.js",
+          "duration": 253,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/RecommendationRail-m9ml_DRx.css",
+          "duration": 189,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/RecommendationSectionRail-Lw-Tca18.js",
+          "duration": 291,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/labels-iuuH4SC2.js",
+          "duration": 311,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/QuantitySelector-DrZlBSL9.js",
+          "duration": 351,
+          "transferSize": 1138
+        },
+        {
+          "name": "/assets/plus-u_FKPOE5.js",
+          "duration": 334,
+          "transferSize": 622
+        },
+        {
+          "name": "/assets/QuantitySelector-hvGVPdMI.css",
+          "duration": 206,
+          "transferSize": 784
+        },
+        {
+          "name": "/assets/ProductDetailPage-DJC8zlYy.css",
+          "duration": 225,
+          "transferSize": 2272
+        },
+        {
+          "name": "/api/store/profile",
+          "duration": 394,
+          "transferSize": 491
+        },
+        {
+          "name": "/api/categories",
+          "duration": 421,
+          "transferSize": 300
+        },
+        {
+          "name": "/api/auth/customer/refresh",
+          "duration": 268,
+          "transferSize": 333
+        },
+        {
+          "name": "/api/products/aurora-studio-headphones",
+          "duration": 152,
+          "transferSize": 1187
+        },
+        {
+          "name": "/api/products/aurora-studio-headphones/reviews",
+          "duration": 187,
+          "transferSize": 417
+        },
+        {
+          "name": "/api/products/aurora-studio-headphones/recommendations",
+          "duration": 165,
+          "transferSize": 2910
+        }
+      ]
+    },
+    {
+      "url": "/admin",
+      "readyMs": 1440,
+      "metrics": {
+        "lcpMs": 880,
+        "cls": 0.021647247942386833
+      },
+      "navigation": [
+        {
+          "name": "http://localhost:3212/admin",
+          "entryType": "navigation",
+          "startTime": 0,
+          "duration": 75.69999998807907,
+          "navigationId": 1624,
+          "initiatorType": "navigation",
+          "deliveryType": "",
+          "nextHopProtocol": "http/1.1",
+          "renderBlockingStatus": "non-blocking",
+          "contentType": "text/html",
+          "contentEncoding": "",
+          "workerStart": 0,
+          "workerRouterEvaluationStart": 0,
+          "workerCacheLookupStart": 0,
+          "workerMatchedSourceType": "",
+          "workerFinalSourceType": "",
+          "redirectStart": 0,
+          "redirectEnd": 0,
+          "fetchStart": 3,
+          "domainLookupStart": 3,
+          "domainLookupEnd": 3,
+          "connectStart": 3,
+          "secureConnectionStart": 0,
+          "connectEnd": 3,
+          "requestStart": 4.599999964237213,
+          "responseStart": 20.299999952316284,
+          "firstInterimResponseStart": 0,
+          "finalResponseHeadersStart": 20.299999952316284,
+          "responseEnd": 21.099999964237213,
+          "transferSize": 855,
+          "encodedBodySize": 555,
+          "decodedBodySize": 555,
+          "responseStatus": 200,
+          "serverTiming": [],
+          "unloadEventStart": 28.799999952316284,
+          "unloadEventEnd": 28.799999952316284,
+          "domInteractive": 45.89999997615814,
+          "domContentLoadedEventStart": 73.89999997615814,
+          "domContentLoadedEventEnd": 74,
+          "domComplete": 75.69999998807907,
+          "loadEventStart": 75.69999998807907,
+          "loadEventEnd": 75.69999998807907,
+          "type": "navigate",
+          "redirectCount": 0,
+          "activationStart": 0,
+          "criticalCHRestart": 0,
+          "notRestoredReasons": null,
+          "confidence": {
+            "randomizedTriggerRate": 0.4994798,
+            "value": "high"
+          }
+        }
+      ],
+      "paint": [
+        {
+          "name": "first-paint",
+          "entryType": "paint",
+          "startTime": 120,
+          "duration": 0,
+          "navigationId": 1624,
+          "paintTime": 98.79999995231628,
+          "presentationTime": 120
+        },
+        {
+          "name": "first-contentful-paint",
+          "entryType": "paint",
+          "startTime": 120,
+          "duration": 0,
+          "navigationId": 1624,
+          "paintTime": 98.79999995231628,
+          "presentationTime": 120
+        }
+      ],
+      "resources": [
+        {
+          "name": "/assets/index-0dydgAUr.js",
+          "duration": 17,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/index-FTMQnrJ_.css",
+          "duration": 22,
+          "transferSize": 300
+        },
+        {
+          "name": "/api/auth/admin/refresh",
+          "duration": 390,
+          "transferSize": 802
+        },
+        {
+          "name": "/api/auth/customer/refresh",
+          "duration": 104,
+          "transferSize": 333
+        },
+        {
+          "name": "/assets/AdminDashboardPage-Doz_Ui7-.js",
+          "duration": 63,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/DataTable-BPSUoVE5.js",
+          "duration": 66,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/arrow-up-BLcfKaXb.js",
+          "duration": 113,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/arrow-up-down-CgsWZ-Is.js",
+          "duration": 121,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/DataTable-Cr7Xfw7I.css",
+          "duration": 111,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/labels-Cyvlelen.js",
+          "duration": 127,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/chartColors-C8nCVqa5.js",
+          "duration": 138,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/dollar-sign-BV7duRk9.js",
+          "duration": 148,
+          "transferSize": 300
+        },
+        {
+          "name": "/api/admin/dashboard/alerts",
+          "duration": 391,
+          "transferSize": 438
+        },
+        {
+          "name": "/api/auth/customer/refresh",
+          "duration": 70,
+          "transferSize": 333
+        },
+        {
+          "name": "/api/admin/dashboard/overview",
+          "duration": 644,
+          "transferSize": 3801
+        }
+      ]
+    }
+  ]
+}

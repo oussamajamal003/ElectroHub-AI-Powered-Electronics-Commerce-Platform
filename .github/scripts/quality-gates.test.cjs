@@ -20,6 +20,6 @@ test('quality checks cannot silently become optional or publish/deploy images', 
   assert.match(ci, /npm run test:quality/);
   assert.match(ci, /frontend-budget\.mjs/);
   assert.match(ci, /payment-pg-disposable\.cjs --run/);
-  assert.match(ci, /quality_extra: '--project=mobile-chromium-320'/);
+  assert.match(ci, /quality_extra: '--project=mobile-chromium-320 --project=chromium-native-zoom'/);
   assert.match(ci, /quality_extra: '--project=tablet-firefox-1024'/);
 });

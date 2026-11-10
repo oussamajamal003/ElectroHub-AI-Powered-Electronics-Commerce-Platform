@@ -9,12 +9,17 @@ export default defineConfig({
   outputDir: './test-results/quality',
   workers: 1,
   retries: 0,
-  webServer: (Array.isArray(release.webServer) ? release.webServer : [release.webServer!]).map(server => ({ ...server, reuseExistingServer: false })),
+  webServer: (Array.isArray(release.webServer) ? release.webServer : [release.webServer!]).map(server => ({
+    ...server, reuseExistingServer: false,
+    ...(process.env.QUALITY_PRODUCTION === '1' && server.command.startsWith('npx vite ')
+      ? { command: server.command.replace('npx vite ', 'npx vite preview ') } : {}),
+  })),
   reporter: [['list'], ['html', { outputFolder: 'playwright-report/quality', open: 'never' }],
     ['json', { outputFile: 'test-results/quality/results.json' }]],
   projects: [
-    ...release.projects!,
+    ...release.projects!.map(project => ({ ...project, testIgnore: '**/native-zoom.quality.spec.ts' })),
     { name: 'mobile-chromium-320', grep: /@responsive/, use: { ...devices['Desktop Chrome'], viewport: { width: 320, height: 800 } } },
     { name: 'tablet-firefox-1024', grep: /@responsive/, use: { ...devices['Desktop Firefox'], viewport: { width: 1024, height: 768 } } },
+    { name: 'chromium-native-zoom', grep: /genuine Chromium/, use: { browserName: 'chromium', viewport: null } },
   ],
 });

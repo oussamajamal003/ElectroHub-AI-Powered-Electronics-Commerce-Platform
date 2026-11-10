@@ -26,8 +26,8 @@
     "audit": "npm audit --audit-level=high"
   },
   "engines": {
-    "node": "20.11.0",
-    "npm": "10.2.4"
+    "node": "22.19.0",
+    "npm": ">=10.9.3 <12"
   },
   "license": "MIT",
   "repository": {

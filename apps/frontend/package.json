@@ -11,7 +11,7 @@
     "build-storybook": "storybook build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "typecheck": "tsc -b",
+    "typecheck": "tsc -b && tsc -p tsconfig.quality.json",
     "test": "vitest run",
     "test:visual": "playwright test -c playwright.config.ts",
     "test:visual:admin-media-live-dev": "playwright test -c playwright.admin-media-live-dev.config.ts",

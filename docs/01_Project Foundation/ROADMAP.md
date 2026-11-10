@@ -702,6 +702,9 @@ Verify supported browsers and responsive layouts.
 
 ### 06.2 Accessibility Verification & Quality Assurance & CI/CD
 
+Implementation/evidence: [Task 06.2](../tasks/Phase-06/TASK_06.2_ACCESSIBILITY_QA_CI_CD.md).
+Status remains under verification; checklist completion requires exact-SHA CI and disposition of documented manual/provider gates.
+
 Verify:
 
 - Keyboard navigation

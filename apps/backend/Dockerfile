@@ -1,4 +1,4 @@
-FROM node:20.11.0-alpine AS builder
+FROM node:22.19.0-alpine AS builder
 RUN apk add --no-cache openssl
 
 WORKDIR /app
@@ -20,13 +20,14 @@ RUN DATABASE_URL=postgresql://unused:unused@localhost:5432/unused DIRECT_URL=pos
 RUN npm run build
 
 # Production image
-FROM node:20.11.0-alpine
+FROM node:22.19.0-alpine
 RUN apk add --no-cache openssl
 WORKDIR /app/apps/backend
 
 COPY --from=builder /app/package.json /app/
 COPY --from=builder /app/node_modules /app/node_modules
 COPY --from=builder /app/apps/backend/package.json ./
+COPY --from=builder /app/apps/backend/node_modules ./node_modules
 COPY --from=builder /app/apps/backend/dist ./dist
 COPY --from=builder /app/apps/backend/prisma ./prisma
 # Task 03.9: packaged PDF fonts (checksum-verified at worker start; resolved relative to dist/, never fetched at runtime).

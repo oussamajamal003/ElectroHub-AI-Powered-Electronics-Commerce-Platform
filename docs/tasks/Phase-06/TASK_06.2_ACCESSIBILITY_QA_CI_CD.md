@@ -25,7 +25,7 @@ Actual Stripe Elements, provider delivery, trained-model latency, assistive tech
 | Reduced motion | Existing MotionConfig and CSS reduce | Browser evidence missing | Media emulation and active-animation assertion | Pending final run |
 | Functional journeys | Existing release suite | Current task SHA unverified | Reuse 06.1 suite, injected search outage/empty states | Pending final run |
 | Responsive | Existing six release projects | 320 and 1024 coverage missing | Quality projects at all six required widths | Pending final run |
-| Native zoom | Actual browser 100% / 200% | Desktop helper cannot initialize / environment | Both node/sky and CUA fail writing kernel assets; viewport tests are separate | NOT VERIFIED |
+| Native zoom | Actual browser 100% / 200% | Desktop helper cannot initialize / environment | Resolved with actual Chromium tabs.setZoom/getZoom in temporary profile; see native-zoom.json | VERIFIED locally |
 | Cross-browser | Chromium, Firefox, WebKit | Current task SHA unverified | Real browser engines in CI and local | Pending final run |
 | Performance | Lazy routes, paginated APIs | No repeatable measurements/budget | Bundle gzip guard, route/resource/API read samples | Pending final run |
 | CI tests | Existing unit/API and release jobs | Optional frontend tests; payment PG silently gated | Mandatory test command; dedicated disposable payment job | Pending remote run |
@@ -64,6 +64,49 @@ PR/push → lint + types + unit/API tests + disposable payment integration + rel
 and gzip budget + three Docker builds/smokes → `Required / Quality Gate` → independent review.
 No image publication, deployment or shared database writes occur in ordinary CI. Security Audit is a separate workflow/check.
 Configure branch protection to require the aggregate gate and security checks; workflow code cannot itself prove repository settings.
+
+Current refinements: all CI jobs check out the exact PR head; Node 22.19.0 matches existing dependency engine requirements.
+PROD migrations changed to manual-only with mandatory reviewed SHA and develop-only dispatch guard; no PROD workflow ran.
+`playwright.quality.config.ts` supports `QUALITY_PRODUCTION=1`; CI builds the optimized app before these checks.
+The dedicated native-zoom project uses no device emulation. Drawer now shares Dialog's controlled-opener focus restoration.
+SearchSelect announces required selection in its accessible label without invalid `aria-required` on a button.
+
+## Recorded local evidence (2026-11-10)
+
+- Full frontend Vitest: **1411/1411**, 171 files, before the later Drawer/SearchSelect regressions were added.
+- Drawer/Dialog/SearchSelect targeted regression: **7/7**; Input/Select **12/12**.
+- Workflow safety/gate tests: **28/28**; backend/frontend typecheck, lint and application builds passed before later QA expansion.
+- AI ruff/format checks pass; local pytest completed successfully with one explicit skip (same suite as 06.1).
+- Initial full browser quality run: **24 passed, 2 failed, 2 skipped**. Both failures were WebKit's skip-link Tab sequence;
+  explicit tabIndex=0 was then proved in WebKit and applied. Final all-project re-run remains required.
+- Optimized Chromium expanded run: **7 passed / 1 failed**; native zoom passed. The one failure was SearchSelect's unsupported ARIA,
+  corrected afterwards with a regression test. Expanded final admin/browser checks remain required.
+- Actual native Chromium **153.0.8010.12**, headless persistent profile, `chrome.tabs.setZoom`/`getZoom`:
+  **1 → 2**, inner viewport **1422×904 → 711×452**, devicePixelRatio **1 → 2**. Customer home/detail/cart/auth and
+  admin dashboard/products/settings/navigation exercised. No viewport substitution, CSS zoom or scale-factor emulation.
+- Optimized local route samples: Home LCP **1036 ms**, CLS **0**; product **784 ms**, **0.0394**; admin **880 ms**, **0.0216**.
+  One navigation sample per route, five real read API samples per operation; loopback and unthrottled, diagnostic only.
+- API samples (ms): listing **165,82,68,65,64**; search **79,54,53,62,50**; popular recommendations **39,41,40,37,38**.
+
+Raw safe measurements: [performance.json](evidence/task06.2/performance.json), [native-zoom.json](evidence/task06.2/native-zoom.json).
+Native API documentation: [Chrome tabs.setZoom](https://developer.chrome.com/docs/extensions/reference/api/tabs#method-setZoom);
+temporary extension workflow: [Playwright](https://playwright.dev/docs/chrome-extensions).
+
+## CI history and known limits
+
+PR: https://github.com/oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerce-Platform/pull/51 (draft).
+Run **42846546724**, head **3a1de19**: backend tests, frontend tests, types/lint/builds, AI tests/Docker, frontend Docker,
+payment PostgreSQL, policy, Chromium and WebKit jobs passed. Firefox quality scans caught transient reveal contrast;
+the scan now waits for finite animations. Backend Docker smoke caught missing workspace Prisma dependencies;
+the runtime copy is corrected. Aggregate gate correctly failed on these failures. This is not final-SHA success evidence.
+
+Local Docker attempt sent a 117 MB filtered context and installed locked dependencies, but was stopped when the workstation
+ran low on disk; image validation uses actual remote CI results. User-authorized npm caches and stopped disposable caches were
+cleaned; Git worktrees, source and trained-model artifacts were preserved. Some older cache paths were locked and retained.
+
+Actual NVDA/VoiceOver, physical Safari/iOS, supervised Stripe Elements/Test Mode purchase, external email delivery and trained-model
+timing remain separate manual/provider acceptance. Current browser stack has no provider credentials. Existing 06.1 tests cover
+provider-unavailable checkout and AI fallback; they do not certify provider success. No database schema or API contract changed.
 
 Completion requires exact-SHA CI and browser evidence, documented performance results, reviewed screenshots, no unresolved material defect,
 task-scoped commits/push and a PR into `develop`. Remaining manual/external gates must be explicit, never silently marked passed.

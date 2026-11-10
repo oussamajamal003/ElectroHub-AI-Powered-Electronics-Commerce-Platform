@@ -1,42 +1,50 @@
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
+import { Dialog } from '../Dialog/Dialog';
+import { useDialogCloseAutoFocus } from '../Dialog/dialogFocus';
 import { X } from 'lucide-react';
 import clsx from 'clsx';
 import styles from './Drawer.module.scss';
 
-export const Drawer = DialogPrimitive.Root;
+export const Drawer = Dialog;
 export const DrawerTrigger = DialogPrimitive.Trigger;
 export const DrawerPortal = DialogPrimitive.Portal;
 
 export const DrawerOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
->(({ className, ...props }, ref) => (
+>(({ className, ...props }, ref) => {
+  const reducedMotion = useReducedMotion();
+  return (
   <DialogPrimitive.Overlay asChild ref={ref} {...props}>
     <motion.div
-      initial={{ opacity: 0 }}
+      initial={reducedMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: reducedMotion ? 0 : 0.2 }}
       className={clsx(styles.overlay, className)}
     />
   </DialogPrimitive.Overlay>
-));
+  );
+});
 DrawerOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 export const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ children, className, ...props }, ref) => (
+>(({ children, className, onCloseAutoFocus, ...props }, ref) => {
+  const closeAutoFocus = useDialogCloseAutoFocus(onCloseAutoFocus);
+  const reducedMotion = useReducedMotion();
+  return (
   <DrawerPortal>
     <DrawerOverlay />
-    <DialogPrimitive.Content asChild ref={ref} {...props}>
+    <DialogPrimitive.Content asChild ref={ref} {...props} onCloseAutoFocus={closeAutoFocus}>
       <motion.div
-        initial={{ x: '100%' }}
+        initial={reducedMotion ? false : { x: '100%' }}
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
-        transition={{ duration: 0.3, ease: 'circOut' }}
+        transition={{ duration: reducedMotion ? 0 : 0.3, ease: 'circOut' }}
         className={clsx(styles.content, className)}
       >
         {children}
@@ -46,7 +54,8 @@ export const DrawerContent = React.forwardRef<
       </motion.div>
     </DialogPrimitive.Content>
   </DrawerPortal>
-));
+  );
+});
 DrawerContent.displayName = DialogPrimitive.Content.displayName;
 
 export const DrawerTitle = React.forwardRef<

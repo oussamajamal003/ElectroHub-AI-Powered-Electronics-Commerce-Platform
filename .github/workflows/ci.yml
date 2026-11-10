@@ -32,7 +32,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.11.0'
+          node-version: '22.19.0'
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
@@ -49,7 +49,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.11.0'
+          node-version: '22.19.0'
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
@@ -67,7 +67,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.11.0'
+          node-version: '22.19.0'
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
@@ -84,7 +84,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.11.0'
+          node-version: '22.19.0'
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
@@ -103,7 +103,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.11.0'
+          node-version: '22.19.0'
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
@@ -125,7 +125,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.11.0'
+          node-version: '22.19.0'
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
@@ -142,7 +142,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.11.0'
+          node-version: '22.19.0'
       - name: Policy self-tests
         run: node --test .github/scripts/*.test.cjs
       - name: Check workflows cannot deploy migrations or use shared-database credentials
@@ -160,7 +160,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { engine: chromium, label: Chromium, projects: '--project=chromium-desktop --project=tablet-chromium-768', quality_extra: '--project=mobile-chromium-320' }
+          - { engine: chromium, label: Chromium, projects: '--project=chromium-desktop --project=tablet-chromium-768', quality_extra: '--project=mobile-chromium-320 --project=chromium-native-zoom' }
           - { engine: firefox, label: Firefox, projects: '--project=firefox-desktop --project=wide-firefox-1920', quality_extra: '--project=tablet-firefox-1024' }
           - { engine: webkit, label: WebKit, projects: '--project=webkit-desktop --project=mobile-webkit-390', quality_extra: '' }
     steps:
@@ -170,7 +170,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.11.0'
+          node-version: '22.19.0'
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
@@ -194,12 +194,15 @@ jobs:
       - name: Release suite (${{ matrix.label }} projects)
         working-directory: apps/frontend
         run: npm run test:release -- ${{ matrix.projects }}
+      - name: Build optimized frontend for quality QA
+        run: npm run build --workspace=@electrohub/frontend
       - name: Accessibility, keyboard and responsive QA
         working-directory: apps/frontend
         # A separate stack prevents state or server reuse across suites. No shared credentials.
         env:
           RELEASE_E2E_API_PORT: '5212'
           RELEASE_E2E_FRONTEND_PORT: '3212'
+          QUALITY_PRODUCTION: '1'
         run: npm run test:quality -- ${{ matrix.projects }} ${{ matrix.quality_extra }}
       - name: Upload release report
         if: ${{ !cancelled() }}
@@ -226,7 +229,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.11.0'
+          node-version: '22.19.0'
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
@@ -275,7 +278,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.11.0'
+          node-version: '22.19.0'
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
@@ -395,7 +398,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
-          node-version: '20.11.0'
+          node-version: '22.19.0'
           cache: npm
       - run: npm ci
       - uses: ./.github/actions/disposable-postgres

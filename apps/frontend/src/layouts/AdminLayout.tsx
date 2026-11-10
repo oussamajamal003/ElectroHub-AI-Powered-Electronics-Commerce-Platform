@@ -159,7 +159,7 @@ export function AdminLayout() {
 
   return <AdminToastProvider>
     <div className={clsx(styles.shell, collapsed && styles.shellCollapsed)}>
-      <a href="#admin-main" className={styles.skipLink}>Skip to content</a>
+      <a href="#admin-main" tabIndex={0} className={styles.skipLink}>Skip to content</a>
       <header className={styles.header} data-admin-header>
         <div className={styles.headerStart}>
           <button type="button" className={clsx(styles.iconButton, styles.menuButton)} onClick={() => setDrawerOpen(true)}
