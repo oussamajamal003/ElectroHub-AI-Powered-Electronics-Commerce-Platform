@@ -1,3 +1,4 @@
+import { useDocumentTitle } from '@/lib/pageTitle';
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Fingerprint, KeyRound, Smartphone } from 'lucide-react';
@@ -39,6 +40,7 @@ const formatRemaining = (ms: number) => {
 };
 
 export function AdminLoginPage() {
+  useDocumentTitle('Admin Login');
   const { login, logout, completeAdminSession, isAuthenticated, user, isInitializing } = useAdminAuth();
   const navigate = useNavigate();
   const location = useLocation();

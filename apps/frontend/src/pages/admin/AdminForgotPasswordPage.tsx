@@ -1,3 +1,4 @@
+import { useDocumentTitle } from '@/lib/pageTitle';
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Fingerprint, KeyRound, Smartphone } from 'lucide-react';
@@ -40,6 +41,7 @@ const formatRemaining = (ms: number) => {
  * the recovery and reset authorizations live only in component state, and the journey ends back at the normal sign-in (password + MFA).
  */
 export function AdminForgotPasswordPage() {
+  useDocumentTitle('Reset Admin Password');
   const navigate = useNavigate();
   const { completeAdminSession } = useAdminAuth();
   const [stage, setStage] = useState<Stage>({ name: 'email' });

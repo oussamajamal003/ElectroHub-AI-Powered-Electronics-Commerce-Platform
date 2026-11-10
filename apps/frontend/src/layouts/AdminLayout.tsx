@@ -14,6 +14,7 @@ import { AdminToastProvider, ConfirmDialog } from '@/features/admin/shared/Admin
 import { formatCount, initials } from '@/features/admin/shared/format';
 import styles from './AdminLayout.module.scss';
 import { usePageTitle } from './usePageTitle';
+import { BRAND_TITLE } from '@/lib/pageTitle';
 
 function readCollapsed() {
   try { return window.localStorage.getItem(SIDEBAR_PREFERENCE_KEY) === '1'; } catch { return false; }
@@ -64,12 +65,14 @@ function AlertsMenu() {
   ] : [];
   const label = data ? (attention ? `Alerts: ${attention} items need attention` : 'Alerts: nothing needs attention') : 'Alerts';
   return <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <button type="button" className={styles.iconButton} aria-label={label}>
-        <Bell aria-hidden="true" />
-        {attention > 0 && <span className={styles.badge} aria-hidden="true">{attention > 99 ? '99+' : attention}</span>}
-      </button>
-    </DropdownMenuTrigger>
+    <Tooltip content="Operational alerts">
+      <DropdownMenuTrigger asChild>
+        <button type="button" className={styles.iconButton} aria-label={label}>
+          <Bell aria-hidden="true" />
+          {attention > 0 && <span className={styles.badge} aria-hidden="true">{attention > 99 ? '99+' : attention}</span>}
+        </button>
+      </DropdownMenuTrigger>
+    </Tooltip>
     <DropdownMenuContent align="end" sideOffset={8} className={`${styles.menu} ${styles.animatedMenu}`}>
       <DropdownMenuLabel className={styles.menuLabel}>Operational alerts</DropdownMenuLabel>
       <DropdownMenuSeparator />
@@ -140,7 +143,7 @@ function ProfileMenu() {
 }
 
 export function AdminLayout() {
-  usePageTitle('admin-main', 'ElectroHub Admin');
+  usePageTitle('admin-main', BRAND_TITLE, 'Admin');
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -164,10 +167,12 @@ export function AdminLayout() {
       <a href="#admin-main" tabIndex={0} className={styles.skipLink}>Skip to content</a>
       <header className={styles.header} data-admin-header>
         <div className={styles.headerStart}>
+          <Tooltip content="Open navigation menu">
           <button type="button" className={clsx(styles.iconButton, styles.menuButton)} onClick={() => setDrawerOpen(true)}
             aria-label="Open navigation" aria-expanded={drawerOpen} aria-controls="admin-drawer">
             <Menu aria-hidden="true" />
           </button>
+          </Tooltip>
           <Link to="/admin" className={styles.brand} aria-label="ElectroHub admin — Dashboard">
             <BrandLogo />
             <span className={styles.adminPill}>Admin</span>

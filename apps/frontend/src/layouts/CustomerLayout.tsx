@@ -12,12 +12,13 @@ import { ShopFooterLinks } from './ShopFooterLinks';
 import { useStorefrontSession } from '@/features/analytics/useStorefrontSession';
 import { useStorefrontProfile } from '@/features/storefront/api';
 import { usePageTitle } from './usePageTitle';
+import { brandTitle } from '@/lib/pageTitle';
 
 export function CustomerLayout() {
   const { isLocked } = usePaymentLock();
   const { data: storeProfile } = useStorefrontProfile();
   useStorefrontSession();
-  usePageTitle('customer-main', storeProfile?.storeName ?? 'ElectroHub');
+  usePageTitle('customer-main', brandTitle(storeProfile?.storeName));
 
   return (
     <DiscoveryProvider disabled={isLocked}>
