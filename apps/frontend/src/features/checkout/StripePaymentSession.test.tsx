@@ -2,6 +2,7 @@ import { createRef, useEffect, useRef } from 'react';
 import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StripePaymentSession, type PaymentEntryActions } from './StripePaymentSession';
+import { ThemeProvider, useTheme } from '@/features/theme';
 const provider = vi.hoisted(() => ({ submit: vi.fn(), confirm: vi.fn(), mount: vi.fn(), unmount: vi.fn(), options: vi.fn(), elements: vi.fn(),
   ready: true, loadError: false, readyEvent: null as (() => void) | null }));
 vi.mock('@stripe/stripe-js', () => ({ loadStripe: vi.fn().mockResolvedValue({}) }));
@@ -168,4 +169,26 @@ it('binds redirect-required verification to the exact saved purchase status URL'
     return_url: `${window.location.origin}/account/payment-status/attempt-a` }, redirect: 'if_required' }));
   expect(screen.getByRole('button', { name: 'Pay USD 199.00' })).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Review Order' })).not.toBeInTheDocument();
+});
+
+it('follows the app theme through Elements options without remounting the secure entry (dark-mode task)', () => {
+    window.localStorage.setItem('electrohub:theme', 'light');
+    document.documentElement.removeAttribute('data-theme');
+    let switchTheme: (theme: 'light' | 'dark') => void = () => undefined;
+    function Switcher() { switchTheme = useTheme().setTheme; return null; }
+    const view = render(<ThemeProvider><Switcher /><StripePaymentSession {...props()} /></ThemeProvider>);
+    const lastOptions = () => provider.elements.mock.calls.at(-1)![0] as { clientSecret: string; appearance: { theme: string; variables: Record<string, string> } };
+    expect(lastOptions().appearance.theme).toBe('stripe');
+    expect(lastOptions().appearance.variables).toEqual({ colorPrimary: '#2563EB', fontFamily: 'Poppins, sans-serif', borderRadius: '0px' });
+    act(() => switchTheme('dark'));
+    expect(lastOptions().clientSecret).toBe('pi_unit_secret_unit');
+    expect(lastOptions().appearance.theme).toBe('night');
+    expect(lastOptions().appearance.variables.colorBackground).toBe('#111A2D');
+    act(() => switchTheme('light'));
+    expect(lastOptions().appearance.theme).toBe('stripe');
+    expect(provider.mount).toHaveBeenCalledTimes(1);
+    expect(provider.unmount).not.toHaveBeenCalled();
+    view.unmount();
+    window.localStorage.removeItem('electrohub:theme');
+    document.documentElement.removeAttribute('data-theme');
 });
