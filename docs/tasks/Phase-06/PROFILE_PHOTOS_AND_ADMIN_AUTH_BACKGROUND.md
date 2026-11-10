@@ -24,6 +24,7 @@ Figma Design was inspected for the Admin Login frame (`175:3184`) and customer P
 ## Security and lifecycle
 
 - A profile path is checked against the authenticated user ID and role before it is read or deleted.
+- Private photo reads in the frontend stay disabled until the role-specific authentication context verifies the current session; cached identity hints during session restoration cannot trigger a photo request.
 - Upload uses server-generated UUID paths and no upsert; the stored image bytes are re-encoded before reaching Storage.
 - Concurrent replacements use an optimistic database condition on the prior path and clean up their losing newly uploaded object.
 - If cleanup of the replaced image fails, the previous private object can remain orphaned. The user association still points only to the new photo; cleanup failure is logged without exposing credentials or image bytes.

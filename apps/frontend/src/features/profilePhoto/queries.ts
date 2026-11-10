@@ -4,11 +4,13 @@ import { profilePhotoApi, type ProfilePhotoScope } from './api';
 export const profilePhotoKey = (scope: ProfilePhotoScope, userId: string) => ['profile-photo', scope, userId] as const;
 const SIGNED_URL_REFRESH_MS = 18 * 60 * 1000;
 
-export function useProfilePhoto(scope: ProfilePhotoScope, userId: string | undefined) {
+export function useProfilePhoto(scope: ProfilePhotoScope, userId: string | undefined, sessionVerified: boolean) {
   return useQuery({
     queryKey: profilePhotoKey(scope, userId ?? 'signed-out'),
     queryFn: ({ signal }) => profilePhotoApi.get(scope, signal),
-    enabled: Boolean(userId),
+    // Cached identities can be present while AuthContext is still restoring a session.
+    // Do not request a private customer/admin resource until the matching session is verified.
+    enabled: Boolean(userId) && sessionVerified,
     staleTime: SIGNED_URL_REFRESH_MS,
     refetchInterval: query => query.state.data?.url ? SIGNED_URL_REFRESH_MS : false,
     retry: 1,

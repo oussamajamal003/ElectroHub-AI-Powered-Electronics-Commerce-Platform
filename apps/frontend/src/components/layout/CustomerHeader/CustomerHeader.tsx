@@ -50,12 +50,12 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
   const cartCountUnresolved = countOverride === undefined && !cartData;
   const wishlistCountUnresolved = wishlistOverride === undefined && wishlist?.isLoading && !wishlist.data;
   const [authReturnTo, setAuthReturnTo] = useState<CustomerReturnPath | undefined>();
-  const { user, rememberedUser, isAuthenticated, isInitializing } = useAuth();
+  const { user, rememberedUser, isAuthenticated, isInitializing, isSessionVerified } = useAuth();
   const headerUser = isInitializing ? rememberedUser : user;
   const showAuthenticatedHeader = isInitializing ? Boolean(rememberedUser) : isAuthenticated;
   // Only the verified session decides the role; the remembered header identity carries none, so nothing privileged is inferred while initializing.
   const isAdmin = !isInitializing && user?.role === 'ADMIN';
-  const profilePhoto = useProfilePhoto(isAdmin ? 'admin' : 'customer', user?.id);
+  const profilePhoto = useProfilePhoto(isAdmin ? 'admin' : 'customer', user?.id, isSessionVerified);
   const navigate = useNavigate();
 
   // Auth modals

@@ -91,8 +91,8 @@ function AlertsMenu() {
 
 /** Avatar-only trigger; the name, email and actions live in the menu. Sign out asks first, then uses the existing AuthContext logout. */
 function ProfileMenu() {
-  const { user, logout } = useAdminAuth();
-  const profilePhoto = useProfilePhoto('admin', user?.id);
+  const { user, logout, isSessionVerified } = useAdminAuth();
+  const profilePhoto = useProfilePhoto('admin', user?.id, isSessionVerified);
   const [confirming, setConfirming] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const name = user ? `${user.firstName} ${user.lastName}`.trim() : '';
