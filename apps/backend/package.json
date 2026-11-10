@@ -14,6 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:logging": "node scripts/logging-safe-tests.cjs",
+    "test:release:db": "node scripts/release-e2e-db.cjs",
+    "test:release:stack": "node scripts/release-e2e-stack.cjs",
     "payment:worker": "tsx src/bootstrap.ts --payment-worker",
     "email:worker": "tsx src/bootstrap.ts --commerce-email-worker",
     "email:pg": "node scripts/commerce-email-pg.cjs",

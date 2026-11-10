@@ -133,6 +133,41 @@ jobs:
       - name: Check workflows cannot deploy migrations or use shared-database credentials
         run: node .github/scripts/check-workflow-policy.cjs
 
+  release-e2e:
+    name: Release E2E / Chromium, Firefox, WebKit
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Task 06.1 release-critical journeys against the real backend and a disposable PostgreSQL. The stack runs hermetically
+    # (ELECTROHUB_ENV_FILES=none, NODE_ENV=test, per-run random secrets): no Stripe, Brevo, AI or shared-database credential exists here.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.11.0'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Start disposable PostgreSQL
+        uses: ./.github/actions/disposable-postgres
+      - name: Generate Prisma Client
+        run: npm run prisma:generate --workspace=@electrohub/backend
+      - name: Install Playwright browsers
+        working-directory: apps/frontend
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Release suite (6 projects)
+        working-directory: apps/frontend
+        run: npm run test:release
+      - name: Upload release report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-e2e-report
+          path: |
+            apps/frontend/playwright-report/release
+            apps/frontend/test-results/release
+          retention-days: 14
+
   backend-test:
     name: Backend / Test
     runs-on: ubuntu-latest
