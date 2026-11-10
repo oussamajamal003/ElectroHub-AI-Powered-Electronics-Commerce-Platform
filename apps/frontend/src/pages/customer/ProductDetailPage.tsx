@@ -1,3 +1,4 @@
+import { toast } from '@/components/ui/Toast';
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate, useParams, useNavigationType } from 'react-router-dom';
@@ -131,10 +132,13 @@ export function ProductDetailPage() {
     try {
       await addItem(product.id, cartQuantity);
       setCartFeedback(`${product.name} added to cart.`);
+      toast.success('Added to cart', { description: product.name, announce: false });
     } catch (error) {
-      setCartFeedback(error instanceof ApiError && error.code === 'CART_STOCK_CONFLICT' || error instanceof Error && /^Only \d+ items? (?:is|are) currently available\.$/.test(error.message)
+      const message = (error instanceof ApiError && error.code === 'CART_STOCK_CONFLICT' || error instanceof Error && /^Only \d+ items? (?:is|are) currently available\.$/.test(error.message)
         ? error.message : error instanceof Error && error.message === SESSION_CHECK_MESSAGE ? 'We could not confirm your sign-in. Please try again.'
           : 'Could not add this product. Check availability and try again.');
+      setCartFeedback(message);
+      toast.error('Couldn\'t add to cart', { description: message, announce: false });
     } finally { cartAction.current = false; setCartPending(false); }
   };
   // Buy Now purchases only this product/quantity through a server-owned BUY_NOW scope; the persistent Cart is never read or changed.

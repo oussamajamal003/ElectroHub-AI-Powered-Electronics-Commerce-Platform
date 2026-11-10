@@ -1,3 +1,4 @@
+import { toast } from '@/components/ui/Toast';
 import { useState, type FormEvent } from 'react';
 import { Mail, MapPin, Phone } from 'lucide-react';
 import { SectionReveal, StaggerContainer, StaggerItem } from '@/components/motion/Motion';
@@ -17,7 +18,7 @@ export function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
   const profileQuery = useStorefrontProfile();
   const { data: profile } = profileQuery;
-  const contact = useMutation({ mutationFn: sendContactMessage });
+  const contact = useMutation({ mutationFn: sendContactMessage, meta: { action: 'send your message' } });
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -28,7 +29,7 @@ export function ContactPage() {
     if (values.Email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.Email.trim())) nextErrors.Email = 'Enter a valid email address.';
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
-    try { await contact.mutateAsync({ name: values.Name.trim(), email: values.Email.trim(), subject: values.Subject.trim(), message: values.Message.trim() }); setSubmitted(true); }
+    try { await contact.mutateAsync({ name: values.Name.trim(), email: values.Email.trim(), subject: values.Subject.trim(), message: values.Message.trim() }); setSubmitted(true); toast.success('Message sent', { description: 'We\'ll get back to you soon.', announce: false }); }
     catch { setSubmitted(false); }
   }
 

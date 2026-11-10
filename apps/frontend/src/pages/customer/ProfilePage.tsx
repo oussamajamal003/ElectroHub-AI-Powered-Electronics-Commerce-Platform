@@ -1,3 +1,4 @@
+import { toast, toastError } from '@/components/ui/Toast';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/features/auth/context/AuthContext';
@@ -76,6 +77,7 @@ export function ProfilePage() {
           : 'A verification code was requested for the new address. Your current verified email remains active until you enter the code.');
       } else {
         setSuccess('Profile updated successfully.');
+        toast.success('Profile updated', { announce: false });
       }
     } catch (err: unknown) {
       if (err instanceof ApiError) {
@@ -83,6 +85,7 @@ export function ProfilePage() {
       } else {
         setError('Failed to update profile. Please try again later.');
       }
+      toastError(err, 'update your profile', { announce: false, preferServerMessage: true });
     } finally {
       setIsLoading(false);
     }
@@ -189,8 +192,10 @@ export function ProfilePage() {
                   setPendingEmail('');
                   setFormData((current) => ({ ...current, email: pendingEmail }));
                   setSuccess('Email changed successfully.');
+                  toast.success('Email address changed', { announce: false });
                 } catch (verifyError) {
                   setError(verifyError instanceof ApiError ? verifyError.message : 'Unable to verify this email. Please try again.');
+                  toast.error('Email not verified', { description: verifyError instanceof ApiError ? verifyError.message : 'Unable to verify this email. Please try again.', announce: false });
                 } finally {
                   setIsLoading(false);
                 }
@@ -201,6 +206,7 @@ export function ProfilePage() {
                 try {
                   const result = await authApi.resendEmailChange();
                   setResendAvailableAt(new Date(result.resendAvailableAt).getTime());
+                  toast.info('Verification code sent', { description: 'Check your inbox for the new code.', announce: false });
                 } catch (resendError) {
                   setError(resendError instanceof ApiError ? resendError.message : 'Unable to resend the code. Please try again.');
                 } finally {
@@ -279,6 +285,7 @@ function PasswordChangeForm() {
       const { authApi } = await import('@/features/auth/api/auth');
       await authApi.changePassword({ currentPassword, newPassword });
       setSuccess('Password changed successfully.');
+      toast.success('Password changed', { announce: false });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -290,6 +297,7 @@ function PasswordChangeForm() {
       } else {
         setError('Failed to change password. Please try again.');
       }
+      toastError(err, 'change your password', { announce: false, preferServerMessage: true });
     } finally {
       setIsLoading(false);
     }

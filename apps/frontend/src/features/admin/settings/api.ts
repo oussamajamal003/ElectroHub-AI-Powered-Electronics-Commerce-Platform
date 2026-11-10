@@ -125,7 +125,7 @@ export function useShippingPreview(subtotal: string | null) {
 
 export function useUpdateStoreSettings() {
   const client = useQueryClient();
-  return useMutation({
+  return useMutation({ meta: { action: "save the store settings" },
     mutationFn: (body: StoreProfileInput) => adminSettingsApi.updateStore(body),
     onSuccess: profile => {
       client.setQueryData(adminSettingsKeys.store, profile);
@@ -138,7 +138,7 @@ export function useUpdateStoreSettings() {
 
 export function useUpdateShippingSettings() {
   const client = useQueryClient();
-  return useMutation({
+  return useMutation({ meta: { action: "save the shipping settings" },
     mutationFn: (body: ShippingUpdateInput) => adminSettingsApi.updateShipping(body),
     onSuccess: view => {
       client.setQueryData(adminSettingsKeys.shipping, view);
@@ -150,7 +150,7 @@ export function useUpdateShippingSettings() {
 
 export function useUpdateNotificationPreferences() {
   const client = useQueryClient();
-  return useMutation({
+  return useMutation({ meta: { action: "save the notification preferences" },
     mutationFn: (body: NotificationPreferencesInput) => adminSettingsApi.updatePreferences(body),
     onSuccess: prefs => client.setQueryData(adminSettingsKeys.preferences, prefs),
   });

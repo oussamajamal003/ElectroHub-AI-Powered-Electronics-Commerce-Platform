@@ -1,3 +1,4 @@
+import { toast } from '@/components/ui/Toast';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
@@ -162,6 +163,8 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
           if (identityRef.current !== owner || epochRef.current !== epoch) break;
           writeAuthenticatedWishlistCount(owner, result.data.totalItems);
           client.setQueryData(queryKeys.wishlist.current(owner), result);
+          // Confirmed by the server, and only if the shopper has not flipped it again since.
+          if (intentRef.current[productId]?.version === intent.version) toast.success(intent.saved ? 'Added to wishlist' : 'Removed from wishlist', { announce: false });
         } catch {
           if (identityRef.current === owner && epochRef.current === epoch && intentRef.current[productId]?.version === intent.version) {
             // A hard refresh can abort the browser request after the server has
@@ -183,6 +186,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
                 if (optimisticCount !== undefined) writeAuthenticatedWishlistCount(owner, Math.max(0, optimisticCount + (intent.saved ? -1 : 1)));
               }
               setError('Wishlist could not be updated. Your previous saved state was restored. Please retry.');
+              toast.error('Wishlist not updated', { description: 'Your previous saved state was restored. Please retry.', announce: false });
             }
           }
         }
@@ -208,10 +212,11 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
     const intendedIds = new Set(currentIds);
     for (const [id, intent] of Object.entries(intentRef.current)) { if (intent.saved) intendedIds.add(id); else intendedIds.delete(id); }
     const count = intendedIds.size;
-    if (!currentlySaved && count >= MAX_WISHLIST_ITEMS) { setError('You can save up to 50 products.'); return; }
+    if (!currentlySaved && count >= MAX_WISHLIST_ITEMS) { setError('You can save up to 50 products.'); toast.warning('Wishlist is full', { description: 'You can save up to 50 products.', announce: false }); return; }
     if (!identity) {
       const next = currentlySaved ? currentIds.filter(id => id !== productId) : [...currentIds, productId];
-      if (!writeWishlist(next)) { setError('Your browser could not save this wishlist. Please try again.'); return; }
+      if (!writeWishlist(next)) { setError('Your browser could not save this wishlist. Please try again.'); toast.error('Wishlist not updated', { description: 'Your browser could not save this wishlist. Please try again.', announce: false }); return; }
+      toast.success(currentlySaved ? 'Removed from wishlist' : 'Added to wishlist', { announce: false });
       guestRef.current = next;
       setGuestIds(next);
       if (product) setOptimisticProducts(current => ({ scope, items: { ...(current.scope === scope ? current.items : {}), [productId]: { productId, product, availability: product.availability === 'AVAILABLE' ? 'AVAILABLE' : 'OUT_OF_STOCK' } } }));
@@ -222,6 +227,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
       // request, so a hard refresh cannot resurrect the pre-click skeleton count.
       if (!writeAuthenticatedWishlistCount(identity, count + (saved ? 1 : -1))) {
         setError('Your browser could not save this wishlist state. Please try again.');
+        toast.error('Wishlist not updated', { description: 'Your browser could not save this wishlist state. Please try again.', announce: false });
         return;
       }
       pendingAuthenticatedMutationOwners.add(identity);

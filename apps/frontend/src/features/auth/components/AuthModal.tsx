@@ -1,3 +1,4 @@
+import { toast } from '@/components/ui/Toast';
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -316,6 +317,7 @@ export function AuthModal({
       }
       onAuthenticated?.();
       onOpenChange(false);
+      toast.success('Signed in successfully');
       setLoginEmail('');
       setLoginPassword('');
       navigate(from, { replace: true });
@@ -454,6 +456,7 @@ export function AuthModal({
           confirmPassword: '',
         });
         onOpenChange(false);
+        toast.success('Account created', { description: 'Welcome to ElectroHub!' });
         navigate(from, { replace: true });
       }
     } catch (err: unknown) {
@@ -476,6 +479,7 @@ export function AuthModal({
       await verifyEmail({ email: targetEmail, code });
       onAuthenticated?.();
       onOpenChange(false);
+      toast.success('Email verified', { description: 'Your account is ready.' });
       navigate(from, { replace: true });
     } catch (err) {
       setVerifyError(normalizeErrorMessage(err));
@@ -490,6 +494,7 @@ export function AuthModal({
     setVerifyError('');
     try {
       const result = await authApi.resendVerification({ email: targetEmail });
+      toast.info('Verification code sent', { description: 'Check your inbox for a new code.', announce: false });
       setVerifyCode('');
       setResendAvailableAt(new Date(result.resendAvailableAt).getTime());
       setResendVersion((version) => version + 1);
@@ -621,6 +626,7 @@ export function AuthModal({
     setResetError('');
     try {
       const result = await authApi.resendPasswordReset({ email: targetEmail });
+      toast.info('Reset code sent', { description: 'If the account exists, a new code is on its way.', announce: false });
       setResendAvailableAt(new Date(result.resendAvailableAt).getTime());
       setResendVersion((version) => version + 1);
     } catch (err) {

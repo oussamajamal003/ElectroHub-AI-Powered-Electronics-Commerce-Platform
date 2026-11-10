@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
 import clsx from 'clsx';
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info, Minus, RotateCcw, Search, TrendingDown, TrendingUp, X, XCircle } from 'lucide-react';
@@ -6,7 +6,7 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbList } from '@/components/ui/Brea
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
-import { Toast, ToastClose, ToastDescription, ToastProvider, ToastViewport } from '@/components/ui/Toast';
+import { ToastCenter, toast } from '@/components/ui/Toast';
 import { errorMessage, type PageMeta } from './api';
 import { formatCount, stockLabel } from './format';
 import { scrollToContentTop } from './scroll';
@@ -198,27 +198,15 @@ export function ConfirmDialog({ open, onOpenChange, title, description, confirmL
 }
 
 // ─── Toasts ───────────────────────────────────────────────
-interface ToastItem { id: number; title: string; variant: 'success' | 'error' | 'info' }
-const ToastContext = createContext<(title: string, variant?: ToastItem['variant']) => void>(() => undefined);
+// Admin feedback uses the one central toast system (components/ui/Toast). `AdminToastProvider` stays as the page-level mount point so
+// stories and isolated tests still render toasts; it is inert when the app-level ToastCenter already owns the viewport.
+type AdminToastVariant = 'success' | 'error' | 'info' | 'warning';
 export function AdminToastProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<ToastItem[]>([]);
-  const notify = useCallback((title: string, variant: ToastItem['variant'] = 'success') => {
-    setItems(current => [...current.slice(-2), { id: Date.now() + Math.random(), title, variant }]);
-  }, []);
-  const value = useMemo(() => notify, [notify]);
-  return <ToastContext.Provider value={value}>
-    <ToastProvider swipeDirection="right" duration={4000}>
-      {children}
-      {items.map(item => <Toast key={item.id} variant={item.variant} onOpenChange={open => { if (!open) setItems(current => current.filter(entry => entry.id !== item.id)); }}>
-        <ToastDescription>{item.title}</ToastDescription>
-        <ToastClose aria-label="Dismiss notification" />
-      </Toast>)}
-      <ToastViewport />
-    </ToastProvider>
-  </ToastContext.Provider>;
+  return <>{children}<ToastCenter /></>;
 }
+const notifyAdmin = (title: string, variant: AdminToastVariant = 'success') => { toast[variant](title); };
 // eslint-disable-next-line react-refresh/only-export-components
-export const useAdminToast = () => useContext(ToastContext);
+export const useAdminToast = () => notifyAdmin;
 
 /** Neutral admin page placeholder (breadcrumb, title, two content blocks) shown while a page's code loads. */
 export function AdminPageSkeleton() {

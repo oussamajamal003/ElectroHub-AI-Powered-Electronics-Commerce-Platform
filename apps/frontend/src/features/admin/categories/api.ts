@@ -26,21 +26,21 @@ export interface CategoryFields { name: string; description: string | null }
 
 export function useCategoryMutations() {
   const settle = useCategoryInvalidation();
-  const create = useMutation({
+  const create = useMutation({ meta: { action: "create this category" },
     mutationFn: (body: CategoryFields) => apiClient<ItemResponse<AdminCategory>>('/api/admin/categories', { method: 'POST', data: body }),
     onSuccess: settle,
   });
-  const update = useMutation({
+  const update = useMutation({ meta: { action: "update this category" },
     mutationFn: ({ id, ...body }: CategoryFields & { id: string; expectedUpdatedAt: string }) =>
       apiClient<ItemResponse<AdminCategory>>(`/api/admin/categories/${encodeURIComponent(id)}`, { method: 'PATCH', data: body }),
     onSuccess: settle,
   });
-  const status = useMutation({
+  const status = useMutation({ meta: { action: "change this category's visibility" },
     mutationFn: ({ id, isActive, expectedUpdatedAt }: { id: string; isActive: boolean; expectedUpdatedAt: string }) =>
       apiClient<ItemResponse<AdminCategory>>(`/api/admin/categories/${encodeURIComponent(id)}/status`, { method: 'PATCH', data: { isActive, expectedUpdatedAt } }),
     onSuccess: settle,
   });
-  const remove = useMutation({
+  const remove = useMutation({ meta: { action: "delete this category" },
     mutationFn: (id: string) => apiClient<void>(`/api/admin/categories/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     onSuccess: settle,
   });
