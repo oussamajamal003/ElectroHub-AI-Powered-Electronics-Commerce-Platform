@@ -389,6 +389,17 @@ function useScopedAuth(scope: AuthScope, hook: string, provider: string) {
 // eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() { return useScopedAuth('customer', 'useAuth', 'an AuthProvider'); }
 
+/**
+ * True while a stored storefront session is still being re-verified after a page load (Task 06.1 D-1/D-2/R-1): cart additions are
+ * refused and wishlist toggles ignored until it has a verdict, so purchase controls should show as pending. Safe without a provider
+ * (Storybook, admin pages): it then reports false.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useCustomerSessionPending(): boolean {
+  const context = useContext(contexts.customer);
+  return context ? !context.isSessionVerified && !context.sessionUnavailable : false;
+}
+
 /** The Admin Console (ADMIN) session. It never exposes a customer. */
 // eslint-disable-next-line react-refresh/only-export-components
 export function useAdminAuth() { return useScopedAuth('admin', 'useAdminAuth', 'an AdminAuthProvider'); }

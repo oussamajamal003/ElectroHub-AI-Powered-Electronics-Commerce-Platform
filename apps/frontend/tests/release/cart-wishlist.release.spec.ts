@@ -85,6 +85,30 @@ test.describe('cart', () => {
     await api.dispose();
   });
 
+  test('product cards wait for the post-reload session check instead of failing a quick Add to Cart (R-1)', async ({ page }, testInfo) => {
+    await signInCustomer(page, shopper(testInfo, 'cart').email);
+    await page.goto(`/search?q=${encodeURIComponent(dock().name)}`);
+    // Hold the session refresh that follows a full page load, so the check is observably in flight.
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.route('**/api/auth/customer/refresh', async route => { await held; await route.continue(); });
+    await page.reload();
+    const card = page.getByTestId('product-card').filter({ hasText: dock().name }).first();
+    const add = card.getByRole('button', { name: `Add ${dock().name} to cart` });
+    await expect(add).toBeDisabled();
+    await expect(card.getByRole('button', { name: `Add ${dock().name} to wishlist` })).toBeDisabled();
+    release();
+    await expect(add).toBeEnabled();
+    await add.click();
+    await expect(cartLink(page, 1)).toBeVisible();
+    await expect(card.getByText('Could not add item. Please try again.')).toHaveCount(0);
+    const api = await customerApi(shopper(testInfo, 'cart').email);
+    await expect.poll(async () => ((await (await api.get('/api/cart')).json()) as { data: { items: { productId: string }[] } }).data.items.map(item => item.productId))
+      .toEqual([dock().id]);
+    await api.dispose();
+    await page.unroute('**/api/auth/customer/refresh');
+  });
+
   test('a failed cart mutation rolls back the optimistic count and reports the error', async ({ page }, testInfo) => {
     await signInCustomer(page, shopper(testInfo, 'cart').email);
     await page.goto(`/products/${headphones().slug}`);
