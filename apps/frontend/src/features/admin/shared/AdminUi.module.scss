@@ -89,7 +89,7 @@
 .tone-warning { background: $color-warning-background; color: $color-warning-foreground; border-color: $color-warning-border; }
 .tone-error { background: $color-error-background; color: $color-error-foreground; border-color: $color-error-border; }
 .tone-info { background: $color-info-background; color: $color-info-foreground; border-color: $color-info-border; }
-.tone-primary { background: theme-alpha($color-primary, .08); color: $color-primary-text; border-color: theme-alpha($color-primary, .25); }
+.tone-primary { background: theme-alpha($color-primary, .08); color: $color-primary-text-hover; border-color: theme-alpha($color-primary, .25); }
 .text-success { color: $color-success-foreground; }
 .text-warning { color: $color-warning-foreground; }
 .text-error { color: $color-error-foreground; }
