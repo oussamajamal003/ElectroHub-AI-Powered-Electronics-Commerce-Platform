@@ -2,33 +2,33 @@
   "environment": "Playwright real stack, local loopback, unthrottled; see run command for Vite dev/preview mode",
   "api": {
     "/api/products?page=1&pageSize=12": [
-      165,
-      82,
-      68,
-      65,
-      64
+      118,
+      108,
+      40,
+      62,
+      49
     ],
     "/api/search/products?q=aurora": [
-      79,
-      54,
-      53,
-      62,
-      50
+      49,
+      41,
+      49,
+      35,
+      53
     ],
     "/api/recommendations/popular": [
-      39,
-      41,
-      40,
-      37,
-      38
+      44,
+      57,
+      59,
+      48,
+      52
     ]
   },
   "routes": [
     {
       "url": "/",
-      "readyMs": 1047,
+      "readyMs": 857,
       "metrics": {
-        "lcpMs": 1036,
+        "lcpMs": 868,
         "cls": 0
       },
       "navigation": [
@@ -36,8 +36,8 @@
           "name": "http://localhost:3212/",
           "entryType": "navigation",
           "startTime": 0,
-          "duration": 500.10000002384186,
-          "navigationId": 6838,
+          "duration": 227.0999999642372,
+          "navigationId": 5907,
           "initiatorType": "navigation",
           "deliveryType": "",
           "nextHopProtocol": "http/1.1",
@@ -51,17 +51,17 @@
           "workerFinalSourceType": "",
           "redirectStart": 0,
           "redirectEnd": 0,
-          "fetchStart": 0.30000001192092896,
-          "domainLookupStart": 1.899999976158142,
-          "domainLookupEnd": 2.600000023841858,
-          "connectStart": 2.600000023841858,
+          "fetchStart": 0.19999998807907104,
+          "domainLookupStart": 1.300000011920929,
+          "domainLookupEnd": 1.899999976158142,
+          "connectStart": 1.899999976158142,
           "secureConnectionStart": 0,
-          "connectEnd": 4.600000023841858,
-          "requestStart": 4.800000011920929,
-          "responseStart": 25.19999998807907,
+          "connectEnd": 3,
+          "requestStart": 3.099999964237213,
+          "responseStart": 14.699999988079071,
           "firstInterimResponseStart": 0,
-          "finalResponseHeadersStart": 25.19999998807907,
-          "responseEnd": 26.600000023841858,
+          "finalResponseHeadersStart": 14.699999988079071,
+          "responseEnd": 15.199999988079071,
           "transferSize": 855,
           "encodedBodySize": 555,
           "decodedBodySize": 555,
@@ -69,12 +69,12 @@
           "serverTiming": [],
           "unloadEventStart": 0,
           "unloadEventEnd": 0,
-          "domInteractive": 41.5,
-          "domContentLoadedEventStart": 500,
-          "domContentLoadedEventEnd": 500,
-          "domComplete": 500.10000002384186,
-          "loadEventStart": 500.10000002384186,
-          "loadEventEnd": 500.10000002384186,
+          "domInteractive": 29.599999964237213,
+          "domContentLoadedEventStart": 226.69999998807907,
+          "domContentLoadedEventEnd": 227,
+          "domComplete": 227.0999999642372,
+          "loadEventStart": 227.0999999642372,
+          "loadEventEnd": 227.0999999642372,
           "type": "navigate",
           "redirectCount": 0,
           "activationStart": 0,
@@ -90,135 +90,135 @@
         {
           "name": "first-paint",
           "entryType": "paint",
-          "startTime": 704,
+          "startTime": 424,
           "duration": 0,
-          "navigationId": 6838,
-          "paintTime": 675,
-          "presentationTime": 704
+          "navigationId": 5907,
+          "paintTime": 401.0999999642372,
+          "presentationTime": 424
         },
         {
           "name": "first-contentful-paint",
           "entryType": "paint",
-          "startTime": 704,
+          "startTime": 424,
           "duration": 0,
-          "navigationId": 6838,
-          "paintTime": 675,
-          "presentationTime": 704
+          "navigationId": 5907,
+          "paintTime": 401.0999999642372,
+          "presentationTime": 424
         }
       ],
       "resources": [
         {
-          "name": "/assets/index-0dydgAUr.js",
-          "duration": 358,
-          "transferSize": 278606
+          "name": "/assets/index-ClskWOlM.js",
+          "duration": 96,
+          "transferSize": 278775
         },
         {
           "name": "/assets/index-FTMQnrJ_.css",
-          "duration": 101,
+          "duration": 35,
           "transferSize": 26814
         },
         {
-          "name": "/assets/HomePage-DGhXy5Dl.js",
-          "duration": 47,
+          "name": "/assets/HomePage-bJ8I2DVO.js",
+          "duration": 44,
           "transferSize": 4498
         },
         {
-          "name": "/assets/package-search-PCMUfcOl.js",
-          "duration": 46,
+          "name": "/assets/package-search-DaxQDGjO.js",
+          "duration": 50,
           "transferSize": 953
         },
         {
-          "name": "/assets/queries-Cn_R95ip.js",
-          "duration": 101,
-          "transferSize": 1438
+          "name": "/assets/queries-BZqfbUsz.js",
+          "duration": 42,
+          "transferSize": 1440
         },
         {
-          "name": "/assets/RecommendationRail-yHhRuT6b.js",
-          "duration": 119,
-          "transferSize": 3748
+          "name": "/assets/RecommendationRail-rZ0qjuZX.js",
+          "duration": 41,
+          "transferSize": 3749
         },
         {
           "name": "/assets/RecommendationRail-m9ml_DRx.css",
-          "duration": 59,
+          "duration": 42,
           "transferSize": 960
         },
         {
-          "name": "/assets/RecommendationSectionRail-Lw-Tca18.js",
-          "duration": 133,
-          "transferSize": 1602
+          "name": "/assets/RecommendationSectionRail-DpMXaPjB.js",
+          "duration": 67,
+          "transferSize": 1603
         },
         {
           "name": "/assets/labels-iuuH4SC2.js",
-          "duration": 158,
+          "duration": 66,
           "transferSize": 942
         },
         {
-          "name": "/assets/Motion-r4fE_PQh.js",
-          "duration": 247,
-          "transferSize": 1537
+          "name": "/assets/Motion-CpFnkVbX.js",
+          "duration": 66,
+          "transferSize": 1539
         },
         {
           "name": "/assets/Motion-5V5n3mHE.css",
-          "duration": 94,
+          "duration": 47,
           "transferSize": 833
         },
         {
-          "name": "/assets/chevron-down-BArEWcLC.js",
-          "duration": 214,
+          "name": "/assets/chevron-down-DEQHlmwu.js",
+          "duration": 66,
           "transferSize": 596
         },
         {
           "name": "/assets/HomePage-CwnL_un0.css",
-          "duration": 118,
+          "duration": 65,
           "transferSize": 3052
         },
         {
           "name": "/api/store/profile",
-          "duration": 269,
+          "duration": 168,
           "transferSize": 491
         },
         {
           "name": "/api/categories",
-          "duration": 303,
+          "duration": 164,
           "transferSize": 645
         },
         {
           "name": "/api/auth/customer/refresh",
-          "duration": 166,
+          "duration": 127,
           "transferSize": 333
         },
         {
           "name": "/images/catalog/laptops.jpg",
-          "duration": 85,
+          "duration": 25,
           "transferSize": 122736
         },
         {
           "name": "/api/products",
-          "duration": 174,
+          "duration": 160,
           "transferSize": 3611
         },
         {
           "name": "/api/products/deals",
-          "duration": 183,
+          "duration": 154,
           "transferSize": 352
         },
         {
           "name": "/images/catalog/variety/macbook13-01.jpg",
-          "duration": 122,
+          "duration": 27,
           "transferSize": 97407
         },
         {
           "name": "/api/recommendations/popular",
-          "duration": 195,
+          "duration": 130,
           "transferSize": 2027
         }
       ]
     },
     {
       "url": "/products/aurora-studio-headphones",
-      "readyMs": 805,
+      "readyMs": 492,
       "metrics": {
-        "lcpMs": 784,
+        "lcpMs": 496,
         "cls": 0.03940162037037037
       },
       "navigation": [
@@ -226,8 +226,213 @@
           "name": "http://localhost:3212/products/aurora-studio-headphones",
           "entryType": "navigation",
           "startTime": 0,
-          "duration": 93,
-          "navigationId": 3720,
+          "duration": 61.60000002384186,
+          "navigationId": 4385,
+          "initiatorType": "navigation",
+          "deliveryType": "",
+          "nextHopProtocol": "http/1.1",
+          "renderBlockingStatus": "non-blocking",
+          "contentType": "text/html",
+          "contentEncoding": "",
+          "workerStart": 0,
+          "workerRouterEvaluationStart": 0,
+          "workerCacheLookupStart": 0,
+          "workerMatchedSourceType": "",
+          "workerFinalSourceType": "",
+          "redirectStart": 0,
+          "redirectEnd": 0,
+          "fetchStart": 2.300000011920929,
+          "domainLookupStart": 2.300000011920929,
+          "domainLookupEnd": 2.300000011920929,
+          "connectStart": 2.300000011920929,
+          "secureConnectionStart": 0,
+          "connectEnd": 2.300000011920929,
+          "requestStart": 3.5,
+          "responseStart": 17.19999998807907,
+          "firstInterimResponseStart": 0,
+          "finalResponseHeadersStart": 17.19999998807907,
+          "responseEnd": 18,
+          "transferSize": 855,
+          "encodedBodySize": 555,
+          "decodedBodySize": 555,
+          "responseStatus": 200,
+          "serverTiming": [],
+          "unloadEventStart": 26.5,
+          "unloadEventEnd": 26.5,
+          "domInteractive": 53.10000002384186,
+          "domContentLoadedEventStart": 60.30000001192093,
+          "domContentLoadedEventEnd": 60.30000001192093,
+          "domComplete": 61.60000002384186,
+          "loadEventStart": 61.60000002384186,
+          "loadEventEnd": 61.60000002384186,
+          "type": "navigate",
+          "redirectCount": 0,
+          "activationStart": 0,
+          "criticalCHRestart": 0,
+          "notRestoredReasons": null,
+          "confidence": {
+            "randomizedTriggerRate": 0.4994798,
+            "value": "low"
+          }
+        }
+      ],
+      "paint": [
+        {
+          "name": "first-paint",
+          "entryType": "paint",
+          "startTime": 160,
+          "duration": 0,
+          "navigationId": 4385,
+          "paintTime": 134.30000001192093,
+          "presentationTime": 160
+        },
+        {
+          "name": "first-contentful-paint",
+          "entryType": "paint",
+          "startTime": 160,
+          "duration": 0,
+          "navigationId": 4385,
+          "paintTime": 134.30000001192093,
+          "presentationTime": 160
+        }
+      ],
+      "resources": [
+        {
+          "name": "/assets/index-ClskWOlM.js",
+          "duration": 9,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/index-FTMQnrJ_.css",
+          "duration": 12,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/ProductDetailPage-C6qQTW_n.js",
+          "duration": 21,
+          "transferSize": 6601
+        },
+        {
+          "name": "/assets/Tabs-C2a5dZgW.js",
+          "duration": 18,
+          "transferSize": 1607
+        },
+        {
+          "name": "/assets/Tabs-CuKUvtNG.css",
+          "duration": 47,
+          "transferSize": 1290
+        },
+        {
+          "name": "/assets/Select-BxIZ2SC4.js",
+          "duration": 48,
+          "transferSize": 7982
+        },
+        {
+          "name": "/assets/chevron-down-DEQHlmwu.js",
+          "duration": 53,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/check-_YIKHuB5.js",
+          "duration": 48,
+          "transferSize": 593
+        },
+        {
+          "name": "/assets/Select-BCOYdxnP.css",
+          "duration": 44,
+          "transferSize": 1478
+        },
+        {
+          "name": "/assets/queries-BZqfbUsz.js",
+          "duration": 58,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/RecommendationRail-rZ0qjuZX.js",
+          "duration": 86,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/RecommendationRail-m9ml_DRx.css",
+          "duration": 26,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/RecommendationSectionRail-DpMXaPjB.js",
+          "duration": 56,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/labels-iuuH4SC2.js",
+          "duration": 78,
+          "transferSize": 300
+        },
+        {
+          "name": "/assets/QuantitySelector-7LZV8Qjt.js",
+          "duration": 109,
+          "transferSize": 1136
+        },
+        {
+          "name": "/assets/plus-svrBxvMP.js",
+          "duration": 102,
+          "transferSize": 622
+        },
+        {
+          "name": "/assets/QuantitySelector-hvGVPdMI.css",
+          "duration": 47,
+          "transferSize": 784
+        },
+        {
+          "name": "/assets/ProductDetailPage-DJC8zlYy.css",
+          "duration": 42,
+          "transferSize": 2272
+        },
+        {
+          "name": "/api/store/profile",
+          "duration": 267,
+          "transferSize": 491
+        },
+        {
+          "name": "/api/categories",
+          "duration": 266,
+          "transferSize": 300
+        },
+        {
+          "name": "/api/auth/customer/refresh",
+          "duration": 88,
+          "transferSize": 333
+        },
+        {
+          "name": "/api/products/aurora-studio-headphones",
+          "duration": 155,
+          "transferSize": 1187
+        },
+        {
+          "name": "/api/products/aurora-studio-headphones/reviews",
+          "duration": 245,
+          "transferSize": 417
+        },
+        {
+          "name": "/api/products/aurora-studio-headphones/recommendations",
+          "duration": 105,
+          "transferSize": 2910
+        }
+      ]
+    },
+    {
+      "url": "/admin",
+      "readyMs": 521,
+      "metrics": {
+        "lcpMs": 528,
+        "cls": 0.021647247942386833
+      },
+      "navigation": [
+        {
+          "name": "http://localhost:3212/admin",
+          "entryType": "navigation",
+          "startTime": 0,
+          "duration": 62.09999996423721,
+          "navigationId": 5539,
           "initiatorType": "navigation",
           "deliveryType": "",
           "nextHopProtocol": "http/1.1",
@@ -248,228 +453,23 @@
           "secureConnectionStart": 0,
           "connectEnd": 2.199999988079071,
           "requestStart": 3.5,
-          "responseStart": 19.30000001192093,
+          "responseStart": 20.399999976158142,
           "firstInterimResponseStart": 0,
-          "finalResponseHeadersStart": 19.30000001192093,
-          "responseEnd": 19.900000035762787,
-          "transferSize": 855,
-          "encodedBodySize": 555,
-          "decodedBodySize": 555,
-          "responseStatus": 200,
-          "serverTiming": [],
-          "unloadEventStart": 44.19999998807907,
-          "unloadEventEnd": 44.19999998807907,
-          "domInteractive": 60.60000002384186,
-          "domContentLoadedEventStart": 90.90000003576279,
-          "domContentLoadedEventEnd": 91,
-          "domComplete": 93,
-          "loadEventStart": 93,
-          "loadEventEnd": 93,
-          "type": "navigate",
-          "redirectCount": 0,
-          "activationStart": 0,
-          "criticalCHRestart": 0,
-          "notRestoredReasons": null,
-          "confidence": {
-            "randomizedTriggerRate": 0.4994798,
-            "value": "low"
-          }
-        }
-      ],
-      "paint": [
-        {
-          "name": "first-paint",
-          "entryType": "paint",
-          "startTime": 204,
-          "duration": 0,
-          "navigationId": 3720,
-          "paintTime": 174.69999998807907,
-          "presentationTime": 204
-        },
-        {
-          "name": "first-contentful-paint",
-          "entryType": "paint",
-          "startTime": 204,
-          "duration": 0,
-          "navigationId": 3720,
-          "paintTime": 174.69999998807907,
-          "presentationTime": 204
-        }
-      ],
-      "resources": [
-        {
-          "name": "/assets/index-0dydgAUr.js",
-          "duration": 17,
-          "transferSize": 300
-        },
-        {
-          "name": "/assets/index-FTMQnrJ_.css",
-          "duration": 27,
-          "transferSize": 300
-        },
-        {
-          "name": "/assets/ProductDetailPage-B4qLc-Zn.js",
-          "duration": 75,
-          "transferSize": 6598
-        },
-        {
-          "name": "/assets/Tabs-f3MgXauz.js",
-          "duration": 104,
-          "transferSize": 1607
-        },
-        {
-          "name": "/assets/Tabs-CuKUvtNG.css",
-          "duration": 119,
-          "transferSize": 1290
-        },
-        {
-          "name": "/assets/Select-LmRJiona.js",
-          "duration": 212,
-          "transferSize": 7981
-        },
-        {
-          "name": "/assets/chevron-down-BArEWcLC.js",
-          "duration": 200,
-          "transferSize": 300
-        },
-        {
-          "name": "/assets/check-C9ngA4VZ.js",
-          "duration": 211,
-          "transferSize": 593
-        },
-        {
-          "name": "/assets/Select-BCOYdxnP.css",
-          "duration": 133,
-          "transferSize": 1478
-        },
-        {
-          "name": "/assets/queries-Cn_R95ip.js",
-          "duration": 252,
-          "transferSize": 300
-        },
-        {
-          "name": "/assets/RecommendationRail-yHhRuT6b.js",
-          "duration": 253,
-          "transferSize": 300
-        },
-        {
-          "name": "/assets/RecommendationRail-m9ml_DRx.css",
-          "duration": 189,
-          "transferSize": 300
-        },
-        {
-          "name": "/assets/RecommendationSectionRail-Lw-Tca18.js",
-          "duration": 291,
-          "transferSize": 300
-        },
-        {
-          "name": "/assets/labels-iuuH4SC2.js",
-          "duration": 311,
-          "transferSize": 300
-        },
-        {
-          "name": "/assets/QuantitySelector-DrZlBSL9.js",
-          "duration": 351,
-          "transferSize": 1138
-        },
-        {
-          "name": "/assets/plus-u_FKPOE5.js",
-          "duration": 334,
-          "transferSize": 622
-        },
-        {
-          "name": "/assets/QuantitySelector-hvGVPdMI.css",
-          "duration": 206,
-          "transferSize": 784
-        },
-        {
-          "name": "/assets/ProductDetailPage-DJC8zlYy.css",
-          "duration": 225,
-          "transferSize": 2272
-        },
-        {
-          "name": "/api/store/profile",
-          "duration": 394,
-          "transferSize": 491
-        },
-        {
-          "name": "/api/categories",
-          "duration": 421,
-          "transferSize": 300
-        },
-        {
-          "name": "/api/auth/customer/refresh",
-          "duration": 268,
-          "transferSize": 333
-        },
-        {
-          "name": "/api/products/aurora-studio-headphones",
-          "duration": 152,
-          "transferSize": 1187
-        },
-        {
-          "name": "/api/products/aurora-studio-headphones/reviews",
-          "duration": 187,
-          "transferSize": 417
-        },
-        {
-          "name": "/api/products/aurora-studio-headphones/recommendations",
-          "duration": 165,
-          "transferSize": 2910
-        }
-      ]
-    },
-    {
-      "url": "/admin",
-      "readyMs": 1440,
-      "metrics": {
-        "lcpMs": 880,
-        "cls": 0.021647247942386833
-      },
-      "navigation": [
-        {
-          "name": "http://localhost:3212/admin",
-          "entryType": "navigation",
-          "startTime": 0,
-          "duration": 75.69999998807907,
-          "navigationId": 1624,
-          "initiatorType": "navigation",
-          "deliveryType": "",
-          "nextHopProtocol": "http/1.1",
-          "renderBlockingStatus": "non-blocking",
-          "contentType": "text/html",
-          "contentEncoding": "",
-          "workerStart": 0,
-          "workerRouterEvaluationStart": 0,
-          "workerCacheLookupStart": 0,
-          "workerMatchedSourceType": "",
-          "workerFinalSourceType": "",
-          "redirectStart": 0,
-          "redirectEnd": 0,
-          "fetchStart": 3,
-          "domainLookupStart": 3,
-          "domainLookupEnd": 3,
-          "connectStart": 3,
-          "secureConnectionStart": 0,
-          "connectEnd": 3,
-          "requestStart": 4.599999964237213,
-          "responseStart": 20.299999952316284,
-          "firstInterimResponseStart": 0,
-          "finalResponseHeadersStart": 20.299999952316284,
+          "finalResponseHeadersStart": 20.399999976158142,
           "responseEnd": 21.099999964237213,
           "transferSize": 855,
           "encodedBodySize": 555,
           "decodedBodySize": 555,
           "responseStatus": 200,
           "serverTiming": [],
-          "unloadEventStart": 28.799999952316284,
-          "unloadEventEnd": 28.799999952316284,
-          "domInteractive": 45.89999997615814,
-          "domContentLoadedEventStart": 73.89999997615814,
-          "domContentLoadedEventEnd": 74,
-          "domComplete": 75.69999998807907,
-          "loadEventStart": 75.69999998807907,
-          "loadEventEnd": 75.69999998807907,
+          "unloadEventStart": 27.899999976158142,
+          "unloadEventEnd": 27.899999976158142,
+          "domInteractive": 43.5,
+          "domContentLoadedEventStart": 60.5,
+          "domContentLoadedEventEnd": 60.59999996423721,
+          "domComplete": 62.09999996423721,
+          "loadEventStart": 62.09999996423721,
+          "loadEventEnd": 62.09999996423721,
           "type": "navigate",
           "redirectCount": 0,
           "activationStart": 0,
@@ -485,96 +485,96 @@
         {
           "name": "first-paint",
           "entryType": "paint",
-          "startTime": 120,
+          "startTime": 88,
           "duration": 0,
-          "navigationId": 1624,
-          "paintTime": 98.79999995231628,
-          "presentationTime": 120
+          "navigationId": 5539,
+          "paintTime": 70.89999997615814,
+          "presentationTime": 88
         },
         {
           "name": "first-contentful-paint",
           "entryType": "paint",
-          "startTime": 120,
+          "startTime": 88,
           "duration": 0,
-          "navigationId": 1624,
-          "paintTime": 98.79999995231628,
-          "presentationTime": 120
+          "navigationId": 5539,
+          "paintTime": 70.89999997615814,
+          "presentationTime": 88
         }
       ],
       "resources": [
         {
-          "name": "/assets/index-0dydgAUr.js",
-          "duration": 17,
+          "name": "/assets/index-ClskWOlM.js",
+          "duration": 13,
           "transferSize": 300
         },
         {
           "name": "/assets/index-FTMQnrJ_.css",
-          "duration": 22,
+          "duration": 14,
           "transferSize": 300
         },
         {
           "name": "/api/auth/admin/refresh",
-          "duration": 390,
+          "duration": 198,
           "transferSize": 802
         },
         {
           "name": "/api/auth/customer/refresh",
-          "duration": 104,
+          "duration": 39,
           "transferSize": 333
         },
         {
-          "name": "/assets/AdminDashboardPage-Doz_Ui7-.js",
-          "duration": 63,
+          "name": "/assets/AdminDashboardPage-CShJS7RN.js",
+          "duration": 12,
           "transferSize": 300
         },
         {
-          "name": "/assets/DataTable-BPSUoVE5.js",
-          "duration": 66,
+          "name": "/assets/DataTable-5DE5RHCG.js",
+          "duration": 16,
           "transferSize": 300
         },
         {
-          "name": "/assets/arrow-up-BLcfKaXb.js",
-          "duration": 113,
+          "name": "/assets/arrow-up-hV7FVpR6.js",
+          "duration": 25,
           "transferSize": 300
         },
         {
-          "name": "/assets/arrow-up-down-CgsWZ-Is.js",
-          "duration": 121,
+          "name": "/assets/arrow-up-down-WE_WEcg_.js",
+          "duration": 31,
           "transferSize": 300
         },
         {
           "name": "/assets/DataTable-Cr7Xfw7I.css",
-          "duration": 111,
+          "duration": 18,
           "transferSize": 300
         },
         {
-          "name": "/assets/labels-Cyvlelen.js",
-          "duration": 127,
+          "name": "/assets/labels-Cjg4frDM.js",
+          "duration": 32,
           "transferSize": 300
         },
         {
           "name": "/assets/chartColors-C8nCVqa5.js",
-          "duration": 138,
+          "duration": 24,
           "transferSize": 300
         },
         {
-          "name": "/assets/dollar-sign-BV7duRk9.js",
-          "duration": 148,
+          "name": "/assets/dollar-sign-BEZTSIrB.js",
+          "duration": 34,
           "transferSize": 300
         },
         {
           "name": "/api/admin/dashboard/alerts",
-          "duration": 391,
+          "duration": 274,
           "transferSize": 438
         },
         {
           "name": "/api/auth/customer/refresh",
-          "duration": 70,
+          "duration": 60,
           "transferSize": 333
         },
         {
           "name": "/api/admin/dashboard/overview",
-          "duration": 644,
+          "duration": 359,
           "transferSize": 3801
         }
       ]

@@ -1,8 +1,11 @@
 # Task 06.2 — Accessibility, QA and CI/CD
 
-Status: **IN PROGRESS**. Scope: ROADMAP §9 / 06.2. Baseline: latest `origin/develop`
+Status: **IMPLEMENTED — final CI and manual acceptance tracked in PR #51**. Scope: ROADMAP §9 / 06.2. Baseline: latest `origin/develop`
 `9cae8647593bd3d48f2faef39552ae5da497f44f`, including merged Task 06.1 PR #50.
 Branch: `feature/06.2-accessibility-qa-ci-cd`. No merge or production deployment authorized.
+
+Final evidence, later fixes, exact limitations and run history: [implementation handoff](TASK_06.2_IMPLEMENTATION_EVIDENCE.md).
+The initial matrix below is a baseline audit; final results supersede its pending entries.
 
 ## Acceptance and resources
 
