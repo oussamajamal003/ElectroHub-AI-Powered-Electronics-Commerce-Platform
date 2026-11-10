@@ -14,6 +14,7 @@ import { useAdminInventoryLiveUpdates } from '@/features/admin/dashboard/useAdmi
 import { AdminToastProvider, ConfirmDialog } from '@/features/admin/shared/AdminUi';
 import { formatCount, initials } from '@/features/admin/shared/format';
 import styles from './AdminLayout.module.scss';
+import { usePageTitle } from './usePageTitle';
 
 function readCollapsed() {
   try { return window.localStorage.getItem(SIDEBAR_PREFERENCE_KEY) === '1'; } catch { return false; }
@@ -140,6 +141,7 @@ function ProfileMenu() {
 }
 
 export function AdminLayout() {
+  usePageTitle('admin-main', 'ElectroHub Admin');
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
