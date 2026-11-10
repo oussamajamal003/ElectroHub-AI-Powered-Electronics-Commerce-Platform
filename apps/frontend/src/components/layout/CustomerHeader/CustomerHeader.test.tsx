@@ -9,18 +9,21 @@ import { wishlistFixture, wishlistProduct } from '@/features/wishlist/fixtures';
 import type { WishlistItem } from '@/features/wishlist/types';
 import { useCart } from '@/features/cart/context';
 import { useStorefrontProfile } from '@/features/storefront/api';
+import { useProfilePhoto } from '@/features/profilePhoto/queries';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
 vi.mock('@/features/cart/context', () => ({ useCart: vi.fn() }));
 vi.mock('@/features/storefront/api', () => ({ useStorefrontProfile: vi.fn() }));
+vi.mock('@/features/profilePhoto/queries', () => ({ useProfilePhoto: vi.fn() }));
 
 describe('CustomerHeader', () => {
   const mockLogout = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useProfilePhoto).mockReturnValue({ data: { url: null, expiresAt: null } } as never);
     vi.mocked(useCart).mockReturnValue({ data: { totalQuantity: 0 }, isLoading: false } as unknown as ReturnType<typeof useCart>);
     vi.mocked(useStorefrontProfile).mockReturnValue({ data: { storeName: 'ElectroHub' } } as unknown as ReturnType<typeof useStorefrontProfile>);
   });

@@ -5,11 +5,13 @@ import { describe, beforeEach, it, expect, vi } from 'vitest';
 import { AccountPage } from './AccountPage';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { useMyReviews } from '@/features/products/queries';
+import { useProfilePhoto } from '@/features/profilePhoto/queries';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
 vi.mock('@/features/products/queries', () => ({ useMyReviews: vi.fn() }));
+vi.mock('@/features/profilePhoto/queries', () => ({ useProfilePhoto: vi.fn() }));
 vi.mock('@/features/recommendations/queries', () => import('@/test/recommendationQueriesMock'));
 
 const mockNavigate = vi.fn();
@@ -27,6 +29,7 @@ describe('AccountPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useMyReviews).mockReturnValue({ data: { data: [] }, isPending: false, isError: false, refetch: vi.fn() } as unknown as ReturnType<typeof useMyReviews>);
+    vi.mocked(useProfilePhoto).mockReturnValue({ data: { url: null, expiresAt: null } } as never);
     vi.mocked(useAuth).mockReturnValue({
       user: { id: '1', firstName: 'John', lastName: 'Doe', email: 'john@example.com', role: 'CUSTOMER' },
       isAuthenticated: true,

@@ -2,8 +2,16 @@ import { Router } from 'express';
 import { reauthenticateDeletionWithPassword, deleteCurrentAccount } from '../controllers/account-deletion.controller.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { accountDeletionRateLimiter } from '../middleware/rateLimiter.js';
+import { customerProfilePhotoController } from '../controllers/profile-photo.controller.js';
+import { admitProfilePhotoUpload, profilePhotoUpload } from '../middleware/profilePhotoUpload.js';
+import { profilePhotoWriteLimiter } from '../middleware/profilePhotoRateLimit.js';
 
 const router = Router();
+
+// Photo operations are scoped to the authenticated customer. Auth and role checks run before any multipart bytes are buffered.
+router.get('/profile-photo', requireAuth, requireRole('CUSTOMER'), customerProfilePhotoController.get);
+router.post('/profile-photo', requireAuth, requireRole('CUSTOMER'), profilePhotoWriteLimiter, admitProfilePhotoUpload, profilePhotoUpload, customerProfilePhotoController.upload);
+router.delete('/profile-photo', requireAuth, requireRole('CUSTOMER'), profilePhotoWriteLimiter, customerProfilePhotoController.remove);
 
 /**
  * @swagger

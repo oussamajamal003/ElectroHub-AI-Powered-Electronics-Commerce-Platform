@@ -1,0 +1,27 @@
+@use '@/styles/abstracts' as *;
+
+.manager { display: flex; align-items: center; gap: $spacing-5; min-width: 0; }
+.avatar { width: 4rem; height: 4rem; font-size: $font-size-xl; }
+.avatarLarge { width: 5rem; height: 5rem; font-size: $font-size-2xl; }
+.details { display: grid; gap: $spacing-2; min-width: 0; }
+.title { color: $color-text-primary; font-weight: $font-weight-semibold; }
+.help { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; line-height: 1.5; }
+.actions, .dialogActions { display: flex; flex-wrap: wrap; align-items: center; gap: $spacing-2; }
+.actions svg { width: 16px; height: 16px; }
+.status { margin: 0; color: $color-success-foreground; font-size: $font-size-sm; }
+.hiddenInput { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.dialog { width: min(30rem, calc(100vw - 2rem)); }
+.preview, .camera { display: block; width: min(18rem, 70vw); height: min(18rem, 70vw); margin: $spacing-4 auto; border-radius: 50%; object-fit: cover; }
+.previewLarge { width: min(20rem, 72vw); height: min(20rem, 72vw); }
+.camera { background: #0b1220; }
+.dialogActions { justify-content: flex-end; }
+
+@media (max-width: $breakpoint-sm) {
+  .manager { align-items: flex-start; }
+  .avatar { width: 3.5rem; height: 3.5rem; }
+  .actions { gap: $spacing-2; }
+}
+
+@media (max-width: 360px) {
+  .manager { flex-direction: column; }
+}

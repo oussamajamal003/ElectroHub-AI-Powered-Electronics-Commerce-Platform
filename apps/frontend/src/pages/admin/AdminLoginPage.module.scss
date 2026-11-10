@@ -2,24 +2,51 @@
 @use '@/styles/abstracts/mixins' as *;
 
 .container {
+  position: relative;
+  isolation: isolate;
   @include flex-center;
   flex-direction: column;
   min-height: 100vh;
-  background-color: #f8fafc;
+  min-height: 100dvh;
+  background-color: #071426;
+  background-image: linear-gradient(135deg, rgba(3, 11, 27, 0.84), rgba(5, 23, 48, 0.62) 50%, rgba(7, 30, 55, 0.76)),
+    url('/images/admin-auth-background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   padding: $spacing-6;
 }
 
 .loginCard {
   position: relative;
+  z-index: 1;
   width: min(480px, calc(100vw - 2rem));
   max-width: 480px;
   background-color: #ffffff !important;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
   border: 1px solid $color-border !important;
   border-radius: 0 !important;
+  color-scheme: light;
   display: flex;
   flex-direction: column;
   padding: $spacing-8;
+}
+
+:global([data-theme='light']) .container {
+  background-image: linear-gradient(135deg, rgba(4, 20, 43, 0.74), rgba(5, 33, 64, 0.46) 52%, rgba(7, 30, 55, 0.66)),
+    url('/images/admin-auth-background.jpg');
+}
+
+:global([data-theme='dark']) .container {
+  background-image: linear-gradient(135deg, rgba(2, 8, 22, 0.9), rgba(2, 20, 42, 0.72) 52%, rgba(3, 17, 34, 0.84)),
+    url('/images/admin-auth-background.jpg');
+}
+
+@media (prefers-color-scheme: dark) {
+  :global(html:not([data-theme='light'])) .container {
+    background-image: linear-gradient(135deg, rgba(2, 8, 22, 0.9), rgba(2, 20, 42, 0.72) 52%, rgba(3, 17, 34, 0.84)),
+      url('/images/admin-auth-background.jpg');
+  }
 }
 
 .header {

@@ -30,6 +30,7 @@ import { shortcutLabel, useDiscovery } from '@/features/search/discovery/context
 import { Toast, ToastClose, ToastProvider, ToastTitle, ToastViewport } from '@/components/ui/Toast';
 import styles from './CustomerHeader.module.scss';
 import { useStorefrontProfile } from '@/features/storefront/api';
+import { useProfilePhoto } from '@/features/profilePhoto/queries';
 
 export interface CustomerHeaderProps {
   cartCount?: number;
@@ -54,6 +55,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
   const showAuthenticatedHeader = isInitializing ? Boolean(rememberedUser) : isAuthenticated;
   // Only the verified session decides the role; the remembered header identity carries none, so nothing privileged is inferred while initializing.
   const isAdmin = !isInitializing && user?.role === 'ADMIN';
+  const profilePhoto = useProfilePhoto(isAdmin ? 'admin' : 'customer', user?.id);
   const navigate = useNavigate();
 
   // Auth modals
@@ -247,7 +249,8 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                           aria-label={`Account menu for ${headerUser.firstName} ${headerUser.lastName}`}
                           disabled={isInitializing}
                         >
-                          <Avatar initials={getInitials(headerUser.firstName, headerUser.lastName)} />
+                          <Avatar src={profilePhoto.data?.url ?? undefined} alt=""
+                            initials={getInitials(headerUser.firstName, headerUser.lastName)} />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className={styles.dropdown}>
