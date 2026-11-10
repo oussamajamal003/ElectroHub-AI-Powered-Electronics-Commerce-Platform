@@ -98,8 +98,9 @@ export function CartPageContent({ cart, pendingPurchases, hasPendingPurchases = 
         <div className={styles.summaryLine}><span>Shipping</span><span className={styles.free}>Free</span></div>
         <div className={`${styles.summaryLine} ${styles.total}`}><strong>Total</strong><strong>{money(cart.data.total)}</strong></div>
         {!cart.data.canCheckout && <p className={styles.warning}>Remove unavailable items or reduce quantities to continue.</p>}
+        {!cart.isGuest && cart.isMutating && <p id="checkout-pending-note" className={styles.syncNote} role="status">Updating your cart… Checkout is available as soon as it is saved.</p>}
         {cart.isGuest ? <Button type="button" className={styles.checkout} disabled={!cart.data.canCheckout || cart.isError} onClick={() => window.dispatchEvent(new CustomEvent('electrohub:open-auth', { detail: { returnTo } }))}>Sign in to Checkout</Button>
-          : <Button type="button" className={styles.checkout} disabled={!cart.data.canCheckout || cart.isError || cart.isLoading || cart.isLoggingOut || cart.isMutating || Boolean(cart.mergeError)} onClick={() => navigate(returnTo)}>Proceed to Checkout</Button>}
+          : <Button type="button" className={styles.checkout} disabled={!cart.data.canCheckout || cart.isError || cart.isLoading || cart.isLoggingOut || cart.isMutating || Boolean(cart.mergeError)} aria-describedby={cart.isMutating ? 'checkout-pending-note' : undefined} onClick={() => navigate(returnTo)}>Proceed to Checkout</Button>}
         <Link className={styles.continue} to="/products">Continue shopping</Link>
       </aside>
     </div>}

@@ -14,48 +14,49 @@ export function HeroEntrance({ children, className = '' }: { children: ReactNode
   return <section className={`${className} ${play ? styles.heroEntrance : ''}`} aria-labelledby="home-title">{children}</section>;
 }
 
-export function SectionReveal({ children, className = '', replay = false, style }: { children: ReactNode; className?: string; replay?: boolean; style?: CSSProperties }) {
+type RevealPhase = 'static' | 'pending' | 'visible' | 'settled';
+
+/**
+ * Reveal once, then stay put. A section that enters the viewport animates a single time and is never hidden or replayed again,
+ * whichever direction the page is scrolled. Sections already above the viewport when observed (reload, back/forward scroll
+ * restoration, an anchor jump) are settled without animation so scrolling up never plays or hides them.
+ * Content stays in the DOM and fully visible when IntersectionObserver is missing or the visitor prefers reduced motion.
+ */
+export function SectionReveal({ children, className = '', style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-  const [hasRevealed, setHasRevealed] = useState(false);
-  const [armed, setArmed] = useState(false);
+  const [phase, setPhase] = useState<RevealPhase>('static');
 
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
     if (typeof window.IntersectionObserver !== 'function' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
 
-    setArmed(true);
-
+    setPhase('pending');
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry?.isIntersecting) {
-        setVisible(true);
-        setHasRevealed(true);
-        if (!replay) {
-          // One-shot: disconnect once revealed
-          observer.disconnect();
-        }
-      } else if (replay) {
-        // Reset visibility when element is truly out of view so re-entry animates.
-        // Crucially, hasRevealed remains TRUE, preventing .pending (opacity: 0) from hiding cards!
-        setVisible(false);
+      if (!entry) return;
+      // Only a still-pending section may change: once revealed or settled it is final.
+      if (entry.isIntersecting) {
+        setPhase(current => current === 'pending' ? 'visible' : current);
+        observer.disconnect();
+      } else if (entry.boundingClientRect && entry.boundingClientRect.bottom <= 0) {
+        // Already scrolled past: show it in its final state, no animation.
+        setPhase(current => current === 'pending' ? 'settled' : current);
+        observer.disconnect();
       }
-    }, { threshold: 0, rootMargin: replay ? '50px 0px 50px 0px' : '0px 0px 0px 0px' });
+    }, { threshold: 0 });
 
     observer.observe(node);
-
     return () => observer.disconnect();
-  }, [replay]);
+  }, []);
 
-  const isPending = armed && !hasRevealed && !visible;
-
-  return <div ref={ref} style={style} className={`${className} ${styles.reveal} ${isPending ? styles.pending : ''} ${visible ? styles.visible : ''}`}>{children}</div>;
+  return <div ref={ref} style={style} className={`${className} ${styles.reveal} ${phase === 'pending' ? styles.pending : ''} ${phase === 'visible' ? styles.visible : ''}`}>{children}</div>;
 }
 
-export function StaggerContainer({ children, className = '', replay = false }: { children: ReactNode; className?: string; replay?: boolean }) {
-  return <SectionReveal className={`${className} ${styles.stagger}`} replay={replay}>{children}</SectionReveal>;
+export function StaggerContainer({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <SectionReveal className={`${className} ${styles.stagger}`}>{children}</SectionReveal>;
 }
 
+/** Cards in a grid reveal once, a controlled stagger after the grid enters; the parent owns the observer. */
 export function BenefitsReveal({ children, className = '' }: { children: ReactNode; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<'static' | 'pending' | 'visible'>('static');
@@ -65,48 +66,41 @@ export function BenefitsReveal({ children, className = '' }: { children: ReactNo
     if (!node || !window.matchMedia) return;
     const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
     let hasScrolled = false;
-    let revealed = false;
     let frame = 0;
+    let done = false;
 
-    const measure = () => {
-      frame = 0;
-      if (preference.matches || !hasScrolled) return;
-      const bounds = node.getBoundingClientRect();
-      const visibleHeight = Math.max(0, Math.min(bounds.bottom, window.innerHeight) - Math.max(bounds.top, 0));
-      const reached = visibleHeight >= Math.min(bounds.height * 0.45, window.innerHeight * 0.3);
-      if (!revealed && reached && bounds.height > 0) {
-        revealed = true;
-        setPhase('visible');
-      } else if (revealed && (bounds.bottom < -64 || bounds.top > window.innerHeight + 64)) {
-        revealed = false;
-        setPhase('pending');
-      }
-    };
-    const onScroll = () => {
-      hasScrolled = true;
-      if (!frame) frame = window.requestAnimationFrame(measure);
-    };
-    const onPreference = () => {
-      revealed = false;
-      setPhase(preference.matches ? 'static' : 'pending');
-    };
-    onPreference();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', measure);
-    preference.addEventListener?.('change', onPreference);
-    return () => {
+    const stop = () => {
+      done = true;
       window.cancelAnimationFrame(frame);
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', measure);
-      preference.removeEventListener?.('change', onPreference);
     };
+    function measure() {
+      frame = 0;
+      if (done || preference.matches || !hasScrolled) return;
+      const bounds = node!.getBoundingClientRect();
+      if (bounds.height <= 0) return;
+      const visibleHeight = Math.max(0, Math.min(bounds.bottom, window.innerHeight) - Math.max(bounds.top, 0));
+      const reached = visibleHeight >= Math.min(bounds.height * 0.45, window.innerHeight * 0.3);
+      if (reached) { setPhase('visible'); stop(); }
+      // Scrolled up past it before it ever animated (e.g. restored scroll position): never hide or replay it.
+      else if (bounds.bottom < 0) { setPhase('static'); stop(); }
+    }
+    function onScroll() {
+      hasScrolled = true;
+      if (!frame) frame = window.requestAnimationFrame(measure);
+    }
+    if (preference.matches) { setPhase('static'); return; }
+    setPhase('pending');
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', measure);
+    return stop;
   }, []);
 
   return <div ref={ref} className={`${className} ${phase === 'pending' ? styles.benefitsPending : ''} ${phase === 'visible' ? styles.benefitsVisible : ''}`}>{children}</div>;
 }
 
-export function StaggerItem({ children, index = 0, replay = false, className = '' }: { children: ReactNode; index?: number; replay?: boolean; className?: string }) {
+export function StaggerItem({ children, index = 0, className = '' }: { children: ReactNode; index?: number; className?: string }) {
   const style = { '--motion-delay': `${Math.min(index, 8) * 70}ms` } as CSSProperties;
-  if (replay) return <SectionReveal className={`${styles.item} ${className}`} replay style={style}>{children}</SectionReveal>;
   return <div className={`${styles.item} ${className}`} style={style}>{children}</div>;
 }

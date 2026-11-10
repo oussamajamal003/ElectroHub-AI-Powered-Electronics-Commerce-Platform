@@ -163,6 +163,7 @@ model User {
   adminMfaActivationsAuthorized AdminMfaActivation[]         @relation("AdminMfaActivationAuthorizer")
   adminSeedIdentity             AdminSeedIdentity?
   adminNotificationPreference   AdminNotificationPreference?
+  adminAlertAcknowledgements    AdminAlertAcknowledgement[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1413,6 +1414,8 @@ model StoreSettings {
   region       String? @db.VarChar(100)
   postalCode   String? @db.VarChar(20)
   country      String? @db.VarChar(100)
+  /// Free-text public opening hours shown on the storefront Contact page (e.g. "Monday–Friday, 9:00 AM–6:00 PM"). NULL = not configured.
+  businessHours String? @db.VarChar(255)
   timezone     String  @default("UTC") @db.VarChar(64)
   currency     String  @default("USD") @db.VarChar(3)
   version      Int     @default(1)
@@ -1422,6 +1425,21 @@ model StoreSettings {
   updatedAt DateTime @updatedAt
 
   @@map("store_settings")
+}
+
+/// Per-administrator "seen" baseline for the header alerts. Alerts themselves are live operational counts (low stock, out of stock,
+/// paid orders awaiting fulfillment) and are never resolved by reading them; this row only records how many of each the administrator
+/// has already acknowledged, so unread = max(0, current - acknowledgedCount). Browsers never access this table.
+model AdminAlertAcknowledgement {
+  userId            String   @db.Uuid
+  category          String   @db.VarChar(32)
+  acknowledgedCount Int      @default(0)
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([userId, category])
+  @@map("admin_alert_acknowledgements")
 }
 
 /// Singleton (id = 'default'). The checkout quote, payment attempt and order commit read the same snapshot.

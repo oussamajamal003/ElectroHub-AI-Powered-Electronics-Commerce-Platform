@@ -12,6 +12,7 @@
 .skeletonActions { display: flex; align-items: center; gap: $spacing-4; margin-inline-start: auto; }
 .skeletonSummary { min-height: 21rem; }
 .skeletonContinue { justify-self: center; }
+.syncNote { color: $color-text-secondary; margin: 0; font-size: $font-size-sm; }
 .warning { color: $color-error-foreground; margin: $spacing-2 $spacing-4 $spacing-4; font-size: $font-size-sm; }
 .summary { border: 1px solid $color-border; padding: $spacing-6; display: grid; gap: $spacing-4; h2 { margin: 0 0 $spacing-2; font-size: $font-size-xl; } .warning { margin: 0; } }
 .summaryLine { display: flex; justify-content: space-between; gap: $spacing-4; color: $color-text-secondary; }

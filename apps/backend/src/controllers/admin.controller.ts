@@ -7,7 +7,7 @@ import { AdminOrderService } from '../services/admin-order.service.js';
 import { AdminCustomerService } from '../services/admin-customer.service.js';
 import { AdminDashboardService } from '../services/admin-dashboard.service.js';
 import { categoryCreateSchema, categoryListSchema, categoryStatusSchema, categoryUpdateSchema, customerListSchema, customerStatusSchema,
-  bulkStatusSchema, dashboardSchema, inventoryAdjustmentSchema, inventoryListSchema, inventoryThresholdSchema, orderListSchema, productCreateSchema,
+  bulkStatusSchema, alertAcknowledgeSchema, dashboardSchema, inventoryAdjustmentSchema, inventoryListSchema, inventoryThresholdSchema, orderListSchema, productCreateSchema,
   productListSchema, productUpdateSchema, statusChangeSchema, uuidSchema } from '../validators/admin.validator.js';
 
 const catalog = new AdminCatalogService();
@@ -94,5 +94,6 @@ export const adminController = {
   }),
   // Dashboard
   overview: action(async req => ({ data: await dashboard.overview(parse(dashboardSchema, req.query).days) })),
-  alerts: action(async req => { noQuery(req); return { data: await dashboard.alerts() }; }),
+  alerts: action(async req => { noQuery(req); return { data: await dashboard.alerts(actor(req)) }; }),
+  acknowledgeAlerts: action(async req => ({ data: await dashboard.acknowledgeAlerts(actor(req), parse(alertAcknowledgeSchema, req.body)) })),
 };
