@@ -1,9 +1,11 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { adminKeys, type ItemResponse, type Money } from '../shared/api';
 import type { AdminOrderRow } from '../orders/api';
 
-export interface AdminAlerts { lowStock: number; outOfStock: number; awaitingFulfillment: number; preparing: number; outForDelivery: number; generatedAt: string }
+export interface AdminAlertUnread { lowStock: number; outOfStock: number; awaitingFulfillment: number; total: number }
+/** Counts are live operational state (never changed by reading); `unread` is this administrator's remainder after their acknowledged baseline. */
+export interface AdminAlerts { lowStock: number; outOfStock: number; awaitingFulfillment: number; preparing: number; outForDelivery: number; unread?: AdminAlertUnread; generatedAt: string }
 export interface DashboardOverview {
   generatedAt: string;
   window: { days: number; since: string; timezone: string };
@@ -41,5 +43,35 @@ export function useAdminAlerts(enabled = true) {
     enabled,
     staleTime: 30_000,
     refetchInterval: 60_000,
+  });
+}
+
+const noUnread: AdminAlertUnread = { lowStock: 0, outOfStock: 0, awaitingFulfillment: 0, total: 0 };
+
+/**
+ * Acknowledges the alert counts the administrator was shown. The server clamps them to its own counts, so an alert that arrived
+ * meanwhile stays unread. The badge clears immediately; a failure restores the previous state and surfaces the error. Only the
+ * unread remainder is touched: the operational counts and the alert list itself are never altered.
+ */
+export function useAcknowledgeAdminAlerts() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (seen: Pick<AdminAlerts, 'lowStock' | 'outOfStock' | 'awaitingFulfillment'>) =>
+      apiClient<ItemResponse<AdminAlerts>>('/api/admin/dashboard/alerts/acknowledge', { method: 'POST', data: seen }),
+    onMutate: async seen => {
+      // A refetch that started before this click would overwrite the optimistic state with the pre-acknowledgement payload.
+      await client.cancelQueries({ queryKey: adminKeys.alerts });
+      const previous = client.getQueryData<ItemResponse<AdminAlerts>>(adminKeys.alerts);
+      if (previous) {
+        const current = previous.data;
+        const remaining = { lowStock: Math.max(0, current.lowStock - seen.lowStock), outOfStock: Math.max(0, current.outOfStock - seen.outOfStock),
+          awaitingFulfillment: Math.max(0, current.awaitingFulfillment - seen.awaitingFulfillment) };
+        client.setQueryData<ItemResponse<AdminAlerts>>(adminKeys.alerts, { ...previous,
+          data: { ...current, unread: { ...noUnread, ...remaining, total: remaining.lowStock + remaining.outOfStock + remaining.awaitingFulfillment } } });
+      }
+      return { previous };
+    },
+    onError: (_error, _seen, context) => { if (context?.previous) client.setQueryData(adminKeys.alerts, context.previous); },
+    onSuccess: response => client.setQueryData(adminKeys.alerts, response),
   });
 }

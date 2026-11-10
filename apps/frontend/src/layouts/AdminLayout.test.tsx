@@ -3,11 +3,11 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdminLayout } from './AdminLayout';
 import { useAdminAuth } from '@/features/auth/context/AuthContext';
-import { useAdminAlerts } from '@/features/admin/dashboard/api';
+import { useAcknowledgeAdminAlerts, useAdminAlerts } from '@/features/admin/dashboard/api';
 import { SIDEBAR_PREFERENCE_KEY } from '@/features/admin/shell/navigation';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({ useAdminAuth: vi.fn() }));
-vi.mock('@/features/admin/dashboard/api', () => ({ useAdminAlerts: vi.fn() }));
+vi.mock('@/features/admin/dashboard/api', () => ({ useAdminAlerts: vi.fn(), useAcknowledgeAdminAlerts: vi.fn() }));
 vi.mock('@/features/admin/dashboard/useAdminInventoryLiveUpdates', () => ({ useAdminInventoryLiveUpdates: vi.fn() }));
 
 const logout = vi.fn();
@@ -22,6 +22,7 @@ describe('AdminLayout shell', () => {
     vi.mocked(useAdminAuth).mockReturnValue({ user: { id: 'a', email: 'admin@example.test', firstName: 'Ada', lastName: 'Admin', role: 'ADMIN' }, logout } as unknown as ReturnType<typeof useAdminAuth>);
     vi.mocked(useAdminAlerts).mockReturnValue({ data: { data: { lowStock: 2, outOfStock: 1, awaitingFulfillment: 3, preparing: 0, outForDelivery: 4, generatedAt: '' } },
       isPending: false, isError: false } as unknown as ReturnType<typeof useAdminAlerts>);
+    vi.mocked(useAcknowledgeAdminAlerts).mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false } as unknown as ReturnType<typeof useAcknowledgeAdminAlerts>);
   });
 
   it('lists only implemented modules (05.1 operations + 05.2 growth/administration) and marks the current one', () => {
@@ -35,9 +36,16 @@ describe('AdminLayout shell', () => {
     expect(within(nav).getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current');
   });
 
-  it('announces real alert counts without unread semantics', () => {
+  it('announces unread alerts, and the operational total once everything has been read', () => {
+    vi.mocked(useAdminAlerts).mockReturnValue({ data: { data: { lowStock: 2, outOfStock: 1, awaitingFulfillment: 3, preparing: 0, outForDelivery: 4, generatedAt: '',
+      unread: { lowStock: 0, outOfStock: 1, awaitingFulfillment: 0, total: 1 } } }, isPending: false, isError: false } as unknown as ReturnType<typeof useAdminAlerts>);
+    const view = renderAt('/admin');
+    expect(screen.getByRole('button', { name: 'Alerts: 1 unread' })).toBeInTheDocument();
+    view.unmount();
+    vi.mocked(useAdminAlerts).mockReturnValue({ data: { data: { lowStock: 2, outOfStock: 1, awaitingFulfillment: 3, preparing: 0, outForDelivery: 4, generatedAt: '',
+      unread: { lowStock: 0, outOfStock: 0, awaitingFulfillment: 0, total: 0 } } }, isPending: false, isError: false } as unknown as ReturnType<typeof useAdminAlerts>);
     renderAt('/admin');
-    expect(screen.getByRole('button', { name: 'Alerts: 6 items need attention' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Alerts: no unread, 6 items need attention' })).toBeInTheDocument();
   });
 
   it('remembers the collapsed sidebar and keeps accessible names on the icon rail', () => {

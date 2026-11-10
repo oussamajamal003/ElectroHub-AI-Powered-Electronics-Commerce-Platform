@@ -40,7 +40,7 @@ const asAdministrator = (capabilities: { isOwner: boolean; canManageAdmins: bool
   vi.mocked(useAdminProfile).mockReturnValue({ data: { capabilities } } as unknown as ReturnType<typeof useAdminProfile>);
 
 const profile = {
-  storeName: 'ElectroHub', supportEmail: 'hello@electrohub.com', supportPhone: '+1 555 000 0000', addressLine1: '123 Commerce Street',
+  storeName: 'ElectroHub', businessHours: null, supportEmail: 'hello@electrohub.com', supportPhone: '+1 555 000 0000', addressLine1: '123 Commerce Street',
   addressLine2: null, city: 'New York', region: 'NY', postalCode: '10001', country: 'United States', timezone: 'America/New_York',
   currency: 'USD' as const, version: 4, updatedAt: '2026-11-01T00:00:00.000Z',
 };
@@ -142,6 +142,26 @@ describe('store section', () => {
     expect(screen.getByLabelText('Currency')).toHaveValue('USD – US Dollar (fixed)');
     expect(screen.getByLabelText('Currency')).toHaveAttribute('readonly');
     expect(screen.queryByRole('combobox', { name: /currency/i })).not.toBeInTheDocument();
+  });
+
+  it('offers example placeholders for every public contact field, which are not saved values', async () => {
+    vi.mocked(useStoreSettings).mockReturnValue(query({ ...profile, supportEmail: null, supportPhone: null, addressLine1: null, addressLine2: null,
+      city: null, country: null, businessHours: null }) as unknown as Hook<typeof useStoreSettings>);
+    renderPage();
+    expect(screen.getByLabelText('Store email')).toHaveAttribute('placeholder', 'support@example.com');
+    expect(screen.getByLabelText('Phone')).toHaveAttribute('placeholder', '+961 XX XXX XXX');
+    expect(screen.getByLabelText('Business hours')).toHaveAttribute('placeholder', 'Monday–Friday, 9:00 AM–6:00 PM');
+    expect(screen.getByLabelText('Address line 1')).toHaveAttribute('placeholder');
+    // Untouched placeholders are not values: nothing is dirty and nothing can be saved.
+    expect(screen.getByLabelText('Business hours')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
+  });
+
+  it('saves business hours with the rest of the profile, using the existing authenticated save', async () => {
+    renderPage();
+    setValue(screen.getByLabelText('Business hours'), 'Monday–Friday, 9:00 AM–6:00 PM');
+    submit('Save Changes');
+    await waitFor(() => expect(storeSave).toHaveBeenCalledWith(expect.objectContaining({ expectedVersion: 4, businessHours: 'Monday–Friday, 9:00 AM–6:00 PM' })));
   });
 
   it('keeps Save disabled until a field actually changes, then saves with the expected version', async () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
+vi.mock('../lib/prisma.js', () => ({ prisma: {} }));
 import { AdminDashboardService } from './admin-dashboard.service.js';
 import type { AdminInventoryService } from './admin-inventory.service.js';
 

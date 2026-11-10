@@ -73,6 +73,7 @@ $sidebar-rail: 4.5rem;
 .alertInfo { background: $color-info-background; color: $color-info-foreground; border-color: $color-info-border; }
 .alertNeutral { background: $color-surface; color: $color-text-secondary; border-color: $color-border; }
 .alertText { flex: 1; font-size: $font-size-sm; }
+.newMarker { font-size: $font-size-xs; font-weight: $font-weight-semibold; color: $color-primary; }
 .alertCount { font-family: $font-family-mono; font-size: $font-size-sm; font-weight: $font-weight-semibold; }
 .profileLabel { display: grid; gap: 2px; padding-top: $spacing-2; padding-bottom: $spacing-2;
   strong { font-size: $font-size-sm; color: $color-text-primary; }
