@@ -71,7 +71,7 @@
     padding-right: $spacing-10; // Space for the error icon
 
     &:focus {
-      box-shadow: 0 0 0 $focus-ring-width rgba($color-error, 0.3);
+      box-shadow: 0 0 0 $focus-ring-width theme-alpha($color-error, 0.3);
       border-color: $color-error;
     }
   }

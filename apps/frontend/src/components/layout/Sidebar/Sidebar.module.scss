@@ -80,7 +80,7 @@
   &:hover:not(:disabled) {
     background-color: $color-accent;
     border-color: $color-border;
-    color: $color-text-inverse;
+    color: $color-accent-foreground;
   }
 
   &.active {

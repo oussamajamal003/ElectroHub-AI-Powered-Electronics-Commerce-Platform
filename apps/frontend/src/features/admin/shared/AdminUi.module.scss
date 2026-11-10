@@ -12,7 +12,7 @@
 .crumbList { display: flex; align-items: center; flex-wrap: wrap; gap: $spacing-1; margin: 0; padding: 0; list-style: none; font-size: $font-size-sm; }
 .crumb { display: inline-flex; align-items: center; gap: $spacing-1; min-width: 0; }
 .crumbLink { color: $color-text-secondary; text-decoration: none; padding: 2px 0;
-  &:hover { color: $color-primary; text-decoration: underline; }
+  &:hover { color: $color-primary-text; text-decoration: underline; }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
 .crumbCurrent { color: $color-text-primary; font-weight: $font-weight-medium; max-width: min(60vw, 28rem); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crumbSeparator { width: 14px; height: 14px; color: $color-text-muted; flex-shrink: 0; }
@@ -42,13 +42,13 @@
 .chip { display: inline-flex; align-items: center; gap: $spacing-2; min-height: 2.5rem; padding: 0 $spacing-4; border: 1px solid $color-border;
   background: $color-background; color: $color-text-secondary; font: inherit; font-size: $font-size-sm; font-weight: $font-weight-medium; cursor: pointer;
   transition: background-color $transition-fast, color $transition-fast, border-color $transition-fast;
-  &:hover { color: $color-primary; border-color: $color-primary; }
+  &:hover { color: $color-primary-text; border-color: $color-primary; }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
 .chipActive { background: $color-primary; border-color: $color-primary; color: $color-text-inverse;
   &:hover { color: $color-text-inverse; background: $color-primary-dark; } .chipCount { color: inherit; background: $color-primary-dark; } }
 .chipCount { font-family: $font-family-mono; font-size: $font-size-xs; padding: 0 $spacing-1; background: $color-surface; color: $color-text-secondary; }
 .resetButton { display: inline-flex; align-items: center; gap: $spacing-2; min-height: 2.5rem; margin-left: auto; padding: 0 $spacing-4; border: 0;
-  background: $color-accent; color: $color-text-inverse; font: inherit; font-size: $font-size-sm; font-weight: $font-weight-semibold; cursor: pointer;
+  background: $color-accent; color: $color-accent-foreground; font: inherit; font-size: $font-size-sm; font-weight: $font-weight-semibold; cursor: pointer;
   svg { width: 16px; height: 16px; }
   &:hover:not(:disabled) { filter: brightness(.92); }
   &:disabled { opacity: .55; cursor: not-allowed; }
@@ -89,12 +89,12 @@
 .tone-warning { background: $color-warning-background; color: $color-warning-foreground; border-color: $color-warning-border; }
 .tone-error { background: $color-error-background; color: $color-error-foreground; border-color: $color-error-border; }
 .tone-info { background: $color-info-background; color: $color-info-foreground; border-color: $color-info-border; }
-.tone-primary { background: rgba($color-primary, .08); color: $color-primary; border-color: rgba($color-primary, .25); }
+.tone-primary { background: theme-alpha($color-primary, .08); color: $color-primary-text; border-color: theme-alpha($color-primary, .25); }
 .text-success { color: $color-success-foreground; }
 .text-warning { color: $color-warning-foreground; }
 .text-error { color: $color-error-foreground; }
 .text-info { color: $color-info-foreground; }
-.text-primary { color: $color-primary; }
+.text-primary { color: $color-primary-text; }
 
 .pill { display: inline-flex; align-items: center; gap: $spacing-1; padding: 2px $spacing-2; border: 1px solid; font-size: $font-size-xs;
   font-weight: $font-weight-semibold; white-space: nowrap; line-height: 1.5; svg { width: 13px; height: 13px; flex-shrink: 0; } }
@@ -104,7 +104,7 @@
 .tableCard { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; overflow-x: clip; background: $color-background;
   &[aria-busy='true'] { tbody { opacity: .55; transition: opacity 120ms linear; }
     &::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; z-index: 2;
-      background: linear-gradient(90deg, transparent, $color-primary, transparent) 0 0 / 40% 100% no-repeat, rgba($color-primary, .15);
+      background: linear-gradient(90deg, transparent, $color-primary, transparent) 0 0 / 40% 100% no-repeat, theme-alpha($color-primary, .15);
       animation: tableBusy 1s ease-in-out infinite; }
     @media (prefers-reduced-motion: reduce) { tbody { transition: none; } &::before { animation: none; background: $color-primary; } } }
   table { min-width: 720px; }

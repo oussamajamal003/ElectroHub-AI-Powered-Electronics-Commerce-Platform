@@ -57,7 +57,7 @@ $eyebrow-tracking: .06em;
 .heroOut .tile { background: $color-primary; border-color: $color-primary; color: $color-text-inverse; }
 .heroText { display: grid; gap: 2px; min-width: 0; }
 .hero .eyebrow { color: inherit; }
-.heroOut .eyebrow { color: $color-border; }
+.heroOut .eyebrow { color: #e2e8f0; } // fixed: the out-for-delivery slab is dark in both themes
 .heroTitle { font-size: $font-size-2xl; font-weight: $font-weight-bold; line-height: $line-height-tight; overflow-wrap: anywhere; }
 .heroDescription { margin: 0; font-size: $font-size-base; line-height: $line-height-normal; color: $color-text-primary; }
 .heroOut .heroDescription { color: $color-text-inverse; }
@@ -96,7 +96,7 @@ $eyebrow-tracking: .06em;
 .copy { display: inline-flex; align-items: center; gap: $spacing-2; min-height: 2.75rem; min-width: 2.75rem; padding: 0 $spacing-3; background: $color-background;
   border: 1px solid $color-border; font: $font-weight-medium $font-size-sm $font-family-base; color: $color-text-primary; cursor: pointer;
   svg { width: 1rem; height: 1rem; }
-  &:hover { border-color: $color-primary; color: $color-primary; }
+  &:hover { border-color: $color-primary; color: $color-primary-text; }
   @include focus-ring;
   @include motion-safe { transition: border-color $transition-normal, color $transition-normal; } }
 .copyError { flex-basis: 100%; margin: 0; font-size: $font-size-sm; color: $color-error-foreground; }
@@ -111,7 +111,7 @@ $eyebrow-tracking: .06em;
   border: 2px solid $color-border; color: $color-text-secondary; svg { width: 1.25rem; height: 1.25rem; }
   @include motion-safe { transition: background-color $transition-normal, border-color $transition-normal, color $transition-normal; } }
 .stepDone .node { background: $color-primary; border-color: $color-primary; color: $color-text-inverse; }
-.stepCurrent:not(.stepDone) .node { background: $color-background; border-color: $color-primary; color: $color-primary; box-shadow: 0 0 0 4px $color-info-background; }
+.stepCurrent:not(.stepDone) .node { background: $color-background; border-color: $color-primary; color: $color-primary-text; box-shadow: 0 0 0 4px $color-info-background; }
 .stepFinal .node { background: $color-success-foreground; border-color: $color-success-foreground; }
 .tick { position: absolute; inset-inline-end: -4px; bottom: -4px; width: 18px; height: 18px; border-radius: $radius-full; display: grid; place-items: center;
   background: $color-background; color: $color-success-foreground; border: 2px solid $color-success-foreground; svg { width: 10px; height: 10px; } }
@@ -175,7 +175,7 @@ $eyebrow-tracking: .06em;
 @container dt (min-width: 64rem) { .actions { grid-template-columns: 1fr; } }
 .back { display: inline-flex; align-items: center; justify-content: center; gap: $spacing-2; min-height: 2.75rem; font-size: $font-size-base;
   font-weight: $font-weight-medium; color: $color-text-primary; text-decoration: none; svg { width: 1rem; height: 1rem; }
-  &:hover { color: $color-primary; text-decoration: underline; }
+  &:hover { color: $color-primary-text; text-decoration: underline; }
   @include focus-ring; }
 
 .skeletonStack { display: grid; gap: $spacing-4; }

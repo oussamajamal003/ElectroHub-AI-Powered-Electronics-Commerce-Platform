@@ -10,22 +10,22 @@
 $discovery-canvas: $color-surface;
 $discovery-surface: $color-background;
 $discovery-surface-raised: $color-background;
-$discovery-surface-hover: #f1f5f9; // lifted from the Button ghost hover literal
-$discovery-surface-selected: #eff6ff; // new — keyboard-active option; primary text on it is 4.8:1
-$discovery-overlay: rgba($color-secondary, 0.5);
+$discovery-surface-hover: $color-surface-hover; // lifted from the Button ghost hover literal
+$discovery-surface-selected: $color-primary-subtle; // keyboard-active option; primary text on it is 4.8:1 (light) / 6.4:1 (dark)
+$discovery-overlay: $color-overlay;
 
 // --- Borders, focus and elevation ---
 $discovery-border: $color-border;
 $discovery-border-strong: $color-text-muted;
 $discovery-focus-ring: $color-primary;
-$discovery-shadow-dialog: 0 24px 48px -12px rgba($color-secondary, 0.28), 0 0 0 1px rgba($color-secondary, 0.06); // new
-$discovery-shadow-floating: 0 8px 20px -8px rgba($color-secondary, 0.2); // new
+$discovery-shadow-dialog: var(--eh-discovery-shadow-dialog);
+$discovery-shadow-floating: var(--eh-discovery-shadow-floating);
 
 // --- Text ---
 $discovery-text-primary: $color-text-primary;
 $discovery-text-secondary: $color-text-secondary;
 $discovery-text-muted: $color-text-muted; // placeholder and disabled only (2.6:1)
-$discovery-text-accent: $color-primary;
+$discovery-text-accent: $color-primary-text;
 
 // --- Interaction ---
 $discovery-accent: $color-primary;
@@ -35,8 +35,8 @@ $discovery-keyboard-hint: $discovery-surface-hover;
 
 // --- Visual (image) search ---
 $discovery-visual-accent: $color-accent; // decoration only — 2.4:1 on white
-$discovery-visual-ink: #0e7490; // new — readable cyan for icons and labels (5.4:1)
-$discovery-visual-subtle: #ecfeff; // new
+$discovery-visual-ink: $color-accent-text; // readable cyan for icons and labels (5.4:1 light)
+$discovery-visual-subtle: $color-accent-subtle;
 $discovery-upload-hover: $discovery-visual-subtle;
 $discovery-upload-dragging: $discovery-visual-ink;
 

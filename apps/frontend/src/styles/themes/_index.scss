@@ -1,4 +1,167 @@
 // ====================================
-// Themes
+// Themes — ElectroHub light & dark semantic tokens
 // ====================================
-// Theme definitions.
+// One source of truth for every colour/elevation token. `src/styles/abstracts/_variables.scss` maps the
+// `$color-*` / `$shadow-*` Sass variables onto these custom properties, so CSS Modules stay theme-agnostic.
+//
+// The active theme is `data-theme` on <html>, set before first paint by `public/theme-init.js` and kept in sync
+// by `ThemeProvider` (src/features/theme). Radix portals render under <body>, so they inherit it too.
+//
+// Light values are the original ElectroHub design-system values (unchanged). The dark values are an ElectroHub
+// extension — Figma has no dark variant — documented in docs/02_Design/DARK_MODE.md: a blue-tinted slate surface
+// hierarchy (canvas → card → elevated), the same #2563EB brand fill, and lighter brand/state text for AA contrast.
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  // Brand
+  --eh-color-primary: #2563eb;
+  --eh-color-primary-light: #3b82f6;
+  --eh-color-primary-dark: #1d4ed8;
+  --eh-color-primary-active: rgb(9.0052020808% 24.2208883553% 67.0732292917%); // was color.adjust(#1d4ed8, $lightness: -10%)
+  --eh-color-primary-text: #2563eb;
+  --eh-color-primary-text-hover: #1d4ed8;
+  --eh-color-primary-subtle: #eff6ff;
+  --eh-color-primary-foreground: #ffffff;
+  --eh-color-secondary: #0f172a;
+  --eh-color-secondary-light: #1e293b;
+  --eh-color-accent: #06b6d4;
+  --eh-color-accent-hover: rgb(1.8024824609% 54.6753013132% 63.6877136176%); // was color.adjust(#06b6d4, $lightness: -10%)
+  --eh-color-accent-foreground: #ffffff;
+  --eh-color-accent-text: #0e7490;
+  --eh-color-accent-subtle: #ecfeff;
+
+  // State
+  --eh-color-success: #22c55e;
+  --eh-color-success-background: #f0fdf4;
+  --eh-color-success-border: #bbf7d0;
+  --eh-color-success-foreground: #15803d;
+  --eh-color-warning: #f59e0b;
+  --eh-color-warning-background: #fffbeb;
+  --eh-color-warning-border: #fde68a;
+  --eh-color-warning-foreground: #b45309;
+  --eh-color-error: #ef4444;
+  --eh-color-error-hover: rgb(92.1491355163% 8.2430213465% 8.2430213465%); // was color.adjust(#ef4444, $lightness: -10%)
+  --eh-color-error-fill: #b91c1c; // destructive fill (white text 6.47:1)
+  --eh-color-error-fill-hover: rgb(55.1781275891% 8.3512841756% 8.3512841756%); // was color.adjust(#b91c1c, $lightness: -10%)
+  --eh-color-error-background: #fef2f2;
+  --eh-color-error-border: #fecaca;
+  --eh-color-error-foreground: #b91c1c;
+  --eh-color-info: #3b82f6;
+  --eh-color-info-background: #f0f9ff;
+  --eh-color-info-border: #bae6fd;
+  --eh-color-info-foreground: #0369a1;
+
+  // Surfaces
+  --eh-color-background: #ffffff;
+  --eh-color-surface: #f8fafc;
+  --eh-color-surface-hover: #f1f5f9;
+  --eh-color-elevated: #ffffff;
+  --eh-color-border: #e2e8f0;
+  --eh-color-border-strong: #cbd5e1;
+  --eh-color-overlay: rgb(15 23 42 / 0.5);
+  --eh-color-header-glass: rgb(255 255 255 / 0.92);
+  --eh-color-skeleton: #d9d9d9;
+  --eh-color-image-well: #f1f5f9;
+
+  // Text
+  --eh-color-text-primary: #0f172a;
+  --eh-color-text-secondary: #475569;
+  --eh-color-text-muted: #475569; // Task 06.2 AA policy: muted copy uses the secondary text colour
+  --eh-color-text-inverse: #ffffff;
+
+  // Interaction
+  --eh-color-focus-ring: #2563eb;
+  --eh-color-selection: rgb(37 99 235 / 0.18);
+
+  // Elevation
+  --eh-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --eh-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --eh-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --eh-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --eh-shadow-card-hover: 0 14px 32px -18px rgb(15 23 42 / 0.35);
+  --eh-shadow-header: 0 1px 0 rgb(15 23 42 / 0.06), 0 8px 24px -12px rgb(15 23 42 / 0.18);
+  --eh-shadow-primary-glow: 0 6px 16px -6px rgb(37 99 235 / 0.55);
+  --eh-discovery-shadow-dialog: 0 24px 48px -12px rgb(15 23 42 / 0.28), 0 0 0 1px rgb(15 23 42 / 0.06);
+  --eh-discovery-shadow-floating: 0 8px 20px -8px rgb(15 23 42 / 0.2);
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  // Brand — the #2563EB fill keeps white labels at 5.2:1; text/links use a lighter blue (≥ 6.5:1 on every dark surface).
+  --eh-color-primary: #2563eb;
+  --eh-color-primary-light: #60a5fa;
+  --eh-color-primary-dark: #1d4ed8;
+  --eh-color-primary-active: #1e40af;
+  --eh-color-primary-text: #7cb2ff;
+  --eh-color-primary-text-hover: #a9cbff;
+  --eh-color-primary-subtle: #15284a;
+  --eh-color-primary-foreground: #ffffff;
+  --eh-color-secondary: #1c2740;
+  --eh-color-secondary-light: #2a3854;
+  --eh-color-accent: #22d3ee;
+  --eh-color-accent-hover: #06b6d4;
+  --eh-color-accent-foreground: #042f38; // dark ink: 7.9:1 on #22d3ee (white would be 1.8:1)
+  --eh-color-accent-text: #67e8f9;
+  --eh-color-accent-subtle: #0b2b35;
+
+  // State — fills stay vivid; foregrounds lighten and backgrounds become low-luminance tints.
+  --eh-color-success: #22c55e;
+  --eh-color-success-background: #0c2a1c;
+  --eh-color-success-border: #1f5f3a;
+  --eh-color-success-foreground: #6ee7a0;
+  --eh-color-warning: #f59e0b;
+  --eh-color-warning-background: #2b200b;
+  --eh-color-warning-border: #6b4a12;
+  --eh-color-warning-foreground: #fcd34d;
+  --eh-color-error: #ef4444;
+  --eh-color-error-hover: #dc2626;
+  --eh-color-error-fill: #dc2626; // white text 4.83:1
+  --eh-color-error-fill-hover: #b91c1c;
+  --eh-color-error-background: #2d1418;
+  --eh-color-error-border: #7a2a31;
+  --eh-color-error-foreground: #fca5a5;
+  --eh-color-info: #60a5fa;
+  --eh-color-info-background: #0c2238;
+  --eh-color-info-border: #1e4a72;
+  --eh-color-info-foreground: #93c5fd;
+
+  // Surfaces — canvas (deepest) → card/header → elevated popovers/dialogs.
+  --eh-color-background: #111a2d;
+  --eh-color-surface: #0b1220;
+  --eh-color-surface-hover: #1b2740;
+  --eh-color-elevated: #172238;
+  --eh-color-border: #26344d;
+  --eh-color-border-strong: #3a4b69;
+  --eh-color-overlay: rgb(2 6 16 / 0.72);
+  --eh-color-header-glass: rgb(17 26 45 / 0.88);
+  --eh-color-skeleton: #1f2b44;
+  --eh-color-image-well: #e9eef5; // product photos are shot on light backgrounds; a soft light well keeps them natural
+
+  // Text
+  --eh-color-text-primary: #e8eef7;
+  --eh-color-text-secondary: #a8b5c9;
+  --eh-color-text-muted: #a8b5c9; // = dark text-secondary (same AA policy as light)
+  --eh-color-text-inverse: #ffffff;
+
+  // Interaction
+  --eh-color-focus-ring: #60a5fa;
+  --eh-color-selection: rgb(96 165 250 / 0.35);
+
+  // Elevation — shadows deepen; borders carry most of the separation.
+  --eh-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --eh-shadow-md: 0 4px 8px -2px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+  --eh-shadow-lg: 0 12px 20px -6px rgb(0 0 0 / 0.55), 0 4px 8px -4px rgb(0 0 0 / 0.45);
+  --eh-shadow-xl: 0 24px 40px -10px rgb(0 0 0 / 0.6), 0 8px 12px -6px rgb(0 0 0 / 0.5);
+  --eh-shadow-card-hover: 0 16px 32px -16px rgb(0 0 0 / 0.7);
+  --eh-shadow-header: 0 1px 0 rgb(255 255 255 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.6);
+  --eh-shadow-primary-glow: 0 6px 18px -6px rgb(37 99 235 / 0.7);
+  --eh-discovery-shadow-dialog: 0 24px 48px -12px rgb(0 0 0 / 0.65), 0 0 0 1px rgb(255 255 255 / 0.06);
+  --eh-discovery-shadow-floating: 0 8px 20px -8px rgb(0 0 0 / 0.6);
+}
+
+::selection {
+  background-color: var(--eh-color-selection);
+}

@@ -52,7 +52,7 @@
 .subsection { display: grid; gap: $spacing-3; min-width: 0; }
 .subsectionTitle { margin: 0; font-size: $font-size-base; font-weight: $font-weight-semibold; color: $color-text-primary; }
 
-.drill { display: inline-flex; align-items: center; gap: $spacing-1; color: $color-primary; font-size: $font-size-sm;
+.drill { display: inline-flex; align-items: center; gap: $spacing-1; color: $color-primary-text; font-size: $font-size-sm;
   font-weight: $font-weight-medium; text-decoration: none; min-height: 2.5rem;
   &:hover { text-decoration: underline; }
   &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; border-radius: $radius-sm; } }
@@ -70,13 +70,14 @@
 .plot { position: relative; min-width: 0; height: 12rem; }
 .svg { width: 100%; height: 100%; display: block; overflow: visible; }
 .baseline { stroke: $color-border; stroke-width: 1; }
-.bar2 { fill: rgba($color-primary, .25); transition: fill $transition-fast; }
+.bar2 { fill: theme-alpha($color-primary, .25); transition: fill $transition-fast;
+  @include dark-theme { fill: theme-alpha($color-primary-light, .6); } } // ≥ 3:1 against the dark card
 .bar2Active { fill: $color-primary; }
 @media (prefers-reduced-motion: reduce) { .bar2 { transition: none; } }
 /* Invisible full-height hit column over each bar with paid orders: hover/focus highlights the bar and fills the readout. */
 .point { position: absolute; padding: 0; border: 0; background: transparent; cursor: pointer;
   &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; } }
-.pointActive { background: rgba($color-primary, .04); }
+.pointActive { background: theme-alpha($color-primary, .04); }
 .xAxis { display: flex; justify-content: space-between; padding-left: 3.5rem; font-size: $font-size-xs; color: $color-text-muted; gap: $spacing-2; }
 .readout { margin: 0; min-height: 1.25rem; font-size: $font-size-sm; color: $color-text-secondary; }
 
@@ -120,7 +121,7 @@
 .productThumbnail { width: 2.75rem; height: 2.75rem; border: 1px solid $color-border; border-radius: $radius-sm; }
 .productDetails { display: grid; gap: $spacing-1; min-width: 0; }
 .productName, .categoryName { color: $color-text-primary; font-weight: $font-weight-medium; overflow-wrap: anywhere; text-decoration: none;
-  &:hover { color: $color-primary; text-decoration: underline; }
+  &:hover { color: $color-primary-text; text-decoration: underline; }
   &:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; border-radius: $radius-sm; } }
 .productBarTrack, .categoryTrack { display: block; height: .375rem; overflow: hidden; background: $color-surface; }
 .productBar, .categoryFill { display: block; height: 100%; background: $color-primary; }
@@ -156,7 +157,7 @@
   color: $color-text-primary; font-variant-numeric: tabular-nums;
   span { font-size: $font-size-sm; font-weight: $font-weight-regular; color: $color-text-secondary; } }
 .growthChart { display: block; width: 100%; height: 6rem; margin-top: $spacing-2; }
-.growthArea { fill: rgba($color-primary, .12); }
+.growthArea { fill: theme-alpha($color-primary, .12); }
 .growthLine { fill: none; stroke: $color-primary; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .donut { position: relative; justify-self: center; width: 8rem; height: 8rem;
   svg { display: block; width: 100%; height: 100%; }

@@ -10,9 +10,9 @@
   transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;
   svg { flex: 0 0 18px; width: 18px; height: 18px; }
   span { overflow-wrap: anywhere; }
-  &:hover:not(:disabled) { background: $color-background; color: $color-primary; }
+  &:hover:not(:disabled) { background: $color-background; color: $color-primary-text; }
   &:focus-visible { position: relative; z-index: 1; outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: -3px; }
-  &[data-state='active'] { background: $color-background; color: $color-primary; border-bottom-color: $color-primary; font-weight: $font-weight-semibold; }
+  &[data-state='active'] { background: $color-background; color: $color-primary-text; border-bottom-color: $color-primary; font-weight: $font-weight-semibold; }
   &:disabled { cursor: not-allowed; }
 }
 .panel { display: flex; flex-direction: column; gap: $spacing-4; min-width: 0; }
@@ -71,7 +71,7 @@
 .strategyLabel { display: flex; flex-wrap: wrap; align-items: center; gap: $spacing-2; }
 .performanceTrack { display: block; width: min(100%, 10rem); height: 5px; margin-top: $spacing-2; overflow: hidden; border-radius: $radius-full; background: $color-surface; > span { display: block; height: 100%; border-radius: inherit; background: $color-primary; } }
 .productIdentity { display: flex; align-items: center; gap: $spacing-3; min-width: 12rem; strong { display: block; color: $color-text-primary; } }
-.productMark { display: grid; flex: 0 0 40px; width: 40px; height: 40px; place-items: center; border: 1px solid $color-border; border-radius: $radius-md; background: $color-surface; color: $color-primary; font-weight: $font-weight-semibold; }
+.productMark { display: grid; flex: 0 0 40px; width: 40px; height: 40px; place-items: center; border: 1px solid $color-border; border-radius: $radius-md; background: $color-surface; color: $color-primary-text; font-weight: $font-weight-semibold; }
 .productIdentity .muted { display: block; margin-top: 2px; }
 .actionsCell { white-space: nowrap; }
 .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: $spacing-3; }
@@ -86,7 +86,7 @@
 .previewProducts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: $spacing-3; margin: $spacing-2 0 0; padding: 0; list-style: none; }
 .previewProduct { display: flex; align-items: center; gap: $spacing-3; min-width: 0; padding: $spacing-3; border: 1px solid $color-border; border-radius: $radius-md; background: $color-background; }
 .previewImage, .previewImageFallback { flex: 0 0 64px; width: 64px; height: 64px; border-radius: $radius-md; object-fit: contain; background: $color-surface; }
-.previewImageFallback { display: grid; place-items: center; color: $color-primary; font-size: $font-size-lg; font-weight: $font-weight-semibold; }
+.previewImageFallback { display: grid; place-items: center; color: $color-primary-text; font-size: $font-size-lg; font-weight: $font-weight-semibold; }
 .previewProductInfo { display: grid; flex: 1; gap: $spacing-1; min-width: 0; font-size: $font-size-sm; > strong:first-child { overflow-wrap: anywhere; } > span { color: $color-text-secondary; } }
 .previewPrice { color: $color-text-primary; font-variant-numeric: tabular-nums; }
 .visuallyHidden {
