@@ -13,7 +13,8 @@ const enabled = process.env.DELIVERY_PG_RUN === '1';
 let app: Express;
 let prisma: typeof import('../lib/prisma.js').prisma;
 const fixtures = deliveryFixtures('http');
-const bearer = (user: { id: string }, role: string) => `Bearer ${generateAccessToken({ userId: user.id, role })}`;
+const bearer = (user: { id: string; sessionId?: string }, role: string) =>
+  `Bearer ${generateAccessToken({ userId: user.id, role, sessionId: user.sessionId })}`;
 
 /** Every key anywhere in a JSON value, so a forbidden field cannot hide inside a nested object. */
 function keys(value: unknown, found = new Set<string>()): Set<string> {

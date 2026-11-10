@@ -14,7 +14,8 @@ import { deliveryFixtures } from '../services/__tests__/helpers/delivery-fixture
 
 const enabled = process.env.DELIVERY_PG_RUN === '1';
 const fixtures = deliveryFixtures('realtime');
-const bearer = (user: { id: string }, role: string) => `Bearer ${generateAccessToken({ userId: user.id, role })}`;
+const bearer = (user: { id: string; sessionId?: string }, role: string) =>
+  `Bearer ${generateAccessToken({ userId: user.id, role, sessionId: user.sessionId })}`;
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 type Event = { v: number; orderReference: string; revision: number; changed: string[]; source: string; snapshot: Record<string, unknown>;
   timelineEntry: unknown; timelineEntries: unknown[] };
