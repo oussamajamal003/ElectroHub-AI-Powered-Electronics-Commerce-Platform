@@ -14,8 +14,8 @@ third-party surfaces, and no light-mode regression. No backend, database, paymen
 | Item | Value |
 |---|---|
 | Starting branch / SHA | `claude/awesome-shannon-u0aukn` @ `9cae864` (clean tree) |
-| Active Phase 06.2 branch | `origin/feature/06.2-accessibility-qa-ci-cd` — `9cae864` at start, advanced to `028f0a4` during this task |
-| Integration | Dark-mode commits rebased onto `028f0a4`; 3 overlapping style files resolved semantically (§16). No shared branch was pushed to. |
+| Active Phase 06.2 branch | `origin/feature/06.2-accessibility-qa-ci-cd` (PR #51) — `9cae864` at start, `028f0a4`, then `960c062` during this task |
+| Integration | Unpushed dark-mode commits rebased onto `028f0a4` (3 overlapping style files resolved semantically, §16); `960c062` merged in afterwards (no conflicts, no force-push). No shared branch was pushed to. |
 | Dark-mode branches | `feature/06.2-premium-dark-mode-cloud` (requested name; triggers CI) and `claude/awesome-shannon-u0aukn` (session branch), same commits |
 
 ## 3. Theme architecture
@@ -103,13 +103,13 @@ dark (no layout shift), no horizontal overflow — PASS in Chromium, Firefox and
 (light/dark pairs of home, catalog, product detail, cart, admin dashboard, products, analytics, login, mobile catalog, mobile admin orders,
 plus dark auth dialog and alerts menu; synthetic fixture data only).
 
-## 13. Unit / component / Playwright results (rebased on `028f0a4`)
+## 13. Unit / component / Playwright results (on top of parent `960c062`)
 
 | Command | Result |
 |---|---|
 | `npm run typecheck --workspace=@electrohub/frontend` | PASS |
 | `npm run lint --workspace=@electrohub/frontend` | PASS — 0 errors, 3 pre-existing warnings (none in changed files) |
-| `npm run test --workspace=@electrohub/frontend` | PASS — 172 files, 1432 tests (incl. 19 new theme/header/Stripe tests) |
+| `npm run test --workspace=@electrohub/frontend` | PASS — 173 files, 1434 tests (incl. 19 new theme/header/Stripe tests) |
 | `npm run build --workspace=@electrohub/frontend` | PASS |
 | `npx playwright test -c playwright.dark-mode.config.ts` | PASS — 138/138 (46 Chromium, 46 Firefox, 46 WebKit) |
 | `npx storybook build` | PASS |
