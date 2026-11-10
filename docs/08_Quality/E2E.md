@@ -301,6 +301,8 @@ Critical E2E tests should run before release.
 
 A full E2E suite may run in a dedicated CI stage when execution time is significant.
 
+Task 06.1: the **Release E2E** job (`.github/workflows/ci.yml`) runs `apps/frontend/playwright.release.config.ts` on every push and pull request: the real backend (`NODE_ENV=test`, hermetic `ELECTROHUB_ENV_FILES=none`, per-run secrets) against the disposable PostgreSQL action, six projects (Chromium/Firefox/WebKit desktop, WebKit 390, Chromium 768, Firefox 1920), with the HTML report and failure traces uploaded as an artifact. Coverage and known gaps: [Task 06.1](../tasks/Phase-06/TASK_06.1_AUTOMATED_TESTING_E2E_CROSS_BROWSER.md).
+
 ## 20. Definition of Done
 
 E2E testing is complete when:
