@@ -122,4 +122,3 @@ describe('AdminLayout shell', () => {
     document.documentElement.removeAttribute('data-theme');
   });
 });
-

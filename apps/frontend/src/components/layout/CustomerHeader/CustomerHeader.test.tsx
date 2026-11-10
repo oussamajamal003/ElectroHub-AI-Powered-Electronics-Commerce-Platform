@@ -539,4 +539,3 @@ describe('CustomerHeader', () => {
     window.localStorage.clear();
   });
 });
-
