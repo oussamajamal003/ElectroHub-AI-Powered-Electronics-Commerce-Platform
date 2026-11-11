@@ -80,7 +80,25 @@ Real Brevo acceptance and inbox delivery remain **NOT VERIFIED** (needs authoris
 - Frontend changed areas: `npx vitest run` on AdminSettingsPage, ProductDetailPage, layouts, motion, cart, CartPage, CompanyPages → **14 files, 152 passed**; later AdminAlertsBadge + AdminSettingsPage → 38 passed.
 - Frontend `npx tsc -b` and `npx tsc -p tsconfig.quality.json`: exit 0. ESLint on changed files: clean.
 - Backend `npx tsc --noEmit`: clean. ESLint on changed files: clean. Contact unit + route + capture tests: 16 passed.
-- Playwright (Chromium) and the full frontend suite: see "Final results" below.
+- Contact through the real provider capture: 5 passed (above).
+
+## Final results (Round 2)
+- **Full frontend `npx vitest run`: 173 files, 1435 tests passed, 0 failed** (the Round 1 `AdminSettingsPage` failure is fixed).
+- **Playwright Chromium, `npx playwright test -c playwright.motion-contact.config.ts`: 40 passed, 0 failed.** New since Round 1:
+  - Product Details 1440/390 px scroll lifecycle with recorded animation, transition and remount counts, plus reload/back-forward, reduced motion and the `/products` catalog;
+  - review box at 320/390/1440 px, which also fails on any runtime page error;
+  - "See all alerts" flow;
+  - Contact/About at 320/390/768/1024/1440/1920 px;
+  - axe WCAG 2.0/2.1 A+AA audits with no violations on Contact (configured, empty, validation errors), About, the review form and the open alerts menu.
+- **Same specs against the base commit `9e50655`:** Product Details passed (nothing to fix there), and the `/products` catalog failed with cards re-hidden while scrolling up. That is the reproduced defect.
+- Frontend production build (`npm run build`): passes.
+
+### Round 2 incidents, recorded honestly
+- `98515bc` failed **Frontend / Build** because the review hint used a non-existent SCSS token (`$font-weight-normal`). Typecheck does not compile SCSS. Fixed in `0e4e6bf` (`$font-weight-regular`); CI's Frontend / Build passed there.
+- The first Playwright run after that commit had 8 failures. Seven were the same SCSS error (Product Details never rendered); the Home one was a side effect of it and passed on re-run. Then 3 review-box failures were my fixture's fault: it answered signed-in cart reads with an array, which crashed the app. Fixed in `6f7d260` with the repository's typed contract fixtures.
+
+## CI
+See the PR for the final head; check results are recorded in the PR description once the run on the final SHA completes.
 
 ## Still NOT VERIFIED
 - New specs on Firefox/WebKit (only Chromium is installed in this sandbox; CI's Release E2E covers its own suite on all three engines).
