@@ -95,7 +95,7 @@ export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload, o
     <div className={styles.fieldGrid}>
       <h3 className={settingsStyles.groupHeading}>Store and contact</h3>
       <Input label="Store name" value={draft.storeName} onChange={event => update('storeName', event.target.value)} error={errors.storeName}
-        maxLength={120} fullWidth autoComplete="organization" />
+        maxLength={120} fullWidth autoComplete="organization" placeholder="Your store name" />
       <Input label="Store email" type="email" value={draft.supportEmail} onChange={event => update('supportEmail', event.target.value)}
         error={errors.supportEmail} maxLength={255} fullWidth autoComplete="email" placeholder="support@example.com"
         helperText="Public. Customer messages from the Contact page are delivered here." />
@@ -108,17 +108,17 @@ export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload, o
       <Input label="Currency" value="USD – US Dollar (fixed)" readOnly fullWidth data-testid="store-currency" />
       <h3 className={settingsStyles.groupHeading}>Address and locale</h3>
       <Input label="Address line 1" value={draft.addressLine1} onChange={event => update('addressLine1', event.target.value)}
-        error={errors.addressLine1} maxLength={255} fullWidth autoComplete="address-line1" placeholder="Street, building" />
+        error={errors.addressLine1} maxLength={255} fullWidth autoComplete="address-line1" placeholder="Street, Building" />
       <Input label="Address line 2" value={draft.addressLine2} onChange={event => update('addressLine2', event.target.value)}
         error={errors.addressLine2} maxLength={255} fullWidth autoComplete="address-line2" placeholder="Floor, suite (optional)" />
       <Input label="City" value={draft.city} onChange={event => update('city', event.target.value)} error={errors.city} maxLength={100} fullWidth
-        autoComplete="address-level2" placeholder="City" />
+        autoComplete="address-level2" placeholder="Enter city" />
       <Input label="State or region" value={draft.region} onChange={event => update('region', event.target.value)} error={errors.region}
-        maxLength={100} fullWidth autoComplete="address-level1" />
+        maxLength={100} fullWidth autoComplete="address-level1" placeholder="Enter state or region (optional)" />
       <Input label="Postal code" value={draft.postalCode} onChange={event => update('postalCode', event.target.value)} error={errors.postalCode}
-        maxLength={20} fullWidth autoComplete="postal-code" />
+        maxLength={20} fullWidth autoComplete="postal-code" placeholder="Enter postal code (optional)" />
       <Input label="Country" value={draft.country} onChange={event => update('country', event.target.value)} error={errors.country} maxLength={100}
-        fullWidth autoComplete="country-name" placeholder="Country" />
+        fullWidth autoComplete="country-name" placeholder="Enter country" />
       <div className={styles.fieldFull}>
         <Select label="Time zone" options={timeZoneOptions} value={draft.timezone} onValueChange={value => update('timezone', value)}
           error={errors.timezone} fullWidth aria-label="Time zone" />

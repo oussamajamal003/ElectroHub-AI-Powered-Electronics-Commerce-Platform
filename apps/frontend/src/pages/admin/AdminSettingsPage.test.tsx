@@ -151,7 +151,10 @@ describe('store section', () => {
     expect(screen.getByLabelText('Store email')).toHaveAttribute('placeholder', 'support@example.com');
     expect(screen.getByLabelText('Phone')).toHaveAttribute('placeholder', '+961 XX XXX XXX');
     expect(screen.getByLabelText('Business hours')).toHaveAttribute('placeholder', 'Monday–Friday, 9:00 AM–6:00 PM');
-    expect(screen.getByLabelText('Address line 1')).toHaveAttribute('placeholder');
+    // Every editable store text field has an example placeholder (Currency is read-only; Time zone is a select).
+    const expected: Record<string, string> = { 'Store name': 'Your store name', 'Address line 1': 'Street, Building', 'Address line 2': 'Floor, suite (optional)',
+      City: 'Enter city', 'State or region': 'Enter state or region (optional)', 'Postal code': 'Enter postal code (optional)', Country: 'Enter country' };
+    for (const [label, placeholder] of Object.entries(expected)) expect(screen.getByLabelText(label)).toHaveAttribute('placeholder', placeholder);
     // Untouched placeholders are not values: nothing is dirty and nothing can be saved.
     expect(screen.getByLabelText('Business hours')).toHaveValue('');
     expect(screen.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
@@ -314,6 +317,8 @@ describe('tabs and the URL', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    // Radix keeps the page behind a dialog aria-hidden until the dialog has finished closing; wait for that instead of racing it.
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument());
     expect(screen.getByRole('heading', { name: 'Store Information' })).toBeInTheDocument();
     expect(screen.getByLabelText('Store name')).toHaveValue('ElectroHub!');
 

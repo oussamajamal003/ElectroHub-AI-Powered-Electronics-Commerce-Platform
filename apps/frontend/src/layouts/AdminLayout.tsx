@@ -94,6 +94,10 @@ function AlertsMenu() {
           <span className={styles.alertCount}>{formatCount(entry.count)}</span>
         </Link>
       </DropdownMenuItem>)}
+      {data && <DropdownMenuSeparator />}
+      {data && <DropdownMenuItem asChild>
+        <Link to="/admin" className={styles.seeAll}>See all alerts</Link>
+      </DropdownMenuItem>}
       {data && <p className={styles.menuFoot}>Live counts from orders and inventory. Reading alerts clears the unread badge; the counts clear only when the work is done.</p>}
     </DropdownMenuContent>
   </DropdownMenu>;

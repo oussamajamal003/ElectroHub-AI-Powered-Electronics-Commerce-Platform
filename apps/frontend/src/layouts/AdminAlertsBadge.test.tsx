@@ -60,6 +60,7 @@ describe('admin alerts unread badge', () => {
     // The menu is the read history: operational counts stay, with this session's "new" markers.
     expect(await screen.findByText('Low stock')).toBeInTheDocument();
     expect(screen.getByText(/2 new/)).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'See all alerts' })).toHaveAttribute('href', '/admin');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Alerts: no unread, 6 items need attention', hidden: true })).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /Alerts: no unread/, hidden: true })).not.toHaveTextContent('6');
     expect(vi.mocked(apiClient)).toHaveBeenCalledWith('/api/admin/dashboard/alerts/acknowledge', expect.objectContaining({ method: 'POST', data: { lowStock: 2, outOfStock: 1, awaitingFulfillment: 3 } }));
