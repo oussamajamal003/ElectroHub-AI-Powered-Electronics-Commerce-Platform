@@ -1,3 +1,4 @@
+import { emailValidationError } from '@/lib/emailValidation';
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -33,7 +34,6 @@ export interface AuthModalProps {
   onSwitchToLogin?: () => void;
 }
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const maskEmail = (email: string) => email.replace(/^(.)([^@]*)(@.*)$/, (_match, first: string, _middle: string, domain: string) => `${first}***${domain}`);
 
 const normalizeErrorMessage = (err: unknown): string => {
@@ -236,15 +236,7 @@ export function AuthModal({
   };
 
   // Login validation
-  const validateLoginEmail = (value: string) => {
-    if (!value.trim()) {
-      return 'Email address is required.';
-    }
-    if (!EMAIL_REGEX.test(value.trim())) {
-      return 'Please enter a valid email address.';
-    }
-    return '';
-  };
+  const validateLoginEmail = emailValidationError;
 
   const validateLoginPassword = (value: string) => {
     if (!value) {
@@ -342,9 +334,7 @@ export function AuthModal({
         if (!value.trim()) return 'Full name is required.';
         return '';
       case 'email':
-        if (!value.trim()) return 'Email address is required.';
-        if (!EMAIL_REGEX.test(value.trim())) return 'Please enter a valid email address.';
-        return '';
+        return emailValidationError(value);
       case 'password':
         if (!value) return 'Password is required.';
         if (value.length < 8) return 'Password must be at least 8 characters.';
@@ -589,8 +579,9 @@ export function AuthModal({
     e.preventDefault();
     if (isLoading) return;
     const newEmail = verificationEmail.trim().toLowerCase();
-    if (!EMAIL_REGEX.test(newEmail)) {
-      setChangeEmailError('Please enter a valid email address.');
+    const emailError = emailValidationError(newEmail);
+    if (emailError) {
+      setChangeEmailError(emailError);
       return;
     }
     setChangeEmailError('');
@@ -765,9 +756,8 @@ export function AuthModal({
 
         {mode === 'changeVerificationEmail' && (
           <>
-            {changeEmailError && <Alert variant="error" className={styles.alert}>{changeEmailError}</Alert>}
             <form onSubmit={handleChangeVerificationEmail} className={styles.form} noValidate>
-              <Input label="New Email Address" type="email" value={verificationEmail} onChange={(event) => setVerificationEmail(event.target.value)} disabled={isLoading} fullWidth autoComplete="email" />
+              <Input label="New Email Address" type="email" error={changeEmailError} value={verificationEmail} onChange={(event) => setVerificationEmail(event.target.value)} disabled={isLoading} fullWidth autoComplete="email" />
               <Button type="submit" className={styles.submitButton} disabled={isLoading} isLoading={isLoading}>Send Verification Code</Button>
             </form>
             <div className={styles.footer}><button type="button" onClick={() => setMode('verify')} className={styles.switchButton} disabled={isLoading}>Back to verification</button></div>

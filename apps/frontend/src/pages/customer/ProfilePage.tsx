@@ -1,3 +1,4 @@
+import { emailValidationError } from '@/lib/emailValidation';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/features/auth/context/AuthContext';
@@ -24,6 +25,7 @@ export function ProfilePage() {
   });
   
   const [error, setError] = useState('');
+  const [emailError, setEmailError] = useState('');
   const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
@@ -39,6 +41,7 @@ export function ProfilePage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    if (name === 'email') setEmailError('');
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -51,10 +54,9 @@ export function ProfilePage() {
       setError('Enter a valid first and last name (up to 100 characters each).');
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      setError('Please enter a valid email address.');
-      return;
-    }
+    const validationError = emailValidationError(formData.email);
+    if (validationError) { setEmailError(validationError); return; }
+    setEmailError('');
     if (formData.firstName.trim() === user?.firstName && formData.lastName.trim() === user?.lastName && formData.email.trim().toLowerCase() === user?.email.toLowerCase()) {
       setSuccess('No changes to save.');
       return;
@@ -122,7 +124,7 @@ export function ProfilePage() {
             <p className={styles.subtext}>Your profile information</p>
           </div>
 
-          <form className={styles.form} onSubmit={handleSave}>
+          <form className={styles.form} onSubmit={handleSave} noValidate>
             {error && <Alert variant="error">{error}</Alert>}
             {success && <Alert variant="success">{success}</Alert>}
 
@@ -146,6 +148,7 @@ export function ProfilePage() {
               label="Email Address"
               name="email"
               type="email"
+              error={emailError}
               value={formData.email}
               onChange={handleChange}
               disabled={isLoading || Boolean(pendingEmail)}

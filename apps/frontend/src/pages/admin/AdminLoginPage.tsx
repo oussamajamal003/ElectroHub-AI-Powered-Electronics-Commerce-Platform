@@ -1,3 +1,4 @@
+import { emailValidationError } from '@/lib/emailValidation';
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Fingerprint, KeyRound, Smartphone } from 'lucide-react';
@@ -19,7 +20,6 @@ import { PasskeySupportNotice } from '@/features/admin/security/components/Passk
 import { SIGN_IN_NOTICE_KEY } from '@/features/admin/security/components/AdminAccountSections';
 import styles from './AdminLoginPage.module.scss';
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Server pre-auth transactions live five minutes; the countdown mirrors it, the server remains authoritative. */
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const EXPIRED_MESSAGE = 'Your sign-in attempt expired. Start again.';
@@ -117,11 +117,7 @@ export function AdminLoginPage() {
     setError(message);
   };
 
-  const validateEmailField = (val: string) => {
-    if (!val.trim()) return 'Email address is required.';
-    if (!EMAIL_REGEX.test(val.trim())) return 'Please enter a valid email address.';
-    return '';
-  };
+  const validateEmailField = emailValidationError;
 
   const validatePasswordField = (val: string) => {
     if (!val) return 'Password is required.';
