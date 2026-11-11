@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectNoAxeViolations } from './axe-audit.helper';
 
 const configured = { storeName: 'Northstar Electronics', supportEmail: 'help@example.test', supportPhone: '+1 555 010 0100', addressLine1: '1 Main St', addressLine2: null,
   city: 'Boston', region: 'MA', postalCode: '02110', country: 'US', businessHours: 'Monday–Friday, 9:00 AM–6:00 PM', currency: 'USD' };
@@ -23,7 +24,7 @@ const fill = async (page: Page, message = 'Hello, I have a question about an ord
   await page.getByLabel('Message').fill(message);
 };
 
-for (const width of [390, 768, 1440, 1920]) {
+for (const width of [320, 390, 768, 1024, 1440, 1920]) {
   test(`Contact page at ${width}px: configured details, validation, send, no overflow`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     const sent = await stub(page, configured);
@@ -107,4 +108,25 @@ test('Contact form is keyboard operable with visible focus', async ({ page }) =>
   }
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Send Message' })).toBeFocused();   // the honeypot is skipped
+});
+
+test('axe WCAG 2.1 AA: Contact (configured, empty, with validation errors) and About', async ({ page }) => {
+  await stub(page, configured);
+  await page.goto('/contact', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('link', { name: 'help@example.test' })).toBeVisible();
+  await expectNoAxeViolations(page, 'contact-configured');
+  await page.getByRole('button', { name: 'Send Message' }).click();
+  await expect(page.getByText('Name is required.')).toBeVisible();
+  await expectNoAxeViolations(page, 'contact-errors');
+  await page.goto('/about', { waitUntil: 'domcontentloaded' });
+  const height = await page.evaluate(() => document.documentElement.scrollHeight);
+  for (let y = 0; y < height; y += 500) { await page.evaluate(p => window.scrollTo(0, p), y); await page.waitForTimeout(60); }
+  await expectNoAxeViolations(page, 'about');
+});
+
+test('axe WCAG 2.1 AA: Contact with nothing configured', async ({ page }) => {
+  await stub(page, unconfigured);
+  await page.goto('/contact', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByText(/have not been published yet/i)).toBeVisible();
+  await expectNoAxeViolations(page, 'contact-empty');
 });

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectNoAxeViolations } from './axe-audit.helper';
 
 /** Models the server: live operational counts + this administrator's persisted baseline. Every API is intercepted; nothing real is touched. */
 async function fakeAdmin(page: Page, initial = { lowStock: 2, outOfStock: 1, awaitingFulfillment: 3 }, options: { failAck?: () => boolean } = {}) {
@@ -40,6 +41,7 @@ test('unread badge clears when the alerts are opened, survives refresh and navig
   await expect.poll(() => acks.length).toBe(1);
   await expect(bell(page)).toHaveAttribute('aria-label', /Alerts: no unread, 6 items need attention/);
   await expect(bell(page)).not.toContainText('6');
+  await expectNoAxeViolations(page, 'alerts-menu-open');
   expect(acks[0]).toEqual({ lowStock: 2, outOfStock: 1, awaitingFulfillment: 3 });
   await page.keyboard.press('Escape');
   await page.screenshot({ path: 'test-results/motion-contact/alerts-read.png' });
@@ -69,4 +71,16 @@ test('with nothing unread, opening the alerts sends no acknowledgement', async (
   await bell(page).click();
   await expect(page.getByText('Operational alerts')).toBeVisible();
   expect(acks).toEqual([]);
+});
+
+test('See all alerts opens the dashboard, clears unread, and leaves the operational counts in place', async ({ page }) => {
+  const { acks } = await fakeAdmin(page, { lowStock: 2, outOfStock: 1, awaitingFulfillment: 1 });
+  await page.goto('/admin/inventory', { waitUntil: 'domcontentloaded' });
+  await expect(bell(page)).toHaveAttribute('aria-label', 'Alerts: 4 unread');
+  await bell(page).click();
+  await page.getByRole('menuitem', { name: 'See all alerts' }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect.poll(() => acks.length).toBe(1);
+  await expect(bell(page)).toHaveAttribute('aria-label', /no unread, 4 items need attention/);
+  await expect(bell(page)).not.toContainText('4');
 });
