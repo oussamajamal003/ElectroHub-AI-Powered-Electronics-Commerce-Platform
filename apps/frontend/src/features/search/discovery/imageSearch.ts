@@ -1,4 +1,4 @@
-import { analyticsAllowed } from '@/features/privacy/consent';
+import { analyticsAllowed, consentGeneration, onAnalyticsWithdrawn } from '@/features/privacy/consent';
 import { ApiError, apiClient, isAbortError } from '@/lib/api';
 import type { ProductSummary } from '@/features/products/types';
 
@@ -32,7 +32,7 @@ export const imageSearchEnabled = () => import.meta.env.VITE_IMAGE_SEARCH_ENABLE
 export interface ImageSearchResponse { data: { items: ProductSummary[] }; analyticsToken?: string }
 
 export type ImageSearchOutcome =
-  | { status: 'success'; items: ProductSummary[]; analyticsToken?: string }
+  | { status: 'success'; items: ProductSummary[]; analyticsToken?: string; consentGeneration?: number }
   | { status: 'unavailable' }
   | { status: 'invalid'; message: string }
   | { status: 'timeout' }
@@ -43,19 +43,70 @@ export type ImageSearchOutcome =
 const isProductList = (value: unknown): value is ProductSummary[] => Array.isArray(value) &&
   value.every(item => item && typeof item === 'object' && typeof (item as ProductSummary).id === 'string' && typeof (item as ProductSummary).slug === 'string');
 
+/** References of consented searches whose response has not arrived yet. */
+const pendingRefs = new Set<string>();
+/** Withdrawals that could not be delivered (offline); retried once when the browser reports it is online again. */
+const undelivered = new Set<string>();
+export const ANALYTICS_WITHDRAWAL_ENDPOINT = '/api/analytics/withdrawals';
+const MAX_REFS_PER_WITHDRAWAL = 16;
+
+function newRef(): string | null {
+  try { return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : null; } catch { return null; }
+}
+
+function deliverWithdrawal(refs: string[], retry: boolean) {
+  if (refs.length === 0 || typeof fetch !== 'function') return;
+  const failed = () => {
+    if (!retry) return;
+    refs.forEach(ref => undelivered.add(ref));
+    if (typeof window !== 'undefined') window.addEventListener('online', flushUndelivered, { once: true });
+  };
+  try {
+    void fetch(ANALYTICS_WITHDRAWAL_ENDPOINT, { method: 'POST', keepalive: true, credentials: 'omit', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refs: refs.slice(0, MAX_REFS_PER_WITHDRAWAL) }) }).then(response => { if (!response.ok && response.status >= 500) failed(); }, failed);
+  } catch { failed(); }
+}
+function flushUndelivered() {
+  const refs = [...undelivered];
+  undelivered.clear();
+  deliverWithdrawal(refs, false);
+}
+
+/**
+ * Consent is decided when a search starts, but the server records its outcome only when inference finishes. Withdrawing while a
+ * consented search is pending sends that search's reference to the server, which then skips (or, if already written, deletes) its
+ * analytics. The search itself continues: shoppers still get their results, just without measurement.
+ */
+onAnalyticsWithdrawn(() => {
+  const refs = [...pendingRefs];
+  pendingRefs.clear();
+  deliverWithdrawal(refs, true);
+});
+
+/** Test seam: references currently awaiting a response. */
+export const pendingAnalyticsRefsForTests = () => [...pendingRefs];
+
 export async function searchByImage(file: File, signal: AbortSignal): Promise<ImageSearchOutcome> {
   if (!imageSearchEnabled()) return { status: 'unavailable' };
   const timeout = new AbortController();
   const timer = setTimeout(() => timeout.abort(), IMAGE_SEARCH_TIMEOUT_MS);
   const onAbort = () => timeout.abort();
   signal.addEventListener('abort', onAbort, { once: true });
+  const generation = consentGeneration();
+  // Random per-search reference (never stored, never linked to a person) that lets a withdrawal reach this search on the server.
+  const ref = analyticsAllowed() ? newRef() : null;
+  if (ref) pendingRefs.add(ref);
   try {
     const body = new FormData();
     body.append('image', file, file.name || 'photo');
-    const response = await apiClient<ImageSearchResponse>(IMAGE_SEARCH_ENDPOINT, { method: 'POST', data: body, signal: timeout.signal, headers: analyticsAllowed() ? { 'X-ElectroHub-Analytics': 'consented' } : {} });
+    const response = await apiClient<ImageSearchResponse>(IMAGE_SEARCH_ENDPOINT, { method: 'POST', data: body, signal: timeout.signal,
+      headers: ref ? { 'X-ElectroHub-Analytics': 'consented', 'X-ElectroHub-Analytics-Ref': ref } : {} });
     const items = response?.data?.items;
-    const analyticsToken = typeof response?.analyticsToken === 'string' && response.analyticsToken.length <= 4096 ? response.analyticsToken : undefined;
-    return isProductList(items) ? { status: 'success', items, ...(analyticsToken ? { analyticsToken } : {}) } : { status: 'error' };
+    // A withdrawal while this search was pending voids its token: no selection can be reported for it, even after re-consent.
+    const stillAllowed = ref !== null && pendingRefs.has(ref) && generation === consentGeneration() && analyticsAllowed();
+    const analyticsToken = stillAllowed && typeof response?.analyticsToken === 'string' && response.analyticsToken.length <= 4096
+      ? response.analyticsToken : undefined;
+    return isProductList(items) ? { status: 'success', items, ...(analyticsToken ? { analyticsToken, consentGeneration: generation } : {}) } : { status: 'error' };
   } catch (failure) {
     if (signal.aborted) return { status: 'cancelled' };
     if (timeout.signal.aborted || isAbortError(failure)) return { status: 'timeout' };
@@ -68,6 +119,7 @@ export async function searchByImage(file: File, signal: AbortSignal): Promise<Im
     }
     return typeof navigator !== 'undefined' && navigator.onLine === false ? { status: 'network' } : { status: 'error' };
   } finally {
+    if (ref) pendingRefs.delete(ref);
     clearTimeout(timer);
     signal.removeEventListener('abort', onAbort);
   }
@@ -78,8 +130,9 @@ export async function searchByImage(file: File, signal: AbortSignal): Promise<Im
  * this exact result list, deduplicates it, and stores no image or identity. Fire-and-forget: `keepalive` lets it outlive the navigation
  * it accompanies, and any failure is ignored so analytics can never block or break the click.
  */
-export function reportImageResultSelected(analyticsToken: string | undefined, productId: string): void {
+export function reportImageResultSelected(analyticsToken: string | undefined, productId: string, generation?: number): void {
   if (!analyticsAllowed() || !analyticsToken || typeof fetch !== 'function') return;
+  if (generation !== undefined && generation !== consentGeneration()) return;
   try {
     void fetch('/api/analytics/events', { method: 'POST', keepalive: true, credentials: 'omit', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'image_search.result_selected', token: analyticsToken, productId }) }).catch(() => undefined);
