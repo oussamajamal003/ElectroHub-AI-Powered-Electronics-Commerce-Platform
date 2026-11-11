@@ -46,7 +46,8 @@ export class StorefrontContactService {
     if (!recipient) throw new AppError('Contact delivery is temporarily unavailable.', 503, 'CONTACT_UNAVAILABLE');
     const { html, text } = renderContactNotification(input, storeName);
     const result = await this.provider.sendTransactionalEmail({ to: recipient, replyTo: { email: input.email, name: oneLine(input.name) },
-      subject: `[${oneLine(storeName).slice(0, 60)}] Contact: ${oneLine(input.subject).slice(0, 120)}`, textContent: text, htmlContent: html });
+      // Subject contract (`Store contact: …`) is relied on by the disposable capture helper and by mailbox filters; keep it stable.
+      subject: `Store contact: ${oneLine(input.subject).slice(0, 120)}`, textContent: text, htmlContent: html });
     if (!result.success) throw new AppError('Contact delivery is temporarily unavailable.', 503, 'CONTACT_UNAVAILABLE');
   }
 }

@@ -23,7 +23,7 @@ describe('StorefrontContactService', () => {
     await service.send({ name: 'Ann\r\nBcc: x@evil.test', email: 'ann@example.test', subject: 'Order <b>help</b>', message: 'Line 1\nLine 2 <a href="https://evil.test">link</a>' }, 'support@example.test', 'Northstar');
     const sent = sendTransactionalEmail.mock.calls[0][0];
     expect(sent.to).toBe('support@example.test');
-    expect(sent.subject).toBe('[Northstar] Contact: Order <b>help</b>');
+    expect(sent.subject).toBe('Store contact: Order <b>help</b>');
     expect(sent.subject).not.toMatch(/[\r\n]/);
     expect(sent.replyTo.name).not.toMatch(/[\r\n]/);
     expect(sent.htmlContent).toContain('Northstar');
