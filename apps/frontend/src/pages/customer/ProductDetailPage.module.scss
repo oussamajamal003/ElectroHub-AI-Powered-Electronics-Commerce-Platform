@@ -36,7 +36,7 @@
   textarea { width: 100%; min-height: 7.5rem; border: 1px solid $color-border; padding: $spacing-3; font: inherit; color: $color-text-primary; background: $color-background; resize: vertical; &::placeholder { color: $color-text-muted; opacity: 1; } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
   small { color: $color-text-secondary; text-align: right; }
 }
-.requiredMark { color: $color-text-muted; font-weight: $font-weight-normal; font-size: $font-size-sm; }
+.requiredMark { color: $color-text-muted; font-weight: $font-weight-regular; font-size: $font-size-sm; }
 .reviewActions { display: flex; flex-wrap: wrap; gap: $spacing-3; margin-top: $spacing-2; }
 .reviewConfirm { margin-top: $spacing-4; padding-top: $spacing-4; border-top: 1px solid $color-border; p { margin: 0; font-weight: $font-weight-medium; } }
 .reviewFeedback { margin: $spacing-4 0 0; padding-top: $spacing-3; border-top: 1px solid $color-border; color: $color-text-secondary; }
