@@ -185,6 +185,35 @@ describe('Product details loading and review auth state', () => {
     expect(screen.queryByRole('heading', { name: 'Test Tablet' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Buy Now' })).not.toBeInTheDocument();
   });
+  it('keeps an already verified product on screen during a background refetch instead of remounting the page as a skeleton', () => {
+    const view = renderPage();
+    expect(screen.getByRole('heading', { name: 'Test Tablet' })).toBeInTheDocument();
+    const heading = screen.getByRole('heading', { name: 'Test Tablet' });
+    vi.mocked(useProduct).mockReturnValue({ data: { data: product }, isPending: false, isFetching: true, isError: false } as unknown as ReturnType<typeof useProduct>);
+    view.rerender(<QueryClientProvider client={testQueryClient}><MemoryRouter initialEntries={['/products/test-tablet']}><Routes><Route path="/products/:slug" element={<ProductDetailPage />} /></Routes></MemoryRouter></QueryClientProvider>);
+    expect(screen.queryByRole('status', { name: 'Loading product details' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Test Tablet' })).toBe(heading);   // same node: nothing was remounted
+  });
+  it('still removes a verified product at once when its refetch fails (404 / no longer public)', () => {
+    const view = renderPage();
+    expect(screen.getByRole('heading', { name: 'Test Tablet' })).toBeInTheDocument();
+    vi.mocked(useProduct).mockReturnValue({ data: { data: product }, isPending: false, isFetching: true, isError: false } as unknown as ReturnType<typeof useProduct>);
+    view.rerender(<QueryClientProvider client={testQueryClient}><MemoryRouter initialEntries={['/products/test-tablet']}><Routes><Route path="/products/:slug" element={<ProductDetailPage />} /></Routes></MemoryRouter></QueryClientProvider>);
+    vi.mocked(useProduct).mockReturnValue({ data: { data: product }, isPending: false, isFetching: false, isError: true, error: new ApiError(404, 'Not found') } as unknown as ReturnType<typeof useProduct>);
+    view.rerender(<QueryClientProvider client={testQueryClient}><MemoryRouter initialEntries={['/products/test-tablet']}><Routes><Route path="/products/:slug" element={<ProductDetailPage />} /></Routes></MemoryRouter></QueryClientProvider>);
+    expect(screen.queryByRole('heading', { name: 'Test Tablet' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add to Cart' })).not.toBeInTheDocument();
+  });
+  it('shows the review box with a visible placeholder, an accessible label and a described character count', () => {
+    vi.mocked(useAuth).mockReturnValue({ isInitializing: false, isAuthenticated: true, isSessionVerified: true, user: { id: 'u1', role: 'CUSTOMER' } } as unknown as ReturnType<typeof useAuth>);
+    vi.mocked(useMyReview).mockReturnValue({ data: { data: null }, isPending: false } as unknown as ReturnType<typeof useMyReview>);
+    render(<QueryClientProvider client={testQueryClient}><MemoryRouter initialEntries={['/products/test-tablet#reviews']}><Routes><Route path="/products/:slug" element={<ProductDetailPage />} /></Routes></MemoryRouter></QueryClientProvider>);
+    const box = screen.getByRole('textbox', { name: /Your review/ });
+    expect(box).toHaveAttribute('placeholder', 'Share your experience with this product...');
+    expect(box).toBeRequired();
+    expect(box).toHaveAttribute('maxLength', '2000');
+    expect(box).toHaveAccessibleDescription('0/2000 characters');
+  });
   it.each([['IN_STOCK', 8, 'In Stock'], ['LOW_STOCK', 2, 'Low Stock'], ['OUT_OF_STOCK', 0, 'Out of Stock']] as const)('renders %s with authoritative quantity controls', (stockStatus, availableQuantity, label) => {
     vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, stockStatus, availableQuantity, purchasable: availableQuantity > 0, availability: availableQuantity > 0 ? 'AVAILABLE' : 'UNAVAILABLE' } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
     renderPage();
