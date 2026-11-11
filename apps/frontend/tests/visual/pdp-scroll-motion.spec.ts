@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { expectNoAxeViolations } from './axe-audit.helper';
+import { emptyCart, emptyWishlist, noSavedPurchases } from '../../src/test/e2eApiFixtures';
 
 /**
  * Product Details scroll lifecycle. Records every CSS animation/transition that starts and every element that is removed while the
@@ -138,10 +139,18 @@ for (const width of [320, 390, 1440]) {
   test(`Review box at ${width}px: visible placeholder, accessible name and description, no overflow`, async ({ page }) => {
     const user = { id: '11111111-1111-4111-8111-111111111111', email: 'review@example.invalid', firstName: 'Alex', lastName: 'Morgan', role: 'CUSTOMER' };
     await page.setViewportSize({ width, height: 900 });
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
     await page.addInitScript(value => sessionStorage.setItem('electrohub:cached-user', JSON.stringify(value)), user);
     await world(page);
     await page.route('**/api/auth/customer/refresh', route => route.fulfill({ json: { accessToken: 'intercepted', user } }));
     await page.route('**/api/auth/me', route => route.fulfill({ json: { user } }));
+    // Signed-in customer reads, answered with the repository's typed contract fixtures.
+    await page.route('**/api/cart', route => route.fulfill({ json: emptyCart }));
+    await page.route('**/api/wishlist', route => route.fulfill({ json: emptyWishlist }));
+    await page.route('**/api/checkout/payment-attempts', route => route.fulfill({ json: noSavedPurchases }));
+    await page.route('**/api/me/recommendation-preferences', route => route.fulfill({ json: { data: { personalizationEnabled: false, updatedAt: null } } }));
+    await page.route('**/api/me/recently-viewed**', route => route.fulfill({ json: { data: { personalizationEnabled: false, items: [] } } }));
     await page.goto(`/products/${product.slug}#reviews`, { waitUntil: 'domcontentloaded' });
     const box = page.getByRole('textbox', { name: /Your review/ });
     await expect(box).toBeVisible({ timeout: 20_000 });
@@ -159,5 +168,6 @@ for (const width of [320, 390, 1440]) {
     await box.fill('Great phone.');
     await expect(box).toHaveAccessibleDescription('12/2000 characters');
     if (width === 1440) await expectNoAxeViolations(page, 'review-form', 'form:has(#review-body)');
+    expect(errors, 'no runtime errors on the signed-in Product Details page').toEqual([]);
   });
 }
