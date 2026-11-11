@@ -29,7 +29,8 @@
     "test:visual:task05-2-deletion-notice": "playwright test -c playwright.task05-2-deletion-notice-disposable.config.ts",
     "test:visual:task05-2-live-dev": "playwright test -c playwright.task05-2-live-dev.config.ts",
     "test:visual:admin-order-email": "playwright test -c playwright.admin-order-email.config.ts",
-    "test:quality": "playwright test -c playwright.quality.config.ts"
+    "test:quality": "playwright test -c playwright.quality.config.ts",
+    "test:branding": "playwright test -c playwright.branding.config.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.6",

@@ -424,10 +424,59 @@ jobs:
           path: ${{ runner.temp }}/payment-integration.json
           retention-days: 14
 
+  branding-e2e:
+    name: Branding E2E / ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Task 06.2 side task: browser tab branding, toasts and tooltips. Hermetic: the spec intercepts every /api request and only needs the
+    # Vite dev server, so there is no database, backend, payment runtime or credential. One runner and one engine per shard.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { engine: chromium, label: Chromium, projects: '--project=chromium --project=mobile-chromium-390 --project=mobile-chromium-320' }
+          - { engine: firefox, label: Firefox, projects: '--project=firefox' }
+          - { engine: webkit, label: WebKit, projects: '--project=webkit' }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.19.0'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Resolve Playwright version
+        id: playwright
+        working-directory: apps/frontend
+        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.engine }}
+      - name: Install Playwright browser and OS dependencies
+        working-directory: apps/frontend
+        run: npx playwright install --with-deps ${{ matrix.engine }}
+      - name: Branding, toast and tooltip suite (${{ matrix.label }})
+        working-directory: apps/frontend
+        run: npm run test:branding -- ${{ matrix.projects }}
+      - name: Upload branding report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: branding-e2e-report-${{ matrix.engine }}
+          path: |
+            apps/frontend/playwright-report/branding
+            apps/frontend/test-results/branding
+          retention-days: 14
+
   quality-gate:
     name: Required / Quality Gate
     if: ${{ always() }}
-    needs: [frontend-lint, frontend-typecheck, frontend-test, frontend-build, backend-lint, backend-typecheck, backend-test, backend-build, workflow-policy, release-e2e, ai, ai-docker, application-docker, payment-postgres]
+    needs: [frontend-lint, frontend-typecheck, frontend-test, frontend-build, backend-lint, backend-typecheck, backend-test, backend-build, workflow-policy, release-e2e, branding-e2e, ai, ai-docker, application-docker, payment-postgres]
     runs-on: ubuntu-latest
     steps:
       - name: Require every validation job to succeed
