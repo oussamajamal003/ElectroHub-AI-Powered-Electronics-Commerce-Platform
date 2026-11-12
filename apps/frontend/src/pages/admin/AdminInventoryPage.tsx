@@ -136,7 +136,7 @@ export function AdminInventoryPage() {
 
   return <div className={styles.page}>
     <PageHeader title="Inventory" crumbs={[{ label: 'Dashboard', to: '/admin' }, { label: 'Inventory' }]}
-      description="Physical stock per product. Every change is checked against the quantity you saw, so concurrent sales are never overwritten." />
+      description="Sellable stock per product: units in placed orders are already deducted, and units held for a processing payment return automatically if it fails. Every change is checked against the quantity you saw, so concurrent sales are never overwritten." />
     <section className={styles.kpiGrid} aria-label="Stock summary">
       <KpiCard label="In stock" tone="success" icon={<CheckCircle2 />} loading={!summary} value={summary ? formatCount(summary.inStock) : null} to="/admin/inventory?status=IN_STOCK" />
       <KpiCard label="Low stock" tone="warning" icon={<AlertTriangle />} loading={!summary} value={summary ? formatCount(summary.lowStock) : null} to="/admin/inventory?status=LOW_STOCK" />

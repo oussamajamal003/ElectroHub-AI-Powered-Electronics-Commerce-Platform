@@ -97,7 +97,9 @@ test.describe('product details', () => {
     await expect(summary.getByText(`SKU: ${headphones().sku}`)).toBeVisible();
     await expect(summary.getByText(money(Number(body.data.price)), { exact: true })).toBeVisible();
     await expect(summary.getByText('In Stock')).toBeVisible();
-    await expect(summary.getByRole('status')).toHaveText(`${headphones().quantity} more items available to add.`);
+    // Exact sellable quantity from the server; with nothing in this Cart there is no separate cart-relative line.
+    await expect(summary.getByTestId('product-available-quantity')).toHaveText(`${headphones().quantity} available`);
+    await expect(summary.getByText(/more items? available to add/)).toHaveCount(0);
 
     await page.getByRole('tab', { name: 'Specifications' }).click();
     await expect(page.getByRole('tabpanel', { name: 'Specifications' })).toContainText('40 mm dynamic');
