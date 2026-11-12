@@ -10,10 +10,12 @@ import { SignOutModal } from '@/features/auth/components/SignOutModal';
 import { useMyReviews } from '@/features/products/queries';
 import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
 import { PersonalizationPanel } from '@/features/recommendations/components/PersonalizationPanel';
+import { useProfilePhoto } from '@/features/profilePhoto/queries';
 import styles from './AccountPage.module.scss';
 
 export function AccountPage() {
-  const { user, isAuthenticated, isInitializing } = useAuth();
+  const { user, isAuthenticated, isInitializing, isSessionVerified } = useAuth();
+  const profilePhoto = useProfilePhoto('customer', user?.id, isSessionVerified);
   const navigate = useNavigate();
   const [showSignOut, setShowSignOut] = useState(false);
   const reviewsQuery = useMyReviews(Boolean(isAuthenticated));
@@ -51,7 +53,7 @@ export function AccountPage() {
 
         <section className={styles.profileCard}>
           <div className={styles.profileInfo}>
-            <Avatar initials={initial} className={styles.avatar} />
+            <Avatar src={profilePhoto.data?.url ?? undefined} alt="" initials={initial} className={styles.avatar} />
             <div className={styles.profileDetails}>
               <h2 className={styles.profileName}>{user?.firstName} {user?.lastName}</h2>
               <div className={styles.profileEmail}>

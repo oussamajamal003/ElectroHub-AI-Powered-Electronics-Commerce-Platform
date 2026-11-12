@@ -9,6 +9,8 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { Button } from '@/components/ui/Button';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { ThemeToggle } from '@/features/theme';
+import { Avatar } from '@/components/ui/Avatar';
+import { useProfilePhoto } from '@/features/profilePhoto/queries';
 import { ADMIN_NAVIGATION, SIDEBAR_PREFERENCE_KEY, type AdminNavItem } from '@/features/admin/shell/navigation';
 import { useAdminAlerts } from '@/features/admin/dashboard/api';
 import { useAdminInventoryLiveUpdates } from '@/features/admin/dashboard/useAdminInventoryLiveUpdates';
@@ -98,7 +100,8 @@ function AlertsMenu() {
 
 /** Avatar-only trigger; the name, email and actions live in the menu. Sign out asks first, then uses the existing AuthContext logout. */
 function ProfileMenu() {
-  const { user, logout } = useAdminAuth();
+  const { user, logout, isSessionVerified } = useAdminAuth();
+  const profilePhoto = useProfilePhoto('admin', user?.id, isSessionVerified);
   const [confirming, setConfirming] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const name = user ? `${user.firstName} ${user.lastName}`.trim() : '';
@@ -113,7 +116,7 @@ function ProfileMenu() {
   <DropdownMenu>
     <DropdownMenuTrigger asChild>
       <button type="button" className={styles.profileButton} aria-label={`Account menu for ${name || 'administrator'}`}>
-        <span className={styles.avatar} aria-hidden="true">{initials(name, 'A')}</span>
+        <Avatar src={profilePhoto.data?.url ?? undefined} initials={initials(name, 'A')} className={styles.avatar} aria-hidden="true" />
       </button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" sideOffset={8} className={`${styles.menu} ${styles.animatedMenu}`}>

@@ -4,9 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdminProfilePage } from './AdminProfilePage';
 import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { useAdminProfile, useUpdateAdminProfile } from '@/features/admin/security/api';
+import { useProfilePhoto, useProfilePhotoMutations } from '@/features/profilePhoto/queries';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({ useAdminAuth: vi.fn() }));
 vi.mock('@/features/admin/security/api', () => ({ useAdminProfile: vi.fn(), useUpdateAdminProfile: vi.fn() }));
+vi.mock('@/features/profilePhoto/queries', () => ({ useProfilePhoto: vi.fn(), useProfilePhotoMutations: vi.fn() }));
 
 const profile = {
   id: 'admin-1', email: 'admin@example.test', firstName: 'Ada', lastName: 'Admin', role: 'ADMIN', emailVerified: true,
@@ -21,6 +23,10 @@ describe('AdminProfilePage', () => {
     vi.mocked(useAdminAuth).mockReturnValue({ updateUserNames } as unknown as ReturnType<typeof useAdminAuth>);
     vi.mocked(useAdminProfile).mockReturnValue({ data: profile, isPending: false, isError: false } as unknown as ReturnType<typeof useAdminProfile>);
     vi.mocked(useUpdateAdminProfile).mockReturnValue({ mutateAsync, isPending: false } as unknown as ReturnType<typeof useUpdateAdminProfile>);
+    vi.mocked(useProfilePhoto).mockReturnValue({ data: { url: null, expiresAt: null }, isError: false } as never);
+    vi.mocked(useProfilePhotoMutations).mockReturnValue({
+      upload: { mutateAsync: vi.fn(), isPending: false }, remove: { mutateAsync: vi.fn(), isPending: false },
+    } as never);
     mutateAsync.mockResolvedValue({ ...profile, firstName: 'Grace', lastName: 'Hopper' });
   });
 

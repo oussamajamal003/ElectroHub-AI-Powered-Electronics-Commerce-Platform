@@ -10,6 +10,7 @@ import { ThemeProvider } from '@/features/theme';
 vi.mock('@/features/auth/context/AuthContext', () => ({ useAdminAuth: vi.fn() }));
 vi.mock('@/features/admin/dashboard/api', () => ({ useAdminAlerts: vi.fn() }));
 vi.mock('@/features/admin/dashboard/useAdminInventoryLiveUpdates', () => ({ useAdminInventoryLiveUpdates: vi.fn() }));
+vi.mock('@/features/profilePhoto/queries', () => ({ useProfilePhoto: () => ({ data: undefined }) }));
 
 const logout = vi.fn();
 const renderAt = (path: string) => render(<MemoryRouter initialEntries={[path]}>

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/Breadcrumb';
-import { Avatar } from '@/components/ui/Avatar';
+import { ProfilePhotoManager } from '@/components/profilePhoto/ProfilePhotoManager';
 import { Input } from '@/components/ui/Input';
 import { PasswordInput } from '@/components/ui/PasswordInput/PasswordInput';
 import { Button } from '@/components/ui/Button';
@@ -16,7 +16,7 @@ import styles from './ProfilePage.module.scss';
 import { AccountDeletionDialog } from './AccountDeletionDialog';
 
 export function ProfilePage() {
-  const { user, updateProfile, verifyEmailChange } = useAuth();
+  const { user, isSessionVerified, updateProfile, verifyEmailChange } = useAuth();
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -123,7 +123,8 @@ export function ProfilePage() {
         <div className={styles.sections}>
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <Avatar initials={initial} className={styles.avatar} />
+            {user && <ProfilePhotoManager scope="customer" userId={user.id} sessionVerified={isSessionVerified} initials={initial}
+              displayName={`${user.firstName} ${user.lastName}`} size="large" />}
             <p className={styles.subtext}>Your profile information</p>
           </div>
 
