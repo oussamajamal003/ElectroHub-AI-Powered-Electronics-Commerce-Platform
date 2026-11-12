@@ -75,7 +75,7 @@ async function run() {
   const statements = (drift.stdout ?? '').split('\n').filter(line => line.trim() && !line.startsWith('--'));
   // Pre-existing drift on early auth tables (DB-side id/updatedAt defaults) predates Task 04.5 and is reported, not failed; any drift on a
   // delivery object fails the gate.
-  const deliveryDrift = statements.filter(line => /"(deliveries|delivery_events)"|"Delivery(Event|Location)/.test(line));
+  const deliveryDrift = statements.filter(line => /"(deliveries|delivery_events|customer_notifications|customer_push_subscriptions|customer_push_deliveries)"|"Delivery(Event|Location)/.test(line));
   console.log(`Prisma drift (migrated disposable DB -> schema.prisma): ${drift.status === 0 ? `${statements.length} statement(s), ${deliveryDrift.length} on delivery objects` : 'diff failed'}`);
   if (drift.status !== 0 || deliveryDrift.length) throw new Error(`Delivery schema drift detected; inspect ${path.relative(root, work)}/drift.sql`);
   const env = {
@@ -91,7 +91,16 @@ async function run() {
     DELIVERY_SIMULATION_ENABLED: 'true',
   };
   const vitest = path.join(path.dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
-  child = spawn(process.execPath, [vitest, 'run', '--config', 'vitest.delivery-pg.config.mts'], { cwd: backend, env, stdio: 'inherit', windowsHide: true });
+  // Match the ordinary CI unit/API pass. Specialized delivery suites have their
+  // own opt-in pass; enabling producers globally invalidates unrelated unit mocks.
+  if (process.env.DELIVERY_PG_FULL_SUITE === '1') {
+    env.DELIVERY_PG_RUN = '0';
+    env.COMMERCE_EMAIL_ENQUEUE_ENABLED = 'false';
+  }
+  const args = process.env.DELIVERY_PG_FULL_SUITE === '1'
+    ? ['run', '--maxWorkers=1', '--testTimeout=30000', '--hookTimeout=60000', '--exclude', 'tests/adminSeedLogin.test.ts', '--exclude', 'tests/auth.integration.test.ts']
+    : ['run', '--config', 'vitest.delivery-pg.config.mts'];
+  child = spawn(process.execPath, [vitest, ...args], { cwd: backend, env, stdio: 'inherit', windowsHide: true });
   return new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', code => resolve(code ?? 1)); });
 }
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child?.kill(signal));

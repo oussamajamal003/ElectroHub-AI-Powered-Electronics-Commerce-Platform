@@ -55,6 +55,7 @@ vi.mock('../../lib/prisma.js', () => ({
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
       findFirst: vi.fn().mockResolvedValue(null),
     },
+    customerPushSubscription: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     $executeRaw: vi.fn().mockResolvedValue(1),
     $queryRaw: vi.fn().mockResolvedValue([]),
     $transaction: vi.fn((callback) => callback(prisma)),

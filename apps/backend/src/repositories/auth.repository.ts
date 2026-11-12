@@ -449,6 +449,7 @@ export class AuthRepository {
         where: { userId: token.userId, familyId: current.familyId },
         data: { isRevoked: true, expiresAt: new Date(0) },
       });
+      await transaction.customerPushSubscription.updateMany({ where: { userId: token.userId, familyId: current.familyId, revokedAt: null }, data: { revokedAt: new Date() } });
       await revokeAdminSessions(transaction, { userId: token.userId, familyId: current.familyId }, 'LOGOUT');
     }, { timeout: 10000 });
     // Task 04.7: the owner lets logout drop that account's live delivery sockets.

@@ -1,3 +1,4 @@
+import { DeliveryNotificationPreferences } from '@/features/notifications/DeliveryNotificationPreferences';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Package, Heart, MapPin, Settings, ChevronRight, User, Star } from 'lucide-react';
@@ -108,6 +109,7 @@ export function AccountPage() {
         </section>
 
         {user.role === 'CUSTOMER' && <div className={styles.section}>
+          <DeliveryNotificationPreferences userId={user.id} />
           <PersonalizationPanel userId={user.id} />
         </div>}
 

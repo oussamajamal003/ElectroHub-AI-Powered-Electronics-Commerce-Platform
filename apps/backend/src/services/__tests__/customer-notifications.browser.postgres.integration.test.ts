@@ -13,7 +13,7 @@ const enabled = process.env.DELIVERY_PG_RUN === '1' && process.env.NOTIFICATION_
 
 /** Actual built React UI, Express API, PostgreSQL, Socket.IO and dispatcher; no intercepted APIs. */
 describe.skipIf(!enabled)('notification real-browser journey on a disposable backend', () => {
-  it('admin transition reaches the customer bell, tracking, persisted read state and controlled email capture', async () => {
+  it('admin transition preserves tracking and durable history after bell removal, with controlled email capture', async () => {
     const target = new URL(process.env.DATABASE_URL!);
     expect(['localhost', '127.0.0.1']).toContain(target.hostname);
     expect(target.pathname).toMatch(/^\/electrohub_disposable_/);
@@ -53,23 +53,14 @@ describe.skipIf(!enabled)('notification real-browser journey on a disposable bac
       const frames: string[] = [];
       page.on('websocket', socket => socket.on('framereceived', event => frames.push(String(event.payload))));
       await page.goto(`${origin}/orders/${order.reference}`);
-      await page.getByRole('button', { name: 'Notifications, 0 unread' }).waitFor();
+      expect(await page.getByRole('button', { name: /^Notifications/ }).count()).toBe(0);
       await expect.poll(() => gateway.namespace.sockets.size, { timeout: 10000 }).toBeGreaterThan(0);
       const endpoint = `/api/admin/orders/${order.reference}/delivery`;
       expect((await request(http).post(endpoint).set('Authorization', `Bearer ${token}`).send({})).status).toBe(201);
       expect((await request(http).patch(endpoint).set('Authorization', `Bearer ${token}`).send({ expectedRevision: 1, status: 'OUT_FOR_DELIVERY' })).status).toBe(200);
-      await page.getByRole('button', { name: 'Notifications, 1 unread' }).waitFor({ timeout: 10000 });
-      expect(frames.some(frame => frame.includes('notification:created'))).toBe(true);
-      await page.getByRole('button', { name: 'Notifications, 1 unread' }).click();
-      const row = page.getByRole('menuitem', { name: /Your order/ });
-      expect(await row.getAttribute('href')).toBe(`/orders/${order.reference}/tracking`);
-      await page.getByRole('menuitem', { name: 'Mark as read' }).click();
-      await expect.poll(() => prisma.customerNotification.count({ where: { userId: owner.id, readAt: null } })).toBe(0);
-      await page.keyboard.press('Escape');
-      await page.reload(); await page.getByRole('button', { name: 'Notifications, 0 unread' }).waitFor();
-      await page.getByRole('button', { name: 'Notifications, 0 unread' }).click();
-      await page.getByRole('menuitem', { name: /Your order/ }).click();
-      await page.waitForURL(`**/orders/${order.reference}/tracking`);
+      await expect.poll(() => frames.some(frame => frame.includes('notification:created'))).toBe(true);
+      expect(await prisma.customerNotification.count({ where: { userId: owner.id } })).toBe(1);
+      await page.goto(`${origin}/orders/${order.reference}/tracking`);
       await page.getByText('Out for delivery', { exact: true }).first().waitFor();
       const output = path.resolve('../../.cache/notification-browser-evidence'); mkdirSync(output, { recursive: true });
       await page.screenshot({ path: path.join(output, 'real-tracking.png'), fullPage: true });

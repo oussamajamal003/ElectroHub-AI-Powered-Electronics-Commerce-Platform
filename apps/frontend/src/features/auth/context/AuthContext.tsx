@@ -1,3 +1,4 @@
+import { clearBrowserPush } from '@/features/notifications/pushClient';
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { User, LoginCredentials, RegisterData, isAdminMfaRequired } from '../types';
 import { authApi, VerificationResponse, LoginResult } from '../api/auth';
@@ -138,6 +139,7 @@ function ScopedAuthProvider({ children, scope, queryClient: ownQueryClient, rest
     setRememberedUser(saveHeaderIdentity(scope, user));
   };
   const forget = () => {
+    if (scope === 'customer') void clearBrowserPush();
     removeCachedUser(scope);
     removeHeaderIdentity(scope);
     setRememberedUser(null);
@@ -306,6 +308,8 @@ function ScopedAuthProvider({ children, scope, queryClient: ownQueryClient, rest
     setLoggingOut(true);
     setState((prev) => ({ ...prev, isLoading: true }));
     try {
+      // Browser cleanup must not delay authoritative server-side session revocation.
+      if (scope === 'customer') void clearBrowserPush();
       await authApi.logout(scope);
     } finally {
       setAccessToken(null, scope);

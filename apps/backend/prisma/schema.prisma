@@ -122,6 +122,7 @@ model Role {
 }
 
 model User {
+  pushSubscriptions CustomerPushSubscription[]
   customerNotifications CustomerNotification[]
   id              String    @id @default(uuid()) @db.Uuid
   roleId          String    @db.Uuid
@@ -1555,6 +1556,7 @@ model AnalyticsEvent {
 
 /// Customer history is independent of email delivery and acknowledgement never changes fulfillment.
 model CustomerNotification {
+  pushDeliveries CustomerPushDelivery[]
   id String @id @default(uuid()) @db.Uuid
   eventKey String @unique @db.VarChar(255)
   userId String @db.Uuid
@@ -1568,4 +1570,41 @@ model CustomerNotification {
   @@index([userId, readAt])
   @@index([orderId])
   @@map("customer_notifications")
+}
+
+
+/// Browser consent is bound to one authenticated refresh-token family, never reassigned across accounts.
+model CustomerPushSubscription {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  familyId String @db.Uuid
+  endpoint String @unique @db.VarChar(2048)
+  p256dh String @db.VarChar(128)
+  auth String @db.VarChar(64)
+  vapidKey String @db.VarChar(128)
+  createdAt DateTime @default(dbgenerated("timezone('UTC'::text, now())"))
+  revokedAt DateTime?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries CustomerPushDelivery[]
+  @@index([userId, familyId, revokedAt])
+  @@map("customer_push_subscriptions")
+}
+
+/// Channel delivery journal for the existing CustomerNotification event; not a second business event queue.
+model CustomerPushDelivery {
+  id String @id @default(uuid()) @db.Uuid
+  notificationId String @db.Uuid
+  subscriptionId String @db.Uuid
+  state String @default("QUEUED") @db.VarChar(16)
+  attempts Int @default(0)
+  availableAt DateTime @default(dbgenerated("timezone('UTC'::text, now())"))
+  leaseUntil DateTime?
+  acceptedAt DateTime?
+  lastCode String? @db.VarChar(32)
+  notification CustomerNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  subscription CustomerPushSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  @@unique([notificationId, subscriptionId])
+  @@index([state, availableAt])
+  @@index([subscriptionId])
+  @@map("customer_push_deliveries")
 }

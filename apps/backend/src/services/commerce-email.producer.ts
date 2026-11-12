@@ -178,9 +178,11 @@ export async function transitionFulfillment(tx: Tx, input: { orderId: string; to
   const transitionId = input.transitionId ?? randomUUID();
   const order = await orderFacts(tx, input.orderId);
   if (input.to === 'OUT_FOR_DELIVERY') {
-    await tx.customerNotification.upsert({ where: { eventKey: `order:${order.id}:out-for-delivery` }, update: {},
+    const notification = await tx.customerNotification.upsert({ where: { eventKey: `order:${order.id}:out-for-delivery` }, update: {},
       create: { eventKey: `order:${order.id}:out-for-delivery`, userId: order.userId, orderId: order.id,
         type: 'ORDER_OUT_FOR_DELIVERY', occurredAt } });
+    const subscriptions = await tx.customerPushSubscription.findMany({ where: { userId: order.userId, revokedAt: null }, select: { id: true } });
+    if (subscriptions.length) await tx.customerPushDelivery.createMany({ data: subscriptions.map(subscription => ({ notificationId: notification.id, subscriptionId: subscription.id })), skipDuplicates: true });
   }
   if (!commerceEmailEnqueueEnabled()) return { changed: true as const, event: null };
   const transition = { fromStatus: from, toStatus: input.to };

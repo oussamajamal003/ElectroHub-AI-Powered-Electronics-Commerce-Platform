@@ -1,3 +1,4 @@
+import customerPushRoutes from './customer-push.routes.js';
 import customerNotificationRoutes from './customer-notification.routes.js';
 import { Router } from 'express';
 import healthRoutes from './health.routes.js';
@@ -44,6 +45,7 @@ router.use(checkoutRoutes);
 router.use(wishlistRoutes);
 router.use('/account', accountRoutes);
 router.use(customerNotificationRoutes);
+router.use(customerPushRoutes);
 router.use(storefrontRoutes);
 // Task 04.4: before productRoutes so /products/:slug/recommendations is owned by its own limiter and cache policy.
 router.use(recommendationRoutes);

@@ -1,3 +1,4 @@
+import { AccountDeletionService } from '../account-deletion.service.js';
 import { AuthService } from '../auth.service.js';
 import { emailService } from '../email.service.js';
 import { randomUUID } from 'node:crypto';
@@ -49,6 +50,35 @@ describe.skipIf(!enabled).sequential('customer notifications: disposable Postgre
     expect(rows[0]!.rls).toBe(true);
     const roles = await db.$queryRaw<{ name: string; exposed: boolean }[]>`SELECT rolname::text AS name, has_table_privilege(rolname, 'public.customer_notifications', 'SELECT,INSERT,UPDATE,DELETE') AS exposed FROM pg_roles WHERE rolname IN ('anon', 'authenticated')`;
     for (const role of roles) expect(role.exposed).toBe(false);
+  });
+
+  it('deleted email re-registration creates a new verified identity and independent welcome delivery', async () => {
+    const capture = vi.spyOn(emailService, 'sendAccountVerificationOtp').mockResolvedValue(true);
+    const auth = new AuthService(); const email = `rejoin-${randomUUID()}@example.invalid`;
+    const create = async () => {
+      await auth.registerCustomer(email, 'Synthetic-password-123!', 'Rejoin', 'Customer');
+      const user = await db.user.findUniqueOrThrow({ where: { email } });
+      const challenge = await db.otpChallenge.findFirstOrThrow({ where: { userId: user.id } });
+      expect(await otpService.verifyEmailOtpWithOutcome(challenge.id, capture.mock.calls.at(-1)![1])).toBe('VERIFIED');
+      return user;
+    };
+    const first = await create();
+    const original = (await events(first.id))[0]!;
+    await new AccountDeletionService().deleteAccount(first.id);
+    const second = await create();
+    expect(second.id).not.toBe(first.id);
+    const current = (await events(second.id))[0]!;
+    expect(current.eventKey).not.toBe(original.eventKey);
+    expect(current.recipient).toBe(email);
+    expect((await db.user.findUniqueOrThrow({ where: { id: first.id } })).isActive).toBe(false);
+    const sent: string[] = [];
+    const worker = new CommerceEmailDispatcher(db, { name: 'CAPTURE', send: async message => {
+      sent.push(message.to); return { success: true, messageId: `rejoin-${randomUUID()}` };
+    } }, renderCommerceEmail, { sendMode: 'allowlist', allowedRecipients: [email], origin: 'http://localhost:5173', batchSize: 10, concurrency: 1, leaseMs: 60000 });
+    for (const claim of await worker.claim()) { await worker.process(claim); await worker.process(claim); }
+    expect(sent).toEqual([email]);
+    expect((await db.commerceEmailOutbox.findUniqueOrThrow({ where: { id: current.id } })).dispatchState).toBe('ACCEPTED');
+    capture.mockRestore();
   });
 
   it('actual registration waits for verification and duplicate registration does not create another welcome', async () => {

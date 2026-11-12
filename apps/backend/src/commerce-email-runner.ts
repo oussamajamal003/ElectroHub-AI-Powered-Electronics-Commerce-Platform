@@ -1,3 +1,4 @@
+import { CustomerPushDispatcher, realPushTransport, pushDispatchAllowed } from './services/customer-push.dispatcher.js';
 import { setTimeout as wait } from 'node:timers/promises';
 import { randomUUID } from 'node:crypto';
 import { prisma } from './lib/prisma.js';
@@ -25,10 +26,11 @@ const permission = dispatchPermission(config, { kind: isolation.target, identity
 logSafely(permission.allowed ? 'info' : 'error', 'Commerce email worker permission resolved', { event: 'email_worker_permission',
   workerInstanceId, allowed: permission.allowed, reason: permission.reason, identity: permission.identity, sendMode: config.sendMode,
   allowlistSize: config.allowedRecipients.length, batchSize: config.batchSize, concurrency: config.concurrency });
-if (!permission.allowed) throw new Error(`Commerce email worker refused: ${permission.reason} (${permission.identity}).`);
+const pushAllowed = pushDispatchAllowed({ kind: isolation.target, identity: isolation.identity });
+if (!permission.allowed && !pushAllowed) throw new Error(`Commerce email worker refused: ${permission.reason} (${permission.identity}).`);
 logCommerceEmailRuntime('email-worker');
 
-const transport: CommerceEmailTransport = config.sendMode === 'capture' ? captureTransport(config.captureDir!) : (() => {
+const transport: CommerceEmailTransport = !permission.allowed ? { name: 'CAPTURE', send: async () => ({ success: false, failure: { category: 'configuration' } }) } : config.sendMode === 'capture' ? captureTransport(config.captureDir!) : (() => {
   const provider = new BrevoProvider(new BrevoClient({ apiKey: env.BREVO_API_KEY, timeoutMs: config.providerTimeoutMs }));
   return { name: 'BREVO' as const, send: message => provider.sendTransactionalEmail({ to: message.to, subject: message.subject,
     htmlContent: message.html, textContent: message.text, tags: message.tags }) };
@@ -37,6 +39,7 @@ const dispatcher = new CommerceEmailDispatcher(prisma, transport, renderCommerce
 // Provider delivery outcomes are read back (never resent) only when real Brevo sends happen; capture mode has no provider log.
 const deliverySource = config.sendMode !== 'capture' && env.BREVO_API_KEY ? brevoDeliveryEvents(env.BREVO_API_KEY, config.providerTimeoutMs) : null;
 let nextDeliverySync = 0;
+const pushDispatcher = pushAllowed ? new CustomerPushDispatcher(prisma, realPushTransport()) : null;
 
 let stopping = false;
 const shutdown = new AbortController();
@@ -59,10 +62,15 @@ async function main() {
               event: 'email_worker_unavailable', workerInstanceId, reason: 'SCHEMA_NOT_READY', identity: permission.identity });
             process.exitCode = 78; stopping = true; break;
           }
+          if (pushDispatcher) {
+            const [{ present: pushPresent }] = await prisma.$queryRaw<{ present: boolean }[]>`SELECT to_regclass('public.customer_push_deliveries') IS NOT NULL AS present`;
+            if (!pushPresent) { process.exitCode = 78; stopping = true; logSafely('error', 'Push schema is not ready', { event: 'customer_push_unavailable', reason: 'SCHEMA_NOT_READY' }); break; }
+          }
           ready = true;
           logSafely('info', 'Commerce email worker ready', { event: 'email_worker_ready', workerInstanceId, sendMode: config.sendMode,
             dispatchEnabled: config.dispatchEnabled, producerEnabledInThisEnvironment: config.enqueueEnabled, allowlistSize: config.allowedRecipients.length }); }
-        const pass = await dispatcher.runBatch();
+        const pass = permission.allowed ? await dispatcher.runBatch() : { claimed: 0 };
+        if (pushDispatcher) await pushDispatcher.runBatch();
         failures = 0;
         drained = pass.claimed >= config.batchSize;
       } catch (error) {
@@ -84,7 +92,7 @@ async function main() {
             excluded: health.allowlistExcluded, hint: 'recipients outside COMMERCE_EMAIL_ALLOWED_RECIPIENTS are never sent in allowlist mode' });
         } catch (error) { logSafely('error', 'Commerce email health unavailable', { event: 'email_worker_unavailable', workerInstanceId, reason: 'HEALTH_QUERY_FAILED', error }); }
       }
-      if (ready && deliverySource && Date.now() >= nextDeliverySync) {
+      if (permission.allowed && ready && deliverySource && Date.now() >= nextDeliverySync) {
         nextDeliverySync = Date.now() + DELIVERY_SYNC_INTERVAL_MS;
         try {
           const sync = await reconcileDeliveries(prisma, deliverySource);

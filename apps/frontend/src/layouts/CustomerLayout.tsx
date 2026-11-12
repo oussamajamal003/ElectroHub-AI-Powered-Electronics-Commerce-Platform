@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { PaymentNotifications } from '@/features/checkout/PaymentPurchases';
 import { Outlet } from 'react-router-dom';
 import { CustomerHeader } from '@/components/layout/CustomerHeader/CustomerHeader';
@@ -15,6 +16,8 @@ import { usePageTitle } from './usePageTitle';
 import { brandTitle } from '@/lib/pageTitle';
 import { CookieControls } from '@/features/privacy/CookieControls';
 
+const CustomerDeliveryEvents = lazy(() => import('@/features/notifications/CustomerDeliveryEvents'));
+
 export function CustomerLayout() {
   const { isLocked } = usePaymentLock();
   const { data: storeProfile } = useStorefrontProfile();
@@ -25,6 +28,7 @@ export function CustomerLayout() {
     <DiscoveryProvider disabled={isLocked}>
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <CustomerScrollRestoration />
+      <Suspense fallback={null}><CustomerDeliveryEvents /></Suspense>
       <div
         data-testid="header-lock-wrapper"
         className={styles.headerLockWrapper}
