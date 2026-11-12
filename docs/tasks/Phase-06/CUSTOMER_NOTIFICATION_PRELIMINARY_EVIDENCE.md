@@ -74,7 +74,7 @@ Native PostgreSQL 18 exists under Program Files although not on PATH. The Window
 | Frontend + backend build | PASS; existing bundle-size, Sass and dependency annotation warnings |
 | Focused backend render/domain/schema/OTP/provider/socket tests | 235 passed in 9 files |
 | Frontend header/delivery/notification component tests | 77 passed in 7 files; final notification-only expansion: 3 passed |
-| Disposable PostgreSQL public-schema/API/Socket.IO/worker suite | 44 passed in 4 files |
+| Disposable PostgreSQL public-schema/API/Socket.IO/worker + actual browser suite | 45 passed in 5 files |
 | Installed-Chrome browser presentation, 390px + 1440px | 2 passed; screenshots inspected |
 | Workflow migration-safety policy | PASS |
 | Brevo sandbox request acceptance | Both rendered templates: HTTP 201, message ID returned |
@@ -99,7 +99,7 @@ Users who completed verification while enqueueing was disabled are not retroacti
 
 ## Final delivery update
 
-Implementation commit, PR URL, final browser/database results and remote CI conclusions will be appended after the branch is pushed. Nothing has been merged or deployed.
+Implementation and corrective code commits are pushed. PR #59 targets the verified Phase 06.2 base. Nothing has been merged or deployed. Remote checks are tied to each exact SHA; consult the PR checks for the final documentation-inclusive HEAD.
 
 Recovery follow-up: the real-browser fixture cleanup now removes its email attempt rows before outbox rows (the existing RESTRICT constraint remains unchanged). The browser test uses the existing NodeNext/CommonJS import convention. Backend typecheck passed after this correction.
 
@@ -109,4 +109,43 @@ PR: https://github.com/oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerc
 
 Initial remote CI run 43177683855: main backend suite 2,122 passed, 251 skipped; frontend tests, all three release browser engines, lint/typechecks, backend build, Docker, payment PostgreSQL and security audit passed. The frontend budget failed at 305,284 gzip bytes; lazy loading the customer-only panel reduced the largest chunk to 278,318 and total JS to 587,071, passing unchanged 300,000/600,000 limits. The added integration step passed 41 tests but three simulation tests rejected the generic CI database name; the step now clones that job's disposable database using the existing required disposable naming convention. No runtime safety guard was changed.
 
-Visual follow-up: one mobile keyboard run raced the order page's existing initial heading-focus effect; the browser fixture now waits for that handoff. Both final Chrome viewport tests passed (21.6 seconds). Screenshot review caught dark-link contrast and it was corrected with existing inverse-text tokens; explicit computed-color assertions protect it. Header/notification component rerun: 30 tests passed. The final CI SHA/status is recorded in the PR and final handoff.
+Visual follow-up: one mobile keyboard run raced the order page's existing initial heading-focus effect; the browser fixture now waits for that handoff. Both final Chrome viewport tests passed (21.6 seconds). Screenshot review caught dark-link contrast and it was corrected with existing inverse-text tokens; explicit computed-color assertions protect it. Header/notification component rerun: 30 tests passed. Corrective code SHA: `049227ea8a7a881b693c54f76face5a5b57a7285`. Its CI run is [43179085764](https://github.com/oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerce-Platform/actions/runs/43179085764); it was in progress when this report was updated. Final SHA/status is recorded in the PR and final handoff.
+
+## Changed files
+
+- `.github/workflows/ci.yml`
+- `apps/backend/prisma/migrations/20261111000000_customer_notifications/migration.sql`
+- `apps/backend/prisma/schema.prisma`
+- `apps/backend/scripts/commerce-email-pg.cjs`
+- `apps/backend/scripts/delivery-pg.cjs`
+- `apps/backend/scripts/lib/commerce-email-schema.cjs`
+- `apps/backend/src/emails/brand.ts`
+- `apps/backend/src/emails/commerce/__tests__/render.test.ts`
+- `apps/backend/src/emails/commerce/__tests__/welcome.test.ts`
+- `apps/backend/src/emails/commerce/layout.ts`
+- `apps/backend/src/emails/commerce/templates.ts`
+- `apps/backend/src/repositories/google.repository.ts`
+- `apps/backend/src/routes/customer-notification.routes.ts`
+- `apps/backend/src/routes/index.ts`
+- `apps/backend/src/services/__tests__/commerce-email.domain.test.ts`
+- `apps/backend/src/services/__tests__/commerce-email.multicustomer.postgres.integration.test.ts`
+- `apps/backend/src/services/__tests__/customer-notifications.browser.postgres.integration.test.ts`
+- `apps/backend/src/services/__tests__/customer-notifications.postgres.integration.test.ts`
+- `apps/backend/src/services/__tests__/delivery.postgres.integration.test.ts`
+- `apps/backend/src/services/__tests__/helpers/delivery-fixtures.ts`
+- `apps/backend/src/services/commerce-email.domain.ts`
+- `apps/backend/src/services/commerce-email.producer.ts`
+- `apps/backend/src/services/customer-notification.service.ts`
+- `apps/backend/src/services/otp.service.ts`
+- `apps/backend/src/sockets/delivery.publisher.ts`
+- `apps/backend/src/sockets/delivery.realtime.postgres.integration.test.ts`
+- `apps/backend/vitest.commerce-email-pg.config.mts`
+- `apps/backend/vitest.delivery-pg.config.mts`
+- `apps/frontend/playwright.notifications.config.ts`
+- `apps/frontend/public/brand/electrohub-email-logo.png`
+- `apps/frontend/src/components/layout/CustomerHeader/CustomerHeader.tsx`
+- `apps/frontend/src/features/notifications/CustomerNotifications.module.scss`
+- `apps/frontend/src/features/notifications/CustomerNotifications.test.tsx`
+- `apps/frontend/src/features/notifications/CustomerNotifications.tsx`
+- `apps/frontend/tests/notifications/customer-notifications.spec.ts`
+- `docs/tasks/Phase-06/CUSTOMER_NOTIFICATION_PRELIMINARY_EVIDENCE.md`
