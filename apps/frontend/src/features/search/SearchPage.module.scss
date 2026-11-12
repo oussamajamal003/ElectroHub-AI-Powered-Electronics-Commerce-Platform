@@ -103,6 +103,9 @@ $control-height: 3.5rem;
 .availability { font-size: $font-size-sm; color: $color-text-secondary; margin: $spacing-2 0; }
 .empty { text-align: center; padding: $spacing-16 $spacing-4; overflow-wrap: anywhere; h2 { font-size: $font-size-3xl; margin-bottom: $spacing-4; } p { color: $color-text-secondary; } button { margin: $spacing-2; } }
 .stateBlock { margin: $spacing-6 0; }
+.continuation { margin-top: $spacing-6; }
+.loadMore { display: flex; justify-content: center; margin: $spacing-6 0; }
+.endOfResults { margin: $spacing-6 0; text-align: center; color: $color-text-secondary; font-size: $font-size-sm; }
 .error { color: $color-error-foreground; padding: $spacing-3 0; }
 .skeleton { display: flex; flex-direction: column; min-width: 0; overflow: hidden; border: 1px solid $color-border; border-radius: 0; background: $color-background; }
 .skeletonImage { aspect-ratio: 1; margin: $spacing-4; background: $color-surface; animation: shimmer 1.5s ease-in-out infinite alternate; }

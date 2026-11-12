@@ -81,7 +81,8 @@ describe('Search services', () => {
     database.$queryRaw.mockResolvedValueOnce([fixture('catalog-item')]);
     const result = await new SearchService().products(searchSchema.parse({}));
     expect(result.data.map(value => value.id)).toEqual(['catalog-item']);
-    expect(result.meta).toEqual({ page: 1, pageSize: 20, total: 1, totalPages: 1 });
+    // Task 06.2: offset meta keeps its fields and adds hasNextPage/nextCursor (additive).
+    expect(result.meta).toEqual({ page: 1, pageSize: 20, total: 1, totalPages: 1, hasNextPage: false, nextCursor: null });
     expect(database.$queryRaw.mock.calls[0][0].text).toContain('p."createdAt" DESC, p."id" ASC');
     expect(database.$queryRaw.mock.calls[0][0].values.slice(-2)).toEqual([20, 0]);
     expect(database.$queryRaw).toHaveBeenCalledTimes(1);
@@ -91,7 +92,7 @@ describe('Search services', () => {
     expect(searchSchema.parse({ sort: 'category-mix' }).sort).toBe('category-mix');
     database.$queryRaw.mockResolvedValueOnce([fixture('mixed', 41n)]);
     const result = await new SearchService().products(searchSchema.parse({ sort: 'category-mix', page: '3', pageSize: '20', brand: 'sony' }));
-    expect(result.meta).toEqual({ page: 3, pageSize: 20, total: 41, totalPages: 3 });
+    expect(result.meta).toEqual({ page: 3, pageSize: 20, total: 41, totalPages: 3, hasNextPage: false, nextCursor: null });
     const query = database.$queryRaw.mock.calls[0][0];
     // Newest-per-category rank first, category name second: every category appears before any repeats.
     expect(query.text).toContain('ROW_NUMBER() OVER (PARTITION BY p."categoryId" ORDER BY p."createdAt" DESC, p."id" ASC) AS "round"');
@@ -106,7 +107,8 @@ describe('Search services', () => {
     expect(result.data.map(value => value.id)).toEqual(['first', 'second']);
     expect(result.data[0]).toMatchObject({ price: '9999999999.99', brand: null, primaryImage: null, availability: 'UNAVAILABLE' });
     expect(result.data[0]).not.toHaveProperty('inventory');
-    expect(result.meta).toEqual({ page: 2, pageSize: 2, total: 21, totalPages: 11 });
+    expect(result.meta).toEqual({ page: 2, pageSize: 2, total: 21, totalPages: 11, hasNextPage: true, nextCursor: null });
+    // The fixture rows carry no sort keys, so no cursor is minted (cursors are built only from complete rows: catalog-cursor.test.ts).
     expect(database.$queryRaw.mock.calls[0][0].values.slice(-2)).toEqual([2, 2]);
   });
   it('returns empty beyond-end pages without product hydration', async () => {
@@ -136,9 +138,14 @@ describe('Search API', () => {
     database.$queryRaw.mockResolvedValue([]);
     expect((await request(app).get('/api/search/suggestions?q=mac')).body).toEqual({ data: [] });
   });
-  it.each(['/products?page=1001', '/products?sort=featured', '/products?q=a&q=b', '/suggestions?q=a', '/suggestions?q=mac&limit=11'])('returns controlled 400 for %s', async path => {
+  it.each(['/products?sort=featured', '/products?q=a&q=b', '/suggestions?q=a', '/suggestions?q=mac&limit=11'])('returns controlled 400 for %s', async path => {
     const response = await request(app).get(`/api/search${path}`);
     expect(response.status).toBe(400); expect(response.body.error.code).toBe('VALIDATION_ERROR');
+  });
+  it.each(['/products?page=101', '/products?page=1001'])('Task 06.2: answers 400 PAGE_LIMIT_EXCEEDED above the offset cap for %s', async path => {
+    const response = await request(app).get(`/api/search${path}`);
+    expect(response.status).toBe(400); expect(response.body.error.code).toBe('PAGE_LIMIT_EXCEEDED');
+    expect(database.$queryRaw).not.toHaveBeenCalled();
   });
   it('sanitizes unexpected failures', async () => {
     database.$queryRaw.mockRejectedValue(new Error('Prisma SQL path private'));
