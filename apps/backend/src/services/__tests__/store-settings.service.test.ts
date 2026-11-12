@@ -19,7 +19,7 @@ import { AppError } from '../../middleware/errorHandler.js';
 
 const ACTOR = '8f2813b4-a388-44d3-b51e-5d4c40386677';
 const storeRow = { storeName: 'ElectroHub', supportEmail: null, supportPhone: null, addressLine1: null, addressLine2: null, city: null,
-  region: null, postalCode: null, country: null, timezone: 'UTC', version: 1, updatedAt: new Date('2026-11-01T00:00:00Z') };
+  region: null, postalCode: null, country: null, businessHours: null, timezone: 'UTC', version: 1, updatedAt: new Date('2026-11-01T00:00:00Z') };
 const validStore = { expectedVersion: 1, storeName: 'ElectroHub', supportEmail: null, supportPhone: null, addressLine1: null,
   addressLine2: null, city: null, region: null, postalCode: null, country: null, timezone: 'UTC', currency: 'USD' };
 const sharedShippingRows = [
@@ -74,6 +74,25 @@ describe('store profile validation', () => {
     expect(parsed.city).toBeNull();
     expect(parsed.supportEmail).toBeNull();
     expect(storeUpdateSchema.safeParse({ ...validStore, role: 'ADMIN' }).success).toBe(false);
+  });
+});
+
+describe('business hours', () => {
+  it('is optional, normalises blank to null, and is bounded to a single line', () => {
+    expect(storeUpdateSchema.parse(validStore).businessHours).toBeUndefined();
+    expect(storeUpdateSchema.parse({ ...validStore, businessHours: '  ' }).businessHours).toBeNull();
+    expect(storeUpdateSchema.parse({ ...validStore, businessHours: ' Mon–Fri, 9:00 AM–6:00 PM ' }).businessHours).toBe('Mon–Fri, 9:00 AM–6:00 PM');
+    expect(storeUpdateSchema.safeParse({ ...validStore, businessHours: 'Mon\nTue' }).success).toBe(false);
+    expect(storeUpdateSchema.safeParse({ ...validStore, businessHours: 'x'.repeat(256) }).success).toBe(false);
+  });
+  it('an omitted value leaves the stored hours untouched and out of the audit; a provided one is written and audited by name only', async () => {
+    await service.updateStore(ACTOR, { ...validStore, storeName: 'Northwind' });
+    expect(db.storeSettings.updateMany.mock.calls[0][0].data).not.toHaveProperty('businessHours');
+    await service.updateStore(ACTOR, { ...validStore, businessHours: 'Mon–Fri, 9–6' });
+    expect(db.storeSettings.updateMany.mock.calls[1][0].data).toMatchObject({ businessHours: 'Mon–Fri, 9–6' });
+    const details = audit.recordAdminAudit.mock.calls[1][0].details;
+    expect(details.changedFields).toEqual(['businessHours']);
+    expect(JSON.stringify(details)).not.toContain('Mon');
   });
 });
 

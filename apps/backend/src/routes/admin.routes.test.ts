@@ -13,7 +13,7 @@ const catalog = vi.hoisted(() => ({ listProducts: vi.fn(), getProduct: vi.fn(), 
 const inventory = vi.hoisted(() => ({ list: vi.fn(), adjust: vi.fn(), setThreshold: vi.fn() }));
 const orders = vi.hoisted(() => ({ list: vi.fn(), detail: vi.fn() }));
 const customers = vi.hoisted(() => ({ list: vi.fn(), detail: vi.fn(), setStatus: vi.fn() }));
-const dashboard = vi.hoisted(() => ({ overview: vi.fn(), alerts: vi.fn() }));
+const dashboard = vi.hoisted(() => ({ overview: vi.fn(), alerts: vi.fn(), acknowledgeAlerts: vi.fn() }));
 const sessions = vi.hoisted(() => ({ session: '5a1e2c3d-4b5f-4a6b-8c7d-9e0f1a2b3c4d', find: vi.fn() }));
 vi.mock('../lib/prisma.js', () => ({ prisma: db }));
 // An ADMIN access token is honoured only with a live, MFA-assured session family (requireAuth re-checks it on every request).
@@ -224,5 +224,34 @@ describe('admin operations API conflicts and envelopes', () => {
     expect(customers.setStatus).toHaveBeenCalledWith(ids.admin, ids.customer, false, stamp);
     const smuggled = await as(request(app).patch(`/api/admin/customers/${ids.customer}/status`).send({ isActive: true, expectedUpdatedAt: stamp, role: 'ADMIN' }));
     expect(smuggled.status).toBe(400);
+  });
+});
+
+describe('admin alert acknowledgement API', () => {
+  const alertsBody = { lowStock: 1, outOfStock: 0, awaitingFulfillment: 2 };
+  it('requires an authenticated ADMIN before any service call', async () => {
+    expect((await request(app).post('/api/admin/dashboard/alerts/acknowledge').send(alertsBody)).status).toBe(401);
+    ids.role = 'CUSTOMER';
+    expect((await as(request(app).post('/api/admin/dashboard/alerts/acknowledge').send(alertsBody))).status).toBe(403);
+    expect(dashboard.acknowledgeAlerts).not.toHaveBeenCalled();
+  });
+  it('acknowledges for the authenticated administrator only, never a client-supplied identity', async () => {
+    dashboard.acknowledgeAlerts.mockResolvedValue({ unread: { total: 0 } } as never);
+    const res = await as(request(app).post('/api/admin/dashboard/alerts/acknowledge').send({ ...alertsBody }));
+    expect(res.status).toBe(200);
+    expect(dashboard.acknowledgeAlerts).toHaveBeenCalledWith(ids.admin, alertsBody);
+    const smuggled = await as(request(app).post('/api/admin/dashboard/alerts/acknowledge').send({ ...alertsBody, userId: 'someone-else' }));
+    expect(smuggled.status).toBe(400);
+  });
+  it('rejects malformed counts', async () => {
+    for (const body of [{}, { ...alertsBody, lowStock: -1 }, { ...alertsBody, lowStock: 1.5 }, { ...alertsBody, outOfStock: '2' }]) {
+      expect((await as(request(app).post('/api/admin/dashboard/alerts/acknowledge').send(body))).status).toBe(400);
+    }
+    expect(dashboard.acknowledgeAlerts).not.toHaveBeenCalled();
+  });
+  it('passes the administrator id when reading alerts', async () => {
+    dashboard.alerts.mockResolvedValue({ unread: { total: 3 } } as never);
+    expect((await as(request(app).get('/api/admin/dashboard/alerts'))).status).toBe(200);
+    expect(dashboard.alerts).toHaveBeenCalledWith(ids.admin);
   });
 });

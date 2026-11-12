@@ -20,6 +20,8 @@ export interface StoreProfile {
   region: string | null;
   postalCode: string | null;
   country: string | null;
+  /** Free-text opening hours shown on the public Contact page. */
+  businessHours: string | null;
   timezone: string;
   currency: 'USD';
   version: number;

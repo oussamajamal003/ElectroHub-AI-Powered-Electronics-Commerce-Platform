@@ -16,11 +16,13 @@ export default defineConfig(({ command }) => {
     // Keep generated Storybook output in this package from being scanned as a second app entry.
     optimizeDeps: { entries: ['index.html'] },
     build: {
+      // CI budgets gzip across all output files; Terser reduces the full route set without dropping functionality.
+      minify: 'terser',
       rollupOptions: {
         output: {
           manualChunks(id) {
             const normalizedId = id.replaceAll('\\', '/');
-            if (/\/node_modules\/(react|react-dom|scheduler)(\/|$)/.test(normalizedId)) return 'react-vendor';
+            if (/\/node_modules\/(react|react-dom|scheduler|zod)(\/|$)/.test(normalizedId)) return 'core-vendor';
           },
         },
       },
