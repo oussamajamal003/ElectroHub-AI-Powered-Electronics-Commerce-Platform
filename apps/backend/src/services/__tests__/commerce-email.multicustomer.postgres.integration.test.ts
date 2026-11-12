@@ -63,7 +63,7 @@ describe.skipIf(!enabled)('Task 03.8 multi-customer delivery — real PostgreSQL
     for (const [customer, events] of [[a, eventsA], [b, eventsB]] as const) {
       for (const event of events) {
         expect(event).toMatchObject({ userId: customer.userId, orderId: customer.orderId, recipient: customer.email, dispatchState: 'READY' });
-        expect(commerceEmailSnapshot.parse(event.snapshot).orderReference).toBe(orderReference(customer.orderId));
+        expect(commerceEmailSnapshot.parse(event.snapshot)).toMatchObject({ orderReference: orderReference(customer.orderId) });
       }
       expect(events.find(event => event.type === 'PAYMENT_CONFIRMED')!.paymentId).toBe(customer.paymentId);
       expect(events.find(event => event.type === 'ORDER_CONFIRMED')!.paymentId).toBeNull();

@@ -15,7 +15,8 @@ export interface LayoutOptions {
   statusLabel: string;
   statusTone: StatusTone;
   heading: string;
-  reference: string;
+  reference?: string;
+  accountWelcome?: boolean;
   eventDateLabel: string;
   /** Trusted HTML built by the template builders; every dynamic value inside it must already be escaped. */
   bodyHtml: string;
@@ -53,8 +54,8 @@ export function renderLayout(options: LayoutOptions): string {
   const url = escapeHtml(options.cta.url);
   const preheader = escapeHtml(options.preheader);
   const heading = escapeHtml(options.heading);
-  const footerText = `You received this email because you placed an order with ${options.storeName || LEGACY_STORE_NAME}. `
-    + 'You can find the latest information in Order Details.'
+  const footerText = (options.accountWelcome ? 'You received this email because you created an ElectroHub account.'
+    : `You received this email because you placed an order with ${options.storeName || LEGACY_STORE_NAME}. You can find the latest information in Order Details.`)
     + (options.supportEmail || options.supportPhone ? ` For help, contact ${[options.supportEmail, options.supportPhone].filter(Boolean).join(' · ')}.` : '');
   const spacer = '&#847;&#8203;'.repeat(40);
   return [
@@ -84,9 +85,9 @@ export function renderLayout(options: LayoutOptions): string {
     '<td style="padding:12px 16px;font-family:' + FONT_STACK + ';">',
     `<p style="margin:0;font-size:14px;line-height:20px;font-weight:600;color:${tone.color};">`
       + `<span aria-hidden="true">${tone.icon}</span> ${escapeHtml(options.statusLabel)} · ${escapeHtml(options.eventDateLabel)}</p>`,
-    '<p style="margin:8px 0 0 0;font-size:14px;line-height:20px;color:#334155;">Order reference</p>',
+    options.reference ? '<p style="margin:8px 0 0 0;font-size:14px;line-height:20px;color:#334155;">Order reference</p>' : '',
     `<p style="margin:2px 0 0 0;font-family:${MONO_STACK};font-size:14px;line-height:20px;color:#0F172A;word-break:break-all;">`
-      + `${escapeHtml(options.reference)}</p>`,
+      + `${escapeHtml(options.reference ?? '')}</p>`,
     '</td>',
     '</tr>',
     '</table>',

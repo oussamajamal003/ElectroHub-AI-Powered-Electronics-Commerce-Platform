@@ -1,5 +1,5 @@
 import { BrandLogo } from '@/components/ui/BrandLogo';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   ShoppingCart,
@@ -33,6 +33,8 @@ import styles from './CustomerHeader.module.scss';
 import { ThemeToggle } from '@/features/theme';
 import { useStorefrontProfile } from '@/features/storefront/api';
 
+const CustomerNotifications = lazy(() => import('@/features/notifications/CustomerNotifications').then(module => ({ default: module.CustomerNotifications })));
+
 export interface CustomerHeaderProps {
   cartCount?: number;
   wishlistCount?: number;
@@ -51,7 +53,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
   const cartCountUnresolved = countOverride === undefined && !cartData;
   const wishlistCountUnresolved = wishlistOverride === undefined && wishlist?.isLoading && !wishlist.data;
   const [authReturnTo, setAuthReturnTo] = useState<CustomerReturnPath | undefined>();
-  const { user, rememberedUser, isAuthenticated, isInitializing } = useAuth();
+  const { user, rememberedUser, isAuthenticated, isInitializing, isSessionVerified, isLoggingOut } = useAuth();
   const headerUser = isInitializing ? rememberedUser : user;
   const showAuthenticatedHeader = isInitializing ? Boolean(rememberedUser) : isAuthenticated;
   // Only the verified session decides the role; the remembered header identity carries none, so nothing privileged is inferred while initializing.
@@ -175,6 +177,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
 
             {/* RIGHT — Utility Icons + Avatar + Unified Search */}
             <div className={styles.actions}>
+              {user?.role === 'CUSTOMER' && isSessionVerified && !isLoggingOut && <Suspense fallback={null}><CustomerNotifications key={user.id} userId={user.id} /></Suspense>}
 
                   <Tooltip content={`Search products (${shortcutLabel()})`}>
                   <button

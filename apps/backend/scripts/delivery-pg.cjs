@@ -17,7 +17,8 @@ const { spawn, spawnSync } = require('node:child_process');
 const backend = path.resolve(__dirname, '..');
 const root = path.resolve(backend, '../..');
 fs.mkdirSync(path.join(root, '.cache'), { recursive: true });
-const work = fs.mkdtempSync(path.join(root, '.cache/delivery-pg-run-'));
+// Native PostgreSQL on Windows requires an ASCII cluster path.
+const work = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'electrohub-delivery-pg-'));
 const data = path.join(work, 'data');
 const binaries = process.env.ELECTROHUB_LOCAL_PG_BIN || 'C:/Program Files/PostgreSQL/18/bin';
 const exe = name => path.join(binaries, process.platform === 'win32' ? `${name}.exe` : name);
@@ -52,6 +53,8 @@ async function run() {
   command(exe('pg_ctl'), ['-D', data, '-l', path.join(work, 'postgres.log'), '-w', 'start']);
   started = true;
   command(exe('createdb'), ['-h', '127.0.0.1', '-p', String(port), '-U', 'postgres', database]);
+  command(exe('psql'), ['-h', '127.0.0.1', '-p', String(port), '-U', 'postgres', '-d', database, '-v', 'ON_ERROR_STOP=1', '-c',
+    'CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; GRANT USAGE ON SCHEMA public TO anon, authenticated; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated;']);
   const url = `postgresql://postgres@127.0.0.1:${port}/${database}`;
   // Every repository migration is applied in order, except the ones that create the pgvector `ai`/`extensions` objects (this host's
   // PostgreSQL has no pgvector extension) and the media overlay that depends on them. Delivery tracking reads/writes only public commerce

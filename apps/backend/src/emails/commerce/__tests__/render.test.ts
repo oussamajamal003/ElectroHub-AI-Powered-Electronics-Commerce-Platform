@@ -46,7 +46,7 @@ describe('subjects and headings', () => {
     ['orderConfirmed', `Order confirmed — ${REFERENCE}`, 'Your order is confirmed'],
     ['paymentConfirmed', `Payment confirmed — ${REFERENCE}`, 'Your payment is confirmed'],
     ['orderPreparing', `We’re preparing your order — ${REFERENCE}`, 'Your order is being prepared'],
-    ['orderOutForDelivery', `Your order is out for delivery — ${REFERENCE}`, 'Your order is out for delivery'],
+    ['orderOutForDelivery', 'Your ElectroHub Order Is Out for Delivery!', 'Your order is out for delivery'],
     ['orderDelivered', `Order delivered — ${REFERENCE}`, 'Your order is marked delivered'],
     ['orderCancelledUnpaid', `Order cancelled — ${REFERENCE}`, 'Your order was cancelled'],
     ['paymentRefunded', `Refund confirmed — ${REFERENCE}`, 'Your refund is confirmed'],
@@ -72,7 +72,8 @@ describe('HTML escaping', () => {
       const html = full.replace(BRAND_LOGO_TAG, '');
       expect(full.match(BRAND_LOGO_TAG)).toHaveLength(1);
       expect(html).not.toContain('<script');
-      expect(html).not.toMatch(/<img/i);
+      expect(html).not.toMatch(/<img\b/i);
+      expect(html).not.toMatch(/<img[^>]*onerror/i);
       expect(html).not.toMatch(/<b>/i);
       expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
       expect(html).toContain('&quot;&gt;&lt;img src=x onerror=alert(1)&gt;');
@@ -231,16 +232,19 @@ describe('static safety', () => {
     }
   });
 
-  it('only uses https product images with empty alt text, plus the one ElectroHub brand logo', () => {
-    const { html: full } = render('orderConfirmed25Items');
-    const html = full.replace(BRAND_LOGO_TAG, '');
+  it('uses the branded HTTPS logo and decorative HTTPS product images', () => {
+    const { html } = render('orderConfirmed25Items');
     const images = html.match(/<img\b[^>]*>/g) ?? [];
     expect(images.length).toBeGreaterThan(0);
-    for (const tag of images) {
+    expect(images[0]).toContain('src="https://electrohub.example/brand/electrohub-email-logo.png"');
+    expect(images[0]).toContain('alt="ElectroHub"');
+    for (const tag of images.slice(1)) {
       expect(tag).toMatch(/src="https:\/\/images\.example\.com\//);
       expect(tag).toContain('alt=""');
     }
-    expect(render('orderConfirmedMinimalOptional').html.replace(BRAND_LOGO_TAG, '')).not.toMatch(/<img\b/);
+    const minimal = render('orderConfirmedMinimalOptional').html;
+    expect(minimal.match(/<img\b/g)).toHaveLength(1);
+    expect(minimal.replace(BRAND_LOGO_TAG, '')).not.toMatch(/<img\b/);
   });
 
   it('has a light color-scheme declaration and a square, single CTA', () => {
