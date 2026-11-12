@@ -15,6 +15,17 @@ const pooled = (ref, extra = '') => `postgresql://postgres.${ref}:pw@aws-0-ap-no
 const direct = (ref) => `postgresql://postgres:pw@db.${ref}.supabase.co:5432/postgres`;
 const sha = (n) => String(n).padStart(64, '0');
 
+test('DEV post-check accepts applied approvals and still rejects missing, failed and mismatched migrations', () => {
+  const migration = { name: '20261114000000_admin_runtime', sha256: sha(1), sql: 'CREATE TABLE safe (id int);' };
+  const row = { name: migration.name, checksum: sha(1), finished: true, rolledBack: false };
+  const check = ledger => plan.validatePendingMigrations([migration], ledger, [migration.name], 'post');
+  assert.deepEqual(check([row]), { pending: [], problems: [] });
+  assert.match(check([]).problems.join(), /not successfully applied/);
+  assert.match(check([{ ...row, finished: false }]).problems.join(), /unfinished|not successfully applied/);
+  assert.match(check([{ ...row, checksum: sha(2) }]).problems.join(), /checksum/);
+  assert.match(plan.validatePendingMigrations([migration], [row], [migration.name]).problems.join(), /approved but not pending/);
+});
+
 test('parseTarget recognises pooled and direct Supabase endpoints and rejects everything else', () => {
   assert.deepEqual(plan.parseTarget(pooled(DEV)), { ok: true, ref: DEV, kind: 'pooler', pgbouncer: false });
   assert.equal(plan.parseTarget(direct(PROD)).ref, PROD);

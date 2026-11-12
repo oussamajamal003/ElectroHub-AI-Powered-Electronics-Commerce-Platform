@@ -1,3 +1,4 @@
+import { emailValidationError } from '@/lib/emailValidation';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { isStepUpCancelled, useStepUp } from '@/features/admin/security/useStepUp';
 import { Button } from '@/components/ui/Button';
@@ -74,6 +75,8 @@ export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload, o
     event.preventDefault();
     setFormError(null);
     setConflict(false);
+    const emailError = emailValidationError(draft.supportEmail, true);
+    if (emailError) { setErrors(current => ({ ...current, supportEmail: emailError })); return; }
     try {
       await runWithStepUp(() => save.mutateAsync({ expectedVersion, ...draft }));
       toast('Store settings saved');

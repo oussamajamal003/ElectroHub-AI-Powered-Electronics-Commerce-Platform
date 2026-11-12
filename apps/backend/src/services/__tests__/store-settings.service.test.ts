@@ -53,6 +53,11 @@ beforeEach(() => {
 });
 
 describe('store profile validation', () => {
+  it.each(['P2021', 'P2022', 'P1001'])('does not mask database failure %s as a default store', async code => {
+    const error = new Prisma.PrismaClientKnownRequestError('Database unavailable', { code, clientVersion: '6.12.0' });
+    db.storeSettings.findUnique.mockRejectedValueOnce(error);
+    await expect(service.getStore()).rejects.toBe(error);
+  });
   it('accepts the USD echo and rejects any other currency', () => {
     expect(storeUpdateSchema.safeParse(validStore).success).toBe(true);
     expect(storeUpdateSchema.safeParse({ ...validStore, currency: 'EUR' }).success).toBe(false);

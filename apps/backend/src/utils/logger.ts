@@ -72,7 +72,8 @@ export function createApplicationLogger(directory = process.env.ELECTROHUB_LOG_D
       const clean = sanitize(Object.assign({ level, message: info.message }, info)) as Record<string, unknown>;
       const requestId = sanitize(logContext.getStore()?.requestId ?? clean.requestId);
       return { ...clean, level, message: clean.message, [Symbol.for('level')]: level,
-        timestamp: new Date().toISOString(), severity: level, pid: process.pid, instanceId,
+        timestamp: new Date().toISOString(), severity: level, service: 'backend',
+        environment: process.env.NODE_ENV || 'development', pid: process.pid, instanceId,
         requestId,
         correlationId: requestId ?? sanitize(clean.correlationId) ?? instanceId,
         eventId: randomUUID(),

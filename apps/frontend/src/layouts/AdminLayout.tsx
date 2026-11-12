@@ -6,6 +6,7 @@ import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/Drawer';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/DropdownMenu';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { Button } from '@/components/ui/Button';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { ThemeToggle } from '@/features/theme';
 import { ADMIN_NAVIGATION, SIDEBAR_PREFERENCE_KEY, type AdminNavItem } from '@/features/admin/shell/navigation';
@@ -78,7 +79,11 @@ function AlertsMenu() {
       <DropdownMenuLabel className={styles.menuLabel}>Operational alerts</DropdownMenuLabel>
       <DropdownMenuSeparator />
       {alerts.isPending && <p className={styles.menuNote} role="status">Loading alerts…</p>}
-      {alerts.isError && !data && <p className={styles.menuNote} role="alert">Alerts could not be loaded.</p>}
+      {alerts.isError && !data && <div className={styles.menuNote} role="alert">
+        <p>Alerts could not be loaded.</p>
+        <Button type="button" variant="outline" size="small" disabled={alerts.isFetching} onClick={() => void alerts.refetch()}>Retry alerts</Button>
+      </div>}
+      {data && entries.every(entry => entry.count === 0) && <p className={styles.menuNote} role="status">No operational alerts need attention.</p>}
       {entries.map(entry => <DropdownMenuItem key={entry.label} asChild>
         <Link to={entry.to} className={styles.alertItem}>
           <span className={clsx(styles.alertIcon, entry.tone)} aria-hidden="true"><entry.icon /></span>

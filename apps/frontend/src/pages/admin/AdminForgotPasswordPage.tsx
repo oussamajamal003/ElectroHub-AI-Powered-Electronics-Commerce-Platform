@@ -1,4 +1,5 @@
 import { useDocumentTitle } from '@/lib/pageTitle';
+import { emailValidationError } from '@/lib/emailValidation';
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Fingerprint, KeyRound, Smartphone } from 'lucide-react';
@@ -19,7 +20,6 @@ import { STRONG_PASSWORD, passwordHint } from '@/features/admin/security/passwor
 import { fieldErrors as serverFieldErrors } from '@/features/admin/shared/api';
 import styles from './AdminLoginPage.module.scss';
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** The email code lives one minute and a resend is allowed when it lapses; the server remains authoritative for both. */
 const CODE_TTL_MS = 60 * 1000;
 
@@ -119,8 +119,8 @@ export function AdminForgotPasswordPage() {
     if (pending) return;
     setError('');
     const value = email.trim();
-    if (!value) { setEmailError('Email address is required.'); return; }
-    if (!EMAIL_REGEX.test(value)) { setEmailError('Please enter a valid email address.'); return; }
+    const validationError = emailValidationError(value);
+    if (validationError) { setEmailError(validationError); return; }
     setEmailError('');
     setPending(true);
     try {
