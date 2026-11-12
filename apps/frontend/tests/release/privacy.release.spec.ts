@@ -44,7 +44,8 @@ async function browse(page: Page) {
   for (const url of ['/', `/products/${product('REL-AURORA-HP').slug}`, '/search?q=aurora', '/']) {
     await page.goto(url);
     await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
-    await page.mouse.wheel(0, 1200);
+    // A real scroll of the document (mobile WebKit has no mouse wheel), so recommendation cards can enter the viewport.
+    await page.evaluate(() => window.scrollBy(0, 1200));
     await page.waitForTimeout(1_300); // longer than the 1 s session minimum and the 1 s impression dwell
   }
 }
@@ -267,7 +268,20 @@ test.describe('in-flight image search and withdrawal', () => {
     await requireEnabled(page, dialog);
     const route = hold.captured.route!;
     hold.release('fetch-then-hold');
-    const response = await route.fetch(); // the real server answers and writes its analytics row
+    // The real server answers and writes its analytics row. WebKit does not expose a file-upload (Blob) body to
+    // interception, so there the same multipart upload is rebuilt: same field, file and bytes, original headers.
+    const original = route.request().postDataBuffer();
+    const boundary = `----e2e${Date.now().toString(16)}`;
+    const { 'content-length': _length, ...headers } = route.request().headers();
+    void _length;
+    const response = await route.fetch(original?.length ? undefined : {
+      headers: { ...headers, 'content-type': `multipart/form-data; boundary=${boundary}` },
+      postData: Buffer.concat([
+        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="image"; filename="speaker.png"\r\nContent-Type: image/png\r\n\r\n`),
+        samplePng(), Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]),
+    });
+    expect(response.status(), 'the forwarded upload is processed, not refused as malformed').not.toBe(400);
     await expect.poll(async () => (await probe({ ref: hold.captured.ref })).imageSearch?.length ?? 0).toBe(1);
     const other = await context.newPage();
     await other.goto('/');

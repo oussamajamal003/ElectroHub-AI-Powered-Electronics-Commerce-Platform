@@ -208,10 +208,11 @@ export async function expectNoHorizontalOverflow(page: Page, label: string) {
 export async function expectUsableControl(control: Locator, label: string) {
   await expect(control, label).toBeVisible();
   const box = await control.boundingBox();
-  const viewport = control.page().viewportSize()!;
+  // A real browser window (viewport: null, e.g. native zoom) has no emulated size; use its CSS layout width instead.
+  const width = control.page().viewportSize()?.width ?? await control.page().evaluate(() => window.innerWidth);
   expect(box, `${label} has a layout box`).not.toBeNull();
   expect(box!.x, `${label} starts inside the viewport`).toBeGreaterThanOrEqual(-1);
-  expect(box!.x + box!.width, `${label} ends inside the viewport`).toBeLessThanOrEqual(viewport.width + 1);
+  expect(box!.x + box!.width, `${label} ends inside the viewport`).toBeLessThanOrEqual(width + 1);
   expect(Math.min(box!.width, box!.height), `${label} target size`).toBeGreaterThanOrEqual(24);
 }
 
