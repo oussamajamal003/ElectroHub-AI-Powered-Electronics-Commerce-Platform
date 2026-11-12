@@ -69,7 +69,7 @@ function useCatalogInvalidation() {
 
 export function useCreateProduct() {
   const settle = useCatalogInvalidation();
-  return useMutation({
+  return useMutation({ meta: { action: "create this product" },
     mutationFn: (body: ProductCreate) => apiClient<ItemResponse<AdminProduct>>('/api/admin/catalog/products', { method: 'POST', data: body }),
     onSuccess: response => settle(response.data),
   });
@@ -77,7 +77,7 @@ export function useCreateProduct() {
 
 export function useUpdateProduct(productId: string) {
   const settle = useCatalogInvalidation();
-  return useMutation({
+  return useMutation({ meta: { action: "update this product" },
     mutationFn: (body: ProductFields & { expectedUpdatedAt: string }) =>
       apiClient<ItemResponse<AdminProduct>>(`/api/admin/catalog/products/${encodeURIComponent(productId)}`, { method: 'PATCH', data: body }),
     onSuccess: response => settle(response.data),
@@ -86,7 +86,7 @@ export function useUpdateProduct(productId: string) {
 
 export function useProductStatus() {
   const settle = useCatalogInvalidation();
-  return useMutation({
+  return useMutation({ meta: { action: "change this product's status" },
     mutationFn: ({ id, status, expectedUpdatedAt }: { id: string; status: ProductStatus; expectedUpdatedAt: string }) =>
       apiClient<ItemResponse<AdminProduct>>(`/api/admin/catalog/products/${encodeURIComponent(id)}/status`,
         { method: 'PATCH', data: { status, expectedUpdatedAt } }),
@@ -103,7 +103,7 @@ export interface BulkStatusResponse { results: BulkStatusResult[]; summary: Bulk
 /** Bounded archive/reactivate of selected rows. The server applies each row independently and reports per-item outcomes. */
 export function useBulkProductStatus() {
   const settle = useCatalogInvalidation();
-  return useMutation({
+  return useMutation({ meta: { action: "update the selected products" },
     mutationFn: ({ status, items }: { status: ProductStatus; items: BulkStatusItem[] }) =>
       apiClient<ItemResponse<BulkStatusResponse>>('/api/admin/catalog/products/bulk-status', { method: 'POST', data: { status, items } }),
     // Settled, not succeeded: rows may have changed even when the request failed part-way, so the lists always refresh.
@@ -114,7 +114,7 @@ export function useBulkProductStatus() {
 export function useDeleteProduct() {
   const client = useQueryClient();
   const settle = useCatalogInvalidation();
-  return useMutation({
+  return useMutation({ meta: { action: "delete this product" },
     mutationFn: (id: string) => apiClient<void>(`/api/admin/catalog/products/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     onSuccess: (_result, id) => { client.removeQueries({ queryKey: adminKeys.product(id) }); settle(); void client.invalidateQueries({ queryKey: adminKeys.options }); },
   });

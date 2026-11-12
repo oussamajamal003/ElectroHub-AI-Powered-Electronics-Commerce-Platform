@@ -1,3 +1,4 @@
+import { renderEmailHeader } from '../emails/brand.js';
 import { EmailDeliveryStatus, EmailType } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { brevoProvider, type BrevoProvider } from '../integrations/brevo/brevo.provider.js';
@@ -26,7 +27,7 @@ export async function sendAdminInvitationEmail(input: { to: string; token: strin
   const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>You're invited to ${brand} Admin</title></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;margin:0;padding:24px;color:#0f172a">
 <div style="max-width:480px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;padding:32px">
-<div style="font-size:22px;font-weight:700;color:#2563eb;text-align:center;margin-bottom:24px">${brand}</div>
+${renderEmailHeader({ storeName })}
 <h1 style="font-size:20px;font-weight:600;margin:0 0 12px;text-align:center">You're invited to the Admin Portal</h1>
 <p style="font-size:14px;line-height:1.6;color:#475569">${inviter} invited you to join the ${brand} administration team. Create your account and set up two-step verification to get access.</p>
 <p style="text-align:center;margin:24px 0"><a href="${escapeHtml(link)}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;font-weight:600;display:inline-block">Accept invitation</a></p>
@@ -64,7 +65,7 @@ export async function sendAdminActivationEmail(input: { to: string; token: strin
   const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Activate your ${brand} administrator account</title></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;margin:0;padding:24px;color:#0f172a">
 <div style="max-width:480px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;padding:32px">
-<div style="font-size:22px;font-weight:700;color:#2563eb;text-align:center;margin-bottom:24px">${brand}</div>
+${renderEmailHeader({ storeName })}
 <h1 style="font-size:20px;font-weight:600;margin:0 0 12px;text-align:center">Activate your administrator account</h1>
 <p style="font-size:14px;line-height:1.6;color:#475569">${owner} authorized two-step verification for your administrator account. Choose a new password and set up an authenticator app to continue. Your previous password stops working once you finish this step.</p>
 <p style="text-align:center;margin:24px 0"><a href="${escapeHtml(link)}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;font-weight:600;display:inline-block">Activate account</a></p>
@@ -117,7 +118,7 @@ async function sendOwnerChangeEmail(kind: keyof typeof OWNER_NOTICES, to: string
     const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(notice.subject)}</title></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;margin:0;padding:24px;color:#0f172a">
 <div style="max-width:480px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;padding:32px">
-<div style="font-size:22px;font-weight:700;color:#2563eb;text-align:center;margin-bottom:24px">ElectroHub</div>
+${renderEmailHeader()}
 <h1 style="font-size:20px;font-weight:600;margin:0 0 12px;text-align:center">${escapeHtml(notice.heading)}</h1>
 <p style="font-size:14px;line-height:1.6;color:#475569">${escapeHtml(notice.message)}</p>
 <p style="text-align:center;margin:24px 0"><a href="${escapeHtml(link)}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;font-weight:600;display:inline-block">Sign in to Admin</a></p>

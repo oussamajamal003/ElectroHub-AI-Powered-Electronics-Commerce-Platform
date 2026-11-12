@@ -31,13 +31,13 @@ export function useInventoryMutations() {
     for (const key of [adminKeys.inventory, adminKeys.products, adminKeys.alerts, ['admin', 'dashboard']]) void client.invalidateQueries({ queryKey: key });
   };
   const onError = (error: unknown) => { const current = conflictRow(error); if (current) settle(current); };
-  const adjust = useMutation({
+  const adjust = useMutation({ meta: { action: "adjust stock" },
     mutationFn: ({ productId, ...body }: InventoryAdjustment & { productId: string }) =>
       apiClient<ItemResponse<InventoryRow>>(`/api/admin/inventory/${encodeURIComponent(productId)}/adjustments`, { method: 'POST', data: body }),
     onSuccess: response => settle(response.data),
     onError,
   });
-  const threshold = useMutation({
+  const threshold = useMutation({ meta: { action: "update the low-stock alert" },
     mutationFn: ({ productId, ...body }: { productId: string; lowStockAt: number; expectedLowStockAt: number }) =>
       apiClient<ItemResponse<InventoryRow>>(`/api/admin/inventory/${encodeURIComponent(productId)}/threshold`, { method: 'PATCH', data: body }),
     onSuccess: response => settle(response.data),

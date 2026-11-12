@@ -1,6 +1,7 @@
-import { QueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryClient } from '@tanstack/react-query';
 import { ApiError, isAbortError } from './api';
 import { searchParams, type SearchState } from '@/features/search/searchState';
+import { describeError, toast } from '@/components/ui/Toast';
 
 export const cachePolicy = {
   reference: { staleTime: 10 * 60_000, gcTime: 30 * 60_000 },
@@ -67,8 +68,28 @@ export function shouldRetry(failureCount: number, error: unknown) {
   return false;
 }
 
+declare module '@tanstack/react-query' {
+  interface Register {
+    /** `action`: verb phrase for failure feedback ("update this product"); `silent`: the caller owns all failure feedback. */
+    mutationMeta: { action?: string; silent?: boolean };
+  }
+}
+
+/**
+ * One failure path for every mutation in both caches (storefront and Admin Console). Differentiated and safe: a 403 is a permission
+ * message, a 409 asks for a refresh, 429 asks to wait, 5xx/offline say so. Not raised here: validation (400/422), which the form shows
+ * inline next to the field; 401, which the session-expiry flow owns; and aborts. Identical failures in a burst collapse by id.
+ */
+export function reportMutationFailure(error: unknown, meta?: { action?: string; silent?: boolean }): void {
+  if (meta?.silent || isAbortError(error)) return;
+  if (error instanceof ApiError && (error.status === 400 || error.status === 401 || error.status === 422)) return;
+  const feedback = describeError(error, meta?.action ?? 'save your changes');
+  const raise = feedback.kind === 'unavailable' || feedback.kind === 'unexpected' ? toast.error : toast.warning;
+  raise(feedback.title, { description: feedback.description, id: `mutation-failure:${feedback.kind}`, announce: feedback.kind !== 'conflict' });
+}
+
 export function createQueryClient() {
-  return new QueryClient({ defaultOptions: {
+  return new QueryClient({ mutationCache: new MutationCache({ onError: (error, _variables, _context, mutation) => reportMutationFailure(error, mutation.meta) }), defaultOptions: {
     queries: {
       staleTime: 30_000,
       gcTime: 5 * 60_000,

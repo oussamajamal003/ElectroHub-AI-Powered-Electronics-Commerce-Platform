@@ -1,3 +1,4 @@
+import { enqueueCustomerWelcome } from './commerce-email.producer.js';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { OtpChannel, OtpPurpose, SecurityEventType } from '@prisma/client';
@@ -491,6 +492,7 @@ export class OtpService {
           : { emailVerifiedAt: now },
       });
       await transaction.securityEvent.create({ data: { userId: user.id, type: SecurityEventType.EMAIL_VERIFIED } });
+      await enqueueCustomerWelcome(transaction, user.id, now);
       return true;
     }, { timeout: 15000 });
     return verified ? 'VERIFIED' : this.getChallengeFailureOutcome(challengeId);

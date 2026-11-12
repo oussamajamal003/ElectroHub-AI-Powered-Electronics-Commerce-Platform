@@ -1,5 +1,6 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { saveChoice } from '@/features/privacy/consent';
 import { HEARTBEAT_MS, useStorefrontSession } from './useStorefrontSession';
 
 let now = 0;
@@ -12,7 +13,9 @@ const show = () => { visibility = 'visible'; document.dispatchEvent(new Event('v
 beforeEach(() => {
   now = 0;
   visibility = 'visible';
+  window.localStorage.clear();
   window.sessionStorage.clear();
+  saveChoice(true);
   fetchMock.mockClear();
   vi.stubGlobal('fetch', fetchMock);
   vi.spyOn(performance, 'now').mockImplementation(() => now);

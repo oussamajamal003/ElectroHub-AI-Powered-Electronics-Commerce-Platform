@@ -136,4 +136,8 @@ export const customerListSchema = z.object({
 export const customerStatusSchema = z.object({ isActive: z.boolean(), expectedUpdatedAt }).strict();
 
 // ─── Dashboard ──────────────────────────────────────────
+/** The counts the administrator was shown. The server clamps them to its own current counts. */
+export const alertAcknowledgeSchema = z.object({
+  lowStock: z.number().int().min(0).max(1_000_000), outOfStock: z.number().int().min(0).max(1_000_000), awaitingFulfillment: z.number().int().min(0).max(1_000_000),
+}).strict();
 export const dashboardSchema = z.object({ days: z.enum(['7', '30', '90']).prefault('30').transform(Number) }).strict();

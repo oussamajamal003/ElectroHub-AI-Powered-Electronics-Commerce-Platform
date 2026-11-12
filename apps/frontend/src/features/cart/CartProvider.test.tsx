@@ -250,7 +250,7 @@ describe('CartProvider authenticated quantity updates', () => {
     expect(result.current.pendingProductIds).toEqual([]);
   });
 
-  it('accepts rapid quantity changes immediately and serializes every server write', async () => {
+  it('accepts rapid quantity changes immediately and coalesces unsent ones into one server write with the final quantity', async () => {
     vi.mocked(useAuth).mockReturnValue({ isSessionVerified: true, isAuthenticated: true, user } as ReturnType<typeof useAuth>);
     const responses: Array<() => void> = [];
     const requestedQuantities: number[] = [];
@@ -272,19 +272,49 @@ describe('CartProvider authenticated quantity updates', () => {
     });
     expect(result.current.data?.items[0]?.quantity).toBe(5);
     expect(result.current.totalQuantity).toBe(5);
+    expect(result.current.isMutating).toBe(true);
     await waitFor(() => expect(responses).toHaveLength(1));
-    await act(async () => { responses.shift()!(); });
-    await waitFor(() => expect(responses).toHaveLength(1));
-    await act(async () => { responses.shift()!(); });
-    await waitFor(() => expect(responses).toHaveLength(1));
+    // A click while that write is on the wire is never merged into it: it queues behind it, and Checkout stays blocked until both settle.
+    let late!: Promise<void>;
+    act(() => { late = result.current.setQuantity(productId, 6); });
     await act(async () => { responses.shift()!(); await Promise.all(updates); });
-    expect(result.current.data?.items[0]?.quantity).toBe(5);
+    expect(result.current.isMutating).toBe(true);
+    await waitFor(() => expect(responses).toHaveLength(1));
+    await act(async () => { responses.shift()!(); await late; });
+    expect(result.current.data?.items[0]?.quantity).toBe(6);
     expect(result.current.pendingProductIds).toEqual([]);
-    expect(requestedQuantities).toEqual([3, 4, 5]);
-    expect(vi.mocked(apiClient)).toHaveBeenCalledTimes(3);
+    expect(result.current.isMutating).toBe(false);
+    expect(requestedQuantities).toEqual([5, 6]);
+    expect(vi.mocked(apiClient)).toHaveBeenCalledTimes(2);
   });
 
-  it('applies rapid decreases in order and keeps the latest intended quantity', async () => {
+  it('keeps Checkout blocked until every queued write has settled, then releases it immediately', async () => {
+    vi.mocked(useAuth).mockReturnValue({ isSessionVerified: true, isAuthenticated: true, user } as ReturnType<typeof useAuth>);
+    const responses: Array<() => void> = [];
+    vi.mocked(apiClient).mockImplementation((endpoint, options) => {
+      if (endpoint === '/api/cart') return Promise.resolve(cart(2) as never);
+      return new Promise(resolve => {
+        const requested = (options?.data as { quantity: number }).quantity;
+        responses.push(() => resolve(cart(requested) as never));
+      });
+    });
+    const client = createQueryClient();
+    client.setQueryData(queryKeys.cart.current(user.id), cart(2));
+    const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}><CartProvider>{children}</CartProvider></QueryClientProvider>;
+    const { result } = renderHook(() => useCart(), { wrapper });
+    let first!: Promise<void>, second!: Promise<void>;
+    act(() => { first = result.current.setQuantity(productId, 3); });
+    await waitFor(() => expect(responses).toHaveLength(1));
+    act(() => { second = result.current.setQuantity(productId, 4); });
+    await act(async () => { responses.shift()!(); await first; });
+    // Regression: the first write settling used to clear the single boolean while the second was still queued.
+    expect(result.current.isMutating).toBe(true);
+    await waitFor(() => expect(responses).toHaveLength(1));
+    await act(async () => { responses.shift()!(); await second; });
+    expect(result.current.isMutating).toBe(false);
+  });
+
+  it('applies rapid decreases as one write carrying the latest intended quantity', async () => {
     vi.mocked(useAuth).mockReturnValue({ isSessionVerified: true, isAuthenticated: true, user } as ReturnType<typeof useAuth>);
     const requests: number[] = [];
     vi.mocked(apiClient).mockImplementation((endpoint, options) => {
@@ -298,9 +328,10 @@ describe('CartProvider authenticated quantity updates', () => {
     const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}><CartProvider>{children}</CartProvider></QueryClientProvider>;
     const { result } = renderHook(() => useCart(), { wrapper });
     await act(async () => { await Promise.all([result.current.setQuantity(productId, 4), result.current.setQuantity(productId, 3), result.current.setQuantity(productId, 2)]); });
-    expect(requests).toEqual([4, 3, 2]);
+    expect(requests).toEqual([2]);
     expect(result.current.data?.items[0]?.quantity).toBe(2);
     expect(result.current.totalQuantity).toBe(2);
+    expect(result.current.isMutating).toBe(false);
   });
 
   it('optimistically removes once, updates totals immediately, and restores the Cart on failure', async () => {

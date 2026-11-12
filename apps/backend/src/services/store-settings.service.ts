@@ -19,27 +19,28 @@ const isUniqueViolation = (error: unknown) => error instanceof Prisma.PrismaClie
 // ─── Store profile ───────────────────────────────────────────────────────────
 
 const STORE_FIELDS = ['storeName', 'supportEmail', 'supportPhone', 'addressLine1', 'addressLine2', 'city', 'region', 'postalCode',
-  'country', 'timezone'] as const;
+  'country', 'businessHours', 'timezone'] as const;
 type StoreField = (typeof STORE_FIELDS)[number];
-type StoreWrite = Record<StoreField, string | null> & { storeName: string; timezone: string };
+/** `businessHours` is optional on the wire: an older client that omits it leaves the stored value untouched. */
+type StoreWrite = Partial<Record<StoreField, string | null>> & { storeName: string; timezone: string };
 
 const storeSelect = { storeName: true, supportEmail: true, supportPhone: true, addressLine1: true, addressLine2: true, city: true,
-  region: true, postalCode: true, country: true, timezone: true, version: true, updatedAt: true } as const;
+  region: true, postalCode: true, country: true, businessHours: true, timezone: true, version: true, updatedAt: true } as const;
 export type StoreRow = Omit<Prisma.StoreSettingsGetPayload<{ select: typeof storeSelect }>, 'updatedAt'> & { updatedAt: Date | null };
 
 export interface StoreProfile {
   storeName: string; supportEmail: string | null; supportPhone: string | null; addressLine1: string | null; addressLine2: string | null;
-  city: string | null; region: string | null; postalCode: string | null; country: string | null; timezone: string; currency: 'USD';
+  city: string | null; region: string | null; postalCode: string | null; country: string | null; businessHours: string | null; timezone: string; currency: 'USD';
   version: number; updatedAt: string | null;
 }
 
 /** Store profile before any administrator saves it (the migration seeds the same values). */
 const DEFAULT_STORE: StoreRow = { storeName: 'ElectroHub', supportEmail: null, supportPhone: null, addressLine1: null, addressLine2: null,
-  city: null, region: null, postalCode: null, country: null, timezone: 'UTC', version: 0, updatedAt: null };
+  city: null, region: null, postalCode: null, country: null, businessHours: null, timezone: 'UTC', version: 0, updatedAt: null };
 
 export const projectStore = (row: StoreRow): StoreProfile => ({
   storeName: row.storeName, supportEmail: row.supportEmail, supportPhone: row.supportPhone, addressLine1: row.addressLine1,
-  addressLine2: row.addressLine2, city: row.city, region: row.region, postalCode: row.postalCode, country: row.country,
+  addressLine2: row.addressLine2, city: row.city, region: row.region, postalCode: row.postalCode, country: row.country, businessHours: row.businessHours,
   timezone: row.timezone, currency: 'USD', version: row.version, updatedAt: row.updatedAt?.toISOString() ?? null,
 });
 
@@ -63,6 +64,9 @@ export const storeUpdateSchema = z.object({
   region: optionalText(100, 'Region is too long.'),
   postalCode: optionalText(20, 'Postal code is too long.'),
   country: optionalText(100, 'Country is too long.'),
+  businessHours: z.union([z.literal(''), z.null(), z.string().trim().max(255, 'Business hours are too long.')
+    // eslint-disable-next-line no-control-regex
+    .regex(/^[^\u0000-\u001F\u007F]*$/, 'Use a single line for the business hours.')]).transform(value => (value === '' || value === null ? null : value)).optional(),
   timezone: z.string().trim().max(64).refine(value => timeZones.has(value), 'Choose a supported time zone.'),
   // Currency is read-only: an echo of USD is accepted, any other value is rejected.
   currency: z.string().optional().refine(value => value === undefined || value === 'USD', 'Currency is fixed to USD and cannot be changed.'),
@@ -131,7 +135,7 @@ export class StoreSettingsService {
   async updateStore(actorId: string, input: unknown, requestId?: string | null): Promise<StoreProfile> {
     const parsed = parseOrThrow(storeUpdateSchema, input);
     const { expectedVersion, currency: _ignored, ...fields } = parsed;
-    const write: StoreWrite = fields;
+    const write = Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) as StoreWrite;
     try {
       const saved = await this.db.$transaction(async tx => {
         // Serialize this decision with ownership changes until the settings and audit commit.
@@ -151,7 +155,7 @@ export class StoreSettingsService {
           if (result.count !== 1) throw conflict('These settings changed elsewhere. Reload to review the latest values.', projectStore(await tx.storeSettings.findUniqueOrThrow({ where: { id: STORE_ID }, select: storeSelect })));
           nextVersion = expectedVersion + 1;
         }
-        const changedFields = STORE_FIELDS.filter(name => !current || (current[name] ?? null) !== write[name]);
+        const changedFields = STORE_FIELDS.filter(name => name in write && (!current || (current[name] ?? null) !== write[name]));
         await recordAdminAudit({ actorId, action: 'STORE_SETTINGS_UPDATED', resourceType: 'STORE_SETTINGS', resourceId: STORE_ID,
           outcome: 'SUCCESS', details: { version: nextVersion, changedFields }, requestId }, tx);
         return projectStore(await tx.storeSettings.findUniqueOrThrow({ where: { id: STORE_ID }, select: storeSelect }));

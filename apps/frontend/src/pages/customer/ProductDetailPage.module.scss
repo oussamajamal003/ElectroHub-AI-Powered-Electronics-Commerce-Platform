@@ -12,6 +12,7 @@
 .availability, .unavailable { display: flex; flex-wrap: wrap; align-items: center; gap: $spacing-3; padding-top: $spacing-5; border-top: 1px solid $color-border; p { margin: 0; } }
 .availability { color: $color-success-foreground; font-weight: $font-weight-semibold; }
 .lowStockFeedback { color: $color-warning-foreground; }
+.stockQuantity { color: $color-text-secondary; font-weight: $font-weight-regular; }
 .unavailable { color: $color-error; font-weight: $font-weight-semibold; }
 .intro { max-width: 40rem; margin: 0 0 $spacing-6; color: $color-text-secondary; font-size: $font-size-base; line-height: $line-height-relaxed; }
 .cartActions { display: grid; justify-items: start; gap: $spacing-4; margin-top: $spacing-5; > p[role='status'] { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; } }
@@ -33,9 +34,10 @@
   h3 { margin: 0 0 $spacing-5; }
   form { display: grid; gap: $spacing-3; }
   label { font-weight: $font-weight-medium; }
-  textarea { width: 100%; border: 1px solid $color-border; padding: $spacing-3; font: inherit; resize: vertical; &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
+  textarea { width: 100%; min-height: 7.5rem; border: 1px solid $color-border; padding: $spacing-3; font: inherit; color: $color-text-primary; background: $color-background; resize: vertical; &::placeholder { color: $color-text-muted; opacity: 1; } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
   small { color: $color-text-secondary; text-align: right; }
 }
+.requiredMark { color: $color-text-muted; font-weight: $font-weight-regular; font-size: $font-size-sm; }
 .reviewActions { display: flex; flex-wrap: wrap; gap: $spacing-3; margin-top: $spacing-2; }
 .reviewConfirm { margin-top: $spacing-4; padding-top: $spacing-4; border-top: 1px solid $color-border; p { margin: 0; font-weight: $font-weight-medium; } }
 .reviewFeedback { margin: $spacing-4 0 0; padding-top: $spacing-3; border-top: 1px solid $color-border; color: $color-text-secondary; }

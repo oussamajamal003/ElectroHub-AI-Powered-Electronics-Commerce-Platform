@@ -122,6 +122,7 @@ model Role {
 }
 
 model User {
+  customerNotifications CustomerNotification[]
   id              String    @id @default(uuid()) @db.Uuid
   roleId          String    @db.Uuid
   email           String    @unique @db.VarChar(255)
@@ -129,6 +130,7 @@ model User {
   passwordHash    String?   @db.VarChar(255)
   firstName       String    @db.VarChar(100)
   lastName        String    @db.VarChar(100)
+  profilePhotoPath String?   @map("profile_photo_path") @db.VarChar(512)
   isActive        Boolean   @default(true)
   emailVerifiedAt DateTime?
 
@@ -163,6 +165,7 @@ model User {
   adminMfaActivationsAuthorized AdminMfaActivation[]         @relation("AdminMfaActivationAuthorizer")
   adminSeedIdentity             AdminSeedIdentity?
   adminNotificationPreference   AdminNotificationPreference?
+  adminAlertAcknowledgements    AdminAlertAcknowledgement[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -458,6 +461,7 @@ model WishlistItem {
 }
 
 model Order {
+  customerNotifications CustomerNotification[]
   id           String      @id @default(uuid()) @db.Uuid
   userId       String      @db.Uuid
   status       OrderStatus @default(CONFIRMED)
@@ -941,6 +945,7 @@ model StockAlertEvent {
 // 20261018000000_commerce_email_outbox (Prisma cannot express them).
 
 enum CommerceEmailType {
+  CUSTOMER_WELCOME
   ORDER_CONFIRMED
   PAYMENT_CONFIRMED
   ORDER_PREPARING
@@ -978,7 +983,7 @@ model CommerceEmailOutbox {
   id                String                     @id @default(uuid()) @db.Uuid
   eventKey          String                     @unique @db.VarChar(255)
   type              CommerceEmailType
-  orderId           String                     @db.Uuid
+  orderId           String?                    @db.Uuid
   paymentId         String?                    @db.Uuid
   userId            String?                    @db.Uuid
   transitionId      String?                    @db.Uuid
@@ -1005,7 +1010,7 @@ model CommerceEmailOutbox {
   suppressionReason String?                    @db.VarChar(64)
   payloadPurgedAt   DateTime?
 
-  order    Order                  @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  order    Order?                 @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   payment  Payment?               @relation(fields: [paymentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   user     User?                  @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   attempts CommerceEmailAttempt[]
@@ -1413,6 +1418,8 @@ model StoreSettings {
   region       String? @db.VarChar(100)
   postalCode   String? @db.VarChar(20)
   country      String? @db.VarChar(100)
+  /// Free-text public opening hours shown on the storefront Contact page (e.g. "Monday–Friday, 9:00 AM–6:00 PM"). NULL = not configured.
+  businessHours String? @db.VarChar(255)
   timezone     String  @default("UTC") @db.VarChar(64)
   currency     String  @default("USD") @db.VarChar(3)
   version      Int     @default(1)
@@ -1422,6 +1429,21 @@ model StoreSettings {
   updatedAt DateTime @updatedAt
 
   @@map("store_settings")
+}
+
+/// Per-administrator "seen" baseline for the header alerts. Alerts themselves are live operational counts (low stock, out of stock,
+/// paid orders awaiting fulfillment) and are never resolved by reading them; this row only records how many of each the administrator
+/// has already acknowledged, so unread = max(0, current - acknowledgedCount). Browsers never access this table.
+model AdminAlertAcknowledgement {
+  userId            String   @db.Uuid
+  category          String   @db.VarChar(32)
+  acknowledgedCount Int      @default(0)
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([userId, category])
+  @@map("admin_alert_acknowledgements")
 }
 
 /// Singleton (id = 'default'). The checkout quote, payment attempt and order commit read the same snapshot.
@@ -1528,4 +1550,21 @@ model AnalyticsEvent {
   @@index([type, occurredAt])
   @@index([occurredAt])
   @@map("analytics_events")
+}
+
+/// Customer history is independent of email delivery and acknowledgement never changes fulfillment.
+model CustomerNotification {
+  id String @id @default(uuid()) @db.Uuid
+  eventKey String @unique @db.VarChar(255)
+  userId String @db.Uuid
+  orderId String @db.Uuid
+  type String @db.VarChar(32)
+  occurredAt DateTime
+  readAt DateTime?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  @@index([userId, occurredAt, id])
+  @@index([userId, readAt])
+  @@index([orderId])
+  @@map("customer_notifications")
 }

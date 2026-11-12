@@ -10,18 +10,21 @@ import { wishlistFixture, wishlistProduct } from '@/features/wishlist/fixtures';
 import type { WishlistItem } from '@/features/wishlist/types';
 import { useCart } from '@/features/cart/context';
 import { useStorefrontProfile } from '@/features/storefront/api';
+import { useProfilePhoto } from '@/features/profilePhoto/queries';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
 vi.mock('@/features/cart/context', () => ({ useCart: vi.fn() }));
 vi.mock('@/features/storefront/api', () => ({ useStorefrontProfile: vi.fn() }));
+vi.mock('@/features/profilePhoto/queries', () => ({ useProfilePhoto: vi.fn() }));
 
 describe('CustomerHeader', () => {
   const mockLogout = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useProfilePhoto).mockReturnValue({ data: { url: null, expiresAt: null } } as never);
     vi.mocked(useCart).mockReturnValue({ data: { totalQuantity: 0 }, isLoading: false } as unknown as ReturnType<typeof useCart>);
     vi.mocked(useStorefrontProfile).mockReturnValue({ data: { storeName: 'ElectroHub' } } as unknown as ReturnType<typeof useStorefrontProfile>);
   });
@@ -537,5 +540,25 @@ describe('CustomerHeader', () => {
     expect(controls.indexOf('Switch to dark mode')).toBeLessThan(controls.findIndex(label => label?.startsWith('Cart')));
     document.documentElement.removeAttribute('data-theme');
     window.localStorage.clear();
+  });
+});
+
+describe('CustomerHeader tooltips', () => {
+  it('explains the icon-only controls on keyboard focus while keeping their accessible names', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event');
+    const { TooltipProvider } = await import('@/components/ui/Tooltip');
+    vi.mocked(useAuth).mockReturnValue({ user: null, isInitializing: false, isAuthenticated: false } as ReturnType<typeof useAuth>);
+    vi.mocked(useCart).mockReturnValue({ data: { totalQuantity: 2 }, isLoading: false } as unknown as ReturnType<typeof useCart>);
+    vi.mocked(useStorefrontProfile).mockReturnValue({ data: { storeName: 'ElectroHub' } } as unknown as ReturnType<typeof useStorefrontProfile>);
+    render(<BrowserRouter><TooltipProvider delayDuration={0}><CustomerHeader /></TooltipProvider></BrowserRouter>);
+    const user = userEvent.setup();
+    screen.getByRole('link', { name: 'Cart, 2 items' }).focus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('View shopping cart');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+    screen.getByRole('button', { name: 'Account' }).focus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Sign in or create an account');
+    // The native `title` fallback is gone, so the hint is never doubled up.
+    expect(screen.getByRole('button', { name: 'Search' })).not.toHaveAttribute('title');
   });
 });

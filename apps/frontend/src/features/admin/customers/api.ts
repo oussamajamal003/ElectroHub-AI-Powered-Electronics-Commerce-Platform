@@ -31,7 +31,7 @@ export function useAdminCustomer(userId: string | undefined) {
 
 export function useCustomerStatus(userId: string) {
   const client = useQueryClient();
-  return useMutation({
+  return useMutation({ meta: { action: "change this customer's status" },
     mutationFn: (body: { isActive: boolean; expectedUpdatedAt: string }) =>
       apiClient<ItemResponse<AdminCustomerDetail>>(`/api/admin/customers/${encodeURIComponent(userId)}/status`, { method: 'PATCH', data: body }),
     onSuccess: async response => {

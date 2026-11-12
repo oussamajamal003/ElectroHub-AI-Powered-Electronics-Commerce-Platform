@@ -24,9 +24,10 @@ async function availableToAdd(browser: Browser, slug: string) {
   const context = await browser.newContext();
   const guest = await context.newPage();
   await guest.goto(`/products/${slug}`);
-  const text = await guest.getByRole('status').filter({ hasText: /more items? available to add/ }).first().innerText();
+  // An empty Cart: the exact sellable quantity the server reports ("12 available" / "Only 3 left"); Add to Cart reserves nothing.
+  const text = await guest.getByTestId('product-available-quantity').innerText();
   await context.close();
-  return Number(text.match(/(\d+) more/)?.[1]);
+  return Number(text.match(/(\d+)/)?.[1]);
 }
 
 test.describe('administrator console', () => {

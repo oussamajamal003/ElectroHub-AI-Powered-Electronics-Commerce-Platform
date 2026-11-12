@@ -12,7 +12,7 @@ import { NotificationPreferencesForm } from './components/NotificationPreference
 // Fixed synthetic fixtures; every write is intercepted at the existing API boundary.
 const profile: StoreProfile = {
   storeName: 'ElectroHub', supportEmail: 'help@example.test', supportPhone: '+1 555 0100', addressLine1: '123 Commerce Street',
-  addressLine2: null, city: 'New York', region: 'NY', postalCode: '10001', country: 'United States', timezone: 'America/New_York',
+  addressLine2: null, city: 'New York', region: 'NY', postalCode: '10001', country: 'United States', businessHours: 'Monday–Friday, 9:00 AM–6:00 PM', timezone: 'America/New_York',
   currency: 'USD', version: 4, updatedAt: '2026-11-01T00:00:00.000Z',
 };
 const shipping: ShippingView = { version: 2, currency: 'USD', freeShippingThreshold: '50.00', methods: [

@@ -1,3 +1,4 @@
+import { renderEmailHeader } from '../emails/brand.js';
 import { EmailDeliveryStatus, EmailType, type Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { brevoProvider, type BrevoProvider } from '../integrations/brevo/brevo.provider.js';
@@ -16,14 +17,15 @@ function emailLayout(subject: string, heading: string, body: string, createdAt: 
   const when = escapeHtml(createdAt.toUTCString());
   const htmlContent = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(subject)}</title></head>
 <body style="margin:0;padding:24px 12px;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Poppins,sans-serif;color:#0f172a"><div style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:32px 24px">
-<div style="font-size:22px;font-weight:700;color:#2563eb;text-align:center;margin-bottom:24px">ElectroHub</div><h1 style="font-size:20px;line-height:1.3;font-weight:600;margin:0 0 12px;text-align:center">${escapeHtml(heading)}</h1>
+${renderEmailHeader()}<h1 style="font-size:20px;line-height:1.3;font-weight:600;margin:0 0 12px;text-align:center">${escapeHtml(heading)}</h1>
 <p style="font-size:14px;line-height:1.6;color:#475569;margin:0 0 12px">${body}</p><p style="font-size:13px;line-height:1.6;color:#64748b;margin:0 0 16px">Confirmed on ${when}.</p>
 <p style="font-size:14px;line-height:1.6;color:#475569;margin:0 0 4px">If you did not make this change, contact the appropriate ElectroHub security administrator or support channel immediately.</p>
 <div style="font-size:12px;color:#94a3b8;text-align:center;margin-top:28px;border-top:1px solid #f1f5f9;padding-top:16px">This is an automated security notice.</div></div></body></html>`;
   return { subject, htmlContent, textContent: `ElectroHub — ${heading}\n\n${body.replace(/<[^>]*>/g, '')}\n\nConfirmed on ${createdAt.toUTCString()}.\n\nIf you did not make this change, contact the appropriate ElectroHub security administrator or support channel immediately.` };
 }
 
-function notificationContent(type: NoticeType, createdAt: Date) {
+/** Exported for rendering tests only. */
+export function notificationContent(type: NoticeType, createdAt: Date) {
   if (type === EmailType.ADMIN_EMAIL_CHANGE_OLD) {
     return emailLayout('Your ElectroHub administrator email was changed', 'Administrator email changed',
       'Your ElectroHub administrator email address was changed. The previous address can no longer be used to sign in.', createdAt);
@@ -40,7 +42,7 @@ export async function sendAdminEmailChangeOtp(email: string, code: string, userI
   const subject = 'Verify your new ElectroHub administrator email';
   const htmlContent = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(subject)}</title></head>
 <body style="margin:0;padding:24px 12px;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Poppins,sans-serif;color:#0f172a"><div style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:32px 24px">
-<div style="font-size:22px;font-weight:700;color:#2563eb;text-align:center;margin-bottom:24px">ElectroHub</div><h1 style="font-size:20px;line-height:1.3;font-weight:600;margin:0 0 12px;text-align:center">Verify your new administrator email</h1>
+${renderEmailHeader()}<h1 style="font-size:20px;line-height:1.3;font-weight:600;margin:0 0 12px;text-align:center">Verify your new administrator email</h1>
 <p style="font-size:14px;line-height:1.6;color:#475569;margin:0 0 16px">Enter this six-digit code to confirm that you can receive email at the new address. Your sign-in email will not change until verification succeeds.</p>
 <div style="background:#f1f5f9;border:1px dashed #cbd5e1;border-radius:8px;padding:18px;text-align:center;margin:24px 0;font-family:monospace;font-size:32px;font-weight:700;letter-spacing:8px;color:#1e293b">${escapeHtml(code)}</div>
 <p style="font-size:13px;line-height:1.6;color:#64748b">This code expires in one minute. If you did not request this change, ignore this message and contact your security administrator.</p></div></body></html>`;

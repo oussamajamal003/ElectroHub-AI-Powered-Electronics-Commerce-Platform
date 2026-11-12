@@ -204,6 +204,9 @@ jobs:
           RELEASE_E2E_FRONTEND_PORT: '3212'
           QUALITY_PRODUCTION: '1'
         run: npm run test:quality -- ${{ matrix.projects }} ${{ matrix.quality_extra }}
+      - name: Customer notification browser QA
+        working-directory: apps/frontend
+        run: npx playwright test -c playwright.notifications.config.ts --project=${{ matrix.engine }}
       - name: Upload release report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -214,6 +217,7 @@ jobs:
             apps/frontend/test-results/release
             apps/frontend/playwright-report/quality
             apps/frontend/test-results/quality
+            apps/frontend/test-results/notifications
           retention-days: 14
 
   backend-test:
@@ -267,6 +271,27 @@ jobs:
         run: npm exec --workspace=@electrohub/backend -- prisma migrate status
       - name: Test (unit tests and integration tests, disposable database)
         run: npm run test:ci --workspace=@electrohub/backend
+      - name: Customer notification transaction and Socket.IO integration
+        working-directory: apps/backend
+        env:
+          DELIVERY_PG_RUN: '1'
+          NODE_EXTRA_CA_CERTS: ${{ env.DB_SSL_CA_CERT_PATH }}
+          COMMERCE_EMAIL_ENQUEUE_ENABLED: 'true'
+          COMMERCE_EMAIL_DISPATCH_ENABLED: 'false'
+          COMMERCE_EMAIL_SEND_MODE: 'disabled'
+          COMMERCE_EMAIL_ORIGIN: 'http://localhost:5173'
+          DELIVERY_SIMULATION_ENABLED: 'true'
+          DELIVERY_ORIGIN_LAT: '33.9'
+          DELIVERY_ORIGIN_LNG: '35.5'
+          DELIVERY_ORIGIN_LABEL: 'ElectroHub demo hub'
+          BREVO_API_KEY: ''
+          STRIPE_SECRET_KEY: ''
+        run: |
+          # Migration CLI alone uses sslmode=disable; application guards require TLS.
+          # Keep the same job-owned loopback DB and its configured, verified CA.
+          export DATABASE_URL="${DATABASE_URL/sslmode=disable/sslmode=require}"
+          export DIRECT_URL="$DATABASE_URL"
+          npx vitest run --config vitest.delivery-pg.config.mts
 
   backend-build:
     name: Backend / Build
@@ -414,8 +439,8 @@ jobs:
           export PAYMENT_PG_DISPOSABLE_URL="${DATABASE_URL%%\?*}"
           export PAYMENT_PG_DISPOSABLE_CA_FILE="$DB_SSL_CA_CERT_PATH"
           export PAYMENT_PG_DISPOSABLE_APPROVED=true
-          export PAYMENT_PG_DISPOSABLE_AUTHORIZATION='DISPOSABLE:electrohub_ci:scenarios-A-S:fixtures+reset-run-database'
-          node apps/backend/scripts/payment-pg-disposable.cjs --run
+          export PAYMENT_PG_DISPOSABLE_AUTHORIZATION='DISPOSABLE:electrohub_ci:scenarios-A-Y:fixtures+reset-run-database'
+          node apps/backend/scripts/payment-pg-disposable.cjs --run --scope=scenarios-A-Y
       - name: Payment integration report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -424,10 +449,59 @@ jobs:
           path: ${{ runner.temp }}/payment-integration.json
           retention-days: 14
 
+  branding-e2e:
+    name: Branding E2E / ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Task 06.2 side task: browser tab branding, toasts and tooltips. Hermetic: the spec intercepts every /api request and only needs the
+    # Vite dev server, so there is no database, backend, payment runtime or credential. One runner and one engine per shard.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { engine: chromium, label: Chromium, projects: '--project=chromium --project=mobile-chromium-390 --project=mobile-chromium-320' }
+          - { engine: firefox, label: Firefox, projects: '--project=firefox' }
+          - { engine: webkit, label: WebKit, projects: '--project=webkit' }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.19.0'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Resolve Playwright version
+        id: playwright
+        working-directory: apps/frontend
+        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.engine }}
+      - name: Install Playwright browser and OS dependencies
+        working-directory: apps/frontend
+        run: npx playwright install --with-deps ${{ matrix.engine }}
+      - name: Branding, toast and tooltip suite (${{ matrix.label }})
+        working-directory: apps/frontend
+        run: npm run test:branding -- ${{ matrix.projects }}
+      - name: Upload branding report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: branding-e2e-report-${{ matrix.engine }}
+          path: |
+            apps/frontend/playwright-report/branding
+            apps/frontend/test-results/branding
+          retention-days: 14
+
   quality-gate:
     name: Required / Quality Gate
     if: ${{ always() }}
-    needs: [frontend-lint, frontend-typecheck, frontend-test, frontend-build, backend-lint, backend-typecheck, backend-test, backend-build, workflow-policy, release-e2e, ai, ai-docker, application-docker, payment-postgres]
+    needs: [frontend-lint, frontend-typecheck, frontend-test, frontend-build, backend-lint, backend-typecheck, backend-test, backend-build, workflow-policy, release-e2e, branding-e2e, ai, ai-docker, application-docker, payment-postgres]
     runs-on: ubuntu-latest
     steps:
       - name: Require every validation job to succeed

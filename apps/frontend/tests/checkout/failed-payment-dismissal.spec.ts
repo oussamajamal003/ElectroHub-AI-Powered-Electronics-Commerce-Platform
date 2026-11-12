@@ -10,7 +10,7 @@ const failedC = '66666666-6666-4666-8666-666666666666';
 
 function purchase(attemptId: string, name: string, overrides: Record<string, unknown> = {}) {
   return { attemptId, checkoutId: attemptId, scope: 'CART_CHECKOUT', state: 'DECLINED', classification: 'DECLINED', total: '49.00', currency: 'USD',
-    pending: false, unread: false, orderReference: null, retryAllowed: true, submittedAt: '2026-10-15T09:00:00.000Z', updatedAt: '2026-10-15T09:01:00.000Z',
+    pending: false, unread: false, orderReference: null, retryAllowed: true, dismissible: true, submittedAt: '2026-10-15T09:00:00.000Z', updatedAt: '2026-10-15T09:01:00.000Z',
     items: [{ name, quantity: 1, imageUrl: null }], ...overrides };
 }
 
@@ -60,7 +60,7 @@ for (const viewport of viewports) {
       const trigger = (await card(page, failedA)).getByRole('button', { name: /Remove failed payment/ });
       await trigger.click();
       await expect(page.getByRole('heading', { name: 'Remove this failed payment?' })).toBeVisible();
-      await expect(page.getByText('This purchase will be removed from your Failed payments list. Your payment history will be preserved.')).toBeVisible();
+      await expect(page.getByText('Remove this failed payment from your list? Your payment history will be preserved.')).toBeVisible();
       await page.waitForTimeout(600); // let the entry animation finish before the visual capture
       await page.screenshot({ path: `test-results/dismissal/dialog-open-${viewport.name}.png` });
       await page.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -127,9 +127,9 @@ for (const viewport of viewports) {
       const pendingId = '77777777-7777-4777-8777-777777777777'; const unknownId = '88888888-8888-4888-8888-888888888888'; const paidId = '99999999-9999-4999-8999-999999999999';
       await listRoute(page, () => [
         purchase(failedA, 'Failed item'),
-        purchase(pendingId, 'Processing item', { state: 'PROCESSING', classification: 'PROCESSING', pending: true, retryAllowed: false }),
-        purchase(unknownId, 'Unknown item', { state: 'PROCESSING', classification: 'UNKNOWN', pending: false, retryAllowed: false }),
-        purchase(paidId, 'Paid item', { state: 'PAID', classification: 'SUCCEEDED', pending: false, retryAllowed: false, orderReference: 'ORD-1' }),
+        purchase(pendingId, 'Processing item', { state: 'PROCESSING', classification: 'PROCESSING', pending: true, retryAllowed: false, dismissible: false }),
+        purchase(unknownId, 'Unknown item', { state: 'PROCESSING', classification: 'UNKNOWN', pending: false, retryAllowed: false, dismissible: false }),
+        purchase(paidId, 'Paid item', { state: 'PAID', classification: 'SUCCEEDED', pending: false, retryAllowed: false, dismissible: false, orderReference: 'ORD-1' }),
       ]);
       await page.goto('/cart');
       await expect(await card(page, failedA)).toHaveCount(1);

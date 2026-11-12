@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
+import { ANALYTICS_SESSION_KEY, analyticsAllowed, useChoiceStatus } from '@/features/privacy/consent';
 
-const SESSION_KEY = 'eh.storefront-session';
+const SESSION_KEY = ANALYTICS_SESSION_KEY;
 const MIN_REPORT_MS = 1000;
 /** While the tab stays visible, the running total is also sent this often, so an open tab counts before it is closed. */
 export const HEARTBEAT_MS = 30_000;
@@ -26,7 +27,12 @@ function tabSessionId(): string | null {
  * Fire-and-forget with `keepalive` so a closing tab still delivers; failures are ignored and never affect shopping.
  */
 export function useStorefrontSession(): void {
+  const choice = useChoiceStatus();
   useEffect(() => {
+    if (choice !== 'accepted') {
+      try { sessionStorage.removeItem(SESSION_KEY); } catch { /* storage unavailable */ }
+      return undefined;
+    }
     const sessionId = tabSessionId();
     if (!sessionId || typeof fetch !== 'function') return undefined;
     let visibleMs = 0;
@@ -39,7 +45,7 @@ export function useStorefrontSession(): void {
     };
     const report = () => {
       const total = Math.round(visibleMs);
-      if (total < MIN_REPORT_MS || total <= reportedMs) return;
+      if (!analyticsAllowed() || total < MIN_REPORT_MS || total <= reportedMs) return;
       reportedMs = total;
       try {
         void fetch('/api/analytics/events', { method: 'POST', keepalive: true, credentials: 'omit', headers: { 'Content-Type': 'application/json' },
@@ -69,5 +75,5 @@ export function useStorefrontSession(): void {
       settle();
       report();
     };
-  }, []);
+  }, [choice]);
 }
