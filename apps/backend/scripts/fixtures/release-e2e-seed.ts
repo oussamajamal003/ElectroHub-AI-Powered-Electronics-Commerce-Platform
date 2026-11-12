@@ -22,11 +22,13 @@ const day = 86_400_000;
 /** One isolated shopper per Playwright project, so parallel browser projects never share a cart, wishlist or order. */
 export const SHOPPER_SLOTS = ['chromium', 'firefox', 'webkit', 'mobile', 'tablet', 'wide', 'journey'] as const;
 /** Spec families that may run in parallel workers within one project get separate shoppers too (`<slot>-<family>`). */
-export const SHOPPER_FAMILIES = ['auth', 'cart', 'checkout', 'orders', 'admin'] as const;
+export const SHOPPER_FAMILIES = ['auth', 'cart', 'checkout', 'orders', 'admin', 'privacy'] as const;
 const shopperEmail = (slot: string) => `shopper-${slot}@release.invalid`;
 const OUTSIDER = 'outsider@release.invalid';
 const ownerEmail = (slot: string) => `owner-${slot}@release.invalid`;
 const staffEmail = (slot: string) => `staff-${slot}@release.invalid`;
+/** Task 06.2: a separate non-Owner administrator for the privacy spec, so its MFA sign-ins never race the admin spec's TOTP steps. */
+const privacyAdminEmail = (slot: string) => `privacy-admin-${slot}@release.invalid`;
 
 const catalog = [
   { sku: 'REL-AURORA-HP', name: 'Aurora Studio Headphones', category: 'audio', price: '249.00', quantity: 40,
@@ -64,13 +66,14 @@ async function main() {
   // Administrators: per browser project an Owner and a non-Owner staff member (so parallel projects never race one MFA enrollment),
   // each with a fresh mandatory TOTP enrollment window. Earlier factors, recovery codes, passkeys, challenges and sessions of these
   // fixture accounts only are removed so enrollment starts clean.
-  const admins: Record<string, { ownerEmail: string; staffEmail: string }> = {};
+  const admins: Record<string, { ownerEmail: string; staffEmail: string; privacyEmail: string }> = {};
   const adminUsers: { id: string; isOwner: boolean }[] = [];
   for (const slot of SHOPPER_SLOTS) {
     const owner = await upsertUser(ownerEmail(slot), adminRole.id, passwordHash, 'Olive', `Owner ${slot}`);
     const staff = await upsertUser(staffEmail(slot), adminRole.id, passwordHash, 'Stan', `Staff ${slot}`);
-    adminUsers.push({ id: owner.id, isOwner: true }, { id: staff.id, isOwner: false });
-    admins[slot] = { ownerEmail: owner.email, staffEmail: staff.email };
+    const privacy = await upsertUser(privacyAdminEmail(slot), adminRole.id, passwordHash, 'Priya', `Privacy ${slot}`);
+    adminUsers.push({ id: owner.id, isOwner: true }, { id: staff.id, isOwner: false }, { id: privacy.id, isOwner: false });
+    admins[slot] = { ownerEmail: owner.email, staffEmail: staff.email, privacyEmail: privacy.email };
   }
   const adminIds = adminUsers.map(user => user.id);
   await prisma.adminRecoveryCode.deleteMany({ where: { userId: { in: adminIds } } });

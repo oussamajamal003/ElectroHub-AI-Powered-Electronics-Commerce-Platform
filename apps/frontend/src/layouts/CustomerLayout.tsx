@@ -13,6 +13,7 @@ import { useStorefrontSession } from '@/features/analytics/useStorefrontSession'
 import { useStorefrontProfile } from '@/features/storefront/api';
 import { usePageTitle } from './usePageTitle';
 import { brandTitle } from '@/lib/pageTitle';
+import { CookieControls } from '@/features/privacy/CookieControls';
 
 export function CustomerLayout() {
   const { isLocked } = usePaymentLock();
@@ -65,6 +66,8 @@ export function CustomerLayout() {
                 <Link to="/contact">Returns & Refunds</Link>
                 <Link to="/contact">Warranty</Link>
                 <Link to="/contact">Privacy Policy</Link>
+                <Link to="/cookie-policy">Cookie Policy</Link>
+                <CookieControls locked={isLocked} />
                 <Link to="/contact">Terms of Service</Link>
             </nav>
 

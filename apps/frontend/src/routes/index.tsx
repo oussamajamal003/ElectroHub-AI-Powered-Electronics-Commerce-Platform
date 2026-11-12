@@ -17,6 +17,7 @@ import { CheckoutDraftSession } from '@/features/checkout/CheckoutDraftSession';
 import { PaymentLockProvider } from '@/features/checkout/PaymentLockContext';
 import { OrdersPage } from '@/pages/customer/OrdersPage';
 import { useCart } from '@/features/cart/context';
+import { CookiePolicy } from '@/features/privacy/CookiePolicy';
 
 function CartRouteValidation() {
   const { isMutating, validateRoute } = useCart();
@@ -96,6 +97,7 @@ export function AppRoutes() {
           <Route path="/" element={route(<HomePage />)} />
           <Route path="/about" element={route(<AboutPage />)} />
           <Route path="/contact" element={route(<ContactPage />)} />
+          <Route path="/cookie-policy" element={<CookiePolicy />} />
           <Route path="/search" element={route(<SearchPage />)} />
           <Route path="/products" element={route(<SearchPage catalog />)} />
           <Route path="/products/:slug" element={route(<ProductDetailPage />)} />

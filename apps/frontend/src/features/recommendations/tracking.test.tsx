@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { saveChoice } from '@/features/privacy/consent';
 import { sendRecommendationEvents } from './api';
 import { IMPRESSION_DWELL_MS, resetImpressionDedupeForTests, useImpressionTracking } from './tracking';
 
@@ -50,6 +51,8 @@ describe('useImpressionTracking', () => {
   const send = vi.mocked(sendRecommendationEvents);
 
   beforeEach(() => {
+    localStorage.clear();
+    saveChoice(true);
     vi.useFakeTimers();
     vi.clearAllMocks();
     resetImpressionDedupeForTests();
