@@ -178,6 +178,7 @@ New file: `payment.stock-integrity.postgres.integration.test.ts`, scenarios T–
 | Y | A decline followed by authorization of the same intent decrements once |
 
 - The CI `payment-postgres` job now runs scope `scenarios-A-Y`, which covers the existing A–S suites plus this file, on its disposable `electrohub_ci` database.
+- Update (PR #51 last-unit review): the CI scope is now `scenarios-A-Z`, which adds scenario Z (last unit, two customers, Cart and Buy Now). See `TASK_06.2_LAST_UNIT_CHECKOUT_RACE_EVIDENCE.md`.
 - The scope is authorized through `PAYMENT_PG_DISPOSABLE_AUTHORIZATION`.
 - **These scenarios were not executed locally.** This machine has no Docker or PostgreSQL. Their status depends on the CI result for this PR.
 - The dismiss race is covered by unit tests (`payment.dismiss.test.ts`) that assert the conditional where-clause.

@@ -232,7 +232,7 @@ export function CheckingPayment({ unconfirmed = false, checking = false, note, o
 export function CheckoutProcessing({ browserConfirming = false }: { browserConfirming?: boolean }) {
   return <section className={styles.processing} aria-labelledby="processing-heading"><ElectroHubLoader size="lg" /><h1 id="processing-heading">Processing your order…</h1>
     <p aria-live="polite">{browserConfirming
-      ? 'Confirming your card with our payment provider. Keep this page open until this finishes — leaving now can interrupt your payment. You won’t be charged twice.'
+      ? 'Confirming your card with our payment provider. Keep this page open until this finishes — leaving now can interrupt your payment. Please don’t submit another payment while this is in progress.'
       : 'You can continue shopping while we securely verify your payment.'}</p></section>;
 }
 /** `ownerId` (signed-in owner) enables the private documents panel. Email delivery is background work and is never shown here. */

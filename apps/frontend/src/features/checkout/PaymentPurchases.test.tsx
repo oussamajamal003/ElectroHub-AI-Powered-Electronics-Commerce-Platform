@@ -613,3 +613,26 @@ describe('awaitCancellation', () => {
     expect(clock).toBeGreaterThanOrEqual(CANCEL_CONFIRM_TIMEOUT_MS);
   });
 });
+
+describe('Sold-out saved purchase (PR #51 last unit)', () => {
+  const soldOut = { ...purchase, state: 'CANCELED', classification: 'FAILED', pending: false, unread: false, retryAllowed: false, dismissible: true,
+    failureCode: 'CART_STOCK_CONFLICT', outcomeReason: 'STOCK_UNAVAILABLE' };
+  it('says "sold out, not charged" only after the provider verified the release, and never offers Try Again', async () => {
+    vi.mocked(apiClient).mockResolvedValue({ data: [{ ...soldOut, authorizationReleased: true }] });
+    show('/cart');
+    const card = await screen.findByRole('article', { name: 'Sold-out purchase for Product A' });
+    expect(card).toHaveAttribute('data-reason', 'sold-out');
+    expect(within(card).getByText('Sold out · Not charged')).toBeVisible();
+    expect(within(card).getByText(/Your card was not charged and the payment authorization was cancelled/)).toBeVisible();
+    expect(within(card).queryByText('Payment failed')).not.toBeInTheDocument();
+    expect(within(card).queryByRole('link', { name: /Try Again/ })).not.toBeInTheDocument();
+  });
+  it('while the cancellation is unverified it never claims "not charged"', async () => {
+    vi.mocked(apiClient).mockResolvedValue({ data: [{ ...soldOut, state: 'CANCEL_PENDING', classification: 'PROCESSING', pending: true, dismissible: false, authorizationReleased: false }] });
+    show('/cart');
+    const card = await screen.findByRole('article', { name: 'Sold-out purchase for Product A' });
+    expect(within(card).getByText('Sold out · Checking payment')).toBeVisible();
+    expect(within(card).getByText(/Please don’t submit another payment while this check is in progress\./)).toBeVisible();
+    expect(card).not.toHaveTextContent(/not charged/i);
+  });
+});

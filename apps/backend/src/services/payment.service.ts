@@ -13,7 +13,7 @@ import { adminNotifications } from './admin-notification.service.js';
 import { OrderService } from './order.service.js';
 import { stripeProvider } from './stripe.provider.js';
 import { ATTEMPT_LIFETIME_MS, SUBMITTED_ABANDON_GRACE_MS, WORK_LEASE_MS, MAX_PAYMENT_RETRIES, TERMINAL_PAYMENT_STATES,
-  cents, retryDelay, customerPaymentStatus, ABANDONMENT_FAILURE_CODES, NOT_CONFIRMED_FAILURE_CODE, CANCELED_BY_CUSTOMER_FAILURE_CODE, NEVER_CONFIRMED_GRACE_MS, CONFIRMATION_SIGNAL_GRACE_MS, SUBMITTED_UNRESOLVED_WINDOW_MS, confirmationSignalEnabled, verifyBinding, type Attempt, type PaymentProvider, type ProviderIntent } from './payment.domain.js';
+  cents, retryDelay, customerPaymentStatus, customerOutcomeReason, authorizationReleased, COMMIT_CONFLICT_RETRIES, ABANDONMENT_FAILURE_CODES, NOT_CONFIRMED_FAILURE_CODE, CANCELED_BY_CUSTOMER_FAILURE_CODE, NEVER_CONFIRMED_GRACE_MS, CONFIRMATION_SIGNAL_GRACE_MS, SUBMITTED_UNRESOLVED_WINDOW_MS, confirmationSignalEnabled, verifyBinding, type Attempt, type PaymentProvider, type ProviderIntent } from './payment.domain.js';
 import { isSerializationConflict } from './transaction-conflict.js';
 import { redactDeliveryForDeletedOwner } from './delivery-privacy.js';
 import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
@@ -163,6 +163,23 @@ function assertSavedTermsCurrent(userId: string,
   }
 }
 
+/**
+ * Last gate before the card is confirmed (submit runs before Stripe.js confirmation, so nothing has been authorized or charged yet).
+ * A read only, never a reservation: a line that is sold out, short, or withdrawn is reported as the standard stock 409 instead of the
+ * generic CHECKOUT_CHANGED, so the shopper corrects the Cart instead of having a card authorized for an item that cannot be sold.
+ */
+export function assertStillPurchasable(items: ReadonlyArray<{ availability: string; availableQuantity: number; quantity: number; product: { name: string } | null }>) {
+  for (const item of items) {
+    const name = item.product?.name ?? 'An item in your order';
+    if (item.availability === 'OUT_OF_STOCK') throw new AppError(`${name} is out of stock. Nothing was charged.`, 409, 'CART_STOCK_CONFLICT');
+    if (item.availability === 'LOW_STOCK') {
+      throw new AppError(`Only ${item.availableQuantity} of ${name} ${item.availableQuantity === 1 ? 'is' : 'are'} available (you requested ${item.quantity}). Nothing was charged.`,
+        409, 'CART_STOCK_CONFLICT');
+    }
+    if (item.availability !== 'AVAILABLE') throw new AppError(`${name} is no longer available. Nothing was charged.`, 409, 'PRODUCT_UNAVAILABLE');
+  }
+}
+
 /** /submit response: the accepted purchase's identity (all the client needs to hand off to Stripe confirmation). */
 type SubmitIdentity = { attemptId: string; checkoutId: string; cartIdentity: string; cartRevision: string; intentId: string | null;
   state: PaymentAttemptState; classification: 'PROCESSING'; scope: 'BUY_NOW' | 'CART_CHECKOUT'; submittedAt: string; committed: boolean;
@@ -198,9 +215,12 @@ export class PaymentService {
     return attempt;
   }
   private async projectStatus(userId: string, attempt: StatusAttempt, recoveryActive = false) {
-    const [cart, confirmation] = await Promise.all([
+    const outcomeReason = customerOutcomeReason(attempt);
+    const [cart, confirmation, unavailableItems] = await Promise.all([
       paymentOperation('cart_projection', 'database', () => currentCart(userId, this.database)).then(value => value.data),
       attempt.orderId ? new OrderService(this.database).getConfirmation(userId, attempt.orderId) : Promise.resolve(null),
+      // Only for a stock outcome (terminal or releasing; never on the routine poll path): what was requested and what is available now.
+      outcomeReason ? this.unavailableItems(attempt.id) : Promise.resolve(null),
     ]);
     const classification = customerPaymentStatus(attempt, attempt.work);
     return { classification, checkoutId: attempt.id, scope: attempt.request && typeof attempt.request === 'object' && !Array.isArray(attempt.request) && attempt.request.scope === 'BUY_NOW' ? 'BUY_NOW' : 'CART_CHECKOUT',
@@ -209,7 +229,8 @@ export class PaymentService {
       cancelable: cancelEligible(attempt),
       attemptId: attempt.id, cartIdentity: attempt.cartIdentity, cartRevision: attempt.revision, intentId: attempt.providerIntentId,
       state: attempt.state, providerStatus: attempt.providerStatus,
-      failureCode: attempt.failureCode, total: attempt.total.toFixed(2), currency: attempt.currency,
+      failureCode: attempt.failureCode, outcomeReason, authorizationReleased: authorizationReleased(attempt), unavailableItems,
+      total: attempt.total.toFixed(2), currency: attempt.currency,
       orderReference: attempt.orderId ? `ORD-${attempt.orderId.toUpperCase()}` : null,
       committed: Boolean(attempt.orderId), cart, recoveryRemainder: attempt.recoveryRemainder,
       recoveryActive: recoveryActive || (attempt.work?.state === 'LEASED' && Boolean(attempt.work.leaseUntil && attempt.work.leaseUntil.getTime() > Date.now())),
@@ -217,6 +238,16 @@ export class PaymentService {
   }
   async status(userId: string, id: string) {
     return this.projectStatus(userId, await this.ownedStatus(userId, id));
+  }
+  /** Saved lines of a purchase that could not be sold, with live availability (read-only; reserves nothing). */
+  private async unavailableItems(attemptId: string) {
+    const items = await this.database.paymentAttemptItem.findMany({ where: { attemptId }, orderBy: { productId: 'asc' } });
+    const live = (await purchaseItemsProjection(items.map(item => ({ productId: item.productId, quantity: item.quantity })), this.database)).data.items;
+    return items.map(item => {
+      const line = live.find(entry => entry.productId === item.productId);
+      return { productId: item.productId, name: item.productName, imageUrl: item.imageUrl, slug: line?.product?.slug ?? null, quantity: item.quantity,
+        availableQuantity: line?.availableQuantity ?? 0, availability: line?.availability ?? 'NOT_FOUND' };
+    });
   }
 
   /**
@@ -270,6 +301,7 @@ export class PaymentService {
               throw new AppError('Checkout changed.', 409, 'CHECKOUT_CHANGED');
             }
             const current = await currentCart(userId, tx);
+            assertStillPurchasable(current.data.items);
             if (!current.data.canCheckout || current.data.revision !== attempt.revision ||
               current.data.items.length !== attempt.items.length) throw new AppError('Checkout changed.', 409, 'CHECKOUT_CHANGED');
             for (const item of attempt.items) {
@@ -279,6 +311,9 @@ export class PaymentService {
               const removed = await tx.cartItem.deleteMany({ where: { id: line.id, cartId, quantity: item.quantity } });
               if (removed.count !== 1) throw new AppError('Checkout changed.', 409, 'CHECKOUT_CHANGED');
             }
+          } else if (request.buyNow) {
+            // Buy Now has no Cart lines to transfer, but the same last gate applies before the card is confirmed.
+            assertStillPurchasable((await buyNowProjection(userId, request.buyNow, tx)).data.items);
           }
           const submittedAt = new Date();
           await tx.paymentAttempt.update({ where: { id }, data: { submittedAt, activeCartId: null } });
@@ -468,6 +503,8 @@ export class PaymentService {
       submittedAt: attempt.submittedAt?.toISOString() ?? null,
       // Copy only: distinguishes "confirming with the provider" from "checking the status of this purchase"; never an outcome.
       confirmationStarted: Boolean(attempt.confirmationStartedAt),
+      // Presentation detail: a stock outcome is shown as "sold out", never as a card failure; release is claimed only once provider-verified.
+      outcomeReason: customerOutcomeReason(attempt), authorizationReleased: authorizationReleased(attempt),
       items: attempt.items.map(item => ({ name: item.productName, quantity: item.quantity, imageUrl: item.imageUrl })) }));
   }
 
@@ -989,11 +1026,22 @@ export class PaymentService {
           await this.patch(id, token, { state: 'AUTHORIZED', providerStatus: intent.status, authorizationExpiresAt: intent.captureBefore });
           try { await new OrderService(this.database, this.inventory).commitAuthorized(id, intent, token); }
           catch (error) {
+            // Exhausted serialization retries are contention, not a verdict on stock or terms: the same authorized attempt is re-committed on
+            // the durable backoff (customer-facing "checking") a bounded number of times before its authorization is released.
+            if (error instanceof AppError && error.code === 'CHECKOUT_CONFLICT') {
+              const work = await this.database.paymentWork.findUnique({ where: { attemptId: id }, select: { retryCount: true } });
+              if ((work?.retryCount ?? 0) < COMMIT_CONFLICT_RETRIES) throw error;
+            }
             if (error instanceof AppError && error.code !== 'PAYMENT_CLAIM_LOST' && error.statusCode < 500) {
+              // The decision (never capture; release the authorization) is durable before the provider is touched.
               await this.patch(id, token, { cancelRequested: true, state: 'CANCEL_PENDING', failureCode: error.code ?? 'CHECKOUT_CONFLICT' });
-              intent = await paymentOperation('stripe.cancel', 'stripe', () => this.provider.cancel(attempt!));
-              if (intent.status === 'canceled') await this.patch(id, token, { state: 'CANCELED', providerStatus: 'canceled', activeCartId: null });
-              await this.finishWork(id, token, intent.status === 'canceled'); return intent;
+              const cancelled = await paymentOperation('stripe.cancel', 'stripe', () => this.provider.cancel(attempt!));
+              // A fresh read decides; the cancellation reply alone proves nothing (same rule as the explicit-cancellation path above).
+              intent = await paymentOperation('stripe.retrieve', 'stripe', () => this.provider.retrieve(cancelled.id));
+              const released = intent.status === 'canceled';
+              if (released) await this.patch(id, token, { state: 'CANCELED', providerStatus: 'canceled', activeCartId: null });
+              // Not released: CANCEL_PENDING stays durable and the next pass reconciles provider truth (cancel again, or refund if captured).
+              await this.finishWork(id, token, released); return intent;
             }
             throw error;
           }

@@ -4,14 +4,14 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 import { PaymentService, SUBMIT_LEASE_WAIT_MS } from '../payment.service.js';
 import { OrderService } from '../order.service.js';
 import { InventoryService } from '../inventory.service.js';
-import { currentCart } from '../cart.service.js';
+import { buyNowProjection, currentCart } from '../cart.service.js';
 import { cartRevision, checkoutRequestSchema, requestHash } from '../checkout.domain.js';
 import type { Attempt, PaymentProvider, ProviderIntent } from '../payment.domain.js';
 
 vi.mock('../shipping-config.js', async original => ({ ...await original<typeof import('../shipping-config.js')>(), loadShippingConfig: vi.fn(async () => currentShippingSnapshot()) }));
 vi.mock('../../lib/prisma.js', () => ({ prisma: {} }));
 vi.mock('../stripe.provider.js', () => ({ stripeProvider: {} }));
-vi.mock('../cart.service.js', async original => ({ ...await original<typeof import('../cart.service.js')>(), currentCart: vi.fn() }));
+vi.mock('../cart.service.js', async original => ({ ...await original<typeof import('../cart.service.js')>(), currentCart: vi.fn(), buyNowProjection: vi.fn() }));
 
 const userId = '11111111-1111-4111-8111-111111111111';
 const cartId = '22222222-2222-4222-8222-222222222222';
@@ -19,7 +19,8 @@ const attemptId = '33333333-3333-4333-8333-333333333333';
 const productA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const productB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const leaseToken = '44444444-4444-4444-8444-444444444444';
-const line = (productId: string) => ({ productId, quantity: 1, product: { price: '10.00' } });
+const line = (productId: string, availability = 'AVAILABLE', availableQuantity = 5) => ({ productId, quantity: 1, availability, availableQuantity,
+  product: { name: `Item ${productId}`, price: '10.00' } });
 const revisionA = cartRevision(cartId, [line(productA)]);
 const revisionB = cartRevision(cartId, [line(productB)]);
 const request = checkoutRequestSchema.parse({ shipping: { recipient: 'Test Customer', line1: 'Test Street', city: 'Test City',
@@ -127,10 +128,26 @@ describe('Payment/Order snapshot isolation (offline database/provider doubles)',
     prepareSubmission(); attempt.cartId = null; attempt.activeCartId = null; attempt.cartIdentity = userId;
     attempt.request = { ...request, scope: 'BUY_NOW', buyNow: { productId: productA, quantity: 1 } };
     attempt.items[0].snapshotCartItemId = null;
+    vi.mocked(buyNowProjection).mockResolvedValue({ data: { items: [line(productA)] } } as Awaited<ReturnType<typeof buyNowProjection>>);
     const result = await new PaymentService(db as unknown as PrismaClient, provider).submit(userId, attemptId);
     expect(result.submittedAt).toBeTruthy(); expect(result.scope).toBe('BUY_NOW');
     expect(db.cartItem.deleteMany).not.toHaveBeenCalled(); expect(db.paymentAttemptItem.update).not.toHaveBeenCalled();
     expect(provider.create).not.toHaveBeenCalled(); expect(provider.capture).not.toHaveBeenCalled();
+  });
+  it('refuses a sold-out Buy Now at submit with the standard stock 409, before any card confirmation', async () => {
+    prepareSubmission(); attempt.cartId = null; attempt.activeCartId = null; attempt.cartIdentity = userId;
+    attempt.request = { ...request, scope: 'BUY_NOW', buyNow: { productId: productA, quantity: 1 } };
+    attempt.items[0].snapshotCartItemId = null;
+    vi.mocked(buyNowProjection).mockResolvedValue({ data: { items: [line(productA, 'OUT_OF_STOCK', 0)] } } as Awaited<ReturnType<typeof buyNowProjection>>);
+    await expect(new PaymentService(db as unknown as PrismaClient, provider).submit(userId, attemptId)).rejects.toMatchObject({ statusCode: 409, code: 'CART_STOCK_CONFLICT' });
+    expect(db.paymentAttempt.update).not.toHaveBeenCalled(); expect(provider.capture).not.toHaveBeenCalled();
+  });
+  it('refuses a sold-out Cart line at submit with the standard stock 409 and transfers nothing', async () => {
+    prepareSubmission();
+    vi.mocked(currentCart).mockResolvedValue({ data: { revision: revisionA, canCheckout: false,
+      items: [{ ...line(productA, 'OUT_OF_STOCK', 0), id: productA }] } } as Awaited<ReturnType<typeof currentCart>>);
+    await expect(new PaymentService(db as unknown as PrismaClient, provider).submit(userId, attemptId)).rejects.toMatchObject({ statusCode: 409, code: 'CART_STOCK_CONFLICT' });
+    expect(db.cartItem.deleteMany).not.toHaveBeenCalled(); expect(db.paymentAttempt.update).not.toHaveBeenCalled();
   });
   it('replays a submitted transfer without deleting newly added cart lines', async () => {
     prepareSubmission();

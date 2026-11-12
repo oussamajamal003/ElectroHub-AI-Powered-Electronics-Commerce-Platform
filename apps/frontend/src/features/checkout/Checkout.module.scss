@@ -213,6 +213,17 @@
   margin-block: $spacing-8 $spacing-6;
   p { margin: 0; }
 }
+// PR #51 sold-out outcome: the item went to another customer before this order committed. Never styled as a card failure.
+.soldOutIcon { width: 5rem; height: 5rem; display: grid; place-items: center; margin-inline: auto; border-radius: 50%; color: $color-warning-foreground; background: $color-warning-background; }
+.soldOutItems { list-style: none; width: 100%; margin: $spacing-6 0 0; padding: 0; display: grid; gap: $spacing-3; text-align: left; }
+.soldOutItem { display: flex; align-items: center; gap: $spacing-4; border: 1px solid $color-border; padding: $spacing-3; min-width: 0;
+  > div { display: grid; gap: $spacing-1; min-width: 0; }
+  strong { font-weight: $font-weight-semibold; overflow-wrap: anywhere; }
+  span { color: $color-text-secondary; font-size: $font-size-sm; }
+}
+.soldOutImage { flex: 0 0 64px; width: 64px; height: 64px; background: $color-surface; }
+.soldOutNotice { width: 100%; box-sizing: border-box; border: 1px solid $color-warning-border; background: $color-warning-background; color: $color-warning-foreground;
+  padding: $spacing-5; margin-block: $spacing-6; line-height: 1.5; text-align: left; p { margin: 0; } p + p { margin-top: $spacing-2; } }
 .failureCardIcon { margin-top: .15rem; }
 .failureCopy { display: grid; gap: $spacing-1; strong { font-weight: $font-weight-semibold; } }
 .failureCardBalance { width: 1.5rem; }

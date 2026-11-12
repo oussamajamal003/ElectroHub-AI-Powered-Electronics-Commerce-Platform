@@ -1039,6 +1039,52 @@ describe('Durable payment processor (mocked DB/provider; not real transaction pr
     await service.process(id); expect(attempt.state).toBe('CANCELED'); expect(attempt.failureCode).toBe('INVENTORY_CONFLICT');
     expect(provider.cancel).toHaveBeenCalledTimes(1); expect(provider.capture).not.toHaveBeenCalled(); expect(attempt.orderId).toBeNull();
   });
+  it('last unit lost at commit: cancels the authorization and records CANCELED only after a fresh provider read confirms it', async () => {
+    Object.assign(attempt, { submittedAt: new Date(), state: 'AWAITING_INPUT' });
+    Object.assign(intent, { status: 'requires_capture', capturable: 1999, methodType: 'card' });
+    commit.mockRejectedValue(new AppError('Product is out of stock.', 409, 'CART_STOCK_CONFLICT'));
+    // The cancel reply claims success, but the provider has not applied it yet: the reply alone must not mark the purchase released.
+    provider.cancel.mockImplementation(async () => ({ ...intent, status: 'canceled', capturable: 0 }));
+    await service.process(id);
+    expect(attempt).toMatchObject({ state: 'CANCEL_PENDING', cancelRequested: true, failureCode: 'CART_STOCK_CONFLICT', orderId: null });
+    expect(attempt.providerStatus).not.toBe('canceled');
+    expect(provider.retrieve.mock.invocationCallOrder.at(-1)).toBeGreaterThan(provider.cancel.mock.invocationCallOrder[0]!);
+    expect(work.state).toBe('READY');
+    expect(provider.capture).not.toHaveBeenCalled();
+    // The provider applies the cancellation; the next pass verifies it and only then records the release.
+    Object.assign(intent, { status: 'canceled', capturable: 0 }); work.nextRunAt = new Date(0);
+    await service.process(id);
+    expect(attempt).toMatchObject({ state: 'CANCELED', providerStatus: 'canceled', failureCode: 'CART_STOCK_CONFLICT', orderId: null });
+    expect(work.state).toBe('DONE');
+    expect(provider.capture).not.toHaveBeenCalled(); expect(commit).toHaveBeenCalledTimes(1);
+    expect(customerPaymentStatus(attempt, work)).toBe('FAILED');
+  });
+  it('a commit that lost only to serialization contention is retried durably (never cancelled) until the bounded budget is spent', async () => {
+    Object.assign(attempt, { submittedAt: new Date(), state: 'AWAITING_INPUT' });
+    Object.assign(intent, { status: 'requires_capture', capturable: 1999, methodType: 'card' });
+    commit.mockRejectedValue(new AppError('Checkout changed. Retry the same checkout attempt safely.', 409, 'CHECKOUT_CONFLICT'));
+    for (let pass = 1; pass <= 3; pass++) {
+      work.nextRunAt = new Date(0);
+      await service.process(id);
+      expect(attempt).toMatchObject({ state: 'AUTHORIZED', cancelRequested: false, orderId: null });
+      expect(work).toMatchObject({ state: 'READY', retryCount: pass, lastError: 'CHECKOUT_CONFLICT' });
+      expect(provider.cancel).not.toHaveBeenCalled();
+    }
+    // A later pass that commits normally is captured; nothing was released in between.
+    commit.mockImplementation(async () => { attempt.orderId = 'order'; attempt.state = 'CAPTURE_PENDING'; });
+    work.nextRunAt = new Date(0);
+    await service.process(id);
+    expect(provider.cancel).not.toHaveBeenCalled(); expect(provider.capture).toHaveBeenCalledTimes(1);
+  });
+  it('a commit conflict that persists past the bounded budget releases the authorization without capture', async () => {
+    Object.assign(attempt, { submittedAt: new Date(), state: 'AUTHORIZED' });
+    Object.assign(intent, { status: 'requires_capture', capturable: 1999, methodType: 'card' });
+    Object.assign(work, { retryCount: 3, lastError: 'CHECKOUT_CONFLICT' });
+    commit.mockRejectedValue(new AppError('Checkout changed. Retry the same checkout attempt safely.', 409, 'CHECKOUT_CONFLICT'));
+    await service.process(id);
+    expect(attempt).toMatchObject({ state: 'CANCELED', failureCode: 'CHECKOUT_CONFLICT', orderId: null, providerStatus: 'canceled' });
+    expect(provider.cancel).toHaveBeenCalledTimes(1); expect(provider.capture).not.toHaveBeenCalled();
+  });
   it.each([false, true])('compensates A once without modifying a newer populated Cart (empty original Cart: %s)', async empty => {
     const productA = '22222222-2222-4222-8222-222222222222';
     const productB = '33333333-3333-4333-8333-333333333333';

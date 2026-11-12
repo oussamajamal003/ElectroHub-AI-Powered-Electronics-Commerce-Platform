@@ -105,8 +105,65 @@ const empty = z.object({}).strict();
  *         required: true
  *         schema: { type: string, format: uuid }
  *     responses:
- *       200: { description: Safe owned status }
+ *       200:
+ *         description: >-
+ *           Safe owned status. Additive last-unit fields (PR #51): `outcomeReason` is `STOCK_UNAVAILABLE` when an order-less purchase was
+ *           (or is being) cancelled because the item sold out or was withdrawn before its order committed (the card authorization is
+ *           cancelled, never captured; `classification` keeps its existing value). `authorizationReleased` is true only after a fresh
+ *           provider read verified the cancellation. `unavailableItems` (stock outcomes only, else null) lists each saved line with its
+ *           requested and currently available quantity. Nothing is reserved by this read.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     classification: { type: string }
+ *                     state: { type: string }
+ *                     failureCode: { type: string, nullable: true }
+ *                     outcomeReason: { type: string, enum: [STOCK_UNAVAILABLE], nullable: true }
+ *                     authorizationReleased: { type: boolean }
+ *                     unavailableItems:
+ *                       type: array
+ *                       nullable: true
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           productId: { type: string, format: uuid }
+ *                           name: { type: string }
+ *                           slug: { type: string, nullable: true }
+ *                           imageUrl: { type: string, nullable: true }
+ *                           quantity: { type: integer, description: Quantity the customer tried to buy }
+ *                           availableQuantity: { type: integer, description: Sellable stock now }
+ *                           availability: { type: string, enum: [AVAILABLE, LOW_STOCK, OUT_OF_STOCK, UNAVAILABLE, NOT_FOUND] }
  *       404: { description: Not found for this customer }
+ * /checkout/payment-attempts/{attemptId}/submit:
+ *   post:
+ *     tags: [Payments]
+ *     summary: Place Order. Accept the purchase before card confirmation; moves Cart lines into the attempt. Reserves no stock.
+ *     description: >-
+ *       Runs before Stripe.js confirms the card, so a refusal means nothing was authorized or charged. Stock is re-read (never reserved);
+ *       inventory is committed only after authorization, at order commit. A purchase whose item is no longer purchasable is refused with the
+ *       standard stock conflict and its Cart lines are kept for the customer to correct. Buy Now applies the same gate.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: attemptId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, additionalProperties: false }
+ *     responses:
+ *       200: { description: Accepted purchase identity (idempotent replay returns the same identity) }
+ *       404: { description: Not found for this customer }
+ *       409:
+ *         description: >-
+ *           `{ error: { code, message } }` with code `CART_STOCK_CONFLICT` (sold out or short; message names the product and available
+ *           quantity), `PRODUCT_UNAVAILABLE` (withdrawn), `CHECKOUT_CHANGED` (Cart or prices changed) or `PAYMENT_RECOVERY_PENDING`.
  * /checkout/payment-attempts/{attemptId}/reconcile:
  *   post:
  *     tags: [Payments]

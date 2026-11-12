@@ -1,12 +1,56 @@
 import { Link } from 'react-router-dom';
-import { CircleX } from 'lucide-react';
+import { CircleX, PackageX } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import type { PaymentOutcome } from './types';
+import { ProductImage } from '@/components/ui/ProductImage';
+import type { PaymentOutcome, UnavailableItem } from './types';
 import { isResolvedPayment } from './paymentPresentation';
 import styles from './Checkout.module.scss';
 import { CheckingPayment } from './CheckoutComponents';
 
 const retryableStates = ['DECLINED', 'ACTION_REQUIRED', 'CANCELED', 'COMPENSATED', 'REFUNDED'];
+
+function availabilityText(item: UnavailableItem) {
+  if (item.availability === 'UNAVAILABLE' || item.availability === 'NOT_FOUND') return 'No longer available';
+  if (item.availableQuantity < 1) return 'Out of stock';
+  return item.availableQuantity < item.quantity ? `Only ${item.availableQuantity} available now` : `${item.availableQuantity} available now`;
+}
+
+/**
+ * PR #51: the item sold out (or was withdrawn) before this purchase's order committed. It is never presented as a card failure, and
+ * "not charged" is said only once the provider verified the authorization was cancelled (`authorizationReleased`). Actions are only those
+ * the backend permits for this outcome: no Try Again (the server refuses it), no restore while the item cannot be bought.
+ */
+function SoldOutRecovery({ outcome, checking, onCheck, onLeave }: { outcome: PaymentOutcome; checking: boolean; onCheck(): void; onLeave?(): boolean | void }) {
+  const released = outcome.authorizationReleased === true;
+  const items = outcome.unavailableItems ?? [];
+  const browsable = items.find(item => item.slug && item.availability !== 'UNAVAILABLE' && item.availability !== 'NOT_FOUND');
+  return (
+    <section className={styles.paymentRecovery} aria-labelledby="payment-recovery-heading" data-outcome="sold-out">
+      <div className={styles.soldOutIcon}><PackageX size={40} aria-hidden="true" /></div>
+      <h1 id="payment-recovery-heading">{items.length > 1 ? 'Some items sold out' : 'This item sold out'}</h1>
+      <p className={styles.failureIntro}>Another customer completed their purchase first, so we couldn’t complete your order.</p>
+      {items.length > 0 && <ul className={styles.soldOutItems} aria-label="Items that could not be purchased">
+        {items.map(item => <li key={item.productId} className={styles.soldOutItem}>
+          <ProductImage src={item.imageUrl ?? undefined} alt="" containerClassName={styles.soldOutImage} />
+          <div><strong>{item.name}</strong><span>Quantity requested: {item.quantity}</span><span>{availabilityText(item)}</span></div>
+        </li>)}
+      </ul>}
+      <div className={styles.soldOutNotice} role="status" aria-live="polite">
+        {released
+          ? <><p><strong>Your card was not charged.</strong> The payment authorization for this order was cancelled.</p>
+            <p>If your bank still shows a temporary hold, your bank will release it.</p></>
+          : <p>We’re cancelling the payment authorization and checking the result of your payment. Please don’t submit another payment while this check is in progress.</p>}
+      </div>
+      <div className={styles.recoveryActions}>
+        {!released && <Button variant="primary" onClick={onCheck} disabled={checking} isLoading={checking}>Check again</Button>}
+        <Link className={released ? styles.primaryLink : styles.secondaryLink} to="/products" onClick={event => { if (onLeave?.() === false) event.preventDefault(); }}>Continue shopping</Link>
+        {released && browsable?.slug && <Link className={styles.secondaryLink} to={`/products/${encodeURIComponent(browsable.slug)}`}
+          onClick={event => { if (onLeave?.() === false) event.preventDefault(); }}>View product</Link>}
+        {released && <Link className={styles.secondaryLink} to="/cart" onClick={event => { if (onLeave?.() === false) event.preventDefault(); }}>Return to Cart</Link>}
+      </div>
+    </section>
+  );
+}
 
 export function PaymentRecovery({ outcome, message, pending, onCheck, onRetry, onLeave }: { outcome?: PaymentOutcome | null;
   message: string; pending: boolean; onCheck(): void; onRetry(): void; onLeave?(): boolean | void }) {
@@ -18,6 +62,10 @@ export function PaymentRecovery({ outcome, message, pending, onCheck, onRetry, o
     window.scrollTo({ top: 0, behavior: 'auto' });
     callback?.();
   };
+
+  if (outcome?.outcomeReason === 'STOCK_UNAVAILABLE' && !outcome.orderReference) {
+    return <SoldOutRecovery outcome={outcome} checking={pending} onCheck={onCheck} onLeave={onLeave} />;
+  }
 
   // Checkout has one checking presentation. Unresolved durable recovery moves
   // to the account status route; it never grows extra actions inside Checkout.

@@ -779,7 +779,14 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
       paid = hasVerifiedPayment(result);
     } catch (error) {
       if (!current()) { staleAttempt = true; return; }
-      if (submitRejected) {
+      if (submitRejected && error instanceof ApiError && (error.code === 'CART_STOCK_CONFLICT' || error.code === 'PRODUCT_UNAVAILABLE')) {
+        // PR #51: the item sold out (or was withdrawn) before card confirmation. Nothing was submitted, authorized or charged; the server's
+        // message names the product and what is available. Refresh the Cart/quote so the order summary shows current availability.
+        setMessage(`${error.message} Review your ${isBuyNow ? 'order' : 'Cart'} to continue.`);
+        setPaymentState('IDLE');
+        void client.invalidateQueries({ queryKey: queryKeys.cart.current(userId) });
+        void client.invalidateQueries({ queryKey: ['checkout', userId] });
+      } else if (submitRejected) {
         // The server refused to start this payment (nothing was submitted or confirmed): the customer can simply try again.
         setMessage('Secure payment could not start. Nothing was charged. Please try Place Order again.');
         setPaymentState('IDLE');

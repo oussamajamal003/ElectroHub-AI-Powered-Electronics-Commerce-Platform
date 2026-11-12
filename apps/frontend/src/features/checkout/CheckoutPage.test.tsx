@@ -1255,6 +1255,24 @@ describe('A refused submit (nothing submitted) returns to Review instead of reco
     expect(readSubmittedPurchase(userId, 'CART_CHECKOUT')).toBeNull();
     expect(JSON.parse(sessionStorage.getItem(draftKey(userId)) ?? '{}').draft.attempt.status).toBe('setup');
   });
+  it('a last-unit stock refusal at submit says which item sold out (standard 409), never shows Processing, and keeps the shopper on review', async () => {
+    reviewedDraft(); const calls3: string[] = [];
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      calls3.push(endpoint);
+      if (endpoint.endsWith('/submit')) throw new ApiError(409, 'Last Unit Phone is out of stock. Nothing was charged.', undefined, 'CART_STOCK_CONFLICT');
+      if (endpoint === '/api/checkout') return { data: quote } as never;
+      if (endpoint === '/api/checkout/payment-attempts') return { data: setup } as never;
+      if (endpoint.startsWith('/api/cart')) return { data: cart } as never;
+      throw new Error(`Unexpected endpoint ${endpoint}`);
+    });
+    show('/checkout?step=review'); await enterReview();
+    fireEvent.click(await screen.findByRole('button', { name: /Place Order/ }));
+    expect(await screen.findByText('Last Unit Phone is out of stock. Nothing was charged. Review your Cart to continue.')).toBeVisible();
+    expect(screen.queryByText(/Secure payment could not start/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Checking your payment|Processing/ })).not.toBeInTheDocument();
+    expect(calls3.some(endpoint => endpoint.endsWith('/confirmation-started') || endpoint.endsWith('/reconcile'))).toBe(false);
+    expect(readSubmittedPurchase(userId, 'CART_CHECKOUT')).toBeNull();
+  });
 });
 
 // Task 03.6 final closure — handoff contract after a slow /submit (DEV incidents: MacBook 8.5 s, Buds2 19.1 s, iPad 24.1 s, MacBook Starlight

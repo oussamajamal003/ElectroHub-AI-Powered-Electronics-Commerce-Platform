@@ -24,7 +24,12 @@ import styles from './Checkout.module.scss';
 export interface SavedPurchase { attemptId: string; scope: string; state: string; classification?: string; total: string; currency: string;
   pending: boolean; unread: boolean; orderReference: string | null; submittedAt?: string | null; updatedAt?: string | null; retryAllowed?: boolean; confirmationStarted?: boolean; cancelable?: boolean;
   /** Server-side Remove eligibility (the rule the dismiss endpoint enforces, minus its transient lease check). Absent means not offered. */
-  dismissible?: boolean; items: { name: string; quantity: number; imageUrl?: string | null }[] }
+  dismissible?: boolean; items: { name: string; quantity: number; imageUrl?: string | null }[];
+  /** PR #51: the item sold out before this purchase's order committed (never a card failure); see authorizationReleased. */
+  outcomeReason?: 'STOCK_UNAVAILABLE' | null; authorizationReleased?: boolean }
+/** Sold-out copy. "Not charged" is said only once the provider verified the authorization was cancelled; a bank hold is never called a charge. */
+export const SOLD_OUT_RELEASED_NOTE = 'This item sold out before your order could be completed. Your card was not charged and the payment authorization was cancelled. If your bank still shows a temporary hold, your bank will release it.';
+export const SOLD_OUT_RELEASING_NOTE = 'This item sold out before your order could be completed. We’re cancelling the payment authorization and checking the result of your payment. Please don’t submit another payment while this check is in progress.';
 /** Reject older backend versions; verified capture also survives delayed pre-capture reads. Refunds remain observable. */
 export function retainPaidPurchases(previous: SavedPurchase[], incoming: SavedPurchase[]) {
   const existing = new Map(previous.map(item => [item.attemptId, item]));
@@ -261,9 +266,12 @@ function PurchaseCard({ item, exit = false, checking = false, onDismissed, actio
   const stale = !kind && Boolean(item.submittedAt) && Date.now() - Date.parse(item.submittedAt ?? '') > STALE_PENDING_PURCHASE_MS;
   // A submitted purchase is never a saved card entry: every unresolved card is Processing and only offers a status check.
   const verification = item.state === 'ACTION_REQUIRED' && item.classification === 'AWAITING_CUSTOMER_ACTION';
-  const status = kind === 'success' ? 'Payment confirmed' : kind === 'failure' ? 'Payment failed'
+  const soldOut = item.outcomeReason === 'STOCK_UNAVAILABLE';
+  const status = soldOut ? item.authorizationReleased ? 'Sold out · Not charged' : 'Sold out · Checking payment'
+    : kind === 'success' ? 'Payment confirmed' : kind === 'failure' ? 'Payment failed'
     : item.classification === 'UNKNOWN' ? 'Awaiting confirmation' : 'Processing';
-  const note = kind === 'success' ? 'Your order is confirmed and available in Orders.'
+  const note = soldOut ? item.authorizationReleased ? SOLD_OUT_RELEASED_NOTE : SOLD_OUT_RELEASING_NOTE
+    : kind === 'success' ? 'Your order is confirmed and available in Orders.'
     : kind === 'failure' ? item.state === 'REFUNDED' ? 'This payment was refunded. Its purchase details are saved separately from your Cart.'
       : item.state === 'DECLINED' ? item.retryAllowed ? 'Nothing was charged. Your items and delivery details are saved for this purchase.' : 'Nothing was charged. This purchase can’t be paid again.'
         : 'This purchase did not complete. Its details are saved separately from your Cart.'
@@ -281,7 +289,8 @@ function PurchaseCard({ item, exit = false, checking = false, onDismissed, actio
   const dismissible = Boolean(onDismissed) && !exit && tone === 'failure' && item.dismissible === true;
   return <article className={styles.purchaseCard} data-tone={tone} data-purchase={item.attemptId} data-outcome={exit ? kind ?? undefined : undefined}
     data-dismissible={dismissible ? 'true' : undefined}
-    aria-label={`${tone === 'failure' ? 'Failed payment' : tone === 'success' ? 'Confirmed payment' : 'Pending payment'} for ${names}`}>
+    data-reason={soldOut ? 'sold-out' : undefined}
+    aria-label={`${soldOut ? 'Sold-out purchase' : tone === 'failure' ? 'Failed payment' : tone === 'success' ? 'Confirmed payment' : 'Pending payment'} for ${names}`}>
     <div className={styles.purchaseCardItems}>{item.items.map((line, index) => <div className={styles.purchaseCardItem} key={index}>
       <ProductImage src={line.imageUrl ?? undefined} alt="" containerClassName={styles.purchaseCardImage} />
       <div className={styles.purchaseCardCopy}><strong>{line.name}</strong><span>Qty: {line.quantity}</span></div>
@@ -482,7 +491,9 @@ export function PaymentNotifications() {
     </Toast>}
     {updates.filter(item => !isPresentedPayment(route, item, confirmationReference) && !(confirmed && item.attemptId === confirmed.attemptId)).map(item =>
     <Toast key={`${item.attemptId}:${item.state}`} open duration={5000} variant={item.state === 'PAID' ? 'success' : 'error'} onOpenChange={open => { if (!open) close(item); }}>
-      <ToastTitle>{item.state === 'PAID' ? ORDER_CONFIRMED_TITLE : 'Payment was not completed. Your saved purchase details are kept in your Cart history.'}</ToastTitle>
+      <ToastTitle>{item.state === 'PAID' ? ORDER_CONFIRMED_TITLE : item.outcomeReason === 'STOCK_UNAVAILABLE' && item.authorizationReleased
+        ? 'An item sold out before your order was completed. Your card was not charged.'
+        : 'Payment was not completed. Your saved purchase details are kept in your Cart history.'}</ToastTitle>
       {item.state === 'PAID' && <ToastDescription>{ORDER_CONFIRMED_TEXT}</ToastDescription>}
       <Link to={item.orderReference ? `/orders/${item.orderReference}` : '/cart'}>{item.orderReference ? 'View Order' : 'View saved purchase'}</Link>
       <ToastClose aria-label="Dismiss payment notification" />
