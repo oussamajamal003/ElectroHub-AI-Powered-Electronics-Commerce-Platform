@@ -71,7 +71,7 @@ test.describe('toasts', () => {
     await page.getByLabel('Name').fill('Sam Shopper');
     await page.getByLabel('Email').fill('sam@example.com');
     await page.getByLabel('Subject').fill('Order question');
-    await page.getByLabel('Message').fill('Where is my order?');
+    await page.getByRole('textbox', { name: 'Message' }).fill('Where is my order?');
   };
   const viewport = (page: Page) => page.getByTestId('toast-viewport');
 
