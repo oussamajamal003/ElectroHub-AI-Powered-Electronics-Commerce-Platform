@@ -268,20 +268,20 @@ test.describe('in-flight image search and withdrawal', () => {
     await requireEnabled(page, dialog);
     const route = hold.captured.route!;
     hold.release('fetch-then-hold');
-    // The real server answers and writes its analytics row. WebKit does not expose a file-upload (Blob) body to
-    // interception, so there the same multipart upload is rebuilt: same field, file and bytes, original headers.
-    const original = route.request().postDataBuffer();
+    // The real server answers and writes its analytics row. Interception does not reliably expose a file-upload (Blob)
+    // body on every engine (WebKit hands back an unusable one), so the same upload is rebuilt for all engines: the
+    // field, file name, type and bytes the page chose, with the original headers (including the analytics reference).
     const boundary = `----e2e${Date.now().toString(16)}`;
     const { 'content-length': _length, ...headers } = route.request().headers();
     void _length;
-    const response = await route.fetch(original?.length ? undefined : {
+    const response = await route.fetch({
       headers: { ...headers, 'content-type': `multipart/form-data; boundary=${boundary}` },
       postData: Buffer.concat([
         Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="image"; filename="speaker.png"\r\nContent-Type: image/png\r\n\r\n`),
         samplePng(), Buffer.from(`\r\n--${boundary}--\r\n`),
       ]),
     });
-    expect(response.status(), 'the forwarded upload is processed, not refused as malformed').not.toBe(400);
+    expect(response.status(), `the forwarded upload is processed, not refused: ${response.status() === 400 ? await response.text() : ''}`).not.toBe(400);
     await expect.poll(async () => (await probe({ ref: hold.captured.ref })).imageSearch?.length ?? 0).toBe(1);
     const other = await context.newPage();
     await other.goto('/');
