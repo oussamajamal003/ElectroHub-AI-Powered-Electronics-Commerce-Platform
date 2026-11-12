@@ -57,7 +57,7 @@
     align-items: center;
     gap: $spacing-2;
     align-self: flex-start;
-    color: $color-primary;
+    color: $color-primary-text;
     font-size: $font-size-2xl;
     font-weight: $font-weight-bold;
     text-decoration: none;
@@ -127,7 +127,7 @@
     }
 
     &:hover {
-      color: $color-primary;
+      color: $color-primary-text;
       &::after { transform: scaleX(1); }
     }
 

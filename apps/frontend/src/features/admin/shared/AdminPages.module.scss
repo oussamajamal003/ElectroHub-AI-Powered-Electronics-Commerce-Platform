@@ -16,13 +16,13 @@
 .panel { display: grid; gap: $spacing-4; min-width: 0; padding: $spacing-6; background: $color-background; border: 1px solid $color-border; align-content: start; }
 // Content panels share the card hover/focus cue (no lift: they hold forms and tables).
 .panel { transition: border-color $transition-fast, box-shadow $transition-fast;
-  &:hover, &:focus-within { border-color: rgba($color-primary, .45); box-shadow: $shadow-md; }
+  &:hover, &:focus-within { border-color: theme-alpha($color-primary, .45); box-shadow: $shadow-md; }
   @media (prefers-reduced-motion: reduce) { transition: none; } }
 .panelFlush { padding: 0; gap: 0; > .panelHeader { padding: $spacing-5 $spacing-6; border-bottom: 1px solid $color-border; } }
 .panelHeader { display: flex; align-items: center; justify-content: space-between; gap: $spacing-3; flex-wrap: wrap; min-width: 0; }
 .panelTitle { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; color: $color-text-primary; }
 .panelHint { margin: 0; font-size: $font-size-sm; color: $color-text-secondary; }
-.panelLink { display: inline-flex; align-items: center; gap: $spacing-1; color: $color-primary; font-size: $font-size-sm; font-weight: $font-weight-medium;
+.panelLink { display: inline-flex; align-items: center; gap: $spacing-1; color: $color-primary-text; font-size: $font-size-sm; font-weight: $font-weight-medium;
   text-decoration: none; svg { width: 16px; height: 16px; }
   &:hover { text-decoration: underline; }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
@@ -45,12 +45,12 @@
 td .mono, td .muted { white-space: nowrap; }
 .strike { color: $color-text-muted; text-decoration: line-through; font-size: $font-size-xs; margin-left: $spacing-1; }
 .rowLink { color: $color-text-primary; font-weight: $font-weight-medium; text-decoration: none;
-  &:hover { color: $color-primary; text-decoration: underline; }
+  &:hover { color: $color-primary-text; text-decoration: underline; }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: 2px; } }
 .rowActions { display: flex; gap: $spacing-2; justify-content: flex-end; flex-wrap: nowrap; }
 .iconAction { display: inline-grid; place-items: center; width: 2.5rem; height: 2.5rem; border: 1px solid $color-border; background: $color-background;
   color: $color-text-secondary; cursor: pointer; text-decoration: none; svg { width: 16px; height: 16px; }
-  &:hover:not(:disabled) { color: $color-primary; border-color: $color-primary; }
+  &:hover:not(:disabled) { color: $color-primary-text; border-color: $color-primary; }
   &:disabled { opacity: .5; cursor: not-allowed; }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: 2px; } }
 .iconActionDanger:hover:not(:disabled) { color: $color-error-foreground; border-color: $color-error-foreground; }
@@ -73,7 +73,7 @@ td .mono, td .muted { white-space: nowrap; }
 .filterPicker { flex: 0 1 15rem; min-width: 12rem; }
 .filterSelectTrigger { min-width: 11rem; }
 .formActions { display: flex; gap: $spacing-3; justify-content: flex-end; flex-wrap: wrap; position: sticky; bottom: 0; padding: $spacing-4 0;
-  background: linear-gradient(to top, $color-surface 70%, rgba($color-surface, 0)); }
+  background: linear-gradient(to top, $color-surface 70%, theme-alpha($color-surface, 0)); }
 // Short forms and dialogs: the sticky footer would pin over their own fields, so their actions stay in the flow.
 .formActionsStatic { position: static; padding: $spacing-2 0 0; background: none; }
 .formError { margin: 0; padding: $spacing-3 $spacing-4; border: 1px solid $color-error-border; background: $color-error-background; color: $color-error-foreground;
@@ -87,7 +87,7 @@ td .mono, td .muted { white-space: nowrap; }
 .segment { min-height: 2.5rem; padding: 0 $spacing-4; color: $color-text-secondary; font: inherit; font-size: $font-size-sm;
   font-weight: $font-weight-medium; cursor: pointer;
   border: 1px solid $color-border; background: $color-background;
-  &:hover:not([aria-pressed='true']):not([aria-checked='true']) { background: rgba($color-primary, .06); color: $color-primary; }
+  &:hover:not([aria-pressed='true']):not([aria-checked='true']) { background: theme-alpha($color-primary, .06); color: $color-primary-text; }
   &[aria-pressed='true'], &[aria-checked='true'] { background: $color-primary; border-color: $color-primary; color: $color-text-inverse; font-weight: $font-weight-semibold; }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: 2px; } }
 
@@ -107,7 +107,7 @@ td .mono, td .muted { white-space: nowrap; }
 .stepDot { position: relative; z-index: 1; display: grid; place-items: center; width: 1.9rem; height: 1.9rem; border-radius: 50%; border: 2px solid $color-border;
   background: $color-background; svg { width: 14px; height: 14px; } }
 .stepDone { color: $color-text-primary; &::before { background: $color-primary; } .stepDot { border-color: $color-primary; background: $color-primary; color: $color-text-inverse; } }
-.stepCurrent { color: $color-primary; font-weight: $font-weight-semibold; &::before { background: $color-primary; } .stepDot { border-color: $color-primary; color: $color-primary; } }
+.stepCurrent { color: $color-primary-text; font-weight: $font-weight-semibold; &::before { background: $color-primary; } .stepDot { border-color: $color-primary; color: $color-primary-text; } }
 
 .chart { display: grid; gap: $spacing-2; }
 .chartStats { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: $spacing-4; margin: 0 0 $spacing-2;
@@ -192,10 +192,10 @@ td .mono, td .muted { white-space: nowrap; }
 .successorSkeleton { height: 5.5rem; }
 .successorCard { position: relative; display: flex; gap: $spacing-3; align-items: flex-start; padding: $spacing-4; border: 1px solid $color-border;
   background: $color-background; cursor: pointer; transition: border-color $transition-fast, box-shadow $transition-fast, background-color $transition-fast;
-  &:hover { border-color: rgba($color-primary, .45); }
+  &:hover { border-color: theme-alpha($color-primary, .45); }
   &:focus-within { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
   @media (prefers-reduced-motion: reduce) { transition: none; } }
-.successorCardSelected { border-color: $color-primary; background: rgba($color-primary, .05); box-shadow: inset 3px 0 0 $color-primary; }
+.successorCardSelected { border-color: $color-primary; background: theme-alpha($color-primary, .05); box-shadow: inset 3px 0 0 $color-primary; }
 .successorRadio { flex: none; width: 1.125rem; height: 1.125rem; margin: 2px 0 0; accent-color: $color-primary; }
 .successorBody { display: grid; gap: $spacing-1; min-width: 0; font-size: $font-size-sm; color: $color-text-primary; }
 .successorEmail { color: $color-text-secondary; overflow-wrap: anywhere; }
@@ -204,9 +204,9 @@ td .mono, td .muted { white-space: nowrap; }
   @media (max-width: $breakpoint-sm - 1px) { grid-template-columns: minmax(0, 1fr); .transferArrow { transform: rotate(90deg); justify-self: center; } } }
 .transferPerson { display: grid; gap: 2px; min-width: 0; padding: $spacing-3 $spacing-4; border: 1px solid $color-border; background: $color-surface; font-size: $font-size-sm;
   span:last-child { color: $color-text-secondary; overflow-wrap: anywhere; } }
-.transferPersonNew { border-color: $color-primary; background: rgba($color-primary, .05); }
+.transferPersonNew { border-color: $color-primary; background: theme-alpha($color-primary, .05); }
 .transferRole { font-size: $font-size-xs; font-weight: $font-weight-semibold; text-transform: uppercase; letter-spacing: .04em; color: $color-text-secondary; }
-.transferArrow { width: 1.25rem; height: 1.25rem; color: $color-primary; }
+.transferArrow { width: 1.25rem; height: 1.25rem; color: $color-primary-text; }
 .transferColumns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: $spacing-4;
   @media (max-width: $breakpoint-sm - 1px) { grid-template-columns: minmax(0, 1fr); } }
 .transferHeading { margin: 0 0 $spacing-2; font-size: $font-size-sm; font-weight: $font-weight-semibold; color: $color-text-primary; }
@@ -223,7 +223,7 @@ td .mono, td .muted { white-space: nowrap; }
 .teamIntro { display: flex; align-items: center; gap: $spacing-4; flex-wrap: wrap; min-width: 0; padding: $spacing-5 $spacing-6;
   background: $color-background; border: 1px solid $color-border; border-left: 3px solid $color-primary; }
 .teamIntroIcon { display: grid; place-items: center; flex: none; width: 3rem; height: 3rem; border-radius: $radius-full;
-  color: $color-primary; background: rgba($color-primary, .08); border: 1px solid rgba($color-primary, .2); }
+  color: $color-primary-text; background: theme-alpha($color-primary, .08); border: 1px solid theme-alpha($color-primary, .2); }
 .teamIntroText { display: grid; gap: $spacing-1; flex: 1 1 16rem; min-width: 0; }
 .teamIntroTitle { margin: 0; font-size: $font-size-xl; font-weight: $font-weight-semibold; color: $color-text-primary; }
 .teamIntroActions { display: flex; gap: $spacing-3; flex: none;

@@ -12,8 +12,8 @@
   &[data-clickable='true'] { cursor: pointer; }
   
   &:hover, &:focus-within {
-    border-color: #cbd5e1;
-    box-shadow: 0 14px 32px -18px rgb(15 23 42 / 0.35);
+    border-color: $color-border-strong;
+    box-shadow: $shadow-card-hover;
     
     .wishlistBtn {
       opacity: 1;
@@ -110,7 +110,7 @@
   font-weight: $font-weight-semibold;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: $color-primary;
+  color: $color-primary-text;
   margin-bottom: $spacing-1;
 }
 
@@ -126,7 +126,7 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  a { position: relative; z-index: 1; color: inherit; text-decoration: none; transition: color $transition-fast; &:hover { color: $color-primary; } }
+  a { position: relative; z-index: 1; color: inherit; text-decoration: none; transition: color $transition-fast; &:hover { color: $color-primary-text; } }
   a:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
 }
 .skeletonContent { gap: $spacing-2; }
@@ -193,7 +193,7 @@
 
   &:hover:not(:disabled) {
     background-color: $color-primary-dark;
-    box-shadow: 0 6px 16px -6px rgb(37 99 235 / 0.55);
+    box-shadow: $shadow-primary-glow;
   }
 
   &:active:not(:disabled) { transform: translateY(1px); }

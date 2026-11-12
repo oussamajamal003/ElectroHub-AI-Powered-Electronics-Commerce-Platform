@@ -1,0 +1,36 @@
+// ====================================
+// Vendors — Leaflet (delivery tracking maps)
+// ====================================
+// leaflet.css paints its zoom bar, popups and attribution white. In dark mode they follow the ElectroHub surface tokens.
+// The OpenStreetMap raster tiles themselves are left untouched: no approved dark tile source exists and filtering the
+// tiles would degrade map legibility. Attribution stays fully readable (required by the OSM licence).
+@use '../abstracts' as *;
+
+[data-theme='dark'] {
+  .leaflet-container { background: $color-surface; }
+
+  .leaflet-bar { border-color: $color-border; box-shadow: $shadow-md; }
+
+  .leaflet-bar a,
+  .leaflet-bar a.leaflet-disabled {
+    background-color: $color-elevated;
+    border-bottom-color: $color-border;
+    color: $color-text-primary;
+  }
+
+  .leaflet-bar a:hover,
+  .leaflet-bar a:focus { background-color: $color-surface-hover; color: $color-text-primary; }
+  .leaflet-bar a.leaflet-disabled { color: $color-text-muted; }
+
+  // leaflet.css styles this as `.leaflet-container .leaflet-control-attribution` and may load later (lazy map chunk).
+  .leaflet-container .leaflet-control-attribution {
+    background: rgb(17 26 45 / 0.88);
+    color: $color-text-secondary;
+
+    a { color: $color-primary-text; }
+  }
+
+  .leaflet-popup-content-wrapper,
+  .leaflet-popup-tip { background: $color-elevated; color: $color-text-primary; box-shadow: $shadow-lg; }
+  .leaflet-container a.leaflet-popup-close-button { color: $color-text-secondary; }
+}

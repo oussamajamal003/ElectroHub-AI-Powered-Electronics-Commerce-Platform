@@ -7,6 +7,7 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/compone
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/DropdownMenu';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { BrandLogo } from '@/components/ui/BrandLogo';
+import { ThemeToggle } from '@/features/theme';
 import { ADMIN_NAVIGATION, SIDEBAR_PREFERENCE_KEY, type AdminNavItem } from '@/features/admin/shell/navigation';
 import { useAdminAlerts } from '@/features/admin/dashboard/api';
 import { useAdminInventoryLiveUpdates } from '@/features/admin/dashboard/useAdminInventoryLiveUpdates';
@@ -174,6 +175,7 @@ export function AdminLayout() {
           </Link>
         </div>
         <div className={styles.headerEnd}>
+          <ThemeToggle className={styles.iconButton} />
           <AlertsMenu />
           <ProfileMenu />
         </div>

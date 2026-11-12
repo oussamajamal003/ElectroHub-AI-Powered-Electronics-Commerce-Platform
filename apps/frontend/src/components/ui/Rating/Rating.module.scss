@@ -25,6 +25,7 @@
 
 .starEmpty {
   color: $color-border; // Empty star color, e.g. #e2e8f0
+  @include dark-theme { color: $color-border-strong; }
 }
 
 .label {

@@ -23,7 +23,7 @@ $control-size: 2.75rem;
 .control { display: inline-grid; place-items: center; min-width: $control-size; min-height: $control-size; padding: 0 $spacing-3; border: 1px solid $color-border;
   background: $color-background; color: $color-text-primary; box-shadow: $shadow-sm; cursor: pointer; font: inherit; font-weight: $font-weight-medium;
   svg { width: 1.25rem; height: 1.25rem; }
-  &:hover:not(:disabled) { color: $color-primary; border-color: $color-primary; }
+  &:hover:not(:disabled) { color: $color-primary-text; border-color: $color-primary; }
   &:disabled { color: $color-text-secondary; cursor: not-allowed; opacity: .6; }
   @include focus-ring; }
 .gate { position: absolute; z-index: 1; inset: 0; display: grid; place-items: center; }
@@ -31,7 +31,7 @@ $control-size: 2.75rem;
 
 .attribution { position: absolute; z-index: 2; inset-block-end: 0; inset-inline-end: 0; margin: 0; padding: 2px $spacing-2; background: $color-background;
   font-size: $font-size-xs; line-height: $line-height-normal; color: $color-text-secondary;
-  a { color: $color-text-secondary; text-decoration: underline; &:hover { color: $color-primary; } @include focus-ring; } }
+  a { color: $color-text-secondary; text-decoration: underline; &:hover { color: $color-primary-text; } @include focus-ring; } }
 
 .legend { display: flex; flex-wrap: wrap; gap: $spacing-2 $spacing-5; margin: 0; padding: 0; list-style: none; font-size: $font-size-sm; color: $color-text-primary;
   li { display: inline-flex; align-items: center; gap: $spacing-2; } }

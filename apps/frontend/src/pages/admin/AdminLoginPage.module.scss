@@ -5,7 +5,7 @@
   @include flex-center;
   flex-direction: column;
   min-height: 100vh;
-  background-color: #f8fafc;
+  background-color: $color-surface;
   padding: $spacing-6;
 }
 
@@ -13,8 +13,8 @@
   position: relative;
   width: min(480px, calc(100vw - 2rem));
   max-width: 480px;
-  background-color: #ffffff !important;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+  background-color: $color-background !important;
+  box-shadow: $shadow-xl !important;
   border: 1px solid $color-border !important;
   border-radius: 0 !important;
   display: flex;
@@ -72,7 +72,7 @@
   background: none;
   border: none;
   padding: 0;
-  color: $color-primary;
+  color: $color-primary-text;
   font-size: $font-size-sm;
   cursor: pointer;
 
@@ -88,7 +88,7 @@
 
 .forgotLink {
   align-self: flex-end;
-  color: $color-primary;
+  color: $color-primary-text;
   font-size: $font-size-sm;
   text-decoration: none;
 
@@ -181,7 +181,7 @@
   justify-content: center;
   gap: $spacing-2;
   border: 1px solid $color-border;
-  background: #fff;
+  background: $color-background;
   color: $color-text-secondary;
   text-align: center;
   line-height: 1.25;
@@ -190,11 +190,11 @@
   svg { width: 18px; height: 18px; flex: 0 0 auto; }
   span { font-size: $font-size-xs; font-weight: $font-weight-semibold; overflow-wrap: anywhere; }
 
-  &:hover { border-color: $color-primary; color: $color-primary; }
+  &:hover { border-color: $color-primary; color: $color-primary-text; }
   &[data-state='active'] {
     border-color: $color-primary;
     background: rgba(37, 99, 235, 0.06);
-    color: $color-primary;
+    color: $color-primary-text;
     box-shadow: inset 0 -2px 0 $color-primary;
   }
   &:focus-visible {
@@ -214,7 +214,7 @@
   background: none;
   border: none;
   padding: $spacing-2;
-  color: $color-primary;
+  color: $color-primary-text;
   font-size: $font-size-sm;
   cursor: pointer;
 
@@ -235,7 +235,7 @@
 
 .textLink {
   align-self: center;
-  color: $color-primary;
+  color: $color-primary-text;
   font-size: $font-size-sm;
   text-decoration: none;
 

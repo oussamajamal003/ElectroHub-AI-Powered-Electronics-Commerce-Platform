@@ -3,12 +3,28 @@ import { createElement } from 'react';
 import '../src/styles/main.scss';
 
 const preview: Preview = {
-  decorators: [Story => createElement('main', { style: { display: 'contents' } }, createElement(Story))],
+  // The "Theme" toolbar applies <html data-theme> exactly like the app (Radix portals included), so every story can be
+  // reviewed in light and dark. Light stays the default.
+  globalTypes: {
+    theme: {
+      description: 'ElectroHub colour theme',
+      toolbar: { title: 'Theme', icon: 'mirror', items: [{ value: 'light', title: 'Light' }, { value: 'dark', title: 'Dark' }], dynamicTitle: true },
+    },
+  },
+  initialGlobals: { theme: 'light' },
+  decorators: [
+    (Story, context) => {
+      document.documentElement.setAttribute('data-theme', context.globals.theme === 'dark' ? 'dark' : 'light');
+      return createElement(Story);
+    },
+    Story => createElement('main', { style: { display: 'contents' } }, createElement(Story)),
+  ],
   parameters: {
     backgrounds: {
       options: [
         { name: 'White', value: '#ffffff' },
         { name: 'Catalog surface', value: '#f8fafc' },
+        { name: 'Dark canvas', value: '#0b1220' },
       ],
     },
     viewport: {

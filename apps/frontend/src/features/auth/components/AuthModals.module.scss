@@ -57,6 +57,17 @@
     opacity: 1;
   }
 
+  // Google's dark-theme sign-in button (fill #131314, stroke #8E918F, text #E3E3E3) — brand-specified, not ElectroHub tokens.
+  @include dark-theme {
+    border-color: #8e918f !important;
+    background: #131314 !important;
+    color: #e3e3e3 !important;
+    box-shadow: none;
+
+    &:hover:not(:disabled) { background: #1f1f20 !important; border-color: #c4c7c5 !important; box-shadow: none; }
+    &:disabled { background: #1f1f20 !important; border-color: #3c4043 !important; color: #8e918f !important; }
+  }
+
   > span:last-child {
     display: flex;
     align-items: center;
@@ -73,8 +84,8 @@
   position: relative;
   width: min(480px, calc(100vw - 2rem));
   max-width: 480px;
-  background-color: #ffffff !important;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+  background-color: $color-elevated !important;
+  box-shadow: $shadow-xl !important;
   border: 1px solid $color-border !important;
   border-radius: 0 !important;
   display: flex;
@@ -91,6 +102,8 @@
 .overlay {
   background-color: rgba(15, 23, 42, 0.55) !important;
   backdrop-filter: blur(4px) !important;
+
+  @include dark-theme { background-color: $color-overlay !important; }
 }
 
 .closeButton {
@@ -131,7 +144,7 @@
     font-family: $font-family-heading;
     font-size: $font-size-2xl;
     font-weight: $font-weight-bold;
-    color: $color-primary;
+    color: $color-primary-text;
     margin-bottom: $spacing-4;
   }
 
@@ -188,7 +201,7 @@
     background: none;
     border: none;
     padding: 0;
-    color: $color-primary;
+    color: $color-primary-text;
     font-size: $font-size-sm;
     cursor: pointer;
 
@@ -217,7 +230,7 @@
 .switchButton {
   background: none;
   border: none;
-  color: $color-primary;
+  color: $color-primary-text;
   font-weight: $font-weight-semibold;
   cursor: pointer;
   padding: 0;

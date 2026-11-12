@@ -29,6 +29,7 @@ import { SignOutModal } from '@/features/auth/components/SignOutModal';
 import { shortcutLabel, useDiscovery } from '@/features/search/discovery/context';
 import { Toast, ToastClose, ToastProvider, ToastTitle, ToastViewport } from '@/components/ui/Toast';
 import styles from './CustomerHeader.module.scss';
+import { ThemeToggle } from '@/features/theme';
 import { useStorefrontProfile } from '@/features/storefront/api';
 
 export interface CustomerHeaderProps {
@@ -187,6 +188,8 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                     <span className={styles.searchTriggerLabel} aria-hidden="true">Search</span>
                     <span className={styles.searchTriggerKey} aria-hidden="true">{shortcutLabel()}</span>
                   </button>
+
+                  <ThemeToggle className={styles.iconButton} />
 
                   {!isAdmin && (
                     <>
