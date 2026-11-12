@@ -2,7 +2,9 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { generateVAPIDKeys } from 'web-push';
 import express, { type Express } from 'express';
 import request from 'supertest';
 import { chromium } from '@playwright/test';
@@ -10,6 +12,13 @@ import { describe, expect, it } from 'vitest';
 import { deliveryFixtures } from './helpers/delivery-fixtures.js';
 
 const enabled = process.env.DELIVERY_PG_RUN === '1' && process.env.NOTIFICATION_BROWSER_RUN === '1';
+const realPush = process.env.NOTIFICATION_REAL_PUSH_RUN === '1';
+// This backend project has Node libraries only. The evaluated callback runs in a
+// real browser; describe the small standard browser API surface used by the test.
+type PushNavigator = { serviceWorker: { ready: Promise<{
+  getNotifications(options?: { tag: string }): Promise<{ close(): void }[]>;
+  pushManager: { getSubscription(): Promise<{ unsubscribe(): Promise<boolean> } | null> };
+}> } };
 
 /** Actual built React UI, Express API, PostgreSQL, Socket.IO and dispatcher; no intercepted APIs. */
 describe.skipIf(!enabled)('notification real-browser journey on a disposable backend', () => {
@@ -22,6 +31,11 @@ describe.skipIf(!enabled)('notification real-browser journey on a disposable bac
     await new Promise<void>(resolve => http.listen(0, '127.0.0.1', resolve));
     const origin = `http://127.0.0.1:${(http.address() as AddressInfo).port}`;
     process.env.FRONTEND_URL = origin;
+    if (realPush) {
+      const vapid = generateVAPIDKeys();
+      Object.assign(process.env, { CUSTOMER_PUSH_ENABLED: 'true', WEB_PUSH_VAPID_PUBLIC_KEY: vapid.publicKey,
+        WEB_PUSH_VAPID_PRIVATE_KEY: vapid.privateKey, WEB_PUSH_VAPID_SUBJECT: 'mailto:qa@example.invalid', COMMERCE_EMAIL_ORIGIN: origin });
+    }
     // Match the existing NodeNext/CommonJS dynamic-import boundary used by the socket integration suite.
     const app = (await import('../../app.js') as unknown as { default: Express }).default;
     const { prisma } = await import('../../lib/prisma.js');
@@ -37,7 +51,12 @@ describe.skipIf(!enabled)('notification real-browser journey on a disposable bac
     const gateway = attachDeliveryGateway(http, { corsOrigin: origin });
     DeliveryPublisher.attach(gateway);
     const fixtures = deliveryFixtures('notification-browser');
-    const browser = await chromium.launch({ channel: process.env.NOTIFICATION_QA_CHROME_CHANNEL === 'chrome' ? 'chrome' : undefined });
+    const profileRoot = path.resolve(tmpdir());
+    const profile = realPush ? mkdtempSync(path.join(profileRoot, 'electrohub-push-journey-')) : null;
+    const browser = realPush ? null : await chromium.launch({ channel: process.env.NOTIFICATION_QA_CHROME_CHANNEL === 'chrome' ? 'chrome' : undefined });
+    const context = profile ? await chromium.launchPersistentContext(profile, { channel: 'chrome', headless: false,
+      viewport: { width: 1440, height: 900 }, ignoreDefaultArgs: ['--disable-background-networking'] })
+      : await browser!.newContext({ viewport: { width: 1440, height: 900 } });
     try {
       const owner = await fixtures.user('CUSTOMER', 'owner');
       const admin = await fixtures.user('ADMIN', 'admin');
@@ -45,11 +64,22 @@ describe.skipIf(!enabled)('notification real-browser journey on a disposable bac
       await prisma.user.update({ where: { id: owner.id }, data: { passwordHash: await hashPassword(password), emailVerifiedAt: new Date() } });
       const order = await fixtures.order(owner.id, 'PREPARING', 'SUCCEEDED');
       const token = generateAccessToken({ userId: admin.id, role: 'ADMIN', sessionId: admin.sessionId });
-      const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+      const page = await context.newPage();
       const login = await page.request.post(`${origin}/api/auth/login`, { data: { email: owner.email, password } });
       expect(login.status()).toBe(200);
       const identity = (await login.json()).user;
       await page.addInitScript(user => sessionStorage.setItem('electrohub:cached-user', JSON.stringify(user)), identity);
+      if (realPush) {
+        await context.grantPermissions(['notifications'], { origin });
+        await page.goto(`${origin}/account`);
+        await page.getByRole('button', { name: 'Enable Delivery Notifications' }).click();
+        try { await page.getByText('Enabled on this browser', { exact: true }).waitFor({ timeout: 60000 }); }
+        catch (error) {
+          const diagnostic = await page.locator('section').filter({ has: page.getByRole('heading', { name: 'Delivery Notifications' }) }).innerText();
+          throw new Error(`Real push subscription prerequisite failed: ${diagnostic}`, { cause: error });
+        }
+        expect(await prisma.customerPushSubscription.count({ where: { userId: owner.id, revokedAt: null } })).toBe(1);
+      }
       const frames: string[] = [];
       page.on('websocket', socket => socket.on('framereceived', event => frames.push(String(event.payload))));
       await page.goto(`${origin}/orders/${order.reference}`);
@@ -73,9 +103,38 @@ describe.skipIf(!enabled)('notification real-browser journey on a disposable bac
         expect.objectContaining({ to: owner.email }),
       ]);
       expect((await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).status).toBe('OUT_FOR_DELIVERY');
+      const emailEvidence = await prisma.commerceEmailOutbox.findMany({ where: { orderId: order.id, type: 'ORDER_OUT_FOR_DELIVERY' },
+        select: { id: true, type: true, dispatchState: true, attemptCount: true, providerMessageId: true } });
+      writeFileSync(path.join(output, 'out-for-delivery-email-capture.json'), JSON.stringify({ recipientClassification: 'DISPOSABLE_SYNTHETIC_CUSTOMER',
+        transport: 'CAPTURE', inboxReceipt: 'NOT_VERIFIED', orderRoute: `/orders/${order.reference}`, events: emailEvidence }, null, 2));
+      if (realPush) {
+        await context.newPage(); await page.close();
+        const { CustomerPushDispatcher, realPushTransport } = await import('../customer-push.dispatcher.js');
+        await new CustomerPushDispatcher(prisma, realPushTransport()).runBatch();
+        const delivery = await prisma.customerPushDelivery.findFirstOrThrow({ where: { notification: { userId: owner.id } } });
+        expect(delivery.state).toBe('ACCEPTED');
+        // Keep all storefront tabs closed while the browser receives the push.
+        await new Promise(resolve => setTimeout(resolve, 8000));
+        const inspect = await context.newPage(); await inspect.goto(origin);
+        await expect.poll(() => inspect.evaluate(async id => {
+          const registration = await (navigator as unknown as PushNavigator).serviceWorker.ready;
+          return (await registration.getNotifications({ tag: 'electrohub-delivery-' + id })).length;
+        }, delivery.notificationId), { timeout: 15000 }).toBe(1);
+        writeFileSync(path.join(output, 'real-push-result.json'), JSON.stringify({ browser: 'headed persistent Chrome on Windows',
+          subscriptionRegisteredThroughCustomerUI: true, ownerAssociationVerified: true, authoritativeTransition: 'OUT_FOR_DELIVERY',
+          eventId: delivery.notificationId, deliveryId: delivery.id, dispatchState: delivery.state, providerCode: delivery.lastCode,
+          tabClosedDuringSend: true, actualReceiptApiAuthorized: true, browserNotificationRecord: true, osToastVisible: 'NOT_VERIFIED' }, null, 2));
+        await inspect.evaluate(async () => {
+          const registration = await (navigator as unknown as PushNavigator).serviceWorker.ready;
+          for (const item of await registration.getNotifications()) item.close();
+          await (await registration.pushManager.getSubscription())?.unsubscribe();
+        });
+        console.log('REAL_PUSH_CUSTOMER_JOURNEY: owned subscription persisted; authoritative transition; provider accepted; storefront tab closed; actual receipt API authorized; browser notification record present. OS toast visibility NOT VERIFIED.');
+      }
     } finally {
-      await browser.close(); DeliveryPublisher.attach(null); await gateway.close();
+      await context.close(); await browser?.close(); DeliveryPublisher.attach(null); await gateway.close();
       await fixtures.cleanup(); await prisma.$disconnect();
+      if (profile && path.dirname(path.resolve(profile)) === profileRoot && path.basename(profile).startsWith('electrohub-push-journey-')) rmSync(profile, { recursive: true, force: true });
     }
-  }, 90000);
+  }, realPush ? 180000 : 90000);
 });

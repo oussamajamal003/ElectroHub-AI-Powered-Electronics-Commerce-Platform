@@ -25,6 +25,8 @@ const exe = name => path.join(binaries, process.platform === 'win32' ? `${name}.
 const database = `electrohub_disposable_delivery_${crypto.randomBytes(4).toString('hex')}`;
 let started = false;
 let child;
+const testEnvFile = path.join(backend, '.env.test.local');
+let createdTestEnv = false;
 
 function command(executable, args, env = process.env) {
   const output = fs.openSync(path.join(work, 'provisioning.log'), 'a');
@@ -96,6 +98,12 @@ async function run() {
   if (process.env.DELIVERY_PG_FULL_SUITE === '1') {
     env.DELIVERY_PG_RUN = '0';
     env.COMMERCE_EMAIL_ENQUEUE_ENABLED = 'false';
+    env.PORT = '0'; // Server lifecycle tests must not bind the user's running API port.
+    env.STRIPE_SECRET_KEY = 'sk_test_placeholder'; // Nonfunctional CI fixture; provider operations remain mocked.
+    if (!fs.existsSync(testEnvFile)) {
+      fs.writeFileSync(testEnvFile, '# Disposable full-suite fixture; configuration is injected by delivery-pg.cjs.\n', { flag: 'wx' });
+      createdTestEnv = true;
+    }
   }
   const args = process.env.DELIVERY_PG_FULL_SUITE === '1'
     ? ['run', '--maxWorkers=1', '--testTimeout=30000', '--hookTimeout=60000', '--exclude', 'tests/adminSeedLogin.test.ts', '--exclude', 'tests/auth.integration.test.ts']
@@ -106,6 +114,7 @@ async function run() {
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child?.kill(signal));
 run().then(code => { process.exitCode = code; }).catch(error => { process.stderr.write(`${error.message}\n`); process.exitCode = 1; })
   .finally(() => {
+    if (createdTestEnv) fs.unlinkSync(testEnvFile);
     if (started) {
       try { command(exe('pg_ctl'), ['-D', data, '-m', 'immediate', '-w', 'stop']); }
       catch { process.stderr.write('Disposable PostgreSQL stop failed; inspect the run directory.\n'); process.exitCode = 1; }
