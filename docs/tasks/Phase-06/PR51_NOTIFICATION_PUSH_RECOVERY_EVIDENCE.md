@@ -5,6 +5,7 @@
 - Existing PR: https://github.com/oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerce-Platform/pull/51
 - Source: `feature/06.2-accessibility-qa-ci-cd`; target: `develop`.
 - Starting revision: `704166def1a77e1d81df236255967e4c203d1a16`.
+- Refetched and incorporated concurrent revision `0a4dfb45da04d3479113495347cd81502f6c8fb0` before delivery. Its existing Development CI, security and Linux migration runs were green; those results are not attributed to this recovery.
 - Work was isolated in a detached worktree. The running checkout and other agents' worktrees were not modified.
 - This supersedes the earlier customer **header bell** acceptance requirement. Backend notification history and read APIs remain intact. No Shipped notification or order lifecycle change is introduced.
 
@@ -42,19 +43,20 @@ Encrypted push payloads contain only version, binding ID and event ID. The worke
 
 Frontend and API must share the configured trusted origin (including the `/api` proxy) for background cookie authorization. Notification presentation depends on browser/OS settings, permission, network, service-worker support and background execution policy. Browser fully terminated behavior cannot be guaranteed. Push received after session expiry or while offline is intentionally suppressed; durable order state remains accessible after sign-in.
 
-## Verification ledger — in progress
+## Verification ledger
 
 - Frontend typecheck: passed after removing the unused bell-only variable.
-- Backend lint: passed. Backend typecheck rerun pending after generated client and corrected fixture field.
+- Backend build/typecheck and frontend/backend lint: passed. Frontend lint has four existing Fast Refresh warnings and zero errors.
 - Preference component tests: 3 passed.
-- Service worker VM tests: first run 2 passed; expanded click tests pending rerun. These are not OS evidence.
-- Disposable PostgreSQL first completed suite: 49 passed, 1 failed, 1 skipped. The failure exposed non-UTC retry timing and prompted the UTC fix. Rerun pending; do not interpret the first run as a complete pass.
+- Service worker VM and actual VAPID encryption/configuration tests: all five passed. These are not OS evidence. The same focused invocation had two existing bcrypt tests exceed their five-second deadline on the loaded Windows host; it is not reported as an entirely green invocation.
+- Disposable PostgreSQL first completed suite: 49 passed, 1 failed, 1 skipped. The failure exposed non-UTC retry timing and prompted the UTC fix. Corrected rerun: 50 passed, one optional browser test skipped. Expanded run with the actual React/API/Socket.IO/browser journey enabled: **52 passed, no skips**, including the additional consent/staleness/exhaustion assertions. Real database transactions and controlled email capture were used; the Web Push provider in these database tests is mocked.
 - Migration initially failed because it preceded its dependency; renamed to `20261117000000_customer_web_push`. Subsequent application succeeded. Seven pre-existing early-auth default drift statements were observed; no push schema drift was present in that run.
-- Real headed Chrome protocol attempt using generated VAPID keys and a disposable profile: subscription failed with `AbortError: Registration failed - permission denied`. No subscription, provider acceptance, tab-closed delivery, browser record or OS toast was verified. `PUSH_BROWSER_PROOF=1 node scripts/push-browser-proof.mjs` preserves a repeatable, one-recipient synthetic protocol attempt; its receipt server is a fixture, not account integration.
+- Real headed Chrome protocol proof: the first ephemeral-context attempt failed with `AbortError: Registration failed - permission denied`. Retrying with a generated persistent profile and background networking enabled **created a real subscription, received real provider acceptance, sent while the storefront tab was closed, and found the service worker's browser notification record**. The temporary profile and subscription were removed afterward. OS toast visibility remains NOT VERIFIED. `PUSH_BROWSER_PROOF=1 node scripts/push-browser-proof.mjs` preserves this repeatable, one-recipient proof; its receipt server is a fixture, not account integration.
 - Brevo inbox delivery: NOT VERIFIED; no live email was sent by this recovery task.
-- Browser visual QA, full tests/builds and final-SHA remote CI: pending.
+- Frontend production build passed, with existing bundle/Sass/dependency warnings. Chromium Playwright preference tests: **2 passed** (390 × 900 and 1440 × 900), using controlled permission/subscription fixtures. Mobile light and desktop dark screenshots were inspected; card contents fit both viewports. The supplied error screenshot informed bell removal; no Figma matching claim is made. Full-stack tracking screenshot: `.cache/notification-browser-evidence/real-tracking.png`; preference screenshots: `apps/frontend/test-results/notifications/` (regenerated by the checked-in tests).
+- Broad local test attempts and final-SHA CI remain under verification. The first broad backend invocation incorrectly inherited producer-enabled specialist-suite settings and was interrupted; the corrected invocation showed two payment guard fixture failures. Both payment cases passed separately with a correctly named disposable target and nonfunctional test key. No payment guard was weakened. The original full frontend run was interrupted during synchronization and is not claimed as passed.
 - Shared DEV/PROD mutation: none. Production migration, merge and deployment: none.
 
 ## Final revision, file manifest and residual risks
 
-Final commit, complete changed-file manifest, test totals, screenshots and exact CI revision will be appended after verification. This document does not yet declare review readiness.
+Final commit, complete changed-file manifest, test totals and exact CI revision will be appended after verification. This document does not yet declare review readiness. Migration rollout, real Brevo inbox delivery, OS toast visibility and physical Safari/iOS behavior remain separate environment checks.

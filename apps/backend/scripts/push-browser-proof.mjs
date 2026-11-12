@@ -1,7 +1,9 @@
 // Opt-in protocol proof: disposable Chrome profile, synthetic receipt server, own subscription only.
 // This is not account/API integration evidence and does not prove OS toast visibility.
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { chromium, firefox } from 'playwright';
 import { generateVAPIDKeys, sendNotification } from 'web-push';
@@ -19,12 +21,14 @@ const server = createServer((req, res) => {
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
-let browser;
+const profileRoot = path.resolve(tmpdir());
+const profile = await mkdtemp(path.join(profileRoot, 'electrohub-push-proof-'));
+let context;
 try {
-  browser = process.env.PUSH_BROWSER_ENGINE === 'firefox'
-    ? await firefox.launch({ headless: false })
-    : await chromium.launch({ channel: 'chrome', headless: false });
-  const context = await browser.newContext(); await context.grantPermissions(['notifications'], { origin });
+  context = process.env.PUSH_BROWSER_ENGINE === 'firefox'
+    ? await firefox.launchPersistentContext(profile, { headless: false })
+    : await chromium.launchPersistentContext(profile, { channel: 'chrome', headless: false, ignoreDefaultArgs: ['--disable-background-networking'] });
+  await context.grantPermissions(['notifications'], { origin });
   const page = await context.newPage(); await page.goto(origin);
   const vapid = generateVAPIDKeys();
   const subscription = await Promise.race([
@@ -54,6 +58,8 @@ try {
   if (!report.subscriptionCreated) report.prerequisiteDiagnostic = String(error?.message ?? 'unknown').replace(/https?:\/\/\S+/g, '[URL]').slice(0, 500);
   process.exitCode = 1;
 } finally {
-  await browser?.close(); await new Promise(resolve => server.close(resolve));
+  await context?.close(); await new Promise(resolve => server.close(resolve));
+  // Only this process's newly created temporary profile may be removed.
+  if (path.dirname(path.resolve(profile)) === profileRoot && path.basename(profile).startsWith('electrohub-push-proof-')) await rm(profile, { recursive: true, force: true });
   console.log(JSON.stringify(report, null, 2));
 }
