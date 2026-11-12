@@ -6,8 +6,8 @@ import { product, storeProfile, world } from './task06-2-world.helper';
 /**
  * Task 06.2 WP A/B/C visual QA: About, Contact and Product Details at 320/390/768/1024/1440/1920 in light and dark OS schemes.
  * Every API call is intercepted (guest world), so nothing touches a shared database or sends email.
- * The storefront is light-only (compile-time SCSS colours, no prefers-color-scheme rules); the dark runs prove the pages stay
- * legible and unchanged under a dark OS preference rather than claiming a dark theme exists.
+ * With no saved choice the storefront follows the OS colour scheme (features/theme/themePreference.ts), so the dark runs audit
+ * the dark theme at every width.
  */
 const require = createRequire(import.meta.url);
 const WIDTHS = [320, 390, 768, 1024, 1440, 1920] as const;
@@ -90,21 +90,26 @@ for (const scheme of SCHEMES) {
   }
 }
 
-test('dark OS preference leaves the light-only storefront unchanged (documented contradiction)', async ({ page }) => {
+test('the OS colour scheme selects the theme unless the visitor saved an explicit choice', async ({ page }) => {
   await world(page);
   const colours = async (scheme: 'light' | 'dark') => {
     await page.emulateMedia({ colorScheme: scheme });
     await page.goto('/contact');
     await expect(page.getByRole('link', { name: storeProfile.supportEmail })).toBeVisible();
-    return page.evaluate(() => ({ body: getComputedStyle(document.body).backgroundColor, text: getComputedStyle(document.body).color,
-      scheme: matchMedia('(prefers-color-scheme: dark)').matches }));
+    return page.evaluate(() => ({ theme: document.documentElement.getAttribute('data-theme'),
+      body: getComputedStyle(document.body).backgroundColor, text: getComputedStyle(document.body).color }));
   };
   const light = await colours('light');
   const dark = await colours('dark');
-  expect(dark.scheme).toBe(true);
-  expect(light.scheme).toBe(false);
-  expect(dark.body).toBe(light.body);
-  expect(dark.text).toBe(light.text);
+  expect(light.theme).toBe('light');
+  expect(dark.theme).toBe('dark');
+  expect(dark.body).not.toBe(light.body);
+  expect(dark.text).not.toBe(light.text);
+  // An explicit saved choice wins over the OS preference.
+  await page.evaluate(() => localStorage.setItem('electrohub:theme', 'light'));
+  const saved = await colours('dark');
+  expect(saved).toEqual(light);
+  await page.evaluate(() => localStorage.removeItem('electrohub:theme'));
 });
 
 test('Contact shows a polished empty state when no contact methods are configured', async ({ page }, info) => {
