@@ -287,9 +287,9 @@ jobs:
           BREVO_API_KEY: ''
           STRIPE_SECRET_KEY: ''
         run: |
-          # Preserve simulation's disposable-name guard using only this job's throwaway DB.
-          docker exec electrohub-ci-pg psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE electrohub_disposable_notifications TEMPLATE electrohub_ci'
-          export DATABASE_URL="${DATABASE_URL/\/electrohub_ci/\/electrohub_disposable_notifications}"
+          # Migration CLI alone uses sslmode=disable; application guards require TLS.
+          # Keep the same job-owned loopback DB and its configured, verified CA.
+          export DATABASE_URL="${DATABASE_URL/sslmode=disable/sslmode=require}"
           export DIRECT_URL="$DATABASE_URL"
           npx vitest run --config vitest.delivery-pg.config.mts
 
