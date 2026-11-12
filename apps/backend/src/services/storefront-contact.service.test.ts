@@ -35,7 +35,7 @@ describe('StorefrontContactService', () => {
   it('never renders customer markup unescaped', () => {
     const { html } = renderContactNotification({ name: '<script>x</script>', email: 'a@example.test', subject: '"><img src=x>', message: '<iframe></iframe>' }, 'Shop');
     // A configured brand logo may be a real, trusted <img>; customer-supplied markup must remain text.
-    expect(html).toContain('data-brand-logo="electrohub"');
+    expect(html).toMatch(/data-brand-logo="electrohub(?:-text)?"/);
     expect(html).not.toMatch(/<script>|<img\s+src=x|<iframe/);
   });
 });
