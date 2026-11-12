@@ -414,8 +414,8 @@ jobs:
           export PAYMENT_PG_DISPOSABLE_URL="${DATABASE_URL%%\?*}"
           export PAYMENT_PG_DISPOSABLE_CA_FILE="$DB_SSL_CA_CERT_PATH"
           export PAYMENT_PG_DISPOSABLE_APPROVED=true
-          export PAYMENT_PG_DISPOSABLE_AUTHORIZATION='DISPOSABLE:electrohub_ci:scenarios-A-S:fixtures+reset-run-database'
-          node apps/backend/scripts/payment-pg-disposable.cjs --run
+          export PAYMENT_PG_DISPOSABLE_AUTHORIZATION='DISPOSABLE:electrohub_ci:scenarios-A-Y:fixtures+reset-run-database'
+          node apps/backend/scripts/payment-pg-disposable.cjs --run --scope=scenarios-A-Y
       - name: Payment integration report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4

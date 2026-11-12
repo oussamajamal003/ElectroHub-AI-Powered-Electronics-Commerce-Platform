@@ -153,7 +153,9 @@ describe('Product details loading and review auth state', () => {
 
   it('limits additions to remaining stock and resets a now-invalid selection', async () => {
     const view = renderPage();
-    expect(screen.getByText('13 more items available to add.')).toBeInTheDocument();
+    // Nothing in this Cart yet: the exact server quantity is the whole story; no redundant cart-relative line.
+    expect(screen.getByTestId('product-available-quantity')).toHaveTextContent('13 available');
+    expect(screen.queryByText(/more items? available to add/)).not.toBeInTheDocument();
     const increase = screen.getByRole('button', { name: 'Increase quantity for Test Tablet' });
     for (let index = 0; index < 6; index++) await userEvent.click(increase);
     expect(screen.getByText('7', { selector: '[aria-live="polite"]' })).toBeInTheDocument();
@@ -162,6 +164,8 @@ describe('Product details loading and review auth state', () => {
     view.rerender(<QueryClientProvider client={testQueryClient}><MemoryRouter initialEntries={['/products/test-tablet']}><Routes><Route path="/products/:slug" element={<ProductDetailPage />} /></Routes></MemoryRouter></QueryClientProvider>);
     expect(screen.getByText('1', { selector: '[aria-live="polite"]' })).toBeInTheDocument();
     expect(screen.getByText('5 more items available to add.')).toBeInTheDocument();
+    // Adding to a Cart reserves nothing: the sellable quantity shown to every shopper is unchanged.
+    expect(screen.getByTestId('product-available-quantity')).toHaveTextContent('13 available');
   });
 
   it('disables Add when the current Cart already contains all available stock', () => {
@@ -192,6 +196,9 @@ describe('Product details loading and review auth state', () => {
     expect(screen.getByRole('button', { name: 'Add to Cart' }).hasAttribute('disabled')).toBe(availableQuantity === 0);
     expect(screen.getByRole('button', { name: 'Increase quantity for Test Tablet' }).hasAttribute('disabled')).toBe(availableQuantity === 0);
     if (stockStatus === 'LOW_STOCK') expect(screen.getByText('Only 2 left')).toBeInTheDocument();
+    const quantity = screen.queryByTestId('product-available-quantity');
+    if (stockStatus === 'IN_STOCK') expect(quantity).toHaveTextContent('8 available');
+    if (stockStatus === 'OUT_OF_STOCK') expect(quantity).not.toBeInTheDocument();
   });
   it.each([undefined, null])('treats missing inventory status as unavailable rather than Out of Stock (%s)', stockStatus => {
     vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, stockStatus, availableQuantity: 0, purchasable: false, availability: 'UNAVAILABLE' } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);

@@ -12,6 +12,7 @@
 .availability, .unavailable { display: flex; flex-wrap: wrap; align-items: center; gap: $spacing-3; padding-top: $spacing-5; border-top: 1px solid $color-border; p { margin: 0; } }
 .availability { color: $color-success-foreground; font-weight: $font-weight-semibold; }
 .lowStockFeedback { color: $color-warning-foreground; }
+.stockQuantity { color: $color-text-secondary; font-weight: $font-weight-regular; }
 .unavailable { color: $color-error; font-weight: $font-weight-semibold; }
 .intro { max-width: 40rem; margin: 0 0 $spacing-6; color: $color-text-secondary; font-size: $font-size-base; line-height: $line-height-relaxed; }
 .cartActions { display: grid; justify-items: start; gap: $spacing-4; margin-top: $spacing-5; > p[role='status'] { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; } }

@@ -22,7 +22,9 @@ import type { PaymentOutcome } from './types';
 import { endPaymentObservation, isPreviousPaymentResult, observedPaymentIds, observePaymentSnapshot, usePaymentObservations } from './paymentObservation';
 import styles from './Checkout.module.scss';
 export interface SavedPurchase { attemptId: string; scope: string; state: string; classification?: string; total: string; currency: string;
-  pending: boolean; unread: boolean; orderReference: string | null; submittedAt?: string | null; updatedAt?: string | null; retryAllowed?: boolean; confirmationStarted?: boolean; cancelable?: boolean; items: { name: string; quantity: number; imageUrl?: string | null }[] }
+  pending: boolean; unread: boolean; orderReference: string | null; submittedAt?: string | null; updatedAt?: string | null; retryAllowed?: boolean; confirmationStarted?: boolean; cancelable?: boolean;
+  /** Server-side Remove eligibility (the rule the dismiss endpoint enforces, minus its transient lease check). Absent means not offered. */
+  dismissible?: boolean; items: { name: string; quantity: number; imageUrl?: string | null }[] }
 /** Reject older backend versions; verified capture also survives delayed pre-capture reads. Refunds remain observable. */
 export function retainPaidPurchases(previous: SavedPurchase[], incoming: SavedPurchase[]) {
   const existing = new Map(previous.map(item => [item.attemptId, item]));
@@ -69,6 +71,11 @@ export function synchronizePaymentOutcome(owner: string, outcome: PaymentOutcome
     client.setQueryData(queryKeys.orders.confirmation(owner, confirmation.orderReference), { data: confirmation });
     endPaymentObservation(owner, outcome.attemptId);
     void client.invalidateQueries({ queryKey: ['orders'] });
+  }
+  // Sellable stock changes on the server when an order commits (authorization) and when a failed order is compensated. Refetch the active
+  // product views so availability reflects the server; stock is never adjusted locally.
+  if (hasVerifiedPayment(outcome) || ['COMPENSATED', 'REFUNDED'].includes(outcome.state)) {
+    void client.invalidateQueries({ queryKey: queryKeys.products.all });
   }
   void client.invalidateQueries({ queryKey: key });
 }
@@ -269,7 +276,9 @@ function PurchaseCard({ item, exit = false, checking = false, onDismissed, actio
             : item.state === 'AWAITING_INPUT' && !item.confirmationStarted ? 'Checking the status of this purchase. Please don’t pay again.'
             : 'We’re confirming this payment with our payment provider.';
   // Every failed-payment card carries the trash icon (Task 03.6 acceptance); eligibility is enforced again by the server on Remove.
-  const dismissible = Boolean(onDismissed) && !exit && tone === 'failure';
+  // Remove only when the server says the failed card is dismissible (the dismiss endpoint's own rule; never inferred from the tone alone),
+  // so a card never advertises an action the server permanently refuses. A transient refusal (a recovery lease) is explained by the dialog.
+  const dismissible = Boolean(onDismissed) && !exit && tone === 'failure' && item.dismissible === true;
   return <article className={styles.purchaseCard} data-tone={tone} data-purchase={item.attemptId} data-outcome={exit ? kind ?? undefined : undefined}
     data-dismissible={dismissible ? 'true' : undefined}
     aria-label={`${tone === 'failure' ? 'Failed payment' : tone === 'success' ? 'Confirmed payment' : 'Pending payment'} for ${names}`}>
