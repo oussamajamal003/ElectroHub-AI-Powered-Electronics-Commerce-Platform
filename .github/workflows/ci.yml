@@ -204,6 +204,9 @@ jobs:
           RELEASE_E2E_FRONTEND_PORT: '3212'
           QUALITY_PRODUCTION: '1'
         run: npm run test:quality -- ${{ matrix.projects }} ${{ matrix.quality_extra }}
+      - name: Customer notification browser QA
+        working-directory: apps/frontend
+        run: npx playwright test -c playwright.notifications.config.ts --project=${{ matrix.engine }}
       - name: Upload release report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -214,6 +217,7 @@ jobs:
             apps/frontend/test-results/release
             apps/frontend/playwright-report/quality
             apps/frontend/test-results/quality
+            apps/frontend/test-results/notifications
           retention-days: 14
 
   backend-test:
@@ -267,6 +271,22 @@ jobs:
         run: npm exec --workspace=@electrohub/backend -- prisma migrate status
       - name: Test (unit tests and integration tests, disposable database)
         run: npm run test:ci --workspace=@electrohub/backend
+      - name: Customer notification transaction and Socket.IO integration
+        working-directory: apps/backend
+        env:
+          DELIVERY_PG_RUN: '1'
+          NODE_EXTRA_CA_CERTS: ${{ env.DB_SSL_CA_CERT_PATH }}
+          COMMERCE_EMAIL_ENQUEUE_ENABLED: 'true'
+          COMMERCE_EMAIL_DISPATCH_ENABLED: 'false'
+          COMMERCE_EMAIL_SEND_MODE: 'disabled'
+          COMMERCE_EMAIL_ORIGIN: 'http://localhost:5173'
+          DELIVERY_SIMULATION_ENABLED: 'true'
+          DELIVERY_ORIGIN_LAT: '33.9'
+          DELIVERY_ORIGIN_LNG: '35.5'
+          DELIVERY_ORIGIN_LABEL: 'ElectroHub demo hub'
+          BREVO_API_KEY: ''
+          STRIPE_SECRET_KEY: ''
+        run: npx vitest run --config vitest.delivery-pg.config.mts
 
   backend-build:
     name: Backend / Build

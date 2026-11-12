@@ -1,7 +1,8 @@
 /**
- * Shared HTML shell for commerce emails. Table-based, inline critical styles, no images, no scripts, no forms.
+ * Shared HTML shell for commerce emails. Table-based, inline critical styles, the shared brand logo, no scripts, no forms.
  * The only `<style>` rules are progressive enhancements for narrow clients; the content stays readable without them.
  */
+import { renderEmailHeader } from '../brand.js';
 import { escapeHtml } from './escape.js';
 
 export type StatusTone = 'success' | 'progress' | 'neutral';
@@ -13,7 +14,9 @@ export interface LayoutOptions {
   statusLabel: string;
   statusTone: StatusTone;
   heading: string;
-  reference: string;
+  reference?: string;
+  origin?: string;
+  accountWelcome?: boolean;
   eventDateLabel: string;
   /** Trusted HTML built by the template builders; every dynamic value inside it must already be escaped. */
   bodyHtml: string;
@@ -49,9 +52,8 @@ export function renderLayout(options: LayoutOptions): string {
   const url = escapeHtml(options.cta.url);
   const preheader = escapeHtml(options.preheader);
   const heading = escapeHtml(options.heading);
-  const storeName = escapeHtml(options.storeName || LEGACY_STORE_NAME);
-  const footerText = `You received this email because you placed an order with ${options.storeName || LEGACY_STORE_NAME}. `
-    + 'You can find the latest information in Order Details.'
+  const footerText = (options.accountWelcome ? 'You received this email because you created an ElectroHub account.'
+    : `You received this email because you placed an order with ${options.storeName || LEGACY_STORE_NAME}. You can find the latest information in Order Details.`)
     + (options.supportEmail || options.supportPhone ? ` For help, contact ${[options.supportEmail, options.supportPhone].filter(Boolean).join(' · ')}.` : '');
   const spacer = '&#847;&#8203;'.repeat(40);
   return [
@@ -74,16 +76,16 @@ export function renderLayout(options: LayoutOptions): string {
       + 'style="width:100%;max-width:600px;background-color:#FFFFFF;border:1px solid #E2E8F0;border-top:3px solid #2563EB;">',
     '<tr>',
     '<td class="eh-inner" style="padding:32px;font-family:' + FONT_STACK + ';color:#0F172A;">',
-    `<p style="margin:0 0 24px 0;font-family:${FONT_STACK};font-size:20px;line-height:28px;font-weight:700;color:#0F172A;">${storeName}</p>`,
+    renderEmailHeader({ origin: options.origin, storeName: options.storeName }),
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
       + `style="background-color:${tone.background};">`,
     '<tr>',
     '<td style="padding:12px 16px;font-family:' + FONT_STACK + ';">',
     `<p style="margin:0;font-size:14px;line-height:20px;font-weight:600;color:${tone.color};">`
       + `<span aria-hidden="true">${tone.icon}</span> ${escapeHtml(options.statusLabel)} · ${escapeHtml(options.eventDateLabel)}</p>`,
-    '<p style="margin:8px 0 0 0;font-size:14px;line-height:20px;color:#334155;">Order reference</p>',
+    options.reference ? '<p style="margin:8px 0 0 0;font-size:14px;line-height:20px;color:#334155;">Order reference</p>' : '',
     `<p style="margin:2px 0 0 0;font-family:${MONO_STACK};font-size:14px;line-height:20px;color:#0F172A;word-break:break-all;">`
-      + `${escapeHtml(options.reference)}</p>`,
+      + `${escapeHtml(options.reference ?? '')}</p>`,
     '</td>',
     '</tr>',
     '</table>',

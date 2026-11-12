@@ -170,4 +170,32 @@ describe.skipIf(!enabled).sequential('Task 04.7 real-time delivery on real Postg
     expect([last.type, last.source, last.actorUserId]).toEqual(['SIMULATION_STOPPED', 'SYSTEM', null]);
     expect(await simulation.recoverOrphans()).toBe(0);
   });
+  it('out-for-delivery hint reaches only its customer; unchanged retries emit nothing and history survives reconnect', async () => {
+    const owned = await fixtures.order(owner.id, 'PREPARING', 'SUCCEEDED');
+    const ownerSocket = (await socketFor(owner, owned.reference, [])).socket;
+    const otherSocket = (await socketFor(other, otherOrder.reference, [])).socket;
+    const received: unknown[] = []; const leaked: unknown[] = [];
+    ownerSocket.on('notification:created', event => received.push(event));
+    otherSocket.on('notification:created', event => leaked.push(event));
+    expect((await request(http).post(`/api/admin/orders/${owned.reference}/delivery`).set('Authorization', bearer(admin, 'ADMIN')).send({})).status).toBe(201);
+    const endpoint = `/api/admin/orders/${owned.reference}/delivery`;
+    expect((await request(http).patch(endpoint).set('Authorization', bearer(admin, 'ADMIN')).send({ expectedRevision: 1, status: 'SHIPPED' })).status).toBe(400);
+    await wait(100); expect(received).toEqual([]); expect(leaked).toEqual([]);
+    expect(await prisma.customerNotification.count({ where: { orderId: owned.id } })).toBe(0);
+    expect((await request(http).patch(endpoint).set('Authorization', bearer(admin, 'ADMIN')).send({ expectedRevision: 1, status: 'OUT_FOR_DELIVERY' })).status).toBe(200);
+    await wait(300);
+    expect(received).toEqual([{ v: 1, id: expect.any(String), type: 'ORDER_OUT_FOR_DELIVERY', orderReference: owned.reference, occurredAt: expect.any(String) }]);
+    expect(leaked).toEqual([]);
+    expect((await request(http).patch(endpoint).set('Authorization', bearer(admin, 'ADMIN')).send({ expectedRevision: 2, status: 'OUT_FOR_DELIVERY' })).status).toBe(200);
+    await wait(300); expect(received).toHaveLength(1);
+    ownerSocket.disconnect();
+    const history = await request(http).get('/api/notifications').set('Authorization', bearer(owner, 'CUSTOMER'));
+    expect(history.body.data.items).toEqual(expect.arrayContaining([expect.objectContaining({ orderReference: owned.reference, readAt: null })]));
+    const id = history.body.data.items.find((item: { orderReference: string }) => item.orderReference === owned.reference).id;
+    expect((await request(http).patch(`/api/notifications/${id}/read`).set('Authorization', bearer(other, 'CUSTOMER'))).status).toBe(404);
+    expect((await request(http).patch(`/api/notifications/${id}/read`).set('Authorization', bearer(owner, 'CUSTOMER'))).status).toBe(204);
+    const refreshed = await request(http).get('/api/notifications').set('Authorization', bearer(owner, 'CUSTOMER'));
+    expect(refreshed.body.data.items.find((item: { id: string }) => item.id === id).readAt).not.toBeNull();
+  });
+
 });
