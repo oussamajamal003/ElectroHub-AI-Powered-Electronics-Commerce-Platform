@@ -656,10 +656,10 @@
 }
 
 // ─────────────────────────────────────────────────────────────
-// SMALL MOBILE (≤ 375px)
+// SMALL MOBILE (≤ 420px): keep the full shopper header inside narrow phone viewports such as 390px.
 // ─────────────────────────────────────────────────────────────
 
-@media (max-width: 375px) {
+@media (max-width: 420px) {
   .logoText {
     font-size: 18px;
   }
