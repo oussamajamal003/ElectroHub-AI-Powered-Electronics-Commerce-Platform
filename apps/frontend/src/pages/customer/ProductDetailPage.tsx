@@ -22,6 +22,7 @@ import { queryKeys } from '@/lib/query';
 import type { ProductDetail, ProductResponse } from '@/features/products/types';
 import styles from './ProductDetailPage.module.scss';
 import { ProductPurchaseActions } from './ProductPurchaseActions';
+import { ProductDescriptionPanel, ReviewSummaryCard } from './ProductDetailSections';
 import { saveBuyNow } from '@/features/checkout/buyNow';
 
 const RECOMMENDATION_LIMIT = 4;
@@ -96,7 +97,7 @@ export function ProductDetailPage() {
     const summary = reviewQuery.data?.summary;
     if (!productId || !summary) return;
     queryClient.setQueryData<ProductResponse<ProductDetail>>(queryKeys.products.detail(slug), current =>
-      current?.data.id === productId ? { ...current, data: { ...current.data, ...summary } } : current);
+      current?.data.id === productId ? { ...current, data: { ...current.data, averageRating: summary.averageRating, reviewCount: summary.reviewCount } } : current);
   }, [product?.id, reviewQuery.data?.summary, queryClient, slug]);
 
   if (productQuery.isPending || productQuery.isFetching) return <div className={styles.container} role="status" aria-label="Loading product details"><div aria-hidden="true"><Skeleton width="38%" height={20} /><div className={styles.productTop}><div><div className={styles.detailSkeletonGallery}><Skeleton width="100%" height="100%" /></div><div className={styles.detailSkeletonThumbnails}><Skeleton width={74} height={74} /><Skeleton width={74} height={74} /></div></div><div className={styles.detailSkeletonSummary}><Skeleton width="28%" height={18} /><Skeleton width="90%" height={42} /><Skeleton width="55%" height={20} /><Skeleton width="42%" height={36} /><Skeleton width="82%" height={80} /><Skeleton width="65%" height={20} /></div></div><div className={styles.detailSkeletonTabs}><Skeleton width="100%" height={50} /></div></div></div>;
@@ -166,14 +167,15 @@ export function ProductDetailPage() {
     </div>
 
     <ProductDetailsTabs className={styles.tabs} reviewCount={product.reviewCount} defaultValue={location.hash === '#reviews' ? 'reviews' : 'description'}
-      description={<section><h2>Product Description</h2><p>{product.description || 'No description is available.'}</p></section>}
+      description={<ProductDescriptionPanel product={product} />}
       specifications={<section><h2>Specifications</h2><ProductSpecifications groups={product.specifications} /></section>}
       reviews={<><div className={styles.reviewsHeading}><h2>Customer Reviews</h2><p>{product.averageRating === null ? 'Not yet rated' : `★ ${product.averageRating} out of 5`} · {product.reviewCount} {product.reviewCount === 1 ? 'review' : 'reviews'}</p></div>
+        <ReviewSummaryCard summary={reviewQuery.data?.summary ?? { averageRating: product.averageRating, reviewCount: product.reviewCount }} />
         <ProductReviews reviews={reviewQuery.data?.data ?? []} loading={reviewQuery.isPending}
           error={reviewQuery.isError && !reviewQuery.data} onRetry={() => void reviewQuery.refetch()} ownReviewId={ownQuery.data?.data?.id} />
         {reviewQuery.data && reviewQuery.data.meta.totalPages > 1 && <nav className={styles.reviewPages} aria-label="Review pages"><Button type="button" disabled={reviewPage <= 1} onClick={() => setReviewPage(page => page - 1)}>Previous</Button><span>Page {reviewPage} of {reviewQuery.data.meta.totalPages}</span><Button type="button" disabled={reviewPage >= reviewQuery.data.meta.totalPages} onClick={() => setReviewPage(page => page + 1)}>Next</Button></nav>}
         {isInitializing ? <div className={styles.reviewAuthLoading} role="status" aria-label="Checking review access"><Skeleton width="100%" height={96} /></div> : isAuthenticated ? <section className={styles.reviewForm}><h3>{ownQuery.data?.data ? 'Edit your review' : 'Write a review'}</h3>
-          {ownQuery.isPending ? <div role="status" aria-label="Loading your review"><Skeleton width="100%" height={120} /></div> : <form onSubmit={event => void submitReview(event)}><Select label="Rating" value={String(rating)} onValueChange={value => setRating(Number(value))} options={[5, 4, 3, 2, 1].map(value => ({ value: String(value), label: `${value} ${value === 1 ? 'star' : 'stars'}` }))} square fullWidth /><label htmlFor="review-body">Your review</label><textarea id="review-body" value={body} onChange={event => setBody(event.target.value)} minLength={1} maxLength={2000} required rows={5} /><small>{body.length}/2000 characters</small><div className={styles.reviewActions}><Button type="submit" isLoading={mutation.isPending}>{ownQuery.data?.data ? 'Update review' : 'Post review'}</Button>{ownQuery.data?.data && !confirmDelete && <Button type="button" variant="destructive" disabled={mutation.isPending} onClick={() => setConfirmDelete(true)}>Delete review</Button>}</div></form>}
+          {ownQuery.isPending ? <div role="status" aria-label="Loading your review"><Skeleton width="100%" height={120} /></div> : <form onSubmit={event => void submitReview(event)}><Select label="Rating" value={String(rating)} onValueChange={value => setRating(Number(value))} options={[5, 4, 3, 2, 1].map(value => ({ value: String(value), label: `${value} ${value === 1 ? 'star' : 'stars'}` }))} square fullWidth /><label htmlFor="review-body">Your review</label><textarea id="review-body" placeholder="Share your experience with this product..." value={body} onChange={event => setBody(event.target.value)} minLength={1} maxLength={2000} required rows={5} /><small>{body.length}/2000 characters</small><div className={styles.reviewActions}><Button type="submit" isLoading={mutation.isPending}>{ownQuery.data?.data ? 'Update review' : 'Post review'}</Button>{ownQuery.data?.data && !confirmDelete && <Button type="button" variant="destructive" disabled={mutation.isPending} onClick={() => setConfirmDelete(true)}>Delete review</Button>}</div></form>}
           {confirmDelete && <div className={styles.reviewConfirm} role="group" aria-label="Confirm review deletion"><p>Delete your review?</p><div className={styles.reviewActions}><Button type="button" variant="destructive" disabled={mutation.isPending} isLoading={mutation.isPending} onClick={() => void removeReview()}>Confirm delete</Button><Button type="button" variant="outline" disabled={mutation.isPending} onClick={() => setConfirmDelete(false)}>Cancel</Button></div></div>}
           {feedback && <p className={styles.reviewFeedback} role="status">{feedback}</p>}
         </section> : <section className={styles.reviewGuest}><h3>Share your experience</h3><p>Sign in to write a review of this product.</p><Button type="button" onClick={() => window.dispatchEvent(new Event('electrohub:open-auth'))}>Sign In</Button></section>}

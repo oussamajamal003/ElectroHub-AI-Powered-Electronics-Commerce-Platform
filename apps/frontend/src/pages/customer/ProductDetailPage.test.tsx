@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -200,5 +200,78 @@ describe('Product details loading and review auth state', () => {
     expect(screen.queryByText('Out of Stock', { exact: true })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add to Cart' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Increase quantity for Test Tablet' })).toBeDisabled();
+  });
+
+  describe('Task 06.2 premium Description and Customer Reviews', () => {
+    const withProduct = (overrides: Record<string, unknown>) => vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, ...overrides } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
+    const withSummary = (summary: unknown) => vi.mocked(useReviews).mockReturnValue({ data: { data: [], summary, meta: { page: 1, pageSize: 10, total: 0, totalPages: 0 } }, isPending: false, isError: false } as unknown as ReturnType<typeof useReviews>);
+
+    it('renders stored paragraphs as text, never as markup, and lists only real product facts', () => {
+      withProduct({ description: 'First paragraph.\n\n<img src=x onerror="alert(1)">Second paragraph.', brand: { id: 'b-1', name: 'Acme', slug: 'acme' }, modelNumber: 'TT-10',
+        specifications: [{ group: 'Display', items: [{ id: 's-1', group: 'Display', name: 'Size', value: '11 in', sortOrder: 0 }] }] });
+      const { container } = renderPage();
+      const panel = screen.getByRole('region', { name: 'Product Description' });
+      expect(within(panel).getByText('First paragraph.')).toBeInTheDocument();
+      expect(within(panel).getByText('<img src=x onerror="alert(1)">Second paragraph.')).toBeInTheDocument();
+      expect(container.querySelector('img[src="x"]')).toBeNull();
+      const glance = screen.getByRole('complementary', { name: 'At a glance' });
+      expect([...glance.querySelectorAll('dt')].map(node => node.textContent)).toEqual(['Category', 'Brand', 'SKU', 'Model', 'Size']);
+      expect(within(glance).getByText('TT-10')).toBeInTheDocument();
+      expect(within(glance).getByText('11 in')).toBeInTheDocument();
+    });
+
+    it('omits brand, model and specification highlights that the product does not have', () => {
+      withProduct({ description: '   ' });
+      renderPage();
+      const glance = screen.getByRole('complementary', { name: 'At a glance' });
+      expect([...glance.querySelectorAll('dt')].map(node => node.textContent)).toEqual(['Category', 'SKU']);
+      expect(screen.queryByTestId('description-highlights')).not.toBeInTheDocument();
+      expect(screen.getByText('No description is available.')).toBeInTheDocument();
+    });
+
+    it('draws the rating distribution from the server per-star counts with a text alternative', async () => {
+      withProduct({ averageRating: '4.2', reviewCount: 5 });
+      withSummary({ averageRating: '4.2', reviewCount: 5, distribution: [{ rating: 5, count: 3 }, { rating: 4, count: 1 }, { rating: 3, count: 0 }, { rating: 2, count: 0 }, { rating: 1, count: 1 }] });
+      renderPage();
+      await userEvent.click(screen.getByRole('tab', { name: 'Reviews (5)' }));
+      const summary = screen.getByTestId('review-summary');
+      expect(within(summary).getByText('4.2')).toBeInTheDocument();
+      expect(within(summary).getByText('Based on 5 reviews')).toBeInTheDocument();
+      const rows = within(screen.getByRole('list', { name: 'Rating distribution' })).getAllByRole('listitem');
+      expect(rows.map(row => row.querySelector('span')?.textContent)).toEqual([
+        '5 stars: 3 reviews, 60%', '4 stars: 1 review, 20%', '3 stars: 0 reviews, 0%', '2 stars: 0 reviews, 0%', '1 star: 1 review, 20%']);
+      expect(screen.getByText('★ 4.2 out of 5 · 5 reviews')).toBeInTheDocument();
+    });
+
+    it.each([
+      ['no distribution from the server', { averageRating: '4.0', reviewCount: 2 }],
+      ['counts that disagree with the total', { averageRating: '4.0', reviewCount: 2, distribution: [5, 4, 3, 2, 1].map(rating => ({ rating, count: rating === 4 ? 1 : 0 })) }],
+    ])('never estimates bars when there is %s', async (_case, summary) => {
+      withProduct({ averageRating: '4.0', reviewCount: 2 });
+      withSummary(summary);
+      renderPage();
+      await userEvent.click(screen.getByRole('tab', { name: 'Reviews (2)' }));
+      expect(within(screen.getByTestId('review-summary')).getByText('4.0')).toBeInTheDocument();
+      expect(screen.queryByRole('list', { name: 'Rating distribution' })).not.toBeInTheDocument();
+    });
+
+    it('shows an honest empty summary for an unrated product', async () => {
+      withSummary({ averageRating: null, reviewCount: 0, distribution: [5, 4, 3, 2, 1].map(rating => ({ rating, count: 0 })) });
+      renderPage();
+      await userEvent.click(screen.getByRole('tab', { name: 'Reviews (0)' }));
+      expect(within(screen.getByTestId('review-summary')).getByText('No ratings yet')).toBeInTheDocument();
+      expect(screen.queryByRole('list', { name: 'Rating distribution' })).not.toBeInTheDocument();
+    });
+
+    it('prompts signed-in customers with the review placeholder without changing the review rules', async () => {
+      vi.mocked(useAuth).mockReturnValue({ isInitializing: false, isAuthenticated: true, isSessionVerified: true } as ReturnType<typeof useAuth>);
+      vi.mocked(useMyReview).mockReturnValue({ isPending: false, data: { data: null } } as unknown as ReturnType<typeof useMyReview>);
+      renderPage();
+      await userEvent.click(screen.getByRole('tab', { name: 'Reviews (0)' }));
+      const textarea = screen.getByLabelText('Your review');
+      expect(textarea).toHaveAttribute('placeholder', 'Share your experience with this product...');
+      expect(textarea).toHaveAttribute('maxLength', '2000');
+      expect(textarea).toBeRequired();
+    });
   });
 });

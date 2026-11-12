@@ -26,9 +26,23 @@ function mapReview(review: PublicReview) {
     createdAt: review.createdAt, updatedAt: review.updatedAt };
 }
 
-async function reviewSummary(productId: string) {
-  const aggregate = await prisma.review.aggregate({ where: { productId }, _avg: { rating: true }, _count: { _all: true } });
-  return { averageRating: aggregate._avg.rating?.toFixed(1) ?? null, reviewCount: aggregate._count._all };
+export const RATING_VALUES = [5, 4, 3, 2, 1] as const;
+
+/**
+ * Rating summary computed from stored reviews only. `distribution` (Task 06.2, additive) counts reviews per star value,
+ * always listing 5..1 so clients never infer a bar from missing data; it is derived from the same rows as the average.
+ */
+export async function reviewSummary(productId: string) {
+  const [aggregate, groups] = await prisma.$transaction([
+    prisma.review.aggregate({ where: { productId }, _avg: { rating: true }, _count: { _all: true } }),
+    prisma.review.groupBy({ by: ['rating'], where: { productId }, orderBy: { rating: 'desc' }, _count: { _all: true } }),
+  ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  const counts = new Map(groups.map(group => [group.rating, typeof group._count === 'object' && group._count ? group._count._all ?? 0 : 0]));
+  return {
+    averageRating: aggregate._avg.rating?.toFixed(1) ?? null,
+    reviewCount: aggregate._count._all,
+    distribution: RATING_VALUES.map(rating => ({ rating, count: counts.get(rating) ?? 0 })),
+  };
 }
 
 async function findProduct(slug: string) {
