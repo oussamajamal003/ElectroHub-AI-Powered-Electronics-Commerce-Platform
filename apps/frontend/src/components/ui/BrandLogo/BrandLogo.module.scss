@@ -11,7 +11,7 @@
 }
 .zap { width: 18px; height: 18px; fill: currentColor; }
 
-.text { font-family: $font-family-heading; font-size: 22px; font-weight: $font-weight-bold; color: $color-primary; letter-spacing: -0.045em; line-height: 1; }
+.text { font-family: $font-family-heading; font-size: 22px; font-weight: $font-weight-bold; color: $color-primary-text; letter-spacing: -0.045em; line-height: 1; }
 .hub {
   position: relative; color: $color-text-primary; font-weight: $font-weight-semibold;
   &::after { content: ''; position: absolute; left: 0; right: 0; bottom: -5px; height: 2px; background: $color-primary; }

@@ -30,6 +30,7 @@ import { shortcutLabel, useDiscovery } from '@/features/search/discovery/context
 import { toast } from '@/components/ui/Toast';
 import { Tooltip } from '@/components/ui/Tooltip';
 import styles from './CustomerHeader.module.scss';
+import { ThemeToggle } from '@/features/theme';
 import { useStorefrontProfile } from '@/features/storefront/api';
 
 export interface CustomerHeaderProps {
@@ -190,6 +191,8 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                     <span className={styles.searchTriggerKey} aria-hidden="true">{shortcutLabel()}</span>
                   </button>
                   </Tooltip>
+
+                  <ThemeToggle className={styles.iconButton} />
 
                   {!isAdmin && (
                     <>

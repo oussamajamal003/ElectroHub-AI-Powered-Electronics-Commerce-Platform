@@ -81,6 +81,7 @@
     background-color: $color-accent;
     border-color: $color-border;
     color: $color-text-inverse;
+    @include dark-theme { color: $color-accent-foreground; }
   }
 
   &.active {

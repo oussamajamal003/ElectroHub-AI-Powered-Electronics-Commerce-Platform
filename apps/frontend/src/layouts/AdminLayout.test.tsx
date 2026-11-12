@@ -5,6 +5,7 @@ import { AdminLayout } from './AdminLayout';
 import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { useAdminAlerts } from '@/features/admin/dashboard/api';
 import { SIDEBAR_PREFERENCE_KEY } from '@/features/admin/shell/navigation';
+import { ThemeProvider } from '@/features/theme';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({ useAdminAuth: vi.fn() }));
 vi.mock('@/features/admin/dashboard/api', () => ({ useAdminAlerts: vi.fn() }));
@@ -105,5 +106,19 @@ describe('AdminLayout shell', () => {
     renderAt('/admin');
     expect(screen.getByRole('link', { name: 'Skip to content' })).toHaveAttribute('href', '#admin-main');
     expect(screen.getByRole('main')).toHaveAttribute('id', 'admin-main');
+  });
+
+  it('offers the shared theme toggle in the admin header and switches the whole console (dark-mode task)', () => {
+    document.documentElement.setAttribute('data-theme', 'light');
+    render(<ThemeProvider><MemoryRouter initialEntries={['/admin']}>
+      <Routes><Route element={<AdminLayout />}><Route path="/admin/*" element={<p>Page body</p>} /></Route></Routes>
+    </MemoryRouter></ThemeProvider>);
+    const header = document.querySelector('[data-admin-header]') as HTMLElement;
+    const toggle = within(header).getByRole('button', { name: 'Switch to dark mode' });
+    fireEvent.click(toggle);
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark');
+    expect(within(header).getByRole('button', { name: 'Switch to light mode' })).toBeInTheDocument();
+    expect(screen.getByText('Page body')).toBeInTheDocument();
+    document.documentElement.removeAttribute('data-theme');
   });
 });
