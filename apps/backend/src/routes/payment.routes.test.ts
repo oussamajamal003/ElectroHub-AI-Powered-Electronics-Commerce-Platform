@@ -160,7 +160,9 @@ describe('Owned payment API boundaries (actual service validation; mocked persis
       expect(response.status).toBe(200); expect(response.body.data.attemptId).toBe(ids.attempt);
       expect(typeof response.body.data.dismissedAt).toBe('string');
       expect(db.paymentAttempt.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-        where: expect.objectContaining({ id: ids.attempt, userId: ids.user, dismissedAt: null, orderId: null }), data: { dismissedAt: expect.any(Date) } }));
+        where: expect.objectContaining({ id: ids.attempt, userId: ids.user, dismissedAt: null,
+          AND: expect.arrayContaining([{ OR: [{ orderId: null }, { state: { in: ['COMPENSATED', 'REFUNDED'] }, compensatedAt: { not: null } }] }]) }),
+        data: { dismissedAt: expect.any(Date) } }));
     });
     it('is idempotent for an already dismissed attempt', async () => {
       owned({ dismissedAt: new Date('2026-10-15T10:00:00.000Z') });

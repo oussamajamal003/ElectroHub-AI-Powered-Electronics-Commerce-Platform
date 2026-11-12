@@ -84,7 +84,7 @@ describe('AdminLoginPage', () => {
     fireEvent.focus(emailInput);
     fireEvent.change(emailInput, { target: { value: 'a' } });
 
-    expect(screen.queryByText('Please enter a valid email address.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Enter a valid email address.')).not.toBeInTheDocument();
     expect(screen.queryByText('Email address is required.')).not.toBeInTheDocument();
 
     const passwordInput = screen.getByLabelText(/^Password/i);
@@ -100,10 +100,19 @@ describe('AdminLoginPage', () => {
     const emailInput = screen.getByLabelText(/Email Address/i);
     fireEvent.change(emailInput, { target: { value: 'invalid-email' } });
     fireEvent.blur(emailInput);
-    expect(screen.getByText('Please enter a valid email address.')).toBeInTheDocument();
+    expect(screen.getByText('Enter a valid email address.')).toBeInTheDocument();
 
     fireEvent.change(emailInput, { target: { value: 'admin@electrohub.com' } });
-    expect(screen.queryByText('Please enter a valid email address.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Enter a valid email address.')).not.toBeInTheDocument();
+  });
+
+  it('associates the missing local-part error with the email field', () => {
+    renderComponent();
+    const emailInput = screen.getByLabelText(/Email Address/i);
+    fireEvent.change(emailInput, { target: { value: '@gmail.com' } });
+    fireEvent.blur(emailInput);
+    expect(emailInput).toHaveAttribute('aria-invalid', 'true');
+    expect(emailInput).toHaveAccessibleDescription('Enter a valid email address before @.');
   });
 
   it('validates email and password on submit', async () => {

@@ -37,7 +37,7 @@
 
 .pageEyebrow {
   margin: 0;
-  color: $color-primary;
+  color: $color-primary-text;
   font-size: $font-size-xs;
   font-weight: $font-weight-semibold;
   letter-spacing: 0.08em;
@@ -152,7 +152,7 @@
     transform: translateY(-1px);
     
     .itemTitle {
-      color: $color-primary;
+      color: $color-primary-text;
     }
   }
 
@@ -161,7 +161,7 @@
 
 
 .itemIcon {
-  color: $color-primary;
+  color: $color-primary-text;
   flex-shrink: 0;
 }
 
@@ -223,6 +223,7 @@
   &:hover {
     background-color: #FFF1F2;
     border-color: $color-error;
+    @include dark-theme { background-color: $color-error-background; }
   }
 }
 

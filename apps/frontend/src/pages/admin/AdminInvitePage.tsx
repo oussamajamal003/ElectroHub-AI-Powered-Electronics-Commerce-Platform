@@ -1,3 +1,4 @@
+import { useDocumentTitle } from '@/lib/pageTitle';
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/ui/BrandLogo';
@@ -54,6 +55,7 @@ type Stage =
   | { name: 'ended'; message: string };
 
 export function AdminInvitePage() {
+  useDocumentTitle('Admin Invitation');
   const { completeAdminSession } = useAdminAuth();
   const navigate = useNavigate();
   // The token is read once and kept in state. The fragment is then removed from the address bar and history.

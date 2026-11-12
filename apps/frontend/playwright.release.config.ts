@@ -68,7 +68,8 @@ export default defineConfig({
       url: `http://localhost:${frontendPort}`,
       reuseExistingServer: !ci,
       timeout: 120_000,
-      env: { E2E_FRONTEND_PORT: frontendPort, E2E_API_PROXY_TARGET: `http://127.0.0.1:${apiPort}` },
+      // Image search switched on so the consent tests exercise a real upload; with no AI service the gateway answers "unavailable".
+      env: { E2E_FRONTEND_PORT: frontendPort, E2E_API_PROXY_TARGET: `http://127.0.0.1:${apiPort}`, VITE_IMAGE_SEARCH_ENABLED: 'true' },
     },
   ],
 });

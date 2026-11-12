@@ -1,5 +1,5 @@
 import { BrandLogo } from '@/components/ui/BrandLogo';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   ShoppingCart,
@@ -27,9 +27,13 @@ import { AuthModal, AuthModalMode } from '@/features/auth/components/AuthModal';
 import { customerReturnPath, type CustomerReturnPath } from '@/features/auth/returnPath';
 import { SignOutModal } from '@/features/auth/components/SignOutModal';
 import { shortcutLabel, useDiscovery } from '@/features/search/discovery/context';
-import { Toast, ToastClose, ToastProvider, ToastTitle, ToastViewport } from '@/components/ui/Toast';
+import { toast } from '@/components/ui/Toast';
+import { Tooltip } from '@/components/ui/Tooltip';
 import styles from './CustomerHeader.module.scss';
+import { ThemeToggle } from '@/features/theme';
 import { useStorefrontProfile } from '@/features/storefront/api';
+import { useProfilePhoto } from '@/features/profilePhoto/queries';
+const CustomerNotifications = lazy(() => import('@/features/notifications/CustomerNotifications').then(module => ({ default: module.CustomerNotifications })));
 
 export interface CustomerHeaderProps {
   cartCount?: number;
@@ -49,18 +53,18 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
   const cartCountUnresolved = countOverride === undefined && !cartData;
   const wishlistCountUnresolved = wishlistOverride === undefined && wishlist?.isLoading && !wishlist.data;
   const [authReturnTo, setAuthReturnTo] = useState<CustomerReturnPath | undefined>();
-  const { user, rememberedUser, isAuthenticated, isInitializing } = useAuth();
+  const { user, rememberedUser, isAuthenticated, isInitializing, isSessionVerified, isLoggingOut } = useAuth();
   const headerUser = isInitializing ? rememberedUser : user;
   const showAuthenticatedHeader = isInitializing ? Boolean(rememberedUser) : isAuthenticated;
   // Only the verified session decides the role; the remembered header identity carries none, so nothing privileged is inferred while initializing.
   const isAdmin = !isInitializing && user?.role === 'ADMIN';
+  const profilePhoto = useProfilePhoto(isAdmin ? 'admin' : 'customer', user?.id, isSessionVerified);
   const navigate = useNavigate();
 
   // Auth modals
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<AuthModalMode>('login');
   const [showSignOut, setShowSignOut] = useState(false);
-  const [signedOutToast, setSignedOutToast] = useState(false);
 
   // Mobile menu
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -142,6 +146,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
           >
             {/* LEFT — Mobile Toggle + Brand */}
             <div className={styles.leftSection}>
+              <Tooltip content={isMobileMenuOpen ? 'Close menu' : 'Open menu'}>
               <button
                 ref={mobileMenuToggle}
                 type="button"
@@ -153,6 +158,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
               >
                 {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
               </button>
+              </Tooltip>
 
               <Link to="/" className={styles.logoLink} aria-label={`${storeProfile?.storeName ?? 'ElectroHub'} — Home`}>
                 <BrandLogo className={styles.brandLogo} name={storeProfile?.storeName ?? 'ElectroHub'} />
@@ -172,7 +178,9 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
 
             {/* RIGHT — Utility Icons + Avatar + Unified Search */}
             <div className={styles.actions}>
+              {user?.role === 'CUSTOMER' && isSessionVerified && !isLoggingOut && <Suspense fallback={null}><CustomerNotifications key={user.id} userId={user.id} /></Suspense>}
 
+                  <Tooltip content={`Search products (${shortcutLabel()})`}>
                   <button
                     type="button"
                     className={`${styles.iconButton} ${styles.searchTrigger}`}
@@ -180,16 +188,19 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                     aria-haspopup="dialog"
                     aria-expanded={discovery ? discovery.isOpen : undefined}
                     aria-keyshortcuts="Control+K Meta+K"
-                    title={`Search (${shortcutLabel()})`}
                     onClick={handleSearchOpen}
                   >
                     <Search size={20} />
                     <span className={styles.searchTriggerLabel} aria-hidden="true">Search</span>
                     <span className={styles.searchTriggerKey} aria-hidden="true">{shortcutLabel()}</span>
                   </button>
+                  </Tooltip>
+
+                  <ThemeToggle className={styles.iconButton} />
 
                   {!isAdmin && (
                     <>
+                  <Tooltip content="View shopping cart">
                   <Link
                     to="/cart"
                     className={styles.iconButton}
@@ -202,7 +213,9 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                       </span>
                     )}
                   </Link>
+                  </Tooltip>
 
+                  <Tooltip content="View wishlist">
                   <Link
                     to="/wishlist"
                     className={styles.iconButton}
@@ -218,12 +231,14 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                       </span>
                     )}
                   </Link>
+                  </Tooltip>
                     </>
                   )}
 
                   {/* Unauthenticated — Account icon */}
                   {isInitializing && !rememberedUser && <span className={styles.authPlaceholder} aria-hidden="true" />}
                   {!isInitializing && !isAuthenticated && (
+                    <Tooltip content="Sign in or create an account">
                     <button
                       type="button"
                       className={styles.iconButton}
@@ -236,6 +251,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                     >
                       <UserIcon size={20} />
                     </button>
+                    </Tooltip>
                   )}
 
                   {/* Authenticated — Avatar dropdown */}
@@ -247,7 +263,8 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
                           aria-label={`Account menu for ${headerUser.firstName} ${headerUser.lastName}`}
                           disabled={isInitializing}
                         >
-                          <Avatar initials={getInitials(headerUser.firstName, headerUser.lastName)} />
+                          <Avatar src={profilePhoto.data?.url ?? undefined} alt=""
+                            initials={getInitials(headerUser.firstName, headerUser.lastName)} />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className={styles.dropdown}>
@@ -345,7 +362,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
       />
       <SignOutModal
         open={showSignOut}
-        onSignedOut={() => setSignedOutToast(true)}
+        onSignedOut={() => { toast.success('Signed out successfully.'); }}
         onOpenChange={open => {
           setShowSignOut(open);
           if (!open && mobileSignOut.current) {
@@ -354,15 +371,6 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
           }
         }}
       />
-      <ToastProvider duration={3000}>
-        {signedOutToast && (
-          <Toast open variant="success" onOpenChange={open => { if (!open) setSignedOutToast(false); }}>
-            <ToastTitle>Signed out successfully.</ToastTitle>
-            <ToastClose aria-label="Dismiss notification" />
-          </Toast>
-        )}
-        <ToastViewport />
-      </ToastProvider>
     </>
   );
 }

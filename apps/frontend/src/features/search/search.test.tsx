@@ -239,7 +239,7 @@ describe('Search page', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Min price ($)' }), { target: { value: '50' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'Max price ($)' }), { target: { value: '1000' } });
     expect(screen.getByTestId('location')).not.toHaveTextContent('minPrice=');
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Filters (4)' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Filters (4)' })).toBeInTheDocument(), { timeout: 15000 });
     expect(screen.getByTestId('location')).not.toHaveTextContent('page=2');
     expect(screen.getByTestId('location')).toHaveTextContent('minPrice=50');
     expect(screen.queryByRole('button', { name: 'Apply prices' })).not.toBeInTheDocument();

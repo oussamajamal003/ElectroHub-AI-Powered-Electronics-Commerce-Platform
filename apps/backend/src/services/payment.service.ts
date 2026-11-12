@@ -87,6 +87,18 @@ const notConfirmedStillUnrecorded = (attempt: Pick<Attempt, 'state' | 'failureCo
 const cancelEligible = (attempt: Pick<Attempt, 'state' | 'submittedAt' | 'orderId' | 'cancelRequested' | 'failureCode' | 'confirmationStartedAt'>) =>
   attempt.state === 'AWAITING_INPUT' && Boolean(attempt.submittedAt) && !attempt.orderId && !attempt.cancelRequested &&
   attempt.failureCode === NOT_CONFIRMED_FAILURE_CODE && !attempt.confirmationStartedAt;
+/** Failed outcomes a customer may hide (the list shows them as Failed or Declined). */
+const DISMISSIBLE_STATES: PaymentAttemptState[] = ['DECLINED', 'CANCELED', 'COMPENSATED', 'REFUNDED'];
+/**
+ * Server-side eligibility for removing a failed purchase card (never inferred on the client). A failed purchase that produced an Order is
+ * dismissible only once that Order's compensation committed (`compensatedAt`: stock restored, Order cancelled, payment released/refunded),
+ * so hiding the card can never hide an unfinished recovery. Work that is leased or carries an unresolved recovery error is never dismissible.
+ */
+const dismissEligible = (attempt: Pick<Attempt, 'state' | 'submittedAt' | 'orderId' | 'compensatedAt' | 'failureCode' | 'confirmationStartedAt'>,
+  work?: { state: string; lastError?: string | null } | null, { ignoreLease = false } = {}) =>
+  ['DECLINED', 'FAILED'].includes(customerPaymentStatus(attempt, work)) && DISMISSIBLE_STATES.includes(attempt.state) && Boolean(attempt.submittedAt) &&
+  (!attempt.orderId || (Boolean(attempt.compensatedAt) && ['COMPENSATED', 'REFUNDED'].includes(attempt.state))) &&
+  (ignoreLease || work?.state !== 'LEASED') && !work?.lastError;
 /** A customer cancellation request; provider truth (decline, authorization, capture) always takes precedence over it. */
 const customerCancellation = (attempt: Pick<Attempt, 'cancelRequested' | 'failureCode'>) =>
   attempt.cancelRequested && attempt.failureCode === CANCELED_BY_CUSTOMER_FAILURE_CODE;
@@ -450,6 +462,9 @@ export class PaymentService {
       // Try Again: a provider decline or a bank verification. Cancel purchase: only a recovery-verified never-confirmed purchase.
       retryAllowed: ['DECLINED', 'AWAITING_CUSTOMER_ACTION'].includes(customerPaymentStatus(attempt, attempt.work)) && !attempt.orderId && !attempt.cancelRequested,
       cancelable: cancelEligible(attempt),
+      // Remove (trash): the rule dismiss() enforces, so the card never offers an action the server permanently refuses. A recovery lease
+      // (about a second, e.g. the periodic decline re-check) is transient: dismiss() answers 409 then and the card stays, so it is ignored here.
+      dismissible: dismissEligible(attempt, attempt.work, { ignoreLease: true }),
       submittedAt: attempt.submittedAt?.toISOString() ?? null,
       // Copy only: distinguishes "confirming with the provider" from "checking the status of this purchase"; never an outcome.
       confirmationStarted: Boolean(attempt.confirmationStartedAt),
@@ -482,23 +497,24 @@ export class PaymentService {
   async dismiss(userId: string, id: string) {
     this.assertMutationsAllowed();
     const attemptId = attemptSchema.parse(id);
-    // Same states the customer list shows as failed: DECLINED, plus CANCELED/COMPENSATED/REFUNDED (customerPaymentStatus FAILED).
-    const dismissible: PaymentAttemptState[] = ['DECLINED', 'CANCELED', 'COMPENSATED', 'REFUNDED'];
     const notDismissible = () => new AppError('This payment cannot be dismissed right now.', 409, 'PAYMENT_NOT_DISMISSIBLE');
     try {
       return await this.database.$transaction(async tx => {
         const attempt = await tx.paymentAttempt.findFirst({ where: { id: attemptId, userId },
-          select: { id: true, state: true, orderId: true, submittedAt: true, dismissedAt: true, work: { select: { state: true, lastError: true } } } });
+          select: { id: true, state: true, orderId: true, compensatedAt: true, failureCode: true, confirmationStartedAt: true, submittedAt: true,
+            dismissedAt: true, work: { select: { state: true, lastError: true } } } });
         if (!attempt) throw new AppError('Payment attempt not found.', 404, 'PAYMENT_ATTEMPT_NOT_FOUND');
         if (attempt.dismissedAt) return { attemptId, dismissedAt: attempt.dismissedAt.toISOString() };
         // The list only shows submitted purchases whose customer classification is a failure; dismissal must match that exactly.
-        const classification = customerPaymentStatus(attempt, attempt.work);
-        if (!['DECLINED', 'FAILED'].includes(classification) || !dismissible.includes(attempt.state) || !attempt.submittedAt ||
-          attempt.orderId || attempt.work?.state === 'LEASED' || attempt.work?.lastError) throw notDismissible();
+        if (!dismissEligible(attempt, attempt.work)) throw notDismissible();
         const dismissedAt = new Date();
         const claimed = await tx.paymentAttempt.updateMany({
-          where: { id: attemptId, userId, dismissedAt: null, orderId: null, submittedAt: { not: null }, state: { in: dismissible },
-            OR: [{ work: { is: null } }, { work: { is: { state: { not: 'LEASED' }, lastError: null } } }] },
+          where: { id: attemptId, userId, dismissedAt: null, submittedAt: { not: null }, state: { in: DISMISSIBLE_STATES },
+            AND: [
+              // An Order-backed failure is hidden only after its compensation committed (re-checked here against a racing recovery).
+              { OR: [{ orderId: null }, { state: { in: ['COMPENSATED', 'REFUNDED'] }, compensatedAt: { not: null } }] },
+              { OR: [{ work: { is: null } }, { work: { is: { state: { not: 'LEASED' }, lastError: null } } }] },
+            ] },
           data: { dismissedAt } });
         if (claimed.count !== 1) throw notDismissible();
         return { attemptId, dismissedAt: dismissedAt.toISOString() };

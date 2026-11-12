@@ -1,4 +1,5 @@
 import swaggerJsdoc from 'swagger-jsdoc';
+import path from 'node:path';
 import { openapiDefinition } from './openapi.js';
 
 /**
@@ -10,9 +11,8 @@ import { openapiDefinition } from './openapi.js';
 const swaggerOptions: swaggerJsdoc.Options = {
   definition: openapiDefinition,
   apis: [
-    './src/routes/*.ts',
-    './apps/backend/src/routes/*.ts',
-    './src/docs/swagger/paths/*.ts',
+    path.resolve(__dirname, '../../routes/*.{ts,js}').replace(/\\/g, '/'),
+    path.resolve(__dirname, 'paths/*.{ts,js}').replace(/\\/g, '/'),
   ],
 };
 

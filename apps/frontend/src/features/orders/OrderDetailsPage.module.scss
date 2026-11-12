@@ -22,7 +22,7 @@
   @include respond-to(md) { padding: $spacing-8; }
   h2 { margin: 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; @include respond-to(md) { font-size: $font-size-xl; } }
 }
-.iconHeading { display: flex; align-items: center; gap: $spacing-3; svg { width: 1.375rem; height: 1.375rem; color: $color-primary; flex-shrink: 0; } }
+.iconHeading { display: flex; align-items: center; gap: $spacing-3; svg { width: 1.375rem; height: 1.375rem; color: $color-primary-text; flex-shrink: 0; } }
 
 .items { margin: 0; padding: 0; list-style: none; display: grid; gap: $spacing-5; }
 .item { display: grid; grid-template-columns: 4rem minmax(0, 1fr); gap: $spacing-3 $spacing-4; align-items: start;
@@ -65,7 +65,7 @@
   font-weight: $font-weight-medium; color: $color-text-primary; text-decoration: none; background: $color-background; border: 1px solid $color-border;
   transition: border-color $transition-fast, color $transition-fast;
   @include respond-to(md) { font-size: $font-size-lg; }
-  &:hover { color: $color-primary; border-color: $color-primary; }
+  &:hover { color: $color-primary-text; border-color: $color-primary; }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
 }
 

@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { deflateSync } from 'node:zlib';
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +19,7 @@ export const supportToken = process.env.E2E_TEST_SUPPORT_TOKEN ?? 'electrohub-re
 export type SeededProduct = { id: string; sku: string; name: string; slug: string; price: number; quantity: number };
 type Fixtures = {
   password: string;
-  admins: Record<string, { ownerEmail: string; staffEmail: string }>;
+  admins: Record<string, { ownerEmail: string; staffEmail: string; privacyEmail: string }>;
   shoppers: Record<string, { email: string; orderId: string; orderReference: string }>;
   outsider: { email: string; orderId: string; orderReference: string };
   products: SeededProduct[];
@@ -36,7 +37,7 @@ export function slot(testInfo: TestInfo): string {
   for (const candidate of ['chromium', 'firefox', 'webkit', 'mobile', 'tablet', 'wide']) if (name.startsWith(candidate)) return candidate;
   throw new Error(`No release fixture slot for project ${name}`);
 }
-export type Family = 'auth' | 'cart' | 'checkout' | 'orders' | 'admin';
+export type Family = 'auth' | 'cart' | 'checkout' | 'orders' | 'admin' | 'privacy';
 /** The shopper for this project and spec family (families run in parallel workers, so they never share a cart or order). */
 export const shopper = (testInfo: TestInfo, family: Family) => fixtures().shoppers[`${slot(testInfo)}-${family}`];
 export const admins = (testInfo: TestInfo) => fixtures().admins[slot(testInfo)];
@@ -207,13 +208,35 @@ export async function expectNoHorizontalOverflow(page: Page, label: string) {
 export async function expectUsableControl(control: Locator, label: string) {
   await expect(control, label).toBeVisible();
   const box = await control.boundingBox();
-  const viewport = control.page().viewportSize()!;
+  // A real browser window (viewport: null, e.g. native zoom) has no emulated size; use its CSS layout width instead.
+  const width = control.page().viewportSize()?.width ?? await control.page().evaluate(() => window.innerWidth);
   expect(box, `${label} has a layout box`).not.toBeNull();
   expect(box!.x, `${label} starts inside the viewport`).toBeGreaterThanOrEqual(-1);
-  expect(box!.x + box!.width, `${label} ends inside the viewport`).toBeLessThanOrEqual(viewport.width + 1);
+  expect(box!.x + box!.width, `${label} ends inside the viewport`).toBeLessThanOrEqual(width + 1);
   expect(Math.min(box!.width, box!.height), `${label} target size`).toBeGreaterThanOrEqual(24);
 }
 
 /** Header cart link, whose accessible name carries the server-reconciled count. */
 export const cartLink = (page: Page, count: number) =>
   page.getByRole('link', { name: `Cart, ${count} ${count === 1 ? 'item' : 'items'}` }).first();
+
+/** A real, decodable 48×48 PNG with a varied pattern (not a blank image), built without any image dependency. */
+export function samplePng(): Buffer {
+  const size = 48;
+  const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (bytes: Buffer) => { let c = 0xffffffff; for (const byte of bytes) c = crcTable[(c ^ byte) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type: string, data: Buffer) => {
+    const head = Buffer.alloc(4); head.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+    const tail = Buffer.alloc(4); tail.writeUInt32BE(crc(body));
+    return Buffer.concat([head, body, tail]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(size, 0); header.writeUInt32BE(size, 4); header[8] = 8; header[9] = 2;
+  const rows: number[] = [];
+  for (let y = 0; y < size; y++) {
+    rows.push(0);
+    for (let x = 0; x < size; x++) rows.push((x * 5) % 256, (y * 5) % 256, ((x + y) * 3 + 90) % 256);
+  }
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', header), chunk('IDAT', deflateSync(Buffer.from(rows))), chunk('IEND', Buffer.alloc(0))]);
+}

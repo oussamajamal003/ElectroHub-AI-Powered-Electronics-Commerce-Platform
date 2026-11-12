@@ -1,6 +1,5 @@
-import { deflateSync } from 'node:zlib';
 import { expect, test, type Page, type Request } from '@playwright/test';
-import { distinctClientAddress, expectNoHorizontalOverflow } from './support';
+import { distinctClientAddress, expectNoHorizontalOverflow, samplePng } from './support';
 
 /**
  * Image search on the hermetic release stack. No AI service is configured here (AI_SERVICE_URL is unset), so similarity
@@ -9,27 +8,6 @@ import { distinctClientAddress, expectNoHorizontalOverflow } from './support';
  * results exist. When the build has image search switched off (VITE_IMAGE_SEARCH_ENABLED unset) the photo must never leave
  * the browser; when it is switched on, the gateway must answer "unavailable" and the UI must say so.
  */
-
-/** A real, decodable 48×48 PNG with a varied pattern (not a blank image), built without any image dependency. */
-function samplePng(): Buffer {
-  const size = 48;
-  const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
-  const crc = (bytes: Buffer) => { let c = 0xffffffff; for (const byte of bytes) c = crcTable[(c ^ byte) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
-  const chunk = (type: string, data: Buffer) => {
-    const head = Buffer.alloc(4); head.writeUInt32BE(data.length);
-    const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
-    const tail = Buffer.alloc(4); tail.writeUInt32BE(crc(body));
-    return Buffer.concat([head, body, tail]);
-  };
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(size, 0); header.writeUInt32BE(size, 4); header[8] = 8; header[9] = 2;
-  const rows: number[] = [];
-  for (let y = 0; y < size; y++) {
-    rows.push(0);
-    for (let x = 0; x < size; x++) rows.push((x * 5) % 256, (y * 5) % 256, ((x + y) * 3 + 90) % 256);
-  }
-  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', header), chunk('IDAT', deflateSync(Buffer.from(rows))), chunk('IEND', Buffer.alloc(0))]);
-}
 
 async function openImageSearch(page: Page) {
   await page.goto('/');

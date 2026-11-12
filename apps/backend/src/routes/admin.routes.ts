@@ -20,6 +20,7 @@ const writes = rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: 'draft-
 
 router.get('/admin/dashboard/overview', c.overview);
 router.get('/admin/dashboard/alerts', c.alerts);
+router.post('/admin/dashboard/alerts/acknowledge', writes, c.acknowledgeAlerts);
 
 router.get('/admin/catalog/options', c.productOptions);
 router.get('/admin/catalog/products', c.listProducts);

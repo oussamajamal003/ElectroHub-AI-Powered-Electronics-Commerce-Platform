@@ -1,3 +1,4 @@
+import { renderEmailHeader } from '../emails/brand.js';
 import { EmailDeliveryStatus, EmailType, type Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { brevoProvider, type BrevoProvider } from '../integrations/brevo/brevo.provider.js';
@@ -27,7 +28,7 @@ export function buildDeletionEmail(deletedAt: Date) {
 <title>${escapeHtml(SUBJECT)}</title></head>
 <body style="margin:0;padding:24px 12px;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Poppins,sans-serif;color:#0f172a">
 <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:32px 24px">
-<div style="font-size:22px;font-weight:700;color:#2563eb;text-align:center;margin-bottom:24px">ElectroHub</div>
+${renderEmailHeader()}
 <h1 style="font-size:20px;line-height:1.3;font-weight:600;margin:0 0 12px;text-align:center">Administrator account deleted</h1>
 <p style="font-size:14px;line-height:1.6;color:#475569;margin:0 0 16px">This confirms that your ElectroHub administrator account was deleted.</p>
 <table role="presentation" style="width:100%;border-collapse:collapse;margin:0 0 16px"><tr>

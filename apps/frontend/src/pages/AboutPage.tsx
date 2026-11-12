@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Headphones, LayoutGrid, ListChecks, LockKeyhole, Search, ShieldCheck, Sparkles, Truck } from 'lucide-react';
+import { ArrowRight, Award, Headphones, PackageCheck, ScanSearch, ShieldCheck, Sparkles, Truck } from 'lucide-react';
 import { SectionReveal, StaggerContainer, StaggerItem } from '@/components/motion/Motion';
 import styles from './CompanyPages.module.scss';
 
 /**
- * About Us (Task 06.2 WP A). Copy describes only what the storefront actually does (catalog, search, product specifications,
- * reviews, Stripe checkout, delivery options chosen at checkout, the contact form); no invented figures, awards or certifications.
+ * About Us (Task 06.2 WP A). Copy describes only what the storefront actually does (catalog, keyword and photo search,
+ * recommendations, product specifications and reviews, Stripe checkout, order tracking, the contact form); no invented figures,
+ * awards or certifications.
  * Imagery: project-owned, unbranded studio photographs (public/images/about, see the README there), served as AVIF/WebP.
  */
 type AboutImageName = 'laptop' | 'headphones' | 'smartwatch' | 'smartphone' | 'monitor' | 'tablet' | 'console' | 'charging-dock' | 'laptop-closed';
@@ -28,10 +29,15 @@ const heroTiles: { name: AboutImageName; alt: string }[] = [
 ];
 
 const offers = [
-  { title: 'A focused catalog', text: 'Phones, laptops, tablets, audio, wearables, monitors, gaming and accessories, organised by category and brand.', icon: LayoutGrid },
-  { title: 'Search that helps you decide', text: 'Filter by category, brand, price and availability, then sort by what matters to you.', icon: Search },
-  { title: 'Details before you buy', text: 'Specifications, stock status and customer reviews on every product page.', icon: ListChecks },
-  { title: 'Secure checkout', text: 'Card payments are handled by Stripe; card details never touch our servers.', icon: LockKeyhole },
+  { title: 'Electronics in one place', text: 'Browse laptops, phones, audio and everyday tech with clear product information and photos.', icon: PackageCheck },
+  { title: 'Find it your way', text: 'Search by keyword, filter the catalog, or search with a photo to find similar products.', icon: ScanSearch },
+  { title: 'Checkout and tracking', text: 'Pay securely with Stripe, follow your order status and, when it is on its way, track the delivery on a map.', icon: Truck },
+  { title: 'Help from our team', text: 'Questions about an order or a product? Send us a message and we will reply by email.', icon: Headphones },
+];
+
+const aiFeatures = [
+  { title: 'Recommendations', text: 'Suggestions built from how products are viewed and bought together, shown alongside the products you browse.', icon: Sparkles },
+  { title: 'Image search', text: 'Upload a photo of a device or accessory and see visually similar products from our catalog.', icon: ScanSearch },
 ];
 
 const range: { name: AboutImageName; title: string; alt: string }[] = [
@@ -42,10 +48,10 @@ const range: { name: AboutImageName; title: string; alt: string }[] = [
 ];
 
 const values = [
-  { title: 'Clarity', text: 'Prices, availability and delivery options are shown before you commit, not after.', icon: Sparkles },
-  { title: 'Honesty', text: 'Star ratings are calculated from the reviews customers leave, and specifications come from the product data.', icon: ShieldCheck },
-  { title: 'Choice', text: 'At checkout, every delivery option available for your order shows its price and estimated arrival.', icon: Truck },
-  { title: 'Help when you need it', text: 'Questions about an order or a product? Our contact form reaches the support team directly.', icon: Headphones },
+  { title: 'Clarity', text: 'Specifications, prices and availability are shown plainly, with no clutter between you and the product.', icon: Sparkles },
+  { title: 'Trust', text: 'Prices, stock and payment state are always confirmed by our servers, never taken on faith from your browser.', icon: ShieldCheck },
+  { title: 'Privacy', text: 'We ask for the details an order needs, and keep payment card data with our payment provider.', icon: Award },
+  { title: 'Care', text: 'Messages sent through our contact form go straight to our support team.', icon: Headphones },
 ];
 
 export function AboutPage() {
@@ -100,6 +106,25 @@ export function AboutPage() {
           </StaggerContainer>
         </section>
 
+        <section className={styles.section} aria-labelledby="ai-title">
+          <SectionReveal>
+            <h2 id="ai-title">Smarter shopping, assisted by AI</h2>
+          </SectionReveal>
+          <StaggerContainer className={styles.gridTwo}>
+            {aiFeatures.map(({ title, text, icon: Icon }, index) => (
+              <StaggerItem key={title} index={index}>
+                <article className={styles.card}>
+                  <div className={styles.iconWrapper}>
+                    <Icon aria-hidden="true" size={24} />
+                  </div>
+                  <h3>{title}</h3>
+                  <p>{text}</p>
+                </article>
+              </StaggerItem>
+            ))}
+          </StaggerContainer>
+        </section>
+
         <section className={styles.section} aria-labelledby="range-title">
           <SectionReveal>
             <h2 id="range-title">Across the range</h2>
@@ -134,12 +159,13 @@ export function AboutPage() {
 
         <SectionReveal className={styles.cta}>
           <h2>Find your next upgrade</h2>
-          <p>Browse the catalog, compare specifications and reviews, and check out securely when you are ready.</p>
+          <p>Browse the catalog, compare specifications and reviews, or get in touch if you would like help choosing.</p>
           <div className={styles.ctaButtonWrapper}>
             <Link to="/products" className={styles.ctaButton}>
               Explore Products
               <ArrowRight aria-hidden="true" size={18} />
             </Link>
+            <Link to="/contact" className={styles.ctaSecondary}>Contact us</Link>
           </div>
         </SectionReveal>
       </div>

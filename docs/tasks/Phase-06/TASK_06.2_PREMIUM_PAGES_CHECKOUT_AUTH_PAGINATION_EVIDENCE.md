@@ -30,7 +30,7 @@ commits were pulled in or overwritten; whichever lands second must resolve the o
 ## 3. Files changed
 
 **Backend**
-- `prisma/schema.prisma`, `prisma/migrations/20261114000000_catalog_price_keyset_index/migration.sql` (new)
+- `prisma/schema.prisma`, `prisma/migrations/20261116000000_catalog_price_keyset_index/migration.sql` (new)
 - `src/services/catalog-cursor.ts` (new), `src/services/search.service.ts`, `src/services/review.service.ts`, `src/services/auth.service.ts`
 - `src/controllers/search.controller.ts`, `src/controllers/product.controller.ts`, `src/controllers/auth.controller.ts`, `src/controllers/admin-security.controller.ts`
 - `src/validators/product.validator.ts`, `src/validators/search.validator.ts`, `src/validators/review.validator.ts`
@@ -232,7 +232,7 @@ verification code will be sent." so it no longer confirms that an account exists
 
 ## 15. Database indexes / migrations
 
-- Migration `20261114000000_catalog_price_keyset_index` adds `products_price_createdAt_id_idx`
+- Migration `20261116000000_catalog_price_keyset_index` adds `products_price_createdAt_id_idx`
   (`price, createdAt DESC, id`). It is mirrored in `schema.prisma` as `@@index([price, createdAt(sort: Desc), id])`.
 - It is additive, with no data change.
 - It is a plain `CREATE INDEX`: it takes a SHARE lock on `products` while building. The table is small today, but it should be

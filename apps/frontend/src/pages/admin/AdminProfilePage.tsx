@@ -11,6 +11,7 @@ import { AdminPageSkeleton, ButtonLink, PageHeader, QueryProblem, StatusPill, us
 import { fieldErrors } from '@/features/admin/shared/api';
 import { ChangePasswordSection, DangerZoneSection } from '@/features/admin/security/components/AdminAccountSections';
 import { AdminEmailChangeDialog } from '@/features/admin/security/components/AdminEmailChangeDialog';
+import { ProfilePhotoManager } from '@/components/profilePhoto/ProfilePhotoManager';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
 
 export function AdminProfilePage() {
@@ -28,7 +29,7 @@ export function AdminProfilePage() {
 /** Mounted once the profile is loaded, so the form starts from the saved values; a successful save updates the baseline. */
 function ProfileContent({ profile }: { profile: AdminProfile }) {
   const save = useUpdateAdminProfile();
-  const { updateUserNames } = useAdminAuth();
+  const { updateUserNames, isSessionVerified } = useAdminAuth();
   const toast = useAdminToast();
   const [firstName, setFirstName] = useState(profile.firstName);
   const [lastName, setLastName] = useState(profile.lastName);
@@ -84,6 +85,9 @@ function ProfileContent({ profile }: { profile: AdminProfile }) {
           <h2 id="profile-details-title" className={styles.panelTitle}>Personal details</h2>
           {dirty && <span className={styles.panelHint}>Unsaved changes</span>}
         </div>
+        <ProfilePhotoManager scope="admin" userId={profile.id} sessionVerified={isSessionVerified}
+          initials={`${profile.firstName[0] ?? ''}${profile.lastName[0] ?? ''}`.toUpperCase()}
+          displayName={`${profile.firstName} ${profile.lastName}`} />
         {formError && <Alert variant="error">{formError}</Alert>}
         <form className={styles.form} onSubmit={submit} noValidate>
           <div className={styles.fieldGrid}>

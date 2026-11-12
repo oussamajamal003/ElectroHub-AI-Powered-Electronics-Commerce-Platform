@@ -63,6 +63,16 @@
   border-color: $color-error-border;
   color: $color-error-foreground;
 }
+.variant-warning {
+  background-color: $color-warning-background;
+  border-color: $color-warning-border;
+  color: $color-warning-foreground;
+}
+.variant-loading {
+  background-color: $color-info-background;
+  border-color: $color-info-border;
+  color: $color-info-foreground;
+}
 .variant-info {
   background-color: $color-info-background;
   border-color: $color-info-border;
@@ -142,7 +152,18 @@
 .actionButton {
   margin-top: $spacing-2;
   align-self: flex-start;
-  // Can be styled like a button or link
+  min-height: 32px;
+  padding: 0 $spacing-3;
+  border: 1px solid currentColor;
+  border-radius: $radius-md;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  cursor: pointer;
+  &:hover { background: rgb(0 0 0 / 0.06); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 $focus-ring-width $focus-ring-color; }
 }
 
 @keyframes slideIn {
@@ -176,3 +197,7 @@
     transition: none;
   }
 }
+
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }

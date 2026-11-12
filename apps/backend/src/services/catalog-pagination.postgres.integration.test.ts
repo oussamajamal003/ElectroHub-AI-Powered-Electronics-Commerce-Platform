@@ -299,7 +299,7 @@ describe.runIf(process.env.CATALOG_PAGINATION_BENCH === '1').sequential('catalog
       { name: 'catalog price-desc', params: { sort: 'price-desc', pageSize: '20' } },
       { name: 'catalog name-asc', params: { sort: 'name-asc', pageSize: '20' } },
     ];
-    // Phase 2 is the index shipped by 20261114000000_catalog_price_keyset_index (expressible in schema.prisma, so no drift).
+    // Phase 2 is the index shipped by 20261116000000_catalog_price_keyset_index (expressible in schema.prisma, so no drift).
     // Run 1 of this benchmark also measured partial storefront indexes and category-leading indexes; the category-leading
     // ones were never chosen by the planner (the category is filtered by slug through a join) and were not shipped.
     const phases: [string, string[]][] = [

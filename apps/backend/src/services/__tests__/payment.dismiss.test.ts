@@ -40,7 +40,20 @@ describe('PaymentService.dismiss', () => {
     expect(Date.parse(result.dismissedAt)).not.toBeNaN();
     const call = db.paymentAttempt.updateMany.mock.calls[0][0];
     expect(Object.keys(call.data)).toEqual(['dismissedAt']);
-    expect(call.where).toMatchObject({ id: attemptId, userId: owner, dismissedAt: null, orderId: null, submittedAt: { not: null }, state: { in: expect.arrayContaining([state]) } });
+    expect(call.where).toMatchObject({ id: attemptId, userId: owner, dismissedAt: null, submittedAt: { not: null }, state: { in: expect.arrayContaining([state]) } });
+    expect(call.where.AND[0]).toEqual({ OR: [{ orderId: null }, { state: { in: ['COMPENSATED', 'REFUNDED'] }, compensatedAt: { not: null } }] });
+  });
+
+  it.each(['COMPENSATED', 'REFUNDED'])('dismisses a %s attempt whose Order was compensated (stock restored), setting only dismissedAt', async state => {
+    db.paymentAttempt.findFirst.mockResolvedValue(row({ state, orderId: 'ord-1', compensatedAt: new Date('2026-10-15T09:30:00.000Z'), work: { state: 'DONE', lastError: null } }));
+    await expect(service.dismiss(owner, attemptId)).resolves.toMatchObject({ attemptId });
+    expect(Object.keys(db.paymentAttempt.updateMany.mock.calls[0][0].data)).toEqual(['dismissedAt']);
+  });
+
+  it.each(['COMPENSATED', 'REFUNDED'])('refuses a %s Order-backed attempt whose compensation has not committed', async state => {
+    db.paymentAttempt.findFirst.mockResolvedValue(row({ state, orderId: 'ord-1', compensatedAt: null }));
+    await expect(service.dismiss(owner, attemptId)).rejects.toMatchObject({ code: 'PAYMENT_NOT_DISMISSIBLE' });
+    expect(db.paymentAttempt.updateMany).not.toHaveBeenCalled();
   });
 
   it('returns the existing dismissal without writing again (idempotent)', async () => {
@@ -68,8 +81,8 @@ describe('PaymentService.dismiss', () => {
     expect(db.paymentAttempt.updateMany).not.toHaveBeenCalled();
   });
 
-  it('refuses an attempt that already produced an Order', async () => {
-    db.paymentAttempt.findFirst.mockResolvedValue(row({ orderId: 'ord-1' }));
+  it.each(['DECLINED', 'CANCELED'])('refuses a %s attempt that already produced an Order (not a compensated failure)', async state => {
+    db.paymentAttempt.findFirst.mockResolvedValue(row({ state, orderId: 'ord-1', compensatedAt: new Date() }));
     await expect(service.dismiss(owner, attemptId)).rejects.toMatchObject({ code: 'PAYMENT_NOT_DISMISSIBLE' });
     expect(db.paymentAttempt.updateMany).not.toHaveBeenCalled();
   });
@@ -91,7 +104,7 @@ describe('PaymentService.dismiss', () => {
     db.paymentAttempt.updateMany.mockResolvedValue({ count: 0 });
     await expect(service.dismiss(owner, attemptId)).rejects.toMatchObject({ code: 'PAYMENT_NOT_DISMISSIBLE' });
     const where = db.paymentAttempt.updateMany.mock.calls[0][0].where;
-    expect(where.OR).toEqual([{ work: { is: null } }, { work: { is: { state: { not: 'LEASED' }, lastError: null } } }]);
+    expect(where.AND[1]).toEqual({ OR: [{ work: { is: null } }, { work: { is: { state: { not: 'LEASED' }, lastError: null } } }] });
   });
 
   it('maps a serialization conflict to a safe retryable refusal', async () => {
@@ -106,5 +119,23 @@ describe('PaymentService.purchases dismissal filter', () => {
     db.paymentAttempt.findMany.mockResolvedValue([]);
     await service.purchases(owner);
     expect(db.paymentAttempt.findMany.mock.calls[0][0].where).toMatchObject({ userId: owner, dismissedAt: null });
+  });
+
+  it('projects server-side dismissibility so the card never offers a Remove the server refuses', async () => {
+    const base = { userId: owner, total: new Prisma.Decimal('10.00'), currency: 'USD', request: { shipping: { recipient: 'Test Person', line1: 'Test Street', city: 'Test City', country: 'US', postalCode: '00000', phone: '1234567890' },
+        deliveryMethod: 'STANDARD', paymentMethod: 'CARD', expectedRevision: 'b'.repeat(64) }, items: [], updatedAt: new Date(), restoredAt: null,
+      notificationReadState: null, cancelRequested: false, failureCode: null, confirmationStartedAt: null, submittedAt: new Date(), compensatedAt: null, orderId: null, work: null };
+    db.paymentAttempt.findMany.mockResolvedValue([
+      { ...base, id: 'declined', state: 'DECLINED' },
+      { ...base, id: 'compensated', state: 'COMPENSATED', orderId: 'ord-1', compensatedAt: new Date(), work: { state: 'DONE', lastError: null } },
+      { ...base, id: 'compensating', state: 'COMPENSATION_PENDING', orderId: 'ord-2', work: { state: 'READY', lastError: null } },
+      { ...base, id: 'unknown', state: 'CANCELED', work: { state: 'READY', lastError: 'PROVIDER_UNAVAILABLE' } },
+      { ...base, id: 'paid', state: 'PAID', orderId: 'ord-3' },
+      { ...base, id: 'declined-with-order', state: 'DECLINED', orderId: 'ord-4' },
+      { ...base, id: 'declined-leased', state: 'DECLINED', work: { state: 'LEASED', lastError: null } },
+    ]);
+    const list = await service.purchases(owner);
+    expect(Object.fromEntries(list.map(item => [item.attemptId, item.dismissible]))).toEqual({ declined: true, compensated: true, compensating: false,
+      unknown: false, paid: false, 'declined-with-order': false, 'declined-leased': true });
   });
 });

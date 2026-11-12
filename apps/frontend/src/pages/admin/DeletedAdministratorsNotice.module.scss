@@ -45,7 +45,7 @@
   cursor: pointer;
 
   &:hover:not(:disabled) {
-    background: rgba($color-primary, 0.1);
+    background: theme-alpha($color-primary, 0.1);
   }
 
   &:focus-visible {
