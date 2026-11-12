@@ -145,6 +145,52 @@ export function PaymentSkeleton() {
     </div>
   </div>;
 }
+/** Review step placeholder while the delivery quote it summarises is still loading (e.g. right after a refresh). */
+export function ReviewSkeleton() {
+  return <div className={styles.reviewSkeleton} role="status" aria-label="Loading order review">
+    {['14rem', '10rem', '12rem'].map((width, index) => <div key={index} className={styles.reviewCardSkeleton} aria-hidden="true">
+      <div className={styles.skeletonDetails}><div className={styles.skeletonTitle} style={{ width }} />
+        <div className={styles.skeletonEstimate} style={{ width: index === 0 ? '18rem' : '9rem' }} />{index === 0 && <div className={styles.skeletonEstimate} style={{ width: '13rem' }} />}</div>
+      <div className={styles.skeletonPrice} style={{ width: '2.5rem' }} />
+    </div>)}
+  </div>;
+}
+// Same order and spans as the Shipping form: name, street, line 2, city | postcode, state | country, phone.
+const SHIPPING_SKELETON_FIELDS = ['full', 'full', 'full', 'half', 'half', 'half', 'half', 'full'] as const;
+const STEP_SKELETON_TITLE: Record<CheckoutStep, string> = { shipping: '13rem', delivery: '12rem', payment: '12rem', review: '13rem' };
+/**
+ * First-load placeholder for Checkout, shaped like the step the customer is about to see (form fields for Shipping, option
+ * rows for Delivery, card fields for Payment, summary cards for Review) next to the Order Summary. It is rendered only while
+ * the session or Cart is genuinely loading; failures render their own error state instead, never this skeleton.
+ */
+export function CheckoutSkeleton({ step }: { step: CheckoutStep }) {
+  return <div className={styles.page} data-testid="checkout-skeleton" data-step={step}>
+    <p className={styles.srOnly} role="status" aria-live="polite">Loading checkout…</p>
+    <div className={styles.checkoutSkeleton} aria-hidden="true">
+      <div className={styles.skeletonBreadcrumb} />
+      <h1>Checkout</h1>
+      <div className={styles.skeletonStepper}>{steps.map(item => <span key={item} className={item === step ? styles.skeletonStepActive : undefined}><i /><b /></span>)}</div>
+      <div className={styles.layout}>
+        <section className={styles.panel}>
+          <div className={styles.skeletonHeading} style={{ width: STEP_SKELETON_TITLE[step] }} />
+          {step === 'shipping' && <div className={styles.formGrid}>{SHIPPING_SKELETON_FIELDS.map((span, index) => <div key={index} className={`${styles.skeletonGroup} ${span === 'full' ? styles.fullWidth : ''}`}>
+            <div className={styles.skeletonLabel} /><div className={styles.skeletonInput} /></div>)}</div>}
+          {step === 'delivery' && <DeliverySkeleton />}
+          {step === 'payment' && <><div className={styles.skeletonChoice} /><div className={styles.providerShell}><PaymentSkeleton /></div></>}
+          {step === 'review' && <ReviewSkeleton />}
+          <div className={styles.skeletonActions}><span /><span /></div>
+        </section>
+        <aside className={`${styles.summary} ${styles.summarySkeleton}`}>
+          <div className={styles.skeletonHeading} style={{ width: '10rem' }} />
+          {[0, 1].map(item => <div key={item} className={styles.summaryItemSkeleton}><span className={styles.imagePlaceholder} />
+            <div className={styles.skeletonDetails}><div className={styles.skeletonTitle} style={{ width: '80%' }} /><div className={styles.skeletonEstimate} style={{ width: '40%' }} /></div>
+            <div className={styles.skeletonPrice} style={{ width: '3.5rem' }} /></div>)}
+          {['Subtotal', 'Shipping', 'Total'].map(row => <div key={row} className={`${styles.totalRowSkeleton} ${row === 'Total' ? styles.grandTotal : ''}`}><span /><span /></div>)}
+        </aside>
+      </div>
+    </div>
+  </div>;
+}
 export function PaymentStep({ onBack, onContinue, children, ready = false, canContinue = ready, pending = false, actionLabel = 'Review Order', paymentNotice = 'Test mode. Payment starts only when you place the order on Review.' }: { actionLabel?: string; paymentNotice?: string; onBack: () => void; onContinue: () => void; children?: ReactNode; ready?: boolean; canContinue?: boolean; pending?: boolean }) {
   return <section className={styles.panel}><h2>Payment Method</h2><div className={styles.paymentChoice}><CreditCard aria-hidden="true" /><strong>Credit / Debit Card</strong><CheckCircle2 size={20} aria-label="Selected" /></div>
     <div className={styles.providerShell}>{children ?? <PaymentSkeleton />}</div>

@@ -13,7 +13,7 @@ import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoa
 import { allowedStep, clearDraft, draftWasSubmitted, forgetSubmittedPurchase, newDraft, readDraft, readSubmittedPurchase, readPurchaseEntry, rememberPurchaseEntries, rememberSubmittedPurchase, saveDraft, shippingErrors, withoutCardEntry } from './state';
 import { clearBuyNow, readBuyNow } from './buyNow';
 import type { CheckoutDraft, CheckoutQuote, CheckoutScope, CheckoutStep, PaymentOutcome, PaymentSetup, SubmissionAttempt } from './types';
-import { CheckoutProcessing, CheckoutStepper, DeliveryStep, OrderSummary, PaymentSetupPending, PaymentStep, ReviewStep, ShippingStep } from './CheckoutComponents';
+import { CheckoutProcessing, CheckoutSkeleton, CheckoutStepper, DeliveryStep, OrderSummary, PaymentSetupPending, PaymentStep, ReviewSkeleton, ReviewStep, ShippingStep } from './CheckoutComponents';
 import { SavedPurchaseCheckout } from './SavedPurchaseCheckout';
 import { acknowledgePaymentOutcome, announceOrderConfirmed, isNotifiableOutcome, synchronizePaymentOutcome, usePresentedPaymentAttempt } from './PaymentPurchases';
 import { StripePaymentSession, type PaymentEntryActions } from './StripePaymentSession';
@@ -883,7 +883,7 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
     // One scheduled recovery; retry has its own identity/generation/busy fences.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recovering, outcome]);
-  if (!isSessionVerified || draftOwner.current !== userId) return <ElectroHubLoader page />;
+  if (!isSessionVerified || draftOwner.current !== userId) return <CheckoutSkeleton step={step} />;
   if (recovering) {
     return (
       <div className={styles.recoveryWrapper}>
@@ -904,7 +904,7 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
   if (isBuyNow) {
     if (!buyNow) return restoreOr(<div className={`${styles.page} ${styles.empty}`}><h1>Nothing to buy</h1><p>Choose a product to buy now.</p><Link className={styles.primaryLink} to="/products">Continue Shopping</Link></div>);
   } else {
-    if (!cart.data) return cart.isLoading ? <ElectroHubLoader page /> : <div className={styles.page}><h1>Checkout</h1><p role="alert">Checkout could not load.</p><Button onClick={() => void cart.retry()}>Retry Cart</Button></div>;
+    if (!cart.data) return cart.isLoading ? <CheckoutSkeleton step={step} /> : <div className={styles.page}><h1>Checkout</h1><p role="alert">Checkout could not load.</p><Button onClick={() => void cart.retry()}>Retry Cart</Button></div>;
     if (!cart.data.items.length && !pending) return restoreOr(<div className={`${styles.page} ${styles.empty}`}><h1>Your cart is empty</h1><p>Add products before starting checkout.</p><Link className={styles.primaryLink} to="/products">Continue Shopping</Link></div>);
   }
   const completed: CheckoutStep[] = [...(draft.shippingComplete ? ['shipping' as const] : []), ...(draft.deliveryComplete ? ['delivery' as const] : []), ...(draft.paymentComplete ? ['payment' as const] : [])];
@@ -954,7 +954,7 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
         )}
       </PaymentStep>
     )}
-    {step === 'review' && (delivery ? <ReviewStep shipping={draft.shipping} delivery={delivery} total={delivery.totals.total} blocked={blocked || !secret || !draft.paymentComplete} onEdit={go} onBack={() => go('payment')} onPlace={() => void place()} /> : <ElectroHubLoader />)}
+    {step === 'review' && (delivery ? <ReviewStep shipping={draft.shipping} delivery={delivery} total={delivery.totals.total} blocked={blocked || !secret || !draft.paymentComplete} onEdit={go} onBack={() => go('payment')} onPlace={() => void place()} /> : <section className={styles.panel}><h2>Review Your Order</h2><ReviewSkeleton /></section>)}
   </>;
   return <div className={styles.page}>
     {pending ? <div className={styles.processingWrapper}><CheckoutProcessing browserConfirming={paymentState === 'CONFIRMING_PAYMENT'} /></div> : <>

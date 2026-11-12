@@ -583,3 +583,31 @@
 // Payment outcome notifications stay bottom-right from tablet up. On phones the checkout actions stack full-width at the
 // bottom of the screen, so the notice appears just below the sticky header instead of covering Review / Place Order.
 ol.paymentToasts { pointer-events: none; @media (max-width: 47.99rem) { top: max(3.75rem, env(safe-area-inset-top)); bottom: auto; width: 100%; padding: $spacing-3 $spacing-4; } }
+
+// Task 06.2 WP D: first-load Checkout skeleton, shaped like the requested step and the Order Summary.
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.checkoutSkeleton {
+  .panel, .summarySkeleton { animation: paymentSkeletonPulse 1.8s ease-in-out infinite; @media (prefers-reduced-motion: reduce) { animation: none; } }
+  .paymentSkeleton, .deliveryOptionSkeleton { animation: none; }
+}
+// The real breadcrumb is one line of small text (~1.3rem tall); the bar sits inside that line box so the title does not move.
+.skeletonBreadcrumb { width: 11rem; height: 0.875rem; margin: 0.25rem 0 calc(#{$spacing-8} + 0.25rem); background: $color-border; }
+.skeletonStepper { display: flex; align-items: center; gap: $spacing-4; max-width: 48rem; margin: 0 0 $spacing-6;
+  > span { display: inline-flex; align-items: center; gap: $spacing-2; flex: 1; min-width: 0; padding: $spacing-1 0; &:last-child { flex: 0 0 auto; } }
+  i { width: 2rem; height: 2rem; flex-shrink: 0; border: 1px solid $color-border; background: $color-background; @include respond-to(md) { width: 2.25rem; height: 2.25rem; } }
+  b { height: 0.875rem; width: 4.5rem; max-width: 100%; background: $color-border; @media (max-width: 420px) { display: none; } }
+  .skeletonStepActive i { background: rgba($color-primary, .35); border-color: rgba($color-primary, .35); } }
+.skeletonHeading { height: 1.5rem; max-width: 100%; margin: 0 0 $spacing-6; background: $color-border; }
+.skeletonChoice { width: 15rem; max-width: 100%; height: 3.5rem; border: 1px solid $color-border; background: $color-surface; }
+.skeletonActions { display: flex; flex-wrap: wrap; gap: $spacing-4; margin-top: $spacing-8;
+  > span { height: 3rem; width: 7rem; border: 1px solid $color-border; background: $color-surface; }
+  > span:last-child { width: 11rem; background: $color-border; }
+  @media (max-width: 30rem) { flex-direction: column-reverse; > span, > span:last-child { width: 100%; } } }
+.reviewSkeleton { display: grid; }
+.reviewCardSkeleton { display: flex; justify-content: space-between; align-items: start; gap: $spacing-3; border: 1px solid $color-border; padding: $spacing-5; margin-top: $spacing-5;
+  &:first-child { margin-top: 0; } .skeletonDetails { gap: $spacing-2; } }
+.summarySkeleton .skeletonHeading { margin-bottom: 0; height: 1.25rem; }
+.summaryItemSkeleton { display: grid; grid-template-columns: 4rem minmax(0, 1fr) auto; gap: $spacing-4; align-items: start; padding-bottom: $spacing-5; border-bottom: 1px solid $color-border;
+  .imagePlaceholder { display: block; width: 4rem; height: 4rem; border: 1px solid $color-border; } .skeletonDetails { gap: $spacing-2; } }
+.totalRowSkeleton { display: flex; justify-content: space-between; gap: $spacing-4;
+  > span { height: 1rem; background: $color-border; } > span:first-child { width: 5rem; } > span:last-child { width: 4rem; } }
