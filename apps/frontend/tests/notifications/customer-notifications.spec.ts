@@ -33,7 +33,7 @@ for (const width of [390, 1440]) test(`notification history, read persistence, k
   await page.screenshot({ path: info.outputPath(`notifications-${width}.png`), fullPage: true });
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await page.screenshot({ path: info.outputPath(`notifications-dark-${width}.png`), fullPage: true });
-  await expect(menu).toHaveCSS('background-color', 'rgb(15, 23, 42)');
+  await expect(menu).toHaveCSS('background-color', 'rgb(28, 39, 64)');
   await expect(menu.getByText(`Your order ${reference} is out for delivery.`, { exact: true })).toHaveCSS('color', 'rgb(255, 255, 255)');
   await page.evaluate(() => { delete document.documentElement.dataset.theme; });
   await menu.getByRole('menuitem', { name: 'Mark as read' }).click(); await expect(menu).toContainText('Read');
