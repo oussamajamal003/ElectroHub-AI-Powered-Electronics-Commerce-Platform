@@ -1,6 +1,5 @@
-import { CustomerNotifications } from '@/features/notifications/CustomerNotifications';
 import { BrandLogo } from '@/components/ui/BrandLogo';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   ShoppingCart,
@@ -31,6 +30,8 @@ import { shortcutLabel, useDiscovery } from '@/features/search/discovery/context
 import { Toast, ToastClose, ToastProvider, ToastTitle, ToastViewport } from '@/components/ui/Toast';
 import styles from './CustomerHeader.module.scss';
 import { useStorefrontProfile } from '@/features/storefront/api';
+
+const CustomerNotifications = lazy(() => import('@/features/notifications/CustomerNotifications').then(module => ({ default: module.CustomerNotifications })));
 
 export interface CustomerHeaderProps {
   cartCount?: number;
@@ -173,7 +174,7 @@ export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishli
 
             {/* RIGHT — Utility Icons + Avatar + Unified Search */}
             <div className={styles.actions}>
-              {user?.role === 'CUSTOMER' && isSessionVerified && !isLoggingOut && <CustomerNotifications key={user.id} userId={user.id} />}
+              {user?.role === 'CUSTOMER' && isSessionVerified && !isLoggingOut && <Suspense fallback={null}><CustomerNotifications key={user.id} userId={user.id} /></Suspense>}
 
                   <button
                     type="button"

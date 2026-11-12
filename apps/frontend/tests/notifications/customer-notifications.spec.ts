@@ -22,6 +22,8 @@ for (const width of [390, 1440]) test(`notification history, read persistence, k
     return send({ data: [], meta: { page: 1, pageSize: 10, total: 0, totalPages: 0 } });
   });
   await page.goto(`/orders/${reference}`);
+  // Wait for the existing order-page focus handoff before testing keyboard entry.
+  await expect(page.getByRole('heading', { level: 1, name: reference })).toBeFocused();
   const bell = page.getByRole('button', { name: 'Notifications, 1 unread' });
   await expect(bell).toBeVisible(); await bell.focus(); await page.keyboard.press('Enter');
   const menu = page.getByRole('menu'); await expect(menu).toBeVisible();
@@ -32,6 +34,7 @@ for (const width of [390, 1440]) test(`notification history, read persistence, k
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await page.screenshot({ path: info.outputPath(`notifications-dark-${width}.png`), fullPage: true });
   await expect(menu).toHaveCSS('background-color', 'rgb(15, 23, 42)');
+  await expect(menu.getByText(`Your order ${reference} is out for delivery.`, { exact: true })).toHaveCSS('color', 'rgb(255, 255, 255)');
   await page.evaluate(() => { delete document.documentElement.dataset.theme; });
   await menu.getByRole('menuitem', { name: 'Mark as read' }).click(); await expect(menu).toContainText('Read');
   await page.keyboard.press('Escape'); await expect(page.getByRole('button', { name: 'Notifications, 0 unread' })).toBeFocused();

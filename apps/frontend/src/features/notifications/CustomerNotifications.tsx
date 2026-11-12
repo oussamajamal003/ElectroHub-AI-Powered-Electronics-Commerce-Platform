@@ -52,7 +52,7 @@ export function CustomerNotifications({ userId }: { userId: string }) {
       <Bell size={20} aria-hidden="true" />{Boolean(count) && <span className={styles.badge} aria-hidden="true">{count! > 99 ? '99+' : count}</span>}
     </button></DropdownMenuTrigger>
     <DropdownMenuContent align="end" className={styles.panel} aria-label="Notifications">
-      <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+      <DropdownMenuLabel className={styles.label}>Notifications</DropdownMenuLabel>
       {query.isPending && <p role="status">Loading notifications…</p>}
       {(query.isError || read.isError) && <><p role="alert">Unable to update notifications. Please try again.</p>
         <DropdownMenuItem onSelect={event => { event.preventDefault(); read.reset(); void query.refetch(); }}>Retry</DropdownMenuItem></>}

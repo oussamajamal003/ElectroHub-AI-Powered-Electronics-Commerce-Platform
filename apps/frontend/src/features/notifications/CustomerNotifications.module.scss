@@ -16,5 +16,5 @@
   line-height: $line-height-normal; overflow-wrap: anywhere; text-decoration: none;
   time { font-size: $font-size-xs; color: $color-text-secondary; } }
 :global(.dark) .panel, :global([data-theme='dark']) .panel { background: $color-secondary; color: $color-text-inverse;
-  .link, .link time { color: inherit; }
+  .label, .link, .link span, .link time { color: $color-text-inverse; }
   :global([data-highlighted]) { background: $color-secondary-light; } }

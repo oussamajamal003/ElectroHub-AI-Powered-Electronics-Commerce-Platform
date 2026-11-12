@@ -286,7 +286,12 @@ jobs:
           DELIVERY_ORIGIN_LABEL: 'ElectroHub demo hub'
           BREVO_API_KEY: ''
           STRIPE_SECRET_KEY: ''
-        run: npx vitest run --config vitest.delivery-pg.config.mts
+        run: |
+          # Preserve simulation's disposable-name guard using only this job's throwaway DB.
+          docker exec electrohub-ci-pg psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE electrohub_disposable_notifications TEMPLATE electrohub_ci'
+          export DATABASE_URL="${DATABASE_URL/\/electrohub_ci/\/electrohub_disposable_notifications}"
+          export DIRECT_URL="$DATABASE_URL"
+          npx vitest run --config vitest.delivery-pg.config.mts
 
   backend-build:
     name: Backend / Build
