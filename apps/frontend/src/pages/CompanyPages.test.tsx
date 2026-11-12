@@ -28,12 +28,65 @@ describe('company pages', () => {
     render(<MemoryRouter><AboutPage /></MemoryRouter>);
     expect(screen.getByRole('heading', { name: 'Technology made simple.' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Explore Products' })).toHaveAttribute('href', '/products');
-    expect(screen.getByRole('link', { name: 'Contact us' })).toHaveAttribute('href', '/contact');
+    const contactLinks = screen.getAllByRole('link', { name: 'Contact us' });
+    expect(contactLinks).toHaveLength(2);
+    for (const link of contactLinks) expect(link).toHaveAttribute('href', '/contact');
   });
 
   it('makes no unsupported business claims on About', () => {
     render(<MemoryRouter><AboutPage /></MemoryRouter>);
     expect(document.body.textContent).not.toMatch(/certified|fast shipping|expert support|founded|since \d{4}|\d+\+? (customers|stores|employees)|guarantee/i);
+  });
+
+  it('serves every About image as AVIF and WebP with descriptive alt text', () => {
+    const { container } = render(<MemoryRouter><AboutPage /></MemoryRouter>);
+    const images = screen.getAllByRole('img');
+    expect(images.length).toBeGreaterThanOrEqual(9);
+    for (const image of images) {
+      expect(image.getAttribute('alt')?.length).toBeGreaterThan(10);
+      expect(image).toHaveAttribute('width', '800');
+      expect(image).toHaveAttribute('height', '800');
+      expect(image.getAttribute('src')).toMatch(/^\/images\/about\/[a-z-]+-800\.webp$/);
+    }
+    const pictures = container.querySelectorAll('picture');
+    expect(pictures).toHaveLength(images.length);
+    for (const picture of pictures) {
+      expect(picture.querySelector('source[type="image/avif"]')?.getAttribute('srcset')).toMatch(/-480\.avif 480w, .*-800\.avif 800w$/);
+      expect(picture.querySelector('source[type="image/webp"]')).not.toBeNull();
+    }
+    // Only the two above-the-fold mosaic tiles load eagerly.
+    expect(images.filter(image => image.getAttribute('loading') === 'eager')).toHaveLength(2);
+  });
+
+  it('makes no unverifiable company claims on About', () => {
+    const { container } = render(<MemoryRouter><AboutPage /></MemoryRouter>);
+    const text = container.textContent ?? '';
+    for (const claim of [/certified/i, /award/i, /expert/i, /verified buyer/i, /\d+\s*(k|\+|%|million|customers|years)/i, /tested for/i, /fast shipping/i]) {
+      expect(text).not.toMatch(claim);
+    }
+    const contactLinks = screen.getAllByRole('link', { name: 'Contact us' });
+    expect(contactLinks).toHaveLength(2);
+    for (const link of contactLinks) expect(link).toHaveAttribute('href', '/contact');
+  });
+
+  it('shows only the contact methods that are configured', () => {
+    vi.mocked(useStorefrontProfile).mockReturnValue({ data: { ...profile, supportPhone: null, addressLine1: null, city: null, region: null, postalCode: null, country: null },
+      isPending: false, isError: false } as unknown as ReturnType<typeof useStorefrontProfile>);
+    renderContact();
+    expect(screen.getByRole('heading', { name: 'Email', level: 3 })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Phone', level: 3 })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Location', level: 3 })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Send us a message', level: 3 })).toBeNull();
+  });
+
+  it('shows a composed empty state instead of blank space when no contact details are configured', () => {
+    vi.mocked(useStorefrontProfile).mockReturnValue({ data: { storeName: 'Northstar', supportEmail: null, supportPhone: null, addressLine1: null, addressLine2: null,
+      city: null, region: null, postalCode: null, country: null, currency: 'USD' }, isPending: false, isError: false } as unknown as ReturnType<typeof useStorefrontProfile>);
+    renderContact();
+    expect(screen.getByRole('heading', { name: 'Send us a message', level: 3 })).toBeInTheDocument();
+    expect(screen.getByText(/Direct contact details have not been published yet/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /@/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Send Message' })).toBeEnabled();
   });
 
   it('uses saved store details as semantic contact addresses and dynamically displays the name', () => {

@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { AuthRepository, StalePasswordHashError } from '../repositories/auth.repository.js';
 import { generateAccessToken, JwtPayload } from '../utils/jwt.js';
 import { hashPassword, verifyPassword } from '../utils/hash.js';
-import { otpService, OtpVerificationError, OTP_CONFIG } from './otp.service.js';
+import { otpService, OtpVerificationError, OtpDeliveryError, OTP_CONFIG } from './otp.service.js';
 import { emailService } from './email.service.js';
 import { OtpPurpose, SecurityEventType, User, Role } from '@prisma/client';
 import type { AdminSessionAssurance } from '../repositories/auth.repository.js';
@@ -12,6 +12,18 @@ import { AppError } from '../middleware/errorHandler.js';
 import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
 
 const normalizeEmail = (email: string) => email.toLowerCase().trim();
+
+/**
+ * Task 06.2 (OTP eligibility): a valid bcrypt hash (cost 12, same as real hashes) of a discarded random secret. Unknown and
+ * inactive accounts are compared against it so that a login for an unregistered address spends the same bcrypt time as one for a
+ * registered address with a wrong password, and the response time does not reveal which addresses have accounts.
+ */
+const TIMING_EQUALIZER_HASH = '$2b$12$8mbKQ.PO4nQG37Yt0RHwFeUmdT85Oa5ntajbgbWRkdzt/EUklbo3m';
+
+/** Public, non-enumerating acknowledgement for every unauthenticated OTP (re)send request. */
+export const GENERIC_OTP_ACKNOWLEDGEMENT = 'If this email address is eligible, a verification code will be sent.';
+
+type OtpAudience = 'CUSTOMER' | 'ADMIN';
 
 /** How long after a rotation a presented superseded token is treated as a concurrent request (409, no token, no revocation) rather than reuse. */
 export const CONCURRENT_ROTATION_WINDOW_MS = 10_000;
@@ -67,6 +79,8 @@ export class AuthService {
     const user = await this.repository.findUserByEmail(normalizedEmail);
     
     if (!user || !user.isActive) {
+      // Spend the same bcrypt time as a wrong password for a real account: no OTP, no challenge, no timing signal.
+      await verifyPassword(passwordPlain, TIMING_EQUALIZER_HASH);
       throw new Error('Invalid credentials');
     }
 
@@ -299,16 +313,20 @@ export class AuthService {
     }
   }
 
-  async resendPasswordReset(email: string) {
+  /**
+   * Re-deliver a live PASSWORD_RESET challenge. `audience` keeps the customer and administrator recovery flows apart: the customer
+   * endpoint never re-sends an administrator's recovery code (and vice versa), mirroring the role gates of the request steps.
+   */
+  async resendPasswordReset(email: string, audience: OtpAudience = 'CUSTOMER') {
     const normalizedEmail = normalizeEmail(email);
     const user = await this.repository.findUserByEmail(normalizedEmail);
-    if (user?.isActive) {
+    if (user?.isActive && user.role.name === audience) {
       const challengeId = await otpService.getChallengeIdByEmail(normalizedEmail, OtpPurpose.PASSWORD_RESET);
       if (challengeId) {
         try {
           await otpService.resendChallenge(challengeId);
-    } catch {
-      logger.error('Password reset resend was not completed', { userId: user.id, reason: 'resend_not_completed' });
+        } catch {
+          logger.error('Password reset resend was not completed', { userId: user.id, reason: 'resend_not_completed' });
         }
       }
     }
@@ -512,6 +530,38 @@ export class AuthService {
       role: updatedUser.role.name,
       requiresEmailVerification: false,
     };
+  }
+
+  /**
+   * Re-deliver a pending registration verification code. Only an active, still-unverified CUSTOMER that already owns a live
+   * EMAIL_VERIFICATION challenge for exactly this address is eligible; every other request (unknown, malformed-but-valid, verified,
+   * suspended, administrator, no live challenge, cooldown) receives the same generic acknowledgement and nothing is created or sent.
+   * Delivery failures for an eligible account still surface as OtpDeliveryError (unchanged contract).
+   */
+  async resendVerification(email: string) {
+    const normalizedEmail = normalizeEmail(email);
+    const generic = {
+      message: GENERIC_OTP_ACKNOWLEDGEMENT,
+      success: true,
+      expiresAt: new Date(Date.now() + OTP_CONFIG.TTL_MS),
+      resendAvailableAt: new Date(Date.now() + OTP_CONFIG.RESEND_COOLDOWN_MS),
+    };
+    const user = await this.repository.findUserByEmail(normalizedEmail) ?? await this.repository.findUserByPendingEmail(normalizedEmail);
+    if (!user || !user.isActive || user.role.name !== 'CUSTOMER' || user.emailVerifiedAt) return generic;
+    // The address must be the account's current verification destination: a stale primary address after a correction is not.
+    const destination = user.pendingEmail || user.email;
+    if (destination !== normalizedEmail) return generic;
+    const challengeId = await otpService.getChallengeIdByUserAndDestination(user.id, normalizedEmail, OtpPurpose.EMAIL_VERIFICATION);
+    if (!challengeId) return generic;
+    try {
+      const metadata = await otpService.resendChallenge(challengeId);
+      return { ...metadata, message: GENERIC_OTP_ACKNOWLEDGEMENT };
+    } catch (error) {
+      // An eligible account whose provider refused the mail keeps the existing 503 contract; cooldown, consumed, locked or vanished
+      // challenges are indistinguishable from "nothing to resend".
+      if (error instanceof OtpDeliveryError) throw error;
+      return generic;
+    }
   }
 
   async changeVerificationEmail(currentEmail: string, passwordPlain: string, newEmail: string) {

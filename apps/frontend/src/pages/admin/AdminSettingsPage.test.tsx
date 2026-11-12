@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AdminSettingsPage } from './AdminSettingsPage';
 import { AdminToastProvider } from '@/features/admin/shared/AdminUi';
+import { toast } from '@/components/ui/Toast';
 import { ApiError } from '@/lib/api';
 import {
   useStoreSettings, useUpdateStoreSettings, useShippingSettings, useUpdateShippingSettings, useNotificationPreferences,
@@ -168,6 +169,7 @@ describe('store section', () => {
   });
 
   it('keeps Save disabled until a field actually changes, then saves with the expected version', async () => {
+    const savedToast = vi.spyOn(toast, 'success');
     renderPage();
     const save = screen.getByRole('button', { name: 'Save Changes' });
     expect(save).toBeDisabled();
@@ -180,7 +182,8 @@ describe('store section', () => {
       expectedVersion: 4, storeName: 'Northwind', timezone: 'America/New_York', supportPhone: '+1 555 000 0000',
     })));
     expect(storeSave.mock.calls[0]?.[0]).not.toHaveProperty('currency');
-    expect(await screen.findByText('Store settings saved')).toBeInTheDocument();
+    expect(savedToast).toHaveBeenCalledWith('Store settings saved');
+    savedToast.mockRestore();
   });
 
   it('a version conflict shows the banner and keeps the administrator edits', async () => {

@@ -278,6 +278,7 @@ model Product {
   @@index([status])
   @@index([categoryId, status])
   @@index([createdAt])
+  @@index([price, createdAt(sort: Desc), id])
   @@map("products")
 }
 

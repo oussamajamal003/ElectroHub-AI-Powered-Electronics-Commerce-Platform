@@ -676,7 +676,7 @@ export function AuthModal({
             {mode === 'verify' && `Enter the 6-digit code sent to ${maskEmail(targetEmail)}`}
             {mode === 'changeVerificationEmail' && 'Enter the corrected email address for your pending account.'}
             {mode === 'forgot' && 'Enter your email to receive a reset code'}
-            {mode === 'resetVerify' && `Enter the 6-digit code sent to ${maskEmail(targetEmail)}`}
+            {mode === 'resetVerify' && `If ${maskEmail(targetEmail)} is eligible, a 6-digit verification code will be sent. Enter it below.`}
             {mode === 'resetNew' && 'Choose a new password for your account.'}
             {mode === 'resetSuccess' && 'Your password has been changed.'}
           </DialogDescription>

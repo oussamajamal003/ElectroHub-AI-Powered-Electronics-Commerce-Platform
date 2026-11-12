@@ -2,7 +2,7 @@ import { toast } from '@/components/ui/Toast';
 import { emailValidationError } from '@/lib/emailValidation';
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Clock, Mail, MapPin, Phone } from 'lucide-react';
+import { Clock, Info, Mail, MapPin, MessageSquare, Phone } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { SectionReveal, StaggerContainer, StaggerItem } from '@/components/motion/Motion';
 import { sendContactMessage, useStorefrontProfile } from '@/features/storefront/api';
@@ -78,30 +78,47 @@ export function ContactPage() {
     ...(address ? [{ title: 'Location', text: address, icon: MapPin }] : []),
     ...(profile?.businessHours ? [{ title: 'Business hours', text: profile.businessHours, icon: Clock }] : []),
   ];
-  const profileReady = Boolean(profile);
+
+  // Only configured store details are shown; nothing is invented when a value is missing.
+  const showEmpty = !profileQuery.isPending && !(profileQuery.isError && !profileQuery.data) && cards.length === 0;
+  const fieldControl = (field: Field) => {
+    const id = `contact-${field}`;
+    const describedBy = [errors[field] ? `${id}-error` : '', field === 'Message' ? `${id}-count` : ''].filter(Boolean).join(' ') || undefined;
+    const common = { id, value: values[field], 'aria-invalid': !!errors[field], 'aria-required': true as const, 'aria-describedby': describedBy, maxLength: LIMITS[field], onChange: change(field), disabled: contact.isPending };
+    return <div className={styles.field} key={field}><label htmlFor={id}>{field}</label>
+      {field === 'Message' ? <textarea {...common} rows={6} /> : <input {...common} type={field === 'Email' ? 'email' : 'text'} autoComplete={field === 'Name' ? 'name' : field === 'Email' ? 'email' : 'off'} />}
+      {field === 'Message' && <p className={styles.counter} id={`${id}-count`}>{values.Message.length} / {LIMITS.Message}</p>}
+      {errors[field] && <p className={styles.error} id={`${id}-error`}>{errors[field]}</p>}</div>;
+  };
 
   return <div className={styles.page}>
     <SectionReveal><section className={styles.hero}><h1>Let's talk</h1><p>Questions about {profile?.storeName ?? 'ElectroHub'}? Get in touch with our team.</p></section></SectionReveal>
-    <div className={styles.content}><div className={styles.contactLayout}>
-      <section aria-labelledby="contact-options"><SectionReveal><h2 id="contact-options">Contact information</h2><p>We’re here to help with orders, products and your account.</p>
-        {profileQuery.isPending && <p role="status">Loading store contact details…</p>}
-        {profileQuery.isError && !profileQuery.data && <p role="alert">Store contact details are temporarily unavailable. You can still send a message using the form.</p>}
-        {profileReady && cards.length === 0 && <p className={styles.emptyNote}>Direct contact details have not been published yet. Send us a message with the form and our team will reply by email.</p>}
-      </SectionReveal>{cards.length > 0 && <StaggerContainer className={styles.contactCards}>
-        {cards.map(({ title, text, href, icon: Icon }, index) => <StaggerItem key={title} index={index}><article className={styles.card}><div className={styles.iconWrapper}><Icon aria-hidden="true" size={22} /></div><h3>{title}</h3><p>{href ? <a href={href}>{text}</a> : text}</p></article></StaggerItem>)}
-      </StaggerContainer>}
-        <SectionReveal><p className={styles.helpLinks}>Looking for answers first? <Link to="/about">About ElectroHub</Link> · <Link to="/products">Browse products</Link></p></SectionReveal>
+    <div className={styles.content}><div className={`${styles.contactLayout} ${styles.contactLayoutPremium}`}>
+      <section aria-labelledby="contact-options">
+        <SectionReveal className={styles.contactIntro}><h2 id="contact-options">Contact information</h2><p>We’re here to help. Reach us directly or send a message with the form.</p>
+          {profileQuery.isError && !profileQuery.data && <p role="alert">Store contact details are temporarily unavailable. You can still send a message using the form.</p>}
+        </SectionReveal>
+        {profileQuery.isPending && <div className={styles.contactMethods}>
+          <p role="status" className={styles.srOnlyText}>Loading store contact details…</p>
+          {[0, 1].map(item => <div key={item} className={`${styles.methodCard} ${styles.methodSkeleton}`} aria-hidden="true"><span className={styles.methodIcon} /><div><span /><span /></div></div>)}
+        </div>}
+        {cards.length > 0 && <StaggerContainer className={styles.contactMethods}>
+          {cards.map(({ title, text, href, icon: Icon }, index) => <StaggerItem key={title} index={index}><article className={styles.methodCard}>
+            <span className={styles.methodIcon}><Icon aria-hidden="true" size={22} /></span>
+            <div><h3>{title}</h3>{href ? <p><a href={href}>{text}</a></p> : <address className={styles.methodAddress}>{text}</address>}</div>
+          </article></StaggerItem>)}
+        </StaggerContainer>}
+        {showEmpty && <div className={styles.contactEmpty}>
+          <span className={styles.methodIcon}><MessageSquare aria-hidden="true" size={22} /></span>
+          <h3>Send us a message</h3>
+          <p>Direct contact details have not been published yet. The form is the quickest way to reach our support team.</p>
+        </div>}
+        <div className={styles.contactNote}><Info aria-hidden="true" size={18} /><p>Messages sent with this form go to our support team. Please include your order number if your question is about an order.</p></div>
+        <p className={styles.helpLinks}>Looking for answers first? <Link to="/about">About ElectroHub</Link> · <Link to="/products">Browse products</Link></p>
       </section>
-      <SectionReveal><form ref={formRef} className={styles.form} onSubmit={handleSubmit} noValidate aria-busy={contact.isPending}><h2>Send a message</h2><p>Send a message to our support team. All fields are required.</p>
-        {fields.map(field => {
-          const id = `contact-${field}`;
-          const describedBy = [errors[field] ? `${id}-error` : '', field === 'Message' ? `${id}-count` : ''].filter(Boolean).join(' ') || undefined;
-          const common = { id, value: values[field], 'aria-invalid': !!errors[field], 'aria-required': true as const, 'aria-describedby': describedBy, maxLength: LIMITS[field], onChange: change(field), disabled: contact.isPending };
-          return <div className={styles.field} key={field}><label htmlFor={id}>{field}</label>
-            {field === 'Message' ? <textarea {...common} rows={6} /> : <input {...common} type={field === 'Email' ? 'email' : 'text'} autoComplete={field === 'Name' ? 'name' : field === 'Email' ? 'email' : 'off'} />}
-            {field === 'Message' && <p className={styles.counter} id={`${id}-count`}>{values.Message.length} / {LIMITS.Message}</p>}
-            {errors[field] && <p className={styles.error} id={`${id}-error`}>{errors[field]}</p>}</div>;
-        })}
+      <SectionReveal><form ref={formRef} className={`${styles.form} ${styles.formPremium}`} onSubmit={handleSubmit} noValidate aria-busy={contact.isPending} aria-labelledby="contact-form-title"><h2 id="contact-form-title">Send a message</h2><p>Send a message to our support team. All fields are required.</p>
+        <div className={styles.fieldRow}>{fieldControl('Name')}{fieldControl('Email')}</div>
+        {fieldControl('Subject')}{fieldControl('Message')}
         {/* Honeypot: invisible and unreachable for people; automated form fillers that complete it are silently discarded server-side. */}
         <div className={styles.trap} aria-hidden="true"><label htmlFor="contact-website">Website</label><input id="contact-website" name="website" type="text" tabIndex={-1} autoComplete="off" value={trap} onChange={event => setTrap(event.target.value)} /></div>
         <button className={styles.submit} type="submit" disabled={contact.isPending}>{contact.isPending ? 'Sending…' : 'Send Message'}</button>

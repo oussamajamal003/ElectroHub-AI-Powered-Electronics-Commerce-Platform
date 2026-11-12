@@ -142,8 +142,10 @@ describe('Product validation', () => {
   it('defaults pagination and accepts maximum size', () => {
     expect(paginationSchema.parse({})).toEqual({ page: 1, pageSize: 20 });
     expect(paginationSchema.parse({ pageSize: '100' }).pageSize).toBe(100);
-    expect(paginationSchema.parse({ page: '1000' }).page).toBe(1000);
-    expect(paginationSchema.safeParse({ page: '1001' }).success).toBe(false);
+    // Task 06.2 WP F: offset pagination is capped at page 100 (deeper traversal uses keyset cursors).
+    expect(paginationSchema.parse({ page: '100' }).page).toBe(100);
+    expect(paginationSchema.safeParse({ page: '101' }).success).toBe(false);
+    expect(paginationSchema.safeParse({ page: '1000' }).success).toBe(false);
   });
   it.each([{ page: '0' }, { page: '-1' }, { page: '1.5' }, { pageSize: '101' },
     { pageSize: '' }, { page: '1000001' }, { page: ['1', '2'] }, { search: 'phone' },
