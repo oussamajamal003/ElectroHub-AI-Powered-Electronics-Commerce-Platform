@@ -1,25 +1,37 @@
 @use '@/styles/abstracts' as *;
 
 .manager { display: flex; align-items: center; gap: $spacing-5; min-width: 0; }
+.avatarWrap { position: relative; flex: 0 0 auto; }
 .avatar { width: 4rem; height: 4rem; font-size: $font-size-xl; }
 .avatarLarge { width: 5rem; height: 5rem; font-size: $font-size-2xl; }
+.editAvatar {
+  position: absolute;
+  right: -0.25rem;
+  bottom: -0.25rem;
+  width: 2rem;
+  height: 2rem;
+  min-width: 2rem;
+  border: 2px solid $color-background;
+  border-radius: 50%;
+  box-shadow: $shadow-sm;
+}
+.editAvatar svg { width: 1rem; height: 1rem; }
 .details { display: grid; gap: $spacing-2; min-width: 0; }
 .title { color: $color-text-primary; font-weight: $font-weight-semibold; }
 .help { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; line-height: 1.5; }
-.actions, .dialogActions { display: flex; flex-wrap: wrap; align-items: center; gap: $spacing-2; }
-.actions svg { width: 16px; height: 16px; }
+.actionMenu svg { width: 1rem; height: 1rem; margin-right: $spacing-2; }
 .status { margin: 0; color: $color-success-foreground; font-size: $font-size-sm; }
 .hiddenInput { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .dialog { width: min(30rem, calc(100vw - 2rem)); }
 .preview, .camera { display: block; width: min(18rem, 70vw); height: min(18rem, 70vw); margin: $spacing-4 auto; border-radius: 50%; object-fit: cover; }
 .previewLarge { width: min(20rem, 72vw); height: min(20rem, 72vw); }
 .camera { background: #0b1220; }
-.dialogActions { justify-content: flex-end; }
+.cameraFallback { display: grid; justify-items: center; gap: $spacing-2; margin: 0 auto $spacing-4; text-align: center; }
+.dialogActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: $spacing-2; }
 
 @media (max-width: $breakpoint-sm) {
   .manager { align-items: flex-start; }
   .avatar { width: 3.5rem; height: 3.5rem; }
-  .actions { gap: $spacing-2; }
 }
 
 @media (max-width: 360px) {

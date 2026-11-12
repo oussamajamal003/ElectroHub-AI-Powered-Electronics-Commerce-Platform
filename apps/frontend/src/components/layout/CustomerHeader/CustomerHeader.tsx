@@ -33,7 +33,6 @@ import styles from './CustomerHeader.module.scss';
 import { ThemeToggle } from '@/features/theme';
 import { useStorefrontProfile } from '@/features/storefront/api';
 import { useProfilePhoto } from '@/features/profilePhoto/queries';
-
 const CustomerNotifications = lazy(() => import('@/features/notifications/CustomerNotifications').then(module => ({ default: module.CustomerNotifications })));
 
 export interface CustomerHeaderProps {
