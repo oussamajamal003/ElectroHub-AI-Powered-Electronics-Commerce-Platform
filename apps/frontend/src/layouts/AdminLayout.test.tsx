@@ -40,6 +40,27 @@ describe('AdminLayout shell', () => {
     expect(screen.getByRole('button', { name: 'Alerts: 6 items need attention' })).toBeInTheDocument();
   });
 
+  it('offers an explicit retry for a failed alerts request', async () => {
+    const refetch = vi.fn();
+    vi.mocked(useAdminAlerts).mockReturnValue({ isError: true, isPending: false, isFetching: false, refetch } as unknown as ReturnType<typeof useAdminAlerts>);
+    renderAt('/admin');
+    const trigger = screen.getByRole('button', { name: /^Alerts$/ });
+    fireEvent.pointerDown(trigger); fireEvent.click(trigger);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Alerts could not be loaded.');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry alerts' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('announces a successful zero-alert state', async () => {
+    vi.mocked(useAdminAlerts).mockReturnValue({ data: { data: { lowStock: 0, outOfStock: 0, awaitingFulfillment: 0,
+      preparing: 0, outForDelivery: 0, generatedAt: '' } }, isError: false, isPending: false } as unknown as ReturnType<typeof useAdminAlerts>);
+    renderAt('/admin');
+    const trigger = screen.getByRole('button', { name: 'Alerts: nothing needs attention' });
+    fireEvent.pointerDown(trigger); fireEvent.click(trigger);
+    expect(await screen.findByRole('status')).toHaveTextContent('No operational alerts need attention.');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('remembers the collapsed sidebar and keeps accessible names on the icon rail', () => {
     renderAt('/admin');
     fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
