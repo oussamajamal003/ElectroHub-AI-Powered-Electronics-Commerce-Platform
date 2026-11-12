@@ -371,4 +371,4 @@ on this branch only add this report. The PR's current head is the final-SHA auth
 
 ## 23. PR URL
 
-PR_URL
+https://github.com/oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerce-Platform/pull/62 (into `feature/06.2-accessibility-qa-ci-cd`; not merged, not deployed)
