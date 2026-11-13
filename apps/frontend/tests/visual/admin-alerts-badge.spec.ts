@@ -99,6 +99,8 @@ test('the alerts dropdown keeps its original compact width', async ({ page }) =>
     await fakeAdmin(page);
     await page.goto('/admin/inventory', { waitUntil: 'domcontentloaded' });
     await openAlerts(page);
+    // The open animation uses perspective + rotateX, which widens the box until it settles; measure the settled menu.
+    await menu(page).evaluate(element => Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished)));
     const box = (await menu(page).boundingBox())!;
     // `.menu` is min-width 18rem / max-width 100vw - 2rem (unchanged since 628e256); the content, not the viewport, sets the width.
     expect(box.width).toBeGreaterThanOrEqual(288);

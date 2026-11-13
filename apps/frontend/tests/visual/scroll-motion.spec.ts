@@ -31,9 +31,10 @@ for (const [name, path] of [['About', '/about'], ['Home', '/']] as const) {
   test(`${name}: revealed content is never hidden or replayed when scrolling down, then up, then down again`, async ({ page }) => {
     await page.route(/^https?:\/\/[^/]+\/api\//, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], meta: { page: 1, pageSize: 20, total: 0, totalPages: 0 } }) }));
     await page.goto(path, { waitUntil: 'domcontentloaded' });
+    // The route is lazy: measure only once it replaced the "Loading page…" fallback (WebKit can need more than 500 ms under load).
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight - innerHeight), { timeout: 15_000 }).toBeGreaterThan(600);
     await page.waitForTimeout(500);
     const height = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
-    expect(height).toBeGreaterThan(600);
 
     await stepScroll(page, 0, height);              // 1-5: down through every section
     await page.waitForTimeout(900);                 // let the last reveal finish
@@ -88,7 +89,8 @@ test('reduced motion: nothing is hidden or animated, at any scroll position', as
     expect(await pendingInView(page)).toEqual([]);
   }
   await expect(page.getByRole('heading', { name: 'What we stand for' })).toBeVisible();
-  const running = await page.evaluate(() => document.getAnimations().filter(a => a.playState === 'running' && !(a.effect as KeyframeEffect | null)?.target?.matches?.('[class*="cta"], [class*="cta"] *')).length);
+  // The global reduced-motion reset shortens every transition/animation to 0.01 ms; a colour change caught in that same frame is not motion.
+  const running = await page.evaluate(() => document.getAnimations().filter(a => a.playState === 'running' && Number(a.effect?.getComputedTiming().duration ?? 0) > 1 && !(a.effect as KeyframeEffect | null)?.target?.matches?.('[class*="cta"], [class*="cta"] *')).length);
   expect(running).toBe(0);
 });
 
