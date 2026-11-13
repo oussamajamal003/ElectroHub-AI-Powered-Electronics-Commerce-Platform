@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import styles from './Motion.module.scss';
 
 let homeEntrancePlayed = false;
@@ -43,10 +43,15 @@ function awaitPassed(node: Element, settle: () => void) {
  * whichever direction the page is scrolled. Sections already above the viewport when observed (reload, back/forward scroll
  * restoration, an anchor jump) are settled without animation so scrolling up never plays or hides them.
  * Content stays in the DOM and fully visible when IntersectionObserver is missing or the visitor prefers reduced motion.
+ *
+ * Once the entrance has finished the section moves to `settled`, which carries no animation at all. A finished CSS animation that
+ * stays attached (fill-mode `both`) is restarted by the browser whenever its box is rebuilt (a display/containment change, a style
+ * recalculation after a re-render in some engines), which is exactly a "replay"; with the animation gone there is nothing to restart.
  */
 export function SectionReveal({ children, className = '', style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
   const ref = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<RevealPhase>('static');
+  useSettleWhenFinished(ref, phase === 'visible', () => setPhase('settled'));
 
   // Layout effect: the starting phase is decided before the first paint. Before Task 06.2 every section painted visible, was then
   // hidden (`pending`, opacity 0) and only reappeared when the IntersectionObserver callback ran, so on a reload or a slow device the
@@ -84,6 +89,25 @@ export function SectionReveal({ children, className = '', style }: { children: R
   }, []);
 
   return <div ref={ref} style={style} className={`${className} ${styles.reveal} ${phase === 'pending' ? styles.pending : ''} ${phase === 'visible' ? styles.visible : ''}`}>{children}</div>;
+}
+
+/**
+ * Moves a revealed element to its final, animation-free state once every entrance animation in it (its own and its stagger
+ * children's) has finished or been cancelled. Without the Web Animations API (old engines, jsdom) it settles straight away.
+ */
+function useSettleWhenFinished(ref: RefObject<HTMLElement | null>, active: boolean, settle: () => void) {
+  const settleRef = useRef(settle);
+  settleRef.current = settle;
+  useEffect(() => {
+    const node = ref.current;
+    if (!active || !node) return;
+    let cancelled = false;
+    const animations = typeof node.getAnimations === 'function' ? node.getAnimations({ subtree: true }) : [];
+    const done = () => { if (!cancelled) settleRef.current(); };
+    if (animations.length === 0) { done(); return; }
+    Promise.allSettled(animations.map(animation => animation.finished)).then(done);
+    return () => { cancelled = true; };
+  }, [active, ref]);
 }
 
 export function StaggerContainer({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -137,4 +161,15 @@ export function BenefitsReveal({ children, className = '' }: { children: ReactNo
 export function StaggerItem({ children, index = 0, className = '' }: { children: ReactNode; index?: number; className?: string }) {
   const style = { '--motion-delay': `${Math.min(index, 8) * 70}ms` } as CSSProperties;
   return <div className={`${styles.item} ${className}`} style={style}>{children}</div>;
+}
+
+/**
+ * A card that reveals itself once, for grids whose items come and go with data (catalog results, pagination, "Load more").
+ * The reveal belongs to the card's own mount: a card React keeps (same key) across a refetch, a re-sort that returns it again or a
+ * re-render never animates again, while a card that is new to the grid gets one short entrance. The stagger is capped so a row
+ * finishes quickly, and everything else (once-only, scroll restoration, reduced motion, no stuck opacity) is SectionReveal's.
+ */
+export function RevealItem({ children, index = 0, className = '' }: { children: ReactNode; index?: number; className?: string }) {
+  const style = { '--motion-delay': `${Math.min(index, 3) * 60}ms` } as CSSProperties;
+  return <SectionReveal className={`${styles.item} ${className}`} style={style}>{children}</SectionReveal>;
 }

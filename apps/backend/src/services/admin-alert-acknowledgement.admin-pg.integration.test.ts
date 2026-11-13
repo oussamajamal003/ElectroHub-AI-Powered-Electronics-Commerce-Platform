@@ -58,13 +58,31 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1')('admin alert acknowle
     expect((await dashboard.alerts(first)).unread.lowStock).toBe(1);
   });
 
+  it('acknowledges one category at a time (including out-for-delivery) and leaves the other rows untouched', async () => {
+    const id = await admin();
+    live.lowStock = 2; live.outOfStock = 1;
+    const before = await dashboard.alerts(id);
+    const afterLow = await dashboard.acknowledgeAlerts(id, { lowStock: 2 });
+    expect(afterLow.unread.lowStock).toBe(0);
+    expect(afterLow.unread.outOfStock).toBe(1);
+    expect(afterLow.unread.total).toBe(before.unread.total - 2);
+    expect((await prisma.adminAlertAcknowledgement.findMany({ where: { userId: id } })).map(row => row.category)).toEqual(['lowStock']);
+    const afterDelivery = await dashboard.acknowledgeAlerts(id, { outForDelivery: before.outForDelivery });
+    expect(afterDelivery.unread.outForDelivery).toBe(0);
+    expect(afterDelivery.unread.outOfStock).toBe(1);
+    expect((await prisma.adminAlertAcknowledgement.findMany({ where: { userId: id }, orderBy: { category: 'asc' } })).map(row => row.category))
+      .toEqual(['lowStock', 'outForDelivery']);
+    const fresh = new AdminDashboardService(prisma, { summary: async () => ({ ...live }) } as unknown as AdminInventoryService);
+    expect((await fresh.alerts(id)).unread).toMatchObject({ lowStock: 0, outOfStock: 1, outForDelivery: 0 });
+  });
+
   it('enforces the schema: no negative baseline, no orphan rows, and rows disappear with their administrator', async () => {
     const id = await admin();
     await expect(prisma.$executeRawUnsafe(`INSERT INTO admin_alert_acknowledgements ("userId", category, "acknowledgedCount", "updatedAt") VALUES ($1::uuid, 'lowStock', -1, now())`, id))
       .rejects.toThrow();
     await expect(prisma.adminAlertAcknowledgement.create({ data: { userId: randomUUID(), category: 'lowStock', acknowledgedCount: 0 } })).rejects.toThrow();
-    await dashboard.acknowledgeAlerts(id, { lowStock: 0, outOfStock: 0, awaitingFulfillment: 0 });
-    expect(await prisma.adminAlertAcknowledgement.count({ where: { userId: id } })).toBe(3);
+    await dashboard.acknowledgeAlerts(id, { lowStock: 0, outOfStock: 0, awaitingFulfillment: 0, outForDelivery: 0 });
+    expect(await prisma.adminAlertAcknowledgement.count({ where: { userId: id } })).toBe(4);
     await prisma.user.delete({ where: { id } });
     created.splice(created.indexOf(id), 1);
     expect(await prisma.adminAlertAcknowledgement.count({ where: { userId: id } })).toBe(0);

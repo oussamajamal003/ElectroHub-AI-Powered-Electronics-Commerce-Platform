@@ -7,6 +7,7 @@ import { useMutation } from '@tanstack/react-query';
 import { SectionReveal, StaggerContainer, StaggerItem } from '@/components/motion/Motion';
 import { sendContactMessage, useStorefrontProfile } from '@/features/storefront/api';
 import { ApiError } from '@/lib/api';
+import { Alert } from '@/components/ui/Alert';
 import styles from './CompanyPages.module.scss';
 
 const fields = ['Name', 'Email', 'Subject', 'Message'] as const;
@@ -45,6 +46,21 @@ export function validateContact(values: FormValues): Partial<FormValues> {
   return errors;
 }
 
+/**
+ * What the customer is told after a failed send. Each case says what actually happened (nothing was delivered) and what to do next;
+ * the typed message always stays in the form. Exported for tests.
+ */
+export function contactFailureMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.code === 'CONTACT_NOT_CONFIGURED') return 'Our support inbox isn’t set up yet, so your message could not be delivered. Your message is still here — please try again later.';
+    if (error.code === 'CONTACT_UNAVAILABLE') return 'Our email service didn’t accept your message, so it was not sent. Your message is still here — please try again in a few minutes.';
+    if (error.status === 429) return 'You’ve sent several messages in a short time. Please wait a minute, then try again.';
+    if (error.status === 0) return 'We couldn’t reach ElectroHub. Check your connection, then try again — your message is still here.';
+    if (error.status === 400 || error.status === 422) return 'Some details could not be accepted. Check the fields and try again.';
+  }
+  return 'We could not send your message. Your message is still here — please try again.';
+}
+
 export function ContactPage() {
   const [values, setValues] = useState<FormValues>(initialValues);
   const [errors, setErrors] = useState<Partial<FormValues>>({});
@@ -53,7 +69,10 @@ export function ContactPage() {
   const formRef = useRef<HTMLFormElement>(null);
   const profileQuery = useStorefrontProfile();
   const { data: profile } = profileQuery;
-  const contact = useMutation({ mutationFn: sendContactMessage, meta: { action: 'send your message' } });
+  // The page owns all feedback for this form (inline, next to the button), so the global failure toast stays silent.
+  const contact = useMutation({ mutationFn: sendContactMessage, meta: { action: 'send your message', silent: true } });
+  // The public profile says whether a support mailbox exists. Without one the server cannot deliver, so say so before typing starts.
+  const inboxMissing = Boolean(profile) && !profile?.supportEmail;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -66,7 +85,7 @@ export function ContactPage() {
       await contact.mutateAsync({ name: values.Name.trim(), email: values.Email.trim(), subject: values.Subject.trim(), message: values.Message.trim(), website: trap });
       setSubmitted(true);
       setValues(initialValues);
-      toast.success('Message sent', { description: 'We\'ll get back to you soon.', announce: false });
+      toast.success('Message sent', { description: 'Our support team will reply to the email address you provided.', announce: false });
     } catch { setSubmitted(false); }
   }
 
@@ -118,7 +137,7 @@ export function ContactPage() {
         {showEmpty && <div className={styles.contactEmpty}>
           <span className={styles.methodIcon}><MessageSquare aria-hidden="true" size={22} /></span>
           <h3>Send us a message</h3>
-          <p>Direct contact details have not been published yet. The form is the quickest way to reach our support team.</p>
+          <p>{inboxMissing ? 'Direct contact details have not been published yet.' : 'Direct contact details have not been published yet. The form is the quickest way to reach our support team.'}</p>
         </div>}
         <div className={styles.contactNote}><Info aria-hidden="true" size={18} /><p>Messages sent with this form go to our support team. Please include your order number if your question is about an order.</p></div>
         <p className={styles.helpLinks}>Looking for answers first? <Link to="/about">About ElectroHub</Link> · <Link to="/products">Browse products</Link></p>
@@ -129,8 +148,9 @@ export function ContactPage() {
         {/* Honeypot: invisible and unreachable for people; automated form fillers that complete it are silently discarded server-side. */}
         <div className={styles.trap} aria-hidden="true"><label htmlFor="contact-website">Website</label><input id="contact-website" name="website" type="text" tabIndex={-1} autoComplete="off" value={trap} onChange={event => setTrap(event.target.value)} /></div>
         <button className={styles.submit} type="submit" disabled={contact.isPending}>{contact.isPending ? 'Sending…' : 'Send Message'}</button>
-        {submitted && <p role="status" className={styles.notice}>Your message has been sent. Our team will reply to the email address you provided.</p>}
-        {contact.isError && <p role="alert" className={styles.error}>{contact.error instanceof ApiError && (contact.error.status === 429 || contact.error.status === 503) ? contact.error.message : 'We could not send your message. Please try again.'}</p>}
+        {/* 202 = the email provider accepted the message for delivery; this does not claim it has reached an inbox. */}
+        {submitted && <p role="status" className={styles.notice}>Your message was sent to our support team. We’ll reply to the email address you provided.</p>}
+        {contact.isError && <p role="alert" className={styles.error}>{contactFailureMessage(contact.error)}</p>}
       </form></SectionReveal>
     </div></div>
   </div>;

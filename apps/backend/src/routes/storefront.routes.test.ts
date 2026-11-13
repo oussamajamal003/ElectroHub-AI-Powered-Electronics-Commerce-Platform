@@ -3,7 +3,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const store = vi.hoisted(() => ({ getStore: vi.fn() }));
-const contact = vi.hoisted(() => ({ sendToAdministrators: vi.fn() }));
+const contact = vi.hoisted(() => ({ deliver: vi.fn() }));
 vi.mock('../services/store-settings.service.js', () => ({ storeSettings: store }));
 vi.mock('../services/storefront-contact.service.js', () => ({ storefrontContact: contact }));
 
@@ -24,7 +24,7 @@ const valid = { name: 'Test Customer', email: 'customer@example.test', subject: 
 beforeEach(() => {
   vi.clearAllMocks();
   store.getStore.mockResolvedValue(profile);
-  contact.sendToAdministrators.mockResolvedValue(undefined);
+  contact.deliver.mockResolvedValue(undefined);
 });
 
 describe('public storefront routes', () => {
@@ -41,7 +41,7 @@ describe('public storefront routes', () => {
     const response = await request(app).post('/api/store/contact').send(valid);
     expect(response.status).toBe(202);
     expect(response.body).toEqual({ data: { accepted: true } });
-    expect(contact.sendToAdministrators).toHaveBeenCalledWith(valid, 'Northstar');
+    expect(contact.deliver).toHaveBeenCalledWith(valid, 'support@example.test', 'Northstar');
   });
 
   it('rejects malformed, extra, and newline-injected fields before reading store settings or sending mail', async () => {
@@ -53,24 +53,24 @@ describe('public storefront routes', () => {
       expect(response.status).toBe(400);
     }
     expect(store.getStore).not.toHaveBeenCalled();
-    expect(contact.sendToAdministrators).not.toHaveBeenCalled();
+    expect(contact.deliver).not.toHaveBeenCalled();
   });
 
   it('answers a filled honeypot as accepted but never reads settings or sends mail', async () => {
     const response = await request(app).post('/api/store/contact').set('X-Forwarded-For', '198.51.100.77').send({ ...valid, website: 'https://spam.example' });
     expect(response.status).toBe(202);
-    expect(contact.sendToAdministrators).not.toHaveBeenCalled();
+    expect(contact.deliver).not.toHaveBeenCalled();
     expect(store.getStore).not.toHaveBeenCalled();
   });
 
   it('accepts the empty honeypot a real browser submits and does not forward it', async () => {
     const response = await request(app).post('/api/store/contact').set('X-Forwarded-For', '198.51.100.78').send({ ...valid, website: '' });
     expect(response.status).toBe(202);
-    expect(contact.sendToAdministrators).toHaveBeenCalledWith(valid, 'Northstar');
+    expect(contact.deliver).toHaveBeenCalledWith(valid, 'support@example.test', 'Northstar');
   });
 
   it('surfaces an unconfigured or failing mailbox as a safe 503 without leaking detail', async () => {
-    contact.sendToAdministrators.mockRejectedValue(Object.assign(new Error('Contact delivery is temporarily unavailable.'), { statusCode: 503, code: 'CONTACT_UNAVAILABLE' }));
+    contact.deliver.mockRejectedValue(Object.assign(new Error('Contact delivery is temporarily unavailable.'), { statusCode: 503, code: 'CONTACT_UNAVAILABLE' }));
     const response = await request(app).post('/api/store/contact').set('X-Forwarded-For', '198.51.100.79').send(valid);
     expect(response.status).toBe(503);
     expect(response.body.error.code).toBe('CONTACT_UNAVAILABLE');

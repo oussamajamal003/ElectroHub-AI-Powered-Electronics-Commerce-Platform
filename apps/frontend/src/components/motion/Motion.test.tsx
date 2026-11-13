@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BenefitsReveal, SectionReveal, StaggerContainer, StaggerItem } from './Motion';
+import { BenefitsReveal, RevealItem, SectionReveal, StaggerContainer, StaggerItem } from './Motion';
 
 type Entry = Partial<IntersectionObserverEntry>;
 
@@ -20,6 +20,20 @@ function mockObserver() {
   return { state, emit };
 }
 
+/** jsdom has no Web Animations API: model one running entrance animation whose end the test controls. */
+function mockAnimations() {
+  const pending: (() => void)[] = [];
+  const getAnimations = vi.fn(() => {
+    let finish!: () => void;
+    const finished = new Promise<void>(resolve => { finish = resolve; });
+    pending.push(finish);
+    return [{ finished } as unknown as Animation];
+  });
+  Object.defineProperty(HTMLElement.prototype, 'getAnimations', { configurable: true, value: getAnimations });
+  const finishAll = () => act(async () => { pending.splice(0).forEach(finish => finish()); await Promise.resolve(); });
+  return { getAnimations, finishAll };
+}
+
 describe('section motion', () => {
   const originalObserver = window.IntersectionObserver;
   const originalMatchMedia = window.matchMedia;
@@ -27,10 +41,12 @@ describe('section motion', () => {
     if (originalObserver) window.IntersectionObserver = originalObserver;
     else delete (window as { IntersectionObserver?: typeof IntersectionObserver }).IntersectionObserver;
     window.matchMedia = originalMatchMedia;
+    delete (HTMLElement.prototype as { getAnimations?: unknown }).getAnimations;
     vi.restoreAllMocks();
   });
 
   it('reveals once and never hides or replays on later scroll changes in either direction', () => {
+    mockAnimations();
     const { state, emit } = mockObserver();
     render(<SectionReveal><h2>Heading</h2></SectionReveal>);
     const wrapper = screen.getByRole('heading', { name: 'Heading' }).parentElement!;
@@ -45,6 +61,46 @@ describe('section motion', () => {
     expect(wrapper.className).toContain('visible');
     expect(wrapper.className).not.toContain('pending');
     expect(state.created).toBe(1);
+  });
+
+  it('drops the finished entrance animation (settled), so a later DOM move or re-style has nothing to replay', async () => {
+    const { finishAll } = mockAnimations();
+    const { emit } = mockObserver();
+    render(<SectionReveal><h2>Heading</h2></SectionReveal>);
+    const wrapper = screen.getByRole('heading', { name: 'Heading' }).parentElement!;
+    emit({ isIntersecting: true });
+    expect(wrapper.className).toContain('visible');
+    await finishAll();
+    expect(wrapper.className).not.toContain('visible');
+    expect(wrapper.className).not.toContain('pending');
+    emit({ isIntersecting: true });                                // stale observer callbacks cannot bring it back
+    expect(wrapper.className).not.toContain('visible');
+  });
+
+  it('settles at once where the browser has no animations to wait for', () => {
+    const { emit } = mockObserver();
+    render(<SectionReveal><h2>Heading</h2></SectionReveal>);
+    emit({ isIntersecting: true });
+    const wrapper = screen.getByRole('heading', { name: 'Heading' }).parentElement!;
+    expect(wrapper.className).not.toMatch(/visible|pending/);
+  });
+
+  it('RevealItem: a card reveals once for its own mount; a re-render or reorder that keeps it never replays, a new card does', async () => {
+    const { finishAll, getAnimations } = mockAnimations();
+    const { emit } = mockObserver();
+    const Grid = ({ ids }: { ids: string[] }) => <div>{ids.map((id, index) => <RevealItem key={id} index={index}><a href={`/products/${id}`}>{id}</a></RevealItem>)}</div>;
+    const { rerender } = render(<Grid ids={['a']} />);
+    const card = screen.getByRole('link', { name: 'a' }).parentElement!;
+    expect(card.className).toContain('pending');
+    emit({ isIntersecting: true });
+    expect(card.className).toContain('visible');
+    await finishAll();
+    expect(card.className).not.toMatch(/visible|pending/);
+    rerender(<Grid ids={['b', 'a']} />);                          // refetch: a new card arrives first, the old one moves
+    expect(screen.getByRole('link', { name: 'a' }).parentElement).toBe(card);
+    expect(card.className).not.toMatch(/visible|pending/);
+    expect(screen.getByRole('link', { name: 'b' }).parentElement!.className).toContain('pending');
+    expect(getAnimations).toHaveBeenCalledTimes(1);
   });
 
   it('settles a section that is already above the viewport without animating or hiding it', () => {

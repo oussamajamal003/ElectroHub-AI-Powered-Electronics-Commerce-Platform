@@ -228,7 +228,7 @@ test.describe('Payment Recovery Loading & Terminal Failure UX', () => {
     // Opens fresh at Shipping Information without any failure banner/flash
     await expect(page.getByRole('heading', { name: 'Shipping Information' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Payment Failed' })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: /Checking your payment|We couldn’t confirm your payment yet/ })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: /Checking your payment|We’re still checking your payment/ })).toHaveCount(0);
     expect(await page.evaluate(() => {
       Reflect.get(window, '__freshCheckoutObserver').disconnect();
       return Reflect.get(window, '__freshCheckoutTerminalFrames');

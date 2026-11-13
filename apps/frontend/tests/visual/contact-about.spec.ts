@@ -21,7 +21,7 @@ const fill = async (page: Page, message = 'Hello, I have a question about an ord
   await page.getByLabel('Name').fill('Demo User');
   await page.getByLabel('Email').fill('demo@example.com');
   await page.getByLabel('Subject').fill('Question');
-  await page.getByLabel('Message').fill(message);
+  await page.getByLabel('Message', { exact: true }).fill(message);
 };
 
 for (const width of [320, 390, 768, 1024, 1440, 1920]) {
@@ -37,7 +37,7 @@ for (const width of [320, 390, 768, 1024, 1440, 1920]) {
     await expect(page.getByLabel('Name')).toBeFocused();
     await fill(page);
     await page.getByRole('button', { name: 'Send Message' }).click();
-    await expect(page.getByRole('status')).toContainText('Your message has been sent');
+    await expect(page.getByRole('status').filter({ hasText: 'Your message was sent to our support team.' })).toBeVisible();
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ name: 'Demo User', email: 'demo@example.com', website: '' });
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -51,14 +51,14 @@ for (const width of [320, 390, 768, 1024, 1440, 1920]) {
     await page.goto('/about', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Technology made simple.' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Smarter shopping, assisted by AI' })).toBeAttached();
-    await expect(page.getByRole('link', { name: 'Contact us' })).toHaveAttribute('href', '/contact');
+    await expect(page.getByRole('link', { name: 'Contact us' }).first()).toHaveAttribute('href', '/contact');
     const height = await page.evaluate(() => document.documentElement.scrollHeight);
     for (let y = 0; y < height; y += 600) { await page.evaluate(p => window.scrollTo(0, p), y); await page.waitForTimeout(60); }
     await page.waitForTimeout(700);
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: `test-results/motion-contact/about-${width}.png`, fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
-    await page.getByRole('link', { name: 'Contact us' }).click();
+    await page.getByRole('link', { name: 'Contact us' }).first().click();
     await expect(page).toHaveURL(/\/contact$/);
   });
 }
@@ -86,15 +86,30 @@ test('Contact submission: pending state blocks a second send, then failure, rate
   await expect(page.getByRole('button', { name: 'Sending…' })).toBeDisabled();
   await page.getByRole('button', { name: 'Sending…' }).click({ force: true }).catch(() => undefined);
   release();
-  await expect(page.getByRole('alert')).toContainText(/temporarily unavailable|Something went wrong/);
-  await expect(page.getByText('Your message has been sent')).toHaveCount(0);
+  await expect(page.getByRole('alert')).toContainText('Our email service didn’t accept your message, so it was not sent.');
+  await expect(page.getByText(/Couldn.t send your message/)).toHaveCount(0);       // one inline explanation, no duplicate global toast
+  await expect(page.getByText('Your message was sent')).toHaveCount(0);
   expect(sent).toHaveLength(1);                                   // the pending click did not send twice
-  expect(await page.getByLabel('Message').inputValue()).toContain('Hello');   // nothing the visitor typed was lost
+  expect(await page.getByLabel('Message', { exact: true }).inputValue()).toContain('Hello');   // nothing the visitor typed was lost
   await page.getByRole('button', { name: 'Send Message' }).click();
-  await expect(page.getByRole('alert')).toContainText(/Too many messages|Something went wrong|could not send/);
+  await expect(page.getByRole('alert')).toContainText('You’ve sent several messages in a short time.');
   await page.getByRole('button', { name: 'Send Message' }).click();
-  await expect(page.getByRole('status')).toContainText('Your message has been sent');
+  await expect(page.getByRole('status').filter({ hasText: 'Your message was sent to our support team.' })).toBeVisible();
   expect(sent).toHaveLength(3);
+});
+
+test('Contact with no recipient at all: no false up-front claim, and a submission is reported as not delivered (never success)', async ({ page }) => {
+  const sent = await stub(page, unconfigured, () => ({ status: 503, body: { error: { code: 'CONTACT_NOT_CONFIGURED', message: 'Our support inbox is not set up yet.' } } }));
+  await page.goto('/contact', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByTestId('contact-inbox-missing')).toHaveCount(0);
+  await fill(page);
+  await page.getByRole('button', { name: 'Send Message' }).click();
+  await expect(page.getByRole('alert')).toContainText('Our support inbox isn’t set up yet, so your message could not be delivered.');
+  await expect(page.getByText(/Couldn.t send your message|Your message was sent/)).toHaveCount(0);
+  expect(await page.getByLabel('Message', { exact: true }).inputValue()).toContain('Hello');
+  expect(sent).toHaveLength(1);
+  await expectNoAxeViolations(page, 'contact-not-configured');
+  await page.screenshot({ path: 'test-results/motion-contact/contact-not-configured.png', fullPage: true });
 });
 
 test('Contact form is keyboard operable with visible focus', async ({ page }) => {
@@ -103,8 +118,8 @@ test('Contact form is keyboard operable with visible focus', async ({ page }) =>
   await page.getByLabel('Name').focus();
   for (const label of ['Email', 'Subject', 'Message']) {
     await page.keyboard.press('Tab');
-    await expect(page.getByLabel(label)).toBeFocused();
-    expect(await page.getByLabel(label).evaluate(el => el.matches(':focus-visible') && getComputedStyle(el).outlineStyle !== 'none')).toBe(true);
+    await expect(page.getByLabel(label, { exact: true })).toBeFocused();
+    expect(await page.getByLabel(label, { exact: true }).evaluate(el => el.matches(':focus-visible') && getComputedStyle(el).outlineStyle !== 'none')).toBe(true);
   }
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Send Message' })).toBeFocused();   // the honeypot is skipped

@@ -7,6 +7,7 @@ import type { PaymentOutcome, UnavailableItem } from './types';
 import { isResolvedPayment } from './paymentPresentation';
 import styles from './Checkout.module.scss';
 import { CheckingPayment } from './CheckoutComponents';
+import { CancelPurchase } from './PaymentPurchases';
 
 const retryableStates = ['DECLINED', 'ACTION_REQUIRED', 'CANCELED', 'COMPENSATED', 'REFUNDED'];
 
@@ -90,8 +91,13 @@ export function PaymentRecovery({ outcome, message, pending, onCheck, onRetry, o
   // A settled check without a result is shown as unconfirmed with a same-attempt check, never as failure.
   if (isProcessing) {
     const unconfirmed = Boolean(message) || outcome?.classification === 'UNKNOWN';
+    // Cancel exists only for a purchase the backend verified never reached the payment provider (`cancelable`); the server re-verifies it.
+    const cancelable = !pending && outcome?.cancelable === true;
+    const note = cancelable ? 'Card confirmation never reached our payment provider, so nothing was charged. You can cancel this purchase and check out again.'
+      : state === 'CANCEL_PENDING' ? 'Cancellation was requested. We’re confirming it with our payment provider — nothing was charged.' : undefined;
     return <div className={styles.processingWrapper}>
-      <CheckingPayment unconfirmed={unconfirmed} checking={pending} onCheck={onCheck} />
+      <CheckingPayment unconfirmed={unconfirmed} checking={pending} onCheck={onCheck} note={note}
+        cancelAction={cancelable && outcome ? <CancelPurchase item={{ attemptId: outcome.attemptId, scope: outcome.scope ?? 'CART_CHECKOUT' }} onSettled={onCheck} /> : null} />
     </div>;
   }
 
@@ -104,7 +110,7 @@ export function PaymentRecovery({ outcome, message, pending, onCheck, onRetry, o
   // Payment failed without claiming a decline.
   const providerDecline = declined && outcome?.classification !== 'FAILED';
   const heading = declined ? 'Payment Failed' : refunded ? 'Payment refunded'
-    : failed ? 'Payment failed'
+    : state === 'CANCELED' ? 'Payment canceled' : failed ? 'Payment failed'
       : state === 'ACTION_REQUIRED' ? 'Additional verification required'
         : 'Checking your payment';
 

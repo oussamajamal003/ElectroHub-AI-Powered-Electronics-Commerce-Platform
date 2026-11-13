@@ -6,7 +6,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ProductCard, ProductCardSkeleton } from '@/components/ui/ProductCard';
-import { StaggerItem } from '@/components/motion/Motion';
+import { RevealItem } from '@/components/motion/Motion';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/Pagination';
 import { SearchField } from '@/components/ui/SearchField/SearchField';
 import { FilterSelect } from '@/components/ui/FilterControls/FilterControls';
@@ -229,7 +229,8 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
             {loading && <div className={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`} aria-hidden="true">{Array.from({ length: getProductGridSkeletonCount(state.pageSize) }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
             {error && <ErrorState headingLevel={2} className={styles.stateBlock} title="Search unavailable" description="Search is temporarily unavailable. Please try again." action={<Button type="button" onClick={() => void searchQuery.refetch()}>Retry search</Button>} />}
             {results && results.data.length > 0 && <div className={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`}>{results.data.map((product, index) => catalog
-              ? <StaggerItem key={product.id} index={index % 4}>{productCard(product)}</StaggerItem>
+              // Keyed by product: a card already in the grid keeps its mount (and its finished reveal) across refetches and re-sorts.
+              ? <RevealItem key={product.id} index={index % 4}>{productCard(product)}</RevealItem>
               : productCard(product))}</div>}
             {results && results.data.length === 0 && <EmptyState headingLevel={2} className={styles.stateBlock} icon={<SearchX aria-hidden="true" />} title={state.q ? `No results for “${state.q}”` : 'No products found'} description="Try adjusting your search or filters." action={<>{catalog && filterCount > 0 && <Button type="button" variant="link" onClick={clearAllFilters}>Reset filters</Button>}{state.q && <Button type="button" variant="link" onClick={() => { draftValue.current = ''; setDraft(''); update({ q: '' }); }}>Clear query</Button>}{state.page > 1 && <Button type="button" variant="link" onClick={() => commit({ ...state, page: 1 })}>First page</Button>}</>} />}
             {totalPages > 1 && <Pagination aria-label="Search result pages"><PaginationContent>
@@ -238,7 +239,8 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
               <PaginationItem><PaginationNext disabled={state.page >= totalPages} onClick={() => commit({ ...state, page: state.page + 1 }, false, true)} /></PaginationItem>
             </PaginationContent></Pagination>}
             {continuationCursor && results && <ResultsContinuation key={continuationCursor} state={requestState} cursor={continuationCursor}
-              seen={results.data} gridClassName={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`} renderCard={productCard}
+              seen={results.data} gridClassName={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`}
+              renderCard={catalog ? (product, index) => <RevealItem key={product.id} index={index % 4}>{productCard(product)}</RevealItem> : productCard}
               onRestart={() => commit({ ...state, page: 1 }, false, true)} />}
           </section>
           {!catalog && !active && !parsed.error && <StartPanel categories={categories.filter(category => category.productCount !== 0)}
@@ -278,7 +280,7 @@ function StartPanel({ categories, onOpen, available }: {
  */
 function ResultsContinuation({ state, cursor, seen, gridClassName, renderCard, onRestart }: {
   state: SearchState; cursor: string; seen: ProductSummary[]; gridClassName: string;
-  renderCard: (product: ProductSummary) => ReactNode; onRestart: () => void;
+  renderCard: (product: ProductSummary, index: number) => ReactNode; onRestart: () => void;
 }) {
   const [requested, setRequested] = useState(false);
   const query = useSearchContinuation(state, cursor, requested);

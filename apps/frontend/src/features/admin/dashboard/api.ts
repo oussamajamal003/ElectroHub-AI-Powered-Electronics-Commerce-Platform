@@ -3,7 +3,9 @@ import { apiClient } from '@/lib/api';
 import { adminKeys, type ItemResponse, type Money } from '../shared/api';
 import type { AdminOrderRow } from '../orders/api';
 
-export interface AdminAlertUnread { lowStock: number; outOfStock: number; awaitingFulfillment: number; total: number }
+export const ADMIN_ALERT_CATEGORIES = ['lowStock', 'outOfStock', 'awaitingFulfillment', 'outForDelivery'] as const;
+export type AdminAlertCategory = typeof ADMIN_ALERT_CATEGORIES[number];
+export type AdminAlertUnread = Record<AdminAlertCategory, number> & { total: number };
 /** Counts are live operational state (never changed by reading); `unread` is this administrator's remainder after their acknowledged baseline. */
 export interface AdminAlerts { lowStock: number; outOfStock: number; awaitingFulfillment: number; preparing: number; outForDelivery: number; unread?: AdminAlertUnread; generatedAt: string }
 export interface DashboardOverview {
@@ -46,17 +48,17 @@ export function useAdminAlerts(enabled = true) {
   });
 }
 
-const noUnread: AdminAlertUnread = { lowStock: 0, outOfStock: 0, awaitingFulfillment: 0, total: 0 };
+const noUnread: AdminAlertUnread = { lowStock: 0, outOfStock: 0, awaitingFulfillment: 0, outForDelivery: 0, total: 0 };
 
 /**
- * Acknowledges the alert counts the administrator was shown. The server clamps them to its own counts, so an alert that arrived
- * meanwhile stays unread. The badge clears immediately; a failure restores the previous state and surfaces the error. Only the
- * unread remainder is touched: the operational counts and the alert list itself are never altered.
+ * Acknowledges ONE alert category (the one the administrator opened) with the count they were shown. The server clamps it to its own
+ * count, so an alert that arrived meanwhile stays unread, and every other category is left untouched. The badge drops immediately; a
+ * failure restores the previous state, re-reads the server and surfaces the error. Operational counts are never altered.
  */
 export function useAcknowledgeAdminAlerts() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (seen: Pick<AdminAlerts, 'lowStock' | 'outOfStock' | 'awaitingFulfillment'>) =>
+    mutationFn: (seen: Partial<Record<AdminAlertCategory, number>>) =>
       apiClient<ItemResponse<AdminAlerts>>('/api/admin/dashboard/alerts/acknowledge', { method: 'POST', data: seen }),
     onMutate: async seen => {
       // A refetch that started before this click would overwrite the optimistic state with the pre-acknowledgement payload.
@@ -64,14 +66,21 @@ export function useAcknowledgeAdminAlerts() {
       const previous = client.getQueryData<ItemResponse<AdminAlerts>>(adminKeys.alerts);
       if (previous) {
         const current = previous.data;
-        const remaining = { lowStock: Math.max(0, current.lowStock - seen.lowStock), outOfStock: Math.max(0, current.outOfStock - seen.outOfStock),
-          awaitingFulfillment: Math.max(0, current.awaitingFulfillment - seen.awaitingFulfillment) };
-        client.setQueryData<ItemResponse<AdminAlerts>>(adminKeys.alerts, { ...previous,
-          data: { ...current, unread: { ...noUnread, ...remaining, total: remaining.lowStock + remaining.outOfStock + remaining.awaitingFulfillment } } });
+        const unread = { ...noUnread, ...current.unread };
+        for (const category of ADMIN_ALERT_CATEGORIES) {
+          const shown = seen[category];
+          // Mirrors the server: the new baseline is at least what was shown, so unread can only fall to count - shown.
+          if (shown !== undefined) unread[category] = Math.min(unread[category], Math.max(0, current[category] - shown));
+        }
+        unread.total = ADMIN_ALERT_CATEGORIES.reduce((sum, category) => sum + unread[category], 0);
+        client.setQueryData<ItemResponse<AdminAlerts>>(adminKeys.alerts, { ...previous, data: { ...current, unread } });
       }
       return { previous };
     },
-    onError: (_error, _seen, context) => { if (context?.previous) client.setQueryData(adminKeys.alerts, context.previous); },
+    onError: (_error, _seen, context) => {
+      if (context?.previous) client.setQueryData(adminKeys.alerts, context.previous);
+      void client.invalidateQueries({ queryKey: adminKeys.alerts });
+    },
     onSuccess: response => client.setQueryData(adminKeys.alerts, response),
   });
 }

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { ApiError } from '@/lib/api';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -150,7 +151,7 @@ describe('company pages', () => {
     fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Question' } });
     fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'Hello there, I have a question.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send Message' }));
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your message has been sent.'));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your message was sent to our support team.'));
     expect(sendContactMessage).toHaveBeenCalledWith({ name: 'Test User', email: 'test@example.com', subject: 'Question', message: 'Hello there, I have a question.', website: '' }, expect.any(Object));
     // The form is cleared after a real success so the same message cannot be re-sent by accident.
     expect(screen.getByLabelText('Message')).toHaveValue('');
@@ -204,7 +205,33 @@ describe('company pages', () => {
       fireEvent.change(screen.getByLabelText(label), { target: { value } });
     }
     fireEvent.click(screen.getByRole('button', { name: 'Send Message' }));
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('We could not send your message. Please try again.'));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('We could not send your message. Your message is still here — please try again.'));
     expect(screen.queryByText('secret provider failure')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [new ApiError(503, 'Something went wrong. Please try again later.', undefined, 'CONTACT_NOT_CONFIGURED'), 'Our support inbox isn’t set up yet, so your message could not be delivered.'],
+    [new ApiError(503, 'Something went wrong. Please try again later.', undefined, 'CONTACT_UNAVAILABLE'), 'Our email service didn’t accept your message, so it was not sent.'],
+    [new ApiError(429, 'Too many requests.', undefined, 'RATE_LIMITED'), 'You’ve sent several messages in a short time. Please wait a minute, then try again.'],
+    [new ApiError(0, 'Network error'), 'We couldn’t reach ElectroHub. Check your connection'],
+  ])('explains what actually happened for %s, keeps the typed message and never claims success', async (error, expected) => {
+    vi.mocked(sendContactMessage).mockRejectedValue(error);
+    renderContact();
+    for (const [label, value] of [['Name', 'Test User'], ['Email', 'test@example.com'], ['Subject', 'Question'], ['Message', 'Hello there, I have a question.']] as const) {
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Send Message' }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(expected));
+    expect(screen.getByLabelText('Message')).toHaveValue('Hello there, I have a question.');
+    expect(screen.queryByText(/Your message was sent/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send Message' })).toBeEnabled();     // retry is one click away
+  });
+
+  it('does not pre-emptively claim delivery is impossible without a support mailbox: verified administrators are the server-side fallback', () => {
+    vi.mocked(useStorefrontProfile).mockReturnValue({ data: { ...profile, supportEmail: null }, isPending: false, isError: false } as unknown as ReturnType<typeof useStorefrontProfile>);
+    renderContact();
+    expect(screen.queryByTestId('contact-inbox-missing')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Send Message' })).toBeEnabled();
+    expect(screen.queryByText(/The form is the quickest way/)).not.toBeInTheDocument();
   });
 });

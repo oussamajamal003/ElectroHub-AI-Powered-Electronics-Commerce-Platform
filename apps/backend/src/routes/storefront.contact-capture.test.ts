@@ -84,7 +84,8 @@ describe('contact form end to end through the real provider (captured, never sen
     administrators.findMany.mockResolvedValueOnce([]);
     const response = await post({ name: 'Ada', email: 'ada@example.test', subject: 'Nobody home', message: 'Hello there' });
     expect(response.status).toBe(503);
-    expect(response.body.error.code).toBe('CONTACT_UNAVAILABLE');
+    expect(response.body.error.code).toBe('CONTACT_NOT_CONFIGURED');
+    expect(response.body.data).toBeUndefined();
   });
 
   it('rejects an oversized message before any delivery', async () => {

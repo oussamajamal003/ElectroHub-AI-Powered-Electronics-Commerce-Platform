@@ -386,14 +386,14 @@ test('S4 failed A shown in Cart beside active B; two failed purchases keep separ
 for (const width of [390, ...compact]) test(`S5 lost reconcile response → truthful UNKNOWN, no resubmission, later verified result at ${width}px`, async ({ page }) => {
   await page.clock.install(); await page.setViewportSize({ width, height: width >= 1366 ? 768 : width >= 1280 ? 720 : width >= 1024 ? 768 : 844 });
   const flow = await world(page, { reconcileA: 'ABORT' }); await submitCartA(page, flow);
-  await expect(page.getByRole('heading', { name: 'We couldn’t confirm your payment yet' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'We’re still checking your payment' })).toBeVisible();
   for (const text of ['Payment Failed', 'Order Confirmed!']) await expect(page.getByText(text, { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Try Again|Place Order|Pay/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Check again' })).toBeEnabled(); await noOverflow(page); await shot(page, `s5-${width}-unconfirmed`, false);
+  await expect(page.getByRole('button', { name: 'Check payment status' })).toBeEnabled(); await noOverflow(page); await shot(page, `s5-${width}-unconfirmed`, false);
   // A check that fails again ends its own loading state and stays truthful.
-  await page.getByRole('button', { name: 'Check again' }).click();
-  await expect(page.getByRole('button', { name: 'Check again' })).toBeEnabled();
-  await expect(page.getByRole('heading', { name: 'We couldn’t confirm your payment yet' })).toBeVisible();
+  await page.getByRole('button', { name: 'Check payment status' }).click();
+  await expect(page.getByRole('button', { name: 'Check payment status' })).toBeEnabled();
+  await expect(page.getByRole('heading', { name: 'We’re still checking your payment' })).toBeVisible();
   // Navigate Home → Cart: pending, not failed; no retry.
   await page.getByRole('link', { name: 'ElectroHub — Home' }).click(); await page.getByRole('link', { name: /^Cart, / }).click();
   const card = page.locator(`article[data-purchase="${idA}"]`); await expect(card).toContainText('Awaiting confirmation');
@@ -414,7 +414,7 @@ for (const width of [390, ...compact]) test(`S5 lost reconcile response → trut
 test('S5 UNKNOWN later verified DECLINED while on Home → failure toast, Cart failed card, no full-page failure', async ({ page }) => {
   await page.clock.install(); await page.setViewportSize({ width: 1280, height: 720 });
   const flow = await world(page, { reconcileA: 'ABORT' }); await submitCartA(page, flow);
-  await expect(page.getByRole('heading', { name: 'We couldn’t confirm your payment yet' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'We’re still checking your payment' })).toBeVisible();
   await page.getByRole('link', { name: 'ElectroHub — Home' }).click();
   flow.settleA('DECLINED'); await page.clock.fastForward(15_001);
   // Hovering pauses the toast's five-second timer (Radix), as a customer reading it would.

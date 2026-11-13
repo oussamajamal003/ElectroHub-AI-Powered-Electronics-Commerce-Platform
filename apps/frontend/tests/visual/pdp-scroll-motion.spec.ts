@@ -12,7 +12,8 @@ const summary = (n: number) => ({ id: `00000000-0000-4000-8000-${String(n).padSt
   availability: 'AVAILABLE', stockStatus: 'IN_STOCK', availableQuantity: 10, purchasable: true,
   category: { id: 'category-1', name: 'Phones', slug: 'phones' }, brand: { id: 'brand-1', name: 'Apple', slug: 'apple' }, primaryImage: image(n), secondaryImage: null });
 const product = { ...summary(1), name: 'Apple iPhone 15 Pro', slug: 'apple-iphone-15-pro', sku: 'IP15P', images: [image(1)],
-  specifications: Array.from({ length: 10 }, (_, i) => ({ name: `Spec ${i + 1}`, value: `Value ${i + 1}`, group: 'General' })) };
+  modelNumber: 'A3102',
+  specifications: [{ group: 'General', items: Array.from({ length: 10 }, (_, i) => ({ id: `spec-${i + 1}`, group: 'General', name: `Spec ${i + 1}`, value: `Value ${i + 1}` })) }] };
 const section = (mode: string, from: number) => ({ mode, surface: 'product_detail', strategy: 'FALLBACK_CATEGORY', isPersonalized: false, isFallback: true,
   fallbackReason: null, modelVersion: null, embeddingVersion: null, algorithmVersion: 'test', context: { categoryName: 'Phones', categorySlug: 'phones' },
   impressionToken: null, items: Array.from({ length: 4 }, (_, i) => ({ rank: i + 1, product: summary(from + i) })) });

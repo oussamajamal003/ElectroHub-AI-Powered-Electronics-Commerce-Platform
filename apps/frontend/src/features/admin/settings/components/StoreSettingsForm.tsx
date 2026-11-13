@@ -1,6 +1,7 @@
 import { emailValidationError } from '@/lib/emailValidation';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { isStepUpCancelled, useStepUp } from '@/features/admin/security/useStepUp';
+import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -95,6 +96,7 @@ export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload, o
   return <><form className={styles.form} onSubmit={submit} noValidate aria-label="Store information">
     {conflict && <SettingsConflictNotice subject="settings" onReload={onReload} />}
     {formError && <p className={styles.formError} role="alert">{formError}</p>}
+    {!profile.supportEmail && <Alert variant="warning" role="status" data-testid="store-email-missing">No store email is saved, so messages from the storefront Contact page cannot be delivered. Add the support mailbox that should receive them in Store email, then save.</Alert>}
     <div className={styles.fieldGrid}>
       <h3 className={settingsStyles.groupHeading}>Store and contact</h3>
       <Input label="Store name" value={draft.storeName} onChange={event => update('storeName', event.target.value)} error={errors.storeName}

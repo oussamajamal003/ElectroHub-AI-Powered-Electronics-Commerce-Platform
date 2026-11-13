@@ -243,8 +243,16 @@ describe('admin alert acknowledgement API', () => {
     const smuggled = await as(request(app).post('/api/admin/dashboard/alerts/acknowledge').send({ ...alertsBody, userId: 'someone-else' }));
     expect(smuggled.status).toBe(400);
   });
+  it('accepts a single category (one per alert click), including out-for-delivery', async () => {
+    dashboard.acknowledgeAlerts.mockResolvedValue({ unread: { total: 0 } } as never);
+    for (const body of [{ outOfStock: 3 }, { outForDelivery: 2 }, { awaitingFulfillment: 0 }]) {
+      expect((await as(request(app).post('/api/admin/dashboard/alerts/acknowledge').send(body))).status).toBe(200);
+      expect(dashboard.acknowledgeAlerts).toHaveBeenLastCalledWith(ids.admin, body);
+    }
+  });
   it('rejects malformed counts', async () => {
-    for (const body of [{}, { ...alertsBody, lowStock: -1 }, { ...alertsBody, lowStock: 1.5 }, { ...alertsBody, outOfStock: '2' }]) {
+    for (const body of [{}, { ...alertsBody, lowStock: -1 }, { ...alertsBody, lowStock: 1.5 }, { ...alertsBody, outOfStock: '2' }, { outForDelivery: null },
+      { unknownCategory: 1 }]) {
       expect((await as(request(app).post('/api/admin/dashboard/alerts/acknowledge').send(body))).status).toBe(400);
     }
     expect(dashboard.acknowledgeAlerts).not.toHaveBeenCalled();

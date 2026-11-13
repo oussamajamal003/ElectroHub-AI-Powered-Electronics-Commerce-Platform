@@ -43,6 +43,8 @@ window.Stripe = function () {
     },
     async confirmPayment() {
       fixture.confirms++;
+      // Optional: a spec sets holdConfirm to keep Stripe.js "confirming" until it calls __stripeFixture.releaseConfirm().
+      if (fixture.holdConfirm) await new Promise(resolve => { fixture.releaseConfirm = resolve; });
       return fixture.behavior === 'decline' ? { error: { type: 'card_error' } } : fixture.behavior === 'unknown'
         ? { error: { type: 'api_connection_error' } } : { paymentIntent: { status: 'requires_capture' } };
     },

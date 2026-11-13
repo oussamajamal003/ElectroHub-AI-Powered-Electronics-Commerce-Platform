@@ -87,7 +87,7 @@ test('reduced motion: nothing is hidden or animated, at any scroll position', as
     await page.waitForTimeout(80);
     expect(await pendingInView(page)).toEqual([]);
   }
-  await expect(page.getByRole('heading', { name: 'Our values' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'What we stand for' })).toBeVisible();
   const running = await page.evaluate(() => document.getAnimations().filter(a => a.playState === 'running' && !(a.effect as KeyframeEffect | null)?.target?.matches?.('[class*="cta"], [class*="cta"] *')).length);
   expect(running).toBe(0);
 });

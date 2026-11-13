@@ -125,7 +125,7 @@ for (const width of [390, 1366]) {
         });
         await page.goto('/cart'); await page.getByRole('link', { name: /^Try Again/ }).click();
         if (state === 'PAID') await expect(page.getByRole('heading', { name: 'Order Confirmed' })).toBeVisible();
-        else await expect(page.getByRole('heading', { name: /Checking your payment|We couldn’t confirm your payment yet/ })).toBeVisible();
+        else await expect(page.getByRole('heading', { name: /Checking your payment|We’re still checking your payment/ })).toBeVisible();
         await expect(page.locator('iframe[title="Mock hosted card entry — intercepted UI test"]')).toHaveCount(0);
         expect(w.resumes()).toBe(0); expect(w.reconciliations()).toBe(0); expect(await w.api.confirms()).toBe(0);
       });
@@ -156,11 +156,11 @@ for (const width of [390, 1366]) {
     test('a recovery conflict with a still-stale decline remains Checking and never invites another confirmation', async ({ page }) => {
       const w = await world(page, true, false, true);
       await page.goto('/cart'); await page.getByRole('link', { name: /^Try Again/ }).click();
-      await expect(page.getByRole('heading', { name: 'We couldn’t confirm your payment yet' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'We’re still checking your payment' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'This purchase can’t be paid again right now' })).toHaveCount(0);
       await expect(page.getByText(/Nothing was charged/)).toHaveCount(0);
       await page.reload();
-      await expect(page.getByRole('heading', { name: /Checking your payment|We couldn’t confirm your payment yet/ })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /Checking your payment|We’re still checking your payment/ })).toBeVisible();
       expect(w.resumes()).toBe(1); expect(await w.api.confirms()).toBe(0); expect(w.reconciliations()).toBe(0);
     });
     test('returning to review during processing restores Checking instead of the screenshot rejection', async ({ page }) => {

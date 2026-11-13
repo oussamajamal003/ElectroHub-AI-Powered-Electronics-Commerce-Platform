@@ -203,11 +203,11 @@ test('the toast close icon dismisses immediately', async ({ page }) => {
   await expect(toastClose(page)).toHaveCount(0, { timeout: 1_000 });
 });
 
-test('UNKNOWN cannot start a retry: unconfirmed view offers Check again on the same attempt and never resumes', async ({ page }) => {
+test('UNKNOWN cannot start a retry: unconfirmed view offers Check payment status on the same attempt and never resumes', async ({ page }) => {
   const api = await harness(page, { unknown: true });
   await page.goto('/checkout'); await review(page);
   await page.getByRole('button', { name: /Place Order/ }).click();
-  await expect(page.getByRole('heading', { name: /Checking your payment|We couldn’t confirm your payment yet/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Checking your payment|We’re still checking your payment/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Try Again' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Payment Failed' })).toHaveCount(0);
   await expect(toastClose(page)).toHaveCount(0);

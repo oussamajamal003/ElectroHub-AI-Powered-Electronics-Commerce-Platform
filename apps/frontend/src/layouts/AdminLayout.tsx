@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { ThemeToggle } from '@/features/theme';
 import { Avatar } from '@/components/ui/Avatar';
 import { useProfilePhoto } from '@/features/profilePhoto/queries';
-import { useAcknowledgeAdminAlerts, useAdminAlerts } from '@/features/admin/dashboard/api';
+import { type AdminAlertCategory, useAcknowledgeAdminAlerts, useAdminAlerts } from '@/features/admin/dashboard/api';
 import { useAdminInventoryLiveUpdates } from '@/features/admin/dashboard/useAdminInventoryLiveUpdates';
 import { AdminToastProvider, ConfirmDialog } from '@/features/admin/shared/AdminUi';
 import { formatCount, initials } from '@/features/admin/shared/format';
@@ -22,25 +22,21 @@ function AlertsMenu() {
   const alerts = useAdminAlerts();
   const acknowledge = useAcknowledgeAdminAlerts();
   const data = alerts.data?.data;
-  // Unread is the server's per-administrator remainder; the operational counts below it stay visible as read history.
-  const unread = data?.unread ?? { lowStock: 0, outOfStock: 0, awaitingFulfillment: 0, total: 0 };
-  // Opening the menu acknowledges what is displayed. The "new" markers shown while it is open come from this snapshot, so they do not
-  // vanish under the administrator's eyes the moment the badge clears.
-  const [shownUnread, setShownUnread] = useState<typeof unread | null>(null);
+  // Unread is the server's per-administrator remainder; the operational counts beside it stay visible as read history. Opening the
+  // menu acknowledges nothing: only choosing a category marks THAT category as read, then navigates to its work queue.
+  const unread = data?.unread ?? { lowStock: 0, outOfStock: 0, awaitingFulfillment: 0, outForDelivery: 0, total: 0 };
   const attention = data ? data.lowStock + data.outOfStock + data.awaitingFulfillment : 0;
-  const entries = data ? [
-    { key: 'outOfStock', to: '/admin/inventory?status=OUT_OF_STOCK', icon: PackageX, label: 'Out of stock', count: data.outOfStock, unread: (shownUnread ?? unread).outOfStock, tone: styles.alertError },
-    { key: 'lowStock', to: '/admin/inventory?status=LOW_STOCK', icon: AlertTriangle, label: 'Low stock', count: data.lowStock, unread: (shownUnread ?? unread).lowStock, tone: styles.alertWarning },
-    { key: 'awaitingFulfillment', to: '/admin/orders?status=CONFIRMED&payment=PAID', icon: ClipboardList, label: 'Paid orders awaiting fulfillment', count: data.awaitingFulfillment, unread: (shownUnread ?? unread).awaitingFulfillment, tone: styles.alertInfo },
-    { key: 'outForDelivery', to: '/admin/deliveries?status=OUT_FOR_DELIVERY', icon: Truck, label: 'Out for delivery', count: data.outForDelivery, unread: 0, tone: styles.alertNeutral },
-  ] : [];
+  const entries: { key: AdminAlertCategory; to: string; icon: typeof Bell; label: string; tone: string | undefined }[] = [
+    { key: 'outOfStock', to: '/admin/inventory?status=OUT_OF_STOCK', icon: PackageX, label: 'Out of stock', tone: styles.alertError },
+    { key: 'lowStock', to: '/admin/inventory?status=LOW_STOCK', icon: AlertTriangle, label: 'Low stock', tone: styles.alertWarning },
+    { key: 'awaitingFulfillment', to: '/admin/orders?status=CONFIRMED&payment=PAID', icon: ClipboardList, label: 'Paid orders awaiting fulfillment', tone: styles.alertInfo },
+    { key: 'outForDelivery', to: '/admin/deliveries?status=OUT_FOR_DELIVERY', icon: Truck, label: 'Out for delivery', tone: styles.alertNeutral },
+  ];
   const label = data ? (unread.total ? `Alerts: ${unread.total} unread` : attention ? `Alerts: no unread, ${attention} items need attention` : 'Alerts: nothing needs attention') : 'Alerts';
-  const onOpenChange = (open: boolean) => {
-    if (!open) { setShownUnread(null); return; }
-    setShownUnread(unread);
-    if (data && unread.total > 0 && !acknowledge.isPending) acknowledge.mutate({ lowStock: data.lowStock, outOfStock: data.outOfStock, awaitingFulfillment: data.awaitingFulfillment });
+  const openCategory = (category: AdminAlertCategory) => {
+    if (data && unread[category] > 0) acknowledge.mutate({ [category]: data[category] });
   };
-  return <DropdownMenu onOpenChange={onOpenChange}>
+  return <DropdownMenu>
     <Tooltip content="Operational alerts">
       <DropdownMenuTrigger asChild>
         <button type="button" className={styles.iconButton} aria-label={label}>
@@ -58,19 +54,15 @@ function AlertsMenu() {
         <Button type="button" variant="outline" size="small" disabled={alerts.isFetching} onClick={() => void alerts.refetch()}>Retry alerts</Button>
       </div>}
       {acknowledge.isError && <p className={styles.menuNote} role="alert">Alerts could not be marked as read. They will stay unread until you try again.</p>}
-      {data && entries.every(entry => entry.count === 0) && <p className={styles.menuNote} role="status">No operational alerts need attention.</p>}
-      {entries.map(entry => <DropdownMenuItem key={entry.key} asChild>
-        <Link to={entry.to} className={styles.alertItem}>
+      {data && entries.every(entry => data[entry.key] === 0) && <p className={styles.menuNote} role="status">No operational alerts need attention.</p>}
+      {data && entries.map(entry => <DropdownMenuItem key={entry.key} asChild onSelect={() => openCategory(entry.key)}>
+        <Link to={entry.to} className={styles.alertItem} data-unread={unread[entry.key] > 0 ? 'true' : undefined}>
           <span className={clsx(styles.alertIcon, entry.tone)} aria-hidden="true"><entry.icon /></span>
-          <span className={styles.alertText}>{entry.label}{entry.unread > 0 && <span className={styles.newMarker}> · {entry.unread} new</span>}</span>
-          <span className={styles.alertCount}>{formatCount(entry.count)}</span>
+          <span className={styles.alertText}>{entry.label}{unread[entry.key] > 0 && <span className={styles.newMarker}> · {unread[entry.key]} new</span>}</span>
+          <span className={styles.alertCount}>{formatCount(data[entry.key])}</span>
         </Link>
       </DropdownMenuItem>)}
-      {data && <DropdownMenuSeparator />}
-      {data && <DropdownMenuItem asChild>
-        <Link to="/admin" className={styles.seeAll}>See all alerts</Link>
-      </DropdownMenuItem>}
-      {data && <p className={styles.menuFoot}>Live counts from orders and inventory. Reading alerts clears the unread badge; the counts clear only when the work is done.</p>}
+      {data && <p className={styles.menuFoot}>Live counts from orders and inventory. Refreshed every minute.</p>}
     </DropdownMenuContent>
   </DropdownMenu>;
 }

@@ -275,7 +275,7 @@ test('foreground UNKNOWN exits the bounded processing screen with durable A and 
   await page.clock.install(); const flow = await journey(page); flow.unknown(); await page.goto('/checkout');
   await fillShipping(page); await page.getByRole('button', { name: 'Continue to Payment' }).click(); await fillCard(page);
   await page.getByRole('button', { name: 'Review Order' }).click(); await page.getByRole('button', { name: /Place Order/ }).click();
-  await expect(page.getByRole('heading', { name: 'We couldn’t confirm your payment yet' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'We’re still checking your payment' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Try Again' })).toHaveCount(0);
   flow.setRows([{ ...purchase, state: 'RECOVERY_PENDING', classification: 'UNKNOWN' }]);
   await page.clock.fastForward(120_001); await expect(page).toHaveURL('/cart?purchase=' + purchase.attemptId);

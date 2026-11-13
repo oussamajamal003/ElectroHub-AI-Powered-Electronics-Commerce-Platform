@@ -28,7 +28,7 @@ test.describe('TASK 03.6 — Critical Checkout State & Payment Recovery Bug Veri
     await expect(failedHeading).toBeVisible({ timeout: 5000 });
 
     // Verify the verification view is completely absent once the decline is confirmed
-    await expect(page.getByRole('heading', { name: /Checking your payment|We couldn’t confirm your payment yet/ })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: /Checking your payment|We’re still checking your payment/ })).toHaveCount(0);
 
     // 2. Functional Try Again button is visible and enabled
     const tryAgainBtn = page.getByRole('button', { name: 'Try Again' });

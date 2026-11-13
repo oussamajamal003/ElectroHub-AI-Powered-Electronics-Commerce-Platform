@@ -27,7 +27,8 @@
 @media (prefers-reduced-motion: no-preference) {
   .reveal.visible:not(.stagger) { animation: heroRise 600ms ease-out both; }
   .stagger.visible > .item { animation: heroRise 550ms ease-out both; animation-delay: var(--motion-delay); }
-  .reveal.visible.item { animation-duration: 550ms; animation-delay: var(--motion-delay); }
+  // A self-revealing card (RevealItem): a shorter, smaller rise than a section so a grid of cards settles quickly.
+  .reveal.visible.item { animation: cardRise 420ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: var(--motion-delay); }
 }
 @media (prefers-reduced-motion: reduce) {
   .pending { opacity: 1; }
@@ -35,4 +36,5 @@
 }
 @keyframes heroFade { from { opacity: .65; } to { opacity: 1; } }
 @keyframes heroRise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes cardRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes heroVisual { from { opacity: .8; transform: scale(1.025) translateX(8px); } to { opacity: 1; transform: scale(1) translateX(0); } }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -585,7 +585,7 @@ describe('Checkout page integration', () => {
       throw new Error(`Unexpected ${url}`);
     });
     show('/checkout?step=payment');
-    expect(await screen.findByRole('heading', { name: 'Payment failed' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Payment canceled' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Try Again' })).toBeEnabled();
     expect(setupCalls).toBe(2); expect(actions.retryCart).toHaveBeenCalledTimes(1); expect(actions.confirm).not.toHaveBeenCalled();
   });
@@ -661,10 +661,11 @@ describe('Checkout page integration', () => {
     show('/checkout?step=review'); await enterReview(); const button = await screen.findByRole('button', { name: /Place Order/ });
     await waitFor(() => expect(button).toBeEnabled()); fireEvent.click(button);
     // Stage 1 ends when the request settles; a settled disconnect is shown as unconfirmed (not failure, not permanent checking).
-    expect(await screen.findByRole('heading', { name: 'We couldn’t confirm your payment yet' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'We’re still checking your payment' })).toBeVisible();
     expect(screen.queryByRole('heading', { name: /Processing your order/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Check again' })).toBeEnabled();
-    expect(screen.queryByRole('button', { name: 'Check payment status' })).not.toBeInTheDocument();
+    // One status check on the same attempt: no second check action and no new payment.
+    expect(screen.getAllByRole('button', { name: /Check/ })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Check payment status' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Try Again' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Return to Cart' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Payment Failed' })).not.toBeInTheDocument();
@@ -1347,6 +1348,27 @@ describe('Place Order handoff after a slow /submit', () => {
     expect(screen.queryByText(/outcome is not yet known/)).not.toBeInTheDocument();
     expect(urls().some(url => url.endsWith('/reconcile'))).toBe(false);
   }, 15000);
+  it('Task 06.2 WP A: the processing card never claims success or offers a Cancel action before the server verifies payment', async () => {
+    let releaseConfirm!: (value: unknown) => void; let resolveReconcile!: (value: unknown) => void;
+    actions.confirm.mockImplementation(async (before?: () => Promise<void>) => { await before?.(); return new Promise(done => { releaseConfirm = done; }); });
+    const finish = slowSubmit();
+    const base = vi.mocked(apiClient).getMockImplementation()!;
+    vi.mocked(apiClient).mockImplementation(async (endpoint, options) => endpoint.endsWith('/reconcile')
+      ? new Promise(done => { resolveReconcile = done; }) as never : base(endpoint, options));
+    await placeOrder();
+    const card = () => screen.getByRole('heading', { name: /Processing your order/ }).closest('section, [role="region"], div')!;
+    expect(within(card() as HTMLElement).queryAllByRole('button')).toHaveLength(0);
+    await act(async () => { finish(); });
+    await waitFor(() => expect(screen.getByTestId('payment-lock-state')).toHaveTextContent('CONFIRMING_PAYMENT'));
+    expect(screen.getByText(/Keep this page open until this finishes/)).toBeVisible();
+    expect(within(card() as HTMLElement).queryAllByRole('button')).toHaveLength(0);
+    await act(async () => { releaseConfirm({ kind: 'confirmed' }); });
+    expect(document.body.textContent).not.toMatch(/\d+\s?%|seconds? left|Payment confirmed|Order Confirmed/);
+    await act(async () => { resolveReconcile({ data: { ...setup, state: 'PAID', committed: true, orderReference: confirmation.orderReference,
+      confirmation: { ...confirmation, paymentState: 'PAID' }, cart: emptyCart, recoveryActive: false } }); });
+    await screen.findByText('Persisted Confirmation');
+    expect(screen.queryByRole('heading', { name: /Processing your order/ })).not.toBeInTheDocument();
+  });
 });
 
 // P0: "Secure payment setup could not finish… Retry" was shown for an intentional 503 PAYMENT_MUTATIONS_DISABLED (payment isolation).

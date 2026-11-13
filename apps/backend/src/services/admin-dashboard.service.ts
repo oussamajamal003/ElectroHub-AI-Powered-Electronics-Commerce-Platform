@@ -13,7 +13,7 @@ import { addLocalDays, localDayWindow, storeTimeZone } from './reporting-timezon
  */
 const ORDER_STATUSES: OrderStatus[] = ['AWAITING_CAPTURE', 'CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
 
-export const ALERT_CATEGORIES = ['lowStock', 'outOfStock', 'awaitingFulfillment'] as const;
+export const ALERT_CATEGORIES = ['lowStock', 'outOfStock', 'awaitingFulfillment', 'outForDelivery'] as const;
 export type AlertCategory = typeof ALERT_CATEGORIES[number];
 
 export class AdminDashboardService {
@@ -29,7 +29,8 @@ export class AdminDashboardService {
 
   private async alertCounts() {
     const [stock, fulfillment] = await Promise.all([this.inventory.summary(), this.fulfillment()]);
-    return { lowStock: stock.lowStock, outOfStock: stock.outOfStock, awaitingFulfillment: fulfillment.awaitingFulfillment, fulfillment };
+    return { lowStock: stock.lowStock, outOfStock: stock.outOfStock, awaitingFulfillment: fulfillment.awaitingFulfillment,
+      outForDelivery: fulfillment.outForDelivery, fulfillment };
   }
 
   /**
@@ -44,21 +45,24 @@ export class AdminDashboardService {
     const baseline = await this.baseline(userId, current);
     const unread = Object.fromEntries(ALERT_CATEGORIES.map(category => [category, Math.max(0, current[category] - baseline[category])])) as Record<AlertCategory, number>;
     return { lowStock: counts.lowStock, outOfStock: counts.outOfStock, ...counts.fulfillment,
-      unread: { ...unread, total: unread.lowStock + unread.outOfStock + unread.awaitingFulfillment }, generatedAt: this.clock().toISOString() };
+      unread: { ...unread, total: ALERT_CATEGORIES.reduce((sum, category) => sum + unread[category], 0) }, generatedAt: this.clock().toISOString() };
   }
 
   /**
-   * Marks what the administrator has SEEN as acknowledged. `seen` is the count the client actually displayed; it is clamped to the
-   * current server count, so an alert that arrived after the list was rendered stays unread, and a client can never acknowledge more
-   * than exists. Only this administrator's own rows change.
+   * Marks what the administrator has SEEN as acknowledged, per category: only the categories present in `seen` change (opening one
+   * alert category never reads the others). `seen` is the count the client actually displayed; it is clamped to the current server
+   * count, so an alert that arrived after the list was rendered stays unread, and a client can never acknowledge more than exists.
+   * Only this administrator's own rows change; operational counts are never touched.
    */
-  async acknowledgeAlerts(userId: string, seen: Record<AlertCategory, number>) {
+  async acknowledgeAlerts(userId: string, seen: Partial<Record<AlertCategory, number>>) {
+    const categories = ALERT_CATEGORIES.filter(category => seen[category] !== undefined);
+    if (categories.length === 0) return this.alerts(userId);
     const counts = await this.alertCounts();
     const rows = await this.db.adminAlertAcknowledgement.findMany({ where: { userId } });
     const existing = new Map(rows.map(row => [row.category, row.acknowledgedCount]));
-    await this.db.$transaction(ALERT_CATEGORIES.map(category => {
+    await this.db.$transaction(categories.map(category => {
       const current = counts[category];
-      const next = Math.max(Math.min(existing.get(category) ?? 0, current), Math.min(seen[category], current));
+      const next = Math.max(Math.min(existing.get(category) ?? 0, current), Math.min(seen[category]!, current));
       return this.db.adminAlertAcknowledgement.upsert({ where: { userId_category: { userId, category } },
         create: { userId, category, acknowledgedCount: next }, update: { acknowledgedCount: next } });
     }));
@@ -66,7 +70,7 @@ export class AdminDashboardService {
   }
 
   private async baseline(userId: string | undefined, current: Record<AlertCategory, number>) {
-    const result: Record<AlertCategory, number> = { lowStock: 0, outOfStock: 0, awaitingFulfillment: 0 };
+    const result: Record<AlertCategory, number> = { lowStock: 0, outOfStock: 0, awaitingFulfillment: 0, outForDelivery: 0 };
     if (!userId) return result;
     const rows = await this.db.adminAlertAcknowledgement.findMany({ where: { userId } });
     for (const row of rows) {

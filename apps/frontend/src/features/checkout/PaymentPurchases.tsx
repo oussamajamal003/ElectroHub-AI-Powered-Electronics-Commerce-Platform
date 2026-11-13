@@ -369,11 +369,17 @@ function SaveSoldOutToCart({ item, label }: { item: SavedPurchase; label: string
     {error && <Alert variant="error">{error}</Alert>}
   </>;
 }
-function CancelPurchase({ item, label }: { item: SavedPurchase; label: string }) {
+/**
+ * Shared by the saved-purchase card and Checkout's "Checking your payment" screen. Render it ONLY when the backend says `cancelable`
+ * (the server re-verifies anyway). `onSettled` re-reads the attempt's server state once the cancellation request has an answer, so the
+ * screen shows the authoritative result (Canceled, or still being confirmed) instead of assuming the provider cancellation succeeded.
+ */
+export function CancelPurchase({ item, label, onSettled }: { item: Pick<SavedPurchase, 'attemptId' | 'scope'>; label?: string; onSettled?(): void }) {
   const { user } = useAuth(); const client = useQueryClient();
   const [open, setOpen] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   const [returnItems, setReturnItems] = useState(item.scope !== 'BUY_NOW');
   const refreshOnClose = useRef(false);
+  const settleOnClose = useRef(false);
   const cancel = async () => {
     if (busy || !user) return;
     setBusy(true); setError('');
@@ -381,6 +387,7 @@ function CancelPurchase({ item, label }: { item: SavedPurchase; label: string })
       const result = await apiClient<{ data: { state: string } }>(`/api/checkout/payment-attempts/${item.attemptId}/cancel`, { method: 'POST', data: {},
         signal: AbortSignal.timeout(45_000) });
       const state = await awaitCancellation(item.attemptId, result.data.state);
+      settleOnClose.current = true;
       let restoreFailed = false;
       // Items return to the Cart only once the provider cancellation is confirmed (restore() re-verifies it and is idempotent).
       if (returnItems && item.scope !== 'BUY_NOW' && state === 'CANCELED') {
@@ -394,6 +401,8 @@ function CancelPurchase({ item, label }: { item: SavedPurchase; label: string })
       // Fresh server truth; invalidation cancels any older in-flight read so a stale "Processing" cannot come back.
       await client.invalidateQueries({ queryKey: ['payment-purchases', user.id] });
       setOpen(false);
+      settleOnClose.current = false;
+      onSettled?.();
     } catch (failure) {
       setError(isPaymentsDisabledError(failure) ? PAYMENTS_UNAVAILABLE_MESSAGE
         : failure instanceof ApiError && failure.code === 'PAYMENT_CANCEL_NOT_ALLOWED' ? 'This purchase can’t be cancelled now. Its payment may be in progress; check its payment status.'
@@ -404,9 +413,11 @@ function CancelPurchase({ item, label }: { item: SavedPurchase; label: string })
     if (busy) return;
     setOpen(next);
     if (!next && (refreshOnClose.current || error) && user) { refreshOnClose.current = false; void client.invalidateQueries({ queryKey: ['payment-purchases', user.id] }); }
+    // A pending or failed cancellation keeps its explanation in the dialog; the screen re-reads server truth once it is closed.
+    if (!next && (settleOnClose.current || error)) { settleOnClose.current = false; onSettled?.(); }
   };
   return <Dialog open={open} onOpenChange={changeOpen}>
-    <DialogTrigger asChild><Button size="small" variant="outline" aria-label={`Cancel purchase: ${label}`} onClick={() => setError('')}>Cancel purchase</Button></DialogTrigger>
+    <DialogTrigger asChild><Button size="small" variant="outline" aria-label={label ? `Cancel purchase: ${label}` : undefined} onClick={() => setError('')}>Cancel purchase</Button></DialogTrigger>
     <DialogContent hideCloseButton onInteractOutside={event => { if (busy) event.preventDefault(); }} onEscapeKeyDown={event => { if (busy) event.preventDefault(); }}>
       <DialogTitle>Cancel this purchase?</DialogTitle>
       <DialogDescription>Card payment didn’t start for this purchase and nothing was charged. Cancelling it lets you check out again. Your purchase history is kept.</DialogDescription>

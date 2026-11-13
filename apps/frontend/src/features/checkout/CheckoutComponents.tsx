@@ -208,11 +208,13 @@ export function ReviewStep({ shipping, delivery, total, blocked, onEdit, onBack,
 }
 /** Stage 2: the submitted payment is durably saved and the outcome is being verified.
  * `unconfirmed` = a check settled without a result (network/5xx/unknown provider state): never a failure claim. */
-export function CheckingPayment({ unconfirmed = false, checking = false, note, onCheck }: { unconfirmed?: boolean; checking?: boolean; note?: string; onCheck?: () => void }) {
+export function CheckingPayment({ unconfirmed = false, checking = false, note, onCheck, cancelAction }: { unconfirmed?: boolean; checking?: boolean; note?: string;
+  onCheck?: () => void; /** Rendered only when the backend marks the attempt `cancelable`; never because a spinner is visible. */ cancelAction?: ReactNode }) {
   return <PaymentProcessingPanel phase={unconfirmed ? 'unconfirmed' : 'verifying'} headingId="checking-heading"
     heading={unconfirmed ? 'We couldn’t confirm your payment yet' : 'Checking your payment'}
     actions={<>
       {unconfirmed && onCheck && <Button onClick={onCheck} disabled={checking} isLoading={checking}>Check again</Button>}
+      {cancelAction}
       <Link className={styles.checkingLink} to="/products">Continue shopping</Link>
     </>}>
     {unconfirmed

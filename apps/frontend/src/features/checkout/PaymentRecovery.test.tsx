@@ -169,12 +169,12 @@ describe('PaymentRecovery actions', () => {
   it('a settled check without a result shows a truthful unconfirmed state with a same-attempt check, never permanent checking or failure', () => {
     const onCheck = vi.fn(); const onRetry = vi.fn();
     render(<MemoryRouter><PaymentRecovery outcome={makeOutcome('PROCESSING')} message="Payment status could not be checked." pending={false} onCheck={onCheck} onRetry={onRetry} /></MemoryRouter>);
-    expect(screen.getByRole('heading', { name: 'We couldn’t confirm your payment yet' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'We’re still checking your payment' })).toBeVisible();
     expect(screen.queryByRole('heading', { name: /Checking your payment/ })).not.toBeInTheDocument();
     expect(screen.getByText(/This isn’t a payment failure/)).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'Payment Failed' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Try Again' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check payment status' }));
     expect(onCheck).toHaveBeenCalledTimes(1); expect(onRetry).not.toHaveBeenCalled();
     expect(screen.getByRole('link', { name: 'Continue shopping' })).toHaveAttribute('href', '/products');
   });
@@ -182,8 +182,8 @@ describe('PaymentRecovery actions', () => {
   it('UNKNOWN classification keeps the attempt in the unconfirmed state, and a running check disables the action', () => {
     const outcome: PaymentOutcome = { ...makeOutcome('PROCESSING'), classification: 'UNKNOWN' };
     render(<MemoryRouter><PaymentRecovery outcome={outcome} message="" pending={true} onCheck={vi.fn()} onRetry={vi.fn()} /></MemoryRouter>);
-    expect(screen.getByRole('heading', { name: 'We couldn’t confirm your payment yet' })).toBeVisible();
-    expect(screen.getByRole('button', { name: /Check again/ })).toBeDisabled();
+    expect(screen.getByRole('heading', { name: 'We’re still checking your payment' })).toBeVisible();
+    expect(screen.getByRole('button', { name: /Check payment status/ })).toBeDisabled();
   });
 });
 

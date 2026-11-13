@@ -23,6 +23,8 @@ export function contactAdministratorFilter(nodeEnv = process.env.NODE_ENV): Pris
     { NOT: { email: { endsWith: '.test', mode: 'insensitive' } } },
   ] };
 }
+import { logger } from '../utils/logger.js';
+import { z } from 'zod';
 
 export interface StorefrontContactMessage { name: string; email: string; subject: string; message: string }
 
@@ -56,13 +58,31 @@ export function renderContactNotification(input: StorefrontContactMessage, store
   return { html, text };
 }
 
+const recipientSchema = z.string().trim().email().max(255);
+
 /**
- * Delivers customer messages to the store's configured support mailbox; never accepts a recipient from the request.
- * Resolving means the provider accepted the message for delivery (HTTP 202 to the customer). It is not proof that it reached an inbox.
+ * Delivers customer messages to the store's configured support mailbox (Admin -> Settings -> Store email); never accepts a recipient
+ * from the request and never falls back to a hard-coded or sender address. The provider's configured, verified sender stays the From
+ * address; the customer is only the Reply-To.
+ *
+ * Outcomes, each with a distinct safe code so the storefront can say what actually happened:
+ *  - resolves: the provider ACCEPTED the message for delivery (HTTP 202). That is not proof that it reached an inbox.
+ *  - 503 CONTACT_NOT_CONFIGURED: no valid support mailbox is configured; nothing was sent. An administrator must set the Store email.
+ *  - 503 CONTACT_UNAVAILABLE: the provider rejected, timed out or could not be reached; nothing was accepted. Safe to retry.
+ * Logs carry only categories and provider status codes: never the recipient, the customer's address or the message.
  */
 export class StorefrontContactService {
   constructor(private readonly provider: Pick<BrevoProvider, 'sendTransactionalEmail'> = brevoProvider,
     private readonly db: Pick<PrismaClient, 'user'> = prisma) {}
+
+  /**
+   * The configured Store Settings support mailbox is the destination. Only when none is configured does the message fall back
+   * to the verified, MFA-enrolled administrators (one provider request, Bcc), so an empty setting never silently drops mail.
+   */
+  async deliver(input: StorefrontContactMessage, supportEmail: string | null, storeName = 'ElectroHub'): Promise<void> {
+    if (recipientSchema.safeParse(supportEmail ?? '').success) return this.send(input, supportEmail, storeName);
+    return this.sendToAdministrators(input, storeName);
+  }
 
   async sendToAdministrators(input: StorefrontContactMessage, storeName = 'ElectroHub'): Promise<void> {
     const administrators = await this.db.user.findMany({ where: contactAdministratorFilter(), select: { email: true },
@@ -70,17 +90,30 @@ export class StorefrontContactService {
     // One provider request prevents a partial loop from sending the same message
     // again to earlier recipients when a later per-recipient call fails.
     const recipients = [...new Set(administrators.map(admin => admin.email.toLowerCase()))];
-    if (!recipients.length || recipients.length > 1000) throw new AppError('Contact delivery is temporarily unavailable.', 503, 'CONTACT_UNAVAILABLE');
-    await this.send(input, recipients[0], storeName, recipients.slice(1).map(email => ({ email })));
+    if (recipients.length > 1000) throw new AppError('Contact delivery is temporarily unavailable.', 503, 'CONTACT_UNAVAILABLE');
+    await this.send(input, recipients[0] ?? null, storeName, recipients.slice(1).map(email => ({ email })));
   }
 
   async send(input: StorefrontContactMessage, recipient: string | null, storeName = 'ElectroHub', bcc: { email: string }[] = []): Promise<void> {
-    if (!recipient) throw new AppError('Contact delivery is temporarily unavailable.', 503, 'CONTACT_UNAVAILABLE');
+    const to = recipientSchema.safeParse(recipient ?? '');
+    if (!to.success) {
+      logger.warn('Contact message not sent: no support mailbox or eligible administrator is configured', { event: 'contact.recipient_missing', configured: Boolean(recipient) });
+      throw new AppError('Our support inbox is not set up yet, so messages cannot be delivered right now.', 503, 'CONTACT_NOT_CONFIGURED');
+    }
     const { html, text } = renderContactNotification(input, storeName);
-    const result = await this.provider.sendTransactionalEmail({ to: recipient, ...(bcc.length ? { bcc } : {}), replyTo: { email: input.email, name: oneLine(input.name) },
-      // Subject contract (`Store contact: …`) is relied on by the disposable capture helper and by mailbox filters; keep it stable.
-      subject: `Store contact: ${oneLine(input.subject).slice(0, 120)}`, textContent: text, htmlContent: html });
-    if (!result.success) throw new AppError('Contact delivery is temporarily unavailable.', 503, 'CONTACT_UNAVAILABLE');
+    let result: Awaited<ReturnType<BrevoProvider['sendTransactionalEmail']>>;
+    try {
+      result = await this.provider.sendTransactionalEmail({ to: to.data, ...(bcc.length ? { bcc } : {}), replyTo: { email: input.email, name: oneLine(input.name) },
+        // Subject contract (`Store contact: …`) is relied on by the disposable capture helper and by mailbox filters; keep it stable.
+        subject: `Store contact: ${oneLine(input.subject).slice(0, 120)}`, textContent: text, htmlContent: html });
+    } catch {
+      result = { success: false, failure: { category: 'provider_error' } };
+    }
+    if (!result.success) {
+      logger.error('Contact message was not accepted by the email provider', { event: 'contact.provider_rejected',
+        category: result.failure?.category ?? 'provider_error', providerStatus: result.failure?.httpStatus, providerCode: result.failure?.providerCode });
+      throw new AppError('Contact delivery is temporarily unavailable.', 503, 'CONTACT_UNAVAILABLE');
+    }
   }
 }
 
