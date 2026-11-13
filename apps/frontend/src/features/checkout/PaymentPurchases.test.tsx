@@ -623,7 +623,7 @@ describe('Sold-out saved purchase (PR #51 last unit)', () => {
     const card = await screen.findByRole('article', { name: 'Sold-out purchase for Product A' });
     expect(card).toHaveAttribute('data-reason', 'sold-out');
     expect(within(card).getByText('Sold out · Not charged')).toBeVisible();
-    expect(within(card).getByText(/Your card was not charged and the payment authorization was cancelled/)).toBeVisible();
+    expect(within(card).getByText(/Your card was not charged and the payment was cancelled./)).toBeVisible();
     expect(within(card).queryByText('Payment failed')).not.toBeInTheDocument();
     expect(within(card).queryByRole('link', { name: /Try Again/ })).not.toBeInTheDocument();
   });
@@ -634,5 +634,21 @@ describe('Sold-out saved purchase (PR #51 last unit)', () => {
     expect(within(card).getByText('Sold out · Checking payment')).toBeVisible();
     expect(within(card).getByText(/Please don’t submit another payment while this check is in progress\./)).toBeVisible();
     expect(card).not.toHaveTextContent(/not charged/i);
+  });
+  it('Save to Cart returns a released sold-out Cart purchase to the Cart through restore and refreshes Cart and purchases', async () => {
+    vi.mocked(apiClient).mockImplementation(async (endpoint: string) => endpoint.endsWith('/restore') ? { data: {} } as never
+      : { data: [{ ...soldOut, scope: 'CART_CHECKOUT', authorizationReleased: true }] } as never);
+    const { client } = show('/cart');
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const card = await screen.findByRole('article', { name: 'Sold-out purchase for Product A' });
+    await act(async () => { fireEvent.click(within(card).getByRole('button', { name: 'Save to Cart: Product A' })); });
+    expect(apiClient).toHaveBeenCalledWith('/api/checkout/payment-attempts/attempt-a/restore', expect.objectContaining({ method: 'POST' }));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['payment-purchases', 'customer-a'] });
+  });
+  it('never offers Save to Cart for a sold-out Buy Now purchase', async () => {
+    vi.mocked(apiClient).mockResolvedValue({ data: [{ ...soldOut, scope: 'BUY_NOW', authorizationReleased: true }] });
+    show('/cart');
+    const card = await screen.findByRole('article', { name: 'Sold-out purchase for Product A' });
+    expect(within(card).queryByRole('button', { name: /Save to Cart/ })).not.toBeInTheDocument();
   });
 });

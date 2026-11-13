@@ -7,11 +7,15 @@
  *
  *   Z1  both customers authorized, commits race through a barrier: exactly one order, stock 1 -> 0, one capture; the loser's
  *       authorization is cancelled at the provider and verified by a fresh read; the loser's projection says "sold out" (never a card
- *       failure), restore is refused while stock is 0, replays by a fresh runner change nothing, and a second unit cannot be bought.
+ *       failure); restore returns the line to the Cart as OUT_OF_STOCK (once, reserving nothing; stock stays 0); replays by a fresh runner
+ *       change nothing, and a second unit cannot be bought.
  *   Z2  the other customer bought the unit first: the loser's Place Order (submit) is refused with CART_STOCK_CONFLICT BEFORE any card
  *       confirmation; the attempt stays unsubmitted, the Cart line is kept (shown OUT_OF_STOCK) and can be removed.
  *   Z3  Buy Now follows the same gate: a Buy Now submit after the unit sold is refused with CART_STOCK_CONFLICT; nothing enters the Cart.
  *   Z4  Buy Now vs Cart checkout, both authorized, racing: one order, stock 0; a Buy Now loser is cancelled and never restorable to Cart.
+ *   Z5  the unit sells AFTER the loser's submit but BEFORE card confirmation: confirmation-started is refused with CART_STOCK_CONFLICT,
+ *       the card is never authorized, the unconfirmed intent is cancelled (fresh read), the purchase settles as sold out in that request,
+ *       and it can be saved back to the Cart.
  *
  * Provider behaviour is the scripted HarnessProvider double: it is NOT Stripe evidence. Runs ONLY in disposable scope (scenarios-A-Z),
  * enabled by scripts/payment-pg-disposable.cjs; the target is re-proved here before any write.
@@ -106,10 +110,14 @@ describe.skipIf(!disposableMode)('real PostgreSQL last-unit competition Z (dispo
       const listed = (await loser.payment.purchases(loser.userId)).find(item => item.attemptId === loser.attempt.id);
       expect(listed).toMatchObject({ outcomeReason: 'STOCK_UNAVAILABLE', authorizationReleased: true, retryAllowed: false });
 
-      // Saved-purchase recovery is refused while the unit is gone; nothing is added to the Cart and stock is untouched.
-      expect(await rejection(loser.payment.restore(loser.userId, loser.attempt.id))).toMatchObject({ status: 409, code: 'CHECKOUT_CHANGED' });
-      expect((await cart.get(loser.userId)).items).toHaveLength(0);
+      // Saved-purchase recovery returns the line to the Cart even at 0 stock: shown OUT_OF_STOCK, checkout blocked, nothing reserved, once.
+      await loser.payment.restore(loser.userId, loser.attempt.id);
+      await loser.payment.restore(loser.userId, loser.attempt.id);
+      const restored = await cart.get(loser.userId);
+      expect(restored.canCheckout).toBe(false);
+      expect(restored.items).toEqual([expect.objectContaining({ productId, quantity: 1, availability: 'OUT_OF_STOCK', availableQuantity: 0 })]);
       expect(await stockOf(productId)).toBe(0);
+      expect((await db.paymentAttempt.findUniqueOrThrow({ where: { id: loser.attempt.id } })).restoredAt).not.toBeNull();
 
       // Replays by the same and by a fresh runner never create an order, capture, or restore stock.
       for (const purchase of purchases) {
@@ -182,5 +190,29 @@ describe.skipIf(!disposableMode)('real PostgreSQL last-unit competition Z (dispo
         expect((await cart.get(buyNowUser)).items).toHaveLength(0);
       }
     }
-  }, 120_000);
+
+    // ---- Z5: sold between submit and card confirmation; the card is never authorized ---------------------------------------------
+    {
+      const productId = await makeProduct(db, 1); const provider = new HarnessProvider();
+      const loser = await startPurchase(context, await makeCustomer(db), productId, provider, 1);
+      await loser.payment.submit(loser.userId, loser.attempt.id); // passes: the unit is still there
+      await buyOutright(productId, provider);
+      expect(await stockOf(productId)).toBe(0);
+      expect(await rejection(loser.payment.confirmationStarted(loser.userId, loser.attempt.id)))
+        .toMatchObject({ status: 409, code: 'CART_STOCK_CONFLICT' });
+      // Settled in that same request: the never-confirmed intent was cancelled and verified; nothing was authorized or captured.
+      const attempt = await db.paymentAttempt.findUniqueOrThrow({ where: { id: loser.attempt.id } });
+      expect(attempt).toMatchObject({ state: 'CANCELED', failureCode: 'CART_STOCK_CONFLICT', providerStatus: 'canceled', orderId: null, confirmationStartedAt: null });
+      expect(provider.intentFor(loser.attempt.id)).toMatchObject({ status: 'canceled', received: 0, capturable: 0 });
+      const view = await loser.payment.status(loser.userId, loser.attempt.id);
+      expect(view).toMatchObject({ outcomeReason: 'STOCK_UNAVAILABLE', authorizationReleased: true, retryAllowed: false, committed: false });
+      // A repeated signal (second tab) is refused too and changes nothing.
+      expect(await rejection(loser.payment.confirmationStarted(loser.userId, loser.attempt.id))).toMatchObject({ status: 409 });
+      await loser.payment.restore(loser.userId, loser.attempt.id);
+      expect((await cart.get(loser.userId)).items).toEqual([expect.objectContaining({ productId, quantity: 1, availability: 'OUT_OF_STOCK' })]);
+      expect(await stockOf(productId)).toBe(0);
+      expect(await ordersFor(productId)).toBe(1);
+      expect(provider.captured).toBe(1);
+    }
+  }, 180_000);
 });

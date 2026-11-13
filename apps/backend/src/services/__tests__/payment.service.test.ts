@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma, type PrismaClient, type PaymentWork } from '@prisma/client';
 import { PaymentService } from '../payment.service.js';
 import { AppError } from '../../middleware/errorHandler.js';
-import { WORK_LEASE_MS, customerPaymentStatus, operationKey, type Attempt, type PaymentProvider, type ProviderIntent } from '../payment.domain.js';
+import { COMMIT_CONFLICT_RETRIES, WORK_LEASE_MS, customerPaymentStatus, operationKey, type Attempt, type PaymentProvider, type ProviderIntent } from '../payment.domain.js';
 import { isSerializationConflict } from '../transaction-conflict.js';
 import { cartRevision, requestHash } from '../checkout.domain.js';
 import { logger, loggingHealth } from '../../utils/logger.js';
@@ -1059,31 +1059,34 @@ describe('Durable payment processor (mocked DB/provider; not real transaction pr
     expect(provider.capture).not.toHaveBeenCalled(); expect(commit).toHaveBeenCalledTimes(1);
     expect(customerPaymentStatus(attempt, work)).toBe('FAILED');
   });
-  it('a commit that lost only to serialization contention is retried durably (never cancelled) until the bounded budget is spent', async () => {
+  it('a commit that lost only to serialization contention is retried within the same pass (never cancelled) and the customer gets the result from that pass', async () => {
     Object.assign(attempt, { submittedAt: new Date(), state: 'AWAITING_INPUT' });
     Object.assign(intent, { status: 'requires_capture', capturable: 1999, methodType: 'card' });
-    commit.mockRejectedValue(new AppError('Checkout changed. Retry the same checkout attempt safely.', 409, 'CHECKOUT_CONFLICT'));
-    for (let pass = 1; pass <= 3; pass++) {
-      work.nextRunAt = new Date(0);
-      await service.process(id);
-      expect(attempt).toMatchObject({ state: 'AUTHORIZED', cancelRequested: false, orderId: null });
-      expect(work).toMatchObject({ state: 'READY', retryCount: pass, lastError: 'CHECKOUT_CONFLICT' });
-      expect(provider.cancel).not.toHaveBeenCalled();
-    }
-    // A later pass that commits normally is captured; nothing was released in between.
-    commit.mockImplementation(async () => { attempt.orderId = 'order'; attempt.state = 'CAPTURE_PENDING'; });
-    work.nextRunAt = new Date(0);
+    const conflict = new AppError('Checkout changed. Retry the same checkout attempt safely.', 409, 'CHECKOUT_CONFLICT');
+    commit.mockRejectedValueOnce(conflict).mockRejectedValueOnce(conflict)
+      .mockImplementationOnce(async () => { attempt.orderId = 'order'; attempt.state = 'CAPTURE_PENDING'; });
     await service.process(id);
+    expect(commit).toHaveBeenCalledTimes(3);
     expect(provider.cancel).not.toHaveBeenCalled(); expect(provider.capture).toHaveBeenCalledTimes(1);
+    // One pass, no durable "checking" retry was scheduled for the conflict.
+    expect(work.lastError).not.toBe('CHECKOUT_CONFLICT'); expect(work.retryCount).toBe(0);
   });
-  it('a commit conflict that persists past the bounded budget releases the authorization without capture', async () => {
+  it('a commit conflict that persists past the bounded in-pass budget releases the authorization in that same pass without capture', async () => {
     Object.assign(attempt, { submittedAt: new Date(), state: 'AUTHORIZED' });
     Object.assign(intent, { status: 'requires_capture', capturable: 1999, methodType: 'card' });
-    Object.assign(work, { retryCount: 3, lastError: 'CHECKOUT_CONFLICT' });
     commit.mockRejectedValue(new AppError('Checkout changed. Retry the same checkout attempt safely.', 409, 'CHECKOUT_CONFLICT'));
     await service.process(id);
+    expect(commit).toHaveBeenCalledTimes(COMMIT_CONFLICT_RETRIES + 1);
     expect(attempt).toMatchObject({ state: 'CANCELED', failureCode: 'CHECKOUT_CONFLICT', orderId: null, providerStatus: 'canceled' });
     expect(provider.cancel).toHaveBeenCalledTimes(1); expect(provider.capture).not.toHaveBeenCalled();
+  });
+  it('a lease lost between in-pass commit rounds stops the pass without cancelling the authorization', async () => {
+    Object.assign(attempt, { submittedAt: new Date(), state: 'AUTHORIZED' });
+    Object.assign(intent, { status: 'requires_capture', capturable: 1999, methodType: 'card' });
+    commit.mockImplementation(async () => { work.leaseToken = 'another-worker'; throw new AppError('Checkout changed.', 409, 'CHECKOUT_CONFLICT'); });
+    await service.process(id);
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(provider.cancel).not.toHaveBeenCalled(); expect(provider.capture).not.toHaveBeenCalled(); expect(attempt.state).toBe('AUTHORIZED');
   });
   it.each([false, true])('compensates A once without modifying a newer populated Cart (empty original Cart: %s)', async empty => {
     const productA = '22222222-2222-4222-8222-222222222222';

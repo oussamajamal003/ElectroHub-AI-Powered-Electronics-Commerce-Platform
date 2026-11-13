@@ -221,6 +221,7 @@
   strong { font-weight: $font-weight-semibold; overflow-wrap: anywhere; }
   span { color: $color-text-secondary; font-size: $font-size-sm; }
 }
+.soldOutHint { margin: $spacing-4 0 0; color: $color-text-secondary; font-size: $font-size-sm; text-align: center; }
 .soldOutImage { flex: 0 0 64px; width: 64px; height: 64px; background: $color-surface; }
 .soldOutNotice { width: 100%; box-sizing: border-box; border: 1px solid $color-warning-border; background: $color-warning-background; color: $color-warning-foreground;
   padding: $spacing-5; margin-block: $spacing-6; line-height: 1.5; text-align: left; p { margin: 0; } p + p { margin-top: $spacing-2; } }

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CircleX, PackageX } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -20,10 +21,23 @@ function availabilityText(item: UnavailableItem) {
  * "not charged" is said only once the provider verified the authorization was cancelled (`authorizationReleased`). Actions are only those
  * the backend permits for this outcome: no Try Again (the server refuses it), no restore while the item cannot be bought.
  */
-function SoldOutRecovery({ outcome, checking, onCheck, onLeave }: { outcome: PaymentOutcome; checking: boolean; onCheck(): void; onLeave?(): boolean | void }) {
+function SoldOutRecovery({ outcome, checking, onCheck, onLeave, onRestore }: { outcome: PaymentOutcome; checking: boolean; onCheck(): void;
+  onLeave?(): boolean | void; onRestore?(): Promise<void> }) {
   const released = outcome.authorizationReleased === true;
   const items = outcome.unavailableItems ?? [];
   const browsable = items.find(item => item.slug && item.availability !== 'UNAVAILABLE' && item.availability !== 'NOT_FOUND');
+  // A Cart purchase can go back to the Cart even at 0 stock (shown there as out of stock; nothing is reserved). Buy Now never touches the
+  // Cart, and a withdrawn product is refused by the server, so the action is offered only where the backend permits it.
+  const restorable = released && Boolean(onRestore) && outcome.scope !== 'BUY_NOW' &&
+    items.every(item => item.availability !== 'UNAVAILABLE' && item.availability !== 'NOT_FOUND');
+  const [saving, setSaving] = useState(false); const [saveError, setSaveError] = useState('');
+  const save = async () => {
+    if (saving || !onRestore) return;
+    setSaving(true); setSaveError('');
+    try { await onRestore(); }
+    catch (error) { setSaveError(error instanceof Error && error.message ? error.message : 'These items could not be saved to your Cart. Please try again.'); }
+    finally { setSaving(false); }
+  };
   return (
     <section className={styles.paymentRecovery} aria-labelledby="payment-recovery-heading" data-outcome="sold-out">
       <div className={styles.soldOutIcon}><PackageX size={40} aria-hidden="true" /></div>
@@ -37,23 +51,26 @@ function SoldOutRecovery({ outcome, checking, onCheck, onLeave }: { outcome: Pay
       </ul>}
       <div className={styles.soldOutNotice} role="status" aria-live="polite">
         {released
-          ? <><p><strong>Your card was not charged.</strong> The payment authorization for this order was cancelled.</p>
+          ? <><p><strong>Your card was not charged.</strong> The payment for this order was cancelled.</p>
             <p>If your bank still shows a temporary hold, your bank will release it.</p></>
           : <p>We’re cancelling the payment authorization and checking the result of your payment. Please don’t submit another payment while this check is in progress.</p>}
       </div>
+      {saveError && <p role="alert">{saveError}</p>}
       <div className={styles.recoveryActions}>
         {!released && <Button variant="primary" onClick={onCheck} disabled={checking} isLoading={checking}>Check again</Button>}
-        <Link className={released ? styles.primaryLink : styles.secondaryLink} to="/products" onClick={event => { if (onLeave?.() === false) event.preventDefault(); }}>Continue shopping</Link>
+        {restorable && <Button variant="primary" onClick={() => void save()} disabled={saving} isLoading={saving}>Save to Cart</Button>}
+        <Link className={released && !restorable ? styles.primaryLink : styles.secondaryLink} to="/products" onClick={event => { if (onLeave?.() === false) event.preventDefault(); }}>Continue shopping</Link>
         {released && browsable?.slug && <Link className={styles.secondaryLink} to={`/products/${encodeURIComponent(browsable.slug)}`}
           onClick={event => { if (onLeave?.() === false) event.preventDefault(); }}>View product</Link>}
-        {released && <Link className={styles.secondaryLink} to="/cart" onClick={event => { if (onLeave?.() === false) event.preventDefault(); }}>Return to Cart</Link>}
+        {released && !restorable && <Link className={styles.secondaryLink} to="/cart" onClick={event => { if (onLeave?.() === false) event.preventDefault(); }}>Return to Cart</Link>}
       </div>
+      {restorable && <p className={styles.soldOutHint}>Saved items stay in your Cart as out of stock, and you can check out once they’re back in stock. Nothing is reserved.</p>}
     </section>
   );
 }
 
-export function PaymentRecovery({ outcome, message, pending, onCheck, onRetry, onLeave }: { outcome?: PaymentOutcome | null;
-  message: string; pending: boolean; onCheck(): void; onRetry(): void; onLeave?(): boolean | void }) {
+export function PaymentRecovery({ outcome, message, pending, onCheck, onRetry, onLeave, onRestore }: { outcome?: PaymentOutcome | null;
+  message: string; pending: boolean; onCheck(): void; onRetry(): void; onLeave?(): boolean | void; onRestore?(): Promise<void> }) {
   const state = outcome?.state;
   const declined = state === 'DECLINED';
   const isProcessing = pending || !outcome || !isResolvedPayment(outcome) || state === 'PAID';
@@ -64,7 +81,7 @@ export function PaymentRecovery({ outcome, message, pending, onCheck, onRetry, o
   };
 
   if (outcome?.outcomeReason === 'STOCK_UNAVAILABLE' && !outcome.orderReference) {
-    return <SoldOutRecovery outcome={outcome} checking={pending} onCheck={onCheck} onLeave={onLeave} />;
+    return <SoldOutRecovery outcome={outcome} checking={pending} onCheck={onCheck} onLeave={onLeave} onRestore={onRestore} />;
   }
 
   // Checkout has one checking presentation. Unresolved durable recovery moves

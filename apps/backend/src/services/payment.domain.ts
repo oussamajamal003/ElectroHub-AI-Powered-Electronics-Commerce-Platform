@@ -104,8 +104,12 @@ export const NEVER_CONFIRMED_GRACE_MS = 10 * 60_000;
  * card was authorized can still lose the item; the authorization is then cancelled, never captured.
  */
 export const STOCK_FAILURE_CODES = ['CART_STOCK_CONFLICT', 'PRODUCT_UNAVAILABLE', 'INVENTORY_NOT_FOUND'] as const;
-/** Bounded durable re-attempts of an order commit that lost only to serialization contention, before its authorization is released. */
+/**
+ * Bounded re-attempts, within one processing pass, of an order commit that lost only to serialization contention (each attempt already
+ * retries serialization internally) before its authorization is released. Backoff is COMMIT_CONFLICT_BACKOFF_MS * 2^round plus jitter.
+ */
 export const COMMIT_CONFLICT_RETRIES = 3;
+export const COMMIT_CONFLICT_BACKOFF_MS = 50;
 export type CustomerOutcomeReason = 'STOCK_UNAVAILABLE' | null;
 /** Why a purchase without an order ended (or is ending). Presentation detail only; never changes the payment classification. */
 export function customerOutcomeReason(attempt: Pick<Attempt, 'state' | 'orderId'> & { failureCode?: string | null }): CustomerOutcomeReason {

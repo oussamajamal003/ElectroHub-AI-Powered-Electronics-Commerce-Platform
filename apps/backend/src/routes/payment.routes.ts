@@ -164,6 +164,48 @@ const empty = z.object({}).strict();
  *         description: >-
  *           `{ error: { code, message } }` with code `CART_STOCK_CONFLICT` (sold out or short; message names the product and available
  *           quantity), `PRODUCT_UNAVAILABLE` (withdrawn), `CHECKOUT_CHANGED` (Cart or prices changed) or `PAYMENT_RECOVERY_PENDING`.
+ * /checkout/payment-attempts/{attemptId}/confirmation-started:
+ *   post:
+ *     tags: [Payments]
+ *     summary: Announce card confirmation for a submitted purchase. Last stock read before the card can be authorized (never a reservation).
+ *     description: >-
+ *       The client calls this immediately before Stripe.js confirms the card and confirms only after a 200. If an item sold out (or was
+ *       withdrawn) after Place Order, the call is refused with the standard stock conflict, the purchase's unconfirmed payment is cancelled
+ *       (verified by a fresh provider read) and its status reports `outcomeReason: STOCK_UNAVAILABLE`. Nothing was authorized or charged.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: attemptId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200: { description: "`{ data: { attemptId, confirmationStartedAt } }` (idempotent; null when the signal is disabled)" }
+ *       404: { description: Not found for this customer }
+ *       409:
+ *         description: >-
+ *           `CART_STOCK_CONFLICT` / `PRODUCT_UNAVAILABLE` (sold out or withdrawn since Place Order; do not confirm the card) or
+ *           `PAYMENT_CONFIRMATION_NOT_ALLOWED` (not a submitted purchase awaiting card input).
+ * /checkout/payment-attempts/{attemptId}/restore:
+ *   post:
+ *     tags: [Payments]
+ *     summary: Return a cancelled Cart purchase's items to the Cart (once; additive to newer Cart quantities)
+ *     description: >-
+ *       Allowed after the cancellation or refund is verified with the provider. A purchase that lost the last unit(s)
+ *       (`outcomeReason: STOCK_UNAVAILABLE`) is returned even while stock is 0; the Cart shows the line as out of stock and blocks
+ *       checkout until restocked. Nothing is reserved. Buy Now purchases are never added to the Cart.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: attemptId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200: { description: The purchase status after restoration }
+ *       404: { description: Not found for this customer }
+ *       409:
+ *         description: >-
+ *           `PURCHASE_NOT_RESTORABLE` (Buy Now), `PRODUCT_UNAVAILABLE` (withdrawn product), `CHECKOUT_CHANGED` (other outcomes whose items are
+ *           no longer purchasable), `CART_FULL`, `INVALID_CART_QUANTITY` or `PAYMENT_RECOVERY_PENDING`.
  * /checkout/payment-attempts/{attemptId}/reconcile:
  *   post:
  *     tags: [Payments]

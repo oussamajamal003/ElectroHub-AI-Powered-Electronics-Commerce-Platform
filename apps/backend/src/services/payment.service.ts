@@ -13,7 +13,7 @@ import { adminNotifications } from './admin-notification.service.js';
 import { OrderService } from './order.service.js';
 import { stripeProvider } from './stripe.provider.js';
 import { ATTEMPT_LIFETIME_MS, SUBMITTED_ABANDON_GRACE_MS, WORK_LEASE_MS, MAX_PAYMENT_RETRIES, TERMINAL_PAYMENT_STATES,
-  cents, retryDelay, customerPaymentStatus, customerOutcomeReason, authorizationReleased, COMMIT_CONFLICT_RETRIES, ABANDONMENT_FAILURE_CODES, NOT_CONFIRMED_FAILURE_CODE, CANCELED_BY_CUSTOMER_FAILURE_CODE, NEVER_CONFIRMED_GRACE_MS, CONFIRMATION_SIGNAL_GRACE_MS, SUBMITTED_UNRESOLVED_WINDOW_MS, confirmationSignalEnabled, verifyBinding, type Attempt, type PaymentProvider, type ProviderIntent } from './payment.domain.js';
+  cents, retryDelay, customerPaymentStatus, customerOutcomeReason, authorizationReleased, COMMIT_CONFLICT_RETRIES, COMMIT_CONFLICT_BACKOFF_MS, ABANDONMENT_FAILURE_CODES, NOT_CONFIRMED_FAILURE_CODE, CANCELED_BY_CUSTOMER_FAILURE_CODE, NEVER_CONFIRMED_GRACE_MS, CONFIRMATION_SIGNAL_GRACE_MS, SUBMITTED_UNRESOLVED_WINDOW_MS, confirmationSignalEnabled, verifyBinding, type Attempt, type PaymentProvider, type ProviderIntent } from './payment.domain.js';
 import { isSerializationConflict } from './transaction-conflict.js';
 import { redactDeliveryForDeletedOwner } from './delivery-privacy.js';
 import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
@@ -257,6 +257,16 @@ export class PaymentService {
   async confirmationStarted(userId: string, id: string) {
     this.assertMutationsAllowed();
     await this.owned(userId, id);
+    // PR #51: the last stock read before Stripe.js may authorize the card (the client confirms only after this call succeeds).
+    const soldOut = await this.refuseSoldOutConfirmation(userId, id);
+    if (soldOut) {
+      // Nothing was confirmed, so the unconfirmed intent is cancelled now (cancel + fresh read) and the purchase settles as sold out.
+      logSafely('info', 'Card confirmation refused: an item sold out after submit.', { event: 'payment.confirmation.stock_refused', attemptId: id, code: soldOut.code });
+      await this.wake(id);
+      await this.process(id).catch((error: unknown) => logSafely('error', 'Sold-out cancellation deferred to the durable runner.', {
+        event: 'payment.recovery.background_failed', attemptId: id, error }));
+      throw soldOut;
+    }
     if (!confirmationSignalEnabled()) return { attemptId: id, confirmationStartedAt: null };
     const claimed = await this.database.paymentAttempt.updateMany({ where: { id, userId, submittedAt: { not: null }, confirmationStartedAt: null, orderId: null,
       cancelRequested: false, state: 'AWAITING_INPUT' }, data: { confirmationStartedAt: new Date() } });
@@ -264,6 +274,37 @@ export class PaymentService {
     if (!attempt?.confirmationStartedAt) throw new AppError('This payment can no longer be confirmed from here.', 409, 'PAYMENT_CONFIRMATION_NOT_ALLOWED');
     void claimed;
     return { attemptId: id, confirmationStartedAt: attempt.confirmationStartedAt.toISOString() };
+  }
+
+  /**
+   * Stock gate at the confirmation boundary. Submit already checked stock, but the shopper can spend minutes in card entry; this read (never a
+   * reservation) runs right before the card could be authorized. Applies only to a submitted, unconfirmed, uncancelled purchase still awaiting
+   * card input; anything else falls through to the ordinary claim rules. On refusal the cancellation decision is durable before any provider I/O.
+   */
+  private async refuseSoldOutConfirmation(userId: string, id: string): Promise<AppError | null> {
+    for (let retry = 0; ; retry++) {
+      try {
+        return await this.database.$transaction(async tx => {
+          await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "payment_attempts" WHERE "id" = ${id}::uuid FOR UPDATE`);
+          await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "payment_work" WHERE "attemptId" = ${id}::uuid FOR UPDATE`);
+          const latest = await tx.paymentAttempt.findFirst({ where: { id, userId }, include: { items: true } });
+          if (!latest?.submittedAt || latest.confirmationStartedAt || latest.orderId || latest.cancelRequested || latest.state !== 'AWAITING_INPUT') return null;
+          const lines = (await purchaseItemsProjection(latest.items.map(item => ({ productId: item.productId, quantity: item.quantity })), tx)).data.items;
+          try {
+            assertStillPurchasable(latest.items.map(item => {
+              const line = lines.find(entry => entry.productId === item.productId);
+              return { availability: line?.availability ?? 'NOT_FOUND', availableQuantity: line?.availableQuantity ?? 0, quantity: item.quantity,
+                product: { name: item.productName } };
+            }));
+            return null;
+          } catch (error) {
+            if (!(error instanceof AppError)) throw error;
+            await tx.paymentAttempt.update({ where: { id }, data: { cancelRequested: true, failureCode: error.code ?? 'CART_STOCK_CONFLICT' } });
+            return error;
+          }
+        }, { isolationLevel: 'Serializable', timeout: PAYMENT_TRANSACTION_TIMEOUT_MS, maxWait: PAYMENT_TRANSACTION_MAX_WAIT_MS });
+      } catch (error) { if (isSerializationConflict(error) && retry < 2) continue; throw error; }
+    }
   }
 
   /** Transfer only the validated cart generation before exposing confirmation to Stripe.js.
@@ -463,7 +504,13 @@ export class PaymentService {
       const restoredItems = attempt.items.map(item => ({ productId: item.productId,
         quantity: (current.data.items.find(line => line.productId === item.productId)?.quantity ?? 0) + item.quantity }));
       if (restoredItems.some(item => item.quantity > MAX_CART_QUANTITY)) throw new AppError('Cart quantity limit exceeded.', 409, 'INVALID_CART_QUANTITY');
-      if (!(await purchaseItemsProjection(restoredItems, tx)).data.canCheckout) {
+      const projected = (await purchaseItemsProjection(restoredItems, tx)).data;
+      // PR #51: a purchase that lost the last unit(s) returns to the Cart even while stock is 0 (a Cart line reserves nothing; the Cart shows it
+      // as out of stock and blocks checkout until restocked). A withdrawn product is never put back. Other outcomes keep the purchasable rule.
+      if (customerOutcomeReason(latest) === 'STOCK_UNAVAILABLE') {
+        const withdrawn = projected.items.find(item => !['AVAILABLE', 'LOW_STOCK', 'OUT_OF_STOCK'].includes(item.availability));
+        if (withdrawn) throw new AppError(`${withdrawn.product?.name ?? 'An item in this purchase'} is no longer sold, so it can’t be returned to your Cart.`, 409, 'PRODUCT_UNAVAILABLE');
+      } else if (!projected.canCheckout) {
         throw new AppError('Saved items are unavailable in this quantity.', 409, 'CHECKOUT_CHANGED');
       }
       for (const item of restoredItems) {
@@ -1024,14 +1071,8 @@ export class PaymentService {
       } else if (intent.status === 'requires_capture') {
         if (!attempt.orderId) {
           await this.patch(id, token, { state: 'AUTHORIZED', providerStatus: intent.status, authorizationExpiresAt: intent.captureBefore });
-          try { await new OrderService(this.database, this.inventory).commitAuthorized(id, intent, token); }
+          try { await this.commitWithinPass(id, intent, token); }
           catch (error) {
-            // Exhausted serialization retries are contention, not a verdict on stock or terms: the same authorized attempt is re-committed on
-            // the durable backoff (customer-facing "checking") a bounded number of times before its authorization is released.
-            if (error instanceof AppError && error.code === 'CHECKOUT_CONFLICT') {
-              const work = await this.database.paymentWork.findUnique({ where: { attemptId: id }, select: { retryCount: true } });
-              if ((work?.retryCount ?? 0) < COMMIT_CONFLICT_RETRIES) throw error;
-            }
             if (error instanceof AppError && error.code !== 'PAYMENT_CLAIM_LOST' && error.statusCode < 500) {
               // The decision (never capture; release the authorization) is durable before the provider is touched.
               await this.patch(id, token, { cancelRequested: true, state: 'CANCEL_PENDING', failureCode: error.code ?? 'CHECKOUT_CONFLICT' });
@@ -1108,6 +1149,24 @@ export class PaymentService {
       return null;
     }
   }
+  /**
+   * Exhausted serialization retries are contention, not a verdict on stock or terms. The same authorized attempt is re-committed inside this
+   * pass (short jittered backoff, lease re-checked each round) a bounded number of times, so the customer gets the final result from this one
+   * pass instead of waiting through durable retries; only a persisting conflict reaches the caller, which then releases the authorization.
+   */
+  private async commitWithinPass(id: string, intent: ProviderIntent, token: string) {
+    const orders = new OrderService(this.database, this.inventory);
+    for (let round = 0; ; round++) {
+      try { return await orders.commitAuthorized(id, intent, token); }
+      catch (error) {
+        if (!(error instanceof AppError) || error.code !== 'CHECKOUT_CONFLICT' || round >= COMMIT_CONFLICT_RETRIES) throw error;
+        logSafely('info', 'Order commit lost to contention; retrying within this pass.', { event: 'payment.commit.conflict_retry', attemptId: id, round: round + 1 });
+        await new Promise(resolve => setTimeout(resolve, COMMIT_CONFLICT_BACKOFF_MS * 2 ** round + Math.floor(Math.random() * COMMIT_CONFLICT_BACKOFF_MS)));
+        await this.assertCurrentClaim(id, token);
+      }
+    }
+  }
+
   private async finishWork(id: string, token: string, done?: boolean) {
     await this.fenced(id, token, async (tx, attempt) => {
       const isDone = done ?? terminal(attempt.state);

@@ -213,7 +213,7 @@ describe('PaymentRecovery when the last unit sold to another customer (PR #51)',
     const list = screen.getByRole('list', { name: 'Items that could not be purchased' });
     expect(list).toHaveTextContent('Last Unit Phone'); expect(list).toHaveTextContent('Quantity requested: 1'); expect(list).toHaveTextContent('Out of stock');
     expect(screen.getByText('Your card was not charged.')).toBeVisible();
-    expect(screen.getByText(/payment authorization for this order was cancelled/)).toBeVisible();
+    expect(screen.getByText(/The payment for this order was cancelled./)).toBeVisible();
     expect(document.body).not.toHaveTextContent(/charged twice|refund/i);
     // Only actions the backend permits: no retry of a sold-out purchase, no status re-check once it is settled.
     expect(screen.queryByRole('button', { name: /Try Again/i })).not.toBeInTheDocument();
@@ -237,5 +237,25 @@ describe('PaymentRecovery when the last unit sold to another customer (PR #51)',
   it('does not show the sold-out state for a committed order', () => {
     render(<MemoryRouter><PaymentRecovery outcome={{ ...soldOut(true, 'PAID'), orderReference: 'EH-1' }} message="" pending={false} onCheck={vi.fn()} onRetry={vi.fn()} /></MemoryRouter>);
     expect(screen.queryByRole('heading', { name: /sold out/i })).not.toBeInTheDocument();
+  });
+  it('offers Save to Cart for a released Cart purchase, even at 0 stock, and reports a refusal without leaving', async () => {
+    const onRestore = vi.fn().mockRejectedValueOnce(new Error('Last Unit Phone is no longer sold, so it can’t be returned to your Cart.')).mockResolvedValueOnce(undefined);
+    render(<MemoryRouter><PaymentRecovery outcome={{ ...soldOut(true), scope: 'CART_CHECKOUT' }} message="" pending={false} onCheck={vi.fn()} onRetry={vi.fn()} onRestore={onRestore} /></MemoryRouter>);
+    expect(screen.getByText(/Saved items stay in your Cart as out of stock/)).toBeVisible();
+    expect(screen.queryByRole('link', { name: 'Return to Cart' })).not.toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save to Cart' })); });
+    expect(screen.getByRole('alert')).toHaveTextContent('no longer sold');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save to Cart' })); });
+    expect(onRestore).toHaveBeenCalledTimes(2);
+  });
+  it('never offers Save to Cart for Buy Now, a withdrawn product, or an unverified cancellation', () => {
+    const onRestore = vi.fn();
+    const { rerender } = render(<MemoryRouter><PaymentRecovery outcome={{ ...soldOut(true), scope: 'BUY_NOW' }} message="" pending={false} onCheck={vi.fn()} onRetry={vi.fn()} onRestore={onRestore} /></MemoryRouter>);
+    expect(screen.queryByRole('button', { name: 'Save to Cart' })).not.toBeInTheDocument();
+    const withdrawn = { ...soldOut(true), scope: 'CART_CHECKOUT' as const, unavailableItems: [{ ...soldOut(true).unavailableItems![0]!, availability: 'UNAVAILABLE' as const }] };
+    rerender(<MemoryRouter><PaymentRecovery outcome={withdrawn} message="" pending={false} onCheck={vi.fn()} onRetry={vi.fn()} onRestore={onRestore} /></MemoryRouter>);
+    expect(screen.queryByRole('button', { name: 'Save to Cart' })).not.toBeInTheDocument();
+    rerender(<MemoryRouter><PaymentRecovery outcome={{ ...soldOut(false), scope: 'CART_CHECKOUT' }} message="" pending={false} onCheck={vi.fn()} onRetry={vi.fn()} onRestore={onRestore} /></MemoryRouter>);
+    expect(screen.queryByRole('button', { name: 'Save to Cart' })).not.toBeInTheDocument();
   });
 });

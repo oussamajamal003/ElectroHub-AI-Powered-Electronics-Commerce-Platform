@@ -12,7 +12,7 @@ import { CheckoutPage } from './CheckoutPage';
 import { cart, confirmation, quote, shipping } from './fixtures';
 import { draftKey, newDraft, readSubmittedPurchase, rememberSubmittedPurchase, saveDraft } from './state';
 import { saveBuyNow } from './buyNow';
-import { announceConfirmation } from './confirmationSignal';
+import { ConfirmationStockRefused, announceConfirmation } from './confirmationSignal';
 import { CheckoutDraftSession } from './CheckoutDraftSession';
 import { queryKeys } from '@/lib/query';
 import type { CartData } from '@/features/cart/types';
@@ -1325,6 +1325,28 @@ describe('Place Order handoff after a slow /submit', () => {
     expect(providerReached).toBe(false);
     expect(urls().some(url => /release|cancel/.test(url))).toBe(false);
   });
+  it('an item that sold out during card entry stops before Stripe and shows the sold-out outcome from the purchase status, never "outcome unknown"', async () => {
+    vi.mocked(announceConfirmation).mockRejectedValueOnce(new ConfirmationStockRefused('Last Unit Phone is out of stock. Nothing was charged.', 'CART_STOCK_CONFLICT'));
+    let providerReached = false;
+    actions.confirm.mockImplementation(async (before?: () => Promise<void>) => { await before?.(); providerReached = true; return { kind: 'confirmed' }; });
+    const soldOut = { ...setup, state: 'CANCELED', classification: 'FAILED', failureCode: 'CART_STOCK_CONFLICT', retryAllowed: false, submittedAt: new Date().toISOString(),
+      outcomeReason: 'STOCK_UNAVAILABLE', authorizationReleased: true, scope: 'CART_CHECKOUT',
+      unavailableItems: [{ productId: 'p1', name: 'Last Unit Phone', slug: 'last-unit-phone', imageUrl: null, quantity: 1, availableQuantity: 0, availability: 'OUT_OF_STOCK' }] };
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint.endsWith('/submit')) return { data: { ...setup, attemptId: endpoint.split('/').at(-2) } } as never;
+      if (endpoint === '/api/checkout') return { data: quote } as never;
+      if (endpoint === '/api/checkout/payment-attempts') return { data: setup } as never;
+      if (endpoint.startsWith('/api/cart')) return { data: cart } as never;
+      if (/\/payment-attempts\/[^/]+$/.test(endpoint)) return { data: { ...soldOut, attemptId: endpoint.split('/').at(-1) } } as never;
+      throw new Error(`Unexpected test request ${endpoint}`);
+    });
+    reviewedDraft(); show('/checkout?step=review'); await enterReview();
+    fireEvent.click(await screen.findByRole('button', { name: /Place Order/ }));
+    expect(await screen.findByRole('heading', { name: 'This item sold out' }, { timeout: 8000 })).toBeVisible();
+    expect(providerReached).toBe(false);
+    expect(screen.queryByText(/outcome is not yet known/)).not.toBeInTheDocument();
+    expect(urls().some(url => url.endsWith('/reconcile'))).toBe(false);
+  }, 15000);
 });
 
 // P0: "Secure payment setup could not finish… Retry" was shown for an intentional 503 PAYMENT_MUTATIONS_DISABLED (payment isolation).

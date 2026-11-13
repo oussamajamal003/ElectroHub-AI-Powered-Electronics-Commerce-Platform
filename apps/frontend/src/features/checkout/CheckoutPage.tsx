@@ -2,7 +2,7 @@ import { useCallback, useEffect, useReducer, useRef, useState, type ReactNode } 
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight } from 'lucide-react';
-import { announceConfirmation } from './confirmationSignal';
+import { ConfirmationStockRefused, announceConfirmation } from './confirmationSignal';
 import { PAYMENTS_UNAVAILABLE_MESSAGE, isPaymentsDisabledError, paymentCapabilityQueryOptions, usePaymentCapability } from './paymentCapability';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { useCart } from '@/features/cart/context';
@@ -296,6 +296,20 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
     draftRef.current = next;
     setupGeneration.current++;
     return true;
+  };
+  /** PR #51: return a sold-out Cart purchase to the Cart (the server re-verifies the cancelled payment; idempotent), then open the Cart. */
+  const saveSoldOutToCart = async () => {
+    const attemptId = outcome?.attemptId;
+    if (!attemptId) return;
+    try { await apiClient(`${endpoint}/${attemptId}/restore`, { method: 'POST', data: {}, signal: AbortSignal.timeout(45_000) }); }
+    catch (error) {
+      throw new Error(error instanceof ApiError && error.code === 'PRODUCT_UNAVAILABLE' ? error.message
+        : 'These items could not be saved to your Cart right now. Please try again.');
+    }
+    await client.invalidateQueries({ queryKey: queryKeys.cart.current(userId) });
+    void client.invalidateQueries({ queryKey: ['payment-purchases', userId] });
+    if (clearTerminalBeforeLeaving() === false) return;
+    navigate('/cart');
   };
   const syncPaymentLock = (payment: PaymentOutcome) => {
     if (!payment.recoveryActive) {
@@ -790,6 +804,13 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
         // The server refused to start this payment (nothing was submitted or confirmed): the customer can simply try again.
         setMessage('Secure payment could not start. Nothing was charged. Please try Place Order again.');
         setPaymentState('IDLE');
+      } else if (error instanceof ConfirmationStockRefused) {
+        // PR #51: sold out between Place Order and card confirmation. Stripe was never asked to confirm, so nothing was authorized; the
+        // purchase's own status (read next) presents the sold-out outcome and whether its cancellation is verified.
+        setOutcome(null);
+        setMessage('');
+        setPaymentState('COMMITTING_ORDER');
+        void client.invalidateQueries({ queryKey: queryKeys.cart.current(userId) });
       } else if (error instanceof PaymentEntryValidationError) {
         setMessage(error.message);
         setPaymentState('IDLE');
@@ -896,7 +917,7 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
       <div className={styles.recoveryWrapper}>
       <PaymentRecovery outcome={outcome} message={message} pending={pending || refreshingPrerequisites}
         onCheck={() => void check()} onRetry={() => { if (outcome?.submittedAt) retrySubmitted(); else void retry(); }}
-        onLeave={clearTerminalBeforeLeaving} />
+        onLeave={clearTerminalBeforeLeaving} onRestore={outcome?.outcomeReason === 'STOCK_UNAVAILABLE' ? saveSoldOutToCart : undefined} />
       </div>
     );
   }

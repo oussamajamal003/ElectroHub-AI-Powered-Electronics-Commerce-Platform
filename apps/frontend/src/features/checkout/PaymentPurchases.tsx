@@ -28,7 +28,7 @@ export interface SavedPurchase { attemptId: string; scope: string; state: string
   /** PR #51: the item sold out before this purchase's order committed (never a card failure); see authorizationReleased. */
   outcomeReason?: 'STOCK_UNAVAILABLE' | null; authorizationReleased?: boolean }
 /** Sold-out copy. "Not charged" is said only once the provider verified the authorization was cancelled; a bank hold is never called a charge. */
-export const SOLD_OUT_RELEASED_NOTE = 'This item sold out before your order could be completed. Your card was not charged and the payment authorization was cancelled. If your bank still shows a temporary hold, your bank will release it.';
+export const SOLD_OUT_RELEASED_NOTE = 'This item sold out before your order could be completed. Your card was not charged and the payment was cancelled. If your bank still shows a temporary hold, your bank will release it.';
 export const SOLD_OUT_RELEASING_NOTE = 'This item sold out before your order could be completed. We’re cancelling the payment authorization and checking the result of your payment. Please don’t submit another payment while this check is in progress.';
 /** Reject older backend versions; verified capture also survives delayed pre-capture reads. Refunds remain observable. */
 export function retainPaidPurchases(previous: SavedPurchase[], incoming: SavedPurchase[]) {
@@ -304,6 +304,7 @@ function PurchaseCard({ item, exit = false, checking = false, onDismissed, actio
       <p>{note}</p>
       {tone === 'pending' && !exit && <Link className={styles.secondaryLink} to={`/checkout?purchase=${encodeURIComponent(item.attemptId)}`}>Check payment status</Link>}
       {tone === 'pending' && !exit && item.cancelable && !actionsDisabled && <CancelPurchase item={item} label={names} />}
+      {soldOut && item.authorizationReleased && item.scope !== 'BUY_NOW' && !exit && !actionsDisabled && <SaveSoldOutToCart item={item} label={names} />}
       {tone === 'failure' && !exit && item.retryAllowed && !actionsDisabled && <Link className={styles.primaryLink} to="/checkout?step=payment" state={{ retryPurchase: item.attemptId }}
         aria-label={`Try Again: pay for ${names} again`}>Try Again</Link>}
     </div>
@@ -331,6 +332,30 @@ export async function awaitCancellation(attemptId: string, initialState: string,
   return state;
 }
 
+/**
+ * PR #51: a Cart purchase that lost the last unit can go back to the Cart, even at 0 stock (the Cart shows it as out of stock; nothing is
+ * reserved). The server re-verifies the cancelled payment, refuses a withdrawn product, and is idempotent. The card then leaves this list.
+ */
+function SaveSoldOutToCart({ item, label }: { item: SavedPurchase; label: string }) {
+  const { user } = useAuth(); const client = useQueryClient();
+  const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  const save = async () => {
+    if (busy || !user) return;
+    setBusy(true); setError('');
+    try {
+      await apiClient(`/api/checkout/payment-attempts/${item.attemptId}/restore`, { method: 'POST', data: {}, signal: AbortSignal.timeout(45_000) });
+      await client.invalidateQueries({ queryKey: queryKeys.cart.current(user.id) });
+      await client.invalidateQueries({ queryKey: ['payment-purchases', user.id] });
+    } catch (failure) {
+      setError(failure instanceof ApiError && failure.code === 'PRODUCT_UNAVAILABLE' ? failure.message
+        : 'These items could not be saved to your Cart right now. Please try again.');
+    } finally { setBusy(false); }
+  };
+  return <>
+    <Button size="small" variant="outline" aria-label={`Save to Cart: ${label}`} onClick={() => void save()} isLoading={busy} disabled={busy}>Save to Cart</Button>
+    {error && <Alert variant="error">{error}</Alert>}
+  </>;
+}
 function CancelPurchase({ item, label }: { item: SavedPurchase; label: string }) {
   const { user } = useAuth(); const client = useQueryClient();
   const [open, setOpen] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState('');

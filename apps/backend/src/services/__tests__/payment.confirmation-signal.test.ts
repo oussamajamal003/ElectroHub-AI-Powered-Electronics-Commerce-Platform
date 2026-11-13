@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { customerPaymentStatus } from '../payment.domain.js';
 import { PaymentService } from '../payment.service.js';
+import { purchaseItemsProjection } from '../cart.service.js';
+
+vi.mock('../cart.service.js', async original => ({ ...await original<typeof import('../cart.service.js')>(), purchaseItemsProjection: vi.fn() }));
 
 const ID = '11111111-1111-4111-8111-111111111111';
 const base = { state: 'AWAITING_INPUT' as const, submittedAt: new Date(), orderId: null, failureCode: null, confirmationStartedAt: null as Date | null };
@@ -24,7 +27,8 @@ describe('PaymentService.confirmationStarted', () => {
   afterEach(() => { delete process.env.PAYMENT_CONFIRMATION_SIGNAL; });
   const when = new Date('2026-10-16T12:00:00Z');
   const make = (claimed: number, row: { confirmationStartedAt: Date | null } | null) => {
-    const db = { paymentAttempt: { findFirst: vi.fn().mockResolvedValue({ id: ID }), updateMany: vi.fn().mockResolvedValue({ count: claimed }) } };
+    // The stock gate's transaction finds nothing to gate here (null): these cases cover the claim itself.
+    const db = { $transaction: vi.fn().mockResolvedValue(null), paymentAttempt: { findFirst: vi.fn().mockResolvedValue({ id: ID }), updateMany: vi.fn().mockResolvedValue({ count: claimed }) } };
     db.paymentAttempt.findFirst.mockResolvedValueOnce({ id: ID }).mockResolvedValueOnce(row ? { state: 'AWAITING_INPUT', submittedAt: when, orderId: null, ...row } : null);
     return { db, service: new PaymentService(db as never, {} as never) };
   };
@@ -48,9 +52,44 @@ describe('PaymentService.confirmationStarted', () => {
 describe('on a database without the migration', () => {
   it('the signal is a harmless no-op that never touches the unmigrated column', async () => {
     delete process.env.PAYMENT_CONFIRMATION_SIGNAL;
-    const db = { paymentAttempt: { findFirst: vi.fn().mockResolvedValue({ id: ID }), updateMany: vi.fn() } };
+    const db = { $transaction: vi.fn().mockResolvedValue(null), paymentAttempt: { findFirst: vi.fn().mockResolvedValue({ id: ID }), updateMany: vi.fn() } };
     const service = new PaymentService(db as never, {} as never);
     await expect(service.confirmationStarted('u', ID)).resolves.toEqual({ attemptId: ID, confirmationStartedAt: null });
     expect(db.paymentAttempt.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('stock gate right before card confirmation (PR #51 last unit)', () => {
+  const submitted = { id: ID, state: 'AWAITING_INPUT', submittedAt: new Date(), confirmationStartedAt: null, orderId: null, cancelRequested: false,
+    items: [{ productId: 'p1', productName: 'Last Unit Phone', quantity: 1 }] };
+  const make = (availability: string, availableQuantity: number) => {
+    const tx = { $queryRaw: vi.fn(), paymentAttempt: { findFirst: vi.fn().mockResolvedValue(submitted), update: vi.fn() } };
+    const db = { $transaction: vi.fn(async (operation: (client: typeof tx) => unknown) => operation(tx)),
+      paymentAttempt: { findFirst: vi.fn().mockResolvedValue({ ...submitted, confirmationStartedAt: new Date() }), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      paymentWork: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) } };
+    vi.mocked(purchaseItemsProjection).mockResolvedValue({ data: { items: [{ productId: 'p1', availability, availableQuantity }] } } as never);
+    const service = new PaymentService(db as never, {} as never);
+    const process = vi.spyOn(service, 'process').mockResolvedValue(null);
+    return { tx, db, service, process };
+  };
+  it('refuses a sold-out item with the standard 409, records the cancellation durably first, never marks confirmation, and settles it now', async () => {
+    const { tx, db, service, process } = make('OUT_OF_STOCK', 0);
+    await expect(service.confirmationStarted('u', ID)).rejects.toMatchObject({ statusCode: 409, code: 'CART_STOCK_CONFLICT',
+      message: 'Last Unit Phone is out of stock. Nothing was charged.' });
+    expect(tx.paymentAttempt.update).toHaveBeenCalledWith({ where: { id: ID }, data: { cancelRequested: true, failureCode: 'CART_STOCK_CONFLICT' } });
+    expect(db.paymentAttempt.updateMany).not.toHaveBeenCalled();
+    expect(db.paymentWork.updateMany).toHaveBeenCalledTimes(1); expect(process).toHaveBeenCalledWith(ID);
+    expect(tx.paymentAttempt.update.mock.invocationCallOrder[0]!).toBeLessThan(process.mock.invocationCallOrder[0]!);
+  });
+  it('refuses a withdrawn item as PRODUCT_UNAVAILABLE', async () => {
+    const { service } = make('UNAVAILABLE', 0);
+    await expect(service.confirmationStarted('u', ID)).rejects.toMatchObject({ statusCode: 409, code: 'PRODUCT_UNAVAILABLE' });
+  });
+  it('lets an in-stock purchase record its confirmation signal untouched', async () => {
+    const { tx, db, service, process } = make('AVAILABLE', 3);
+    globalThis.process.env.PAYMENT_CONFIRMATION_SIGNAL = 'true';
+    try { await expect(service.confirmationStarted('u', ID)).resolves.toMatchObject({ attemptId: ID }); }
+    finally { delete globalThis.process.env.PAYMENT_CONFIRMATION_SIGNAL; }
+    expect(tx.paymentAttempt.update).not.toHaveBeenCalled(); expect(db.paymentAttempt.updateMany).toHaveBeenCalledTimes(1); expect(process).not.toHaveBeenCalled();
   });
 });
