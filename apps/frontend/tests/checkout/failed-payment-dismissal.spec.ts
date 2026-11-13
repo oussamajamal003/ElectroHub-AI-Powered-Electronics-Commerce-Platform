@@ -4,13 +4,13 @@ import { harness } from './stripe.harness';
 // Intercepted QA only: no shared DEV, no session rows, no backend. The dismissal endpoint is simulated; the
 // persistence guarantee comes from backend tests and a separately authorized migration, not from these results.
 const viewports = [{ name: '390', width: 390, height: 844 }, { name: '768', width: 768, height: 1024 }, { name: '1366', width: 1366, height: 768 }];
-const dismissUrl = /\/api\/checkout\/payment-attempts\/[^/]+\/dismiss$/;
+const dismissUrl = /\/api\/checkout\/payment-attempts\/[^/]+\/discard$/;
 const failedA = '55555555-5555-4555-8555-555555555555';
 const failedC = '66666666-6666-4666-8666-666666666666';
 
 function purchase(attemptId: string, name: string, overrides: Record<string, unknown> = {}) {
   return { attemptId, checkoutId: attemptId, scope: 'CART_CHECKOUT', state: 'DECLINED', classification: 'DECLINED', total: '49.00', currency: 'USD',
-    pending: false, unread: false, orderReference: null, retryAllowed: true, dismissible: true, submittedAt: '2026-10-15T09:00:00.000Z', updatedAt: '2026-10-15T09:01:00.000Z',
+    pending: false, unread: false, orderReference: null, retryAllowed: true, dismissible: true, removal: 'REMOVE', submittedAt: '2026-10-15T09:00:00.000Z', updatedAt: '2026-10-15T09:01:00.000Z',
     items: [{ name, quantity: 1, imageUrl: null }], ...overrides };
 }
 
@@ -87,7 +87,7 @@ for (const viewport of viewports) {
       await page.route(dismissUrl, async route => {
         const id = new URL(route.request().url()).pathname.split('/')[4]; dismissed.push(id);
         serverRows = serverRows.filter(row => row.attemptId !== id);
-        await route.fulfill({ json: { data: { attemptId: id, dismissedAt: '2026-10-15T10:00:00.000Z' } } });
+        await route.fulfill({ json: { data: { attemptId: id, status: 'REMOVED', dismissedAt: '2026-10-15T10:00:00.000Z' } } });
       });
       await listRoute(page, () => serverRows);
       await page.goto('/cart');
@@ -98,6 +98,46 @@ for (const viewport of viewports) {
       expect(dismissed).toEqual([failedA]);
       await expect(page.getByRole('heading', { name: 'Failed payments' })).toBeFocused();
       await page.screenshot({ path: `test-results/dismissal/after-dismiss-${viewport.name}.png` });
+    });
+
+    test('a declined payment still open at the provider: Cancel & Remove waits for the server, then removes only that card', async ({ page }) => {
+      await harness(page); const calls: string[] = []; let serverRows = [purchase(failedA, 'Apple iPhone 16 128GB — Pink', { removal: 'CANCEL_AND_REMOVE' }), purchase(failedC, 'Galaxy Tab S9')];
+      await page.route(dismissUrl, async route => {
+        const id = new URL(route.request().url()).pathname.split('/')[4]; calls.push(id);
+        // First answer: cancellation accepted, not yet confirmed. The card must stay until the server says REMOVED.
+        if (calls.length === 1) return route.fulfill({ status: 202, json: { data: { attemptId: id, status: 'CANCEL_PENDING', dismissedAt: null } } });
+        serverRows = serverRows.filter(row => row.attemptId !== id);
+        return route.fulfill({ json: { data: { attemptId: id, status: 'REMOVED', dismissedAt: '2026-10-15T10:00:00.000Z' } } });
+      });
+      await listRoute(page, () => serverRows);
+      await page.goto('/cart');
+      await (await card(page, failedA)).getByRole('button', { name: /Remove failed payment/ }).click();
+      await expect(page.getByRole('heading', { name: 'Cancel and remove this payment?' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Keep payment' })).toBeVisible();
+      await page.screenshot({ path: `test-results/dismissal/cancel-remove-dialog-${viewport.name}.png` });
+      await page.getByRole('button', { name: 'Cancel & Remove' }).click();
+      await expect(page.getByText('Cancelling with our payment provider…')).toBeVisible();
+      await expect(await card(page, failedA)).toHaveCount(1);
+      await expect(await card(page, failedA)).toHaveCount(0, { timeout: 10_000 });
+      await expect(await card(page, failedC)).toHaveCount(1);
+      expect(calls).toEqual([failedA, failedA]);
+    });
+
+    test('a failed payment whose status is not confirmed keeps its trash action but only explains and offers a status check', async ({ page }) => {
+      await harness(page); const calls: string[] = [];
+      await page.route(dismissUrl, route => { calls.push(route.request().url()); return route.abort(); });
+      await listRoute(page, () => [purchase(failedA, 'Apple iPhone 16 128GB — Pink', { dismissible: false, removal: 'CONFIRMING' })]);
+      await page.goto('/cart');
+      await (await card(page, failedA)).getByRole('button', { name: /Remove failed payment/ }).click();
+      await expect(page.getByRole('heading', { name: 'This payment can’t be removed yet' })).toBeVisible();
+      await expect(page.getByText(/We need to confirm this payment’s status before it can be removed\./)).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Remove', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Cancel & Remove' })).toHaveCount(0);
+      await page.screenshot({ path: `test-results/dismissal/confirming-dialog-${viewport.name}.png` });
+      await page.getByRole('button', { name: 'Check payment status' }).click();
+      await expect(page.getByText(/isn’t confirmed yet, so it stays in your list/)).toBeVisible();
+      await expect(await card(page, failedA)).toHaveCount(1);
+      expect(calls).toEqual([]);
     });
 
     test('server failure keeps the card and shows a recoverable error', async ({ page }) => {
@@ -127,9 +167,9 @@ for (const viewport of viewports) {
       const pendingId = '77777777-7777-4777-8777-777777777777'; const unknownId = '88888888-8888-4888-8888-888888888888'; const paidId = '99999999-9999-4999-8999-999999999999';
       await listRoute(page, () => [
         purchase(failedA, 'Failed item'),
-        purchase(pendingId, 'Processing item', { state: 'PROCESSING', classification: 'PROCESSING', pending: true, retryAllowed: false, dismissible: false }),
-        purchase(unknownId, 'Unknown item', { state: 'PROCESSING', classification: 'UNKNOWN', pending: false, retryAllowed: false, dismissible: false }),
-        purchase(paidId, 'Paid item', { state: 'PAID', classification: 'SUCCEEDED', pending: false, retryAllowed: false, dismissible: false, orderReference: 'ORD-1' }),
+        purchase(pendingId, 'Processing item', { state: 'PROCESSING', classification: 'PROCESSING', pending: true, retryAllowed: false, dismissible: false, removal: null }),
+        purchase(unknownId, 'Unknown item', { state: 'PROCESSING', classification: 'UNKNOWN', pending: false, retryAllowed: false, dismissible: false, removal: null }),
+        purchase(paidId, 'Paid item', { state: 'PAID', classification: 'SUCCEEDED', pending: false, retryAllowed: false, dismissible: false, removal: null, orderReference: 'ORD-1' }),
       ]);
       await page.goto('/cart');
       await expect(await card(page, failedA)).toHaveCount(1);

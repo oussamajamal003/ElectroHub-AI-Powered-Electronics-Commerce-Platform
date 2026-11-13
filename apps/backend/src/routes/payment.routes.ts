@@ -206,6 +206,34 @@ const empty = z.object({}).strict();
  *         description: >-
  *           `PURCHASE_NOT_RESTORABLE` (Buy Now), `PRODUCT_UNAVAILABLE` (withdrawn product), `CHECKOUT_CHANGED` (other outcomes whose items are
  *           no longer purchasable), `CART_FULL`, `INVALID_CART_QUANTITY` or `PAYMENT_RECOVERY_PENDING`.
+ * /checkout/payment-attempts/{attemptId}/discard:
+ *   post:
+ *     tags: [Payments]
+ *     summary: Remove a failed payment from the customer's purchases (cancelling a still-open declined intent first)
+ *     description: >-
+ *       The single trash action on a failed-payment card. Owner-scoped and idempotent. A terminal failure is hidden at once
+ *       (`dismissedAt`); nothing is deleted and the audit history is kept. A declined purchase whose provider intent is still open is
+ *       re-read from the provider and cancelled first; the card is hidden only after the cancellation is verified. Repeating the request
+ *       re-drives the same recorded cancellation and never issues a second provider call for an operation already done.
+ *       The purchases list exposes the server's decision as `removal`: `REMOVE`, `CANCEL_AND_REMOVE`, `PENDING` or `CONFIRMING`.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: attemptId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, additionalProperties: false }
+ *     responses:
+ *       200: { description: "`{ attemptId, status: REMOVED, dismissedAt }` — the payment is hidden from the customer's purchases" }
+ *       202: { description: "`{ attemptId, status: CANCEL_PENDING, dismissedAt: null }` — cancellation recorded, provider verification pending" }
+ *       404: { description: Not found for this customer }
+ *       409:
+ *         description: >-
+ *           `PAYMENT_STATUS_UNCONFIRMED` (the outcome is not confirmed or the provider shows an authorization; nothing is cancelled or
+ *           hidden) or `PAYMENT_NOT_DISMISSIBLE` (paid, compensation pending, or a recovery pass holds the payment).
  * /checkout/payment-attempts/{attemptId}/reconcile:
  *   post:
  *     tags: [Payments]

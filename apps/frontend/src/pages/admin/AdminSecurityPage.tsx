@@ -1,3 +1,4 @@
+import { AdminAccountSkeleton } from '@/features/account/AccountSkeleton';
 import { useState } from 'react';
 import { KeyRound, Smartphone, ShieldCheck } from 'lucide-react';
 import { browserSupportsWebAuthn } from '@simplewebauthn/browser';
@@ -15,7 +16,7 @@ import {
   type AdminTotpEnrollment, type PasskeySummary, type TotpFactorSummary,
 } from '@/features/admin/security/api';
 import { ApiError } from '@/lib/api';
-import { AdminPageSkeleton, ConfirmDialog, EmptyRows, PageHeader, QueryProblem, useAdminToast } from '@/features/admin/shared/AdminUi';
+import { ConfirmDialog, EmptyRows, PageHeader, QueryProblem, useAdminToast } from '@/features/admin/shared/AdminUi';
 import { formatDate } from '@/features/admin/shared/format';
 import styles from '@/features/admin/shared/AdminPages.module.scss';
 import secStyles from './AdminSecurityPage.module.scss';
@@ -140,7 +141,7 @@ export function AdminSecurityPage() {
     () => removePasskey.mutateAsync(passkey.id), 'Passkey removed.');
 
   if (factors.isPending) {
-    return <div className={styles.page}><PageHeader title="Security" crumbs={[{ label: 'Dashboard', to: '/admin' }, { label: 'My Profile', to: '/admin/profile' }, { label: 'Security' }]} /><AdminPageSkeleton /></div>;
+    return <div className={styles.page}><PageHeader title="Security" crumbs={[{ label: 'Dashboard', to: '/admin' }, { label: 'My Profile', to: '/admin/profile' }, { label: 'Security' }]} /><AdminAccountSkeleton variant="security" heading={false} /></div>;
   }
 
   const data = factors.data;

@@ -30,6 +30,26 @@ describe('AdminProfilePage', () => {
     mutateAsync.mockResolvedValue({ ...profile, firstName: 'Grace', lastName: 'Hopper' });
   });
 
+  it('uses profile placeholders for cold loads and preserves resolved data during refetch', () => {
+    vi.mocked(useAdminProfile).mockReturnValue({ data: undefined, isPending: true, isError: false } as unknown as ReturnType<typeof useAdminProfile>);
+    const view = render(<MemoryRouter><AdminProfilePage /></MemoryRouter>);
+    expect(screen.getByRole('status', { name: 'Loading administrator profile' })).toBeVisible();
+    expect(screen.queryByLabelText('First name')).not.toBeInTheDocument();
+    vi.mocked(useAdminProfile).mockReturnValue({ data: profile, isPending: false, isFetching: true, isError: false } as unknown as ReturnType<typeof useAdminProfile>);
+    view.rerender(<MemoryRouter><AdminProfilePage /></MemoryRouter>);
+    expect(screen.queryByRole('status', { name: 'Loading administrator profile' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('First name')).toHaveValue('Ada');
+  });
+
+  it('stops loading and offers retry on a profile fetch failure', () => {
+    const refetch = vi.fn();
+    vi.mocked(useAdminProfile).mockReturnValue({ data: undefined, isPending: false, isError: true, error: new Error('unavailable'), refetch } as unknown as ReturnType<typeof useAdminProfile>);
+    render(<MemoryRouter><AdminProfilePage /></MemoryRouter>);
+    expect(screen.queryByRole('status', { name: 'Loading administrator profile' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+    expect(refetch).toHaveBeenCalledOnce();
+  });
+
   it('syncs the authenticated identity with the server profile after a successful save', async () => {
     render(<MemoryRouter><AdminProfilePage /></MemoryRouter>);
     fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Grace' } });

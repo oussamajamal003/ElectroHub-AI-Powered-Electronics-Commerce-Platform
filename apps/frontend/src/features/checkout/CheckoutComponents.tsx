@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, CheckCircle2, Clock3, CreditCard, LockKeyhole, RotateCcw, ShieldCheck, Truck, Zap } from 'lucide-react';
+import { Check, CheckCircle2, CreditCard, LockKeyhole, RotateCcw, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
-import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
+import { PaymentProcessingPanel } from './PaymentProcessingPanel';
 import type { CartData } from '@/features/cart/types';
 import { OrderDocumentsPanel } from '@/features/orders/documents/OrderDocumentsPanel';
 import { shippingErrors, steps } from './state';
@@ -209,31 +209,25 @@ export function ReviewStep({ shipping, delivery, total, blocked, onEdit, onBack,
 /** Stage 2: the submitted payment is durably saved and the outcome is being verified.
  * `unconfirmed` = a check settled without a result (network/5xx/unknown provider state): never a failure claim. */
 export function CheckingPayment({ unconfirmed = false, checking = false, note, onCheck }: { unconfirmed?: boolean; checking?: boolean; note?: string; onCheck?: () => void }) {
-  return <section className={styles.checking} aria-labelledby="checking-heading" data-state={unconfirmed ? 'unconfirmed' : 'checking'}>
-    <div className={styles.checkingVisual} aria-hidden="true">
-      {!unconfirmed && <><span className={styles.checkingPulse} /><span className={styles.checkingArc} /></>}
-      <span className={styles.checkingBadge}>{unconfirmed ? <Clock3 size={30} /> : <Zap size={30} fill="currentColor" />}</span>
-    </div>
-    <h1 id="checking-heading">{unconfirmed ? 'We couldn’t confirm your payment yet' : 'Checking your payment'}</h1>
-    <div role="status" aria-live="polite" className={styles.checkingCopy}>
-      {unconfirmed
-        ? <p>Your payment attempt is saved. This isn’t a payment failure — we couldn’t reach the payment service to confirm it. Please don’t pay again.</p>
-        : <p>Your payment was submitted. We’re confirming the result with our payment provider.</p>}
-      {note && <p className={styles.checkingNote}>{note}</p>}
-    </div>
-    <p className={styles.checkingHint}><ShieldCheck size={16} aria-hidden="true" />You can keep shopping. We’ll notify you as soon as the result is confirmed.</p>
-    <div className={styles.checkingActions}>
+  return <PaymentProcessingPanel phase={unconfirmed ? 'unconfirmed' : 'verifying'} headingId="checking-heading"
+    heading={unconfirmed ? 'We couldn’t confirm your payment yet' : 'Checking your payment'}
+    actions={<>
       {unconfirmed && onCheck && <Button onClick={onCheck} disabled={checking} isLoading={checking}>Check again</Button>}
       <Link className={styles.checkingLink} to="/products">Continue shopping</Link>
-    </div>
-  </section>;
+    </>}>
+    {unconfirmed
+      ? <p>Your payment attempt is saved. This isn’t a payment failure — we couldn’t reach the payment service to confirm it. Please don’t pay again.</p>
+      : <p>Your payment was submitted. We’re confirming the result with our payment provider.</p>}
+    {note && <p>{note}</p>}
+  </PaymentProcessingPanel>;
 }
 /** `browserConfirming`: Place Order is waiting on /submit or Stripe.js. Only this tab can confirm the card then, so it must stay open. */
 export function CheckoutProcessing({ browserConfirming = false }: { browserConfirming?: boolean }) {
-  return <section className={styles.processing} aria-labelledby="processing-heading"><ElectroHubLoader size="lg" /><h1 id="processing-heading">Processing your order…</h1>
-    <p aria-live="polite">{browserConfirming
+  return <PaymentProcessingPanel phase={browserConfirming ? 'confirming' : 'verifying'} headingId="processing-heading" heading="Processing your order…">
+    <p>{browserConfirming
       ? 'Confirming your card with our payment provider. Keep this page open until this finishes — leaving now can interrupt your payment. Please don’t submit another payment while this is in progress.'
-      : 'You can continue shopping while we securely verify your payment.'}</p></section>;
+      : 'You can continue shopping while we securely verify your payment.'}</p>
+  </PaymentProcessingPanel>;
 }
 /** `ownerId` (signed-in owner) enables the private documents panel. Email delivery is background work and is never shown here. */
 export function ConfirmationContent({ order, ownerId }: { order: Confirmation; ownerId?: string }) {

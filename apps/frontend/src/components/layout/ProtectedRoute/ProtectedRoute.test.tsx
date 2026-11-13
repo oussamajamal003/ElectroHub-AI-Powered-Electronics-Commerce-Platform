@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ProtectedRoute } from './ProtectedRoute';
 import { useAuth } from '@/features/auth/context/AuthContext';
@@ -116,6 +116,34 @@ describe('ProtectedRoute', () => {
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(screen.queryByText('Private Account Content')).not.toBeInTheDocument();
     expect(screen.queryByText('Home Page Content')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['/account', 'Loading your account', 'CUSTOMER'],
+    ['/account/profile', 'Loading your profile', 'CUSTOMER'],
+    ['/admin/profile', 'Loading administrator profile', 'ADMIN'],
+    ['/admin/profile/security', 'Loading security settings', 'ADMIN'],
+    ['/admin/profile/sessions', 'Loading sessions and login history', 'ADMIN'],
+  ])('shows the matching public skeleton during session restoration at %s', (path, label, role) => {
+    vi.mocked(useAuth).mockReturnValue({ isInitializing: true, isAuthenticated: true,
+      user: { firstName: 'Cached private name', role }, isSessionVerified: false } as ReturnType<typeof useAuth>);
+    render(<MemoryRouter initialEntries={[path]}><Routes><Route element={<ProtectedRoute requiredRole={role} />}>
+      <Route path={path} element={<div>Private content</div>} /></Route></Routes></MemoryRouter>);
+    expect(screen.getByRole('status', { name: label })).toHaveAttribute('aria-busy', 'true');
+    expect(screen.queryByText('Cached private name')).not.toBeInTheDocument();
+    expect(screen.queryByText('Private content')).not.toBeInTheDocument();
+  });
+
+  it('replaces the skeleton with retry after session restoration exhausts its retries', () => {
+    const retrySession = vi.fn();
+    vi.mocked(useAuth).mockReturnValue({ isInitializing: true, sessionUnavailable: true, retrySession,
+      isAuthenticated: false, user: null, isSessionVerified: false } as unknown as ReturnType<typeof useAuth>);
+    render(<MemoryRouter initialEntries={['/account']}><Routes><Route element={<ProtectedRoute requiredRole="CUSTOMER" />}>
+      <Route path="/account" element={<div>Private content</div>} /></Route></Routes></MemoryRouter>);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByText('We could not verify your session.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(retrySession).toHaveBeenCalledOnce();
   });
 
   describe('explicit sign-out (Task 03.8)', () => {

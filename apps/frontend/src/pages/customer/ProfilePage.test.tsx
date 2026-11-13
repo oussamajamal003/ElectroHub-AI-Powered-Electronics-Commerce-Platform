@@ -44,6 +44,13 @@ describe('ProfilePage', () => {
     return render(<QueryClientProvider client={new QueryClient()}><BrowserRouter>{ui}</BrowserRouter></QueryClientProvider>);
   };
 
+  it('does not expose cached form values before session restoration completes', () => {
+    vi.mocked(useAuth).mockReturnValue({ ...vi.mocked(useAuth)(), isInitializing: true });
+    renderWithRouter(<ProfilePage />);
+    expect(screen.getByRole('status', { name: 'Loading your profile' })).toBeVisible();
+    expect(screen.queryByDisplayValue('jane@example.com')).not.toBeInTheDocument();
+  });
+
   it('renders breadcrumb and title', () => {
     renderWithRouter(<ProfilePage />);
     expect(screen.getByText('Home')).toBeInTheDocument();

@@ -1,5 +1,9 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAdminAuth, useAuth } from '@/features/auth/context/AuthContext';
+import { CustomerAccountSkeleton, AdminAccountSkeleton } from '@/features/account/AccountSkeleton';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { Button } from '@/components/ui/Button';
+import skeletonStyles from '@/features/account/AccountSkeleton.module.scss';
 import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
 
 interface ProtectedRouteProps {
@@ -23,10 +27,19 @@ function CustomerRouteGate(props: ProtectedRouteProps) { return <RouteGate sessi
 
 function RouteGate({ session, requiredRole, redirectTo = '/', requireVerifiedSession = false, preserveReturnPath = false, logoutRedirectTo = '/' }:
   ProtectedRouteProps & { session: Session }) {
-  const { isAuthenticated, user, isInitializing, isSessionVerified, isLoggingOut } = session;
+  const { isAuthenticated, user, isInitializing, isSessionVerified, isLoggingOut, sessionUnavailable, retrySession } = session;
   const location = useLocation();
 
   if (isInitializing || (requireVerifiedSession && !isSessionVerified)) {
+    if (sessionUnavailable) return <div className={skeletonStyles.gate}><ErrorState title="We could not verify your session."
+      description="Please try again to securely load your account." action={<Button onClick={retrySession}>Retry</Button>} /></div>;
+    if (location.pathname === '/account' || location.pathname === '/account/profile') {
+      return <CustomerAccountSkeleton variant={location.pathname.endsWith('/profile') ? 'profile' : 'account'} />;
+    }
+    if (location.pathname.startsWith('/admin/profile')) {
+      const variant = location.pathname.endsWith('/security') ? 'security' : location.pathname.endsWith('/sessions') ? 'sessions' : 'profile';
+      return <div className={skeletonStyles.gate}><AdminAccountSkeleton variant={variant} /></div>;
+    }
     return <ElectroHubLoader page />;
   }
 

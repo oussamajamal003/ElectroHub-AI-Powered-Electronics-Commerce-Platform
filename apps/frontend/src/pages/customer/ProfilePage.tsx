@@ -13,10 +13,11 @@ import { ApiError } from '@/lib/api';
 import { OtpVerification } from '@/components/ui/OtpVerification';
 import { authApi } from '@/features/auth/api/auth';
 import styles from './ProfilePage.module.scss';
+import { CustomerAccountSkeleton } from '@/features/account/AccountSkeleton';
 import { AccountDeletionDialog } from './AccountDeletionDialog';
 
 export function ProfilePage() {
-  const { user, isSessionVerified, updateProfile, verifyEmailChange } = useAuth();
+  const { user, isInitializing, isSessionVerified, updateProfile, verifyEmailChange } = useAuth();
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -92,6 +93,8 @@ export function ProfilePage() {
       setIsLoading(false);
     }
   };
+
+  if (isInitializing || !user) return <CustomerAccountSkeleton variant="profile" />;
 
   return (
     <div className={styles.page}>

@@ -3,16 +3,32 @@ import { Rating } from '@/components/ui/Rating/Rating';
 import type { ProductDetail, ReviewSummary } from '@/features/products/types';
 import styles from './ProductDetailPage.module.scss';
 
-/** Splits stored plain text on blank lines. Rendered as React text only: markup in a description is never interpreted. */
-function descriptionParagraphs(text: string | null | undefined) {
-  return (text ?? '').split(/\r?\n[ \t]*\r?\n/).map(paragraph => paragraph.trim()).filter(Boolean);
+/** Plain text only: recognize explicit bullet lines without interpreting HTML or links. */
+function DescriptionCopy({ text }: { text: string }) {
+  const blocks: { kind: 'paragraph' | 'list'; lines: string[] }[] = [];
+  for (const line of text.trim().split(/\r?\n/)) {
+    if (!line.trim()) {
+      // A blank line ends the current paragraph/list, including consecutive paragraphs.
+      blocks.push({ kind: 'paragraph', lines: [] });
+      continue;
+    }
+    const bullet = /^\s*[-*•]\s+(.+)$/.exec(line);
+    const kind = bullet ? 'list' : 'paragraph';
+    const previous = blocks[blocks.length - 1];
+    const value = bullet ? bullet[1]! : line;
+    if (previous?.kind === kind) previous.lines.push(value);
+    else blocks.push({ kind, lines: [value] });
+  }
+  return <>{blocks.filter(block => block.lines.length).map((block, index) => block.kind === 'list'
+    ? <ul key={index}>{block.lines.map((line, item) => <li key={item}>{line}</li>)}</ul>
+    : <p key={index}>{block.lines.join('\n')}</p>)}</>;
 }
 
 const HIGHLIGHT_LIMIT = 4;
 
 /** Task 06.2 WP C: premium Description tab. Every value shown comes from the Product record; nothing is inferred. */
 export function ProductDescriptionPanel({ product }: { product: ProductDetail }) {
-  const paragraphs = descriptionParagraphs(product.description);
+  const description = product.description?.trim();
   const specificationItems = product.specifications.flatMap(group => group.items);
   const highlights = specificationItems.slice(0, HIGHLIGHT_LIMIT);
   const facts = [
@@ -24,10 +40,14 @@ export function ProductDescriptionPanel({ product }: { product: ProductDetail })
 
   return <section className={styles.descriptionPanel} aria-labelledby="product-description-title">
     <div className={styles.descriptionBody}>
-      <h2 id="product-description-title">Product Description</h2>
-      {paragraphs.length > 0
-        ? paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)
-        : <div className={styles.descriptionEmpty}><span className={styles.cardIcon} aria-hidden="true"><FileText size={20} /></span><p>No description is available.</p></div>}
+      <div className={styles.descriptionHeading}>
+        <span className={styles.cardIcon} aria-hidden="true"><FileText size={22} /></span>
+        <h2 id="product-description-title">Product Description</h2>
+      </div>
+      <div className={styles.descriptionCopy}>
+        {description ? <DescriptionCopy text={description} />
+          : <p className={styles.descriptionEmpty}>No description is available.</p>}
+      </div>
     </div>
     <aside className={styles.glanceCard} aria-labelledby="product-glance-title">
       <h3 id="product-glance-title"><span className={styles.cardIcon} aria-hidden="true"><ListChecks size={20} /></span>At a glance</h3>
@@ -36,7 +56,7 @@ export function ProductDescriptionPanel({ product }: { product: ProductDetail })
       </dl>
       {highlights.length > 0 && <>
         <h4>From the specifications</h4>
-        <dl className={styles.glanceList} data-testid="description-highlights">
+        <dl className={styles.descriptionHighlights} data-testid="description-highlights">
           {highlights.map(item => <div key={item.id}><dt>{item.name}</dt><dd>{item.value}</dd></div>)}
         </dl>
         {specificationItems.length > HIGHLIGHT_LIMIT && <p className={styles.glanceMore}>{specificationItems.length - HIGHLIGHT_LIMIT} more in the Specifications tab.</p>}

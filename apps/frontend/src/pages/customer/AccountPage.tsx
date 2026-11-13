@@ -1,16 +1,16 @@
 import { DeliveryNotificationPreferences } from '@/features/notifications/DeliveryNotificationPreferences';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Package, Heart, MapPin, Settings, ChevronRight, User, Star, ShieldCheck } from 'lucide-react';
+import { Mail, Package, Heart, MapPin, Settings, ChevronRight, Star, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/Breadcrumb';
 import { Avatar } from '@/components/ui/Avatar';
 import { openCookieSettings } from '@/features/privacy/consent';
 import { Button } from '@/components/ui/Button';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { RecentOrders } from '@/features/account/RecentOrders';
 import { SignOutModal } from '@/features/auth/components/SignOutModal';
 import { useMyReviews } from '@/features/products/queries';
-import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
+import { CustomerAccountSkeleton } from '@/features/account/AccountSkeleton';
 import { PersonalizationPanel } from '@/features/recommendations/components/PersonalizationPanel';
 import { useProfilePhoto } from '@/features/profilePhoto/queries';
 import styles from './AccountPage.module.scss';
@@ -20,10 +20,10 @@ export function AccountPage() {
   const profilePhoto = useProfilePhoto('customer', user?.id, isSessionVerified);
   const navigate = useNavigate();
   const [showSignOut, setShowSignOut] = useState(false);
-  const reviewsQuery = useMyReviews(Boolean(isAuthenticated));
+  const reviewsQuery = useMyReviews(Boolean(isAuthenticated && !isInitializing));
 
   if (isInitializing || !isAuthenticated || !user) {
-    return <ElectroHubLoader page />;
+    return <CustomerAccountSkeleton />;
   }
 
   const initial = user?.firstName?.[0]?.toUpperCase() || 'U';
@@ -147,16 +147,7 @@ export function AccountPage() {
 
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Recent Orders</h2>
-          <EmptyState
-            icon={<User size={48} />}
-            title="No orders yet"
-            description="Your order history will appear here after your first purchase."
-            action={
-              <Button variant="primary" onClick={() => navigate('/products')}>
-                Start shopping
-              </Button>
-            }
-          />
+          <RecentOrders />
         </section>
 
         <div className={styles.signOutWrapper}>

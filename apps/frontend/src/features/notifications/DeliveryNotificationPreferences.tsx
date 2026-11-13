@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { enablePush, disablePush, pushStatus, pushSupported } from './pushClient';
 import styles from './DeliveryNotificationPreferences.module.scss';
@@ -21,7 +22,9 @@ export function DeliveryNotificationPreferences({ userId }: { userId: string }) 
     <p>Get a system notification when your ElectroHub order is out for delivery.</p>
     <p>Email updates are separate. Browser and operating system settings may prevent notifications from appearing.</p>
     {!supported ? <p role="status">This browser cannot enable Web Push here. Use a supported browser in a secure context. On iPhone or iPad, use an installed Home Screen web app.</p> : <>
-      <p role="status">{loading ? 'Checking notification preferences…' : enabled ? 'Enabled on this browser' : 'Not enabled on this browser'}</p>
+      <p role="status" aria-busy={loading || undefined}>{loading
+        ? <><span className={styles.srOnly}>Checking notification preferences…</span><span aria-hidden="true"><Skeleton width="min(14rem, 70%)" height={18} /></span></>
+        : enabled ? 'Enabled on this browser' : 'Not enabled on this browser'}</p>
       <Button type="button" disabled={busy || loading || (!enabled && !available)} onClick={() => void change()}>{busy ? 'Updating…' : enabled ? 'Disable Delivery Notifications' : 'Enable Delivery Notifications'}</Button>
       {error && <Button variant="outline" type="button" disabled={busy} onClick={() => void refresh()}>Retry</Button>}
     </>}

@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 /**
  * Task 03.6 — persistent failed-payment removal on the ISOLATED stack only (frontend :3200 -> backend :5200 -> disposable PostgreSQL).
  * Needs at least one Payment failed card per viewport for the generated fixture customer (disposable DB fixture, no Stripe intent).
- * Dismissal is a database-only write, so no PaymentIntent is ever created. Refuses any base URL other than the isolated frontend.
+ * Removal goes through POST /discard; the fixture has no PaymentIntent, so no provider call is made. Refuses any base URL other than the isolated frontend.
  */
 const base = process.env.ISOLATED_BASE_URL ?? 'http://127.0.0.1:3200';
 const credentialsFile = process.env.ISOLATED_FIXTURE_CREDENTIALS;
@@ -38,8 +38,9 @@ for (const viewport of [{ width: 1366, height: 900 }, { width: 390, height: 844 
     }
     await page.screenshot({ path: `test-results/isolated/dismiss-1-before-${viewport.width}.png`, fullPage: true });
     await card.getByRole('button', { name: /^Remove failed payment for / }).click();
-    await expect(page.getByRole('heading', { name: 'Remove this failed payment?' })).toBeVisible();
-    await page.getByRole('button', { name: 'Remove', exact: true }).click();
+    // PR #51: a fixture without a provider intent is removed directly; one with an open declined intent is cancelled first (server decides).
+    await expect(page.getByRole('heading', { name: /^(Remove this failed payment\?|Cancel and remove this payment\?)$/ })).toBeVisible();
+    await page.getByRole('button', { name: /^(Remove|Cancel & Remove)$/ }).click();
     await expect(page.locator(`[data-purchase="${attemptId}"]`)).toHaveCount(0, { timeout: 15_000 });
     await expect(page.getByText(/could not be removed|switched off on this server/)).toHaveCount(0);
     await page.reload();

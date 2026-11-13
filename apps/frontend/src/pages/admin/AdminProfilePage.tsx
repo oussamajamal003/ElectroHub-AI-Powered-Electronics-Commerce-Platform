@@ -1,3 +1,4 @@
+import { AdminAccountSkeleton } from '@/features/account/AccountSkeleton';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { KeyRound, ShieldCheck } from 'lucide-react';
@@ -7,7 +8,7 @@ import { Alert } from '@/components/ui/Alert';
 import { ApiError } from '@/lib/api';
 import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { useAdminProfile, useUpdateAdminProfile, type AdminProfile } from '@/features/admin/security/api';
-import { AdminPageSkeleton, ButtonLink, PageHeader, QueryProblem, StatusPill, useAdminToast } from '@/features/admin/shared/AdminUi';
+import { ButtonLink, PageHeader, QueryProblem, StatusPill, useAdminToast } from '@/features/admin/shared/AdminUi';
 import { fieldErrors } from '@/features/admin/shared/api';
 import { ChangePasswordSection, DangerZoneSection } from '@/features/admin/security/components/AdminAccountSections';
 import { AdminEmailChangeDialog } from '@/features/admin/security/components/AdminEmailChangeDialog';
@@ -20,7 +21,7 @@ export function AdminProfilePage() {
   return <div className={styles.page}>
     <PageHeader title="My Profile" crumbs={[{ label: 'Dashboard', to: '/admin' }, { label: 'My Profile' }]}
       description="Your administrator identity, access and personal security settings." />
-    {profile.isPending && <AdminPageSkeleton />}
+    {profile.isPending && <AdminAccountSkeleton variant="profile" heading={false} />}
     {profile.isError && !data && <QueryProblem error={profile.error} hasData={false} onRetry={() => void profile.refetch()} retrying={profile.isFetching} what="Your profile" />}
     {data && <ProfileContent profile={data} />}
   </div>;

@@ -1,0 +1,7 @@
+@use '@/styles/abstracts' as *;
+.list { display: grid; gap: $spacing-4; }
+.card { display: grid; gap: $spacing-3; padding: $spacing-5; border: 1px solid $color-border; border-radius: $radius-lg; background: $color-background; min-width: 0;
+  > a { overflow-wrap: anywhere; font-weight: $font-weight-semibold; color: $color-primary-text; }
+  > p { margin: 0; font-size: $font-size-sm; color: $color-text-secondary; }
+}
+.list a:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }

@@ -4,3 +4,5 @@
   h2 { margin-bottom: $spacing-3; } p { margin-block: $spacing-3; line-height: $line-height-normal; }
   button { margin: $spacing-2 $spacing-2 $spacing-2 0; max-width: 100%; white-space: normal; }
 }
+
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
