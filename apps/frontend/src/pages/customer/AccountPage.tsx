@@ -1,10 +1,11 @@
 import { DeliveryNotificationPreferences } from '@/features/notifications/DeliveryNotificationPreferences';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Package, Heart, MapPin, Settings, ChevronRight, User, Star } from 'lucide-react';
+import { Mail, Package, Heart, MapPin, Settings, ChevronRight, User, Star, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/Breadcrumb';
 import { Avatar } from '@/components/ui/Avatar';
+import { openCookieSettings } from '@/features/privacy/consent';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SignOutModal } from '@/features/auth/components/SignOutModal';
@@ -52,13 +53,13 @@ export function AccountPage() {
           <p>Manage your profile, orders, saved products and preferences.</p>
         </header>
 
-        <section className={styles.profileCard}>
+        <section className={styles.profileCard} aria-label="Your profile">
           <div className={styles.profileInfo}>
             <Avatar src={profilePhoto.data?.url ?? undefined} alt="" initials={initial} className={styles.avatar} />
             <div className={styles.profileDetails}>
               <h2 className={styles.profileName}>{user?.firstName} {user?.lastName}</h2>
               <div className={styles.profileEmail}>
-                <Mail size={16} />
+                <Mail size={16} aria-hidden="true" />
                 <span>{user?.email}</span>
               </div>
             </div>
@@ -72,40 +73,47 @@ export function AccountPage() {
           <h2 className={styles.sectionTitle}>Account</h2>
           <div className={styles.grid}>
             <Link to="/orders" className={styles.gridItem}>
-              <div className={styles.itemIcon}><Package size={24} /></div>
+              <div className={styles.itemIcon} aria-hidden="true"><Package size={22} /></div>
               <div className={styles.itemBody}>
                 <span className={styles.itemTitle}>My Orders</span>
                 <span className={styles.itemDesc}>View order history and track deliveries</span>
               </div>
-              <ChevronRight size={20} className={styles.chevron} />
+              <ChevronRight size={20} className={styles.chevron} aria-hidden="true" />
             </Link>
 
             <Link to="/wishlist" className={styles.gridItem}>
-              <div className={styles.itemIcon}><Heart size={24} /></div>
+              <div className={styles.itemIcon} aria-hidden="true"><Heart size={22} /></div>
               <div className={styles.itemBody}>
                 <span className={styles.itemTitle}>Wishlist</span>
                 <span className={styles.itemDesc}>Products you've saved for later</span>
               </div>
-              <ChevronRight size={20} className={styles.chevron} />
+              <ChevronRight size={20} className={styles.chevron} aria-hidden="true" />
             </Link>
 
             <Link to="/orders" className={styles.gridItem}>
-              <div className={styles.itemIcon}><MapPin size={24} /></div>
+              <div className={styles.itemIcon} aria-hidden="true"><MapPin size={22} /></div>
               <div className={styles.itemBody}>
                 <span className={styles.itemTitle}>Delivery Tracking</span>
                 <span className={styles.itemDesc}>Real-time tracking for active deliveries</span>
               </div>
-              <ChevronRight size={20} className={styles.chevron} />
+              <ChevronRight size={20} className={styles.chevron} aria-hidden="true" />
             </Link>
 
             <Link to="/account/profile" className={styles.gridItem}>
-              <div className={styles.itemIcon}><Settings size={24} /></div>
+              <div className={styles.itemIcon} aria-hidden="true"><Settings size={22} /></div>
               <div className={styles.itemBody}>
                 <span className={styles.itemTitle}>Account Settings</span>
                 <span className={styles.itemDesc}>Manage your profile and preferences</span>
               </div>
+              <ChevronRight size={20} className={styles.chevron} aria-hidden="true" />
             </Link>
           </div>
+          <p className={styles.privacyLinks}>
+            <ShieldCheck size={16} aria-hidden="true" /> Privacy:{' '}
+            <Link to="/cookie-policy">Cookie Policy</Link>
+            <span aria-hidden="true">·</span>
+            <button type="button" onClick={openCookieSettings}>Cookie preferences</button>
+          </p>
         </section>
 
         {user.role === 'CUSTOMER' && <div className={styles.section}>

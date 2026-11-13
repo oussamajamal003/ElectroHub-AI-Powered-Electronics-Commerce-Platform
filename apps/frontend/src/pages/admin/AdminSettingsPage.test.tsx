@@ -153,8 +153,8 @@ describe('store section', () => {
     expect(screen.getByLabelText('Phone')).toHaveAttribute('placeholder', '+961 XX XXX XXX');
     expect(screen.getByLabelText('Business hours')).toHaveAttribute('placeholder', 'Monday–Friday, 9:00 AM–6:00 PM');
     // Every editable store text field has an example placeholder (Currency is read-only; Time zone is a select).
-    const expected: Record<string, string> = { 'Store name': 'Your store name', 'Address line 1': 'Street, Building', 'Address line 2': 'Floor, suite (optional)',
-      City: 'Enter city', 'State or region': 'Enter state or region (optional)', 'Postal code': 'Enter postal code (optional)', Country: 'Enter country' };
+    const expected: Record<string, string> = { 'Store name': 'Your store name', 'Address line 1': 'Street and building', 'Address line 2': 'Apartment, floor or additional details (optional)',
+      City: 'Enter city', 'State or region': 'Enter region', 'Postal code': 'Enter postal code', Country: 'Enter country' };
     for (const [label, placeholder] of Object.entries(expected)) expect(screen.getByLabelText(label)).toHaveAttribute('placeholder', placeholder);
     // Untouched placeholders are not values: nothing is dirty and nothing can be saved.
     expect(screen.getByLabelText('Business hours')).toHaveValue('');

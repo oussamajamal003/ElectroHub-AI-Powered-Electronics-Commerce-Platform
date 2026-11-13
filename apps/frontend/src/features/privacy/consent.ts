@@ -77,3 +77,7 @@ function subscribe(listener: () => void) {
   return () => { listeners.delete(listener); };
 }
 export function useChoiceStatus() { return useSyncExternalStore(subscribe, choiceStatus, () => 'unset'); }
+
+/** Opens the single Cookie Settings dialog owned by CookieControls (footer) from anywhere in the storefront. */
+export const OPEN_COOKIE_SETTINGS_EVENT = 'electrohub:open-cookie-settings';
+export function openCookieSettings(): void { window.dispatchEvent(new Event(OPEN_COOKIE_SETTINGS_EVENT)); }

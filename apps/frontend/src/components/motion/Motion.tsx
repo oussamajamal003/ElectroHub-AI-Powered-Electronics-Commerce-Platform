@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import styles from './Motion.module.scss';
 
 let homeEntrancePlayed = false;
@@ -48,10 +48,19 @@ export function SectionReveal({ children, className = '', style }: { children: R
   const ref = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<RevealPhase>('static');
 
-  useEffect(() => {
+  // Layout effect: the starting phase is decided before the first paint. Before Task 06.2 every section painted visible, was then
+  // hidden (`pending`, opacity 0) and only reappeared when the IntersectionObserver callback ran, so on a reload or a slow device the
+  // content already on screen flashed or stayed blank until that callback. A section already in the viewport now starts its
+  // entrance immediately (CSS animation, no observer needed); one above it is settled; only sections below the fold wait.
+  useLayoutEffect(() => {
     const node = ref.current;
     if (!node) return;
     if (typeof window.IntersectionObserver !== 'function' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+
+    const rect = node.getBoundingClientRect();
+    const measured = rect.width > 0 || rect.height > 0;
+    if (measured && rect.bottom > 0 && rect.top < window.innerHeight) { setPhase('visible'); return; }
+    if (measured && rect.bottom <= 0) { setPhase('settled'); return; }
 
     setPhase('pending');
     const observer = new IntersectionObserver(([entry]) => {

@@ -111,15 +111,15 @@ export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload, o
       <Input label="Currency" value="USD – US Dollar (fixed)" readOnly fullWidth data-testid="store-currency" />
       <h3 className={settingsStyles.groupHeading}>Address and locale</h3>
       <Input label="Address line 1" value={draft.addressLine1} onChange={event => update('addressLine1', event.target.value)}
-        error={errors.addressLine1} maxLength={255} fullWidth autoComplete="address-line1" placeholder="Street, Building" />
+        error={errors.addressLine1} maxLength={255} fullWidth autoComplete="address-line1" placeholder="Street and building" />
       <Input label="Address line 2" value={draft.addressLine2} onChange={event => update('addressLine2', event.target.value)}
-        error={errors.addressLine2} maxLength={255} fullWidth autoComplete="address-line2" placeholder="Floor, suite (optional)" />
+        error={errors.addressLine2} maxLength={255} fullWidth autoComplete="address-line2" placeholder="Apartment, floor or additional details (optional)" />
       <Input label="City" value={draft.city} onChange={event => update('city', event.target.value)} error={errors.city} maxLength={100} fullWidth
         autoComplete="address-level2" placeholder="Enter city" />
       <Input label="State or region" value={draft.region} onChange={event => update('region', event.target.value)} error={errors.region}
-        maxLength={100} fullWidth autoComplete="address-level1" placeholder="Enter state or region (optional)" />
+        maxLength={100} fullWidth autoComplete="address-level1" placeholder="Enter region" />
       <Input label="Postal code" value={draft.postalCode} onChange={event => update('postalCode', event.target.value)} error={errors.postalCode}
-        maxLength={20} fullWidth autoComplete="postal-code" placeholder="Enter postal code (optional)" />
+        maxLength={20} fullWidth autoComplete="postal-code" placeholder="Enter postal code" />
       <Input label="Country" value={draft.country} onChange={event => update('country', event.target.value)} error={errors.country} maxLength={100}
         fullWidth autoComplete="country-name" placeholder="Enter country" />
       <div className={styles.fieldFull}>

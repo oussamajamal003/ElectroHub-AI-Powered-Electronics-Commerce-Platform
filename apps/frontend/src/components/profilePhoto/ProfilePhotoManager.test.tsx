@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProfilePhotoManager } from './ProfilePhotoManager';
@@ -62,7 +62,7 @@ describe('ProfilePhotoManager', () => {
     expect(await screen.findByRole('heading', { name: 'Preview profile photo' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save photo' }));
     await waitFor(() => expect(upload).toHaveBeenCalledWith(file));
-    expect(await screen.findByRole('status')).toHaveTextContent('Profile photo saved.');
+    expect(await screen.findByRole('status')).toHaveTextContent('Profile photo updated.');
   });
 
   it('offers native mobile camera capture when browser camera access is unavailable', async () => {
@@ -129,5 +129,49 @@ describe('ProfilePhotoManager', () => {
     view.unmount();
     await act(async () => { resolveStream?.({ getTracks: () => [track as unknown as MediaStreamTrack] } as MediaStream); });
     await waitFor(() => expect(track.stop).toHaveBeenCalledOnce());
+  });
+
+  it('keeps the native file inputs hidden so no "No file chosen" text can render', () => {
+    render(<ProfilePhotoManager scope="customer" userId="user-1" sessionVerified initials="JD" displayName="Jane Doe" />);
+    expect(screen.getByLabelText('Choose a profile photo')).not.toBeVisible();
+    expect(screen.getByLabelText('Take a profile photo with your device camera')).not.toBeVisible();
+    expect(screen.getByText('JPEG, PNG or WebP · Max 5 MB')).toBeInTheDocument();
+    expect(screen.queryByText(/No file chosen/i)).not.toBeInTheDocument();
+  });
+
+  it('opens the edit menu, not an empty preview, when the avatar has no saved photo', async () => {
+    const user = userEvent.setup();
+    render(<ProfilePhotoManager scope="customer" userId="user-1" sessionVerified initials="JD" displayName="Jane Doe" />);
+    await user.click(screen.getByRole('button', { name: 'Add a profile photo for Jane Doe' }));
+    expect(await screen.findByRole('menuitem', { name: 'Upload photo' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'View' })).not.toBeInTheDocument();
+  });
+
+  it('opens an accessible preview dialog when a saved photo is clicked and restores focus on Escape', async () => {
+    vi.mocked(useProfilePhoto).mockReturnValue({ data: { url: 'https://storage.example/private', expiresAt: '2030-01-01T00:30:00.000Z' }, isError: false } as never);
+    const user = userEvent.setup();
+    render(<ProfilePhotoManager scope="admin" userId="admin-1" sessionVerified initials="AD" displayName="Admin Doe" />);
+    const avatar = screen.getByRole('button', { name: "View Admin Doe's profile photo" });
+    await user.click(avatar);
+    const dialog = await screen.findByRole('dialog', { name: 'Profile photo' });
+    expect(within(dialog).getByRole('img', { name: "Admin Doe's profile photo" })).toHaveAttribute('src', 'https://storage.example/private');
+    expect(upload).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(avatar).toHaveFocus());
+  });
+
+  it('hides an expired or broken signed photo link and refreshes it once', async () => {
+    const refetch = vi.fn();
+    vi.mocked(useProfilePhoto).mockReturnValue({ data: { url: 'https://storage.example/expired', expiresAt: '2030-01-01T00:30:00.000Z' }, isError: false, refetch } as never);
+    const user = userEvent.setup();
+    render(<ProfilePhotoManager scope="customer" userId="user-1" sessionVerified initials="JD" displayName="Jane Doe" />);
+    await user.click(screen.getByRole('button', { name: "View Jane Doe's profile photo" }));
+    fireEvent.error(within(await screen.findByRole('dialog')).getByRole('img'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(refetch).toHaveBeenCalledOnce();
+    expect(screen.getByText(/Your saved photo could not be loaded/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: "Change Jane Doe's profile photo" })).toBeInTheDocument();
   });
 });

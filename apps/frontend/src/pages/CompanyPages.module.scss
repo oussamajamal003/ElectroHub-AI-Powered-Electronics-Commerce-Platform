@@ -257,7 +257,7 @@
 .field { display: grid; gap: $spacing-2; label { font-weight: $font-weight-medium; } input, textarea { width: 100%; min-height: $spacing-12; padding: $spacing-3; border: 1px solid $color-border; border-radius: $radius-md; font: inherit; } textarea { min-height: 8rem; resize: vertical; } input:focus-visible, textarea:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
 .error { margin: 0; color: $color-error-foreground; font-size: $font-size-sm; }
 .emptyNote { margin: $spacing-4 0 0; padding: $spacing-4; border: 1px dashed $color-border; color: $color-text-secondary; font-size: $font-size-sm; line-height: $line-height-relaxed; }
-.helpLinks { margin: $spacing-6 0 0; color: $color-text-secondary; font-size: $font-size-sm; a { color: $color-primary; font-weight: $font-weight-medium; } }
+.helpLinks { margin: $spacing-6 0 0; color: $color-text-secondary; font-size: $font-size-sm; a { color: $color-primary-text; font-weight: $font-weight-medium; } }
 .counter { margin: 0; text-align: right; color: $color-text-secondary; font-size: $font-size-xs; }
 // Honeypot: out of the layout and the tab order, but still in the DOM for naive form fillers.
 .trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }

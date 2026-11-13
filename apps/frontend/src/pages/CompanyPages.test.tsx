@@ -130,6 +130,17 @@ describe('company pages', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  it('shows example placeholders that are never submitted as values', () => {
+    renderContact();
+    const expected = { Name: 'Enter your full name', Email: 'you@example.com', Subject: 'How can we help you?',
+      Message: 'Tell us how we can help. Include your order number if relevant.' };
+    for (const [label, placeholder] of Object.entries(expected)) {
+      const control = document.getElementById(`contact-${label}`);
+      expect(control).toHaveAttribute('placeholder', placeholder);
+      expect(control).toHaveValue('');
+    }
+  });
+
   it('validates contact and reports successful delivery only after the request resolves', async () => {
     renderContact();
     fireEvent.click(screen.getByRole('button', { name: 'Send Message' }));

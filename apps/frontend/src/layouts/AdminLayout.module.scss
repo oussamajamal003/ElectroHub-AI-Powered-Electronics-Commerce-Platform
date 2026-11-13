@@ -44,8 +44,8 @@ $sidebar-rail: 4.5rem;
   background: transparent; cursor: pointer; transition: box-shadow $transition-fast;
   &:hover .avatar, &[data-state='open'] .avatar { box-shadow: 0 0 0 3px theme-alpha($color-primary, .2); }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
-.avatar { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 50%; background: $color-primary; color: $color-text-inverse;
-  font-size: $font-size-xs; font-weight: $font-weight-semibold; flex-shrink: 0; transition: box-shadow $transition-fast; }
+// Size only: colour, fill and layout come from the shared Avatar so the fallback stays neutral and never stripes (Task 06.2).
+.avatar { width: 2.25rem; height: 2.25rem; font-size: $font-size-xs; font-weight: $font-weight-semibold; transition: box-shadow $transition-fast; }
 
 // ─── Menus ────────────────────────────────────────────────
 .menu { min-width: 18rem; max-width: calc(100vw - 2rem); }

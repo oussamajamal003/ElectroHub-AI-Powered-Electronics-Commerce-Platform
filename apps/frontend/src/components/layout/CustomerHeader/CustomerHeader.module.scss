@@ -684,3 +684,15 @@
     padding: 0 10px;
   }
 }
+
+// ≤ 360px (320px phones, or ~400%+ browser zoom): the signed-in header carries bell, search, theme, cart, wishlist and avatar.
+// Slightly smaller avatar and logo keep every control reachable without horizontal page scroll (Task 06.2).
+@media (max-width: 360px) {
+  .brandLogo > span:last-child { font-size: 17px; }
+  .mobileMenuToggle { width: 32px; height: 32px; }
+  // 30px stays above the WCAG 2.5.8 24px minimum target size.
+  .iconButton { width: 30px; height: 30px; }
+  .avatarButton { padding: 1px; margin-left: 0; }
+  .avatarButton > span { width: 30px; height: 30px; font-size: 12px; }
+  .container { padding: 0 8px; }
+}

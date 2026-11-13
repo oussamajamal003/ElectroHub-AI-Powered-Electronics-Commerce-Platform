@@ -105,7 +105,9 @@
     color: $color-text-primary;
   }
 
-  a {
+  // Footer links and the Cookie Settings button (a real <button>, marked data-footer-link) share one look (Task 06.2).
+  a,
+  [data-footer-link] {
     position: relative;
     color: $color-text-secondary;
     font-size: $font-size-sm;

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, ImagePlus, Trash2 } from 'lucide-react';
+import { Camera, Eye, ImagePlus, Lock, RotateCw, Trash2 } from 'lucide-react';
 import { Alert } from '@/components/ui/Alert';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +19,7 @@ import styles from './ProfilePhotoManager.module.scss';
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const STATUS_CLEAR_MS = 6000;
 
 interface Props {
   scope: ProfilePhotoScope;
@@ -45,8 +46,34 @@ export function ProfilePhotoManager({ scope, userId, sessionVerified, initials, 
   const [previewUrl, setPreviewUrl] = useState<string>();
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  // A signed URL that failed to load (expired link, network error). It is refreshed once and never shown as a broken image.
+  const [failedUrl, setFailedUrl] = useState<string>();
   const pending = upload.isPending || remove.isPending;
-  const hasPhoto = Boolean(photo.data?.url);
+  const savedUrl = photo.data?.url ?? undefined;
+  const hasPhoto = Boolean(savedUrl);
+  const photoUrl = savedUrl && savedUrl !== failedUrl ? savedUrl : undefined;
+  const photoUnavailable = photo.isError || (hasPhoto && !photoUrl);
+
+  // Success feedback is transient: it clears itself and never follows the user to another page.
+  useEffect(() => {
+    if (!status || showCaptureFallback) return;
+    const timer = window.setTimeout(() => setStatus(''), STATUS_CLEAR_MS);
+    return () => window.clearTimeout(timer);
+  }, [status, showCaptureFallback]);
+
+  function handleImageStatus(loading: 'idle' | 'loading' | 'loaded' | 'error') {
+    if (loading !== 'error' || !savedUrl || savedUrl === failedUrl) return;
+    setFailedUrl(savedUrl);
+    setViewerOpen(false);
+    void photo.refetch?.();
+  }
+
+  function openFilePicker() {
+    setViewerOpen(false);
+    fileInput.current?.click();
+  }
 
   useEffect(() => {
     if (!selectedFile) { setPreviewUrl(undefined); return; }
@@ -143,7 +170,7 @@ export function ProfilePhotoManager({ scope, userId, sessionVerified, initials, 
     try {
       await upload.mutateAsync(selectedFile);
       clearDialog();
-      setStatus('Profile photo saved.');
+      setStatus('Profile photo updated.');
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : 'The photo could not be saved. Try again.');
     }
@@ -154,17 +181,26 @@ export function ProfilePhotoManager({ scope, userId, sessionVerified, initials, 
     setError('');
     try {
       await remove.mutateAsync();
+      setViewerOpen(false);
       setStatus('Profile photo removed.');
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : 'The photo could not be removed. Try again.');
     }
   }
 
+  const liveMessage = dialogOpen ? '' : pending ? (remove.isPending ? 'Removing your profile photo…' : 'Saving your profile photo…') : status;
+
   return <section className={styles.manager} aria-label="Profile photo">
     <div className={styles.avatarWrap}>
-      <Avatar src={photo.data?.url ?? undefined} alt={photo.data?.url ? `${displayName}'s profile photo` : undefined}
-        initials={initials} className={`${styles.avatar} ${size === 'large' ? styles.avatarLarge : ''}`} />
-      <DropdownMenu>
+      {/* With a saved photo the avatar opens a preview; without one it opens the edit menu, never an empty preview. */}
+      <button type="button" className={styles.avatarButton} disabled={pending}
+        aria-label={photoUrl ? `View ${displayName}'s profile photo` : hasPhoto ? `Change ${displayName}'s profile photo` : `Add a profile photo for ${displayName}`}
+        aria-haspopup={photoUrl ? 'dialog' : 'menu'}
+        onClick={() => { if (photoUrl) setViewerOpen(true); else setMenuOpen(true); }}>
+        <Avatar src={photoUrl} alt="" initials={initials} onImageLoadingStatusChange={handleImageStatus}
+          className={`${styles.avatar} ${size === 'large' ? styles.avatarLarge : ''}`} />
+      </button>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <IconButton
             type="button"
@@ -177,12 +213,15 @@ export function ProfilePhotoManager({ scope, userId, sessionVerified, initials, 
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className={styles.actionMenu}>
-          <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
+          <DropdownMenuItem onSelect={openFilePicker}>
             <ImagePlus aria-hidden="true" /> {hasPhoto ? 'Change photo' : 'Upload photo'}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => void openCamera()}>
             <Camera aria-hidden="true" /> Take photo
           </DropdownMenuItem>
+          {photoUrl && <DropdownMenuItem onSelect={() => setViewerOpen(true)}>
+            <Eye aria-hidden="true" /> View photo
+          </DropdownMenuItem>}
           {hasPhoto && <>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" disabled={pending} onSelect={() => void removePhoto()}>
@@ -194,19 +233,55 @@ export function ProfilePhotoManager({ scope, userId, sessionVerified, initials, 
     </div>
     <div className={styles.details}>
       <strong className={styles.title}>{hasPhoto ? 'Your profile photo' : 'Add a profile photo'}</strong>
-      <p className={styles.help}>JPEG, PNG, or WebP up to 5 MB. Your photo is stored privately. Use the camera button to manage it.</p>
-      {photo.isError && <p className={styles.help}>Your saved photo could not be loaded. You can replace it or try again.</p>}
+      <p className={styles.help}>JPEG, PNG or WebP · Max 5 MB</p>
+      <p className={styles.privacy}><Lock aria-hidden="true" /> Stored privately and shown through expiring links</p>
+      <div className={styles.actions}>
+        <Button type="button" variant="outline" size="small" disabled={pending} onClick={openFilePicker}>
+          <ImagePlus aria-hidden="true" /> {hasPhoto ? 'Change' : 'Upload'}
+        </Button>
+        <Button type="button" variant="ghost" size="small" disabled={pending} onClick={() => void openCamera()}>
+          <Camera aria-hidden="true" /> Take photo
+        </Button>
+        {photoUrl && <Button type="button" variant="ghost" size="small" onClick={() => setViewerOpen(true)}>
+          <Eye aria-hidden="true" /> View
+        </Button>}
+        {hasPhoto && <Button type="button" variant="ghost" size="small" className={styles.removeAction} disabled={pending}
+          onClick={() => void removePhoto()}>
+          <Trash2 aria-hidden="true" /> Remove
+        </Button>}
+      </div>
+      {photoUnavailable && <p className={styles.help}>
+        Your saved photo could not be loaded.{' '}
+        <button type="button" className={styles.inlineAction} onClick={() => { setFailedUrl(undefined); void photo.refetch?.(); }}>
+          <RotateCw aria-hidden="true" /> Try again
+        </button>
+      </p>}
       {error && !dialogOpen && <Alert variant="error">{error}</Alert>}
-      {status && !dialogOpen && <p className={styles.status} role="status">{status}</p>}
+      <p className={styles.status} role="status" aria-live="polite">{liveMessage}</p>
       {showCaptureFallback && !dialogOpen && <Button type="button" variant="outline" size="small" onClick={() => cameraFileInput.current?.click()}>
         <Camera aria-hidden="true" /> Use device camera
       </Button>}
-      {pending && <p className={styles.help} role="status">Saving your profile photo…</p>}
-      <input ref={fileInput} className={styles.hiddenInput} type="file" accept="image/jpeg,image/png,image/webp"
+      {/* `hidden` keeps both native inputs out of layout: the buttons above are the only visible trigger, so no "No file chosen" text can render. */}
+      <input ref={fileInput} hidden type="file" accept="image/jpeg,image/png,image/webp"
         aria-label="Choose a profile photo" onChange={event => { chooseFile(event.currentTarget.files?.[0]); event.currentTarget.value = ''; }} />
-      <input ref={cameraFileInput} className={styles.hiddenInput} type="file" accept="image/*" capture="user"
+      <input ref={cameraFileInput} hidden type="file" accept="image/*" capture="user"
         aria-label="Take a profile photo with your device camera" onChange={event => { chooseFile(event.currentTarget.files?.[0]); event.currentTarget.value = ''; }} />
     </div>
+
+    <Dialog open={viewerOpen && Boolean(photoUrl)} onOpenChange={setViewerOpen}>
+      <DialogContent className={styles.viewer} aria-describedby="profile-photo-viewer-description">
+        <DialogTitle>Profile photo</DialogTitle>
+        <DialogDescription id="profile-photo-viewer-description">{displayName}</DialogDescription>
+        {photoUrl && <img className={styles.viewerImage} src={photoUrl} alt={`${displayName}'s profile photo`}
+          onError={() => handleImageStatus('error')} />}
+        <div className={styles.dialogActions}>
+          <Button type="button" variant="outline" disabled={pending} onClick={openFilePicker}>
+            <ImagePlus aria-hidden="true" /> Change photo
+          </Button>
+          <DialogClose asChild><Button type="button" variant="ghost">Close</Button></DialogClose>
+        </div>
+      </DialogContent>
+    </Dialog>
 
     <Dialog open={dialogOpen} onOpenChange={open => { if (!open) clearDialog(); }}>
       <DialogContent className={styles.dialog} aria-describedby="profile-photo-dialog-description">

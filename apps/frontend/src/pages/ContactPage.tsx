@@ -15,6 +15,13 @@ type FormValues = Record<Field, string>;
 const initialValues: FormValues = { Name: '', Email: '', Subject: '', Message: '' };
 /** Mirrors the server limits (the server stays authoritative). */
 const LIMITS = { Name: 120, Email: 255, Subject: 160, Message: 5000 } as const;
+// Examples only (Task 06.2): placeholders are never submitted and never replace the visible labels.
+const PLACEHOLDERS: Record<Field, string> = {
+  Name: 'Enter your full name',
+  Email: 'you@example.com',
+  Subject: 'How can we help you?',
+  Message: 'Tell us how we can help. Include your order number if relevant.',
+};
 const MIN_MESSAGE = 10;
 const hasControl = (value: string, allowLineBreaks = false) => [...value].some(character => {
   const code = character.charCodeAt(0);
@@ -84,7 +91,7 @@ export function ContactPage() {
   const fieldControl = (field: Field) => {
     const id = `contact-${field}`;
     const describedBy = [errors[field] ? `${id}-error` : '', field === 'Message' ? `${id}-count` : ''].filter(Boolean).join(' ') || undefined;
-    const common = { id, value: values[field], 'aria-invalid': !!errors[field], 'aria-required': true as const, 'aria-describedby': describedBy, maxLength: LIMITS[field], onChange: change(field), disabled: contact.isPending };
+    const common = { id, value: values[field], 'aria-invalid': !!errors[field], 'aria-required': true as const, 'aria-describedby': describedBy, maxLength: LIMITS[field], placeholder: PLACEHOLDERS[field], onChange: change(field), disabled: contact.isPending };
     return <div className={styles.field} key={field}><label htmlFor={id}>{field}</label>
       {field === 'Message' ? <textarea {...common} rows={6} /> : <input {...common} type={field === 'Email' ? 'email' : 'text'} autoComplete={field === 'Name' ? 'name' : field === 'Email' ? 'email' : 'off'} />}
       {field === 'Message' && <p className={styles.counter} id={`${id}-count`}>{values.Message.length} / {LIMITS.Message}</p>}
