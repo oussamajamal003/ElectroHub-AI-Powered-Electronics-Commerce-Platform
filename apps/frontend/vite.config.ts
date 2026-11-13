@@ -2,12 +2,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import { getViteServerConfig } from './src/config/viteServerConfig';
+import { getViteCacheDir, getViteServerConfig } from './src/config/viteServerConfig';
 
 export default defineConfig(({ command }) => {
   const server = getViteServerConfig(command, process.env, process.argv);
+  const cacheDir = getViteCacheDir(server);
   return {
     plugins: [react()],
+    ...(cacheDir ? { cacheDir } : {}),
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

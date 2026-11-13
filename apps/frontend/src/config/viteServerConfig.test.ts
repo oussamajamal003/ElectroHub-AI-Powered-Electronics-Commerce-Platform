@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getFrontendServerConfig, getViteServerConfig } from './viteServerConfig';
+import { getFrontendServerConfig, getViteCacheDir, getViteServerConfig } from './viteServerConfig';
 
 describe('getFrontendServerConfig', () => {
   it('keeps normal DEV on :3000 → :5000 with strict port binding', () => {
@@ -49,5 +49,15 @@ describe('getFrontendServerConfig', () => {
     { E2E_FRONTEND_PORT: 'bad' },
   ])('rejects unsafe or mismatched environment: $E2E_FRONTEND_PORT $E2E_API_PROXY_TARGET', environment => {
     expect(() => getFrontendServerConfig(environment)).toThrow();
+  });
+});
+
+describe('getViteCacheDir', () => {
+  it('keeps the default cache for :3000, builds and tests, and isolates every other dev port', () => {
+    expect(getViteCacheDir(getViteServerConfig('serve', {}, []))).toBeUndefined();
+    expect(getViteCacheDir(getViteServerConfig('build', {}, ['--port', '3262']))).toBeUndefined();
+    expect(getViteCacheDir(getViteServerConfig('serve', {}, ['--port', '3262']))).toBe('node_modules/.vite-port-3262');
+    expect(getViteCacheDir(getViteServerConfig('serve', { E2E_FRONTEND_PORT: '3200', E2E_API_PROXY_TARGET: 'http://localhost:5200' })))
+      .toBe('node_modules/.vite-port-3200');
   });
 });
