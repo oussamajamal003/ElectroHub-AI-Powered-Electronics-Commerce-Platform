@@ -220,6 +220,28 @@ export async function expectUsableControl(control: Locator, label: string) {
 export const cartLink = (page: Page, count: number) =>
   page.getByRole('link', { name: `Cart, ${count} ${count === 1 ? 'item' : 'items'}` }).first();
 
+/**
+ * A returning shopper who already answered the cookie banner with "Reject optional" (the privacy-preserving choice), stored exactly as
+ * the app stores it. For journeys that are not about consent: on a 390 px phone the fixed banner covers the lower third of the viewport.
+ * Consent itself is covered by privacy.release.spec.ts, which never calls this.
+ */
+export async function rememberRejectedCookieChoice(page: Page) {
+  await page.addInitScript(() => {
+    const key = 'electrohub.privacy.v1';
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ version: 1, analytics: false, savedAt: Date.now() }));
+  });
+}
+
+/**
+ * Presses a control after bringing it to the middle of the viewport at once. The storefront scrolls smoothly and keeps a sticky header,
+ * so Playwright's own scroll-into-view can leave a small control animating under the header when the press starts (seen on mobile WebKit).
+ */
+export async function pressInView(control: Locator) {
+  await control.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
+  await expect(control).toBeInViewport();
+  await control.click();
+}
+
 /** A real, decodable 48×48 PNG with a varied pattern (not a blank image), built without any image dependency. */
 export function samplePng(): Buffer {
   const size = 48;
