@@ -58,6 +58,8 @@ const noUnread: AdminAlertUnread = { lowStock: 0, outOfStock: 0, awaitingFulfill
 export function useAcknowledgeAdminAlerts() {
   const client = useQueryClient();
   return useMutation({
+    // Acknowledgements run one at a time, so rapid clicks on several categories cannot interleave their optimistic updates.
+    scope: { id: 'admin-alert-acknowledgement' },
     mutationFn: (seen: Partial<Record<AdminAlertCategory, number>>) =>
       apiClient<ItemResponse<AdminAlerts>>('/api/admin/dashboard/alerts/acknowledge', { method: 'POST', data: seen }),
     onMutate: async seen => {

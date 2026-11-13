@@ -57,7 +57,14 @@ export class BrevoProvider {
         for (const recipient of recipients) {
           const fileName = createHash('sha256').update(`${recipient}:${options.subject}`).digest('hex');
           await writeFile(join(outbox, `${fileName}.json`), JSON.stringify({
-            to: recipient, subject: options.subject, textContent: options.textContent, sentAt: new Date().toISOString(),
+            to: recipient,
+            subject: options.subject,
+            textContent: options.textContent,
+            htmlContent: options.htmlContent,
+            replyTo: options.replyTo,
+            ...(options.idempotencyKey ? { headers: { idempotencyKey: options.idempotencyKey } } : {}),
+            sender: { email: options.sender?.email || this.defaultSenderEmail, name: options.sender?.name || this.defaultSenderName },
+            sentAt: new Date().toISOString(),
           }), { mode: 0o600 });
         }
         return { success: true, messageId: `e2e-${randomUUID()}` };
@@ -91,6 +98,7 @@ export class BrevoProvider {
         templateId: options.templateId,
         params: options.params,
         replyTo: options.replyTo,
+        ...(options.idempotencyKey ? { headers: { idempotencyKey: options.idempotencyKey } } : {}),
       };
 
       const result = await this.client.sendSmtpEmail(payload);

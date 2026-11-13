@@ -28,7 +28,7 @@ app.use(express.json({ limit: '20kb' }));
 app.use('/api', storefrontRoutes);
 app.use(errorHandler);
 const read = async (subject: string) => JSON.parse(await readFile(join(outbox, `${createHash('sha256').update(`${recipient}:${subject}`).digest('hex')}.json`), 'utf8')) as
-  { to: string; subject: string; textContent: string };
+  { to: string; subject: string; textContent: string; htmlContent: string; replyTo: { email: string; name: string }; headers: { idempotencyKey: string } };
 let ip = 10;
 const post = (body: object) => request(app).post('/api/store/contact').set('X-Forwarded-For', `203.0.113.${ip++}`).send(body);
 
@@ -62,6 +62,9 @@ describe('contact form end to end through the real provider (captured, never sen
     expect(response.body).toEqual({ data: { accepted: true } });
     const captured = await read('Store contact: Order question');
     expect(captured.to).toBe(recipient);
+    expect(captured.headers.idempotencyKey).toMatch(/^[a-f0-9-]{36}$/);
+    expect(captured.replyTo).toEqual({ email: 'ada@example.test', name: 'Ada Customer' });
+    expect(captured.htmlContent).toContain('Where is my order?<br>Thanks!');
     expect(captured.textContent).toContain('Where is my order?\nThanks!');
     expect(captured.textContent).toContain('Ada Customer <ada@example.test>');
   });

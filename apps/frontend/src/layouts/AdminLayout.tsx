@@ -25,7 +25,7 @@ function AlertsMenu() {
   // Unread is the server's per-administrator remainder; the operational counts beside it stay visible as read history. Opening the
   // menu acknowledges nothing: only choosing a category marks THAT category as read, then navigates to its work queue.
   const unread = data?.unread ?? { lowStock: 0, outOfStock: 0, awaitingFulfillment: 0, outForDelivery: 0, total: 0 };
-  const attention = data ? data.lowStock + data.outOfStock + data.awaitingFulfillment : 0;
+  const attention = data ? data.lowStock + data.outOfStock + data.awaitingFulfillment + data.outForDelivery : 0;
   const entries: { key: AdminAlertCategory; to: string; icon: typeof Bell; label: string; tone: string | undefined }[] = [
     { key: 'outOfStock', to: '/admin/inventory?status=OUT_OF_STOCK', icon: PackageX, label: 'Out of stock', tone: styles.alertError },
     { key: 'lowStock', to: '/admin/inventory?status=LOW_STOCK', icon: AlertTriangle, label: 'Low stock', tone: styles.alertWarning },

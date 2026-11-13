@@ -14,6 +14,8 @@ export interface BrevoSendEmailPayload {
   templateId?: number;
   params?: Record<string, unknown>;
   replyTo?: BrevoEmailAddress;
+  /** Provider deduplication for an exact transactional request. */
+  headers?: { idempotencyKey: string };
 }
 
 export interface BrevoSendEmailResponse {
@@ -31,6 +33,7 @@ export interface SendTransactionalEmailOptions {
   params?: Record<string, unknown>;
   sender?: BrevoEmailAddress;
   replyTo?: BrevoEmailAddress;
+  idempotencyKey?: string;
 }
 
 /**

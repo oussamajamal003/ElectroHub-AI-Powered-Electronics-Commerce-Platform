@@ -14,15 +14,20 @@ function harness(initial: { lowStock: number; outOfStock: number; awaiting: numb
   const key = (userId: string, category: string) => `${userId}:${category}`;
   const ack = {
     findMany: vi.fn(async ({ where }: { where: { userId: string } }) => [...rows].filter(([k]) => k.startsWith(where.userId)).map(([k, acknowledgedCount]) => ({ category: k.split(':')[1]!, acknowledgedCount }))),
-    upsert: vi.fn(async ({ where, create, update }: { where: { userId_category: { userId: string; category: string } }; create: { acknowledgedCount: number }; update: { acknowledgedCount: number } }) => {
-      const k = key(where.userId_category.userId, where.userId_category.category);
-      rows.set(k, rows.has(k) ? update.acknowledgedCount : create.acknowledgedCount);
-    }),
-    update: vi.fn(async ({ where, data }: { where: { userId_category: { userId: string; category: string } }; data: { acknowledgedCount: number } }) => {
-      rows.set(key(where.userId_category.userId, where.userId_category.category), data.acknowledgedCount);
+    updateMany: vi.fn(async ({ where, data }: { where: { userId: string; category: string; acknowledgedCount: { gt: number } }; data: { acknowledgedCount: number } }) => {
+      const k = key(where.userId, where.category);
+      if ((rows.get(k) ?? -1) > where.acknowledgedCount.gt) rows.set(k, data.acknowledgedCount);
+      return { count: 1 };
     }),
   };
-  const db = { adminAlertAcknowledgement: ack, $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
+  // Mirrors the INSERT .. ON CONFLICT .. LEAST(current, GREATEST(stored, next)) statement: values are [userId, category, next, current].
+  const executeRaw = vi.fn(async (query: { values: unknown[] }) => {
+    const [userId, category, next, current] = query.values as [string, string, number, number];
+    const k = key(userId, category);
+    rows.set(k, rows.has(k) ? Math.min(current, Math.max(rows.get(k)!, next)) : next);
+    return 1;
+  });
+  const db = { $executeRaw: executeRaw, adminAlertAcknowledgement: ack, $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
     order: { count: vi.fn(async ({ where }: { where: { status: string } }) => where.status === 'CONFIRMED' ? live.awaiting : where.status === 'OUT_FOR_DELIVERY' ? live.outForDelivery : 0) } };
   const inventory = { summary: vi.fn(async () => ({ lowStock: live.lowStock, outOfStock: live.outOfStock })) };
   const service = new AdminDashboardService(db as unknown as PrismaClient, inventory as unknown as AdminInventoryService, () => new Date('2026-11-01T10:00:00.000Z'));
@@ -118,6 +123,13 @@ describe('admin alert acknowledgement', () => {
     await service.acknowledgeAlerts(admin, { awaitingFulfillment: 1 });
     expect(rows.get(`${admin}:lowStock`)).toBe(2);
     expect((await service.alerts(admin)).unread.total).toBe(0);
+  });
+
+  it('a stale tab acknowledging a smaller count never lowers a larger acknowledged baseline', async () => {
+    const { service, rows } = harness({ lowStock: 3, outOfStock: 0, awaiting: 0 });
+    await Promise.all([service.acknowledgeAlerts(admin, { lowStock: 3 }), service.acknowledgeAlerts(admin, { lowStock: 1 })]);
+    expect(rows.get(`${admin}:lowStock`)).toBe(3);
+    expect((await service.alerts(admin)).unread.lowStock).toBe(0);
   });
 
   it('an empty acknowledgement changes nothing', async () => {

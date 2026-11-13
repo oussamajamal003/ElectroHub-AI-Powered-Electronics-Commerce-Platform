@@ -85,7 +85,7 @@ describe('company pages', () => {
       city: null, region: null, postalCode: null, country: null, currency: 'USD' }, isPending: false, isError: false } as unknown as ReturnType<typeof useStorefrontProfile>);
     renderContact();
     expect(screen.getByRole('heading', { name: 'Send us a message', level: 3 })).toBeInTheDocument();
-    expect(screen.getByText(/Direct contact details have not been published yet/)).toBeInTheDocument();
+    expect(screen.getByText(/^Direct contact details have not been published yet.$/)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /@/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Send Message' })).toBeEnabled();
   });

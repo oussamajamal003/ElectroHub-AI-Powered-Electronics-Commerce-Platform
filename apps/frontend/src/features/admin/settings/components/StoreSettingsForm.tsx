@@ -103,7 +103,7 @@ export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload, o
         maxLength={120} fullWidth autoComplete="organization" placeholder="Your store name" />
       <Input label="Store email" type="email" value={draft.supportEmail} onChange={event => update('supportEmail', event.target.value)}
         error={errors.supportEmail} maxLength={255} fullWidth autoComplete="email" placeholder="support@example.com"
-        helperText="Public. Customer messages from the Contact page are delivered here." />
+        helperText={draft.supportEmail.trim() ? "Public. Customer messages from the Contact page are delivered here." : "Public. While empty, Contact page messages go privately to verified administrators instead. The backend email sender must be configured."} />
       <Input label="Phone" type="tel" value={draft.supportPhone} onChange={event => update('supportPhone', event.target.value)}
         error={errors.supportPhone} maxLength={32} fullWidth autoComplete="tel" placeholder="+961 XX XXX XXX"
         helperText="Public. Digits, spaces and + ( ) . - only." />

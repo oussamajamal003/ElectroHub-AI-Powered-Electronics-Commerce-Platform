@@ -58,13 +58,17 @@ export class AdminDashboardService {
     const categories = ALERT_CATEGORIES.filter(category => seen[category] !== undefined);
     if (categories.length === 0) return this.alerts(userId);
     const counts = await this.alertCounts();
-    const rows = await this.db.adminAlertAcknowledgement.findMany({ where: { userId } });
-    const existing = new Map(rows.map(row => [row.category, row.acknowledgedCount]));
+    // One atomic statement per category: concurrent tabs or requests can never lower a larger acknowledged baseline (no
+    // read-modify-write race), and the stored baseline never exceeds the current server count. Only the listed categories change.
     await this.db.$transaction(categories.map(category => {
       const current = counts[category];
-      const next = Math.max(Math.min(existing.get(category) ?? 0, current), Math.min(seen[category]!, current));
-      return this.db.adminAlertAcknowledgement.upsert({ where: { userId_category: { userId, category } },
-        create: { userId, category, acknowledgedCount: next }, update: { acknowledgedCount: next } });
+      const next = Math.min(seen[category]!, current);
+      return this.db.$executeRaw(Prisma.sql`
+        INSERT INTO "admin_alert_acknowledgements" ("userId", "category", "acknowledgedCount", "updatedAt")
+        VALUES (${userId}::uuid, ${category}, ${next}, NOW())
+        ON CONFLICT ("userId", "category") DO UPDATE
+        SET "acknowledgedCount" = LEAST(${current}, GREATEST("admin_alert_acknowledgements"."acknowledgedCount", EXCLUDED."acknowledgedCount")),
+            "updatedAt" = NOW()`);
     }));
     return this.alerts(userId);
   }
@@ -79,7 +83,8 @@ export class AdminDashboardService {
       result[category] = Math.min(row.acknowledgedCount, current[category]);
       if (row.acknowledgedCount > current[category]) {
         // Best effort: a failed write only leaves the (already clamped) stored value to be clamped again on the next read.
-        await this.db.adminAlertAcknowledgement.update({ where: { userId_category: { userId, category } }, data: { acknowledgedCount: current[category] } }).catch(() => undefined);
+        // Guarded: only lowers a row that is still above the live count, so a concurrent acknowledgement is never overwritten.
+        await this.db.adminAlertAcknowledgement.updateMany({ where: { userId, category, acknowledgedCount: { gt: current[category] } }, data: { acknowledgedCount: current[category] } }).catch(() => undefined);
       }
     }
     return result;

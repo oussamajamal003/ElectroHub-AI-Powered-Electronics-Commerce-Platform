@@ -74,7 +74,7 @@ test('opening the bell acknowledges nothing; each category acknowledges only its
   await openAlerts(page);
   await page.getByRole('menuitem', { name: /^Paid orders awaiting fulfillment/ }).click();
   await expect(page).toHaveURL(/\/admin\/orders\?status=CONFIRMED&payment=PAID$/);
-  await expect(bell(page)).toHaveAttribute('aria-label', /Alerts: no unread, 6 items need attention/);
+  await expect(bell(page)).toHaveAttribute('aria-label', /Alerts: no unread, 7 items need attention/);
   expect(acks).toEqual([{ outForDelivery: 1 }, { lowStock: 2 }, { outOfStock: 1 }, { awaitingFulfillment: 3 }]);
 
   live.awaitingFulfillment = 5;                                                   // two new paid orders
@@ -102,7 +102,7 @@ test('the alerts dropdown keeps its original compact width', async ({ page }) =>
     const box = (await menu(page).boundingBox())!;
     // `.menu` is min-width 18rem / max-width 100vw - 2rem (unchanged since 628e256); the content, not the viewport, sets the width.
     expect(box.width).toBeGreaterThanOrEqual(288);
-    expect(box.width).toBeLessThanOrEqual(Math.min(width - 32, 400) + 0.5);
+    expect(box.width).toBeLessThanOrEqual(Math.min(width - 32, 400) + 1); // WebKit sub-pixel rounding
     console.log(`alerts menu width at ${width}px viewport: ${box.width.toFixed(1)}px`);
     expect(box.x).toBeGreaterThanOrEqual(-0.5);
     await page.screenshot({ path: `test-results/alerts/alerts-menu-${width}.png` });

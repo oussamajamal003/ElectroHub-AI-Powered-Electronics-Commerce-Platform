@@ -13,7 +13,7 @@ const storeProperties = {
 };
 const count = { type: 'integer', minimum: 0 };
 const alertsProperties = { lowStock: count, outOfStock: count, awaitingFulfillment: count, preparing: count,
-  outForDelivery: count, generatedAt: { type: 'string', format: 'date-time' } };
+  outForDelivery: count, unread: { type: 'object', required: ['lowStock', 'outOfStock', 'awaitingFulfillment', 'outForDelivery', 'total'], properties: { lowStock: count, outOfStock: count, awaitingFulfillment: count, outForDelivery: count, total: count } }, generatedAt: { type: 'string', format: 'date-time' } };
 const item = (properties: object) => ({ description: 'Private, no-store response.', content: { 'application/json': {
   schema: { type: 'object', required: ['data'], properties: { data: { type: 'object', required: Object.keys(properties), properties } } },
 } } });
@@ -31,4 +31,13 @@ export const adminRuntimePaths = {
     security: [{ bearerAuth: [] }], responses: { '200': item(alertsProperties), '401': error('Authentication required.'),
       '403': error('Administrator role required.'), '500': error('Safe INTERNAL_SERVER_ERROR; counts are never fabricated on failure.') },
   } },
+  '/admin/dashboard/alerts/acknowledge': { post: {
+    tags: ['Admin'], summary: 'Acknowledge displayed alert categories for the authenticated administrator',
+    description: 'Send one or more displayed category counts. Omitted categories are untouched; counts are clamped to server state. Does not resolve stock or orders. The legacy three-field body remains supported.',
+    security: [{ bearerAuth: [] }],
+    requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', minProperties: 1, additionalProperties: false,
+      properties: { lowStock: count, outOfStock: count, awaitingFulfillment: count, outForDelivery: count } } } } },
+    responses: { '200': item(alertsProperties), '400': error('Invalid counts.'), '401': error('Authentication required.'), '403': error('Administrator role required.') },
+  } },
+
 };

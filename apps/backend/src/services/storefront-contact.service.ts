@@ -25,6 +25,18 @@ export function contactAdministratorFilter(nodeEnv = process.env.NODE_ENV): Pris
 }
 import { logger } from '../utils/logger.js';
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
+
+/**
+ * Deterministic UUID v5 for one exact contact request (recipient + content). Brevo processes a given `idempotencyKey` once and answers
+ * `duplicate_parameter` for a reuse within 30 minutes, so a retried request (double submit, network retry) never sends a second email.
+ * A changed message gets a different key. Nothing here is logged.
+ */
+export function contactIdempotencyKey(input: StorefrontContactMessage, recipient: string, storeName: string) {
+  const hash = createHash('sha1').update(Buffer.from('6ba7b8109dad11d180b400c04fd430c8', 'hex'))
+    .update(JSON.stringify(['electrohub:contact:v1', recipient, storeName, input.name, input.email, input.subject, input.message])).digest('hex');
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-${((parseInt(hash[16]!, 16) & 3) | 8).toString(16)}${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+}
 
 export interface StorefrontContactMessage { name: string; email: string; subject: string; message: string }
 
@@ -103,13 +115,15 @@ export class StorefrontContactService {
     const { html, text } = renderContactNotification(input, storeName);
     let result: Awaited<ReturnType<BrevoProvider['sendTransactionalEmail']>>;
     try {
-      result = await this.provider.sendTransactionalEmail({ to: to.data, ...(bcc.length ? { bcc } : {}), replyTo: { email: input.email, name: oneLine(input.name) },
+      result = await this.provider.sendTransactionalEmail({ to: to.data, ...(bcc.length ? { bcc } : {}),
+        idempotencyKey: contactIdempotencyKey(input, [to.data, ...bcc.map(entry => entry.email)].join(','), storeName), replyTo: { email: input.email, name: oneLine(input.name) },
         // Subject contract (`Store contact: …`) is relied on by the disposable capture helper and by mailbox filters; keep it stable.
         subject: `Store contact: ${oneLine(input.subject).slice(0, 120)}`, textContent: text, htmlContent: html });
     } catch {
       result = { success: false, failure: { category: 'provider_error' } };
     }
-    if (!result.success) {
+    // `duplicate_parameter`: Brevo already accepted this exact request within its 30-minute idempotency window, so it is delivered once.
+    if (!result.success && result.failure?.providerCode !== 'duplicate_parameter') {
       logger.error('Contact message was not accepted by the email provider', { event: 'contact.provider_rejected',
         category: result.failure?.category ?? 'provider_error', providerStatus: result.failure?.httpStatus, providerCode: result.failure?.providerCode });
       throw new AppError('Contact delivery is temporarily unavailable.', 503, 'CONTACT_UNAVAILABLE');
