@@ -747,7 +747,49 @@ Docker Build
 
 Production deployment is reserved for the final release phase.
 
-### 06.3 Release Validation & Documentation Completion & Roadmap Completion Audit
+### 06.3 Production Infrastructure & Production Deployment
+
+Deploy using:
+
+```text
+DigitalOcean
+    ↓
+Ubuntu
+    ↓
+Docker
+    ↓
+Nginx
+    ↓
+Frontend / Backend / AI Service
+```
+
+Configure:
+
+- VPS
+- Docker
+- Nginx
+- HTTPS
+- SSL
+- Environment variables
+- Health checks
+- Production services
+
+Complete:
+
+- Production environment validation
+- Production build
+- Docker deployment
+- Nginx configuration
+- SSL
+- External service configuration
+- Database connectivity
+- Brevo configuration
+- Stripe configuration
+- Supabase Storage configuration
+- AI service configuration
+- Socket.IO configuration
+
+### 06.4 Release Validation & Documentation Completion & Roadmap Completion Audit
 
 Run:
 
@@ -805,51 +847,6 @@ For each completed milestone:
 - Note deviations.
 - Identify technical debt.
 - Identify future enhancements.
-
-
-### 06.4 Production Infrastructure & Production Deployment
-
-Deploy using:
-
-```text
-DigitalOcean
-    ↓
-Ubuntu
-    ↓
-Docker
-    ↓
-Nginx
-    ↓
-Frontend / Backend / AI Service
-```
-
-Configure:
-
-- VPS
-- Docker
-- Nginx
-- HTTPS
-- SSL
-- Environment variables
-- Health checks
-- Production services
-
-Complete:
-
-- Production environment validation
-- Production build
-- Docker deployment
-- Nginx configuration
-- SSL
-- External service configuration
-- Database connectivity
-- Brevo configuration
-- Stripe configuration
-- Supabase Storage configuration
-- AI service configuration
-- Socket.IO configuration
-
-
 
 ## Completion Criteria
 
