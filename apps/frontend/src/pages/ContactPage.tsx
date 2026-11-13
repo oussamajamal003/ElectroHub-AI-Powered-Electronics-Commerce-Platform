@@ -7,7 +7,6 @@ import { useMutation } from '@tanstack/react-query';
 import { SectionReveal, StaggerContainer, StaggerItem } from '@/components/motion/Motion';
 import { sendContactMessage, useStorefrontProfile } from '@/features/storefront/api';
 import { ApiError } from '@/lib/api';
-import { Alert } from '@/components/ui/Alert';
 import styles from './CompanyPages.module.scss';
 
 const fields = ['Name', 'Email', 'Subject', 'Message'] as const;

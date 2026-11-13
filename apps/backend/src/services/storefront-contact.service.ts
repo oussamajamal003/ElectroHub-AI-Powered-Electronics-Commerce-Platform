@@ -93,6 +93,8 @@ export class StorefrontContactService {
    */
   async deliver(input: StorefrontContactMessage, supportEmail: string | null, storeName = 'ElectroHub'): Promise<void> {
     if (recipientSchema.safeParse(supportEmail ?? '').success) return this.send(input, supportEmail, storeName);
+    // Not silent: operators see this event (and Admin → Settings says so) until a support mailbox is configured.
+    logger.warn('Contact message routed to verified administrators: no valid store support mailbox is configured', { event: 'contact.fallback_administrators', configured: Boolean(supportEmail) });
     return this.sendToAdministrators(input, storeName);
   }
 

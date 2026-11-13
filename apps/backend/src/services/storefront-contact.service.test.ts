@@ -37,13 +37,16 @@ describe('StorefrontContactService', () => {
     expect(sendTransactionalEmail.mock.calls[0]![0]).toMatchObject({ to: 'support@example.test' });
     expect(sendTransactionalEmail.mock.calls[0]![0]).not.toHaveProperty('bcc');
   });
-  it('falls back to verified administrators only when the support mailbox is empty or invalid', async () => {
+  it('falls back to verified administrators only when the support mailbox is empty or invalid, and tells operators', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => logger);
     for (const supportEmail of [null, '', 'not-an-email']) {
       const sendTransactionalEmail = vi.fn().mockResolvedValue({ success: true });
       const findMany = vi.fn().mockResolvedValue([{ email: 'admin@example.test' }]);
       const service = new StorefrontContactService({ sendTransactionalEmail }, { user: { findMany } } as unknown as Pick<PrismaClient, 'user'>);
       await service.deliver(message, supportEmail);
       expect(findMany).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenLastCalledWith(expect.any(String), { event: 'contact.fallback_administrators', configured: Boolean(supportEmail) });
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('admin@example.test');
       expect(sendTransactionalEmail.mock.calls[0]![0]).toMatchObject({ to: 'admin@example.test' });
     }
   });

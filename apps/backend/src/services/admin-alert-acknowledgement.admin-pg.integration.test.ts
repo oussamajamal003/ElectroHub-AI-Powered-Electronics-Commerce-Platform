@@ -76,6 +76,18 @@ describe.skipIf(process.env.ADMIN_SECURITY_PG_RUN !== '1')('admin alert acknowle
     expect((await fresh.alerts(id)).unread).toMatchObject({ lowStock: 0, outOfStock: 1, outForDelivery: 0 });
   });
 
+  it('a stale tab acknowledging fewer alerts concurrently never lowers the larger stored baseline', async () => {
+    const id = await admin();
+    live.lowStock = 4;
+    // Many interleaved writers (fresh tab saw 4, stale tabs saw 1 or 2): the single INSERT .. ON CONFLICT .. GREATEST statement wins.
+    await Promise.all([1, 4, 2, 1, 4, 2].map(seen => dashboard.acknowledgeAlerts(id, { lowStock: seen })));
+    const row = await prisma.adminAlertAcknowledgement.findUniqueOrThrow({ where: { userId_category: { userId: id, category: 'lowStock' } } });
+    expect(row.acknowledgedCount).toBe(4);
+    expect((await dashboard.alerts(id)).unread.lowStock).toBe(0);
+    await dashboard.acknowledgeAlerts(id, { lowStock: 1 });                      // a late stale write after the fact
+    expect((await dashboard.alerts(id)).unread.lowStock).toBe(0);
+  });
+
   it('enforces the schema: no negative baseline, no orphan rows, and rows disappear with their administrator', async () => {
     const id = await admin();
     await expect(prisma.$executeRawUnsafe(`INSERT INTO admin_alert_acknowledgements ("userId", category, "acknowledgedCount", "updatedAt") VALUES ($1::uuid, 'lowStock', -1, now())`, id))
