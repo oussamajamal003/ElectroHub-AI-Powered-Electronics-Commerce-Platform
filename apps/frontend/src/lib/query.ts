@@ -64,8 +64,18 @@ export const queryKeys = {
 
 export function shouldRetry(failureCount: number, error: unknown) {
   if (failureCount >= 1 || isAbortError(error)) return false;
-  if (error instanceof ApiError) return error.status === 0 || error.status >= 500;
+  if (error instanceof ApiError) {
+    if ((error.retryAfterMs ?? 0) > 60_000) return false; // leave long waits to explicit user recovery
+    return error.status === 0 || error.status >= 500;
+  }
   return false;
+}
+
+/** Read retries only. Mutations remain retry:false, including payments, uploads and contact sends. */
+export function queryRetryDelay(attempt: number, error: unknown, random: () => number = Math.random) {
+  const base = Math.min(300 * 2 ** attempt, 2_000);
+  const jittered = Math.min(2_000, base + Math.floor(base * 0.25 * random()));
+  return Math.max(jittered, error instanceof ApiError ? error.retryAfterMs ?? 0 : 0);
 }
 
 declare module '@tanstack/react-query' {
@@ -94,7 +104,7 @@ export function createQueryClient() {
       staleTime: 30_000,
       gcTime: 5 * 60_000,
       retry: shouldRetry,
-      retryDelay: attempt => Math.min(300 * 2 ** attempt, 2_000),
+      retryDelay: queryRetryDelay,
       refetchOnWindowFocus: false,
       refetchOnReconnect: true,
       refetchOnMount: true,

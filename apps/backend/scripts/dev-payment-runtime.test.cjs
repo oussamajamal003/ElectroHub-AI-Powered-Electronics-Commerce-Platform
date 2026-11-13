@@ -86,6 +86,7 @@ function fakeRuntime(onReady = () => {}) {
   const protocol = { runnerReady: false };
   let nextPid = 800;
   const deps = {
+    openControl: async () => ({ close: async () => {} }),
     acquireLock: () => lock,
     writeDiagnosticToken: token => { assert.match(token, /^[a-f0-9]{64}$/); },
     spawn: () => { const child = makeChild(nextPid++); children.push(child); return child; },
@@ -247,6 +248,17 @@ test('preflight-only mode never starts a runtime', async () => {
   } finally { console.log = priorLog; }
   assert.equal(starts, 0);
   assert.equal(output.some(value => value.includes(REVIEWED_ID) || value.includes(TASK04_ID)), false, 'preflight output never exposes private attempt IDs');
+});
+
+test('a parent stop received during preflight never creates a payment runtime', async () => {
+  let starts = 0; const log = console.log; console.log = () => {};
+  try {
+    assert.equal(await main(['--start', '--allow-dev-checkout', '--recovery-mode=checkout'], {
+      preflight: async () => { process.emit('message', { type: 'dev-stack.stop' }); return { port: 5000 }; },
+      supervise: async () => { starts++; },
+    }), 0);
+    assert.equal(starts, 0);
+  } finally { console.log = log; }
 });
 
 test('supervisor refuses a missing allowlist before acquiring a lock or starting children', async () => {

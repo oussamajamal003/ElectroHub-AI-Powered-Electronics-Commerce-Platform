@@ -46,6 +46,9 @@ const shutdown = new AbortController();
 const stop = () => { stopping = true; shutdown.abort(); };
 process.on('SIGTERM', stop);
 process.on('SIGINT', stop);
+// A Node-owned IPC child can drain its current batch on Windows. A parent loss
+// stops new claims; durable leases remain authoritative after forced shutdown.
+if (process.connected) process.on('disconnect', stop);
 const once = process.argv.includes('--once');
 
 async function main() {

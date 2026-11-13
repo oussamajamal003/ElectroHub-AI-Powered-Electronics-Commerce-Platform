@@ -21,12 +21,14 @@ identity and reason; it refuses to start unless that permission is allowed, and 
 
 ## Development runtime (normal startup is enough)
 
+For the main port 3000/5000 application, prefer `npm run dev:stack:supervised -- --allow-email-allowlist` from the repository root after configuring the approved allowlist and an empty sendable backlog. It wraps the existing checkout supervisor, starts Vite, and supervises the separate email worker without a general payment-recovery runner. Without this explicit flag, commerce dispatch stays disabled. See [development runtime](../11_Workflow/DEVELOPMENT_RUNTIME.md) for status, shutdown, restart and legacy-process ownership rules.
+
 Commerce email needs three things in every environment: the **producer** on in every process that can finalize a payment, a **supervised worker**,
 and a **send mode**. The development launchers now provide all three, so no one-shot script or manual worker is needed after a purchase.
 
 | Mode | Command (apps/backend) | What it does |
 | --- | --- | --- |
-| Shared Supabase DEV | `npm run build` then `npm run payment:dev` | Starts the Stripe listener, API, payment worker **and the supervised email worker** (log lines `[email-worker]`). Settings come from `.env.local`: `COMMERCE_EMAIL_ENQUEUE_ENABLED`, `COMMERCE_EMAIL_DISPATCH_ENABLED`, `COMMERCE_EMAIL_SEND_MODE=allowlist`, `COMMERCE_EMAIL_ALLOWED_RECIPIENTS=<approved mailboxes>`. Only listed addresses can ever receive mail |
+| Shared Supabase DEV checkout | Root `npm run dev:stack:supervised -- --allow-email-allowlist` | Starts the Stripe listener, API, Vite and separately approved allowlist email worker, without general recovery. Requires the producer/dispatch/allowlist settings and empty sendable allowlist backlog; never claims that provider configuration proves delivery. |
 | Isolated local PostgreSQL, safe default | `npm run dev:isolated` | Applies pending migrations to the disposable database, starts the watched API and the supervised worker in **capture** mode. No external email; `npm run db:isolated:emails` lists what would have been sent |
 | Isolated, real Brevo | `npm run dev:isolated:real-email` | Same, with real Brevo to the approved `COMMERCE_EMAIL_ALLOWED_RECIPIENTS` only (refuses to start without them or without `BREVO_API_KEY`). Accounts that are not listed keep their events READY and visible (`allowlistExcluded`) |
 | Isolated, sign in as an approved address | `node scripts/dev-isolated.cjs use-real-recipient <address>` / `restore-recipient` | Points the fixture customer at an approved address that has no account yet, then back (disposable database only) |

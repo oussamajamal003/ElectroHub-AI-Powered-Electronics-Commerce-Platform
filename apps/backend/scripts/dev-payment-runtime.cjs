@@ -8,6 +8,7 @@ const { spawn, fork, execFileSync } = require('node:child_process');
 const safety = require('./stripe-gate-safety.cjs');
 const verifier = require('./stripe-webhook-verifier.cjs');
 const emailDev = require('./lib/commerce-email-dev.cjs');
+const { openControl } = require('../../../scripts/lib/dev-control.cjs');
 const backend = path.resolve(__dirname, '..');
 
 function existingPaymentProcesses() {
@@ -20,7 +21,7 @@ function existingPaymentProcesses() {
       `$taskCommand=[string]$_.CommandLine; if ($taskCommand -match 'payment-runner\\.(js|ts)') { ` +
       `[pscustomobject]@{pid=$_.ProcessId;kind='runner'} } elseif (` +
       `$taskCommand.IndexOf('${quotedRepository}',[StringComparison]::OrdinalIgnoreCase) -ge 0 -and ` +
-      `$taskCommand -match '(src|dist)[/\\\\]+server\\.(ts|js)') { ` +
+      `$taskCommand -match '(src|dist)[/\\\\]+(bootstrap|server)\\.(ts|js)') { ` +
       `[pscustomobject]@{pid=$_.ProcessId;kind='backend'} } }) | ConvertTo-Json -Compress`],
     { encoding: 'utf8', windowsHide: true, timeout: 5000 });
     const parsed = raw.trim() ? JSON.parse(raw) : [];
@@ -29,7 +30,7 @@ function existingPaymentProcesses() {
   return execFileSync('ps', ['-eo', 'pid=,args='], { encoding: 'utf8', timeout: 5000 }).split('\n')
     .flatMap(line => {
       const kind = /payment-runner\.(js|ts)/.test(line) ? 'runner' :
-        line.includes(path.resolve(backend, '../..')) && /(?:src|dist)[/\\]+server\.(ts|js)/.test(line) ? 'backend' : null;
+        line.includes(path.resolve(backend, '../..')) && /(?:src|dist)[/\\]+(?:bootstrap|server)\.(ts|js)/.test(line) ? 'backend' : null;
       return kind ? [{ pid: Number(line.trim().split(/\s+/)[0]), kind }] : [];
     });
 }
@@ -426,6 +427,7 @@ async function supervise(config, options = {}, deps = {}) {
   let stopping = false; let shutdownPromise = null; let primaryFailure = null; let resolveShutdownFinished;
   const shutdownFinished = new Promise(resolve => { resolveShutdownFinished = resolve; });
   let email = { started: false, reason: 'disabled-by-default', runtime: null, stop: async () => {} };
+  let control = null; let controlPhase = 'starting'; let emailStopped = true;
   const track = (child, role, ipc = false) => {
     if (!child || !Number.isInteger(child.pid) || child.pid < 1) throw new Error('Owned process identity unavailable.');
     const record = { child, role, ipc, exited: child.exitCode !== null || Boolean(child.signalCode) };
@@ -436,6 +438,7 @@ async function supervise(config, options = {}, deps = {}) {
   const startShutdown = () => {
     if (shutdownPromise) return shutdownPromise;
     stopping = true;
+    controlPhase = 'stopping';
     shutdownPromise = (async () => {
       for (const record of records) {
         const child = record.child;
@@ -447,7 +450,7 @@ async function supervise(config, options = {}, deps = {}) {
         // terminates immediately, so allow that shutdown to drain leases before the bounded fallback.
         if (!record.ipc && !record.exited) { try { child.kill('SIGTERM'); } catch { /* checked below */ } }
       }
-      try { await email.stop(); } catch { /* the helper reports its own failure */ }
+      try { await email.stop(); } catch { emailStopped = false; primaryFailure ||= new Error('Email worker shutdown not confirmed; ownership locks retained.'); }
       const clean = await Promise.all([...records].map(record => waitForChildExit(record.child, deps.shutdownGraceMs ?? 10000)));
       if (clean.some(value => !value)) {
         for (const record of records) if (!record.exited && record.child.exitCode === null) { try { record.child.kill('SIGKILL'); } catch { /* lock retained below */ } }
@@ -461,6 +464,10 @@ async function supervise(config, options = {}, deps = {}) {
   };
   const signalHandler = () => { void startShutdown(); };
   process.once('SIGINT', signalHandler); process.once('SIGTERM', signalHandler);
+  // The stack's live IPC channel is a stop request only; it grants no payment authority.
+  const onStackMessage = message => { if (message?.type === 'dev-stack.stop') void startShutdown(); };
+  process.on('message', onStackMessage);
+  process.once('disconnect', signalHandler);
   let failRuntime;
   const failed = new Promise((_, reject) => { failRuntime = reject; });
   failed.catch(() => {});
@@ -471,6 +478,12 @@ async function supervise(config, options = {}, deps = {}) {
     void startShutdown();
   };
   try {
+    control = await (deps.openControl || openControl)(path.join(backend, '.cache/dev-payment-control.json'), `electrohub-payment:${backend}`,
+      () => ({ phase: controlPhase, mode: options.mode, backendPort: config.port,
+        apiPid: [...records].find(record => record.role === 'api')?.child.pid,
+        listenerAlive: [...records].some(record => record.role === 'stripe-cli' && !record.exited),
+        email: { ...(email.status ? email.status() : { started: email.started, ready: false, reason: email.reason }),
+          requested: Boolean(options.allowEmailAllowlist) } }), startShutdown);
     const listener = await (deps.startListener || verifier.startListener)({
       executable: verifier.resolveStripeExecutable(), apiKey: process.env.STRIPE_SECRET_KEY,
       forwardUrl: `http://127.0.0.1:${config.port}/api/webhooks/stripe`, spawnProcess: (...args) => {
@@ -549,6 +562,7 @@ async function supervise(config, options = {}, deps = {}) {
     api.child.send({ type: 'payment-supervisor.activate', nonce });
     await Promise.race([waitFor(() => status.activated.has('api'), Boolean, { timeoutMs: 5000, intervalMs: 50 }), failed]);
     if (primaryFailure || stopping) throw primaryFailure || new Error('DEV runtime startup interrupted.');
+    controlPhase = 'ready';
     (deps.log || console.log)(JSON.stringify({ readiness: 'PASS', backendPort: config.port, targetIdentity: config.targetIdentity,
       migrationCount: config.migrationCount, paymentBacklog: config.paymentBacklog, stripeAccountVerified: config.stripeAccountVerified,
       listenerBoundInMemory: true, apiDatabaseReady: status.apiReady, recoveryMode: options.mode ?? 'incident-scoped',
@@ -572,23 +586,35 @@ async function supervise(config, options = {}, deps = {}) {
   } finally {
     await startShutdown();
     const stopped = [...records].every(record => record.exited || record.child.exitCode !== null || Boolean(record.child.signalCode));
-    if (stopped) lock.release();
+    if (stopped && emailStopped) { await control?.close(); lock.release(); }
     process.removeListener('SIGINT', signalHandler); process.removeListener('SIGTERM', signalHandler);
+    process.removeListener('message', onStackMessage); process.removeListener('disconnect', signalHandler);
   }
 }
 
 async function main(argv = process.argv.slice(2), deps = {}) {
   const restoreOut = safety.installSanitizedOutput(process.stdout); const restoreError = safety.installSanitizedOutput(process.stderr);
+  // Parent shutdown can arrive while read-only preflight is still waiting for
+  // PostgreSQL/Stripe. Remember it before any child/authority can be created.
+  let cancelled = typeof process.send === 'function' && !process.connected;
+  const cancel = message => { if (message?.type === 'dev-stack.stop') cancelled = true; };
+  const disconnected = () => { cancelled = true; };
+  process.on('message', cancel); process.once('disconnect', disconnected);
   try {
     const options = applyGovernedEmailDefault(argumentsFor(argv), process.env);
     const config = deps.preflight ? await deps.preflight(options) : await preflight({}, options);
+    if (cancelled) { console.log(JSON.stringify({ status: 'STOPPED', reason: 'Parent session stopped during preflight; no runtime started.' })); return 0; }
     const publicConfig = { ...config };
     delete publicConfig.workerAttemptIds;
     console.log(JSON.stringify({ preflight: 'PASS', ...publicConfig, financialAcceptance: 'NOT_VERIFIED' }));
     if (options.start) await (deps.supervise || supervise)(config, options, deps.supervisorDeps || {});
     return 0;
   } catch (error) { console.log(JSON.stringify({ status: 'BLOCKED', error: safety.sanitize(error.message) })); return 1; }
-  finally { restoreOut(); restoreError(); }
+  finally {
+    process.removeListener('message', cancel); process.removeListener('disconnect', disconnected);
+    if (process.connected) process.disconnect();
+    restoreOut(); restoreError();
+  }
 }
 if (require.main === module) main().then(code => { process.exitCode = code; });
 module.exports = { argumentsFor, applyGovernedEmailDefault, assertAcceptedBacklog, allowlistedRecipients, migrationNames, migrationChecksumCandidates, verifyMigrationLedger, assertNoPaymentBacklog, assertNoEmailBacklog,

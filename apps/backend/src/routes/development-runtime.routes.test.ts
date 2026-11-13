@@ -32,7 +32,8 @@ it('returns an instance binding only after a real identity/TLS check', async () 
   const response = await request(app).get('/api/internal/development-runtime').auth(token, { type: 'bearer' });
   expect(response.status).toBe(200);
   expect(response.headers['cache-control']).toBe('no-store');
-  expect(response.body.data).toEqual({ mode: 'ISOLATED_QA', instanceId: expect.any(String), databaseReady: true, tlsVerified: true });
+  expect(response.body.data).toEqual({ mode: 'ISOLATED_QA', instanceId: expect.any(String), databaseReady: true, tlsVerified: true,
+    pid: process.pid, supervisorPid: process.ppid, supervisorActive: false });
   expect(JSON.stringify(response.body)).not.toMatch(/postgres|55434|localhost|unit|DATABASE_URL/);
   expect(db.$queryRaw).toHaveBeenCalledTimes(1);
 });

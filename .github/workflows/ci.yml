@@ -314,6 +314,8 @@ jobs:
         run: npm run prisma:generate --workspace=@electrohub/backend
       - name: Build
         run: npm run build --workspace=@electrohub/backend
+      - name: Runtime ownership, worker lifecycle and supervisor safety
+        run: npm run test:runtime
 
   ai:
     name: AI Service / Test
