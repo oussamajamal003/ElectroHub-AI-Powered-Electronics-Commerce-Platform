@@ -160,30 +160,35 @@ The short / XSS case and dark mode are asserted in the same spec. Their screensh
 
 ## 16. Test commands and counts
 
-All local runs used placeholder environment values only (no `.env`, no real secret). They ran on the pre-rebase tree (`4bef532` + this work).
-The rebased SHA is validated by PR #51 CI.
+All local runs used placeholder environment values only (no `.env`, no real secret). The backend payment suites used the same placeholders
+CI writes to `.env.test.local` (`STRIPE_SECRET_KEY=sk_test_placeholder`, etc.).
+
+**Re-run on the rebased implementation commit `e64af2af`** (after the worktree's `node_modules` junctions were re-pointed to the main
+checkout's dependencies, same lockfile):
 
 | Command | Result |
 |---|---|
-| `npm run typecheck -w apps/frontend` | PASS (0 errors) |
-| `npm run lint -w apps/frontend` | PASS (0 errors) |
-| `npx vitest run` (frontend, full) | 1599 / 1600. The one failure, `AdminProductFormPage`, timed out under full-suite load and passes alone. Affected subset 686 / 686 |
-| `npm run build -w apps/frontend` | PASS |
-| backend `tsc --noEmit`, `eslint` | PASS |
-| backend payment service / routes / isolation suites | PASS |
-| backend `tests/swagger.test.ts` | 5 / 5 alone. Under parallel load it timed out with `read ECONNRESET` (local load); the discard operation was asserted in the generated spec (200/202/404/409) |
-| backend full suite | Failures limited to tests needing a live Postgres or `STRIPE_SECRET_KEY=sk_test_…` (set by CI) |
-| `payment.stock-integrity.postgres.integration.test.ts` | NOT VERIFIED locally (no disposable Postgres); runs in CI `payment-postgres` |
-| `playwright -c playwright.dismissal.config.ts` | 27 / 27 (final run) |
-| `playwright -c playwright.checkout-processing.config.ts` | 22 / 22 earlier. Final run 20 / 22: the 1440 processing and 1024 declined tests failed while the shared dependency tree was being removed (see §20) |
-| `playwright -c playwright.task06-2-description-skeletons.config.ts` (`DESCRIPTION_SKELETONS_ALL_BROWSERS=1`) | Chromium + WebKit 56 / 56 earlier. Firefox 0 / 28: `browserType.launch: spawn UNKNOWN` (local launch failure). Final Chromium evidence run 27 / 28: the dark-mode description test failed with Vite `504 Outdated Optimize Dep` / `ENOENT node_modules/.vite` during the same removal |
+| `npm run typecheck` (frontend) | PASS (0 errors) |
+| `npm run lint` (frontend) | PASS (0 errors, 4 pre-existing warnings) |
+| `npm run build` (frontend) | PASS |
+| `npx vitest run` (frontend, full) | 1608 / 1609. The one failure, `AdminProductFormPage` "navigates once…", is not touched by this commit and passes 15 / 15 when run alone |
+| backend `tsc --noEmit`, `npm run lint` | PASS |
+| backend payment service / routes / isolation / dismiss suites | 239 / 239 with CI's placeholder env. Without `STRIPE_SECRET_KEY` the capture-identity test fails by design ("Test card payments are unavailable") |
+| backend `tests/swagger.test.ts` | 5 / 5. The discard operation is in the generated spec with 200 / 202 / 404 / 409 |
+| `payment.stock-integrity.postgres.integration.test.ts` | NOT VERIFIED locally (no disposable Postgres); PASS in CI `Integration / Payment PostgreSQL` (§19) |
+| `playwright -c playwright.checkout-processing.config.ts` | 22 / 22 (Chromium) |
+| `playwright -c playwright.dismissal.config.ts` | 27 / 27 (Chromium) |
+| `playwright -c playwright.task06-2-description-skeletons.config.ts` (`DESCRIPTION_SKELETONS_ALL_BROWSERS=1`) | Chromium 28 / 28, WebKit 28 / 28. Firefox 0 / 28: `browserType.launch: spawn UNKNOWN` (local launch failure only) |
+
+Before the rebase, the final evidence run had three browser failures. They happened while the shared dependency tree was being removed
+(§20) and did not recur on the re-run above.
 
 ## 17. Browser / viewport results
 
 | Area | Widths | Chromium | WebKit | Firefox |
 |---|---|---|---|---|
-| Processing / Checking / Declined | 320 390 768 1024 1440 1920 | PASS | not run | NOT VERIFIED |
-| Failed-payment dismissal | 390 768 1366 | PASS | not run | NOT VERIFIED |
+| Processing / Checking / Declined | 320 390 768 1024 1440 1920 | PASS | not run | NOT VERIFIED locally |
+| Failed-payment dismissal | 390 768 1366 | PASS | not run | NOT VERIFIED locally |
 | Product Description | 320 390 768 1024 1440 1920 | PASS | PASS | NOT VERIFIED (launch failure) |
 | Account skeletons | 390 1440 | PASS | PASS | NOT VERIFIED (launch failure) |
 
@@ -203,7 +208,15 @@ account / orders / admin profile skeletons at 1440, admin security at 390.
 
 ## 19. CI status
 
-The rebased SHA is reviewed in the PR #51 checks. The result is reported in the final hand-off for that SHA; this report does not claim it.
+PR #51 checks on the implementation commit `e64af2afb4d599bf006afc2f1c6b0619275490b7`: **45 / 45 passed, 0 failing, 0 pending**. These include:
+- Frontend Typecheck / Lint / Test / Build
+- Backend Typecheck / Lint / Test / Build
+- Integration / Payment PostgreSQL
+- Release E2E and Branding E2E on Chromium, Firefox and WebKit
+- Security / NPM Audit, Docker frontend/backend, AI Service, Migration Safety Policy, verify-migration
+- Required / Quality Gate
+
+The documentation-only commit that records this result gets its own CI run on PR #51.
 
 ## 20. Parallel-agent reconciliation
 
@@ -214,21 +227,22 @@ The rebased SHA is reviewed in the PR #51 checks. The result is reported in the 
 - **Shared dependencies removed mid-run.** During the final evidence run, the dependency tree that this worktree's `node_modules` junctions
   pointed to (`.cache/notification-push-recovery`) was removed by another process at about 20:17.
   - The three browser failures in §16 coincide with that removal.
-  - Local re-verification after the rebase was not possible.
-  - Re-pointing the junctions was not performed (it was not permitted in this session).
+  - With the user's approval the junctions were re-pointed to the main checkout's `node_modules` (identical lockfile), and every local
+    suite was re-run on `e64af2af` (§16).
 
 ## 21. Remaining material risks
 
-- The Postgres removal scenarios (U, W) and the rebased tree are validated by CI only.
+- The Postgres removal scenarios (U, W) ran in CI only (passed on `e64af2af`), not locally.
 - No live or test-mode Stripe cancellation was exercised.
-- Firefox was not run locally.
+- Firefox was not run locally (launch failure). CI's Firefox release and branding E2E jobs passed, but they do not run the new local suites.
 - During session restore, the admin skeleton renders without the admin shell (sidebar/header).
 - At 320px, the sticky header overlaps the top of element screenshots. This affects screenshots only, not the layout.
 - The checkout-processing and description/skeleton Playwright configs are local suites. CI does not run them.
 
 ## 22. Final SHA
 
-The commit that adds this report on `feature/06.2-accessibility-qa-ci-cd` (parent `36f5bf52`).
+Implementation: `e64af2afb4d599bf006afc2f1c6b0619275490b7` (parent `36f5bf52`), CI 45 / 45 green.
+This report's CI update is a documentation-only commit on top of it.
 
 ## 23. PR
 
