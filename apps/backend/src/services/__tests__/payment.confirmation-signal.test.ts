@@ -92,4 +92,24 @@ describe('stock gate right before card confirmation (PR #51 last unit)', () => {
     finally { delete globalThis.process.env.PAYMENT_CONFIRMATION_SIGNAL; }
     expect(tx.paymentAttempt.update).not.toHaveBeenCalled(); expect(db.paymentAttempt.updateMany).toHaveBeenCalledTimes(1); expect(process).not.toHaveBeenCalled();
   });
+  it.each([['CART_STOCK_CONFLICT', 'CART_STOCK_CONFLICT'], ['PRODUCT_UNAVAILABLE', 'PRODUCT_UNAVAILABLE'], ['INVENTORY_NOT_FOUND', 'PRODUCT_UNAVAILABLE']])(
+    'keeps refusing a purchase already lost to stock (%s), signal flag on or off, without re-cancelling or claiming "not charged"', async (failureCode, code) => {
+      for (const flag of [undefined, 'true']) {
+        const { tx, db, service, process } = make('OUT_OF_STOCK', 0);
+        tx.paymentAttempt.findFirst.mockResolvedValue({ ...submitted, state: 'CANCELED', cancelRequested: true, failureCode });
+        if (flag) globalThis.process.env.PAYMENT_CONFIRMATION_SIGNAL = flag;
+        try {
+          const error = await service.confirmationStarted('u', ID).then(() => null, (reason: unknown) => reason);
+          expect(error).toMatchObject({ statusCode: 409, code }); expect(String((error as Error).message)).not.toMatch(/not charged/i);
+        } finally { delete globalThis.process.env.PAYMENT_CONFIRMATION_SIGNAL; }
+        expect(tx.paymentAttempt.update).not.toHaveBeenCalled(); expect(db.paymentAttempt.updateMany).not.toHaveBeenCalled();
+        expect(db.paymentWork.updateMany).not.toHaveBeenCalled(); expect(process).not.toHaveBeenCalled();
+      }
+    });
+  it('does not treat a non-stock cancellation as sold out', async () => {
+    const { tx, service, process } = make('AVAILABLE', 3);
+    tx.paymentAttempt.findFirst.mockResolvedValue({ ...submitted, cancelRequested: true, failureCode: 'CANCELED_BY_CUSTOMER' });
+    await expect(service.confirmationStarted('u', ID)).resolves.toMatchObject({ attemptId: ID, confirmationStartedAt: null });
+    expect(process).not.toHaveBeenCalled();
+  });
 });

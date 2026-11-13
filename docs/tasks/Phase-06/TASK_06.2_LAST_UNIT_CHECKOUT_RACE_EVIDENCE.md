@@ -127,6 +127,7 @@ Scenario Z (`payment.last-unit.postgres.integration.test.ts`), stock = 1:
   - Sold out: 409 with the product name. The cancel decision is written in the transaction before `process`, and the confirmation marker is not recorded.
   - Withdrawn: `PRODUCT_UNAVAILABLE`.
   - In stock: the marker is recorded and nothing is cancelled.
+  - Already lost to stock (any of the three stock codes), flag on or off: refused again with the stock 409, no re-cancel, no "not charged" wording. A non-stock cancellation is not treated as sold out.
 - Existing stock-conflict cancel tests still pass.
 
 ## 11. Cart and saved-attempt recovery — PASS
@@ -171,7 +172,7 @@ Run in the worktree, with the unit env pointed at a loopback `electrohub_ci_unit
 | backend `npm run typecheck` | exit 0 |
 | backend `npm run lint` | exit 0, 0 errors |
 | backend `npm run build` | exit 0 |
-| backend `npx vitest run src/services/__tests__/payment` | 16 files passed, 5 skipped (DB suites, no DB by design); 359 passed, 52 skipped |
+| backend `npx vitest run src/services/__tests__/payment` | 16 files passed, 5 skipped (DB suites, no DB by design); 363 passed, 52 skipped |
 | backend `node --test scripts/payment-pg-disposable.test.cjs` | 23/23 passed |
 | OpenAPI spec load (`src/docs/swagger/index.ts`) | submit, confirmation-started and restore each document 200/404/409 with their codes; status `data` has `outcomeReason`, `authorizationReleased`, `unavailableItems` |
 | frontend `npm run typecheck` | exit 0 |
