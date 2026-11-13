@@ -131,6 +131,40 @@ describe('Owned payment API boundaries (actual service validation; mocked persis
     }
     expect(db.paymentAttempt.create).not.toHaveBeenCalled();
   });
+  describe('POST /checkout/payment-attempts/:attemptId/discard (Remove failed payment)', () => {
+    const discard = (id = ids.attempt) => request(app).post(`/api/checkout/payment-attempts/${id}/discard`);
+    const owned = (patch: object = {}) => db.paymentAttempt.findFirst.mockResolvedValue({ id: ids.attempt, state: 'CANCELED', orderId: null, failureCode: 'CART_STOCK_CONFLICT',
+      cancelRequested: false, providerIntentId: 'pi_test', compensatedAt: null, confirmationStartedAt: null, submittedAt: new Date(), dismissedAt: null, work: null, ...patch });
+    it('requires a session', async () => {
+      const response = await discard().send({});
+      expect(response.status).toBe(401);
+      expect(db.paymentAttempt.findFirst).not.toHaveBeenCalled(); expect(db.paymentAttempt.updateMany).not.toHaveBeenCalled();
+    });
+    it('rejects a request body (strict empty contract) and a malformed attempt id', async () => {
+      expect((await discard().auth(token(), { type: 'bearer' }).send({ state: 'CANCELED' })).status).toBe(400);
+      expect((await discard('not-an-id').auth(token(), { type: 'bearer' }).send({})).status).toBe(400);
+      expect(db.paymentAttempt.updateMany).not.toHaveBeenCalled();
+    });
+    it('returns the same 404 for an attempt the customer does not own or that does not exist, without writing', async () => {
+      const response = await discard().auth(token(), { type: 'bearer' }).send({});
+      expect(response.status).toBe(404); expect(response.body.error.code).toBe('PAYMENT_ATTEMPT_NOT_FOUND');
+      expect(db.paymentAttempt.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: ids.attempt, userId: ids.user } }));
+      expect(db.paymentAttempt.updateMany).not.toHaveBeenCalled();
+    });
+    it('hides an already-terminal failure (200 REMOVED), changing nothing but dismissedAt', async () => {
+      owned(); db.paymentAttempt.updateMany.mockResolvedValue({ count: 1 });
+      const response = await discard().auth(token(), { type: 'bearer' }).send({});
+      expect(response.status).toBe(200); expect(response.body.data).toMatchObject({ attemptId: ids.attempt, status: 'REMOVED' });
+      expect(db.paymentAttempt.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { dismissedAt: expect.any(Date) } }));
+    });
+    it.each([['paid', { state: 'PAID', orderId: 'order-1', failureCode: null }], ['still processing', { state: 'PROCESSING', failureCode: null }]])(
+      'returns 409 PAYMENT_STATUS_UNCONFIRMED for a purchase that is %s, without hiding it', async (_label, patch) => {
+        owned(patch);
+        const response = await discard().auth(token(), { type: 'bearer' }).send({});
+        expect(response.status).toBe(409); expect(response.body.error.code).toBe('PAYMENT_STATUS_UNCONFIRMED');
+        expect(db.paymentAttempt.updateMany).not.toHaveBeenCalled();
+      });
+  });
   describe('POST /checkout/payment-attempts/:attemptId/dismiss', () => {
     const dismiss = (id = ids.attempt) => request(app).post(`/api/checkout/payment-attempts/${id}/dismiss`);
     const owned = (patch: object = {}) => db.paymentAttempt.findFirst.mockResolvedValue({ id: ids.attempt, state: 'DECLINED', orderId: null,

@@ -79,6 +79,13 @@ export const INCOMPLETE_FAILURE_CODE = 'PAYMENT_INCOMPLETE';
 /** The customer cancelled a verified never-confirmed purchase (Cancel purchase); its PaymentIntent was cancelled with nothing received. */
 export const CANCELED_BY_CUSTOMER_FAILURE_CODE = 'PAYMENT_CANCELED_BY_CUSTOMER';
 /**
+ * The customer discarded a failed (declined) purchase whose PaymentIntent was still open (Remove failed payment -> Cancel & Remove). The
+ * intent is cancelled by the lease-fenced worker with nothing received or authorized, and the card is hidden (dismissedAt) in the same
+ * write that records the provider-verified cancellation. It is deliberately NOT an abandonment code: the purchase failed at the provider
+ * first, and a provider authorization observed before the cancellation still wins over this request.
+ */
+export const DISCARDED_BY_CUSTOMER_FAILURE_CODE = 'PAYMENT_DISCARDED_BY_CUSTOMER';
+/**
  * Purchases that ended with NO provider decline and NO payment (system expiry, superseded setup, legacy release, customer cancellation of a
  * verified never-confirmed purchase). Documented presentation rule (Task 03.6): they are excluded from the customer's active payment lists
  * (never relabelled Payment failed, which requires provider evidence). Records are preserved; abandoned CART items stay restorable via

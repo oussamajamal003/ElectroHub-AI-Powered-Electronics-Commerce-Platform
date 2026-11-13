@@ -446,7 +446,7 @@ it('while payment writes are disabled, the trash icon stays on every failed card
 it('a refused dismissal on a disabled backend explains the restriction, keeps the purchase and never claims removal', async () => {
   const { ApiError } = await import('@/lib/api');
   vi.mocked(apiClient).mockImplementation(async (url, options) => {
-    if (String(url).endsWith('/dismiss')) throw new ApiError(503, 'Payments are unavailable in this environment.', undefined, 'PAYMENT_MUTATIONS_DISABLED');
+    if (String(url).endsWith('/discard')) throw new ApiError(503, 'Payments are unavailable in this environment.', undefined, 'PAYMENT_MUTATIONS_DISABLED');
     if (String(url) === '/api/checkout/payment-capability') return { data: { paymentsEnabled: true } } as never; // capability not yet refreshed
     void options; return { data: [notConfirmed] } as never;
   });
@@ -460,7 +460,7 @@ it('a refused dismissal on a disabled backend explains the restriction, keeps th
   // The refusal itself claims nothing about charges (the card keeps its own provider-evidence copy).
   expect(within(screen.getByRole('dialog')).queryByText(/Nothing was charged|Please try again\. Your/)).not.toBeInTheDocument();
   expect(document.querySelector('[data-purchase="attempt-a"]')).not.toBeNull();
-  expect(vi.mocked(apiClient).mock.calls.filter(([url]) => String(url).endsWith('/dismiss'))).toHaveLength(1);
+  expect(vi.mocked(apiClient).mock.calls.filter(([url]) => String(url).endsWith('/discard'))).toHaveLength(1);
 });
 it('a dropped purchases read (for example a restarting dev server) is retried before any error is shown', async () => {
   let reads = 0;
@@ -486,17 +486,64 @@ it('renders the trash icon and Payment failed on every failed-payment card', asy
     expect(within(card).getByRole('button', { name: /^Remove failed payment for / })).toBeVisible();
   }
 });
-// Task 06.2: Remove is never offered for a failed card the server will permanently refuse (it would stay listed forever).
-it('hides the trash icon only on a failed card the backend marks not dismissible', async () => {
+// PR #51: the trash action is on EVERY failed card. What it does is the server's decision; a card that is not safe to hide explains instead.
+it('keeps the trash action on a failed card the backend will not remove yet, and explains instead of removing', async () => {
   vi.mocked(apiClient).mockResolvedValue({ data: [
-    { ...purchase, attemptId: 'ok', checkoutId: 'ok', state: 'COMPENSATED', classification: 'FAILED', pending: false, unread: false, retryAllowed: false, dismissible: true },
-    { ...purchase, attemptId: 'no', checkoutId: 'no', state: 'DECLINED', classification: 'DECLINED', pending: false, unread: false, retryAllowed: false, dismissible: false }] });
+    { ...purchase, attemptId: 'ok', checkoutId: 'ok', state: 'COMPENSATED', classification: 'FAILED', pending: false, unread: false, retryAllowed: false, dismissible: true, removal: 'REMOVE' },
+    { ...purchase, attemptId: 'no', checkoutId: 'no', state: 'COMPENSATED', classification: 'FAILED', pending: false, unread: false, retryAllowed: false, dismissible: false, removal: 'CONFIRMING' }] });
   show('/cart');
   const failedSection = (await screen.findByRole('heading', { name: 'Failed payments' })).closest('section') as HTMLElement;
   expect(within(failedSection.querySelector('[data-purchase="ok"]') as HTMLElement).getByRole('button', { name: /^Remove failed payment for / })).toBeVisible();
   const refused = failedSection.querySelector('[data-purchase="no"]') as HTMLElement;
   expect(within(refused).getByText('Payment failed')).toBeVisible();
-  expect(within(refused).queryByRole('button', { name: /Remove failed payment/ })).not.toBeInTheDocument();
+  expect(refused).toHaveAttribute('data-removal', 'CONFIRMING');
+  await act(async () => { fireEvent.click(within(refused).getByRole('button', { name: /^Remove failed payment for / })); });
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).getByText(/We need to confirm this payment’s status before it can be removed\./)).toBeInTheDocument();
+  expect(within(dialog).queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+  expect(within(dialog).getByRole('button', { name: 'Check payment status' })).toBeEnabled();
+  expect(vi.mocked(apiClient).mock.calls.some(([url]) => String(url).endsWith('/discard'))).toBe(false);
+});
+it('a declined payment still open at the provider offers Cancel & Remove; the card leaves only after the server confirms', async () => {
+  let rows: SavedPurchase[] = [{ ...purchase, state: 'DECLINED', classification: 'DECLINED', dismissible: true, removal: 'CANCEL_AND_REMOVE', pending: false, unread: false, retryAllowed: true }];
+  vi.mocked(apiClient).mockImplementation(async url => {
+    if (String(url).endsWith('/discard')) { rows = []; return { data: { attemptId: 'attempt-a', status: 'REMOVED', dismissedAt: '2026-10-15T10:00:00.000Z' } } as never; }
+    if (String(url) === '/api/checkout/payment-capability') return { data: { paymentsEnabled: true } } as never;
+    return { data: rows } as never;
+  });
+  show('/cart');
+  const card = await waitFor(() => { const found = document.querySelector('[data-purchase="attempt-a"]'); expect(found).not.toBeNull(); return found as HTMLElement; });
+  expect(card).toHaveAttribute('data-removal', 'CANCEL_AND_REMOVE');
+  expect(within(card).getByRole('link', { name: /Try Again/ })).toBeVisible();
+  await act(async () => { fireEvent.click(within(card).getByRole('button', { name: /^Remove failed payment for / })); });
+  expect(await screen.findByRole('heading', { name: 'Cancel and remove this payment?' })).toBeInTheDocument();
+  expect(document.querySelector('[data-purchase="attempt-a"]')).not.toBeNull();
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Cancel & Remove' })); });
+  await waitFor(() => expect(document.querySelector('[data-purchase="attempt-a"]')).toBeNull());
+  expect(vi.mocked(apiClient).mock.calls.filter(([url]) => String(url).endsWith('/discard'))).toHaveLength(1);
+  // No new payment attempt, no Cart write: only the discard request and reads were sent.
+  expect(vi.mocked(apiClient).mock.calls.every(([url, options]) => String(url).endsWith('/discard') || (options as { method?: string } | undefined)?.method !== 'POST'
+    || String(url).endsWith('/recover-overdue'))).toBe(true);
+});
+it('a cancellation that is not yet provider-confirmed stays listed as a failed payment being removed: no Try Again, no "Processing" card', async () => {
+  vi.mocked(apiClient).mockResolvedValue({ data: [{ ...purchase, state: 'CANCEL_PENDING', classification: 'PROCESSING', removal: 'PENDING', dismissible: false, pending: true, unread: false, retryAllowed: false }] });
+  show('/cart');
+  const failedSection = (await screen.findByRole('heading', { name: 'Failed payments' })).closest('section') as HTMLElement;
+  const card = failedSection.querySelector('[data-purchase="attempt-a"]') as HTMLElement;
+  expect(within(card).getByText('Removing')).toBeVisible();
+  expect(within(card).getByText(/will be removed as soon as our payment provider confirms it/)).toBeVisible();
+  expect(card).toHaveAttribute('aria-busy', 'true');
+  expect(within(card).queryByRole('link', { name: /Try Again/ })).not.toBeInTheDocument();
+  expect(within(card).queryByRole('link', { name: 'Check payment status' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Pending purchases' })).not.toBeInTheDocument();
+  expect(within(card).getByRole('button', { name: /^Remove failed payment for / })).toBeVisible();
+});
+it('a paid purchase never carries a removal action', async () => {
+  vi.mocked(apiClient).mockResolvedValue({ data: [{ ...purchase, state: 'PAID', classification: 'SUCCEEDED', orderReference: 'ORD-1', removal: null, dismissible: false, pending: false, unread: false, retryAllowed: false },
+    { ...purchase, attemptId: 'attempt-p', state: 'PROCESSING', classification: 'PROCESSING', removal: null, dismissible: false, pending: true, unread: false, retryAllowed: false }] });
+  show('/cart');
+  expect(await screen.findByRole('heading', { name: 'Pending purchases' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: /Remove failed payment/ })).not.toBeInTheDocument();
 });
 it('the remove dialog uses the agreed copy; Cancel keeps the card and sends nothing', async () => {
   vi.mocked(apiClient).mockResolvedValue({ data: [{ ...purchase, state: 'DECLINED', classification: 'DECLINED', dismissible: true, pending: false, unread: false, retryAllowed: true }] });
@@ -505,7 +552,7 @@ it('the remove dialog uses the agreed copy; Cancel keeps the card and sends noth
   expect(await screen.findByText('Remove this failed payment from your list? Your payment history will be preserved.')).toBeInTheDocument();
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Cancel' })); });
   expect(document.querySelector('[data-purchase="attempt-a"]')).not.toBeNull();
-  expect(vi.mocked(apiClient).mock.calls.some(([url]) => String(url).endsWith('/dismiss'))).toBe(false);
+  expect(vi.mocked(apiClient).mock.calls.some(([url]) => String(url).endsWith('/discard'))).toBe(false);
 });
 
 // Task 03.6: Cancel purchase is a rare, server-verified exception on a Processing purchase (cancelable comes only from the backend).

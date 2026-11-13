@@ -282,6 +282,13 @@ router.post('/checkout/payment-attempts/:attemptId/dismiss', limiter, async (req
   try { empty.parse(req.body ?? {}); res.json({ data: await paymentService.dismiss(req.user!.userId, String(req.params.attemptId)) }); }
   catch (error) { next(normalize(error)); }
 });
+// Remove failed payment (single trash action): the server decides between hiding a terminal failure and cancelling a declined purchase's
+// still-open intent first. 202 = cancellation requested and not yet provider-verified; the card is hidden only once it is.
+router.post('/checkout/payment-attempts/:attemptId/discard', limiter, async (req, res, next) => {
+  try { empty.parse(req.body ?? {}); const data = await paymentService.discard(req.user!.userId, String(req.params.attemptId));
+    res.status(data.status === 'REMOVED' ? 200 : 202).json({ data }); }
+  catch (error) { next(normalize(error)); }
+});
 router.post('/checkout/payment-attempts/:attemptId/read', limiter, async (req, res, next) => {
   try {
     const { state } = z.object({ state: z.enum(['PAID', 'DECLINED', 'CANCELED', 'COMPENSATED', 'REFUNDED']) }).strict().parse(req.body);

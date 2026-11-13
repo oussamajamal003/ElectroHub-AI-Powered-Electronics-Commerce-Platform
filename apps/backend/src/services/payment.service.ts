@@ -13,7 +13,7 @@ import { adminNotifications } from './admin-notification.service.js';
 import { OrderService } from './order.service.js';
 import { stripeProvider } from './stripe.provider.js';
 import { ATTEMPT_LIFETIME_MS, SUBMITTED_ABANDON_GRACE_MS, WORK_LEASE_MS, MAX_PAYMENT_RETRIES, TERMINAL_PAYMENT_STATES,
-  cents, retryDelay, customerPaymentStatus, customerOutcomeReason, authorizationReleased, STOCK_FAILURE_CODES, COMMIT_CONFLICT_RETRIES, COMMIT_CONFLICT_BACKOFF_MS, ABANDONMENT_FAILURE_CODES, NOT_CONFIRMED_FAILURE_CODE, CANCELED_BY_CUSTOMER_FAILURE_CODE, NEVER_CONFIRMED_GRACE_MS, CONFIRMATION_SIGNAL_GRACE_MS, SUBMITTED_UNRESOLVED_WINDOW_MS, confirmationSignalEnabled, verifyBinding, type Attempt, type PaymentProvider, type ProviderIntent } from './payment.domain.js';
+  cents, retryDelay, customerPaymentStatus, customerOutcomeReason, authorizationReleased, STOCK_FAILURE_CODES, COMMIT_CONFLICT_RETRIES, COMMIT_CONFLICT_BACKOFF_MS, ABANDONMENT_FAILURE_CODES, NOT_CONFIRMED_FAILURE_CODE, CANCELED_BY_CUSTOMER_FAILURE_CODE, DISCARDED_BY_CUSTOMER_FAILURE_CODE, NEVER_CONFIRMED_GRACE_MS, CONFIRMATION_SIGNAL_GRACE_MS, SUBMITTED_UNRESOLVED_WINDOW_MS, confirmationSignalEnabled, verifyBinding, type Attempt, type PaymentProvider, type ProviderIntent } from './payment.domain.js';
 import { isSerializationConflict } from './transaction-conflict.js';
 import { redactDeliveryForDeletedOwner } from './delivery-privacy.js';
 import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
@@ -99,6 +99,28 @@ const dismissEligible = (attempt: Pick<Attempt, 'state' | 'submittedAt' | 'order
   ['DECLINED', 'FAILED'].includes(customerPaymentStatus(attempt, work)) && DISMISSIBLE_STATES.includes(attempt.state) && Boolean(attempt.submittedAt) &&
   (!attempt.orderId || (Boolean(attempt.compensatedAt) && ['COMPENSATED', 'REFUNDED'].includes(attempt.state))) &&
   (ignoreLease || work?.state !== 'LEASED') && !work?.lastError;
+/** Remove failed payment on a declined purchase whose intent is still open: cancel at the provider, then hide. Provider truth still wins. */
+const discardCancellation = (attempt: Pick<Attempt, 'cancelRequested' | 'failureCode'>) =>
+  attempt.cancelRequested && attempt.failureCode === DISCARDED_BY_CUSTOMER_FAILURE_CODE;
+/** The provider-verified CANCELED write; a customer discard is hidden in the same write, so removal never depends on the browser staying open. */
+const canceledWrite = (attempt: Pick<Attempt, 'cancelRequested' | 'failureCode'>): Prisma.PaymentAttemptUpdateInput =>
+  ({ state: 'CANCELED', providerStatus: 'canceled', activeCartId: null, ...(discardCancellation(attempt) ? { dismissedAt: new Date() } : {}) });
+/**
+ * What the trash action on a failed-payment card does, decided only on the server:
+ *  REMOVE             already terminal and safe to hide (dismiss only; the provider is not called);
+ *  CANCEL_AND_REMOVE  a provider decline whose PaymentIntent is still open: cancel it (verified), then hide;
+ *  PENDING            that cancellation was requested and is not yet provider-verified;
+ *  CONFIRMING         shown as failed, but recovery/compensation is unfinished or the outcome is unverified: never hidden;
+ *  null               not a failed payment (pending, paid, abandoned): no removal action.
+ */
+export type RemovalPlan = 'REMOVE' | 'CANCEL_AND_REMOVE' | 'PENDING' | 'CONFIRMING' | null;
+const removalPlan = (attempt: Pick<Attempt, 'state' | 'submittedAt' | 'orderId' | 'compensatedAt' | 'failureCode' | 'confirmationStartedAt' | 'cancelRequested' | 'providerIntentId'>,
+  work?: { state: string; lastError?: string | null } | null): RemovalPlan => {
+  if (discardCancellation(attempt) && !attempt.orderId && ['DECLINED', 'CANCEL_PENDING'].includes(attempt.state)) return 'PENDING';
+  if (!['DECLINED', 'FAILED'].includes(customerPaymentStatus(attempt, work)) || !attempt.submittedAt) return null;
+  if (!dismissEligible(attempt, work, { ignoreLease: true })) return 'CONFIRMING';
+  return attempt.state === 'DECLINED' && attempt.providerIntentId && !attempt.cancelRequested ? 'CANCEL_AND_REMOVE' : 'REMOVE';
+};
 /** A customer cancellation request; provider truth (decline, authorization, capture) always takes precedence over it. */
 const customerCancellation = (attempt: Pick<Attempt, 'cancelRequested' | 'failureCode'>) =>
   attempt.cancelRequested && attempt.failureCode === CANCELED_BY_CUSTOMER_FAILURE_CODE;
@@ -555,6 +577,8 @@ export class PaymentService {
       // Remove (trash): the rule dismiss() enforces, so the card never offers an action the server permanently refuses. A recovery lease
       // (about a second, e.g. the periodic decline re-check) is transient: dismiss() answers 409 then and the card stays, so it is ignored here.
       dismissible: dismissEligible(attempt, attempt.work, { ignoreLease: true }),
+      // The single trash action's server-decided meaning (see RemovalPlan); the discard endpoint re-verifies it against the provider.
+      removal: removalPlan(attempt, attempt.work),
       submittedAt: attempt.submittedAt?.toISOString() ?? null,
       // Copy only: distinguishes "confirming with the provider" from "checking the status of this purchase"; never an outcome.
       confirmationStarted: Boolean(attempt.confirmationStartedAt),
@@ -615,6 +639,79 @@ export class PaymentService {
       if (isSerializationConflict(error)) throw notDismissible();
       throw error;
     }
+  }
+
+  /**
+   * Remove failed payment (the card's single trash action), decided and carried out by the server.
+   *  - Already terminal (REMOVE): the existing dismissal; the provider is not called.
+   *  - Provider decline with a still-open PaymentIntent (CANCEL_AND_REMOVE): a FRESH provider read must show nothing received or authorized
+   *    and no confirmation in flight; the request is then recorded under the attempt and work row locks (a lease, an order, a retry or any
+   *    state change refuses it) and the lease-fenced worker cancels the intent. The card is hidden in the same write that records the
+   *    provider-verified cancellation, so a closed browser or a restart cannot leave it half done. An authorization seen meanwhile wins.
+   *  - Anything unverified (CONFIRMING, or a provider state other than the above) is refused and recovery is woken: nothing is hidden.
+   * Idempotent: a repeat answers REMOVED or CANCEL_PENDING without a second request. Never refunds, never charges, never touches stock.
+   */
+  async discard(userId: string, id: string) {
+    this.assertMutationsAllowed();
+    const attemptId = attemptSchema.parse(id);
+    const unconfirmed = () => new AppError('We need to confirm this payment’s status before it can be removed.', 409, 'PAYMENT_STATUS_UNCONFIRMED');
+    const read = async () => {
+      const attempt = await this.database.paymentAttempt.findFirst({ where: { id: attemptId, userId }, include: { ...attemptInclude, work: true } });
+      if (!attempt) throw new AppError('Payment attempt not found.', 404, 'PAYMENT_ATTEMPT_NOT_FOUND');
+      return attempt;
+    };
+    const drive = async () => {
+      await this.wake(attemptId);
+      await this.process(attemptId).catch((error: unknown) => logSafely('error', 'Discard cancellation deferred to the durable runner.', {
+        event: 'payment.recovery.background_failed', attemptId, error }));
+    };
+    const answer = async () => {
+      const latest = await read();
+      if (latest.dismissedAt) return { attemptId, status: 'REMOVED' as const, dismissedAt: latest.dismissedAt.toISOString() };
+      // Provider truth overrode the request (e.g. an authorization from another tab): nothing was cancelled and nothing is hidden.
+      if (removalPlan(latest, latest.work) !== 'PENDING') throw unconfirmed();
+      return { attemptId, status: 'CANCEL_PENDING' as const, dismissedAt: null };
+    };
+    const attempt = await read();
+    if (attempt.dismissedAt) return { attemptId, status: 'REMOVED' as const, dismissedAt: attempt.dismissedAt.toISOString() };
+    const plan = removalPlan(attempt, attempt.work);
+    if (plan === 'REMOVE') return { ...await this.dismiss(userId, attemptId), status: 'REMOVED' as const };
+    if (plan === 'PENDING') { await drive(); return answer(); }
+    if (plan !== 'CANCEL_AND_REMOVE' || !attempt.providerIntentId) {
+      // Unfinished recovery is nudged (due work only, under its own lease); it is never hidden.
+      if (plan === 'CONFIRMING') await drive();
+      throw unconfirmed();
+    }
+    const intent = await paymentOperation('stripe.retrieve', 'stripe', () => this.provider.retrieve(attempt.providerIntentId!));
+    verifyBinding(attempt, intent);
+    // Only an intent with no confirmation in flight and nothing received or authorized may be cancelled from a failed-payment card.
+    if (!['requires_payment_method', 'canceled'].includes(intent.status) || intent.received !== 0 || intent.capturable !== 0) {
+      await drive();
+      throw unconfirmed();
+    }
+    for (let waited = 0; ; waited += SUBMIT_LEASE_POLL_MS) {
+      const recorded = await this.database.$transaction(async tx => {
+        await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "payment_attempts" WHERE "id" = ${attemptId}::uuid FOR UPDATE`);
+        await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "payment_work" WHERE "attemptId" = ${attemptId}::uuid FOR UPDATE`);
+        const latest = await tx.paymentAttempt.findFirst({ where: { id: attemptId, userId }, include: { work: true } });
+        if (!latest) throw new AppError('Payment attempt not found.', 404, 'PAYMENT_ATTEMPT_NOT_FOUND');
+        if (latest.dismissedAt || removalPlan(latest, latest.work) === 'PENDING') return true;
+        // A routine decline re-check holds the lease for about a second: wait it out rather than refuse the customer.
+        if (latest.work?.state === 'LEASED' && (!latest.work.leaseUntil || latest.work.leaseUntil.getTime() > Date.now())) return false;
+        if (removalPlan(latest, latest.work) !== 'CANCEL_AND_REMOVE' || latest.providerIntentId !== intent.id) throw unconfirmed();
+        await tx.paymentAttempt.update({ where: { id: attemptId }, data: { cancelRequested: true, failureCode: DISCARDED_BY_CUSTOMER_FAILURE_CODE } });
+        return true;
+      }, { isolationLevel: 'Serializable', timeout: PAYMENT_TRANSACTION_TIMEOUT_MS, maxWait: PAYMENT_TRANSACTION_MAX_WAIT_MS }).catch((error: unknown) => {
+        if (isSerializationConflict(error)) return false;
+        throw error;
+      });
+      if (recorded) break;
+      if (waited >= SUBMIT_LEASE_WAIT_MS) throw new AppError('This payment can’t be removed right now. Please try again in a moment.', 409, 'PAYMENT_NOT_DISMISSIBLE');
+      await new Promise(resolve => setTimeout(resolve, SUBMIT_LEASE_POLL_MS));
+    }
+    logSafely('info', 'Customer discard of a declined purchase requested.', { event: 'payment.discard.requested', attemptId });
+    await drive();
+    return answer();
   }
 
   async acknowledge(userId: string, id: string, state: PaymentAttemptState) {
@@ -995,15 +1092,17 @@ export class PaymentService {
       }
       let compatible = true;
       try { verifyBinding(attempt, intent); } catch { compatible = false; }
-      if (compatible && (expiryCancellation(attempt) || customerCancellation(attempt) || attempt.cancelRequested && attempt.failureCode === 'PAYMENT_SETUP_SUPERSEDED') &&
+      if (compatible && (expiryCancellation(attempt) || customerCancellation(attempt) || discardCancellation(attempt) || attempt.cancelRequested && attempt.failureCode === 'PAYMENT_SETUP_SUPERSEDED') &&
         ['requires_capture', 'processing', 'succeeded'].includes(intent.status) ||
         // A Stripe decline recorded meanwhile is a Payment failed (Try Again), never a cancelled purchase.
         compatible && customerCancellation(attempt) && intent.status === 'requires_payment_method' && intent.declined && !intent.received && !intent.capturable) {
         // Older setup decisions may already have persisted an expiry cancellation.
         // Provider authorization/recovery takes precedence over that local decision.
-        attempt = await this.fenced(id, token, async (tx, latest) => expiryCancellation(latest) || customerCancellation(latest) ||
+        attempt = await this.fenced(id, token, async (tx, latest) => expiryCancellation(latest) || customerCancellation(latest) || discardCancellation(latest) ||
           latest.cancelRequested && latest.failureCode === 'PAYMENT_SETUP_SUPERSEDED'
-          ? tx.paymentAttempt.update({ where: { id }, data: { cancelRequested: false, failureCode: null }, include: attemptInclude })
+          // A discard that already reached CANCEL_PENDING returns to card entry, so the authorization below is reconciled, not stranded.
+          ? tx.paymentAttempt.update({ where: { id }, data: { cancelRequested: false, failureCode: null,
+            ...(latest.state === 'CANCEL_PENDING' && discardCancellation(latest) ? { state: 'AWAITING_INPUT' as const } : {}) }, include: attemptInclude })
           : latest);
       }
       if (releaseCardEntry && compatible && ['requires_payment_method', 'requires_confirmation'].includes(intent.status) &&
@@ -1048,7 +1147,7 @@ export class PaymentService {
         } else await this.refundUnexpected(attempt, token, intent);
       } else if (intent.status === 'canceled') {
         if (attempt.orderId) await this.compensate(attempt, token, false);
-        else await this.patch(id, token, { state: 'CANCELED', providerStatus: 'canceled', activeCartId: null });
+        else await this.patch(id, token, canceledWrite(attempt));
       } else if (compatible && neverConfirmedSubmission(attempt, intent)) {
         // Decided on the locked row: a confirmation announced meanwhile (marker set / state changed) wins and nothing is written.
         await this.fenced(id, token, async (tx, latest) => neverConfirmedSubmission(latest, intent!)
@@ -1074,7 +1173,7 @@ export class PaymentService {
         intent = await paymentOperation('stripe.retrieve', 'stripe', () => this.provider.retrieve(intent!.id));
         if (intent.status === 'canceled') {
           if (attempt.orderId) await this.compensate(attempt, token, false);
-          else await this.patch(id, token, { state: 'CANCELED', providerStatus: 'canceled', activeCartId: null });
+          else await this.patch(id, token, canceledWrite(attempt));
         }
       } else if (intent.status === 'requires_capture') {
         if (!attempt.orderId) {

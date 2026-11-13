@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { ProductImage } from '@/components/ui/ProductImage';
 import { CheckCircle2, Clock3, XCircle } from 'lucide-react';
-import { DismissFailedPurchase } from './DismissFailedPurchase';
+import { DismissFailedPurchase, type FailedPaymentRemoval } from './DismissFailedPurchase';
 import { PAYMENTS_UNAVAILABLE_MESSAGE, isPaymentsDisabledError, usePaymentCapability } from './paymentCapability';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/Dialog';
 import { Alert } from '@/components/ui/Alert';
@@ -24,7 +24,9 @@ import styles from './Checkout.module.scss';
 export interface SavedPurchase { attemptId: string; scope: string; state: string; classification?: string; total: string; currency: string;
   pending: boolean; unread: boolean; orderReference: string | null; submittedAt?: string | null; updatedAt?: string | null; retryAllowed?: boolean; confirmationStarted?: boolean; cancelable?: boolean;
   /** Server-side Remove eligibility (the rule the dismiss endpoint enforces, minus its transient lease check). Absent means not offered. */
-  dismissible?: boolean; items: { name: string; quantity: number; imageUrl?: string | null }[];
+  dismissible?: boolean;
+  /** Server-decided meaning of the trash action (see FailedPaymentRemoval); null/absent when the purchase is not a failed payment. */
+  removal?: FailedPaymentRemoval | null; items: { name: string; quantity: number; imageUrl?: string | null }[];
   /** PR #51: the item sold out before this purchase's order committed (never a card failure); see authorizationReleased. */
   outcomeReason?: 'STOCK_UNAVAILABLE' | null; authorizationReleased?: boolean }
 /** Sold-out copy. "Not charged" is said only once the provider verified the authorization was cancelled; a bank hold is never called a charge. */
@@ -111,7 +113,9 @@ export function usePaymentPurchases(observe = false) {
   useEffect(() => { query.data?.data.forEach(item => observePaymentSnapshot(user?.id ?? '', item)); }, [query.data, user?.id]);
   return query;
 }
-const unresolved = (item: SavedPurchase) => item.pending && !['DECLINED', 'FAILED'].includes(item.classification ?? item.state);
+/** A requested Cancel & Remove that the provider has not confirmed yet: still a failed payment, shown as being removed (never as Processing). */
+const removing = (item: SavedPurchase) => item.removal === 'PENDING';
+const unresolved = (item: SavedPurchase) => removing(item) || item.pending && !['DECLINED', 'FAILED'].includes(item.classification ?? item.state);
 const firstObserved = new Map<string, number>();
 // A late/empty list must not stop discovery of a confirmed submission. Once a
 // row exists, its backend outcome supersedes this discovery-only pointer.
@@ -200,7 +204,7 @@ export function acknowledgePaymentOutcome(owner: string, outcome: NoticeIdentity
 }
 export function PendingPurchases() {
   const query = usePaymentPurchases(); const { user } = useAuth();
-  const actionable = Boolean(query.data?.data.some(item => resultKind(item) === 'failure'));
+  const actionable = Boolean(query.data?.data.some(item => resultKind(item) === 'failure' || removing(item)));
   // Only asked when a payment action (Remove, Try Again) could be offered.
   const paymentsDisabled = usePaymentCapability(actionable) === false;
   const previous = useRef<{ owner?: string; items: SavedPurchase[] }>({ items: [] });
@@ -239,8 +243,10 @@ export function PendingPurchases() {
   if (query.isError && !query.data) return <div className={styles.inlineNotice} role="status"><p>Saved purchases could not be loaded. Your Cart is unaffected.</p>
     <Button size="small" variant="outline" onClick={() => void query.refetch()} isLoading={query.isFetching} disabled={query.isFetching}>Retry</Button></div>;
   const checking = (item: SavedPurchase) => isPreviousPaymentResult(user?.id ?? '', item);
-  const pending = query.data?.data.filter(item => (item.pending && !resultKind(item) || checking(item)) && !settled.current.has(item.attemptId)) ?? [];
-  const failed = query.data?.data.filter(item => resultKind(item) === 'failure' && !checking(item) && !settled.current.has(item.attemptId) && !exiting.some(old => old.attemptId === item.attemptId)) ?? [];
+  const pending = query.data?.data.filter(item => !removing(item) && (item.pending && !resultKind(item) || checking(item)) && !settled.current.has(item.attemptId)) ?? [];
+  const failed = query.data?.data.filter(item => (removing(item) || resultKind(item) === 'failure' && !checking(item)) && !settled.current.has(item.attemptId) && !exiting.some(old => old.attemptId === item.attemptId)) ?? [];
+  // An unconfirmed failed payment is never hidden: the customer can ask for a fresh status (recovery is nudged at most once per 30 s).
+  const checkStatus = async () => { requestOverdueRecovery(user?.id ?? ''); await query.refetch(); };
   return <>
     {query.isError && <div className={styles.inlineNotice} role="status"><p>Saved purchases could not be updated. The last verified status is shown; we’ll check again automatically.</p></div>}
     {(pending.length > 0 || exiting.length > 0) && <section className={styles.pendingPurchases} aria-labelledby="pending-purchases-heading"><h2 id="pending-purchases-heading">Pending purchases</h2>
@@ -252,25 +258,28 @@ export function PendingPurchases() {
     </section>}
     {failed.length > 0 && <section className={styles.savedPurchaseHistory} aria-labelledby="saved-purchases-heading"><h2 id="saved-purchases-heading" tabIndex={-1}>Failed payments</h2>
       <p className={styles.purchaseSectionNote}>These purchases didn’t complete. They’re kept separate from your Cart.</p>
-      <ul className={styles.purchaseList}>{failed.map(item => <li key={item.attemptId}><PurchaseCard item={item} onDismissed={dismissFailed} actionsDisabled={paymentsDisabled} /></li>)}</ul></section>}
+      <ul className={styles.purchaseList}>{failed.map(item => <li key={item.attemptId}><PurchaseCard item={item} onDismissed={dismissFailed} onCheckStatus={checkStatus} actionsDisabled={paymentsDisabled} /></li>)}</ul></section>}
   </>;
 }
 const money = (value: string, currency: string) => new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(value));
 /** An unresolved purchase this old is no longer an ordinary wait: say so plainly and give a reference for support. */
 export const STALE_PENDING_PURCHASE_MS = 45 * 60_000;
 /** One Cart-style card per purchase identity; every line of a multi-item purchase stays grouped under it. */
-function PurchaseCard({ item, exit = false, checking = false, onDismissed, actionsDisabled = false }: { item: SavedPurchase; exit?: boolean; checking?: boolean; onDismissed?: (attemptId: string) => void; actionsDisabled?: boolean }) {
-  const kind = checking ? null : resultKind(item); const names = item.items.map(line => line.name).join(', ');
+function PurchaseCard({ item, exit = false, checking = false, onDismissed, onCheckStatus, actionsDisabled = false }: { item: SavedPurchase; exit?: boolean; checking?: boolean; onDismissed?: (attemptId: string) => void;
+  onCheckStatus?: () => Promise<unknown> | void; actionsDisabled?: boolean }) {
+  const beingRemoved = !exit && !checking && removing(item);
+  const kind = checking ? null : beingRemoved ? 'failure' : resultKind(item); const names = item.items.map(line => line.name).join(', ');
   const tone = kind === 'success' ? 'success' : kind === 'failure' ? 'failure' : 'pending';
   // Unresolved is never terminal and never an invitation to pay again: the backend alone resolves it, so these cards only observe.
   const stale = !kind && Boolean(item.submittedAt) && Date.now() - Date.parse(item.submittedAt ?? '') > STALE_PENDING_PURCHASE_MS;
   // A submitted purchase is never a saved card entry: every unresolved card is Processing and only offers a status check.
   const verification = item.state === 'ACTION_REQUIRED' && item.classification === 'AWAITING_CUSTOMER_ACTION';
   const soldOut = item.outcomeReason === 'STOCK_UNAVAILABLE';
-  const status = soldOut ? item.authorizationReleased ? 'Sold out · Not charged' : 'Sold out · Checking payment'
+  const status = beingRemoved ? 'Removing' : soldOut ? item.authorizationReleased ? 'Sold out · Not charged' : 'Sold out · Checking payment'
     : kind === 'success' ? 'Payment confirmed' : kind === 'failure' ? 'Payment failed'
     : item.classification === 'UNKNOWN' ? 'Awaiting confirmation' : 'Processing';
-  const note = soldOut ? item.authorizationReleased ? SOLD_OUT_RELEASED_NOTE : SOLD_OUT_RELEASING_NOTE
+  const note = beingRemoved ? 'Cancellation requested. Nothing was charged. This payment will be removed as soon as our payment provider confirms it.'
+    : soldOut ? item.authorizationReleased ? SOLD_OUT_RELEASED_NOTE : SOLD_OUT_RELEASING_NOTE
     : kind === 'success' ? 'Your order is confirmed and available in Orders.'
     : kind === 'failure' ? item.state === 'REFUNDED' ? 'This payment was refunded. Its purchase details are saved separately from your Cart.'
       : item.state === 'DECLINED' ? item.retryAllowed ? 'Nothing was charged. Your items and delivery details are saved for this purchase.' : 'Nothing was charged. This purchase can’t be paid again.'
@@ -283,12 +292,15 @@ function PurchaseCard({ item, exit = false, checking = false, onDismissed, actio
             : item.cancelable ? 'Card payment didn’t start for this purchase, and nothing was charged. You can cancel it and check out again.'
             : item.state === 'AWAITING_INPUT' && !item.confirmationStarted ? 'Checking the status of this purchase. Please don’t pay again.'
             : 'We’re confirming this payment with our payment provider.';
-  // Every failed-payment card carries the trash icon (Task 03.6 acceptance); eligibility is enforced again by the server on Remove.
-  // Remove only when the server says the failed card is dismissible (the dismiss endpoint's own rule; never inferred from the tone alone),
-  // so a card never advertises an action the server permanently refuses. A transient refusal (a recovery lease) is explained by the dialog.
-  const dismissible = Boolean(onDismissed) && !exit && tone === 'failure' && item.dismissible === true;
+  // PR #51: EVERY genuine failed-payment card carries the trash action; what it does is the server's decision (`removal`), never inferred
+  // from the tone. Removable now (REMOVE), cancel-then-remove (CANCEL_AND_REMOVE), or explained and checkable (PENDING / CONFIRMING): the
+  // control is never silently absent, and a payment that is not safe to hide is never hidden. An older backend without `removal` falls back
+  // to its `dismissible` flag; without either the dialog only explains.
+  const removal: FailedPaymentRemoval = item.removal ?? (item.dismissible === true ? 'REMOVE' : 'CONFIRMING');
+  const removable = Boolean(onDismissed) && !exit && tone === 'failure';
+  const dismissible = removable && (removal === 'REMOVE' || removal === 'CANCEL_AND_REMOVE');
   return <article className={styles.purchaseCard} data-tone={tone} data-purchase={item.attemptId} data-outcome={exit ? kind ?? undefined : undefined}
-    data-dismissible={dismissible ? 'true' : undefined}
+    data-dismissible={dismissible ? 'true' : undefined} data-removal={removable ? removal : undefined} aria-busy={beingRemoved || undefined}
     data-reason={soldOut ? 'sold-out' : undefined}
     aria-label={`${soldOut ? 'Sold-out purchase' : tone === 'failure' ? 'Failed payment' : tone === 'success' ? 'Confirmed payment' : 'Pending payment'} for ${names}`}>
     <div className={styles.purchaseCardItems}>{item.items.map((line, index) => <div className={styles.purchaseCardItem} key={index}>
@@ -296,16 +308,17 @@ function PurchaseCard({ item, exit = false, checking = false, onDismissed, actio
       <div className={styles.purchaseCardCopy}><strong>{line.name}</strong><span>Qty: {line.quantity}</span></div>
     </div>)}</div>
     <div className={styles.purchaseCardMeta}>
-      {dismissible && onDismissed && <DismissFailedPurchase attemptId={item.attemptId} label={names} onDismissed={onDismissed} unavailableReason={actionsDisabled ? PAYMENTS_UNAVAILABLE_MESSAGE : undefined} />}
-      <Badge variant={tone === 'failure' ? 'error' : tone === 'success' ? 'success' : item.classification === 'UNKNOWN' ? 'warning' : 'info'} size="sm" role={exit ? 'status' : undefined}
-        icon={tone === 'failure' ? <XCircle size={14} aria-hidden="true" /> : tone === 'success' ? <CheckCircle2 size={14} aria-hidden="true" /> : <Clock3 size={14} aria-hidden="true" />}>{status}</Badge>
+      {removable && onDismissed && <DismissFailedPurchase attemptId={item.attemptId} label={names} removal={removal} onDismissed={onDismissed} onCheckStatus={onCheckStatus}
+        unavailableReason={actionsDisabled ? PAYMENTS_UNAVAILABLE_MESSAGE : undefined} />}
+      <Badge variant={beingRemoved ? 'info' : tone === 'failure' ? 'error' : tone === 'success' ? 'success' : item.classification === 'UNKNOWN' ? 'warning' : 'info'} size="sm" role={exit ? 'status' : undefined}
+        icon={beingRemoved ? <Clock3 size={14} aria-hidden="true" /> : tone === 'failure' ? <XCircle size={14} aria-hidden="true" /> : tone === 'success' ? <CheckCircle2 size={14} aria-hidden="true" /> : <Clock3 size={14} aria-hidden="true" />}>{status}</Badge>
       <strong className={styles.purchaseCardTotal}>{money(item.total, item.currency)}</strong>
       {tone === 'pending' && !exit && <span className={styles.purchaseProgress} aria-hidden="true"><span /></span>}
       <p>{note}</p>
       {tone === 'pending' && !exit && <Link className={styles.secondaryLink} to={`/checkout?purchase=${encodeURIComponent(item.attemptId)}`}>Check payment status</Link>}
       {tone === 'pending' && !exit && item.cancelable && !actionsDisabled && <CancelPurchase item={item} label={names} />}
-      {soldOut && item.authorizationReleased && item.scope !== 'BUY_NOW' && !exit && !actionsDisabled && <SaveSoldOutToCart item={item} label={names} />}
-      {tone === 'failure' && !exit && item.retryAllowed && !actionsDisabled && <Link className={styles.primaryLink} to="/checkout?step=payment" state={{ retryPurchase: item.attemptId }}
+      {soldOut && item.authorizationReleased && item.scope !== 'BUY_NOW' && !exit && !beingRemoved && !actionsDisabled && <SaveSoldOutToCart item={item} label={names} />}
+      {tone === 'failure' && !exit && !beingRemoved && item.retryAllowed && !actionsDisabled && <Link className={styles.primaryLink} to="/checkout?step=payment" state={{ retryPurchase: item.attemptId }}
         aria-label={`Try Again: pay for ${names} again`}>Try Again</Link>}
     </div>
   </article>;
