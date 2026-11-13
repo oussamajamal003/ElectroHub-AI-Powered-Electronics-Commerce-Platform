@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Camera, Eye, ImagePlus, Lock, RotateCw, Trash2 } from 'lucide-react';
 import { Alert } from '@/components/ui/Alert';
 import { Avatar } from '@/components/ui/Avatar';
@@ -31,6 +31,8 @@ interface Props {
 }
 
 export function ProfilePhotoManager({ scope, userId, sessionVerified, initials, displayName, size = 'regular' }: Props) {
+  const descriptionId = useId();
+  const viewerDescriptionId = useId();
   const photo = useProfilePhoto(scope, userId, sessionVerified);
   const { upload, remove } = useProfilePhotoMutations(scope, userId);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -199,6 +201,7 @@ export function ProfilePhotoManager({ scope, userId, sessionVerified, initials, 
         onClick={() => { if (photoUrl) setViewerOpen(true); else setMenuOpen(true); }}>
         <Avatar src={photoUrl} alt="" initials={initials} onImageLoadingStatusChange={handleImageStatus}
           className={`${styles.avatar} ${size === 'large' ? styles.avatarLarge : ''}`} />
+        {photoUrl && <span className={styles.previewHint} aria-hidden="true"><Eye /> View</span>}
       </button>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
@@ -233,8 +236,8 @@ export function ProfilePhotoManager({ scope, userId, sessionVerified, initials, 
     </div>
     <div className={styles.details}>
       <strong className={styles.title}>{hasPhoto ? 'Your profile photo' : 'Add a profile photo'}</strong>
-      <p className={styles.help}>JPEG, PNG or WebP · Max 5 MB</p>
-      <p className={styles.privacy}><Lock aria-hidden="true" /> Stored privately and shown through expiring links</p>
+      <p className={styles.help}>JPEG, PNG or WebP · Maximum 5 MB</p>
+      <p className={styles.privacy}><Lock aria-hidden="true" /> Your photo stays private</p>
       <div className={styles.actions}>
         <Button type="button" variant="outline" size="small" disabled={pending} onClick={openFilePicker}>
           <ImagePlus aria-hidden="true" /> {hasPhoto ? 'Change' : 'Upload'}
@@ -262,16 +265,16 @@ export function ProfilePhotoManager({ scope, userId, sessionVerified, initials, 
         <Camera aria-hidden="true" /> Use device camera
       </Button>}
       {/* `hidden` keeps both native inputs out of layout: the buttons above are the only visible trigger, so no "No file chosen" text can render. */}
-      <input ref={fileInput} hidden type="file" accept="image/jpeg,image/png,image/webp"
+      <input ref={fileInput} className={styles.fileInput} hidden type="file" accept="image/jpeg,image/png,image/webp"
         aria-label="Choose a profile photo" onChange={event => { chooseFile(event.currentTarget.files?.[0]); event.currentTarget.value = ''; }} />
-      <input ref={cameraFileInput} hidden type="file" accept="image/*" capture="user"
+      <input ref={cameraFileInput} className={styles.fileInput} hidden type="file" accept="image/*" capture="user"
         aria-label="Take a profile photo with your device camera" onChange={event => { chooseFile(event.currentTarget.files?.[0]); event.currentTarget.value = ''; }} />
     </div>
 
     <Dialog open={viewerOpen && Boolean(photoUrl)} onOpenChange={setViewerOpen}>
-      <DialogContent className={styles.viewer} aria-describedby="profile-photo-viewer-description">
+      <DialogContent className={styles.viewer} aria-describedby={viewerDescriptionId}>
         <DialogTitle>Profile photo</DialogTitle>
-        <DialogDescription id="profile-photo-viewer-description">{displayName}</DialogDescription>
+        <DialogDescription id={viewerDescriptionId}>{displayName}</DialogDescription>
         {photoUrl && <img className={styles.viewerImage} src={photoUrl} alt={`${displayName}'s profile photo`}
           onError={() => handleImageStatus('error')} />}
         <div className={styles.dialogActions}>
@@ -283,10 +286,11 @@ export function ProfilePhotoManager({ scope, userId, sessionVerified, initials, 
       </DialogContent>
     </Dialog>
 
-    <Dialog open={dialogOpen} onOpenChange={open => { if (!open) clearDialog(); }}>
-      <DialogContent className={styles.dialog} aria-describedby="profile-photo-dialog-description">
+    <Dialog open={dialogOpen} onOpenChange={open => { if (!open && !pending) clearDialog(); }}>
+      <DialogContent className={styles.dialog} aria-describedby={descriptionId} hideCloseButton={pending}
+        onEscapeKeyDown={event => { if (pending) event.preventDefault(); }} onPointerDownOutside={event => { if (pending) event.preventDefault(); }}>
         <DialogTitle>{cameraOpen ? 'Take a photo' : 'Preview profile photo'}</DialogTitle>
-        <DialogDescription id="profile-photo-dialog-description">
+        <DialogDescription id={descriptionId}>
           {cameraOpen ? 'Center your face in the frame, then capture your photo.' : 'Your photo is cropped to a square before it is saved.'}
         </DialogDescription>
         {cameraOpen ? <video ref={video => {

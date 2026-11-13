@@ -12,7 +12,10 @@
   background: $color-surface;
 }
 .avatarWrap { position: relative; flex: 0 0 auto; }
+.fileInput { display: none !important; }
 .avatarButton {
+  position: relative;
+  overflow: hidden;
   display: block;
   padding: 0;
   border: 0;
@@ -24,6 +27,13 @@
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
   &:disabled { cursor: progress; }
 }
+.previewHint {
+  position: absolute; inset: auto 0 0; display: flex; align-items: center; justify-content: center;
+  gap: $spacing-1; padding: $spacing-1; background: $color-overlay; color: $color-text-inverse;
+  font-size: $font-size-xs; opacity: 0; transition: opacity $transition-fast;
+  svg { width: 0.875rem; height: 0.875rem; }
+}
+.avatarButton:hover .previewHint, .avatarButton:focus-visible .previewHint { opacity: 1; }
 .avatar { width: 4.5rem; height: 4.5rem; font-size: $font-size-xl; }
 .avatarLarge { width: 5.5rem; height: 5.5rem; font-size: $font-size-2xl; }
 .editAvatar {
@@ -82,16 +92,16 @@
 .camera { background: #0b1220; }
 .cameraFallback { display: grid; justify-items: center; gap: $spacing-2; margin: 0 auto $spacing-4; text-align: center; }
 .dialogActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: $spacing-2; }
-.viewer { width: min(32rem, calc(100vw - 2rem)); }
+.viewer { width: min(36rem, calc(100vw - 2rem)); }
 .viewerImage {
   display: block;
-  width: min(24rem, 100%);
-  aspect-ratio: 1;
+  width: 100%;
+  height: min(26rem, 52dvh);
   margin: $spacing-4 auto;
   border: 1px solid $color-border;
   border-radius: $radius-lg;
   background: $color-surface;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 @media (max-width: $breakpoint-sm) {

@@ -135,7 +135,7 @@ describe('ProfilePhotoManager', () => {
     render(<ProfilePhotoManager scope="customer" userId="user-1" sessionVerified initials="JD" displayName="Jane Doe" />);
     expect(screen.getByLabelText('Choose a profile photo')).not.toBeVisible();
     expect(screen.getByLabelText('Take a profile photo with your device camera')).not.toBeVisible();
-    expect(screen.getByText('JPEG, PNG or WebP · Max 5 MB')).toBeInTheDocument();
+    expect(screen.getByText('JPEG, PNG or WebP · Maximum 5 MB')).toBeInTheDocument();
     expect(screen.queryByText(/No file chosen/i)).not.toBeInTheDocument();
   });
 
@@ -174,4 +174,17 @@ describe('ProfilePhotoManager', () => {
     expect(screen.getByText(/Your saved photo could not be loaded/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: "Change Jane Doe's profile photo" })).toBeInTheDocument();
   });
+  it('keeps the upload preview open while saving so Escape cannot discard an in-flight selection', async () => {
+    const props = { scope: 'customer' as const, userId: 'user-1', sessionVerified: true, initials: 'JD', displayName: 'Jane Doe' };
+    const view = render(<ProfilePhotoManager {...props} />);
+    fireEvent.change(screen.getByLabelText('Choose a profile photo'), { target: { files: [new File(['image'], 'photo.png', { type: 'image/png' })] } });
+    expect(await screen.findByRole('dialog', { name: 'Preview profile photo' })).toBeInTheDocument();
+    vi.mocked(useProfilePhotoMutations).mockReturnValue({ upload: { mutateAsync: upload, isPending: true }, remove: { mutateAsync: remove, isPending: false } } as never);
+    view.rerender(<ProfilePhotoManager {...props} />);
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+  });
+
 });

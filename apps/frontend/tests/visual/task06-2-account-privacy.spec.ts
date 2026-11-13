@@ -162,7 +162,7 @@ test.describe('B — profile photo UX (mocked upload/remove)', () => {
       await page.goto(scope === 'admin' ? '/admin/profile' : '/account/profile');
       const card = page.getByRole('region', { name: 'Profile photo' });
       await expect(card).toBeVisible();
-      await expect(card.getByText('JPEG, PNG or WebP · Max 5 MB')).toBeVisible();
+      await expect(card.getByText('JPEG, PNG or WebP · Maximum 5 MB')).toBeVisible();
       await expect(page.getByText(/No file chosen/i)).toHaveCount(0);
       expect(await card.locator('input[type="file"]').evaluateAll(inputs => inputs.every(input => input.getBoundingClientRect().width === 0))).toBe(true);
 
@@ -197,6 +197,20 @@ test.describe('B — profile photo UX (mocked upload/remove)', () => {
       await expect(viewer).toHaveCount(0);
       await expect(avatar).toBeFocused();
       await shot(page, info, `${scope}-photo-identity-card`);
+      await page.reload();
+      await expect(headerTrigger.locator('img')).toHaveAttribute('src', PHOTO_URL);
+      for (const scheme of SCHEMES) {
+        await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+        for (const width of [390, 1440]) {
+          await page.setViewportSize({ width, height: 900 });
+          await avatar.click();
+          await expect(viewer).toBeVisible();
+          await expectNoAxeViolations(page, `${scope}-photo-viewer-${scheme}-${width}`);
+          await shot(page, info, `${scope}-photo-viewer-${scheme}-${width}`);
+          await page.keyboard.press('Escape');
+          await expect(viewer).toHaveCount(0);
+        }
+      }
 
       await card.getByRole('button', { name: 'Remove' }).click();
       await expect(card.getByRole('status')).toHaveText('Profile photo removed.');
