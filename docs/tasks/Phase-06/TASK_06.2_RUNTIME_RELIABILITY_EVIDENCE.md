@@ -106,3 +106,38 @@ No public API contract, database schema, design tokens or UI layout was changed.
 5. Verify subscribed browser push/receipt and OS presentation separately, bounded navigation uptime, database session trend, worker failure/restart, signed-photo expiry, provider outage, duplicate actions and controlled restart. No indefinite-uptime claim is supported.
 
 **Current self-assessment: NOT READY — MATERIAL SHARED-RUNTIME ACCEPTANCE REMAINS.** The implementation is reviewable independently; the task's full shared customer/admin/payment/email acceptance has not been self-approved.
+
+## Follow-up: Contact recipients, reviewed-decline restart gate and concurrent work (continued after the Codex session limit)
+
+Starting point: `774e061e` (remote tip; local `dbdc5638` fast-forwarded with no conflicts against the uncommitted files).
+
+### Root causes confirmed in the live browser
+
+| Symptom | Root cause | Fix | Status |
+|---|---|---|---|
+| Contact form fails ("try again") | Store **Support Email** empty, so `POST /api/store/contact` answered `503 CONTACT_UNAVAILABLE` by design | On the owner's instruction, contact messages go to every **active, email-verified ADMIN with completed MFA, an active MFA factor or passkey, and an admin login record**. Reserved `.invalid`/`.test` mailboxes are excluded outside tests. One provider request (`to` + `bcc`) so a partial failure cannot re-send to earlier recipients; no recipient is ever taken from the request | Code PASS (unit/route/capture tests); live provider acceptance NOT VERIFIED |
+| Profile photo fails to load | Running backend predated the compiled profile-photo controller: `GET /api/account/profile-photo` returned **404** (stale process, not a storage fault) | Doctor now probes the route and reports "route missing from running backend; controlled restart required" instead of a generic failure | Diagnosis PASS; post-restart live load NOT VERIFIED |
+| Controlled restart refused | Preflight correctly blocked on one unresolved **declined** card attempt queued for reconciliation | New decline-only exact-attempt mode (`reviewed-decline-recovery.ts`): one UUID, fresh Stripe Test Mode read must show `requires_payment_method`, declined, nothing received/capturable, livemode false; under attempt→work row locks it only marks that `PaymentWork` row DONE. No provider mutation method is reachable; any drift raises `REVIEWED_DECLINE_CHANGED` for operator review. Supervisor IPC carries a `declineOnly` flag accepted only with exactly one attempt ID | Code PASS; live reconciliation of the approved attempt NOT VERIFIED in this session |
+
+The development diagnostic also reports `contactRecipientsConfigured` (count > 0, no addresses) behind the existing token/loopback guard.
+
+### Concurrent work included in this delivery (owner asked to merge all outstanding work)
+
+- **Remove failed payment** (`POST /api/checkout/payment-attempts/:id/discard`, `PaymentPurchases`/`DismissFailedPurchase`): server-decided REMOVE / CANCEL_AND_REMOVE / PENDING / CONFIRMING; cancellation is fenced by the worker and provider truth (an authorization) always wins; hidden only in the same write that records verified cancellation.
+- `DB_POOL_MAX` optional pool ceiling (1–10, invalid values fail closed; unset keeps defaults).
+- ROADMAP: 06.3 Production Infrastructure & Deployment inserted, release audit renumbered to 06.4.
+
+### Verification (this session)
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` (frontend + backend) | PASS |
+| `npm run lint` | PASS (0 errors, 4 pre-existing frontend warnings) |
+| `npm run test:runtime` | PASS 49/49 |
+| Focused backend: decline recovery, pool config, supervisor, dev-runtime route, contact service/routes/capture, payment routes/service, payment isolation (disposable loopback target, CI placeholder test key) | PASS 270/272 in one parallel run; the 2 failures were timeouts under load and both files re-ran **196/196 PASS twice** in isolation |
+| Same suite with the local `.env` (shared DEV target) | FAIL by design — payment isolation refuses shared-DEV mutations in tests (`PAYMENT_MUTATIONS_DISABLED`); not a code defect |
+| Frontend `src/features/checkout` | PASS 312/312 (21 files) |
+| Full backend/frontend suites, builds, browser E2E | Delegated to final-SHA CI (local disk ~1.4 GiB free; earlier local OOM/ENOSPC) |
+| Live doctor at handoff | Frontend/backend/database **UNAVAILABLE** — the legacy stack had been stopped; supervised stack not running |
+
+Remaining: start `npm run dev:stack:supervised`, confirm preflight passes (or run the approved decline-only reconciliation for the single reviewed attempt), then verify Contact delivery and the profile photo against the restarted backend.

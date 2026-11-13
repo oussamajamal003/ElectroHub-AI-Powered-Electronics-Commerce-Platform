@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const net = require('node:net');
-const { start, assertFree, diskReadiness, main } = require('./dev-stack.cjs');
+const { start, assertFree, diskReadiness, publicDependencyStatuses, main } = require('./dev-stack.cjs');
 
 function harness(overrides = {}) {
   const children = []; const actions = []; let stop; let snapshot; let pid = 100;
@@ -100,4 +100,13 @@ test('disk exhaustion is diagnosed and blocks a fresh build without launching fi
   const h = harness({ diskReadiness: () => ({ status: 'BLOCKED' }) });
   await assert.rejects(start({}, h.deps), /less than 256 MiB/);
   assert.equal(h.children.length, 0); assert.equal(h.actions.includes('build'), false);
+});
+test('doctor distinguishes stale photo routes and missing contact recipient from healthy process liveness', () => {
+  const broken = publicDependencyStatuses({ ok: true, data: { supportEmail: null } }, { status: 404 });
+  assert.deepEqual(broken.map(row => row.status), ['UNAVAILABLE', 'BLOCKED']);
+  assert.match(broken[0].evidence, /controlled supervisor restart/);
+  const configured = publicDependencyStatuses({ ok: true, data: { supportEmail: 'support@example.invalid' } }, { status: 401 }, true);
+  assert.deepEqual(configured.map(row => row.status), ['READY', 'READY']);
+  assert.equal(JSON.stringify(configured).includes('support@example.invalid'), false);
+  assert.deepEqual(publicDependencyStatuses({}, {}).map(row => row.status), ['UNAVAILABLE', 'NOT VERIFIED']);
 });

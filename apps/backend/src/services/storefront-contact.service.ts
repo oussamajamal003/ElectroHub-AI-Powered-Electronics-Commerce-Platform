@@ -3,6 +3,26 @@ import { brevoProvider, type BrevoProvider } from '../integrations/brevo/brevo.p
 import { escapeHtml } from '../emails/commerce/escape.js';
 import { FONT_STACK } from '../emails/commerce/layout.js';
 import { AppError } from '../middleware/errorHandler.js';
+import type { Prisma, PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
+
+/** Contact recipients have completed MFA, still possess an active factor, and have an MFA-assured login record. */
+export const contactAdministratorWhere = {
+  isActive: true, emailVerifiedAt: { not: null }, role: { name: 'ADMIN' },
+  adminSecurity: { is: { mfaEnrolledAt: { not: null } } },
+  adminSessions: { some: {} },
+  OR: [
+    { adminMfaFactors: { some: { verifiedAt: { not: null }, disabledAt: null } } },
+    { adminWebAuthnCredentials: { some: { revokedAt: null } } },
+  ],
+} satisfies Prisma.UserWhereInput;
+
+export function contactAdministratorFilter(nodeEnv = process.env.NODE_ENV): Prisma.UserWhereInput {
+  return nodeEnv === 'test' ? contactAdministratorWhere : { ...contactAdministratorWhere, AND: [
+    { NOT: { email: { endsWith: '.invalid', mode: 'insensitive' } } },
+    { NOT: { email: { endsWith: '.test', mode: 'insensitive' } } },
+  ] };
+}
 
 export interface StorefrontContactMessage { name: string; email: string; subject: string; message: string }
 
@@ -41,12 +61,23 @@ export function renderContactNotification(input: StorefrontContactMessage, store
  * Resolving means the provider accepted the message for delivery (HTTP 202 to the customer). It is not proof that it reached an inbox.
  */
 export class StorefrontContactService {
-  constructor(private readonly provider: Pick<BrevoProvider, 'sendTransactionalEmail'> = brevoProvider) {}
+  constructor(private readonly provider: Pick<BrevoProvider, 'sendTransactionalEmail'> = brevoProvider,
+    private readonly db: Pick<PrismaClient, 'user'> = prisma) {}
 
-  async send(input: StorefrontContactMessage, recipient: string | null, storeName = 'ElectroHub'): Promise<void> {
+  async sendToAdministrators(input: StorefrontContactMessage, storeName = 'ElectroHub'): Promise<void> {
+    const administrators = await this.db.user.findMany({ where: contactAdministratorFilter(), select: { email: true },
+      orderBy: { id: 'asc' }, take: 1001 });
+    // One provider request prevents a partial loop from sending the same message
+    // again to earlier recipients when a later per-recipient call fails.
+    const recipients = [...new Set(administrators.map(admin => admin.email.toLowerCase()))];
+    if (!recipients.length || recipients.length > 1000) throw new AppError('Contact delivery is temporarily unavailable.', 503, 'CONTACT_UNAVAILABLE');
+    await this.send(input, recipients[0], storeName, recipients.slice(1).map(email => ({ email })));
+  }
+
+  async send(input: StorefrontContactMessage, recipient: string | null, storeName = 'ElectroHub', bcc: { email: string }[] = []): Promise<void> {
     if (!recipient) throw new AppError('Contact delivery is temporarily unavailable.', 503, 'CONTACT_UNAVAILABLE');
     const { html, text } = renderContactNotification(input, storeName);
-    const result = await this.provider.sendTransactionalEmail({ to: recipient, replyTo: { email: input.email, name: oneLine(input.name) },
+    const result = await this.provider.sendTransactionalEmail({ to: recipient, ...(bcc.length ? { bcc } : {}), replyTo: { email: input.email, name: oneLine(input.name) },
       // Subject contract (`Store contact: …`) is relied on by the disposable capture helper and by mailbox filters; keep it stable.
       subject: `Store contact: ${oneLine(input.subject).slice(0, 120)}`, textContent: text, htmlContent: html });
     if (!result.success) throw new AppError('Contact delivery is temporarily unavailable.', 503, 'CONTACT_UNAVAILABLE');

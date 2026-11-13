@@ -6,6 +6,7 @@ export interface BrevoEmailAddress {
 export interface BrevoSendEmailPayload {
   sender?: BrevoEmailAddress;
   to: BrevoEmailAddress[];
+  bcc?: BrevoEmailAddress[];
   subject: string;
   htmlContent?: string;
   textContent?: string;
@@ -21,6 +22,7 @@ export interface BrevoSendEmailResponse {
 
 export interface SendTransactionalEmailOptions {
   to: string | BrevoEmailAddress;
+  bcc?: BrevoEmailAddress[];
   subject: string;
   htmlContent?: string;
   textContent?: string;

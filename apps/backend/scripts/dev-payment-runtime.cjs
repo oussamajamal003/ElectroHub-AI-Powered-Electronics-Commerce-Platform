@@ -246,8 +246,10 @@ function normalizeWorkerAttemptIds(value, mode = 'incident-scoped') {
 }
 
 // Explicit operator approval may cover one reviewed card-entry attempt; never widen it to unrelated backlog.
-function assertReviewedRecovery(attempt, id) {
-  if (!attempt || attempt.id !== id || attempt.state !== 'AWAITING_INPUT' || attempt.orderId ||
+function assertReviewedRecovery(attempt, id, mode = 'incident-scoped') {
+  const reviewedDecline = mode === 'exact-attempt' && attempt?.state === 'DECLINED' && attempt.failureCode === 'PAYMENT_DECLINED' &&
+    attempt.providerStatus === 'requires_payment_method' && Boolean(attempt.submittedAt) && !attempt.cancelRequested;
+  if (!attempt || attempt.id !== id || !(attempt.state === 'AWAITING_INPUT' || reviewedDecline) || attempt.orderId ||
     !attempt.providerIntentId || attempt.work?.state !== 'READY') throw new Error('Reviewed recovery attempt changed; inspect it again before startup.');
 }
 
@@ -313,10 +315,13 @@ async function preflight(deps = {}, options = {}) {
         if (options.mode === 'expired-lease') {
           const signedEvents = attempt ? await tx.stripeEvent.count({ where: { attemptId: id } }) : -1;
           assertExpiredLeaseRecovery(attempt, id, signedEvents);
-        } else assertReviewedRecovery(attempt, id);
+        } else assertReviewedRecovery(attempt, id, options.mode);
         reviewedAttempts.push(attempt);
       }
       reviewedAttempt = reviewedAttempts[0] ?? null;
+      if (options.mode !== 'expired-lease' && reviewedAttempts.some(attempt => attempt.state === 'DECLINED') && (options.mode !== 'exact-attempt' || reviewedAttempts.length !== 1)) {
+        throw new Error('Decline-only reconciliation requires exactly one reviewed attempt; it cannot be mixed with general recovery.');
+      }
       const expiredLease = options.mode === 'expired-lease';
       if (expiredLease && (reviewedAttempts.length !== 1 || options.acceptedBacklogAttempt)) throw new Error('Expired-lease recovery requires exactly one reviewed attempt.');
       const exact = options.mode === 'exact-attempt' || expiredLease;
@@ -381,7 +386,7 @@ async function preflight(deps = {}, options = {}) {
       (deps.verifyBinding || require('../dist/services/payment.domain.js').verifyBinding)(reviewedAttempt, intent);
       // Expired-lease recovery additionally needs Stripe to still report the decline: the worker then only re-persists it.
       if (intent.livemode !== false || intent.status !== 'requires_payment_method' || intent.received !== 0 || (intent.capturable ?? 0) !== 0 ||
-        options.mode === 'expired-lease' && intent.declined !== true) {
+        (options.mode === 'expired-lease' || reviewedAttempt.state === 'DECLINED') && intent.declined !== true) {
         throw new Error('Reviewed recovery provider state changed; inspect it again before startup.');
       }
     }
@@ -398,6 +403,7 @@ async function preflight(deps = {}, options = {}) {
       stripeAccountVerified: true, runtimeUrlSource,
       emailAllowlist: options.allowEmailAllowlist ? { enabled: true, pendingBacklog: snapshot.emailBacklog } : { enabled: false },
       ...(options.mode === 'governed' ? { governedSince: options.governedSince, governedOpenWork: governedScopedWork } : {}),
+      ...(options.mode === 'exact-attempt' && reviewedAttempts[0]?.state === 'DECLINED' ? { declineOnly: true } : {}),
       ...(options.start ? { workerAttemptIds, ...(options.mode === 'governed' ? { workerScope: { createdSince: options.governedSince } } : {}) } : {}) };
   } finally { await prisma.$disconnect?.(); }
 }
@@ -414,6 +420,7 @@ async function supervise(config, options = {}, deps = {}) {
     throw new Error('Governed scope must match the exact --governed-since from DEV preflight and carry no attempt IDs.');
   }
   const workerAttemptIds = checkoutMode || governedMode ? [] : normalizeWorkerAttemptIds(config.workerAttemptIds, options.mode);
+  if (config.declineOnly && (options.mode !== 'exact-attempt' || workerAttemptIds.length !== 1)) throw new Error('Decline-only scope must name exactly one reviewed attempt.');
   if (options.mode === 'expired-lease' && (!options.noEmail || options.allowEmailAllowlist || (config.workerAttemptIds ?? []).length !== 1)) {
     throw new Error('Expired-lease recovery supervises exactly one attempt with email disabled.');
   }
@@ -525,6 +532,7 @@ async function supervise(config, options = {}, deps = {}) {
         if (!message || message.role !== record.role) return;
         if (message.event === 'payment.supervisor.awaiting') {
           child.send({ type: 'payment-supervisor.prepare', identity: config.targetIdentity, nonce, parentPid: process.pid,
+            ...(record.role === 'worker' && config.declineOnly ? { declineOnly: true } : {}),
             ...(record.role === 'worker' ? governedMode ? { createdSince: options.governedSince } : { attemptIds: workerAttemptIds } : {}) });
         } else if (message.event === 'payment.supervisor.prepared' && message.nonce === nonce) status.prepared.add(record.role);
         else if (message.event === 'payment.supervisor.worker-ready' && message.role === 'worker' && message.nonce === nonce) status.workerDatabaseReady = true;

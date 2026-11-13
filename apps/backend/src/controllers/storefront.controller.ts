@@ -32,7 +32,7 @@ export const storefrontController = {
       const { website, ...message } = parsed.data;
       if (website && website.trim()) { res.status(202).json({ data: { accepted: true } }); return; }
       const profile = await storeSettings.getStore();
-      await storefrontContact.send(message, profile.supportEmail, profile.storeName);
+      await storefrontContact.sendToAdministrators(message, profile.storeName);
       res.status(202).json({ data: { accepted: true } });
     } catch (error) { next(error); }
   },

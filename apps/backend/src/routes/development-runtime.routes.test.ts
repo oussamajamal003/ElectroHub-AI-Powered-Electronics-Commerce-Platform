@@ -3,7 +3,7 @@ import request from 'supertest';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import router from './development-runtime.routes.js';
 
-const db = vi.hoisted(() => ({ $queryRaw: vi.fn() }));
+const db = vi.hoisted(() => ({ $queryRaw: vi.fn(), user: { count: vi.fn() } }));
 vi.mock('../lib/prisma.js', () => ({ prisma: db }));
 const app = express(); app.use('/api', router);
 const prior = { ...process.env };
@@ -14,6 +14,7 @@ beforeEach(() => {
     DATABASE_URL: 'postgresql://postgres:unit@localhost:55434/electrohub_disposable',
     DIRECT_URL: 'postgresql://postgres:unit@localhost:55434/electrohub_disposable' });
   db.$queryRaw.mockResolvedValue([{ database: 'electrohub_disposable', port: 55434, address: '127.0.0.1', tls: true }]);
+  db.user.count.mockResolvedValue(1);
 });
 afterEach(() => { process.env = { ...prior }; });
 
@@ -33,7 +34,7 @@ it('returns an instance binding only after a real identity/TLS check', async () 
   expect(response.status).toBe(200);
   expect(response.headers['cache-control']).toBe('no-store');
   expect(response.body.data).toEqual({ mode: 'ISOLATED_QA', instanceId: expect.any(String), databaseReady: true, tlsVerified: true,
-    pid: process.pid, supervisorPid: process.ppid, supervisorActive: false });
+    pid: process.pid, supervisorPid: process.ppid, supervisorActive: false, contactRecipientsConfigured: true });
   expect(JSON.stringify(response.body)).not.toMatch(/postgres|55434|localhost|unit|DATABASE_URL/);
   expect(db.$queryRaw).toHaveBeenCalledTimes(1);
 });

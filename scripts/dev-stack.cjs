@@ -45,16 +45,29 @@ async function verifiedPayment(owner) {
   return ok && data?.mode === 'MAIN_DEV' && data.databaseReady && data.tlsVerified && data.supervisorActive &&
     data.pid === owner.apiPid && data.supervisorPid === owner.pid;
 }
+function publicDependencyStatuses(store, photoRoute, contactConfigured) {
+  return [
+    { service: 'Customer photo API route', status: photoRoute.status === 401 ? 'READY' : 'UNAVAILABLE', evidence: photoRoute.status === 404
+      ? 'Route missing from running backend. Load the current compiled backend through a controlled supervisor restart; retrying the browser cannot install routes.'
+      : `HTTP ${photoRoute.status ?? 'unreachable'}; expected protected-route 401 without credentials. Private photo/storage success remains NOT VERIFIED.` },
+    { service: 'Contact recipient configuration', status: contactConfigured === true ? 'READY' : contactConfigured === false ? 'BLOCKED' :
+      store.ok && !store.data?.supportEmail && photoRoute.status === 404 ? 'BLOCKED' : 'NOT VERIFIED',
+      evidence: contactConfigured === true ? 'Eligible verified MFA administrators found; actual provider acceptance remains NOT VERIFIED.' : contactConfigured === false
+        ? 'No active, verified administrator has completed MFA with an active factor. No unapproved fallback recipient is used.'
+        : 'Legacy/unverified contact recipient policy. The old backend requires Support Email; load the current compiled backend to use the approved verified-MFA-admin policy.' },
+  ];
+}
 async function report() {
   let owner = null; let ownership = 'No authenticated checkout supervisor.';
   try { owner = await paymentOwner(); } catch (error) { ownership = error.message; }
   const token = diagnosticToken();
-  const [front, live, ready, diagnostic, socket, swagger, products, store] = await Promise.all([
+  const [front, live, ready, diagnostic, socket, swagger, products, store, photoRoute] = await Promise.all([
     probe('http://localhost:3000/@vite/client'), probe('http://127.0.0.1:5000/api/health'),
     probe('http://127.0.0.1:5000/api/health/ready'), token ? probe('http://127.0.0.1:5000/api/internal/development-runtime', token) : {},
     probe('http://127.0.0.1:5000/socket.io/?EIO=4&transport=polling'), probe('http://127.0.0.1:5000/api/docs/'),
     probe('http://127.0.0.1:5000/api/products'),
     probe('http://127.0.0.1:5000/api/store/profile'),
+    probe('http://127.0.0.1:5000/api/account/profile-photo'),
   ]);
   const rows = [];
   const add = (service, status, evidence) => rows.push({ service, status, evidence });
@@ -72,6 +85,7 @@ async function report() {
   add('Swagger', swagger.ok ? 'READY' : 'UNAVAILABLE', 'HTTP docs probe');
   add('Public products', products.ok ? 'READY' : 'UNAVAILABLE', `HTTP ${products.status ?? 'unreachable'}; authenticated cart/orders NOT VERIFIED`);
   add('Public store settings', store.ok ? 'READY' : 'UNAVAILABLE', `HTTP ${store.status ?? 'unreachable'}`);
+  rows.push(...publicDependencyStatuses(store, photoRoute, diagnostic.data?.contactRecipientsConfigured));
   for (const service of ['Customer authentication/API', 'Admin authentication/MFA/API', 'Profile storage', 'Web Push delivery', 'Contact email provider'])
     add(service, 'NOT VERIFIED', 'Requires authorized identity/provider acceptance; configuration or listening port is insufficient');
   const output = { checkedAt: new Date().toISOString(), services: rows };
@@ -230,4 +244,4 @@ if (require.main === module) {
   const restoreOut = safety.installSanitizedOutput(process.stdout); const restoreErr = safety.installSanitizedOutput(process.stderr);
   main().catch(error => { console.error(safety.sanitize(error.message)); process.exitCode = 1; }).finally(() => { restoreOut(); restoreErr(); });
 }
-module.exports = { probe, report, assertFree, verifiedPayment, diskReadiness, start, main };
+module.exports = { probe, report, assertFree, verifiedPayment, diskReadiness, publicDependencyStatuses, start, main };

@@ -1,7 +1,29 @@
 import { describe, expect, it, vi } from 'vitest';
-import { StorefrontContactService, renderContactNotification } from './storefront-contact.service.js';
+import type { PrismaClient } from '@prisma/client';
+import { StorefrontContactService, contactAdministratorWhere, renderContactNotification } from './storefront-contact.service.js';
 
 describe('StorefrontContactService', () => {
+  it('selects only active verified administrators with completed MFA and delivers once with private BCC fanout', async () => {
+    const sendTransactionalEmail = vi.fn().mockResolvedValue({ success: true });
+    const findMany = vi.fn().mockResolvedValue([{ email: 'first@example.test' }, { email: 'second@example.test' }, { email: 'FIRST@example.test' }]);
+    const service = new StorefrontContactService({ sendTransactionalEmail }, { user: { findMany } } as unknown as Pick<PrismaClient, 'user'>);
+    await service.sendToAdministrators({ name: 'Customer', email: 'customer@example.test', subject: 'Help', message: 'Hello' });
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: contactAdministratorWhere }));
+    expect(contactAdministratorWhere).toMatchObject({ isActive: true, emailVerifiedAt: { not: null }, role: { name: 'ADMIN' },
+      adminSecurity: { is: { mfaEnrolledAt: { not: null } } }, adminSessions: { some: {} } });
+    expect(contactAdministratorWhere.OR).toEqual([
+      { adminMfaFactors: { some: { verifiedAt: { not: null }, disabledAt: null } } },
+      { adminWebAuthnCredentials: { some: { revokedAt: null } } },
+    ]);
+    expect(sendTransactionalEmail).toHaveBeenCalledTimes(1);
+    expect(sendTransactionalEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'first@example.test', bcc: [{ email: 'second@example.test' }] }));
+  });
+  it('never sends to unapproved fallbacks when no administrator qualifies', async () => {
+    const sendTransactionalEmail = vi.fn(); const findMany = vi.fn().mockResolvedValue([]);
+    const service = new StorefrontContactService({ sendTransactionalEmail }, { user: { findMany } } as unknown as Pick<PrismaClient, 'user'>);
+    await expect(service.sendToAdministrators({ name: 'A', email: 'a@example.test', subject: 'Help', message: 'Hello' })).rejects.toMatchObject({ code: 'CONTACT_UNAVAILABLE' });
+    expect(sendTransactionalEmail).not.toHaveBeenCalled();
+  });
   it('sends only to the configured sender mailbox and escapes the customer content', async () => {
     const sendTransactionalEmail = vi.fn().mockResolvedValue({ success: true });
     const service = new StorefrontContactService({ sendTransactionalEmail });

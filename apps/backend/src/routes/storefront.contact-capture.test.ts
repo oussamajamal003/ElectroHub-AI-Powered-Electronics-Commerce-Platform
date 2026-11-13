@@ -13,8 +13,9 @@ import { env } from '../config/env.js';
  * settings read is stubbed. Nothing can leave this machine: the provider refuses non-.invalid recipients when capture is on.
  */
 const store = vi.hoisted(() => ({ getStore: vi.fn() }));
+const administrators = vi.hoisted(() => ({ findMany: vi.fn() }));
 vi.mock('../services/store-settings.service.js', () => ({ storeSettings: store }));
-vi.mock('../lib/prisma.js', () => ({ prisma: {} }));
+vi.mock('../lib/prisma.js', () => ({ prisma: { user: administrators } }));
 
 import storefrontRoutes from './storefront.routes.js';
 import { errorHandler } from '../middleware/errorHandler.js';
@@ -40,11 +41,21 @@ afterAll(async () => {
   await rm(outbox, { recursive: true, force: true });
 });
 beforeEach(() => {
+  administrators.findMany.mockResolvedValue([{ email: recipient }]);
   store.getStore.mockResolvedValue({ storeName: 'Northstar', supportEmail: recipient, supportPhone: null, addressLine1: null, addressLine2: null,
     city: null, region: null, postalCode: null, country: null, businessHours: null, timezone: 'UTC', currency: 'USD', version: 1, updatedAt: null });
 });
 
 describe('contact form end to end through the real provider (captured, never sent)', () => {
+  it('fans one approved submission out to every eligible administrator even with no Support Email', async () => {
+    administrators.findMany.mockResolvedValue([{ email: recipient }, { email: 'second-admin@northstar.invalid' }]);
+    store.getStore.mockResolvedValueOnce({ storeName: 'Northstar', supportEmail: null });
+    const response = await post({ name: 'Ada', email: 'ada@example.test', subject: 'All eligible administrators', message: 'One captured test' });
+    expect(response.status).toBe(202);
+    const second = createHash('sha256').update('second-admin@northstar.invalid:Store contact: All eligible administrators').digest('hex');
+    expect(JSON.parse(await readFile(join(outbox, `${second}.json`), 'utf8')).to).toBe('second-admin@northstar.invalid');
+    expect((await read('Store contact: All eligible administrators')).to).toBe(recipient);
+  });
   it('delivers a valid message to the configured mailbox only, with the customer text intact', async () => {
     const response = await post({ name: 'Ada Customer', email: 'ada@example.test', subject: 'Order question', message: 'Where is my order?\nThanks!', website: '' });
     expect(response.status).toBe(202);
@@ -68,8 +79,9 @@ describe('contact form end to end through the real provider (captured, never sen
     expect((await readdir(outbox)).length).toBe(before);
   });
 
-  it('an unconfigured mailbox is an honest 503, never a fake success', async () => {
+  it('no eligible administrator is an honest 503, never a fake success', async () => {
     store.getStore.mockResolvedValue({ storeName: 'Northstar', supportEmail: null });
+    administrators.findMany.mockResolvedValueOnce([]);
     const response = await post({ name: 'Ada', email: 'ada@example.test', subject: 'Nobody home', message: 'Hello there' });
     expect(response.status).toBe(503);
     expect(response.body.error.code).toBe('CONTACT_UNAVAILABLE');
