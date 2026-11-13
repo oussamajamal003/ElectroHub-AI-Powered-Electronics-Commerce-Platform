@@ -111,7 +111,7 @@ The short / XSS case and dark mode are asserted in the same spec. Their screensh
 | `/orders/:ref` | `OrderDetailsSkeleton` (extracted, reused as the route fallback) |
 | `/orders/:ref/tracking` | `TrackingSkeleton` (extracted, reused as the route fallback) |
 | `/wishlist` | Existing wishlist skeleton |
-| `/admin/profile`, `/admin/profile/security`, `/admin/profile/sessions` | `AdminAccountSkeleton variant=profile|security|sessions` |
+| `/admin/profile`, `/admin/profile/security`, `/admin/profile/sessions` | `AdminAccountSkeleton variant=profile|security|sessions`, inside the real console frame (`AdminSessionRestoreShell`) |
 | Notification preferences (account) | Inline skeleton with a screen-reader "Checking notification preferences…" |
 
 ## 12. Skeleton component architecture
@@ -119,6 +119,10 @@ The short / XSS case and dark mode are asserted in the same spec. Their screensh
 - `features/account/AccountSkeleton.tsx` composes the shared `Skeleton` primitive. It adds no new primitive and no new shimmer.
 - Each skeleton root has `role="status"`, `aria-busy="true"`, an accessible label and `data-account-skeleton`.
 - `ProtectedRoute` shows the route-specific fallback (passed through `route()` / `adminRoute()`) while the session restores.
+- Administrator account pages restore inside the console frame. `layouts/AdminShellFrame.tsx` holds the header, sidebar, mobile drawer
+  and main region, and `AdminLayout` renders through it. During restore, `AdminSessionRestoreShell` uses the same frame with neutral
+  placeholders for the alerts and account controls. No identity, photo, alerts request or live-inventory socket starts before the session is
+  verified, and the header does not move when the real controls replace the placeholders (Playwright compares its bounding box).
 - If the session check fails, `ProtectedRoute` shows `ErrorState` "We could not verify your session." with **Retry**, never an endless skeleton.
 - The shared `Skeleton` already disables shimmer under `prefers-reduced-motion`.
 
@@ -149,6 +153,7 @@ The short / XSS case and dark mode are asserted in the same spec. Their screensh
   - `features/account/{AccountSkeleton,RecentOrders}.*`
   - `OrderDetailsSkeleton.tsx`, `TrackingSkeleton.tsx`
   - `ProtectedRoute.{tsx,test.tsx}`, `routes/index.tsx`
+  - `layouts/AdminShellFrame.tsx` (new), `layouts/AdminLayout.tsx` (renders through the frame)
   - `AccountPage`, `ProfilePage`, `AdminProfilePage`, `AdminSecurityPage` and their tests
   - `DeliveryNotificationPreferences.*`
 - **Browser specs and configs:**
@@ -183,6 +188,13 @@ checkout's dependencies, same lockfile):
 Before the rebase, the final evidence run had three browser failures. They happened while the shared dependency tree was being removed
 (§20) and did not recur on the re-run above.
 
+**Admin console frame follow-up** (after `5a3f505b`):
+- Frontend typecheck and lint: 0 errors. Build: passes.
+- Frontend unit tests: 1608 / 1610. Both failures are `AdminProductFormPage` load-timing tests; that page does not use the changed
+  modules, and it passes 15 / 15 on each of two runs alone.
+- `ProtectedRoute`, layout and route unit tests: 41 / 41.
+- Description/skeleton spec: Chromium 28 / 28. The admin restore tests also pass 6 / 6 in WebKit.
+
 ## 17. Browser / viewport results
 
 | Area | Widths | Chromium | WebKit | Firefox |
@@ -193,7 +205,7 @@ Before the rebase, the final evidence run had three browser failures. They happe
 | Account skeletons | 390 1440 | PASS | PASS | NOT VERIFIED (launch failure) |
 
 Screenshots were inspected by eye: processing at 390 and 320, Cancel & Remove dialog at 390, long description at 1920 and 320, customer
-account / orders / admin profile skeletons at 1440, admin security at 390.
+account / orders skeletons at 1440, admin security at 1440 and admin profile at 390 (WebKit), both inside the console frame.
 
 ## 18. Accessibility findings
 
@@ -235,7 +247,6 @@ The documentation-only commit that records this result gets its own CI run on PR
 - The Postgres removal scenarios (U, W) ran in CI only (passed on `e64af2af`), not locally.
 - No live or test-mode Stripe cancellation was exercised.
 - Firefox was not run locally (launch failure). CI's Firefox release and branding E2E jobs passed, but they do not run the new local suites.
-- During session restore, the admin skeleton renders without the admin shell (sidebar/header).
 - At 320px, the sticky header overlaps the top of element screenshots. This affects screenshots only, not the layout.
 - The checkout-processing and description/skeleton Playwright configs are local suites. CI does not run them.
 

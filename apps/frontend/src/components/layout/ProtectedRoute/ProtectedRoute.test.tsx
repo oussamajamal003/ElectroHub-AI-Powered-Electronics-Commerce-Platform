@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ProtectedRoute } from './ProtectedRoute';
 import { useAuth } from '@/features/auth/context/AuthContext';
@@ -131,6 +131,24 @@ describe('ProtectedRoute', () => {
       <Route path={path} element={<div>Private content</div>} /></Route></Routes></MemoryRouter>);
     expect(screen.getByRole('status', { name: label })).toHaveAttribute('aria-busy', 'true');
     expect(screen.queryByText('Cached private name')).not.toBeInTheDocument();
+    expect(screen.queryByText('Private content')).not.toBeInTheDocument();
+  });
+
+  it('restores an administrator account page inside the real console frame without administrator data', () => {
+    vi.mocked(useAuth).mockReturnValue({ isInitializing: true, isAuthenticated: true,
+      user: { firstName: 'Cached private name', email: 'cached.admin@example.test', role: 'ADMIN' }, isSessionVerified: false } as ReturnType<typeof useAuth>);
+    render(<MemoryRouter initialEntries={['/admin/profile/security']}><Routes><Route element={<ProtectedRoute requiredRole="ADMIN" />}>
+      <Route path="/admin/profile/security" element={<div>Private content</div>} /></Route></Routes></MemoryRouter>);
+    const main = screen.getByRole('main');
+    expect(within(main).getByRole('status', { name: 'Loading security settings' })).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('navigation', { name: 'Admin navigation' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'ElectroHub admin — Dashboard' })).toHaveAttribute('href', '/admin');
+    expect(screen.getByRole('button', { name: 'Open navigation' })).toBeInTheDocument();
+    // Alerts and the account menu are neutral placeholders until the session is verified: no identity, no alert counts.
+    expect(screen.queryByRole('button', { name: /^Account menu/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Alerts/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Cached private name')).not.toBeInTheDocument();
+    expect(screen.queryByText('cached.admin@example.test')).not.toBeInTheDocument();
     expect(screen.queryByText('Private content')).not.toBeInTheDocument();
   });
 

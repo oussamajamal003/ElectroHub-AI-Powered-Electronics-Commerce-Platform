@@ -2,7 +2,7 @@ import { mkdirSync, copyFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page, type Route, type TestInfo } from '@playwright/test';
-import { CUSTOMER, installDarkModeApi, summaries } from './darkMode.fixtures';
+import { ADMIN, CUSTOMER, installDarkModeApi, summaries } from './darkMode.fixtures';
 
 /**
  * PR #51 / Task 06.2 WP C + WP D — Product Description layout and account loading skeletons.
@@ -145,16 +145,32 @@ test.describe('WP D — account loading skeletons', () => {
       });
     }
     for (const target of ADMIN_PAGES) {
-      test(`${target.name} at ${width}px: a layout skeleton while the administrator session restores`, async ({ page }, info) => {
+      test(`${target.name} at ${width}px: a layout skeleton inside the console frame while the administrator session restores`, async ({ page }, info) => {
         await page.setViewportSize({ width, height: 900 });
         await installDarkModeApi(page, { admin: true });
+        const adminRequests: string[] = [];
+        page.on('request', request => { const { pathname } = new URL(request.url()); if (pathname.startsWith('/api/admin/')) adminRequests.push(pathname); });
         const restore = await hold(page, '/api/auth/admin/refresh');
         await page.goto(target.url);
-        await expect(page.locator(`[data-account-skeleton^="admin-"]`).first()).toBeVisible();
+        const skeleton = page.locator('main#admin-main [data-account-skeleton^="admin-"]');
+        await expect(skeleton).toBeVisible();
+        // The real console frame is already there: header and brand, and the sidebar (desktop) or the navigation button (mobile).
+        await expect(page.locator('[data-admin-header]')).toBeVisible();
+        await expect(page.getByRole('link', { name: 'ElectroHub admin — Dashboard' })).toBeVisible();
+        if (width >= 1024) await expect(page.getByRole('complementary', { name: 'Sidebar' }).getByRole('navigation', { name: 'Admin navigation' })).toBeVisible();
+        else await expect(page.getByRole('button', { name: 'Open navigation' })).toBeVisible();
+        // Nothing that needs the administrator session is requested or painted before it is verified.
+        await expect(page.getByText(ADMIN.email)).toHaveCount(0);
+        await expect(page.getByRole('button', { name: /^Account menu/ })).toHaveCount(0);
+        expect(adminRequests).toEqual([]);
         expect(await overflow(page)).toBeLessThanOrEqual(0);
+        const headerBefore = await page.locator('[data-admin-header]').boundingBox();
         await shot(page, info, `skeleton-${target.name}-${width}`);
         restore.release();
         await expect(page.locator('[data-account-skeleton]')).toHaveCount(0, { timeout: 15_000 });
+        // The frame does not jump when the session resolves.
+        await expect(page.getByRole('button', { name: /^Account menu/ })).toBeVisible();
+        expect(await page.locator('[data-admin-header]').boundingBox()).toEqual(headerBefore);
       });
     }
   }

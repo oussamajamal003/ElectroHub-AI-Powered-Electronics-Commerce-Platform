@@ -5,6 +5,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import skeletonStyles from '@/features/account/AccountSkeleton.module.scss';
 import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
+import { AdminSessionRestoreShell } from '@/layouts/AdminShellFrame';
 
 interface ProtectedRouteProps {
   requiredRole?: string;
@@ -38,7 +39,8 @@ function RouteGate({ session, requiredRole, redirectTo = '/', requireVerifiedSes
     }
     if (location.pathname.startsWith('/admin/profile')) {
       const variant = location.pathname.endsWith('/security') ? 'security' : location.pathname.endsWith('/sessions') ? 'sessions' : 'profile';
-      return <div className={skeletonStyles.gate}><AdminAccountSkeleton variant={variant} /></div>;
+      // The real console frame (header, sidebar, drawer) with the page skeleton where the page will render; no administrator data yet.
+      return <AdminSessionRestoreShell><AdminAccountSkeleton variant={variant} /></AdminSessionRestoreShell>;
     }
     return <ElectroHubLoader page />;
   }
