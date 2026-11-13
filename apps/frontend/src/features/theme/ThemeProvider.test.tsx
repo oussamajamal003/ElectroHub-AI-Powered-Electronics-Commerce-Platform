@@ -1,3 +1,4 @@
+import { Link, MemoryRouter } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -5,7 +6,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThemeProvider, ThemeToggle, THEME_STORAGE_KEY, useTheme } from '.';
-import { readStoredTheme, resolveInitialTheme, systemTheme } from './themePreference';
+import { readStoredTheme, resolveInitialTheme, systemTheme, THEME_STORAGE_KEYS, themeScope, migrateLegacyTheme } from './themePreference';
 
 type Listener = (event: MediaQueryListEvent) => void;
 let systemDark = false;
@@ -185,5 +186,59 @@ describe('public/theme-init.js (pre-paint script)', () => {
   it('uses the same storage key and values as the React provider', () => {
     expect(source).toContain(`'${THEME_STORAGE_KEY}'`);
     expect(source).toContain("'(prefers-color-scheme: dark)'");
+  });
+});
+
+
+describe('independent route scopes', () => {
+  it.each(['/admin', '/admin/login', '/admin/profile'])('recognises %s as admin', path => expect(themeScope(path)).toBe('admin'));
+  it.each(['/administrator-help', '/products', '/account/profile'])('recognises %s as customer', path => expect(themeScope(path)).toBe('customer'));
+  it('switches scopes in the same mounted tree without persisting the previous scope into the next', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem(THEME_STORAGE_KEYS.customer, 'dark');
+    window.localStorage.setItem(THEME_STORAGE_KEYS.admin, 'light');
+    render(<MemoryRouter initialEntries={['/products']}><ThemeProvider><ThemeToggle /><Probe /><StatefulChild />
+      <Link to="/admin/login">Admin</Link><Link to="/products">Store</Link>
+    </ThemeProvider></MemoryRouter>);
+    expect(root()).toHaveAttribute('data-theme', 'dark');
+    await user.click(screen.getByRole('link', { name: 'Admin' }));
+    expect(root()).toHaveAttribute('data-theme', 'light');
+    act(() => window.dispatchEvent(new StorageEvent('storage', { key: THEME_STORAGE_KEYS.customer, newValue: 'light' })));
+    expect(root()).toHaveAttribute('data-theme', 'light');
+    await user.click(screen.getByRole('button', { name: 'Switch to dark mode' }));
+    expect(window.localStorage.getItem(THEME_STORAGE_KEYS.customer)).toBe('dark');
+    await user.click(screen.getByRole('link', { name: 'Store' }));
+    expect(root()).toHaveAttribute('data-theme', 'light');
+    expect(mounts).toBe(1);
+  });
+  it('ignores an admin storage event in the storefront document', () => {
+    renderApp();
+    act(() => window.dispatchEvent(new StorageEvent('storage', { key: THEME_STORAGE_KEYS.admin, newValue: 'dark' })));
+    expect(root()).toHaveAttribute('data-theme', 'light');
+  });
+  it('consumes a valid legacy preference only for customer and never overrides an explicit scoped choice', () => {
+    window.localStorage.setItem('electrohub:theme', 'dark');
+    migrateLegacyTheme();
+    expect(readStoredTheme('customer')).toBe('dark');
+    expect(readStoredTheme('admin')).toBeNull();
+    expect(window.localStorage.getItem('electrohub:theme')).toBeNull();
+    window.localStorage.setItem(THEME_STORAGE_KEYS.customer, 'light');
+    window.localStorage.setItem('electrohub:theme', 'dark');
+    migrateLegacyTheme();
+    expect(readStoredTheme('customer')).toBe('light');
+    window.localStorage.removeItem(THEME_STORAGE_KEYS.customer);
+    migrateLegacyTheme();
+    expect(readStoredTheme('customer')).toBeNull();
+  });
+  it.each(['/products', '/admin/login', '/admin/profile', '/administrator-help'])('pre-paint and provider agree for %s', pathname => {
+    window.history.replaceState({}, '', pathname);
+    window.localStorage.setItem(THEME_STORAGE_KEYS.customer, 'dark');
+    window.localStorage.setItem(THEME_STORAGE_KEYS.admin, 'light');
+    new Function(readFileSync(path.resolve(__dirname, '../../../public/theme-init.js'), 'utf8'))();
+    const expected = themeScope(pathname) === 'admin' ? 'light' : 'dark';
+    expect(root()).toHaveAttribute('data-theme', expected);
+    renderApp();
+    expect(root()).toHaveAttribute('data-theme', expected);
+    window.history.replaceState({}, '', '/');
   });
 });

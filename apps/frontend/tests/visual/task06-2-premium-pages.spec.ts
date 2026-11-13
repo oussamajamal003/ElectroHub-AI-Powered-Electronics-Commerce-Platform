@@ -106,10 +106,10 @@ test('the OS colour scheme selects the theme unless the visitor saved an explici
   expect(dark.body).not.toBe(light.body);
   expect(dark.text).not.toBe(light.text);
   // An explicit saved choice wins over the OS preference.
-  await page.evaluate(() => localStorage.setItem('electrohub:theme', 'light'));
+  await page.evaluate(() => localStorage.setItem('electrohub:theme:customer', 'light'));
   const saved = await colours('dark');
   expect(saved).toEqual(light);
-  await page.evaluate(() => localStorage.removeItem('electrohub:theme'));
+  await page.evaluate(() => localStorage.removeItem('electrohub:theme:customer'));
 });
 
 test('Contact shows a polished empty state when no contact methods are configured', async ({ page }, info) => {

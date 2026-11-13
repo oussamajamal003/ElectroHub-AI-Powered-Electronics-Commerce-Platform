@@ -172,7 +172,7 @@ it('binds redirect-required verification to the exact saved purchase status URL'
 });
 
 it('follows the app theme through Elements options without remounting the secure entry (dark-mode task)', () => {
-    window.localStorage.setItem('electrohub:theme', 'light');
+    window.localStorage.setItem('electrohub:theme:customer', 'light');
     document.documentElement.removeAttribute('data-theme');
     let switchTheme: (theme: 'light' | 'dark') => void = () => undefined;
     function Switcher() { switchTheme = useTheme().setTheme; return null; }
@@ -189,6 +189,6 @@ it('follows the app theme through Elements options without remounting the secure
     expect(provider.mount).toHaveBeenCalledTimes(1);
     expect(provider.unmount).not.toHaveBeenCalled();
     view.unmount();
-    window.localStorage.removeItem('electrohub:theme');
+    window.localStorage.removeItem('electrohub:theme:customer');
     document.documentElement.removeAttribute('data-theme');
 });

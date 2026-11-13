@@ -38,12 +38,15 @@ render under `<body>` and therefore inherit it automatically — no portal-speci
 
 | Step | Rule |
 |---|---|
-| 1 | A valid explicit choice in `localStorage['electrohub:theme']` (`light` \| `dark`) wins. |
+| 1 | A valid explicit choice in `localStorage['electrohub:theme:customer']` or `localStorage['electrohub:theme:admin']` (`light` \| `dark`) wins. |
 | 2 | Otherwise `prefers-color-scheme`, followed live until the user chooses. |
 | 3 | Otherwise light. |
 
 - Only explicit choices are written; invalid values are ignored; blocked storage never breaks switching (the choice just isn't kept).
-- The `storage` event keeps every open tab (storefront and admin) in sync; clearing storage returns to the system preference.
+- Route ownership selects the active preference: `/admin` and `/admin/...` use admin, including login; similar prefixes such as `/administrator-help` use customer.
+- A single provider sits inside BrowserRouter and changes the document attribute in a layout effect on SPA transitions. It never copies a theme between scopes or remounts the application.
+- Storage events synchronise each scope only. Customer/admin tabs remain independent; clearing storage returns each scope to system preference.
+- The old `electrohub:theme` key is consumed once for customer only and removed; valid explicit scoped settings win. Admin initializes independently from system. Invalid legacy values are removed without migration.
 - Device-local only: never sent to the backend, no cookie, no database field.
 - `public/theme-init.js` mirrors the same rules (kept in sync by a unit test). It is a classic, render-blocking, same-origin script —
   compatible with a future `script-src 'self'` CSP; no inline script was added.

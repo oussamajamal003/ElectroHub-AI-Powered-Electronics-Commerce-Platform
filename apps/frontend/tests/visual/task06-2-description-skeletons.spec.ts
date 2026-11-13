@@ -101,7 +101,7 @@ test.describe('WP C — Product Description', () => {
   test('dark mode keeps the description readable', async ({ page }, info) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.emulateMedia({ colorScheme: 'dark' });
-    await page.addInitScript(() => window.localStorage.setItem('electrohub:theme', 'dark'));
+    await page.addInitScript(() => window.localStorage.setItem('electrohub:theme:customer', 'dark'));
     await installDarkModeApi(page);
     await page.goto(`/products/${product.slug}`);
     const panel = page.locator('section[aria-labelledby="product-description-title"]');
@@ -178,7 +178,7 @@ test.describe('WP D — account loading skeletons', () => {
   test('dark mode with reduced motion: the skeleton has no shimmer animation', async ({ page }, info) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
-    await page.addInitScript(() => window.localStorage.setItem('electrohub:theme', 'dark'));
+    await page.addInitScript(() => window.localStorage.setItem('electrohub:theme:customer', 'dark'));
     await installDarkModeApi(page, { customer: true });
     const restore = await hold(page, '/api/auth/customer/refresh');
     await page.goto('/account');

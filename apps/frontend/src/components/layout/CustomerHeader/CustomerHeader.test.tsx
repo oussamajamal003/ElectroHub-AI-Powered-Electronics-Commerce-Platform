@@ -528,8 +528,9 @@ describe('CustomerHeader', () => {
 
   it('offers the shared theme toggle beside the utility icons for customers (dark-mode task)', () => {
     document.documentElement.setAttribute('data-theme', 'dark');
+    window.localStorage.setItem('electrohub:theme:customer', 'dark');
     vi.mocked(useAuth).mockReturnValue({ user: null, isInitializing: false, isAuthenticated: false } as ReturnType<typeof useAuth>);
-    render(<ThemeProvider><BrowserRouter><CustomerHeader /></BrowserRouter></ThemeProvider>);
+    render(<BrowserRouter><ThemeProvider><CustomerHeader /></ThemeProvider></BrowserRouter>);
     const banner = screen.getByRole('banner');
     const toggle = within(banner).getByRole('button', { name: 'Switch to light mode' });
     fireEvent.click(toggle);

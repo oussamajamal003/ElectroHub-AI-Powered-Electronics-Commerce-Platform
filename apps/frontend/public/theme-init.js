@@ -1,21 +1,23 @@
-// ElectroHub — pre-paint theme initialisation.
-// Loaded as a classic, render-blocking, same-origin script in <head> (compatible with a `script-src 'self'` CSP; no
-// inline script) so <html data-theme> is set before the first paint and dark-mode users never see a light flash.
-// Mirrors src/features/theme/themePreference.ts: saved explicit choice → prefers-color-scheme → light.
+// Render-blocking same-origin initializer. Mirror themePreference.ts before React or CSS paints.
 (function () {
   var theme = null;
+  var customerKey = 'electrohub:theme:customer';
+  var adminKey = 'electrohub:theme:admin';
+  function valid(value) { return value === 'light' || value === 'dark'; }
   try {
-    var stored = window.localStorage.getItem('electrohub:theme');
-    if (stored === 'light' || stored === 'dark') theme = stored;
-  } catch (error) {
-    /* storage unavailable: fall through to the system preference */
-  }
-  if (!theme) {
-    try {
-      theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    } catch (error) {
-      theme = 'light';
+    var legacy = window.localStorage.getItem('electrohub:theme');
+    if (legacy !== null) {
+      if (valid(legacy) && !valid(window.localStorage.getItem(customerKey))) window.localStorage.setItem(customerKey, legacy);
+      window.localStorage.removeItem('electrohub:theme');
     }
+  } catch (error) { /* migration unavailable */ }
+  try {
+    var stored = window.localStorage.getItem(/^\/admin(?:\/|$)/.test(window.location.pathname) ? adminKey : customerKey);
+    if (valid(stored)) theme = stored;
+  } catch (error) { /* storage unavailable */ }
+  if (!theme) {
+    try { theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; }
+    catch (error) { theme = 'light'; }
   }
   document.documentElement.setAttribute('data-theme', theme);
 })();

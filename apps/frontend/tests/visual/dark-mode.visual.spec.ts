@@ -18,7 +18,9 @@ const captures = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 if (CAPTURE) mkdirSync(captures, { recursive: true });
 
 type Theme = 'light' | 'dark';
-const KEY = 'electrohub:theme';
+const KEY = 'electrohub:theme:customer';
+const ADMIN_KEY = 'electrohub:theme:admin';
+const keyForRoute = (route: string) => /^\/admin(?:\/|$)/.test(route) ? ADMIN_KEY : KEY;
 
 const CUSTOMER_ROUTES = ['/', '/products', '/products/apple-iphone-15-128gb', '/search?q=apple', '/cart', '/wishlist', '/orders', '/account',
   '/account/profile', '/about', '/contact', '/route-that-does-not-exist'];
@@ -31,7 +33,7 @@ const isAdmin = (route: string) => route.startsWith('/admin') && !PUBLIC_ADMIN_R
 
 async function open(page: Page, route: string, theme: Theme | null) {
   await installDarkModeApi(page, { customer: !route.startsWith('/admin'), admin: isAdmin(route) });
-  if (theme) await page.addInitScript(([key, value]) => { if (!sessionStorage.getItem('eh-seeded')) { localStorage.setItem(key, value); sessionStorage.setItem('eh-seeded', '1'); } }, [KEY, theme] as const);
+  if (theme) await page.addInitScript(([key, value]) => { if (!sessionStorage.getItem('eh-seeded')) { localStorage.setItem(key, value); sessionStorage.setItem('eh-seeded', '1'); } }, [keyForRoute(route), theme] as const);
   await page.goto(route);
   await expect(page.locator('main, [role="main"], form').first()).toBeVisible();
   await page.waitForLoadState('networkidle');
@@ -144,15 +146,17 @@ test.describe('theme preference and header toggles', () => {
 
     await page.goto('/admin/orders');
     await expect(page.getByRole('heading', { level: 1, name: 'Orders' })).toBeVisible();
-    expect(await appliedTheme(page)).toBe('dark');
+    expect(await appliedTheme(page)).toBe('light');
     const adminHeader = page.locator('[data-admin-header]');
+    await adminHeader.getByRole('button', { name: 'Switch to dark mode' }).click();
+    expect(await appliedTheme(page)).toBe('dark');
     await adminHeader.getByRole('button', { name: 'Switch to light mode' }).click();
     expect(await appliedTheme(page)).toBe('light');
     await page.waitForLoadState('networkidle');
 
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    expect(await appliedTheme(page)).toBe('light');
+    expect(await appliedTheme(page)).toBe('dark');
     expect(errors).toEqual([]);
   });
 
@@ -201,7 +205,7 @@ test.describe('theme preference and header toggles', () => {
     expect(head[0]).toBe('script:/theme-init.js:classic:false');
   });
 
-  test('open tabs stay in sync (storefront tab and admin tab)', async ({ context }) => {
+  test('storefront and admin tabs keep independent preferences', async ({ context }) => {
     const storefront = await context.newPage();
     const admin = await context.newPage();
     await installDarkModeApi(storefront);
@@ -212,9 +216,11 @@ test.describe('theme preference and header toggles', () => {
     await admin.goto('/admin');
     await expect(admin.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
     await storefront.getByRole('banner').getByRole('button', { name: 'Switch to dark mode' }).click();
-    await expect.poll(() => appliedTheme(admin)).toBe('dark');
+    await expect.poll(() => appliedTheme(admin)).toBe('light');
+    await admin.locator('[data-admin-header]').getByRole('button', { name: 'Switch to dark mode' }).click();
+    await expect.poll(() => appliedTheme(storefront)).toBe('dark');
     await admin.locator('[data-admin-header]').getByRole('button', { name: 'Switch to light mode' }).click();
-    await expect.poll(() => appliedTheme(storefront)).toBe('light');
+    await expect.poll(() => appliedTheme(storefront)).toBe('dark');
   });
 
   test('switching keeps form input, session and cached data (no refetch, no remount)', async ({ page }) => {
@@ -279,7 +285,7 @@ test.describe('responsive header placement', () => {
           .map(rect => `${Math.round(rect.x)},${Math.round(rect.y)},${Math.round(rect.width)},${Math.round(rect.height)}`));
         expect(darkLayout).toEqual(lightLayout);
         expect(await noHorizontalOverflow(page), `${route} overflows at ${width}px`).toBe(true);
-        await page.evaluate(key => localStorage.removeItem(key), KEY);
+        await page.evaluate(key => localStorage.removeItem(key), keyForRoute(route));
       }
     });
   }
@@ -364,7 +370,7 @@ test.describe('route coverage — every customer and admin route themed', () => 
       if (CAPTURE && info.project.name === 'chromium') {
         const name = route.replace(/[/?=]/g, '_');
         await page.screenshot({ path: path.join(captures, `dark${name}.png`), fullPage: true });
-        await page.evaluate(key => localStorage.setItem(key, 'light'), KEY);
+        await page.evaluate(key => localStorage.setItem(key, 'light'), keyForRoute(route));
         await page.reload(); await page.waitForLoadState('networkidle'); await settle(page);
         await page.screenshot({ path: path.join(captures, `light${name}.png`), fullPage: true });
       }

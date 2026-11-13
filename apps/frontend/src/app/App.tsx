@@ -9,17 +9,17 @@ import { ThemeProvider } from '@/features/theme';
 
 export function App() {
   return (
-    <ThemeProvider>
-      <MotionConfig reducedMotion="user">
-        <QueryClientProvider client={queryClient}>
-          <BrowserRouter>
+    <BrowserRouter>
+      <ThemeProvider>
+        <MotionConfig reducedMotion="user">
+          <QueryClientProvider client={queryClient}>
             <TooltipProvider delayDuration={400} skipDelayDuration={200}>
               <AppRoutes />
               <ToastCenter />
             </TooltipProvider>
-          </BrowserRouter>
-        </QueryClientProvider>
-      </MotionConfig>
-    </ThemeProvider>
+          </QueryClientProvider>
+        </MotionConfig>
+      </ThemeProvider>
+    </BrowserRouter>
   );
 }
