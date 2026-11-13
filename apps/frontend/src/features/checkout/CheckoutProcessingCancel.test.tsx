@@ -50,8 +50,8 @@ describe('Checkout cancel is server-gated', () => {
     expect(screen.queryByRole('button', { name: /Cancel/ })).not.toBeInTheDocument();
     document.body.innerHTML = '';
     show(outcome('PROCESSING', { classification: 'UNKNOWN' }), { message: 'unknown' });
-    expect(screen.getByRole('heading', { name: 'We’re still checking your payment' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Check payment status' })).toBeEnabled();
+    expect(screen.getByRole('heading', { name: 'We couldn’t confirm your payment yet' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: /Cancel/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/Payment failed/i)).not.toBeInTheDocument();
     document.body.innerHTML = '';

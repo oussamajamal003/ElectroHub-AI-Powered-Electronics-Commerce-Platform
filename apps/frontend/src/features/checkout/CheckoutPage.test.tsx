@@ -661,11 +661,11 @@ describe('Checkout page integration', () => {
     show('/checkout?step=review'); await enterReview(); const button = await screen.findByRole('button', { name: /Place Order/ });
     await waitFor(() => expect(button).toBeEnabled()); fireEvent.click(button);
     // Stage 1 ends when the request settles; a settled disconnect is shown as unconfirmed (not failure, not permanent checking).
-    expect(await screen.findByRole('heading', { name: 'We’re still checking your payment' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'We couldn’t confirm your payment yet' })).toBeVisible();
     expect(screen.queryByRole('heading', { name: /Processing your order/ })).not.toBeInTheDocument();
     // One status check on the same attempt: no second check action and no new payment.
     expect(screen.getAllByRole('button', { name: /Check/ })).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Check payment status' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Try Again' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Return to Cart' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Payment Failed' })).not.toBeInTheDocument();

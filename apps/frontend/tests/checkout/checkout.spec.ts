@@ -59,8 +59,8 @@ test('real BrowserRouter permits shell, keyboard and history navigation during s
 test('lost response retains exact attempt and recovers on reload before empty Cart', async ({ page }) => {
   const api = await harness(page, { unknown: true }); await page.goto('/checkout'); await review(page); await page.getByRole('button', { name: /Place Order/ }).click(); await expect(page.getByRole('heading', { name: 'Processing your order…' })).toBeVisible();
   // A lost response settles as unconfirmed (never failure, never permanent checking) with a same-attempt check.
-  await expect(page.getByRole('heading', { name: 'We’re still checking your payment' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Check payment status' })).toBeEnabled(); await expect(page.getByRole('button', { name: 'Try Again' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'We couldn’t confirm your payment yet' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Check again' })).toBeEnabled(); await expect(page.getByRole('button', { name: 'Try Again' })).toHaveCount(0);
   expect(api.requests.filter(value => value.path.endsWith('/reconcile'))).toHaveLength(1);
   const setup = api.requests.find(value => value.method === 'POST' && value.path === '/api/checkout/payment-attempts');
   api.setState('PAID');
@@ -102,7 +102,7 @@ test('ownership miss retains recovery and cannot show private confirmation or st
   const api = await harness(page, { wrongOwner: true });
   await page.goto('/checkout'); await review(page);
   await page.getByRole('button', { name: /Place Order/ }).click();
-  await expect(page.getByRole('heading', { name: /Processing your order…|Checking your payment|We’re still checking your payment/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Processing your order…|Checking your payment|We couldn’t confirm your payment yet/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Try Again' })).toHaveCount(0);
   // Scenario 1: the legacy status URL redirects to Cart; another owner's attempt is never listed or confirmed there.
   await page.goto(`/account/payment-status/${attemptId}`); await page.reload();
