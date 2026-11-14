@@ -14,16 +14,16 @@ async function offlineApi(page: Page, overrides: Record<string, (method: string)
   });
 }
 
-test.describe('browser tab branding', () => {
-  test.beforeEach(async ({ page }) => {
-    // Cookie-consent behavior is covered by the dedicated privacy suite. Keep this hermetic
-    // branding suite focused on its own interactions, especially at 320px where the consent
-    // banner can otherwise cover the page controls being exercised.
-    await page.addInitScript(() => {
-      localStorage.setItem('electrohub.privacy.v1', JSON.stringify({ version: 1, analytics: false, savedAt: Date.now() }));
-    });
-    await offlineApi(page);
+// Cookie-consent behavior is covered by the dedicated privacy suite. Keep every branding test
+// context focused on its own interactions, especially at 320px where the banner can cover controls.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('electrohub.privacy.v1', JSON.stringify({ version: 1, analytics: false, savedAt: Date.now() }));
   });
+});
+
+test.describe('browser tab branding', () => {
+  test.beforeEach(async ({ page }) => { await offlineApi(page); });
 
   test('serves the official favicon, not the Vite placeholder, from every route depth', async ({ page }) => {
     for (const path of ['/', '/contact', '/products/some-product', '/admin/login']) {
@@ -82,14 +82,6 @@ test.describe('toasts', () => {
     await page.getByRole('textbox', { name: 'Message' }).fill('Where is my order?');
   };
   const viewport = (page: Page) => page.getByTestId('toast-viewport');
-
-  test.beforeEach(async ({ page }) => {
-    // The consent banner has its own privacy coverage; it must not intercept the contact
-    // form interactions this suite verifies at narrow mobile widths.
-    await page.addInitScript(() => {
-      localStorage.setItem('electrohub.privacy.v1', JSON.stringify({ version: 1, analytics: false, savedAt: Date.now() }));
-    });
-  });
 
   test('confirms success only after the server accepted it, announces politely, and can be dismissed', async ({ page }) => {
     let accepted!: () => void;
