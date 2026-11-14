@@ -95,35 +95,35 @@ test.describe('toasts', () => {
     await expect(toast).toHaveCount(0);
   });
 
-  test('explains a service failure (not a success, not "offline") and collapses repeats', async ({ page }) => {
-    await offlineApi(page, { '/api/store/contact': () => ({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'Contact delivery is temporarily unavailable.' } } }) });
+  // The Contact page owns its failure feedback inline, next to the Send button (its mutation is `silent`), so a failed send must
+  // raise no toast at all. The global failure-toast variants and burst collapsing are covered by ToastCenter.test.tsx.
+  test('explains a service failure inline (not a success, not a toast) and keeps the message', async ({ page }) => {
+    await offlineApi(page, { '/api/store/contact': () => ({ status: 503, json: { error: { code: 'CONTACT_UNAVAILABLE', message: 'Contact delivery is temporarily unavailable.' } } }) });
     await page.goto('/contact');
     await fillContact(page);
     const send = page.getByRole('button', { name: 'Send Message' });
     await send.click();
-    await expect(viewport(page).locator('[data-toast-variant="error"]')).toContainText("Couldn't send your message: service temporarily unavailable");
-    await expect(page.getByRole('alert').filter({ hasText: 'We could not send your message' }).or(page.getByRole('alert').filter({ hasText: 'temporarily unavailable' })).first()).toBeVisible();
-    await expect(viewport(page).locator('[data-toast-variant="success"]')).toHaveCount(0);
+    await expect(page.getByRole('alert').filter({ hasText: 'didn’t accept your message, so it was not sent' })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Message' })).toHaveValue('Where is my order?');
     await send.click(); await send.click();
-    await expect(viewport(page).locator('[data-toast-variant]')).toHaveCount(1);
+    await expect(page.getByRole('alert').filter({ hasText: 'was not sent' })).toHaveCount(1);
+    await expect(viewport(page).locator('[data-toast-variant]')).toHaveCount(0);
   });
 
-  test('a rate limit is a warning telling the user to wait', async ({ page }) => {
+  test('a rate limit tells the user to wait, inline', async ({ page }) => {
     await offlineApi(page, { '/api/store/contact': () => ({ status: 429, json: { error: { code: 'RATE_LIMITED', message: 'Too many requests' } } }) });
     await page.goto('/contact');
     await fillContact(page);
     await page.getByRole('button', { name: 'Send Message' }).click();
-    const toast = viewport(page).locator('[data-toast-variant="warning"]');
-    await expect(toast).toContainText('Too many attempts');
-    await expect(toast).toContainText('wait a moment');
+    await expect(page.getByRole('alert').filter({ hasText: 'Please wait a minute, then try again.' })).toBeVisible();
+    await expect(viewport(page).locator('[data-toast-variant]')).toHaveCount(0);
   });
 
   test('stays inside the viewport and never steals focus or causes horizontal scroll', async ({ page }) => {
-    await offlineApi(page, { '/api/store/contact': () => ({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'x'.repeat(400) } } }) });
+    await offlineApi(page, { '/api/store/contact': () => ({ status: 200, json: { data: { accepted: true } } }) });
     await page.goto('/contact');
     await fillContact(page);
-    const send = page.getByRole('button', { name: 'Send Message' });
-    await send.click();
+    await page.getByRole('button', { name: 'Send Message' }).click();
     const toast = viewport(page).locator('[data-toast-variant]').first();
     await expect(toast).toBeVisible();
     // Measure at rest: the toast slides in from the right edge, so a mid-animation box is legitimately off-screen.
@@ -133,7 +133,7 @@ test.describe('toasts', () => {
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(size.width + 0.5);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-    // The toast never takes focus (the Send button itself drops focus only because the form disables it while submitting).
+    // The toast never takes focus.
     await expect(viewport(page).locator(':focus')).toHaveCount(0);
     expect(await page.evaluate(() => document.activeElement?.closest('[data-testid="toast-viewport"]') ?? null)).toBeNull();
   });
