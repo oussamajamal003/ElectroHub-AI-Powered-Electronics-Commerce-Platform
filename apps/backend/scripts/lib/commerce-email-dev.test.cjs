@@ -57,3 +57,33 @@ test('corrupt worker ownership is retained rather than guessed stale', () => {
   try { assert.throws(() => acquireWorkerLock(folder), /unreadable/); assert.equal(fs.readFileSync(file, 'utf8'), '{broken'); }
   finally { fs.rmSync(folder, { recursive: true }); }
 });
+
+test('push environment: one generated VAPID pair, stored privately and reused, bound to the verified identity', () => {
+  const { pushEnvironment, PUSH_SUBJECT } = require('./commerce-email-dev.cjs');
+  const backend = fs.mkdtempSync(path.join(os.tmpdir(), 'electrohub-push-env-'));
+  let generated = 0;
+  const generate = () => { generated += 1; return { publicKey: 'B' + 'p'.repeat(86), privateKey: 'k'.repeat(43) }; };
+  const first = pushEnvironment(backend, 'supabase:project/postgres', generate);
+  assert.equal(first.CUSTOMER_PUSH_ENABLED, 'true');
+  assert.equal(first.CUSTOMER_PUSH_APPROVED_TARGET, 'supabase:project/postgres');
+  assert.equal(first.WEB_PUSH_VAPID_SUBJECT, PUSH_SUBJECT);
+  assert.match(PUSH_SUBJECT, /^https:\/\//); // no personal mailbox goes to push services
+  const again = pushEnvironment(backend, 'supabase:project/postgres', generate);
+  assert.equal(generated, 1); // existing subscriptions stay valid across restarts
+  assert.equal(again.WEB_PUSH_VAPID_PRIVATE_KEY, first.WEB_PUSH_VAPID_PRIVATE_KEY);
+  assert.throws(() => pushEnvironment(backend, '', generate), /identity/);
+  assert.throws(() => pushEnvironment(fs.mkdtempSync(path.join(os.tmpdir(), 'electrohub-push-bad-')), 'id', () => ({ publicKey: 'x', privateKey: 'y' })), /malformed/);
+  const real = pushEnvironment(fs.mkdtempSync(path.join(os.tmpdir(), 'electrohub-push-real-')), 'id');
+  assert.match(real.WEB_PUSH_VAPID_PUBLIC_KEY, /^[A-Za-z0-9_-]{87}$/);
+});
+
+test('a heartbeat with old rows awaiting review is still sending; only a paused worker is not', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'electrohub-heartbeat-'));
+  const file = path.join(dir, 'app.log');
+  const line = fields => JSON.stringify({ pid: 7, timestamp: new Date().toISOString(), event: 'email_worker_heartbeat', sendMode: 'live', ...fields });
+  fs.writeFileSync(file, line({ paused: false, attention: true, staleNeedingReview: 26 }) + '\n');
+  assert.deepEqual(readinessOf(file, 7), { ready: true, attention: true, staleNeedingReview: 26, reason: 'QUEUE_NEEDS_ATTENTION', sendMode: 'live', observedAt: readinessOf(file, 7).observedAt });
+  fs.writeFileSync(file, line({ paused: true, attention: false }) + '\n');
+  assert.equal(readinessOf(file, 7).ready, false);
+  assert.equal(readinessOf(file, 7).reason, 'PAUSED');
+});

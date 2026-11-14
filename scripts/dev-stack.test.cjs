@@ -126,5 +126,8 @@ test('the email-enabled stack commands only add the approved allowlist flag', ()
   const scripts = require('../package.json').scripts;
   assert.equal(scripts['dev:stack:supervised:email'], 'node scripts/dev-stack.cjs start --allow-email-allowlist');
   assert.equal(scripts['dev:stack:restart:email'], 'node scripts/dev-stack.cjs restart --allow-email-allowlist');
+  assert.equal(scripts['dev:stack:supervised:live'], 'node scripts/dev-stack.cjs start --allow-email-live --allow-push');
+  assert.equal(scripts['dev:stack:restart:live'], 'node scripts/dev-stack.cjs restart --allow-email-live --allow-push');
+  assert.match(emailEvidence({ email: { ready: true, producerEnabled: true, mode: 'live', push: true } }), /every customer \(live mode\); delivery push on/);
   assert.equal(scripts['dev:stack:supervised'], 'node scripts/dev-stack.cjs start');
 });

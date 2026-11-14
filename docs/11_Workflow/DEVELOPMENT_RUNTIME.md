@@ -25,6 +25,8 @@ The default stack leaves commerce dispatch disabled. To request the existing app
 ```powershell
 npm run dev:stack:supervised:email      # same as: npm run dev:stack:supervised -- --allow-email-allowlist
 npm run dev:stack:restart:email         # switch an already running stack to the email-enabled profile
+npm run dev:stack:supervised:live       # every customer receives commerce email (live mode) + delivery browser push
+npm run dev:stack:restart:live          # switch an already running stack to live email + push
 npm run notifications:doctor            # read-only: producer, dispatch, send mode, queue counts, push configuration
 ```
 

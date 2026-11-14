@@ -39,6 +39,30 @@ function describeEmailRuntime(env) {
     workerWillRun: sends && (sendMode !== 'allowlist' || allowlistSize > 0), warnings };
 }
 
+/** VAPID `sub` claim: a public project URL, so no personal mailbox is sent to browser push services. */
+const PUSH_SUBJECT = 'https://github.com/oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerce-Platform';
+const VAPID_PUBLIC = /^[A-Za-z0-9_-]{87}$/; const VAPID_PRIVATE = /^[A-Za-z0-9_-]{43}$/;
+/**
+ * Development delivery push: one application-owned VAPID pair kept in `<backend>/.cache/web-push-vapid.json` (gitignored, mode 0600),
+ * generated on first use and reused so existing browser subscriptions stay valid. The keys are returned for the child environment only;
+ * nothing here prints them. The approved target is the identity this start already verified.
+ */
+function pushEnvironment(backend, identity, generate = () => require('web-push').generateVAPIDKeys()) {
+  if (!identity) throw new Error('Push needs the verified database identity.');
+  const file = path.join(backend, '.cache/web-push-vapid.json');
+  let keys = null;
+  try { keys = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* first use */ }
+  if (!keys || !VAPID_PUBLIC.test(keys.publicKey) || !VAPID_PRIVATE.test(keys.privateKey)) {
+    const fresh = generate();
+    if (!VAPID_PUBLIC.test(fresh.publicKey) || !VAPID_PRIVATE.test(fresh.privateKey)) throw new Error('Generated VAPID keys are malformed.');
+    keys = { publicKey: fresh.publicKey, privateKey: fresh.privateKey, createdAt: new Date().toISOString() };
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(keys), { mode: 0o600 });
+  }
+  return { CUSTOMER_PUSH_ENABLED: 'true', WEB_PUSH_VAPID_PUBLIC_KEY: keys.publicKey, WEB_PUSH_VAPID_PRIVATE_KEY: keys.privateKey,
+    WEB_PUSH_VAPID_SUBJECT: PUSH_SUBJECT, CUSTOMER_PUSH_APPROVED_TARGET: identity };
+}
+
 function alive(pid) { try { process.kill(pid, 0); return true; } catch (error) { return error.code === 'EPERM'; } }
 
 /**
@@ -86,8 +110,10 @@ function readinessOf(logFile, pid, since = 0) {
     if (record.event === 'email_worker_ready') verdict = { ready: true, sendMode: record.sendMode };
     else if (record.event === 'email_worker_permission' && record.allowed === false) verdict = { ready: false, reason: record.reason };
     else if (record.event === 'email_worker_unavailable') verdict = { ready: false, reason: record.reason };
-    else if (record.event === 'email_worker_heartbeat') verdict = { ready: !record.paused && !record.attention,
-      reason: record.paused || record.attention ? 'QUEUE_NEEDS_ATTENTION' : undefined, sendMode: record.sendMode };
+    // A paused worker sends nothing. `attention` (old rows awaiting review, uncertain sends) does not stop it sending new mail,
+    // so it is reported alongside readiness instead of as "not sending".
+    else if (record.event === 'email_worker_heartbeat') verdict = { ready: !record.paused, attention: Boolean(record.attention),
+      staleNeedingReview: record.staleNeedingReview, reason: record.paused ? 'PAUSED' : record.attention ? 'QUEUE_NEEDS_ATTENTION' : undefined, sendMode: record.sendMode };
     if (verdict && Number.isFinite(at)) verdict.observedAt = at;
   }
   return verdict;
@@ -153,7 +179,10 @@ function startEmailWorker(options) {
       const verdict = readinessOf(logFile, pid, launchedAt);
       if (verdict?.observedAt && now() - verdict.observedAt > 150000) { verdict.ready = false; verdict.reason = 'HEARTBEAT_STALE'; }
       if (verdict) current = { started: true, ready: verdict.ready, reason: verdict.ready ? 'worker-readiness-observed' : 'worker-unavailable' };
-      if (verdict?.ready && shown !== true) { log(`[email-worker] READY (pid ${pid}, send mode ${verdict.sendMode})`); shown = true; }
+      if (verdict?.ready && shown !== true) {
+        log(`[email-worker] READY (pid ${pid}, send mode ${verdict.sendMode})${verdict.attention ? `; queue needs review (${verdict.staleNeedingReview ?? 0} rows older than 24 h are never sent automatically): npm run notifications:doctor` : ''}`);
+        shown = true;
+      }
       else if (verdict && !verdict.ready && shown !== false) { log('[email-worker] NOT SENDING: inspect email_worker_* events.'); shown = false; }
       else if (!verdict && now() - startedAt > (options.readyTimeoutMs ?? 40_000) && shown !== false) {
         current.reason = 'readiness-timeout'; shown = false;
@@ -190,4 +219,4 @@ function startEmailWorker(options) {
   } };
 }
 
-module.exports = { describeEmailRuntime, acquireWorkerLock, startEmailWorker, readinessOf, EXIT_CONFIG_REFUSED };
+module.exports = { pushEnvironment, PUSH_SUBJECT, describeEmailRuntime, acquireWorkerLock, startEmailWorker, readinessOf, EXIT_CONFIG_REFUSED };

@@ -71,7 +71,7 @@ async function main() {
           }
           ready = true;
           logSafely('info', 'Commerce email worker ready', { event: 'email_worker_ready', workerInstanceId, sendMode: config.sendMode,
-            dispatchEnabled: config.dispatchEnabled, producerEnabledInThisEnvironment: config.enqueueEnabled, allowlistSize: config.allowedRecipients.length }); }
+            dispatchEnabled: config.dispatchEnabled, producerEnabledInThisEnvironment: config.enqueueEnabled, allowlistSize: config.allowedRecipients.length, pushEnabled: Boolean(pushDispatcher) }); }
         const pass = permission.allowed ? await dispatcher.runBatch() : { claimed: 0 };
         if (pushDispatcher) await pushDispatcher.runBatch();
         failures = 0;

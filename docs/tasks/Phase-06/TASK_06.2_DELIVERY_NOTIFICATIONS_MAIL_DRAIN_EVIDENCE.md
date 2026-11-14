@@ -85,3 +85,24 @@ Firefox cannot launch on this machine (`browserType.launch: spawn UNKNOWN`), so 
 - **Notifications spec stall: cause established.** Reproduced deliberately with `--workers=8 --repeat-each=6` on Chromium and WebKit (31 of 60 failed). Every failure listed only static build assets as pending (`/assets/AccountPage-*.js`, its CSS and its lazy dependencies) and no `/api/` request: under CPU saturation the lazy Account chunk does not finish loading within the 20 s wait. It is load starvation of the browser and the single `vite preview` process, not a card or fixture defect. At the configured `workers: 1` (what CI uses) the spec passed 10/10 after this change and 30/30 earlier.
 - **Duplicate "On" text removed.** A successful enable or turn-off no longer adds a second message; the status line, a live region, already states the new state.
 - **Two local edits committed** as their own commits: the admin route first-load loader in `apps/frontend/src/routes/index.tsx` (typecheck, lint and the 1650 unit tests pass with it; no browser test was run for it) and the supervised-restart section of `TASK_06.2_RUNTIME_RELIABILITY_EVIDENCE.md` (recorded by its author, not re-verified here).
+
+## Live email to every customer and delivery push on the dev stack (owner-approved 2026-11-14)
+
+The owner asked for every customer to receive welcome and out-for-delivery email, and for delivery push to work. The backend env file is not readable by the agent, so the launcher supplies the settings per start instead of an env-file edit:
+
+- `npm run dev:stack:supervised:live` / `npm run dev:stack:restart:live` pass `--allow-email-live --allow-push` to `apps/backend/scripts/dev-payment-runtime.cjs`. Live mode sets `COMMERCE_EMAIL_LIVE_APPROVED_TARGET` to the identity the launcher has just verified (never inherited from a file) and requires the producer, `BREVO_API_KEY` and a trusted origin. Push needs an email worker, uses a VAPID pair generated once into the gitignored `apps/backend/.cache/web-push-vapid.json` (never printed), and a public project URL as the VAPID subject.
+- The allowlist profile is unchanged, and nothing is implied by any other flag.
+- Worker readiness no longer reports "NOT SENDING" when old rows await review: only a paused worker is not sending; review-needed rows are reported next to READY.
+
+| Claim | Evidence | Status |
+| --- | --- | --- |
+| Old stack | All recorded supervisor PIDs confirmed not running, ports 3000/5000 free; three control/lock files renamed `*.stale-20261114` (not deleted) | Resolved |
+| Live preflight | PASS; 5 fresh (< 24 h) queued rows reported before start | VERIFIED |
+| Worker ready, live mode | `email_worker_permission` reason `live-approved-target`; `email_worker_ready` `sendMode: live` | VERIFIED |
+| Provider accepted | First live start: one `email_provider_accepted`; queue `ACCEPTED` 16 → 17; the other 4 fresh rows became `SUPPRESSED` by the existing suppression rules | VERIFIED (1 row) |
+| Old rows | 26 rows older than 24 h stay `READY` for review and were not sent | VERIFIED |
+| Push enabled in the worker | `email_worker_ready` `pushEnabled: true`; `dev:stack:status`: "sending to every customer (live mode); delivery push on" | VERIFIED |
+| Account card shows Enable as available | Needs a signed-in customer in a browser | NOT VERIFIED |
+| Provider delivered / inbox received / OS toast | Not observed | NOT VERIFIED |
+
+`npm run notifications:doctor` reads the env files in its own process, so it still shows the file configuration (allowlist, push off) rather than the launcher's per-start settings; `npm run dev:stack:status` and the worker log show the running mode.

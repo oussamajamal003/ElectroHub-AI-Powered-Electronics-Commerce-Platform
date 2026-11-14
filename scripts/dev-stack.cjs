@@ -60,9 +60,11 @@ function publicDependencyStatuses(store, photoRoute, contactConfigured) {
 /** Says what a queued order, welcome or delivery email will do in this runtime, and the supported command that changes it. */
 function emailEvidence(owner) {
   if (!owner) return 'No supervised runtime: nothing drains queued mail. Start with npm run dev:stack:supervised:email';
-  if (owner.email?.ready && owner.email?.producerEnabled) return 'Worker is draining allowlisted recipients. READY is not provider acceptance or inbox delivery';
+  if (owner.email?.ready && owner.email?.producerEnabled) return owner.email?.mode === 'live'
+    ? `Worker is sending to every customer (live mode)${owner.email?.push ? '; delivery push on' : ''}. READY is not provider acceptance or inbox delivery`
+    : 'Worker is draining allowlisted recipients. READY is not provider acceptance or inbox delivery';
   if (owner.email?.started || owner.email?.requested) return `${owner.email?.reason ?? 'Worker requested but not ready'}. Check with npm run notifications:doctor`;
-  return `${owner.email?.reason ?? 'disabled-by-default'}: events are still queued but NOT sent. Restart with npm run dev:stack:restart:email (approved allowlist only); inspect the queue with npm run notifications:doctor`;
+  return `${owner.email?.reason ?? 'disabled-by-default'}: events are still queued but NOT sent. Restart with npm run dev:stack:restart:email (approved allowlist) or npm run dev:stack:restart:live (every customer, plus push); inspect the queue with npm run notifications:doctor`;
 }
 async function report() {
   let owner = null; let ownership = 'No authenticated checkout supervisor.';
@@ -187,13 +189,14 @@ async function start(options = {}, deps = {}) {
     const owner = await getOwner();
     if (owner) {
       if (!await verifyOwner(owner)) throw new Error('Existing supervisor/API ownership or readiness failed. No replacement started.');
-      if (options.email && !owner.email?.started) throw new Error('Existing runtime has email disabled; stop its owning session and start with approved allowlist configuration.');
+      if ((options.email || options.live) && !owner.email?.started) throw new Error('Existing runtime has email disabled; restart it with the email option you want.');
     } else {
       await free(5000);
       if (inspectDisk().status === 'BLOCKED') throw new Error('Workspace disk has less than 256 MiB free; free space before building/starting another runtime. No payment supervisor started.');
       await compile();
       if (stopping) return;
-      const args = ['--start', '--allow-dev-checkout', '--recovery-mode=checkout', ...(options.email ? ['--allow-email-allowlist'] : [])];
+      const args = ['--start', '--allow-dev-checkout', '--recovery-mode=checkout', ...(options.email ? ['--allow-email-allowlist'] : []),
+        ...(options.live ? ['--allow-email-live'] : []), ...(options.push ? ['--allow-push'] : [])];
       ownedPayment = watch(forkChild(path.join(backend, 'scripts/dev-payment-runtime.cjs'), args,
         { cwd: backend, windowsHide: true, stdio: ['ignore', 'inherit', 'inherit', 'ipc'], env: { ...process.env, PORT: '5000', NODE_ENV: 'development' } }));
       await until(async () => { if (failure || stopping) throw failure || new Error('Startup stopped.'); return verifyOwner(await getOwner()); });
@@ -232,8 +235,12 @@ async function start(options = {}, deps = {}) {
 }
 async function main(argv = process.argv.slice(2)) {
   const [command = 'status', ...flags] = argv;
-  if (flags.some(flag => flag !== '--allow-email-allowlist') || !['start', 'status', 'doctor', 'stop', 'restart'].includes(command) ||
-      flags.length > 1 || flags.length && !['start', 'restart'].includes(command)) throw new Error('Use start/status/doctor/stop/restart; start/restart optionally accept --allow-email-allowlist.');
+  const known = ['--allow-email-allowlist', '--allow-email-live', '--allow-push'];
+  if (flags.some(flag => !known.includes(flag)) || new Set(flags).size !== flags.length || !['start', 'status', 'doctor', 'stop', 'restart'].includes(command) ||
+      flags.length && !['start', 'restart'].includes(command) || flags.includes('--allow-email-allowlist') && flags.includes('--allow-email-live') ||
+      flags.includes('--allow-push') && flags.length === 1) {
+    throw new Error('Use start/status/doctor/stop/restart; start/restart accept --allow-email-allowlist or --allow-email-live, optionally with --allow-push.');
+  }
   if (command === 'status' || command === 'doctor') {
     const result = await report();
     if (result.services.some(row => ['Frontend :3000', 'Backend :5000', 'Database', 'Payment supervisor'].includes(row.service) && row.status !== 'READY' || row.service === 'Workspace disk' && row.status === 'BLOCKED')) process.exitCode = 1;
@@ -245,7 +252,7 @@ async function main(argv = process.argv.slice(2)) {
     if (stopped) await until(() => !fs.existsSync(stackFile), 55000);
     if (command === 'stop') return;
   }
-  return start({ email: flags.includes('--allow-email-allowlist') });
+  return start({ email: flags.includes('--allow-email-allowlist'), live: flags.includes('--allow-email-live'), push: flags.includes('--allow-push') });
 }
 if (require.main === module) {
   const restoreOut = safety.installSanitizedOutput(process.stdout); const restoreErr = safety.installSanitizedOutput(process.stderr);

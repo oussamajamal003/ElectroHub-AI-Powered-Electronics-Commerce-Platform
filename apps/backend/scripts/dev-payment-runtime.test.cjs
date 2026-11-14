@@ -683,3 +683,15 @@ test('expired-lease mode: one owner-named DECLINED attempt, frozen facts, Stripe
   assert.equal(worker.spawnOptions.env.COMMERCE_EMAIL_SEND_MODE, 'disabled');
   assert.equal(state.logs.find(log => log.readiness === 'PASS').recoveryMode, 'expired-lease');
 });
+
+test('live email and push are separate explicit opt-ins; push always rides an email worker', () => {
+  const base = ['--start', '--allow-dev-checkout', '--recovery-mode=checkout'];
+  assert.deepEqual(argumentsFor([...base, '--allow-email-live', '--allow-push']),
+    { start: true, mode: 'checkout', allowEmailAllowlist: false, allowEmailLive: true, allowPush: true });
+  assert.deepEqual(argumentsFor([...base, '--allow-email-allowlist', '--allow-push']),
+    { start: true, mode: 'checkout', allowEmailAllowlist: true, allowPush: true });
+  assert.throws(() => argumentsFor([...base, '--allow-email-live', '--allow-email-allowlist']), /not both/);
+  assert.throws(() => argumentsFor([...base, '--allow-email-live', '--no-email']), /not both/);
+  assert.throws(() => argumentsFor([...base, '--allow-push']), /needs the email worker/);
+  assert.deepEqual(argumentsFor(base), { start: true, mode: 'checkout', allowEmailAllowlist: false }); // nothing implied
+});
