@@ -15,14 +15,15 @@ describe('Delivery notification preferences', () => {
     permission('default');
     mocks.pushSupported.mockReturnValue(true);
     mocks.pushStatus.mockResolvedValue({ available: true, enabled: false });
-    mocks.enablePush.mockResolvedValue(undefined);
+    mocks.enablePush.mockImplementation(async () => { permission('granted'); });
     mocks.disablePush.mockResolvedValue(undefined);
   });
 
   it('asks for permission only from the Enable button and can be turned off again', async () => {
     render(<DeliveryNotificationPreferences userId="customer" />);
     await waitFor(() => expect(enableButton()).toBeEnabled());
-    expect(card().getByText('Available')).toBeVisible();
+    expect(card().getByText('Permission required')).toBeVisible();
+    expect(screen.getByText('Browser permission has not been granted.')).toBeVisible();
     // Mounting and reading the status never opens the browser prompt.
     expect(mocks.enablePush).not.toHaveBeenCalled();
     fireEvent.click(enableButton());
@@ -45,37 +46,33 @@ describe('Delivery notification preferences', () => {
     expect(mocks.enablePush).not.toHaveBeenCalled();
   });
 
-  it('keeps the control disabled while the server reports push unavailable, and Check again re-reads it', async () => {
+  it('reports configured push as temporarily unavailable when a granted browser lacks a subscription', async () => {
+    permission('granted');
     mocks.pushStatus.mockResolvedValue({ available: false, enabled: false });
     render(<DeliveryNotificationPreferences userId="customer" />);
-    expect(await screen.findByText(/Browser alerts are not available right now/)).toBeVisible();
-    expect(screen.getByText(/still get order updates by email/)).toBeVisible();
-    expect(card().getByText('Unavailable')).toBeVisible();
-    expect(enableButton()).toBeDisabled();
+    expect(await screen.findByText('Temporarily unavailable', { exact: true })).toBeVisible();
+    expect(screen.getByText(/Order emails are sent separately/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Retry notifications setup' })).toBeEnabled();
 
     // Still unavailable: the customer is told the check ran, and the control stays disabled.
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
-    expect(await screen.findByText('Checked just now: browser alerts are still unavailable.')).toBeVisible();
+    expect(await screen.findByText('Checked just now: notifications still need setup. You can retry.')).toBeVisible();
     expect(mocks.pushStatus).toHaveBeenCalledTimes(2);
-    expect(enableButton()).toBeDisabled();
 
-    // Available on the next check: the control enables, and permission is still not requested until it is pressed.
+    // Server setup recovering does not claim enabled before a browser subscription exists.
     mocks.pushStatus.mockResolvedValue({ available: true, enabled: false });
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
-    await waitFor(() => expect(enableButton()).toBeEnabled());
-    expect(screen.queryByText(/not available right now/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Check again' })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Retry notifications setup' })).toBeEnabled());
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeVisible();
     expect(mocks.enablePush).not.toHaveBeenCalled();
   });
 
   it('claims nothing about availability when the lookup fails, and recovers on Check again', async () => {
     mocks.pushStatus.mockRejectedValueOnce(new Error('offline'));
     render(<DeliveryNotificationPreferences userId="customer" />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('could not check your notification settings');
-    expect(screen.getByText('Notification status could not be checked.')).toBeVisible();
-    expect(screen.queryByText(/not available right now/)).not.toBeInTheDocument();
-    expect(card().queryByText('Unavailable')).not.toBeInTheDocument();
-    expect(enableButton()).toBeDisabled();
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not check notification setup right now');
+    expect(screen.getByText('Notifications are not active on this browser.')).toBeVisible();
+    expect(card().getByText('Temporarily unavailable')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
     await waitFor(() => expect(enableButton()).toBeEnabled());
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -84,9 +81,10 @@ describe('Delivery notification preferences', () => {
   it('shows a browser block as its own state and reports a denied prompt', async () => {
     permission('denied');
     const view = render(<DeliveryNotificationPreferences userId="customer" />);
-    expect(await screen.findByText(/This browser is blocking notifications for ElectroHub/)).toBeVisible();
-    expect(card().getByText('Blocked in browser')).toBeVisible();
+    expect(await screen.findByText(/Notifications are blocked for ElectroHub/)).toBeVisible();
+    expect(card().getByText('Permission blocked')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Check again' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Enable delivery notifications' })).not.toBeInTheDocument();
     view.unmount();
 
     permission('default');
@@ -98,7 +96,7 @@ describe('Delivery notification preferences', () => {
     await waitFor(() => expect(enableButton()).toBeEnabled());
     fireEvent.click(enableButton());
     expect(await screen.findByRole('alert')).toHaveTextContent('browser settings');
-    expect(card().getByText('Blocked in browser')).toBeVisible();
+    expect(card().getByText('Permission blocked')).toBeVisible();
   });
 
   it('keeps the previous state and explains when enabling fails for another reason', async () => {
@@ -107,7 +105,42 @@ describe('Delivery notification preferences', () => {
     await waitFor(() => expect(enableButton()).toBeEnabled());
     fireEvent.click(enableButton());
     expect(await screen.findByRole('alert')).toHaveTextContent('Permission was not granted');
-    expect(enableButton()).toBeEnabled();
-    expect(card().getByText('Available')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Retry notifications setup' })).toBeEnabled();
+    expect(card().getByText('Temporarily unavailable')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Retry notifications setup' })).toBeEnabled();
+  });
+
+  it('does not claim enabled when push initialization fails and recovers when retried', async () => {
+    mocks.enablePush.mockRejectedValueOnce(new Error('Service worker setup failed')).mockImplementationOnce(async () => { permission('granted'); });
+    render(<DeliveryNotificationPreferences userId="customer" />);
+    await waitFor(() => expect(enableButton()).toBeEnabled());
+    fireEvent.click(enableButton());
+    expect(await screen.findByRole('alert')).toHaveTextContent('Service worker setup failed');
+    expect(card().getByText('Temporarily unavailable')).toBeVisible();
+    expect(screen.queryByText('Notifications are on for this browser.')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry notifications setup' }));
+    expect(await screen.findByRole('button', { name: 'Turn off notifications' })).toBeEnabled();
+  });
+
+  it('prevents repeated activation while an initialization is in flight', async () => {
+    let finish!: () => void;
+    mocks.enablePush.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    render(<DeliveryNotificationPreferences userId="customer" />);
+    await waitFor(() => expect(enableButton()).toBeEnabled());
+    const enable = enableButton();
+    fireEvent.click(enable);
+    fireEvent.click(enable);
+    expect(mocks.enablePush).toHaveBeenCalledTimes(1);
+    permission('granted');
+    finish();
+    await screen.findByRole('button', { name: 'Turn off notifications' });
+  });
+
+  it('does not repeat status or push initialization when the account card rerenders', async () => {
+    const view = render(<DeliveryNotificationPreferences userId="customer" />);
+    await waitFor(() => expect(enableButton()).toBeEnabled());
+    view.rerender(<DeliveryNotificationPreferences userId="customer" />);
+    await waitFor(() => expect(mocks.pushStatus).toHaveBeenCalledTimes(1));
+    expect(mocks.enablePush).not.toHaveBeenCalled();
   });
 });

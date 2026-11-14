@@ -23,13 +23,14 @@ async function account(page: Page, width: number, options: { available?: boolean
       },
     } };
     Object.defineProperty(window, 'PushManager', { value: class {}, configurable: true });
-    const state = window as unknown as { __permissionRequests: number };
+    const state = window as unknown as { __permissionRequests: number; __setNotificationPermission: (permission: Permission) => void };
     state.__permissionRequests = 0;
     const notifications = { permission: initialPermission, requestPermission: async () => {
       state.__permissionRequests += 1;
       if (notifications.permission === 'default') notifications.permission = 'granted';
       return notifications.permission;
     } };
+    state.__setNotificationPermission = permission => { notifications.permission = permission; };
     Object.defineProperty(window, 'Notification', { value: notifications, configurable: true });
     Object.defineProperty(navigator, 'serviceWorker', { value: { getRegistration: async () => registered ? registration : undefined,
       register: async () => { registered = true; return registration; }, ready: Promise.resolve(registration) }, configurable: true });
@@ -60,7 +61,9 @@ Pending at failure: ${[...pending].join(', ') || 'none'}`); };
   const section = page.getByRole('region', { name: 'Delivery Notifications' });
   // First paint follows session restore and the lazy Account chunk.
   await expect(section).toBeVisible({ timeout: 20_000 }).catch(stalled);
-  return { server, section, permissionRequests: () => page.evaluate(() => (window as unknown as { __permissionRequests: number }).__permissionRequests) };
+  return { server, section,
+    permissionRequests: () => page.evaluate(() => (window as unknown as { __permissionRequests: number }).__permissionRequests),
+    setPermission: (permission: Permission) => page.evaluate(value => (window as unknown as { __setNotificationPermission: (permission: Permission) => void }).__setNotificationPermission(value), permission) };
 }
 
 /** The card stays inside the viewport and nothing in it scrolls sideways. */
@@ -77,13 +80,13 @@ async function capture(page: Page, section: ReturnType<Page['getByRole']>, name:
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
 }
 
-for (const width of [390, 1440]) {
+for (const width of [390, 1280]) {
   test(`delivery preferences: enable from the keyboard and turn off at ${width}px`, async ({ page }, info) => {
     const { section, permissionRequests } = await account(page, width);
     await expect(page.getByRole('button', { name: /^Notifications/ })).toHaveCount(0); // the header bell stays removed
     const enable = section.getByRole('button', { name: 'Enable delivery notifications' });
     await expect(enable).toBeEnabled();
-    await expect(section.getByText('Available', { exact: true })).toBeVisible();
+    await expect(section.getByText('Permission required', { exact: true })).toBeVisible();
     expect(await permissionRequests()).toBe(0); // loading the page never opens the browser prompt
     await expectFits(page, section, width);
     await capture(page, section, `push-preferences-available-${width}`, file => info.outputPath(file));
@@ -101,33 +104,36 @@ for (const width of [390, 1440]) {
   });
 
   test(`delivery preferences: backend reports push unavailable at ${width}px`, async ({ page }, info) => {
-    const { server, section, permissionRequests } = await account(page, width, { available: false });
-    const enable = section.getByRole('button', { name: 'Enable delivery notifications' });
-    await expect(section.getByText('Browser alerts are not available right now.')).toBeVisible();
-    await expect(section.getByText('Unavailable', { exact: true })).toBeVisible();
-    await expect(enable).toBeDisabled();
+    const { server, section, permissionRequests } = await account(page, width, { available: false, permission: 'granted' });
+    const enable = section.getByRole('button', { name: 'Retry notifications setup' });
+    await expect(section.getByText('Notifications are temporarily unavailable.', { exact: false })).toBeVisible();
+    await expect(section.getByText('Temporarily unavailable', { exact: true })).toBeVisible();
+    await expect(enable).toBeEnabled();
     await expectFits(page, section, width);
     await capture(page, section, `push-preferences-unavailable-${width}`, file => info.outputPath(file));
 
     const before = server.statusReads;
     await section.getByRole('button', { name: 'Check again' }).click();
-    await expect(section.getByText('Checked just now: browser alerts are still unavailable.')).toBeVisible();
+    await expect(section.getByText('Checked just now: notifications still need setup. You can retry.')).toBeVisible();
     expect(server.statusReads).toBeGreaterThan(before);
-    await expect(enable).toBeDisabled();
 
-    server.available = true; // the operator enabled push: the next check turns the control on, still without a prompt
+    server.available = true; // configuration recovered, but no active subscription means setup is still required
     await section.getByRole('button', { name: 'Check again' }).click();
     await expect(enable).toBeEnabled();
-    await expect(section.getByRole('button', { name: 'Check again' })).toHaveCount(0);
+    await expect(section.getByRole('button', { name: 'Check again' })).toBeVisible();
     expect(await permissionRequests()).toBe(0);
   });
 }
 
 test('delivery preferences: a browser-level block is explained and never re-prompts on load', async ({ page }, info) => {
-  const { section, permissionRequests } = await account(page, 1440, { permission: 'denied' });
-  await expect(section.getByText('This browser is blocking notifications for ElectroHub.')).toBeVisible();
-  await expect(section.getByText('Blocked in browser', { exact: true })).toBeVisible();
+  const { section, permissionRequests, setPermission } = await account(page, 1280, { permission: 'denied' });
+  await expect(section.getByText('Notifications are blocked for ElectroHub.')).toBeVisible();
+  await expect(section.getByText('Permission blocked', { exact: true })).toBeVisible();
   await expect(section.getByRole('button', { name: 'Check again' })).toBeEnabled();
   expect(await permissionRequests()).toBe(0);
-  await capture(page, section, 'push-preferences-blocked-1440', file => info.outputPath(file));
+  await capture(page, section, 'push-preferences-blocked-1280', file => info.outputPath(file));
+  await setPermission('granted'); // Simulate a site-settings change without opening a browser permission dialog.
+  await section.getByRole('button', { name: 'Check again' }).click();
+  await expect(section.getByText('Temporarily unavailable', { exact: true })).toBeVisible(); // Granted, but no registered push subscription.
+  expect(await permissionRequests()).toBe(0);
 });
