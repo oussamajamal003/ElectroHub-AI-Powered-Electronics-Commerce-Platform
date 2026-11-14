@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Routes, Route, Outlet, useLocation } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { adminQueryClient } from '@/lib/query';
@@ -17,7 +17,7 @@ import { CheckoutDraftSession } from '@/features/checkout/CheckoutDraftSession';
 import { PaymentLockProvider } from '@/features/checkout/PaymentLockContext';
 import { OrdersPage } from '@/pages/customer/OrdersPage';
 import { useCart } from '@/features/cart/context';
-import { CustomerAccountSkeleton, AdminAccountSkeleton } from '@/features/account/AccountSkeleton';
+import { CustomerAccountSkeleton } from '@/features/account/AccountSkeleton';
 import { DetailsSkeleton } from '@/features/orders/OrderDetailsSkeleton';
 import { TrackingSkeleton } from '@/features/delivery/TrackingSkeleton';
 import orderStyles from '@/features/orders/Orders.module.scss';
@@ -80,8 +80,14 @@ const AdminInvitePage = lazy(() => import('@/pages/admin/AdminInvitePage').then(
 const AdminForgotPasswordPage = lazy(() => import('@/pages/admin/AdminForgotPasswordPage').then(module => ({ default: module.AdminForgotPasswordPage })));
 const AdminActivatePage = lazy(() => import('@/pages/admin/AdminActivatePage').then(module => ({ default: module.AdminActivatePage })));
 const route = (content: React.ReactNode, fallback: React.ReactNode = <ElectroHubLoader page />) => <Suspense fallback={fallback}>{content}</Suspense>;
-// Inside the admin shell a page's code chunk loads behind a page-shaped skeleton; the full-page loader is kept for a whole-app reload.
-const adminRoute = (content: React.ReactNode, fallback: React.ReactNode = <AdminPageSkeleton />) => <Suspense fallback={fallback}>{content}</Suspense>;
+// The first matched route after a document load uses the brand loader. Once
+// the app has mounted, admin client-side navigation keeps its page skeletons.
+function AdminRoute({ content, fallback = <AdminPageSkeleton /> }: { content: React.ReactNode; fallback?: React.ReactNode }) {
+  const [initialDocumentLoad, setInitialDocumentLoad] = useState(true);
+  useEffect(() => { setInitialDocumentLoad(false); }, []);
+  return <Suspense fallback={initialDocumentLoad ? <ElectroHubLoader page /> : fallback}>{content}</Suspense>;
+}
+const adminRoute = (content: React.ReactNode, fallback?: React.ReactNode) => <AdminRoute content={content} fallback={fallback} />;
 
 /** Task 05.2: every /admin page reads and writes the administrator's own query cache, never the storefront's. */
 function AdminQueryBoundary() { return <QueryClientProvider client={adminQueryClient}><Outlet /></QueryClientProvider>; }
@@ -158,9 +164,9 @@ export function AppRoutes() {
             <Route path="/admin/analytics" element={adminRoute(<AdminAnalyticsPage />)} />
             <Route path="/admin/settings" element={adminRoute(<AdminSettingsPage />)} />
             <Route path="/admin/settings/administrators" element={adminRoute(<AdministratorsAccessGate><AdminAdministratorsPage /></AdministratorsAccessGate>)} />
-            <Route path="/admin/profile" element={adminRoute(<AdminProfilePage />, <AdminAccountSkeleton variant="profile" />)} />
-            <Route path="/admin/profile/security" element={adminRoute(<AdminSecurityPage />, <AdminAccountSkeleton variant="security" />)} />
-            <Route path="/admin/profile/sessions" element={adminRoute(<AdminSessionsPage />, <AdminAccountSkeleton variant="sessions" />)} />
+            <Route path="/admin/profile" element={adminRoute(<AdminProfilePage />, <ElectroHubLoader page />)} />
+            <Route path="/admin/profile/security" element={adminRoute(<AdminSecurityPage />, <ElectroHubLoader page />)} />
+            <Route path="/admin/profile/sessions" element={adminRoute(<AdminSessionsPage />, <ElectroHubLoader page />)} />
             <Route path="/admin/*" element={adminRoute(<AdminNotFoundPage />)} />
           </Route>
         </Route>
