@@ -308,3 +308,17 @@ describe('size budget', () => {
     expect(bytes).toBeLessThan(90_000);
   });
 });
+
+describe('out-for-delivery email call to action', () => {
+  it('has one working button to the customer order details page, in the HTML and the text part', () => {
+    const fixture = commerceEmailFixtures.orderOutForDelivery;
+    const destination = `https://electrohub.example/orders/${encodeURIComponent(fixture.orderReference)}`;
+    const { html, text } = render('orderOutForDelivery');
+    expect(html.match(/View Order Details/g)).toHaveLength(1);
+    // /orders/:orderReference is the session-gated order details route; ownership is enforced by the API.
+    expect(html).toContain(`href="${destination}"`);
+    expect(text).toContain(destination);
+    // No administrator or tracking-token destination leaks into a customer message.
+    expect(html).not.toContain('/admin/');
+  });
+});

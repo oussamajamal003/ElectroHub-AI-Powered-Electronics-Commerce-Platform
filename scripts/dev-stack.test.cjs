@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const net = require('node:net');
-const { start, assertFree, diskReadiness, publicDependencyStatuses, main } = require('./dev-stack.cjs');
+const { start, assertFree, diskReadiness, publicDependencyStatuses, main, emailEvidence } = require('./dev-stack.cjs');
 
 function harness(overrides = {}) {
   const children = []; const actions = []; let stop; let snapshot; let pid = 100;
@@ -109,4 +109,22 @@ test('doctor distinguishes stale photo routes and missing contact recipient from
   assert.deepEqual(configured.map(row => row.status), ['READY', 'READY']);
   assert.equal(JSON.stringify(configured).includes('support@example.invalid'), false);
   assert.deepEqual(publicDependencyStatuses({}, {}).map(row => row.status), ['UNAVAILABLE', 'NOT VERIFIED']);
+});
+
+test('email status says whether queued mail is drained and names the supported command', () => {
+  assert.match(emailEvidence(null), /nothing drains queued mail.*dev:stack:supervised:email/);
+  const disabled = emailEvidence({ email: { started: false, reason: 'disabled-by-default' } });
+  assert.match(disabled, /disabled-by-default: events are still queued but NOT sent/);
+  assert.match(disabled, /dev:stack:restart:email/);
+  assert.match(emailEvidence({ email: { requested: true, started: false, reason: 'allowlist-backlog' } }), /^allowlist-backlog\. Check with npm run notifications:doctor$/);
+  const ready = emailEvidence({ email: { ready: true, producerEnabled: true } });
+  assert.match(ready, /draining allowlisted recipients/);
+  assert.match(ready, /not provider acceptance or inbox delivery/);
+});
+
+test('the email-enabled stack commands only add the approved allowlist flag', () => {
+  const scripts = require('../package.json').scripts;
+  assert.equal(scripts['dev:stack:supervised:email'], 'node scripts/dev-stack.cjs start --allow-email-allowlist');
+  assert.equal(scripts['dev:stack:restart:email'], 'node scripts/dev-stack.cjs restart --allow-email-allowlist');
+  assert.equal(scripts['dev:stack:supervised'], 'node scripts/dev-stack.cjs start');
 });

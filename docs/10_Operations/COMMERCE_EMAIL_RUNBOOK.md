@@ -21,7 +21,7 @@ identity and reason; it refuses to start unless that permission is allowed, and 
 
 ## Development runtime (normal startup is enough)
 
-For the main port 3000/5000 application, prefer `npm run dev:stack:supervised -- --allow-email-allowlist` from the repository root after configuring the approved allowlist and an empty sendable backlog. It wraps the existing checkout supervisor, starts Vite, and supervises the separate email worker without a general payment-recovery runner. Without this explicit flag, commerce dispatch stays disabled. See [development runtime](../11_Workflow/DEVELOPMENT_RUNTIME.md) for status, shutdown, restart and legacy-process ownership rules.
+For the main port 3000/5000 application, prefer `npm run dev:stack:supervised:email` (the named form of `npm run dev:stack:supervised -- --allow-email-allowlist`) from the repository root after configuring the approved allowlist and an empty sendable backlog. It wraps the existing checkout supervisor, starts Vite, and supervises the separate email worker without a general payment-recovery runner. Without this explicit flag, commerce dispatch stays disabled. Events are still enqueued in that case and wait as `READY`; `npm run dev:stack:status` reports this and `npm run notifications:doctor` (read-only) shows the queue. See [development runtime](../11_Workflow/DEVELOPMENT_RUNTIME.md) for status, shutdown, restart and legacy-process ownership rules.
 
 Commerce email needs three things in every environment: the **producer** on in every process that can finalize a payment, a **supervised worker**,
 and a **send mode**. The development launchers now provide all three, so no one-shot script or manual worker is needed after a purchase.

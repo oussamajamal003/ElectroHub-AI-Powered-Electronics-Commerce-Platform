@@ -23,8 +23,12 @@ Keep the first command running. Open `http://localhost:3000`; API, Swagger (`htt
 The default stack leaves commerce dispatch disabled. To request the existing approved allowlist worker:
 
 ```powershell
-npm run dev:stack:supervised -- --allow-email-allowlist
+npm run dev:stack:supervised:email      # same as: npm run dev:stack:supervised -- --allow-email-allowlist
+npm run dev:stack:restart:email         # switch an already running stack to the email-enabled profile
+npm run notifications:doctor            # read-only: producer, dispatch, send mode, queue counts, push configuration
 ```
+
+**`npm run dev` and the plain `npm run dev:stack:supervised` never send commerce email.** They still *enqueue* welcome, order and out-for-delivery events, which then wait as `READY` rows. `npm run dev:stack:status` says so on the `Commerce email worker` row (`disabled-by-default: events are still queued but NOT sent`) and names the command above. Rows older than 24 hours are never sent automatically (`staleNeedingReview`), and rows for recipients outside `COMMERCE_EMAIL_ALLOWED_RECIPIENTS` stay queued by design (`allowlistExcluded`); neither is replayed by starting the worker. Five separate claims must not be merged: *event enqueued* (outbox row), *worker ready* (status row / `email_worker_ready`), *provider accepted* (`ACCEPTED` row), *provider delivered* (Brevo transactional log) and *inbox received* (seen in the mailbox).
 
 The backend environment must already have `COMMERCE_EMAIL_ENQUEUE_ENABLED=true`, `COMMERCE_EMAIL_DISPATCH_ENABLED=true`, `COMMERCE_EMAIL_SEND_MODE=allowlist`, approved `COMMERCE_EMAIL_ALLOWED_RECIPIENTS`, a valid frontend origin and authorized Brevo configuration. The supervisor rejects any **sendable backlog for those allowlisted recipients** before starting a worker. It never enables unrestricted/live email. Producer configuration is independent of dispatch; a worker with its producer disabled is reported DEGRADED.
 

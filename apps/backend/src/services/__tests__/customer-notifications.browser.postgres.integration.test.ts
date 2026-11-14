@@ -72,8 +72,8 @@ describe.skipIf(!enabled)('notification real-browser journey on a disposable bac
       if (realPush) {
         await context.grantPermissions(['notifications'], { origin });
         await page.goto(`${origin}/account`);
-        await page.getByRole('button', { name: 'Enable Delivery Notifications' }).click();
-        try { await page.getByText('Enabled on this browser', { exact: true }).waitFor({ timeout: 60000 }); }
+        await page.getByRole('button', { name: 'Enable delivery notifications' }).click();
+        try { await page.getByText('Notifications are on for this browser.', { exact: true }).waitFor({ timeout: 60000 }); }
         catch (error) {
           const diagnostic = await page.locator('section').filter({ has: page.getByRole('heading', { name: 'Delivery Notifications' }) }).innerText();
           throw new Error(`Real push subscription prerequisite failed: ${diagnostic}`, { cause: error });

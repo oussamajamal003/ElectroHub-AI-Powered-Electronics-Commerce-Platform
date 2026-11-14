@@ -57,6 +57,13 @@ function publicDependencyStatuses(store, photoRoute, contactConfigured) {
         : 'Legacy/unverified contact recipient policy. The old backend requires Support Email; load the current compiled backend to use the approved verified-MFA-admin policy.' },
   ];
 }
+/** Says what a queued order, welcome or delivery email will do in this runtime, and the supported command that changes it. */
+function emailEvidence(owner) {
+  if (!owner) return 'No supervised runtime: nothing drains queued mail. Start with npm run dev:stack:supervised:email';
+  if (owner.email?.ready && owner.email?.producerEnabled) return 'Worker is draining allowlisted recipients. READY is not provider acceptance or inbox delivery';
+  if (owner.email?.started || owner.email?.requested) return `${owner.email?.reason ?? 'Worker requested but not ready'}. Check with npm run notifications:doctor`;
+  return `${owner.email?.reason ?? 'disabled-by-default'}: events are still queued but NOT sent. Restart with npm run dev:stack:restart:email (approved allowlist only); inspect the queue with npm run notifications:doctor`;
+}
 async function report() {
   let owner = null; let ownership = 'No authenticated checkout supervisor.';
   try { owner = await paymentOwner(); } catch (error) { ownership = error.message; }
@@ -80,7 +87,7 @@ async function report() {
   add('Payment supervisor', owned ? 'READY' : owner ? 'BLOCKED' : 'NOT VERIFIED', owned ? 'Authenticated owner + private API process/parent binding' : ownership);
   add('Stripe Test Mode / listener', owned && owner.listenerAlive ? 'READY' : owner ? 'BLOCKED' : 'NOT VERIFIED', 'Supervisor startup account/listener validation and private live payment authority; customer capability endpoint/payment completion NOT VERIFIED');
   add('Commerce email worker', !owner ? 'NOT VERIFIED' : owner.email?.ready && owner.email?.producerEnabled ? 'READY' : owner.email?.started || owner.email?.requested ? 'DEGRADED' : 'DISABLED BY APPROVED POLICY',
-    owner?.email?.reason ?? 'Worker readiness is separate from provider acceptance/inbox delivery');
+    emailEvidence(owner));
   add('Socket.IO', socket.ok && socket.text?.startsWith('0{') ? 'READY' : 'UNAVAILABLE', 'Engine.IO handshake; authenticated delivery NOT VERIFIED');
   add('Swagger', swagger.ok ? 'READY' : 'UNAVAILABLE', 'HTTP docs probe');
   add('Public products', products.ok ? 'READY' : 'UNAVAILABLE', `HTTP ${products.status ?? 'unreachable'}; authenticated cart/orders NOT VERIFIED`);
@@ -244,4 +251,4 @@ if (require.main === module) {
   const restoreOut = safety.installSanitizedOutput(process.stdout); const restoreErr = safety.installSanitizedOutput(process.stderr);
   main().catch(error => { console.error(safety.sanitize(error.message)); process.exitCode = 1; }).finally(() => { restoreOut(); restoreErr(); });
 }
-module.exports = { probe, report, assertFree, verifiedPayment, diskReadiness, publicDependencyStatuses, start, main };
+module.exports = { emailEvidence, probe, report, assertFree, verifiedPayment, diskReadiness, publicDependencyStatuses, start, main };
