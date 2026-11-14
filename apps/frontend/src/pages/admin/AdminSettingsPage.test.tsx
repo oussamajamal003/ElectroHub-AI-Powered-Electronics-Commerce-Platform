@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AdminSettingsPage } from './AdminSettingsPage';
 import { AdminToastProvider } from '@/features/admin/shared/AdminUi';
+import { toast } from '@/components/ui/Toast';
 import { ApiError } from '@/lib/api';
 import {
   useStoreSettings, useUpdateStoreSettings, useShippingSettings, useUpdateShippingSettings, useNotificationPreferences,
@@ -40,7 +41,7 @@ const asAdministrator = (capabilities: { isOwner: boolean; canManageAdmins: bool
   vi.mocked(useAdminProfile).mockReturnValue({ data: { capabilities } } as unknown as ReturnType<typeof useAdminProfile>);
 
 const profile = {
-  storeName: 'ElectroHub', supportEmail: 'hello@electrohub.com', supportPhone: '+1 555 000 0000', addressLine1: '123 Commerce Street',
+  storeName: 'ElectroHub', businessHours: null, supportEmail: 'hello@electrohub.com', supportPhone: '+1 555 000 0000', addressLine1: '123 Commerce Street',
   addressLine2: null, city: 'New York', region: 'NY', postalCode: '10001', country: 'United States', timezone: 'America/New_York',
   currency: 'USD' as const, version: 4, updatedAt: '2026-11-01T00:00:00.000Z',
 };
@@ -144,7 +145,31 @@ describe('store section', () => {
     expect(screen.queryByRole('combobox', { name: /currency/i })).not.toBeInTheDocument();
   });
 
+  it('offers example placeholders for every public contact field, which are not saved values', async () => {
+    vi.mocked(useStoreSettings).mockReturnValue(query({ ...profile, supportEmail: null, supportPhone: null, addressLine1: null, addressLine2: null,
+      city: null, country: null, businessHours: null }) as unknown as Hook<typeof useStoreSettings>);
+    renderPage();
+    expect(screen.getByLabelText('Store email')).toHaveAttribute('placeholder', 'support@example.com');
+    expect(screen.getByLabelText('Phone')).toHaveAttribute('placeholder', '+961 XX XXX XXX');
+    expect(screen.getByLabelText('Business hours')).toHaveAttribute('placeholder', 'Monday–Friday, 9:00 AM–6:00 PM');
+    // Every editable store text field has an example placeholder (Currency is read-only; Time zone is a select).
+    const expected: Record<string, string> = { 'Store name': 'Your store name', 'Address line 1': 'Street and building', 'Address line 2': 'Apartment, floor or additional details (optional)',
+      City: 'Enter city', 'State or region': 'Enter region', 'Postal code': 'Enter postal code', Country: 'Enter country' };
+    for (const [label, placeholder] of Object.entries(expected)) expect(screen.getByLabelText(label)).toHaveAttribute('placeholder', placeholder);
+    // Untouched placeholders are not values: nothing is dirty and nothing can be saved.
+    expect(screen.getByLabelText('Business hours')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
+  });
+
+  it('saves business hours with the rest of the profile, using the existing authenticated save', async () => {
+    renderPage();
+    setValue(screen.getByLabelText('Business hours'), 'Monday–Friday, 9:00 AM–6:00 PM');
+    submit('Save Changes');
+    await waitFor(() => expect(storeSave).toHaveBeenCalledWith(expect.objectContaining({ expectedVersion: 4, businessHours: 'Monday–Friday, 9:00 AM–6:00 PM' })));
+  });
+
   it('keeps Save disabled until a field actually changes, then saves with the expected version', async () => {
+    const savedToast = vi.spyOn(toast, 'success');
     renderPage();
     const save = screen.getByRole('button', { name: 'Save Changes' });
     expect(save).toBeDisabled();
@@ -157,7 +182,8 @@ describe('store section', () => {
       expectedVersion: 4, storeName: 'Northwind', timezone: 'America/New_York', supportPhone: '+1 555 000 0000',
     })));
     expect(storeSave.mock.calls[0]?.[0]).not.toHaveProperty('currency');
-    expect(await screen.findByText('Store settings saved')).toBeInTheDocument();
+    expect(savedToast).toHaveBeenCalledWith('Store settings saved');
+    savedToast.mockRestore();
   });
 
   it('a version conflict shows the banner and keeps the administrator edits', async () => {
@@ -294,6 +320,8 @@ describe('tabs and the URL', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    // Radix keeps the page behind a dialog aria-hidden until the dialog has finished closing; wait for that instead of racing it.
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument());
     expect(screen.getByRole('heading', { name: 'Store Information' })).toBeInTheDocument();
     expect(screen.getByLabelText('Store name')).toHaveValue('ElectroHub!');
 

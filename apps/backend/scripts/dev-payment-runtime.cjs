@@ -8,6 +8,7 @@ const { spawn, fork, execFileSync } = require('node:child_process');
 const safety = require('./stripe-gate-safety.cjs');
 const verifier = require('./stripe-webhook-verifier.cjs');
 const emailDev = require('./lib/commerce-email-dev.cjs');
+const { openControl } = require('../../../scripts/lib/dev-control.cjs');
 const backend = path.resolve(__dirname, '..');
 
 function existingPaymentProcesses() {
@@ -20,7 +21,7 @@ function existingPaymentProcesses() {
       `$taskCommand=[string]$_.CommandLine; if ($taskCommand -match 'payment-runner\\.(js|ts)') { ` +
       `[pscustomobject]@{pid=$_.ProcessId;kind='runner'} } elseif (` +
       `$taskCommand.IndexOf('${quotedRepository}',[StringComparison]::OrdinalIgnoreCase) -ge 0 -and ` +
-      `$taskCommand -match '(src|dist)[/\\\\]+server\\.(ts|js)') { ` +
+      `$taskCommand -match '(src|dist)[/\\\\]+(bootstrap|server)\\.(ts|js)') { ` +
       `[pscustomobject]@{pid=$_.ProcessId;kind='backend'} } }) | ConvertTo-Json -Compress`],
     { encoding: 'utf8', windowsHide: true, timeout: 5000 });
     const parsed = raw.trim() ? JSON.parse(raw) : [];
@@ -29,7 +30,7 @@ function existingPaymentProcesses() {
   return execFileSync('ps', ['-eo', 'pid=,args='], { encoding: 'utf8', timeout: 5000 }).split('\n')
     .flatMap(line => {
       const kind = /payment-runner\.(js|ts)/.test(line) ? 'runner' :
-        line.includes(path.resolve(backend, '../..')) && /(?:src|dist)[/\\]+server\.(ts|js)/.test(line) ? 'backend' : null;
+        line.includes(path.resolve(backend, '../..')) && /(?:src|dist)[/\\]+(?:bootstrap|server)\.(ts|js)/.test(line) ? 'backend' : null;
       return kind ? [{ pid: Number(line.trim().split(/\s+/)[0]), kind }] : [];
     });
 }
@@ -177,7 +178,7 @@ function argumentsFor(argv) {
   const reviewed = argv.filter(arg => /^--reviewed-recovery-attempt=[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(arg));
   const accepted = argv.filter(arg => /^--accepted-backlog-attempt=[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(arg));
   if (accepted.length > 1) throw new Error('At most one owner-accepted backlog attempt may be isolated.');
-  if (reviewed.length > (mode === 'exact-attempt' ? MAX_EXACT_ATTEMPTS : mode === 'expired-lease' ? 1 : mode === 'checkout' || mode === 'governed' ? 0 : 1) || argv.some(arg => !['--preflight', '--start', '--allow-dev-recovery', '--allow-dev-checkout', '--allow-email-allowlist'].includes(arg) && !reviewed.includes(arg) && !accepted.includes(arg)) || new Set(argv).size !== argv.length ||
+  if (reviewed.length > (mode === 'exact-attempt' ? MAX_EXACT_ATTEMPTS : mode === 'expired-lease' ? 1 : mode === 'checkout' || mode === 'governed' ? 0 : 1) || argv.some(arg => !['--preflight', '--start', '--allow-dev-recovery', '--allow-dev-checkout', '--allow-email-allowlist', '--allow-email-live', '--allow-push'].includes(arg) && !reviewed.includes(arg) && !accepted.includes(arg)) || new Set(argv).size !== argv.length ||
     argv.includes('--start') && argv.includes('--preflight')) throw new Error('Use --preflight or --start --allow-dev-recovery.');
   const start = argv.includes('--start');
   if (mode === 'checkout') {
@@ -194,7 +195,15 @@ function argumentsFor(argv) {
     throw new Error('--recovery-mode=expired-lease takes exactly one --reviewed-recovery-attempt, requires --no-email, and accepts no backlog isolation.');
   }
   if (noEmail && argv.includes('--allow-email-allowlist')) throw new Error('Choose --allow-email-allowlist or --no-email, not both.');
-  return { start, mode, allowEmailAllowlist: argv.includes('--allow-email-allowlist'), ...(noEmail ? { noEmail: true } : {}),
+  // Live mode sends to every customer recipient on this database. It is a per-start operator decision, never read from an env file.
+  const live = argv.includes('--allow-email-live'); const push = argv.includes('--allow-push');
+  if (live && argv.includes('--allow-email-allowlist')) throw new Error('Choose --allow-email-allowlist or --allow-email-live, not both.');
+  if (live && noEmail) throw new Error('Choose --allow-email-live or --no-email, not both.');
+  if (live && mode === 'expired-lease') throw new Error('--recovery-mode=expired-lease runs with email disabled.');
+  // Delivery push is dispatched by the commerce email worker, so it needs one of the email opt-ins.
+  if (push && !live && !argv.includes('--allow-email-allowlist')) throw new Error('--allow-push needs the email worker: add --allow-email-allowlist or --allow-email-live.');
+  return { start, mode, allowEmailAllowlist: argv.includes('--allow-email-allowlist'), ...(live ? { allowEmailLive: true } : {}),
+    ...(push ? { allowPush: true } : {}), ...(noEmail ? { noEmail: true } : {}),
     ...(sinceArgs.length ? { governedSince: governedSince(GOVERNED_SINCE.exec(sinceArgs[0])[1]) } : {}),
     ...(reviewed.length ? { reviewedRecoveryAttempt: reviewedIds[0], reviewedRecoveryAttempts: reviewedIds } : {}),
     ...(accepted.length ? { acceptedBacklogAttempt: accepted[0].split('=')[1].toLowerCase() } : {}) };
@@ -245,8 +254,10 @@ function normalizeWorkerAttemptIds(value, mode = 'incident-scoped') {
 }
 
 // Explicit operator approval may cover one reviewed card-entry attempt; never widen it to unrelated backlog.
-function assertReviewedRecovery(attempt, id) {
-  if (!attempt || attempt.id !== id || attempt.state !== 'AWAITING_INPUT' || attempt.orderId ||
+function assertReviewedRecovery(attempt, id, mode = 'incident-scoped') {
+  const reviewedDecline = mode === 'exact-attempt' && attempt?.state === 'DECLINED' && attempt.failureCode === 'PAYMENT_DECLINED' &&
+    attempt.providerStatus === 'requires_payment_method' && Boolean(attempt.submittedAt) && !attempt.cancelRequested;
+  if (!attempt || attempt.id !== id || !(attempt.state === 'AWAITING_INPUT' || reviewedDecline) || attempt.orderId ||
     !attempt.providerIntentId || attempt.work?.state !== 'READY') throw new Error('Reviewed recovery attempt changed; inspect it again before startup.');
 }
 
@@ -298,7 +309,7 @@ async function preflight(deps = {}, options = {}) {
       const databaseMs = Date.now() - at;
       const rows = await tx.$queryRaw`SELECT count(*)::int AS others FROM pg_stat_activity WHERE usename=current_user AND datname=current_database() AND pid<>pg_backend_pid() AND backend_type = 'client backend'`;
       // Only client connections consume pooler capacity; background workers (e.g. pg_net) are not sessions this runtime competes with.
-      const reserve = options.allowEmailAllowlist ? 15 : 10;
+      const reserve = options.allowEmailAllowlist || options.allowEmailLive ? 15 : 10;
       if (rows[0].others + reserve > 15) throw new Error('Existing sessions plus API/runner/email reserve exceed conservative DEV limit 15.');
       const migrations = await tx.$queryRaw`SELECT migration_name,checksum,started_at,finished_at,rolled_back_at,logs FROM "_prisma_migrations"`;
       const migrationCount = verifyMigrationLedger(migrations);
@@ -312,10 +323,13 @@ async function preflight(deps = {}, options = {}) {
         if (options.mode === 'expired-lease') {
           const signedEvents = attempt ? await tx.stripeEvent.count({ where: { attemptId: id } }) : -1;
           assertExpiredLeaseRecovery(attempt, id, signedEvents);
-        } else assertReviewedRecovery(attempt, id);
+        } else assertReviewedRecovery(attempt, id, options.mode);
         reviewedAttempts.push(attempt);
       }
       reviewedAttempt = reviewedAttempts[0] ?? null;
+      if (options.mode !== 'expired-lease' && reviewedAttempts.some(attempt => attempt.state === 'DECLINED') && (options.mode !== 'exact-attempt' || reviewedAttempts.length !== 1)) {
+        throw new Error('Decline-only reconciliation requires exactly one reviewed attempt; it cannot be mixed with general recovery.');
+      }
       const expiredLease = options.mode === 'expired-lease';
       if (expiredLease && (reviewedAttempts.length !== 1 || options.acceptedBacklogAttempt)) throw new Error('Expired-lease recovery requires exactly one reviewed attempt.');
       const exact = options.mode === 'exact-attempt' || expiredLease;
@@ -367,6 +381,14 @@ async function preflight(deps = {}, options = {}) {
         emailBacklog = await tx.commerceEmailOutbox.count({ where: { dispatchState: { in: ['READY', 'LEASED', 'RETRY_WAIT'] },
           recipient: { in: allowlistedRecipients(process.env) } } });
         assertNoEmailBacklog(emailBacklog);
+      } else if (options.allowEmailLive) {
+        const emailRuntime = (deps.describeEmail || emailDev.describeEmailRuntime)({ ...process.env, COMMERCE_EMAIL_DISPATCH_ENABLED: 'true', COMMERCE_EMAIL_SEND_MODE: 'live' });
+        if (!emailRuntime.producerEnabled || !emailRuntime.brevoKeyPresent || !emailRuntime.originConfigured) {
+          throw new Error('Live email needs COMMERCE_EMAIL_ENQUEUE_ENABLED=true, BREVO_API_KEY and COMMERCE_EMAIL_ORIGIN/FRONTEND_URL.');
+        }
+        // Reported, not blocking: the operator chose to send these. Rows older than 24 h are never claimed by the worker.
+        emailBacklog = await tx.commerceEmailOutbox.count({ where: { dispatchState: { in: ['READY', 'LEASED', 'RETRY_WAIT'] },
+          createdAt: { gt: new Date(Date.now() - 24 * 3_600_000) } } });
       }
       return { databaseMs, otherSessions: rows[0].others, migrationCount, unfinishedWork, unresolvedAttempts, historicalIncidents,
         emailBacklog, reviewedAttempts, taskFixtureAttempt, workerAttemptIds, governedScopedWork };
@@ -380,7 +402,7 @@ async function preflight(deps = {}, options = {}) {
       (deps.verifyBinding || require('../dist/services/payment.domain.js').verifyBinding)(reviewedAttempt, intent);
       // Expired-lease recovery additionally needs Stripe to still report the decline: the worker then only re-persists it.
       if (intent.livemode !== false || intent.status !== 'requires_payment_method' || intent.received !== 0 || (intent.capturable ?? 0) !== 0 ||
-        options.mode === 'expired-lease' && intent.declined !== true) {
+        (options.mode === 'expired-lease' || reviewedAttempt.state === 'DECLINED') && intent.declined !== true) {
         throw new Error('Reviewed recovery provider state changed; inspect it again before startup.');
       }
     }
@@ -391,12 +413,14 @@ async function preflight(deps = {}, options = {}) {
         throw new Error('Task04 synthetic provider state changed; inspect it before startup.');
       }
     }
-    return { port: env.PORT, ...safeSnapshot, recoveryMode: options.mode ?? 'incident-scoped', reviewedRecoveryCount: reviewedAttempts.length, reserve: options.allowEmailAllowlist ? 15 : 10, limit: 15,
+    return { port: env.PORT, ...safeSnapshot, recoveryMode: options.mode ?? 'incident-scoped', reviewedRecoveryCount: reviewedAttempts.length, reserve: options.allowEmailAllowlist || options.allowEmailLive ? 15 : 10, limit: 15,
       targetIdentity: resolved.runtime.identity, paymentBacklog: { unfinishedWork: snapshot.unfinishedWork,
         unresolvedAttempts: snapshot.unresolvedAttempts, historicalIncidentAttempts: snapshot.historicalIncidents },
       stripeAccountVerified: true, runtimeUrlSource,
       emailAllowlist: options.allowEmailAllowlist ? { enabled: true, pendingBacklog: snapshot.emailBacklog } : { enabled: false },
+      ...(options.allowEmailLive ? { emailLive: { enabled: true, freshRowsThatWillSend: snapshot.emailBacklog } } : {}),
       ...(options.mode === 'governed' ? { governedSince: options.governedSince, governedOpenWork: governedScopedWork } : {}),
+      ...(options.mode === 'exact-attempt' && reviewedAttempts[0]?.state === 'DECLINED' ? { declineOnly: true } : {}),
       ...(options.start ? { workerAttemptIds, ...(options.mode === 'governed' ? { workerScope: { createdSince: options.governedSince } } : {}) } : {}) };
   } finally { await prisma.$disconnect?.(); }
 }
@@ -413,7 +437,8 @@ async function supervise(config, options = {}, deps = {}) {
     throw new Error('Governed scope must match the exact --governed-since from DEV preflight and carry no attempt IDs.');
   }
   const workerAttemptIds = checkoutMode || governedMode ? [] : normalizeWorkerAttemptIds(config.workerAttemptIds, options.mode);
-  if (options.mode === 'expired-lease' && (!options.noEmail || options.allowEmailAllowlist || (config.workerAttemptIds ?? []).length !== 1)) {
+  if (config.declineOnly && (options.mode !== 'exact-attempt' || workerAttemptIds.length !== 1)) throw new Error('Decline-only scope must name exactly one reviewed attempt.');
+  if (options.mode === 'expired-lease' && (!options.noEmail || options.allowEmailAllowlist || options.allowEmailLive || (config.workerAttemptIds ?? []).length !== 1)) {
     throw new Error('Expired-lease recovery supervises exactly one attempt with email disabled.');
   }
   const exactMatches = !['exact-attempt', 'expired-lease'].includes(options.mode) || (Array.isArray(options.reviewedRecoveryAttempts) &&
@@ -426,6 +451,7 @@ async function supervise(config, options = {}, deps = {}) {
   let stopping = false; let shutdownPromise = null; let primaryFailure = null; let resolveShutdownFinished;
   const shutdownFinished = new Promise(resolve => { resolveShutdownFinished = resolve; });
   let email = { started: false, reason: 'disabled-by-default', runtime: null, stop: async () => {} };
+  let control = null; let controlPhase = 'starting'; let emailStopped = true;
   const track = (child, role, ipc = false) => {
     if (!child || !Number.isInteger(child.pid) || child.pid < 1) throw new Error('Owned process identity unavailable.');
     const record = { child, role, ipc, exited: child.exitCode !== null || Boolean(child.signalCode) };
@@ -436,6 +462,7 @@ async function supervise(config, options = {}, deps = {}) {
   const startShutdown = () => {
     if (shutdownPromise) return shutdownPromise;
     stopping = true;
+    controlPhase = 'stopping';
     shutdownPromise = (async () => {
       for (const record of records) {
         const child = record.child;
@@ -447,7 +474,7 @@ async function supervise(config, options = {}, deps = {}) {
         // terminates immediately, so allow that shutdown to drain leases before the bounded fallback.
         if (!record.ipc && !record.exited) { try { child.kill('SIGTERM'); } catch { /* checked below */ } }
       }
-      try { await email.stop(); } catch { /* the helper reports its own failure */ }
+      try { await email.stop(); } catch { emailStopped = false; primaryFailure ||= new Error('Email worker shutdown not confirmed; ownership locks retained.'); }
       const clean = await Promise.all([...records].map(record => waitForChildExit(record.child, deps.shutdownGraceMs ?? 10000)));
       if (clean.some(value => !value)) {
         for (const record of records) if (!record.exited && record.child.exitCode === null) { try { record.child.kill('SIGKILL'); } catch { /* lock retained below */ } }
@@ -461,6 +488,10 @@ async function supervise(config, options = {}, deps = {}) {
   };
   const signalHandler = () => { void startShutdown(); };
   process.once('SIGINT', signalHandler); process.once('SIGTERM', signalHandler);
+  // The stack's live IPC channel is a stop request only; it grants no payment authority.
+  const onStackMessage = message => { if (message?.type === 'dev-stack.stop') void startShutdown(); };
+  process.on('message', onStackMessage);
+  process.once('disconnect', signalHandler);
   let failRuntime;
   const failed = new Promise((_, reject) => { failRuntime = reject; });
   failed.catch(() => {});
@@ -471,6 +502,13 @@ async function supervise(config, options = {}, deps = {}) {
     void startShutdown();
   };
   try {
+    control = await (deps.openControl || openControl)(path.join(backend, '.cache/dev-payment-control.json'), `electrohub-payment:${backend}`,
+      () => ({ phase: controlPhase, mode: options.mode, backendPort: config.port,
+        apiPid: [...records].find(record => record.role === 'api')?.child.pid,
+        listenerAlive: [...records].some(record => record.role === 'stripe-cli' && !record.exited),
+        email: { ...(email.status ? email.status() : { started: email.started, ready: false, reason: email.reason }),
+          requested: Boolean(options.allowEmailAllowlist || options.allowEmailLive),
+          mode: options.allowEmailLive ? 'live' : options.allowEmailAllowlist ? 'allowlist' : 'disabled', push: Boolean(options.allowPush) } }), startShutdown);
     const listener = await (deps.startListener || verifier.startListener)({
       executable: verifier.resolveStripeExecutable(), apiKey: process.env.STRIPE_SECRET_KEY,
       forwardUrl: `http://127.0.0.1:${config.port}/api/webhooks/stripe`, spawnProcess: (...args) => {
@@ -491,11 +529,15 @@ async function supervise(config, options = {}, deps = {}) {
     delete inheritedEnv.PAYMENT_DEV_ATTEMPT_IDS;
     delete inheritedEnv.PAYMENT_DEV_SUPERVISED;
     delete inheritedEnv.PAYMENT_INPROCESS_RECOVERY;
+    // The live target approval is bound to this start's verified database identity; an env-file value is never inherited.
+    inheritedEnv.COMMERCE_EMAIL_LIVE_APPROVED_TARGET = options.allowEmailLive ? config.targetIdentity : '';
+    // Push: VAPID keys from the launcher's own untracked key file (never printed); API and worker must share them.
+    if (options.allowPush) Object.assign(inheritedEnv, (deps.pushEnvironment || emailDev.pushEnvironment)(backend, config.targetIdentity));
     const childEnv = { ...inheritedEnv, NODE_ENV: 'development', PAYMENT_DEV_SUPERVISED: '1', PAYMENT_INPROCESS_RECOVERY: 'false',
       DB_RUNTIME_URL_SOURCE: config.runtimeUrlSource, STRIPE_WEBHOOK_SECRET: listener.secret,
       ELECTROHUB_DEV_DIAGNOSTIC_TOKEN: diagnosticToken,
-      COMMERCE_EMAIL_DISPATCH_ENABLED: options.allowEmailAllowlist ? process.env.COMMERCE_EMAIL_DISPATCH_ENABLED : 'false',
-      COMMERCE_EMAIL_SEND_MODE: options.allowEmailAllowlist ? 'allowlist' : 'disabled', PAYMENT_SHARED_MUTATIONS_APPROVED: '' };
+      COMMERCE_EMAIL_DISPATCH_ENABLED: options.allowEmailAllowlist ? process.env.COMMERCE_EMAIL_DISPATCH_ENABLED : options.allowEmailLive ? 'true' : 'false',
+      COMMERCE_EMAIL_SEND_MODE: options.allowEmailAllowlist ? 'allowlist' : options.allowEmailLive ? 'live' : 'disabled', PAYMENT_SHARED_MUTATIONS_APPROVED: '' };
     const spawnRuntime = (role, args) => {
       const child = forkProcess(path.join(backend, 'dist/bootstrap.js'), args, { cwd: backend,
         env: { ...childEnv, ...(role === 'api' ? { PORT: String(config.port) } : {}) },
@@ -512,6 +554,7 @@ async function supervise(config, options = {}, deps = {}) {
         if (!message || message.role !== record.role) return;
         if (message.event === 'payment.supervisor.awaiting') {
           child.send({ type: 'payment-supervisor.prepare', identity: config.targetIdentity, nonce, parentPid: process.pid,
+            ...(record.role === 'worker' && config.declineOnly ? { declineOnly: true } : {}),
             ...(record.role === 'worker' ? governedMode ? { createdSince: options.governedSince } : { attemptIds: workerAttemptIds } : {}) });
         } else if (message.event === 'payment.supervisor.prepared' && message.nonce === nonce) status.prepared.add(record.role);
         else if (message.event === 'payment.supervisor.worker-ready' && message.role === 'worker' && message.nonce === nonce) status.workerDatabaseReady = true;
@@ -529,12 +572,13 @@ async function supervise(config, options = {}, deps = {}) {
     watch(api); if (worker) watch(worker);
     const log = deps.emailLog || console.log;
     const emailEnv = { ...inheritedEnv, NODE_ENV: 'development', COMMERCE_EMAIL_DISPATCH_ENABLED: 'false', COMMERCE_EMAIL_SEND_MODE: 'disabled' };
-    if (options.allowEmailAllowlist) {
-      emailEnv.COMMERCE_EMAIL_DISPATCH_ENABLED = process.env.COMMERCE_EMAIL_DISPATCH_ENABLED;
-      emailEnv.COMMERCE_EMAIL_SEND_MODE = process.env.COMMERCE_EMAIL_SEND_MODE;
+    if (options.allowEmailAllowlist || options.allowEmailLive) {
+      const expected = options.allowEmailLive ? 'live' : 'allowlist';
+      emailEnv.COMMERCE_EMAIL_DISPATCH_ENABLED = options.allowEmailLive ? 'true' : process.env.COMMERCE_EMAIL_DISPATCH_ENABLED;
+      emailEnv.COMMERCE_EMAIL_SEND_MODE = options.allowEmailLive ? 'live' : process.env.COMMERCE_EMAIL_SEND_MODE;
       const report = (deps.describeEmail || emailDev.describeEmailRuntime)(emailEnv);
       const runner = path.join(backend, 'dist/commerce-email-runner.js');
-      if (report.sendMode !== 'allowlist' || !report.workerWillRun || !(deps.exists || fs.existsSync)(runner)) throw new Error('Approved allowlist email worker is not ready to start.');
+      if (report.sendMode !== expected || !report.workerWillRun || !(deps.exists || fs.existsSync)(runner)) throw new Error(`Approved ${expected} email worker is not ready to start.`);
       email = (deps.startEmailWorker || emailDev.startEmailWorker)({ backend, entry: { command: process.execPath, args: [runner] }, env: emailEnv, log });
     }
     const waitFor = deps.waitForCondition || verifier.waitForCondition;
@@ -549,12 +593,13 @@ async function supervise(config, options = {}, deps = {}) {
     api.child.send({ type: 'payment-supervisor.activate', nonce });
     await Promise.race([waitFor(() => status.activated.has('api'), Boolean, { timeoutMs: 5000, intervalMs: 50 }), failed]);
     if (primaryFailure || stopping) throw primaryFailure || new Error('DEV runtime startup interrupted.');
+    controlPhase = 'ready';
     (deps.log || console.log)(JSON.stringify({ readiness: 'PASS', backendPort: config.port, targetIdentity: config.targetIdentity,
       migrationCount: config.migrationCount, paymentBacklog: config.paymentBacklog, stripeAccountVerified: config.stripeAccountVerified,
       listenerBoundInMemory: true, apiDatabaseReady: status.apiReady, recoveryMode: options.mode ?? 'incident-scoped',
       ...(worker ? { workerDatabaseReady: status.workerDatabaseReady, workerReady: status.workerReady } : { recoveryWorker: 'not-started' }),
       supervisorIPC: 'prepared-and-activated', financialAcceptance: 'NOT_VERIFIED', shutdown: 'Ctrl+C stops only owned processes',
-      emailAllowlist: { enabled: Boolean(options.allowEmailAllowlist), workerStarted: Boolean(email.started), sendMode: options.allowEmailAllowlist ? 'allowlist' : 'disabled',
+      emailAllowlist: { enabled: Boolean(options.allowEmailAllowlist), workerStarted: Boolean(email.started), sendMode: options.allowEmailLive ? 'live' : options.allowEmailAllowlist ? 'allowlist' : 'disabled', push: Boolean(options.allowPush),
         ...(options.emailDefault ? { reason: options.emailDefault } : {}) } }));
     const lifetime = new Promise((resolve, reject) => {
       for (const record of records) record.child.once('exit', () => {
@@ -572,23 +617,35 @@ async function supervise(config, options = {}, deps = {}) {
   } finally {
     await startShutdown();
     const stopped = [...records].every(record => record.exited || record.child.exitCode !== null || Boolean(record.child.signalCode));
-    if (stopped) lock.release();
+    if (stopped && emailStopped) { await control?.close(); lock.release(); }
     process.removeListener('SIGINT', signalHandler); process.removeListener('SIGTERM', signalHandler);
+    process.removeListener('message', onStackMessage); process.removeListener('disconnect', signalHandler);
   }
 }
 
 async function main(argv = process.argv.slice(2), deps = {}) {
   const restoreOut = safety.installSanitizedOutput(process.stdout); const restoreError = safety.installSanitizedOutput(process.stderr);
+  // Parent shutdown can arrive while read-only preflight is still waiting for
+  // PostgreSQL/Stripe. Remember it before any child/authority can be created.
+  let cancelled = typeof process.send === 'function' && !process.connected;
+  const cancel = message => { if (message?.type === 'dev-stack.stop') cancelled = true; };
+  const disconnected = () => { cancelled = true; };
+  process.on('message', cancel); process.once('disconnect', disconnected);
   try {
     const options = applyGovernedEmailDefault(argumentsFor(argv), process.env);
     const config = deps.preflight ? await deps.preflight(options) : await preflight({}, options);
+    if (cancelled) { console.log(JSON.stringify({ status: 'STOPPED', reason: 'Parent session stopped during preflight; no runtime started.' })); return 0; }
     const publicConfig = { ...config };
     delete publicConfig.workerAttemptIds;
     console.log(JSON.stringify({ preflight: 'PASS', ...publicConfig, financialAcceptance: 'NOT_VERIFIED' }));
     if (options.start) await (deps.supervise || supervise)(config, options, deps.supervisorDeps || {});
     return 0;
   } catch (error) { console.log(JSON.stringify({ status: 'BLOCKED', error: safety.sanitize(error.message) })); return 1; }
-  finally { restoreOut(); restoreError(); }
+  finally {
+    process.removeListener('message', cancel); process.removeListener('disconnect', disconnected);
+    if (process.connected) process.disconnect();
+    restoreOut(); restoreError();
+  }
 }
 if (require.main === module) main().then(code => { process.exitCode = code; });
 module.exports = { argumentsFor, applyGovernedEmailDefault, assertAcceptedBacklog, allowlistedRecipients, migrationNames, migrationChecksumCandidates, verifyMigrationLedger, assertNoPaymentBacklog, assertNoEmailBacklog,

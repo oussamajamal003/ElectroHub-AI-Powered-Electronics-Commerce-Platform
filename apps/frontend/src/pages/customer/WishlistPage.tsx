@@ -31,7 +31,7 @@ export function WishlistPageContent({ wishlist, onAddToCart, onNavigate }: {
   const displayedCount = !initial && (wishlist.totalItems > 0 || wishlist.data) ? wishlist.totalItems : undefined;
   const showEmpty = !wishlist.isLoading && Boolean(wishlist.data) && !wishlist.isError && !wishlist.isMerging && !wishlist.isLoggingOut
     && !wishlist.mergeError && wishlist.data?.totalItems === 0 && items.length === 0;
-  return <main className={styles.page} ref={root}>
+  return <div className={styles.page} ref={root}>
     <nav className={styles.breadcrumb} aria-label="Breadcrumb"><Link to="/">Home</Link><ChevronRight size={16} aria-hidden="true" /><span aria-current="page">Wishlist</span></nav>
     <div className={styles.heading}><h1>Wishlist</h1>{displayedCount === undefined
       ? wishlist.isError ? null : <span role="status" aria-label="Wishlist count loading"><Skeleton width="4rem" height={16} /></span>
@@ -51,7 +51,7 @@ export function WishlistPageContent({ wishlist, onAddToCart, onNavigate }: {
         <Heart size={32} aria-hidden="true" /><h2>Product unavailable</h2><p>This saved product is no longer available. You can remove it from your wishlist.</p>
         <Button variant="outline" data-remove-unavailable onClick={() => remove(item.productId, index)}>Remove unavailable product</Button>
       </section>)}</div>}
-  </main>;
+  </div>;
 }
 export function WishlistPage() {
   const wishlist = useWishlist();

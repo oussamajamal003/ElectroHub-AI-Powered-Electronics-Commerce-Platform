@@ -6,6 +6,7 @@ import { PaymentSkeleton, PaymentStep } from './CheckoutComponents';
 import { markPaymentTiming } from './paymentTiming';
 import { Button } from '@/components/ui/Button';
 import styles from './Checkout.module.scss';
+import { useTheme } from '@/features/theme';
 
 // Measured real Payment Element readiness on a slow (~85 KB/s) link: 24.1-30.4 s from a cold cache.
 // A slow load is reported as slow; only a stall well beyond that is reported as unavailable.
@@ -79,6 +80,11 @@ const Entry = forwardRef<PaymentEntryActions, EntryProps>(function Entry(props, 
   </PaymentStep></div>{props.children}</>;
 });
 
+const STRIPE_LIGHT_VARIABLES = { colorPrimary: '#2563EB', fontFamily: 'Poppins, sans-serif', borderRadius: '0px' };
+// Stripe's `night` theme tuned to the ElectroHub dark tokens (card #111A2D, text #E8EEF7, border #26344D, focus #60A5FA).
+const STRIPE_DARK_VARIABLES = { ...STRIPE_LIGHT_VARIABLES, colorBackground: '#111A2D', colorText: '#E8EEF7', colorTextSecondary: '#A8B5C9',
+  colorTextPlaceholder: '#7D8CA5', colorDanger: '#FCA5A5', colorIcon: '#A8B5C9' };
+
 /** Keep the same Elements and secure iframe mounted through Review and 3DS. Secrets remain only in memory. */
 export const StripePaymentSession = forwardRef<PaymentEntryActions, Props>(function StripePaymentSession({ clientSecret, ...props }, ref) {
   const [stripe, setStripe] = useState(stripeClient);
@@ -87,9 +93,12 @@ export const StripePaymentSession = forwardRef<PaymentEntryActions, Props>(funct
   const [mountEpoch, setMountEpoch] = useState(0);
   const remount = () => { setFailed(false); setStripe(stripeClient()); setMountEpoch(value => value + 1); };
   useEffect(() => { let active = true; if (stripe) void stripe.then(value => { if (active && !value) setFailed(true); }); return () => { active = false; }; }, [stripe]);
-  const options = useMemo<StripeElementsOptions>(() => ({ clientSecret, appearance: { theme: 'stripe',
+  // Follows the app theme. A changed appearance reaches the mounted Payment Element through elements.update() (the `key` below is
+  // unchanged), so switching themes never remounts the secure iframe, re-requests the payment setup or clears card entry.
+  const { theme } = useTheme();
+  const options = useMemo<StripeElementsOptions>(() => ({ clientSecret, appearance: { theme: theme === 'dark' ? 'night' : 'stripe',
     disableAnimations: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
-    variables: { colorPrimary: '#2563EB', fontFamily: 'Poppins, sans-serif', borderRadius: '0px' } } }), [clientSecret]);
+    variables: theme === 'dark' ? STRIPE_DARK_VARIABLES : STRIPE_LIGHT_VARIABLES } }), [clientSecret, theme]);
   if (!stripe || failed) return <><div hidden={!props.visible}><PaymentStep ready={false} pending={props.pending} onBack={props.onBack} onContinue={props.onContinue}>
     <div role="alert" className={styles.providerError}><p>Secure card entry could not load. Please retry.</p><Button size="small" onClick={remount}>Retry secure entry</Button></div>
   </PaymentStep></div>{props.children}</>;

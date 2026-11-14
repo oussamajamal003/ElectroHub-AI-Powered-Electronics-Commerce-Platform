@@ -1,5 +1,20 @@
 # GitHub Actions
 
+Task 06.2 implementation: `.github/workflows/ci.yml` checks the exact PR head SHA on Node 22.19.0,
+matching `.nvmrc` and both Node Dockerfiles. Existing locked dependencies require Node 22; Node 20.11 is no longer the supported baseline.
+Lint, typechecks, mandatory frontend/backend tests, real disposable payment concurrency/lifecycle integration,
+three-engine release E2E, optimized-build accessibility/responsive/native-zoom QA, builds, gzip budgets and all three Docker images
+feed **Required / Quality Gate**. A skipped, failed or cancelled dependency fails that aggregate gate.
+Security Audit remains a separate required check. Repository branch-protection configuration requires an owner/admin;
+the workflow file alone does not enforce branch protection. Reports/traces have 14-day retention.
+
+**Operational change for independent review:** PROD migrations are now manual-dispatch only, require the full approved SHA,
+refuse non-`develop` dispatches, and retain protected-environment, TLS identity and migration pre/post checks.
+Merging ordinary development work no longer starts a production write. No migration workflow was dispatched by Task 06.2.
+DEV remains manual-only. Infrastructure deployment is reserved for Task 06.4.
+
+Evidence and commands: [Task 06.2](../tasks/Phase-06/TASK_06.2_ACCESSIBILITY_QA_CI_CD.md).
+
 ## 1. Purpose
 
 This document defines the CI/CD strategy for ElectroHub using GitHub Actions.

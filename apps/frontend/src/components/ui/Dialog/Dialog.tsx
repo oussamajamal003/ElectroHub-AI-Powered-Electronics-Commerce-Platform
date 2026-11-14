@@ -3,8 +3,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { motion, useReducedMotion } from 'framer-motion';
 import { X } from 'lucide-react';
 import styles from './Dialog.module.scss';
-
-const DialogReturnFocus = React.createContext<HTMLElement | null>(null);
+import { DialogReturnFocus, useDialogCloseAutoFocus } from './dialogFocus';
 
 export function Dialog({ open, defaultOpen = false, onOpenChange, ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   const [localOpen, setLocalOpen] = React.useState(defaultOpen);
@@ -49,10 +48,8 @@ export const DialogContent = React.forwardRef<
     hideCloseButton?: boolean;
   }
 >(({ children, className, overlayClassName, containerClassName, hideCloseButton, onOpenAutoFocus, onCloseAutoFocus, ...props }, ref) => {
-  const returnFocus = React.useRef<HTMLElement | null>(null);
-  const opener = React.useContext(DialogReturnFocus);
+  const closeAutoFocus = useDialogCloseAutoFocus(onCloseAutoFocus);
   const reducedMotion = useReducedMotion();
-  React.useEffect(() => { if (opener) returnFocus.current = opener; }, [opener]);
   return (
   <DialogPortal>
     <DialogOverlay className={overlayClassName} />
@@ -61,14 +58,7 @@ export const DialogContent = React.forwardRef<
         onOpenAutoFocus={event => {
           onOpenAutoFocus?.(event);
         }}
-        onCloseAutoFocus={event => {
-          onCloseAutoFocus?.(event);
-          // Controlled dialogs may have no Radix Trigger. Keep their keyboard return target as well.
-          if (!event.defaultPrevented && returnFocus.current?.isConnected && returnFocus.current !== document.body) {
-            event.preventDefault();
-            returnFocus.current.focus();
-          }
-        }}>
+        onCloseAutoFocus={closeAutoFocus}>
         <motion.div
           initial={reducedMotion ? false : { opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}

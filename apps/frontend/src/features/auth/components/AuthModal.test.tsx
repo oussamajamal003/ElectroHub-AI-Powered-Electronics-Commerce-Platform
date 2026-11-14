@@ -267,7 +267,7 @@ describe('AuthModal Component', () => {
       fireEvent.focus(emailInput);
       fireEvent.change(emailInput, { target: { value: 'a' } });
 
-      expect(screen.queryByText('Please enter a valid email address.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Enter a valid email address.')).not.toBeInTheDocument();
       expect(screen.queryByText('Email address is required.')).not.toBeInTheDocument();
 
       const passwordInput = screen.getByLabelText(/^Password$/i);
@@ -325,12 +325,12 @@ describe('AuthModal Component', () => {
       // Type invalid email and blur to touch field
       fireEvent.change(emailInput, { target: { value: 'invalid-email' } });
       fireEvent.blur(emailInput);
-      expect(screen.getByText('Please enter a valid email address.')).toBeInTheDocument();
+      expect(screen.getByText('Enter a valid email address.')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /^Login$/i })).toBeDisabled();
 
       // Correct email dynamically clears error
       fireEvent.change(emailInput, { target: { value: 'valid@example.com' } });
-      expect(screen.queryByText('Please enter a valid email address.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Enter a valid email address.')).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: /^Login$/i })).not.toBeDisabled();
     });
 

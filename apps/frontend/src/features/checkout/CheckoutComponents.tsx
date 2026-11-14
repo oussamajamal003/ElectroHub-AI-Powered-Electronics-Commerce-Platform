@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, CheckCircle2, Clock3, CreditCard, LockKeyhole, RotateCcw, ShieldCheck, Truck, Zap } from 'lucide-react';
+import { Check, CheckCircle2, CreditCard, LockKeyhole, RotateCcw, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
-import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoader';
+import { PaymentProcessingPanel } from './PaymentProcessingPanel';
 import type { CartData } from '@/features/cart/types';
 import { OrderDocumentsPanel } from '@/features/orders/documents/OrderDocumentsPanel';
 import { shippingErrors, steps } from './state';
@@ -145,6 +145,52 @@ export function PaymentSkeleton() {
     </div>
   </div>;
 }
+/** Review step placeholder while the delivery quote it summarises is still loading (e.g. right after a refresh). */
+export function ReviewSkeleton() {
+  return <div className={styles.reviewSkeleton} role="status" aria-label="Loading order review">
+    {['14rem', '10rem', '12rem'].map((width, index) => <div key={index} className={styles.reviewCardSkeleton} aria-hidden="true">
+      <div className={styles.skeletonDetails}><div className={styles.skeletonTitle} style={{ width }} />
+        <div className={styles.skeletonEstimate} style={{ width: index === 0 ? '18rem' : '9rem' }} />{index === 0 && <div className={styles.skeletonEstimate} style={{ width: '13rem' }} />}</div>
+      <div className={styles.skeletonPrice} style={{ width: '2.5rem' }} />
+    </div>)}
+  </div>;
+}
+// Same order and spans as the Shipping form: name, street, line 2, city | postcode, state | country, phone.
+const SHIPPING_SKELETON_FIELDS = ['full', 'full', 'full', 'half', 'half', 'half', 'half', 'full'] as const;
+const STEP_SKELETON_TITLE: Record<CheckoutStep, string> = { shipping: '13rem', delivery: '12rem', payment: '12rem', review: '13rem' };
+/**
+ * First-load placeholder for Checkout, shaped like the step the customer is about to see (form fields for Shipping, option
+ * rows for Delivery, card fields for Payment, summary cards for Review) next to the Order Summary. It is rendered only while
+ * the session or Cart is genuinely loading; failures render their own error state instead, never this skeleton.
+ */
+export function CheckoutSkeleton({ step }: { step: CheckoutStep }) {
+  return <div className={styles.page} data-testid="checkout-skeleton" data-step={step}>
+    <p className={styles.srOnly} role="status" aria-live="polite">Loading checkout…</p>
+    <div className={styles.checkoutSkeleton} aria-hidden="true">
+      <div className={styles.skeletonBreadcrumb} />
+      <h1>Checkout</h1>
+      <div className={styles.skeletonStepper}>{steps.map(item => <span key={item} className={item === step ? styles.skeletonStepActive : undefined}><i /><b /></span>)}</div>
+      <div className={styles.layout}>
+        <section className={styles.panel}>
+          <div className={styles.skeletonHeading} style={{ width: STEP_SKELETON_TITLE[step] }} />
+          {step === 'shipping' && <div className={styles.formGrid}>{SHIPPING_SKELETON_FIELDS.map((span, index) => <div key={index} className={`${styles.skeletonGroup} ${span === 'full' ? styles.fullWidth : ''}`}>
+            <div className={styles.skeletonLabel} /><div className={styles.skeletonInput} /></div>)}</div>}
+          {step === 'delivery' && <DeliverySkeleton />}
+          {step === 'payment' && <><div className={styles.skeletonChoice} /><div className={styles.providerShell}><PaymentSkeleton /></div></>}
+          {step === 'review' && <ReviewSkeleton />}
+          <div className={styles.skeletonActions}><span /><span /></div>
+        </section>
+        <aside className={`${styles.summary} ${styles.summarySkeleton}`}>
+          <div className={styles.skeletonHeading} style={{ width: '10rem' }} />
+          {[0, 1].map(item => <div key={item} className={styles.summaryItemSkeleton}><span className={styles.imagePlaceholder} />
+            <div className={styles.skeletonDetails}><div className={styles.skeletonTitle} style={{ width: '80%' }} /><div className={styles.skeletonEstimate} style={{ width: '40%' }} /></div>
+            <div className={styles.skeletonPrice} style={{ width: '3.5rem' }} /></div>)}
+          {['Subtotal', 'Shipping', 'Total'].map(row => <div key={row} className={`${styles.totalRowSkeleton} ${row === 'Total' ? styles.grandTotal : ''}`}><span /><span /></div>)}
+        </aside>
+      </div>
+    </div>
+  </div>;
+}
 export function PaymentStep({ onBack, onContinue, children, ready = false, canContinue = ready, pending = false, actionLabel = 'Review Order', paymentNotice = 'Test mode. Payment starts only when you place the order on Review.' }: { actionLabel?: string; paymentNotice?: string; onBack: () => void; onContinue: () => void; children?: ReactNode; ready?: boolean; canContinue?: boolean; pending?: boolean }) {
   return <section className={styles.panel}><h2>Payment Method</h2><div className={styles.paymentChoice}><CreditCard aria-hidden="true" /><strong>Credit / Debit Card</strong><CheckCircle2 size={20} aria-label="Selected" /></div>
     <div className={styles.providerShell}>{children ?? <PaymentSkeleton />}</div>
@@ -162,32 +208,28 @@ export function ReviewStep({ shipping, delivery, total, blocked, onEdit, onBack,
 }
 /** Stage 2: the submitted payment is durably saved and the outcome is being verified.
  * `unconfirmed` = a check settled without a result (network/5xx/unknown provider state): never a failure claim. */
-export function CheckingPayment({ unconfirmed = false, checking = false, note, onCheck }: { unconfirmed?: boolean; checking?: boolean; note?: string; onCheck?: () => void }) {
-  return <section className={styles.checking} aria-labelledby="checking-heading" data-state={unconfirmed ? 'unconfirmed' : 'checking'}>
-    <div className={styles.checkingVisual} aria-hidden="true">
-      {!unconfirmed && <><span className={styles.checkingPulse} /><span className={styles.checkingArc} /></>}
-      <span className={styles.checkingBadge}>{unconfirmed ? <Clock3 size={30} /> : <Zap size={30} fill="currentColor" />}</span>
-    </div>
-    <h1 id="checking-heading">{unconfirmed ? 'We couldn’t confirm your payment yet' : 'Checking your payment'}</h1>
-    <div role="status" aria-live="polite" className={styles.checkingCopy}>
-      {unconfirmed
-        ? <p>Your payment attempt is saved. This isn’t a payment failure — we couldn’t reach the payment service to confirm it. Please don’t pay again.</p>
-        : <p>Your payment was submitted. We’re confirming the result with our payment provider.</p>}
-      {note && <p className={styles.checkingNote}>{note}</p>}
-    </div>
-    <p className={styles.checkingHint}><ShieldCheck size={16} aria-hidden="true" />You can keep shopping. We’ll notify you as soon as the result is confirmed.</p>
-    <div className={styles.checkingActions}>
+export function CheckingPayment({ unconfirmed = false, checking = false, note, onCheck, cancelAction }: { unconfirmed?: boolean; checking?: boolean; note?: string;
+  onCheck?: () => void; /** Rendered only when the backend marks the attempt `cancelable`; never because a spinner is visible. */ cancelAction?: ReactNode }) {
+  return <PaymentProcessingPanel phase={unconfirmed ? 'unconfirmed' : 'verifying'} headingId="checking-heading"
+    heading={unconfirmed ? 'We couldn’t confirm your payment yet' : 'Checking your payment'}
+    actions={<>
       {unconfirmed && onCheck && <Button onClick={onCheck} disabled={checking} isLoading={checking}>Check again</Button>}
+      {cancelAction}
       <Link className={styles.checkingLink} to="/products">Continue shopping</Link>
-    </div>
-  </section>;
+    </>}>
+    {unconfirmed
+      ? <p>Your payment attempt is saved. This isn’t a payment failure — we couldn’t reach the payment service to confirm it. Please don’t pay again.</p>
+      : <p>Your payment was submitted. We’re confirming the result with our payment provider.</p>}
+    {note && <p>{note}</p>}
+  </PaymentProcessingPanel>;
 }
 /** `browserConfirming`: Place Order is waiting on /submit or Stripe.js. Only this tab can confirm the card then, so it must stay open. */
 export function CheckoutProcessing({ browserConfirming = false }: { browserConfirming?: boolean }) {
-  return <section className={styles.processing} aria-labelledby="processing-heading"><ElectroHubLoader size="lg" /><h1 id="processing-heading">Processing your order…</h1>
-    <p aria-live="polite">{browserConfirming
-      ? 'Confirming your card with our payment provider. Keep this page open until this finishes — leaving now can interrupt your payment. You won’t be charged twice.'
-      : 'You can continue shopping while we securely verify your payment.'}</p></section>;
+  return <PaymentProcessingPanel phase={browserConfirming ? 'confirming' : 'verifying'} headingId="processing-heading" heading="Processing your order…">
+    <p>{browserConfirming
+      ? 'Confirming your card with our payment provider. Keep this page open until this finishes — leaving now can interrupt your payment. Please don’t submit another payment while this is in progress.'
+      : 'You can continue shopping while we securely verify your payment.'}</p>
+  </PaymentProcessingPanel>;
 }
 /** `ownerId` (signed-in owner) enables the private documents panel. Email delivery is background work and is never shown here. */
 export function ConfirmationContent({ order, ownerId }: { order: Confirmation; ownerId?: string }) {

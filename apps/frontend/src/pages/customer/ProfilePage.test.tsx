@@ -5,10 +5,12 @@ import { describe, beforeEach, it, expect, vi } from 'vitest';
 import { ProfilePage } from './ProfilePage';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useProfilePhoto, useProfilePhotoMutations } from '@/features/profilePhoto/queries';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
+vi.mock('@/features/profilePhoto/queries', () => ({ useProfilePhoto: vi.fn(), useProfilePhotoMutations: vi.fn() }));
 
 const mockNavigate = vi.fn();
 const mockUpdateProfile = vi.fn();
@@ -32,11 +34,22 @@ describe('ProfilePage', () => {
       updateProfile: mockUpdateProfile,
       verifyEmailChange: vi.fn(),
     } as any);
+    vi.mocked(useProfilePhoto).mockReturnValue({ data: { url: null, expiresAt: null }, isError: false } as never);
+    vi.mocked(useProfilePhotoMutations).mockReturnValue({
+      upload: { mutateAsync: vi.fn(), isPending: false }, remove: { mutateAsync: vi.fn(), isPending: false },
+    } as never);
   });
 
   const renderWithRouter = (ui: React.ReactElement) => {
     return render(<QueryClientProvider client={new QueryClient()}><BrowserRouter>{ui}</BrowserRouter></QueryClientProvider>);
   };
+
+  it('does not expose cached form values before session restoration completes', () => {
+    vi.mocked(useAuth).mockReturnValue({ ...vi.mocked(useAuth)(), isInitializing: true });
+    renderWithRouter(<ProfilePage />);
+    expect(screen.getByRole('status', { name: 'Loading your profile' })).toBeVisible();
+    expect(screen.queryByDisplayValue('jane@example.com')).not.toBeInTheDocument();
+  });
 
   it('renders breadcrumb and title', () => {
     renderWithRouter(<ProfilePage />);

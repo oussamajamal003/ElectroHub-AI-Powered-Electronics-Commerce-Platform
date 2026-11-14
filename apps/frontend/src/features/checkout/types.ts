@@ -26,5 +26,12 @@ export type PaymentState = 'PREPARING' | 'AWAITING_INPUT' | 'ACTION_REQUIRED' | 
 export interface PaymentOutcome { classification?: 'NOT_SUBMITTED' | 'AWAITING_CUSTOMER_ACTION' | 'PROCESSING' | 'AUTHORIZED' | 'ORDER_PROCESSING' | 'SUCCEEDED' | 'DECLINED' | 'FAILED' | 'ABANDONED' | 'UNKNOWN'; submittedAt?: string | null; confirmationStartedAt?: string | null; retryAllowed?: boolean; cancelable?: boolean; scope?: CheckoutScope; attemptId: string; state: PaymentState; providerStatus: string | null; failureCode: string | null;
   cartIdentity?: string; cartRevision?: string; intentId?: string | null; updatedAt?: string | null;
   total: string; currency: string; orderReference: string | null; committed: boolean; cart: CartData;
-  confirmation: Confirmation | null; recoveryRemainder: { productId: string; quantity: number }[] | null; recoveryActive: boolean }
+  confirmation: Confirmation | null; recoveryRemainder: { productId: string; quantity: number }[] | null; recoveryActive: boolean;
+  /** PR #51: the item sold out (or was withdrawn) before this purchase's order committed; its authorization is cancelled, never captured. */
+  outcomeReason?: 'STOCK_UNAVAILABLE' | null;
+  /** True only after the provider verified the authorization was cancelled with nothing received. */
+  authorizationReleased?: boolean;
+  unavailableItems?: UnavailableItem[] | null }
+export interface UnavailableItem { productId: string; name: string; slug: string | null; imageUrl: string | null; quantity: number; availableQuantity: number;
+  availability: 'AVAILABLE' | 'LOW_STOCK' | 'OUT_OF_STOCK' | 'UNAVAILABLE' | 'NOT_FOUND' }
 export interface PaymentSetup extends PaymentOutcome { clientSecret: string | null; replayed: boolean }

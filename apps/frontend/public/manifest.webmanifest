@@ -1,0 +1,11 @@
+{
+  "id": "/",
+  "name": "ElectroHub",
+  "short_name": "ElectroHub",
+  "start_url": "/account",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#2563EB",
+  "icons": [{ "src": "/brand/electrohub-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" }]
+}

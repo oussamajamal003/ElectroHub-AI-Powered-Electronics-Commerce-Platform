@@ -6,6 +6,10 @@
   background-color: $color-background;
   border: 1px solid $color-border;
   border-radius: $radius-lg;
+  &:focus-visible {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
 }
 
 .table {

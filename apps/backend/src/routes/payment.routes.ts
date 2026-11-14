@@ -105,8 +105,135 @@ const empty = z.object({}).strict();
  *         required: true
  *         schema: { type: string, format: uuid }
  *     responses:
- *       200: { description: Safe owned status }
+ *       200:
+ *         description: >-
+ *           Safe owned status. Additive last-unit fields (PR #51): `outcomeReason` is `STOCK_UNAVAILABLE` when an order-less purchase was
+ *           (or is being) cancelled because the item sold out or was withdrawn before its order committed (the card authorization is
+ *           cancelled, never captured; `classification` keeps its existing value). `authorizationReleased` is true only after a fresh
+ *           provider read verified the cancellation. `unavailableItems` (stock outcomes only, else null) lists each saved line with its
+ *           requested and currently available quantity. Nothing is reserved by this read.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     classification: { type: string }
+ *                     state: { type: string }
+ *                     failureCode: { type: string, nullable: true }
+ *                     outcomeReason: { type: string, enum: [STOCK_UNAVAILABLE], nullable: true }
+ *                     authorizationReleased: { type: boolean }
+ *                     unavailableItems:
+ *                       type: array
+ *                       nullable: true
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           productId: { type: string, format: uuid }
+ *                           name: { type: string }
+ *                           slug: { type: string, nullable: true }
+ *                           imageUrl: { type: string, nullable: true }
+ *                           quantity: { type: integer, description: Quantity the customer tried to buy }
+ *                           availableQuantity: { type: integer, description: Sellable stock now }
+ *                           availability: { type: string, enum: [AVAILABLE, LOW_STOCK, OUT_OF_STOCK, UNAVAILABLE, NOT_FOUND] }
  *       404: { description: Not found for this customer }
+ * /checkout/payment-attempts/{attemptId}/submit:
+ *   post:
+ *     tags: [Payments]
+ *     summary: Place Order. Accept the purchase before card confirmation; moves Cart lines into the attempt. Reserves no stock.
+ *     description: >-
+ *       Runs before Stripe.js confirms the card, so a refusal means nothing was authorized or charged. Stock is re-read (never reserved);
+ *       inventory is committed only after authorization, at order commit. A purchase whose item is no longer purchasable is refused with the
+ *       standard stock conflict and its Cart lines are kept for the customer to correct. Buy Now applies the same gate.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: attemptId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, additionalProperties: false }
+ *     responses:
+ *       200: { description: Accepted purchase identity (idempotent replay returns the same identity) }
+ *       404: { description: Not found for this customer }
+ *       409:
+ *         description: >-
+ *           `{ error: { code, message } }` with code `CART_STOCK_CONFLICT` (sold out or short; message names the product and available
+ *           quantity), `PRODUCT_UNAVAILABLE` (withdrawn), `CHECKOUT_CHANGED` (Cart or prices changed) or `PAYMENT_RECOVERY_PENDING`.
+ * /checkout/payment-attempts/{attemptId}/confirmation-started:
+ *   post:
+ *     tags: [Payments]
+ *     summary: Announce card confirmation for a submitted purchase. Last stock read before the card can be authorized (never a reservation).
+ *     description: >-
+ *       The client calls this immediately before Stripe.js confirms the card and confirms only after a 200. If an item sold out (or was
+ *       withdrawn) after Place Order, the call is refused with the standard stock conflict, the purchase's unconfirmed payment is cancelled
+ *       (verified by a fresh provider read) and its status reports `outcomeReason: STOCK_UNAVAILABLE`. Nothing was authorized or charged.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: attemptId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200: { description: "`{ data: { attemptId, confirmationStartedAt } }` (idempotent; null when the signal is disabled)" }
+ *       404: { description: Not found for this customer }
+ *       409:
+ *         description: >-
+ *           `CART_STOCK_CONFLICT` / `PRODUCT_UNAVAILABLE` (sold out or withdrawn since Place Order; do not confirm the card) or
+ *           `PAYMENT_CONFIRMATION_NOT_ALLOWED` (not a submitted purchase awaiting card input).
+ * /checkout/payment-attempts/{attemptId}/restore:
+ *   post:
+ *     tags: [Payments]
+ *     summary: Return a cancelled Cart purchase's items to the Cart (once; additive to newer Cart quantities)
+ *     description: >-
+ *       Allowed after the cancellation or refund is verified with the provider. A purchase that lost the last unit(s)
+ *       (`outcomeReason: STOCK_UNAVAILABLE`) is returned even while stock is 0; the Cart shows the line as out of stock and blocks
+ *       checkout until restocked. Nothing is reserved. Buy Now purchases are never added to the Cart.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: attemptId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200: { description: The purchase status after restoration }
+ *       404: { description: Not found for this customer }
+ *       409:
+ *         description: >-
+ *           `PURCHASE_NOT_RESTORABLE` (Buy Now), `PRODUCT_UNAVAILABLE` (withdrawn product), `CHECKOUT_CHANGED` (other outcomes whose items are
+ *           no longer purchasable), `CART_FULL`, `INVALID_CART_QUANTITY` or `PAYMENT_RECOVERY_PENDING`.
+ * /checkout/payment-attempts/{attemptId}/discard:
+ *   post:
+ *     tags: [Payments]
+ *     summary: Remove a failed payment from the customer's purchases (cancelling a still-open declined intent first)
+ *     description: >-
+ *       The single trash action on a failed-payment card. Owner-scoped and idempotent. A terminal failure is hidden at once
+ *       (`dismissedAt`); nothing is deleted and the audit history is kept. A declined purchase whose provider intent is still open is
+ *       re-read from the provider and cancelled first; the card is hidden only after the cancellation is verified. Repeating the request
+ *       re-drives the same recorded cancellation and never issues a second provider call for an operation already done.
+ *       The purchases list exposes the server's decision as `removal`: `REMOVE`, `CANCEL_AND_REMOVE`, `PENDING` or `CONFIRMING`.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: attemptId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, additionalProperties: false }
+ *     responses:
+ *       200: { description: "`{ attemptId, status: REMOVED, dismissedAt }` — the payment is hidden from the customer's purchases" }
+ *       202: { description: "`{ attemptId, status: CANCEL_PENDING, dismissedAt: null }` — cancellation recorded, provider verification pending" }
+ *       404: { description: Not found for this customer }
+ *       409:
+ *         description: >-
+ *           `PAYMENT_STATUS_UNCONFIRMED` (the outcome is not confirmed or the provider shows an authorization; nothing is cancelled or
+ *           hidden) or `PAYMENT_NOT_DISMISSIBLE` (paid, compensation pending, or a recovery pass holds the payment).
  * /checkout/payment-attempts/{attemptId}/reconcile:
  *   post:
  *     tags: [Payments]
@@ -181,6 +308,13 @@ router.post('/checkout/payment-attempts/:attemptId/confirmation-started', limite
 });
 router.post('/checkout/payment-attempts/:attemptId/dismiss', limiter, async (req, res, next) => {
   try { empty.parse(req.body ?? {}); res.json({ data: await paymentService.dismiss(req.user!.userId, String(req.params.attemptId)) }); }
+  catch (error) { next(normalize(error)); }
+});
+// Remove failed payment (single trash action): the server decides between hiding a terminal failure and cancelling a declined purchase's
+// still-open intent first. 202 = cancellation requested and not yet provider-verified; the card is hidden only once it is.
+router.post('/checkout/payment-attempts/:attemptId/discard', limiter, async (req, res, next) => {
+  try { empty.parse(req.body ?? {}); const data = await paymentService.discard(req.user!.userId, String(req.params.attemptId));
+    res.status(data.status === 'REMOVED' ? 200 : 202).json({ data }); }
   catch (error) { next(normalize(error)); }
 });
 router.post('/checkout/payment-attempts/:attemptId/read', limiter, async (req, res, next) => {

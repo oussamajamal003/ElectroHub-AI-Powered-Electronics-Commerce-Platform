@@ -57,7 +57,7 @@ $control-height: 3.5rem;
   @media (prefers-reduced-motion: reduce) { transition: none; }
 }
 .filterTrigger { display: inline-flex; align-items: center; gap: $spacing-2; white-space: nowrap; svg { flex: 0 0 auto; color: $color-text-muted; } }
-.filterTriggerActive { border-color: $color-primary; color: $color-primary-dark; background: rgb(37 99 235 / 0.05); svg { color: $color-primary; } }
+.filterTriggerActive { border-color: $color-primary; color: $color-primary-text-hover; background: rgb(37 99 235 / 0.05); svg { color: $color-primary-text; } }
 .filterBadge { display: inline-flex; align-items: center; justify-content: center; min-width: 1.5rem; height: 1.5rem; padding: 0 $spacing-1; border-radius: $radius-full; background: $color-primary; color: $color-text-inverse; font-size: $font-size-xs; font-weight: $font-weight-semibold; line-height: 1; }
 .chevron { margin-left: auto; transition: transform $transition-fast; @media (prefers-reduced-motion: reduce) { transition: none; } }
 .chevronOpen { transform: rotate(180deg); }
@@ -85,7 +85,7 @@ $control-height: 3.5rem;
 .toolbar > [role='group'] { grid-column: 1 / -1; }
 .filterActions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: $spacing-2; }
 .activeFilters { display: flex; flex-wrap: wrap; align-items: center; gap: $spacing-2; margin-top: $spacing-4;
-  button { display: inline-flex; align-items: center; gap: $spacing-1; min-height: 2.25rem; border: 1px solid rgb(37 99 235 / 0.35); background: rgb(37 99 235 / 0.06); color: $color-primary-dark; padding: $spacing-1 $spacing-3; font: inherit; font-size: $font-size-sm; font-weight: $font-weight-medium; cursor: pointer; transition: background-color $transition-fast, border-color $transition-fast, color $transition-fast; }
+  button { display: inline-flex; align-items: center; gap: $spacing-1; min-height: 2.25rem; border: 1px solid rgb(37 99 235 / 0.35); background: rgb(37 99 235 / 0.06); color: $color-primary-text-hover; padding: $spacing-1 $spacing-3; font: inherit; font-size: $font-size-sm; font-weight: $font-weight-medium; cursor: pointer; transition: background-color $transition-fast, border-color $transition-fast, color $transition-fast; }
   button:hover { border-color: $color-primary; background: rgb(37 99 235 / 0.12); }
   button:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; }
   .clearAll { border-color: transparent; background: transparent; color: $color-text-secondary; text-decoration: underline; text-underline-offset: 3px;
@@ -103,6 +103,9 @@ $control-height: 3.5rem;
 .availability { font-size: $font-size-sm; color: $color-text-secondary; margin: $spacing-2 0; }
 .empty { text-align: center; padding: $spacing-16 $spacing-4; overflow-wrap: anywhere; h2 { font-size: $font-size-3xl; margin-bottom: $spacing-4; } p { color: $color-text-secondary; } button { margin: $spacing-2; } }
 .stateBlock { margin: $spacing-6 0; }
+.continuation { margin-top: $spacing-6; }
+.loadMore { display: flex; justify-content: center; margin: $spacing-6 0; }
+.endOfResults { margin: $spacing-6 0; text-align: center; color: $color-text-secondary; font-size: $font-size-sm; }
 .error { color: $color-error-foreground; padding: $spacing-3 0; }
 .skeleton { display: flex; flex-direction: column; min-width: 0; overflow: hidden; border: 1px solid $color-border; border-radius: 0; background: $color-background; }
 .skeletonImage { aspect-ratio: 1; margin: $spacing-4; background: $color-surface; animation: shimmer 1.5s ease-in-out infinite alternate; }

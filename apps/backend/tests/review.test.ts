@@ -5,7 +5,7 @@ import { ReviewService } from '../src/services/review.service.js';
 
 const database = vi.hoisted(() => ({
   product: { findFirst: vi.fn() },
-  review: { findMany: vi.fn(), count: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), deleteMany: vi.fn(), aggregate: vi.fn() },
+  review: { findMany: vi.fn(), count: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), deleteMany: vi.fn(), aggregate: vi.fn(), groupBy: vi.fn() },
   $transaction: vi.fn(),
 }));
 vi.mock('../src/lib/prisma.js', () => ({ prisma: database }));
@@ -17,6 +17,8 @@ beforeEach(() => {
   vi.resetAllMocks();
   database.product.findFirst.mockResolvedValue({ id: 'product-1' });
   database.review.aggregate.mockResolvedValue({ _avg: { rating: 4.5 }, _count: { _all: 2 } });
+  // Task 06.2: the summary also carries per-star counts from the same snapshot (one 5-star and one 4-star review).
+  database.review.groupBy.mockResolvedValue([{ rating: 5, _count: { _all: 1 } }, { rating: 4, _count: { _all: 1 } }]);
   database.$transaction.mockImplementation(async (queries: Promise<unknown>[]) => Promise.all(queries));
 });
 
@@ -47,7 +49,8 @@ describe('Review validation and privacy', () => {
     database.review.findMany.mockResolvedValue([review]); database.review.count.mockResolvedValue(1);
     const result = await new ReviewService().list('product-slug', { page: 1, pageSize: 10 });
     expect(result.meta).toEqual({ page: 1, pageSize: 10, total: 1, totalPages: 1 });
-    expect(result.summary).toEqual({ averageRating: '4.5', reviewCount: 2 });
+    expect(result.summary).toEqual({ averageRating: '4.5', reviewCount: 2, distribution: [
+      { rating: 5, count: 1 }, { rating: 4, count: 1 }, { rating: 3, count: 0 }, { rating: 2, count: 0 }, { rating: 1, count: 0 }] });
     expect(result.data[0].author).toEqual({ displayName: 'Sample Reviewer' });
     expect(JSON.stringify(result)).not.toMatch(/email|passwordHash|hidden/);
     expect(database.review.findMany).toHaveBeenCalledWith(expect.objectContaining({

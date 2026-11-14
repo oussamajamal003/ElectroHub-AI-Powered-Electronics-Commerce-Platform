@@ -3,41 +3,66 @@
 // ====================================
 // Design system tokens for the ElectroHub frontend.
 
+// Helpers for translucent/darkened theme colours (forwarded so modules that only `@use` this file get them too).
+@forward 'functions';
+
 // --- Colors ---
-$color-primary: #2563eb;
-$color-primary-light: #3b82f6;
-$color-primary-dark: #1d4ed8;
+// Every colour is a semantic CSS custom property defined for both themes in `styles/themes/_index.scss`
+// (`:root` / `[data-theme='light']` and `[data-theme='dark']`). Light values are unchanged from the original
+// design system; Sass colour functions must use `theme-alpha()` instead of `rgba()` (no `color.adjust()` on tokens).
+$color-primary: var(--eh-color-primary); // brand fill, borders, icons (#2563eb in both themes)
+$color-primary-light: var(--eh-color-primary-light);
+$color-primary-dark: var(--eh-color-primary-dark);
+$color-primary-active: var(--eh-color-primary-active);
+$color-primary-text: var(--eh-color-primary-text); // brand-coloured text/links: #2563eb light, lighter blue on dark surfaces
+$color-primary-text-hover: var(--eh-color-primary-text-hover);
+$color-primary-subtle: var(--eh-color-primary-subtle); // selected/active tint behind primary text
+$color-primary-foreground: var(--eh-color-primary-foreground); // text on a primary fill
 
-$color-secondary: #0f172a;
-$color-secondary-light: #1e293b;
+$color-secondary: var(--eh-color-secondary); // inverse slab (hero, tooltip) — always carries inverse text
+$color-secondary-light: var(--eh-color-secondary-light);
 
-$color-accent: #06b6d4;
+$color-accent: var(--eh-color-accent);
+$color-accent-hover: var(--eh-color-accent-hover);
+$color-accent-foreground: var(--eh-color-accent-foreground); // text on an accent fill
+$color-accent-text: var(--eh-color-accent-text);
+$color-accent-subtle: var(--eh-color-accent-subtle);
 
-$color-success: #22c55e;
-$color-success-background: #f0fdf4;
-$color-success-border: #bbf7d0;
-$color-success-foreground: #15803d;
-$color-warning: #f59e0b;
-$color-warning-background: #fffbeb;
-$color-warning-border: #fde68a;
-$color-warning-foreground: #b45309;
-$color-error: #ef4444;
-$color-error-background: #fef2f2;
-$color-error-border: #fecaca;
-$color-error-foreground: #b91c1c;
-$color-info: #3b82f6;
-$color-info-background: #f0f9ff;
-$color-info-border: #bae6fd;
-$color-info-foreground: #0369a1;
+$color-success: var(--eh-color-success);
+$color-success-background: var(--eh-color-success-background);
+$color-success-border: var(--eh-color-success-border);
+$color-success-foreground: var(--eh-color-success-foreground);
+$color-warning: var(--eh-color-warning);
+$color-warning-background: var(--eh-color-warning-background);
+$color-warning-border: var(--eh-color-warning-border);
+$color-warning-foreground: var(--eh-color-warning-foreground);
+$color-error: var(--eh-color-error);
+$color-error-hover: var(--eh-color-error-hover);
+$color-error-fill: var(--eh-color-error-fill); // solid danger fill behind white text (destructive button, alert badge)
+$color-error-fill-hover: var(--eh-color-error-fill-hover);
+$color-error-background: var(--eh-color-error-background);
+$color-error-border: var(--eh-color-error-border);
+$color-error-foreground: var(--eh-color-error-foreground);
+$color-info: var(--eh-color-info);
+$color-info-background: var(--eh-color-info-background);
+$color-info-border: var(--eh-color-info-border);
+$color-info-foreground: var(--eh-color-info-foreground);
 
-$color-background: #ffffff;
-$color-surface: #f8fafc;
-$color-border: #e2e8f0;
+$color-background: var(--eh-color-background); // cards, header, body
+$color-surface: var(--eh-color-surface); // subtle wash: admin canvas, table heads, hovers
+$color-surface-hover: var(--eh-color-surface-hover); // ghost/menu hover (was the #f1f5f9 literal)
+$color-elevated: var(--eh-color-elevated); // popovers, menus, dialogs
+$color-border: var(--eh-color-border);
+$color-border-strong: var(--eh-color-border-strong);
+$color-overlay: var(--eh-color-overlay); // modal/drawer backdrop
+$color-header-glass: var(--eh-color-header-glass); // translucent sticky header once scrolled
+$color-skeleton: var(--eh-color-skeleton);
+$color-image-well: var(--eh-color-image-well); // product-image placeholder well
 
-$color-text-primary: #0f172a;
-$color-text-secondary: #475569;
-$color-text-muted: #94a3b8;
-$color-text-inverse: #ffffff;
+$color-text-primary: var(--eh-color-text-primary);
+$color-text-secondary: var(--eh-color-text-secondary);
+$color-text-muted: var(--eh-color-text-muted); // Muted copy still needs AA contrast: equals text-secondary in both themes.
+$color-text-inverse: var(--eh-color-text-inverse);
 
 // --- Typography ---
 $font-family-base: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI',
@@ -93,16 +118,17 @@ $radius-full: 9999px;
 // --- Focus ---
 $focus-ring-width: 2px;
 $focus-ring-style: solid;
-$focus-ring-color: $color-primary;
+$focus-ring-color: var(--eh-color-focus-ring);
 $focus-ring-offset: 2px;
 
 // --- Shadows ---
-$shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-$shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-$shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1),
-  0 4px 6px -4px rgb(0 0 0 / 0.1);
-$shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1),
-  0 8px 10px -6px rgb(0 0 0 / 0.1);
+$shadow-sm: var(--eh-shadow-sm);
+$shadow-md: var(--eh-shadow-md);
+$shadow-lg: var(--eh-shadow-lg);
+$shadow-xl: var(--eh-shadow-xl);
+$shadow-card-hover: var(--eh-shadow-card-hover);
+$shadow-header: var(--eh-shadow-header);
+$shadow-primary-glow: var(--eh-shadow-primary-glow);
 
 // --- Transitions ---
 $transition-fast: 150ms ease;

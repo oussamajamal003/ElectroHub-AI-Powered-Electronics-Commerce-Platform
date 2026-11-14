@@ -8,6 +8,17 @@
     "apps/backend"
   ],
   "scripts": {
+    "dev:stack:supervised": "node scripts/dev-stack.cjs start",
+    "dev:stack:supervised:email": "node scripts/dev-stack.cjs start --allow-email-allowlist",
+    "dev:stack:status": "node scripts/dev-stack.cjs status",
+    "dev:stack:doctor": "node scripts/dev-stack.cjs doctor",
+    "dev:stack:stop": "node scripts/dev-stack.cjs stop",
+    "dev:stack:restart": "node scripts/dev-stack.cjs restart",
+    "dev:stack:restart:email": "node scripts/dev-stack.cjs restart --allow-email-allowlist",
+    "dev:stack:supervised:live": "node scripts/dev-stack.cjs start --allow-email-live --allow-push",
+    "dev:stack:restart:live": "node scripts/dev-stack.cjs restart --allow-email-live --allow-push",
+    "notifications:doctor": "npm run notifications:doctor --workspace=apps/backend",
+    "test:runtime": "node --test scripts/dev-stack.test.cjs scripts/lib/dev-control.test.cjs apps/backend/scripts/dev-payment-runtime.test.cjs apps/backend/scripts/lib/commerce-email-dev.test.cjs",
     "dev:frontend": "npm run dev --workspace=apps/frontend",
     "dev:backend": "npm run dev --workspace=apps/backend",
     "build:frontend": "npm run build --workspace=apps/frontend",
@@ -26,8 +37,8 @@
     "audit": "npm audit --audit-level=high"
   },
   "engines": {
-    "node": "20.11.0",
-    "npm": "10.2.4"
+    "node": "22.19.0",
+    "npm": ">=10.9.3 <12"
   },
   "license": "MIT",
   "repository": {

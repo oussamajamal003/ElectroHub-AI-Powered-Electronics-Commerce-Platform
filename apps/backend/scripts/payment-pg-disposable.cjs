@@ -49,14 +49,22 @@ const SCENARIOS = 'ABCDEFGHIJKLMNOPQRS'.split('');
 const TEST_FILES = [
   'src/services/__tests__/payment.concurrency.postgres.integration.test.ts',
   'src/services/__tests__/payment.lifecycle.postgres.integration.test.ts',
+  // Task 06.2: exact sellable-stock arithmetic (T-Y). Only the A-Y suite runs it; A-S and A-J keep their exact file sets.
+  'src/services/__tests__/payment.stock-integrity.postgres.integration.test.ts',
+  // Task 06.2 (PR #51): two customers competing for the last unit (Z). Only the A-Z suite runs it; A-Y keeps its exact three files.
+  'src/services/__tests__/payment.last-unit.postgres.integration.test.ts',
 ];
+const ALL_SCENARIOS = 'ABCDEFGHIJKLMNOPQRSTUVWXY'.split('');
+const ALL_SCENARIOS_WITH_LAST_UNIT = [...ALL_SCENARIOS, 'Z'];
 /**
  * Scenario suites this runner can execute. Each suite has its own exact authorization scope, so approval of A–J alone
  * can never start K–S (and the A–S string is not needed to run A–J).
  */
 const SUITES = {
-  'scenarios-A-S': { scenarios: SCENARIOS, files: TEST_FILES },
+  'scenarios-A-S': { scenarios: SCENARIOS, files: TEST_FILES.slice(0, 2) },
   'scenarios-A-J': { scenarios: 'ABCDEFGHIJ'.split(''), files: [TEST_FILES[0]] },
+  'scenarios-A-Y': { scenarios: ALL_SCENARIOS, files: TEST_FILES.slice(0, 3) },
+  'scenarios-A-Z': { scenarios: ALL_SCENARIOS_WITH_LAST_UNIT, files: TEST_FILES },
 };
 const CONFIG_FILE = 'vitest.config.mts';
 const ENV_FILE_NAMES = ['.env', '.env.local', '.env.test.local', '.env.production.local', '.env.development.local'];
@@ -81,6 +89,8 @@ function scrubbedEnvironment(env) {
 const AUTH_SCOPES = {
   'scenarios-A-S': 'scenarios-A-S:fixtures+reset-run-database',
   'scenarios-A-J': 'scenarios-A-J:fixtures+reset-run-database',
+  'scenarios-A-Y': 'scenarios-A-Y:fixtures+reset-run-database',
+  'scenarios-A-Z': 'scenarios-A-Z:fixtures+reset-run-database',
   'stripe-live': 'stripe-live-suite:disposable-fixtures-owned-ids',
 };
 function expectedAuthorization(database, scope = 'scenarios-A-S') {
@@ -311,7 +321,7 @@ function verifyReport(stdout, root = backendRoot, suite = SUITES['scenarios-A-S'
   if (!files.every(file => expectedNames.has(path.resolve(file.name)))) throw failure('TEST_SELECTION_MISMATCH');
   const results = files.flatMap(file => file.assertionResults ?? []);
   if (results.length !== total || results.some(test => test.status !== 'passed')) throw failure('TESTS_FAILED_SKIPPED_OR_WRONG_SELECTION');
-  const letters = results.map(test => test.title?.match(/^([A-S]) — /)?.[1]);
+  const letters = results.map(test => test.title?.match(/^([A-Z]) — /)?.[1]);
   if (new Set(letters).size !== total || letters.includes(undefined) || letters.some(letter => !suite.scenarios.includes(letter))) {
     throw failure('TEST_SCENARIOS_MISSING');
   }
@@ -422,7 +432,7 @@ function stageDefinitions(config, identity, env = process.env, { probeFile, scop
   ];
 }
 
-/** `--scope=scenarios-A-J` selects the A–J suite; the default stays A–S. Only suites with their own scope are accepted. */
+/** `--scope=scenarios-A-J` / `--scope=scenarios-A-Y` / `--scope=scenarios-A-Z` select those suites; the default stays A–S. Only suites with their own scope are accepted. */
 function selectedScope(argv) {
   const option = argv.find(arg => arg.startsWith('--scope='));
   const scope = option ? option.slice('--scope='.length) : 'scenarios-A-S';
@@ -431,7 +441,7 @@ function selectedScope(argv) {
 
 async function main(argv = process.argv.slice(2)) {
   const scope = selectedScope(argv);
-  if (!scope) { console.error('BLOCKED: unknown --scope; use scenarios-A-S or scenarios-A-J.'); process.exitCode = 2; return; }
+  if (!scope) { console.error('BLOCKED: unknown --scope; use scenarios-A-S, scenarios-A-J, scenarios-A-Y or scenarios-A-Z.'); process.exitCode = 2; return; }
   const suite = SUITES[scope];
   const validated = validateConfiguration(process.env, { scope });
   if (validated.error) { console.error(`BLOCKED: ${validated.error}`); process.exitCode = 2; return; }

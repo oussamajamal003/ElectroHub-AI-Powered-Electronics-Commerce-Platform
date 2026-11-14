@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { PaymentNotifications } from '@/features/checkout/PaymentPurchases';
 import { Outlet } from 'react-router-dom';
 import { CustomerHeader } from '@/components/layout/CustomerHeader/CustomerHeader';
@@ -11,18 +12,23 @@ import { DiscoveryProvider } from '@/features/search/discovery/DiscoveryProvider
 import { ShopFooterLinks } from './ShopFooterLinks';
 import { useStorefrontSession } from '@/features/analytics/useStorefrontSession';
 import { useStorefrontProfile } from '@/features/storefront/api';
-import { useEffect } from 'react';
+import { usePageTitle } from './usePageTitle';
+import { brandTitle } from '@/lib/pageTitle';
+import { CookieControls } from '@/features/privacy/CookieControls';
+
+const CustomerDeliveryEvents = lazy(() => import('@/features/notifications/CustomerDeliveryEvents'));
 
 export function CustomerLayout() {
   const { isLocked } = usePaymentLock();
   const { data: storeProfile } = useStorefrontProfile();
   useStorefrontSession();
-  useEffect(() => { if (storeProfile?.storeName) document.title = `${storeProfile.storeName} | Electronics`; }, [storeProfile?.storeName]);
+  usePageTitle('customer-main', brandTitle(storeProfile?.storeName));
 
   return (
     <DiscoveryProvider disabled={isLocked}>
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <CustomerScrollRestoration />
+      <Suspense fallback={null}><CustomerDeliveryEvents /></Suspense>
       <div
         data-testid="header-lock-wrapper"
         className={styles.headerLockWrapper}
@@ -32,10 +38,11 @@ export function CustomerLayout() {
         onClickCapture={isLocked ? e => { e.preventDefault(); e.stopPropagation(); } : undefined}
         onKeyDownCapture={isLocked ? e => { e.preventDefault(); e.stopPropagation(); } : undefined}
       >
+        <a href="#customer-main" tabIndex={0} className={styles.skipLink}>Skip to content</a>
         <CustomerHeader />
 
       </div>
-      <main style={{ flex: 1 }}>
+      <main id="customer-main" tabIndex={-1} style={{ flex: 1 }}>
         <PaymentNotifications />
         <Outlet />
       </main>
@@ -63,6 +70,8 @@ export function CustomerLayout() {
                 <Link to="/contact">Returns & Refunds</Link>
                 <Link to="/contact">Warranty</Link>
                 <Link to="/contact">Privacy Policy</Link>
+                <Link to="/cookie-policy">Cookie Policy</Link>
+                <CookieControls locked={isLocked} />
                 <Link to="/contact">Terms of Service</Link>
             </nav>
 

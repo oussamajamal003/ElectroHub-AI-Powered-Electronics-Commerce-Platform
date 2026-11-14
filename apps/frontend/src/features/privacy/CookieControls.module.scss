@@ -1,0 +1,45 @@
+@use '@/styles/abstracts' as *;
+
+.banner { position: fixed; z-index: $z-modal - 1; inset: auto $spacing-4 $spacing-4; display: flex; align-items: center; justify-content: space-between; gap: $spacing-6; padding: $spacing-5; background: $color-background; color: $color-text-primary; border: 1px solid $color-border; box-shadow: $shadow-xl; max-height: calc(100dvh - 2rem); overflow: auto; }
+.banner p, .category p { margin: $spacing-2 0 0; line-height: 1.6; }
+.bannerActions { display: flex; flex-wrap: wrap; gap: $spacing-2; flex-shrink: 0; }
+.dialog { max-width: 42rem; gap: $spacing-5; padding: $spacing-8; border-radius: $radius-xl; background: $color-elevated; }
+.heading { display: flex; align-items: flex-start; gap: $spacing-4; padding-right: $spacing-8; }
+.heading > div { display: grid; gap: $spacing-2; }
+.headingIcon, .categoryIcon { display: grid; flex: 0 0 auto; place-items: center; color: $color-primary-text; background: $color-primary-subtle; }
+.headingIcon { width: 3rem; height: 3rem; border-radius: $radius-lg; svg { width: 1.5rem; height: 1.5rem; } }
+.current { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: $spacing-2 $spacing-4; margin: 0; padding: $spacing-3 $spacing-4; border: 1px solid $color-border; border-radius: $radius-md; background: $color-surface; color: $color-text-secondary; font-size: $font-size-sm; }
+.current strong { color: $color-text-primary; font-weight: $font-weight-semibold; }
+.category { display: flex; align-items: flex-start; gap: $spacing-4; margin: 0; padding: $spacing-5; border: 1px solid $color-border; border-radius: $radius-lg; background: $color-background; }
+.categoryIcon { width: 2.5rem; height: 2.5rem; border-radius: $radius-md; svg { width: 1.25rem; height: 1.25rem; } }
+.categoryCopy { flex: 1; min-width: 0; }
+.categoryCopy p { margin: $spacing-2 0 0; color: $color-text-secondary; font-size: $font-size-sm; line-height: 1.6; }
+.categoryHeading { display: flex; align-items: center; justify-content: space-between; gap: $spacing-3; }
+.categoryHeading strong, .categoryCopy label strong { color: $color-text-primary; font-size: $font-size-base; font-weight: $font-weight-semibold; }
+.alwaysActive { padding: $spacing-1 $spacing-2; border: 1px solid $color-success-border; background: $color-success-background; color: $color-success-foreground; font-size: $font-size-xs; font-weight: $font-weight-medium; white-space: nowrap; }
+.categoryCopy label { display: inline-flex; align-items: center; gap: $spacing-2; min-height: 1.75rem; cursor: pointer; }
+.categoryCopy input { width: 1.125rem; height: 1.125rem; margin: 0; accent-color: $color-primary; cursor: pointer; }
+.categoryCopy input:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
+.policy { margin: 0; }
+.policyLink { color: $color-primary-text; font-weight: $font-weight-semibold; text-decoration: underline; text-underline-offset: 3px; &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
+.dialogActions { display: grid; grid-template-columns: 1fr 1.15fr 1.25fr; gap: $spacing-2; padding-top: $spacing-4; border-top: 1px solid $color-border; }
+.dialogActions > button { min-width: 0; min-height: 3rem; padding-inline: $spacing-3; white-space: normal; }
+.footerLink { padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.footerLink:focus-visible { outline: 2px solid $color-primary; outline-offset: 2px; }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 767px) {
+  .banner { flex-direction: column; align-items: stretch; }
+  .bannerActions > button { flex: 1 1 auto; }
+  .dialog { padding: $spacing-5; gap: $spacing-4; }
+  .heading { gap: $spacing-3; }
+  .headingIcon { width: 2.5rem; height: 2.5rem; }
+  .category { padding: $spacing-4; gap: $spacing-3; }
+  .dialogActions { grid-template-columns: 1fr 1fr; }
+  .dialogActions > button:last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 380px) {
+  .current { align-items: flex-start; flex-direction: column; }
+  .categoryHeading { align-items: flex-start; flex-direction: column; }
+  .dialogActions { grid-template-columns: 1fr; }
+  .dialogActions > button:last-child { grid-column: auto; }
+}

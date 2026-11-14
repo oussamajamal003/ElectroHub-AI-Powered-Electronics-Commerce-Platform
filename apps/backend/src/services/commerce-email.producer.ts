@@ -12,16 +12,16 @@ import { commerceEmailConfig, safeEmailImageUrl } from './commerce-email.config.
 import { SNAPSHOT_VERSION, TEMPLATE_VERSION, commerceEmailSnapshot, eventKeys, orderReference, usableRecipient,
   type CommerceEmailType, type SuppressionReason } from './commerce-email.domain.js';
 import { logSafely } from '../utils/logger.js';
-import { parseStoreIdentitySnapshot } from './store-identity.js';
+import { readStoreIdentitySnapshot, parseStoreIdentitySnapshot } from './store-identity.js';
 
 type Tx = Prisma.TransactionClient;
 /** Database time in UTC, matching how Prisma stores `TIMESTAMP(3)` values. */
 export const DB_NOW = Prisma.sql`(now() AT TIME ZONE 'UTC')`;
 export const utc = (value: Date) => Prisma.sql`(${value.toISOString()}::timestamptz AT TIME ZONE 'UTC')`;
 
-export interface CreatedCommerceEmail { id: string; type: CommerceEmailType; orderId: string; suppressed: boolean }
+export interface CreatedCommerceEmail { id: string; type: CommerceEmailType; orderId: string | null; suppressed: boolean }
 interface EventInput {
-  key: string; type: CommerceEmailType; orderId: string; paymentId: string | null; userId: string; occurredAt: Date;
+  key: string; type: CommerceEmailType; orderId: string | null; paymentId: string | null; userId: string; occurredAt: Date;
   transition?: { id: string; from: OrderStatus; to: OrderStatus };
   account: { email: string | null; isActive: boolean } | null;
   snapshot: Record<string, unknown>;
@@ -52,7 +52,7 @@ async function insertEvent(tx: Tx, input: EventInput): Promise<CreatedCommerceEm
   const parsed = commerceEmailSnapshot.safeParse(input.snapshot);
   const suppression: SuppressionReason | null = 'suppression' in recipient ? recipient.suppression : parsed.success ? null : 'SNAPSHOT_INVALID';
   const snapshot = suppression
-    ? { v: SNAPSHOT_VERSION, type: input.type, orderReference: orderReference(input.orderId), occurredAt: input.occurredAt.toISOString(), suppressed: true }
+    ? { v: SNAPSHOT_VERSION, type: input.type, ...(input.orderId ? { orderReference: orderReference(input.orderId) } : {}), occurredAt: input.occurredAt.toISOString(), suppressed: true }
     : parsed.data;
   const id = randomUUID();
   const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
@@ -174,14 +174,32 @@ export async function transitionFulfillment(tx: Tx, input: { orderId: string; to
   const next = FULFILLMENT_TRANSITIONS[from];
   if (!next || next.to !== input.to) throw new AppError('This order status change is not allowed.', 409, 'ORDER_TRANSITION_INVALID');
   await tx.order.update({ where: { id: input.orderId }, data: { status: input.to } });
-  if (!commerceEmailEnqueueEnabled()) return { changed: true as const, event: null };
   const occurredAt = input.occurredAt ?? new Date();
   const transitionId = input.transitionId ?? randomUUID();
   const order = await orderFacts(tx, input.orderId);
+  if (input.to === 'OUT_FOR_DELIVERY') {
+    const notification = await tx.customerNotification.upsert({ where: { eventKey: `order:${order.id}:out-for-delivery` }, update: {},
+      create: { eventKey: `order:${order.id}:out-for-delivery`, userId: order.userId, orderId: order.id,
+        type: 'ORDER_OUT_FOR_DELIVERY', occurredAt } });
+    const subscriptions = await tx.customerPushSubscription.findMany({ where: { userId: order.userId, revokedAt: null }, select: { id: true } });
+    if (subscriptions.length) await tx.customerPushDelivery.createMany({ data: subscriptions.map(subscription => ({ notificationId: notification.id, subscriptionId: subscription.id })), skipDuplicates: true });
+  }
+  if (!commerceEmailEnqueueEnabled()) return { changed: true as const, event: null };
   const transition = { fromStatus: from, toStatus: input.to };
   const snapshot = next.type === 'ORDER_DELIVERED' ? { ...common(order, occurredAt), type: next.type, ...transition }
     : { ...common(order, occurredAt), type: next.type, ...transition, delivery: delivery(order) };
   const event = await insertEvent(tx, { key: eventKeys.orderTransition(order.id, transitionId), type: next.type, orderId: order.id, paymentId: null,
     userId: order.userId, occurredAt, transition: { id: transitionId, from, to: input.to }, account: order.user, snapshot });
   return { changed: true as const, event };
+}
+
+/** Called only by first verification/new Google-account transactions; no network work here. */
+export async function enqueueCustomerWelcome(tx: Tx, userId: string, occurredAt: Date) {
+  if (!commerceEmailEnqueueEnabled()) return null;
+  const user = await tx.user.findUnique({ where: { id: userId }, include: { role: true } });
+  if (!user || user.role.name !== 'CUSTOMER' || !user.emailVerifiedAt) return null;
+  return insertEvent(tx, { key: eventKeys.customerWelcome(user.id), type: 'CUSTOMER_WELCOME', orderId: null,
+    paymentId: null, userId: user.id, occurredAt, account: user,
+    snapshot: { v: SNAPSHOT_VERSION, type: 'CUSTOMER_WELCOME', occurredAt: occurredAt.toISOString(),
+      recipientName: firstName(user.firstName), seller: await readStoreIdentitySnapshot(tx) } });
 }

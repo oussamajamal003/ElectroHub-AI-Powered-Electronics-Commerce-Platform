@@ -49,6 +49,7 @@ export class AccountDeletionService {
         });
       }
 
+      await transaction.customerPushSubscription.deleteMany({ where: { userId } });
       await transaction.refreshToken.deleteMany({ where: { userId } });
       await transaction.otpChallenge.deleteMany({ where: { userId } });
       await transaction.passwordResetToken.deleteMany({ where: { userId } });

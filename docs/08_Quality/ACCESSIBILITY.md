@@ -1,5 +1,13 @@
 # Accessibility
 
+Task 06.2 adds `npm run test:quality --workspace=apps/frontend` (requires the disposable release database).
+It checks WCAG 2.1 AA with pinned axe-core, real keyboard focus/containment/restoration, reduced-motion emulation,
+rendered customer/admin states, responsive widths and genuine Chromium zoom using `chrome.tabs.setZoom`.
+Run after `npm run build:frontend` with `QUALITY_PRODUCTION=1` to test optimized assets.
+Scans wait for finite entrance/reveal animations, inspect the active modal while background content is inert,
+and inspect the full page otherwise. No rule is disabled. These checks do not certify WCAG compliance or replace NVDA/VoiceOver acceptance.
+Results: [Task 06.2](../tasks/Phase-06/TASK_06.2_ACCESSIBILITY_QA_CI_CD.md).
+
 ## 1. Purpose
 
 This document defines accessibility requirements for ElectroHub.

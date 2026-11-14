@@ -60,7 +60,7 @@ export const productSchemas = {
   },
   ProductPagination: {
     type: 'object', required: ['page', 'pageSize', 'total'],
-    properties: { page: { type: 'integer', minimum: 1, maximum: 1000 },
+    properties: { page: { type: 'integer', minimum: 1, maximum: 100 },
       pageSize: { type: 'integer', minimum: 1, maximum: 100 }, total: { type: 'integer', minimum: 0 } },
   },
   Review: {
@@ -72,7 +72,12 @@ export const productSchemas = {
   },
   ReviewSummary: {
     type: 'object', required: ['averageRating', 'reviewCount'],
-    properties: { averageRating: { type: 'string', nullable: true, pattern: '^\\d+\\.\\d$' }, reviewCount: { type: 'integer', minimum: 0 } },
+    properties: { averageRating: { type: 'string', nullable: true, pattern: '^\\d+\\.\\d$' }, reviewCount: { type: 'integer', minimum: 0 },
+      distribution: {
+        type: 'array', minItems: 5, maxItems: 5,
+        description: 'Reviews per star value, always 5 to 1 (zero counts included); the counts sum to reviewCount. Added in Task 06.2 (additive).',
+        items: { type: 'object', required: ['rating', 'count'], properties: { rating: { type: 'integer', minimum: 1, maximum: 5 }, count: { type: 'integer', minimum: 0 } } },
+      } },
   },
 };
 
@@ -82,7 +87,7 @@ const errorResponse = (description: string) => ({
 const collectionOperation = (schema: string, description: string) => ({
   tags: ['Products'], description,
   parameters: [
-    { name: 'page', in: 'query', schema: { type: 'integer', default: 1, minimum: 1, maximum: 1000 } },
+    { name: 'page', in: 'query', description: 'Pages above 100 answer 400 PAGE_LIMIT_EXCEEDED.', schema: { type: 'integer', default: 1, minimum: 1, maximum: 100 } },
     { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 20, minimum: 1, maximum: 100 } },
   ],
   responses: {
@@ -110,7 +115,7 @@ const detailOperation = (schema: string, maxLength: number, description: string)
 
 export const productPaths = {
   '/reviews/me': { get: { tags: ['Reviews'], security: [{ bearerAuth: [] }], summary: 'List the authenticated customer’s reviews with Product context',
-    parameters: [{ name: 'page', in: 'query', schema: { type: 'integer', default: 1, maximum: 1000 } },
+    parameters: [{ name: 'page', in: 'query', schema: { type: 'integer', default: 1, minimum: 1, maximum: 100 } },
       { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 10, maximum: 50 } }],
     responses: { '200': { description: 'Bounded reviews belonging only to the authenticated customer, with public Product summaries.' },
       '400': errorResponse('Invalid pagination.'), '401': errorResponse('Authentication required.'),
@@ -125,7 +130,7 @@ export const productPaths = {
   '/products/{slug}/reviews': {
     get: { tags: ['Reviews'], summary: 'List public reviews, newest first',
       parameters: [{ name: 'slug', in: 'path', required: true, schema: { type: 'string' } },
-        { name: 'page', in: 'query', schema: { type: 'integer', default: 1, maximum: 1000 } },
+        { name: 'page', in: 'query', schema: { type: 'integer', default: 1, minimum: 1, maximum: 100 } },
         { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 10, maximum: 50 } }],
       responses: { '200': { description: 'Paginated public reviews and current rating summary; author display only, no email or User fields.' },
         '400': errorResponse('Invalid pagination.'), '404': errorResponse('Product not found.') } },

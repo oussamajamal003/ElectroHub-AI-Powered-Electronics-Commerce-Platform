@@ -29,7 +29,7 @@
 
 a.productLink {
   cursor: pointer;
-  &:hover .title { color: $color-primary; }
+  &:hover .title { color: $color-primary-text; }
   &:focus-visible { outline: 2px solid $color-primary; outline-offset: 3px; }
 }
 
@@ -149,7 +149,7 @@ a.productLink {
   font-family: $font-family-base;
   font-weight: $font-weight-semibold;
   font-size: $font-size-base;
-  color: $color-primary; // Use primary color for discount maybe, or primary-text
+  color: $color-primary-text; // Use primary color for discount maybe, or primary-text
 }
 
 .originalPrice {

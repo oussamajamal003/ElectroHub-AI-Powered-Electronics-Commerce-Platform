@@ -9,7 +9,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     fileParallelism: false,
-    include: ['src/services/__tests__/delivery.postgres.integration.test.ts', 'src/routes/delivery.routes.postgres.integration.test.ts',
+    include: ['src/services/__tests__/customer-push.postgres.integration.test.ts', 'src/services/__tests__/customer-notifications.browser.postgres.integration.test.ts', 'src/services/__tests__/customer-notifications.postgres.integration.test.ts', 'src/services/__tests__/delivery.postgres.integration.test.ts', 'src/routes/delivery.routes.postgres.integration.test.ts',
       'src/sockets/delivery.realtime.postgres.integration.test.ts'],
     testTimeout: 60000,
     hookTimeout: 60000,

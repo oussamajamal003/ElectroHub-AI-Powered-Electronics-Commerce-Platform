@@ -1,6 +1,5 @@
 @use '../../../styles/abstracts/variables' as *;
 @use '../../../styles/abstracts/mixins' as *;
-@use 'sass:color';
 
 .button {
   display: inline-flex;
@@ -91,11 +90,11 @@
 
   &:hover:not(:disabled) {
     background-color: $color-primary-dark;
-    box-shadow: 0 6px 16px -6px rgb(37 99 235 / 0.55);
+    box-shadow: $shadow-primary-glow;
   }
 
   &:active:not(:disabled) {
-    background-color: color.adjust($color-primary-dark, $lightness: -10%);
+    background-color: $color-primary-active;
   }
 
   &:disabled {
@@ -107,10 +106,10 @@
 
 .variant-secondary {
   background-color: $color-accent;
-  color: $color-text-inverse;
+  color: $color-accent-foreground;
 
   &:hover:not(:disabled) {
-    background-color: color.adjust($color-accent, $lightness: -10%);
+    background-color: $color-accent-hover;
   }
 
   &:disabled {
@@ -123,7 +122,7 @@
 .variant-outline {
   background-color: $color-background;
   border-color: $color-border;
-  color: $color-primary;
+  color: $color-primary-text;
 
   &:hover:not(:disabled) {
     border-color: $color-primary;
@@ -144,8 +143,8 @@
   color: $color-text-primary;
 
   &:hover:not(:disabled) {
-    background-color: #f1f5f9;
-    color: $color-primary;
+    background-color: $color-surface-hover;
+    color: $color-primary-text;
   }
 
   &:active:not(:disabled) {
@@ -158,11 +157,11 @@
 }
 
 .variant-destructive {
-  background-color: $color-error;
+  background-color: $color-error-fill;
   color: $color-text-inverse;
 
   &:hover:not(:disabled) {
-    background-color: color.adjust($color-error, $lightness: -10%);
+    background-color: $color-error-fill-hover;
   }
 
   &:disabled {
@@ -174,7 +173,7 @@
 
 .variant-link {
   background-color: transparent;
-  color: $color-primary;
+  color: $color-primary-text;
   padding: 0;
   height: auto;
   border: none;
@@ -182,7 +181,7 @@
   text-underline-offset: 3px;
 
   &:hover:not(:disabled) {
-    color: $color-primary-dark;
+    color: $color-primary-text-hover;
     text-decoration: underline;
   }
 

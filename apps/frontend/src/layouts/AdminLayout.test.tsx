@@ -3,12 +3,14 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AdminLayout } from './AdminLayout';
 import { useAdminAuth } from '@/features/auth/context/AuthContext';
-import { useAdminAlerts } from '@/features/admin/dashboard/api';
+import { useAcknowledgeAdminAlerts, useAdminAlerts } from '@/features/admin/dashboard/api';
 import { SIDEBAR_PREFERENCE_KEY } from '@/features/admin/shell/navigation';
+import { ThemeProvider } from '@/features/theme';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({ useAdminAuth: vi.fn() }));
-vi.mock('@/features/admin/dashboard/api', () => ({ useAdminAlerts: vi.fn() }));
+vi.mock('@/features/admin/dashboard/api', () => ({ useAdminAlerts: vi.fn(), useAcknowledgeAdminAlerts: vi.fn() }));
 vi.mock('@/features/admin/dashboard/useAdminInventoryLiveUpdates', () => ({ useAdminInventoryLiveUpdates: vi.fn() }));
+vi.mock('@/features/profilePhoto/queries', () => ({ useProfilePhoto: () => ({ data: undefined }) }));
 
 const logout = vi.fn();
 const renderAt = (path: string) => render(<MemoryRouter initialEntries={[path]}>
@@ -22,6 +24,7 @@ describe('AdminLayout shell', () => {
     vi.mocked(useAdminAuth).mockReturnValue({ user: { id: 'a', email: 'admin@example.test', firstName: 'Ada', lastName: 'Admin', role: 'ADMIN' }, logout } as unknown as ReturnType<typeof useAdminAuth>);
     vi.mocked(useAdminAlerts).mockReturnValue({ data: { data: { lowStock: 2, outOfStock: 1, awaitingFulfillment: 3, preparing: 0, outForDelivery: 4, generatedAt: '' } },
       isPending: false, isError: false } as unknown as ReturnType<typeof useAdminAlerts>);
+    vi.mocked(useAcknowledgeAdminAlerts).mockReturnValue({ mutate: vi.fn(), isPending: false, isError: false } as unknown as ReturnType<typeof useAcknowledgeAdminAlerts>);
   });
 
   it('lists only implemented modules (05.1 operations + 05.2 growth/administration) and marks the current one', () => {
@@ -35,9 +38,37 @@ describe('AdminLayout shell', () => {
     expect(within(nav).getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current');
   });
 
-  it('announces real alert counts without unread semantics', () => {
+  it('announces unread alerts, and the operational total once everything has been read', () => {
+    vi.mocked(useAdminAlerts).mockReturnValue({ data: { data: { lowStock: 2, outOfStock: 1, awaitingFulfillment: 3, preparing: 0, outForDelivery: 4, generatedAt: '',
+      unread: { lowStock: 0, outOfStock: 1, awaitingFulfillment: 0, outForDelivery: 0, total: 1 } } }, isPending: false, isError: false } as unknown as ReturnType<typeof useAdminAlerts>);
+    const view = renderAt('/admin');
+    expect(screen.getByRole('button', { name: 'Alerts: 1 unread' })).toBeInTheDocument();
+    view.unmount();
+    vi.mocked(useAdminAlerts).mockReturnValue({ data: { data: { lowStock: 2, outOfStock: 1, awaitingFulfillment: 3, preparing: 0, outForDelivery: 4, generatedAt: '',
+      unread: { lowStock: 0, outOfStock: 0, awaitingFulfillment: 0, outForDelivery: 0, total: 0 } } }, isPending: false, isError: false } as unknown as ReturnType<typeof useAdminAlerts>);
     renderAt('/admin');
-    expect(screen.getByRole('button', { name: 'Alerts: 6 items need attention' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Alerts: no unread, 10 items need attention' })).toBeInTheDocument();
+  });
+
+  it('offers an explicit retry for a failed alerts request', async () => {
+    const refetch = vi.fn();
+    vi.mocked(useAdminAlerts).mockReturnValue({ isError: true, isPending: false, isFetching: false, refetch } as unknown as ReturnType<typeof useAdminAlerts>);
+    renderAt('/admin');
+    const trigger = screen.getByRole('button', { name: /^Alerts$/ });
+    fireEvent.pointerDown(trigger); fireEvent.click(trigger);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Alerts could not be loaded.');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry alerts' }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('announces a successful zero-alert state', async () => {
+    vi.mocked(useAdminAlerts).mockReturnValue({ data: { data: { lowStock: 0, outOfStock: 0, awaitingFulfillment: 0,
+      preparing: 0, outForDelivery: 0, generatedAt: '' } }, isError: false, isPending: false } as unknown as ReturnType<typeof useAdminAlerts>);
+    renderAt('/admin');
+    const trigger = screen.getByRole('button', { name: 'Alerts: nothing needs attention' });
+    fireEvent.pointerDown(trigger); fireEvent.click(trigger);
+    expect(await screen.findByRole('status')).toHaveTextContent('No operational alerts need attention.');
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('remembers the collapsed sidebar and keeps accessible names on the icon rail', () => {
@@ -105,5 +136,19 @@ describe('AdminLayout shell', () => {
     renderAt('/admin');
     expect(screen.getByRole('link', { name: 'Skip to content' })).toHaveAttribute('href', '#admin-main');
     expect(screen.getByRole('main')).toHaveAttribute('id', 'admin-main');
+  });
+
+  it('offers the shared theme toggle in the admin header and switches the whole console (dark-mode task)', () => {
+    document.documentElement.setAttribute('data-theme', 'light');
+    render(<ThemeProvider><MemoryRouter initialEntries={['/admin']}>
+      <Routes><Route element={<AdminLayout />}><Route path="/admin/*" element={<p>Page body</p>} /></Route></Routes>
+    </MemoryRouter></ThemeProvider>);
+    const header = document.querySelector('[data-admin-header]') as HTMLElement;
+    const toggle = within(header).getByRole('button', { name: 'Switch to dark mode' });
+    fireEvent.click(toggle);
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark');
+    expect(within(header).getByRole('button', { name: 'Switch to light mode' })).toBeInTheDocument();
+    expect(screen.getByText('Page body')).toBeInTheDocument();
+    document.documentElement.removeAttribute('data-theme');
   });
 });

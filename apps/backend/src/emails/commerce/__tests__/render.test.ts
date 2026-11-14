@@ -15,6 +15,8 @@ function render(name: CommerceEmailFixtureName) {
   return renderCommerceEmail(commerceEmailFixtures[name], ctx, TEMPLATE_VERSION);
 }
 
+const BRAND_LOGO_TAG = /<img data-brand-logo="electrohub"[^>]*>/;
+
 describe('fixtures', () => {
   it.each(Object.keys(commerceEmailFixtures) as CommerceEmailFixtureName[])('%s parses against its zod schema', name => {
     expect(commerceEmailSnapshot.safeParse(commerceEmailFixtures[name]).success).toBe(true);
@@ -44,7 +46,7 @@ describe('subjects and headings', () => {
     ['orderConfirmed', `Order confirmed — ${REFERENCE}`, 'Your order is confirmed'],
     ['paymentConfirmed', `Payment confirmed — ${REFERENCE}`, 'Your payment is confirmed'],
     ['orderPreparing', `We’re preparing your order — ${REFERENCE}`, 'Your order is being prepared'],
-    ['orderOutForDelivery', `Your order is out for delivery — ${REFERENCE}`, 'Your order is out for delivery'],
+    ['orderOutForDelivery', 'Your ElectroHub Order Is Out for Delivery!', 'Your order is out for delivery'],
     ['orderDelivered', `Order delivered — ${REFERENCE}`, 'Your order is marked delivered'],
     ['orderCancelledUnpaid', `Order cancelled — ${REFERENCE}`, 'Your order was cancelled'],
     ['paymentRefunded', `Refund confirmed — ${REFERENCE}`, 'Your refund is confirmed'],
@@ -65,9 +67,13 @@ describe('HTML escaping', () => {
 
   it('never emits raw attacker markup from malicious fixtures', () => {
     for (const name of MALICIOUS) {
-      const { html } = render(name);
+      const { html: full } = render(name);
+      // The fixed, configuration-derived brand logo is the only image allowed here; no data-driven markup becomes an element.
+      const html = full.replace(BRAND_LOGO_TAG, '');
+      expect(full.match(BRAND_LOGO_TAG)).toHaveLength(1);
       expect(html).not.toContain('<script');
-      expect(html).not.toMatch(/<img/i);
+      expect(html).not.toMatch(/<img\b/i);
+      expect(html).not.toMatch(/<img[^>]*onerror/i);
       expect(html).not.toMatch(/<b>/i);
       expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
       expect(html).toContain('&quot;&gt;&lt;img src=x onerror=alert(1)&gt;');
@@ -226,15 +232,19 @@ describe('static safety', () => {
     }
   });
 
-  it('only uses https images with empty alt text', () => {
+  it('uses the branded HTTPS logo and decorative HTTPS product images', () => {
     const { html } = render('orderConfirmed25Items');
     const images = html.match(/<img\b[^>]*>/g) ?? [];
     expect(images.length).toBeGreaterThan(0);
-    for (const tag of images) {
+    expect(images[0]).toContain('src="https://electrohub.example/brand/electrohub-email-logo.png"');
+    expect(images[0]).toContain('alt="ElectroHub"');
+    for (const tag of images.slice(1)) {
       expect(tag).toMatch(/src="https:\/\/images\.example\.com\//);
       expect(tag).toContain('alt=""');
     }
-    expect(render('orderConfirmedMinimalOptional').html).not.toMatch(/<img\b/);
+    const minimal = render('orderConfirmedMinimalOptional').html;
+    expect(minimal.match(/<img\b/g)).toHaveLength(1);
+    expect(minimal.replace(BRAND_LOGO_TAG, '')).not.toMatch(/<img\b/);
   });
 
   it('has a light color-scheme declaration and a square, single CTA', () => {
@@ -296,5 +306,19 @@ describe('size budget', () => {
   it.each(['orderConfirmed25Items', 'orderConfirmed100Items'] as const)('%s HTML stays under 90 KB', name => {
     const bytes = Buffer.byteLength(render(name).html, 'utf8');
     expect(bytes).toBeLessThan(90_000);
+  });
+});
+
+describe('out-for-delivery email call to action', () => {
+  it('has one working button to the customer order details page, in the HTML and the text part', () => {
+    const fixture = commerceEmailFixtures.orderOutForDelivery;
+    const destination = `https://electrohub.example/orders/${encodeURIComponent(fixture.orderReference)}`;
+    const { html, text } = render('orderOutForDelivery');
+    expect(html.match(/View Order Details/g)).toHaveLength(1);
+    // /orders/:orderReference is the session-gated order details route; ownership is enforced by the API.
+    expect(html).toContain(`href="${destination}"`);
+    expect(text).toContain(destination);
+    // No administrator or tracking-token destination leaks into a customer message.
+    expect(html).not.toContain('/admin/');
   });
 });

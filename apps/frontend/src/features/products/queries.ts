@@ -71,10 +71,10 @@ export function useReviewMutation(slug: string) {
 
       const applySummary = (nextSummary: NonNullable<typeof summary>) => {
         client.setQueryData<ProductResponse<ProductDetail>>(queryKeys.products.detail(slug), current => current && ({
-          ...current, data: { ...current.data, ...nextSummary },
+          ...current, data: { ...current.data, averageRating: nextSummary.averageRating, reviewCount: nextSummary.reviewCount },
         }));
         const updateRows = <T extends { data: ProductSummary[] }>(current: T | undefined): T | undefined => current && ({
-          ...current, data: current.data.map(item => item.slug === slug ? { ...item, ...nextSummary } : item),
+          ...current, data: current.data.map(item => item.slug === slug ? { ...item, averageRating: nextSummary.averageRating, reviewCount: nextSummary.reviewCount } : item),
         });
         for (const [key, value] of client.getQueriesData<ProductCollection<ProductSummary>>({ queryKey: queryKeys.products.all })) {
           if (key[1] === 'list' || key[1] === 'deals') client.setQueryData(key, updateRows(value));

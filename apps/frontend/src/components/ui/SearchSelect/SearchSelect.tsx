@@ -140,11 +140,11 @@ export function SearchSelect({ label, hideLabel, value, onValueChange, options, 
 
   return <div ref={root} className={clsx(styles.container, fullWidth && styles.fullWidth, className)}>
     <span id={labelId} className={clsx(styles.label, hideLabel && styles.visuallyHidden, disabled && styles.labelDisabled)}>
-      {label}{required && <span className={styles.required} aria-hidden="true">*</span>}
+      {label}{required && <><span className={styles.required} aria-hidden="true">*</span><span className={styles.visuallyHidden}> (required)</span></>}
     </span>
     <button ref={trigger} type="button" className={clsx(styles.trigger, error && styles.error, triggerClassName)} disabled={disabled}
       aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? listId : undefined} aria-labelledby={`${labelId} ${id}-value`}
-      aria-invalid={error ? true : undefined} aria-required={required || undefined}
+      aria-invalid={error ? true : undefined}
       aria-describedby={(error ? errorId : helperText ? helpId : undefined)}
       onClick={() => (open ? close() : show())} onKeyDown={onTriggerKey}>
       <span id={`${id}-value`} className={clsx(styles.value, !selected && styles.placeholder)} title={selected?.label}>{selected?.label ?? placeholder}</span>

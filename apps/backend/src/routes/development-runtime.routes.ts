@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { prisma } from '../lib/prisma.js';
 import { resolveDatabaseTargets } from '../lib/database-target.js';
+import { paymentIsolation } from '../payment-isolation.js';
+import { contactAdministratorFilter } from '../services/storefront-contact.service.js';
 
 const router = Router();
 const instanceId = randomUUID();
@@ -36,7 +38,12 @@ router.get('/internal/development-runtime', async (req, res) => {
       (process.env.ISOLATED_PG_DOCKER === '1' && /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(row?.address ?? ''));
     if (!row || (serverTlsRequired && !row.tls) || row.database !== decodeURIComponent(url.pathname.slice(1)) ||
       row.port !== Number(url.port || 5432) || (local && !localServer)) throw new Error('IDENTITY_NOT_VERIFIED');
-    res.json({ data: { mode: local ? 'ISOLATED_QA' : 'MAIN_DEV', instanceId, databaseReady: true, tlsVerified: true } });
+    const isolation = paymentIsolation();
+    const contactRecipientsConfigured = await prisma.user.count({ where: contactAdministratorFilter() }).then(count => count > 0).catch(() => null);
+    res.json({ data: { mode: local ? 'ISOLATED_QA' : 'MAIN_DEV', instanceId, databaseReady: true, tlsVerified: true,
+      pid: process.pid, supervisorPid: process.ppid,
+      contactRecipientsConfigured,
+      supervisorActive: !local && isolation.allowed && isolation.reason === 'shared-target-approved' } });
   } catch { res.status(503).json({ error: { code: 'DEVELOPMENT_RUNTIME_NOT_READY' } }); }
 });
 

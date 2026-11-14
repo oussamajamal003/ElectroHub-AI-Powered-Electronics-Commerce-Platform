@@ -119,7 +119,7 @@ export const adminSecurityController = {
   recoveryResend: handle(async (req, res) => {
     const body = z.object({ email: z.string().trim().email().max(254) }).strict().parse(req.body);
     // Same acknowledgement for everyone; only a live reset challenge is ever re-sent.
-    res.set('Cache-Control', 'no-store').status(200).json(await authService.resendPasswordReset(body.email));
+    res.set('Cache-Control', 'no-store').status(200).json(await authService.resendPasswordReset(body.email, 'ADMIN'));
   }),
   recoveryVerifyEmail: handle(async (req, res) => {
     const body = z.object({ email: z.string().trim().email().max(254), code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code.') }).strict().parse(req.body);

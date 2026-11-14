@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Toast, ToastClose, ToastProvider, ToastTitle, ToastViewport } from '@/components/ui/Toast';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { TrackingSkeleton } from './TrackingSkeleton';
 import { ApiError } from '@/lib/api';
 import { OrderBadges } from '@/features/orders/OrderBadges';
 import { OrdersAccessGate } from '@/features/orders/OrdersAccessGate';
@@ -28,18 +28,6 @@ export function DeliveryTrackingPage() {
 }
 
 /** Same skeleton shape as the loaded page (overview first, then progress), so nothing jumps when data arrives. */
-function TrackingSkeleton({ label = 'Loading delivery tracking' }: { label?: string }) {
-  return <div className={styles.tracking} role="status" aria-label={label}>
-    <span className={styles.visuallyHidden}>{label}…</span>
-    <div className={styles.grid} aria-hidden="true">
-      <div className={`${styles.areaOverview} ${styles.overview}`}><Skeleton width="100%" height={168} /><div className={styles.skeletonStack}>
-        <Skeleton width="100%" height={132} /><Skeleton width="100%" height={110} /></div><Skeleton width="70%" height={18} /></div>
-      <div className={`${styles.areaStep} ${styles.card}`}><Skeleton width="11rem" height={22} /><Skeleton width="100%" height={72} /></div>
-      <div className={`${styles.areaMap} ${styles.card}`}><Skeleton width="10rem" height={22} /><Skeleton width="80%" height={16} /></div>
-      <div className={`${styles.areaTimeline} ${styles.card}`}><Skeleton width="10rem" height={22} /><Skeleton width="100%" height={48} /><Skeleton width="100%" height={48} /></div>
-    </div>
-  </div>;
-}
 
 function OwnedDeliveryTracking() {
   const { orderReference = '' } = useParams();

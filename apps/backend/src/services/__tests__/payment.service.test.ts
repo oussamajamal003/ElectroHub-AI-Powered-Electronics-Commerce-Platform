@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma, type PrismaClient, type PaymentWork } from '@prisma/client';
 import { PaymentService } from '../payment.service.js';
 import { AppError } from '../../middleware/errorHandler.js';
-import { WORK_LEASE_MS, customerPaymentStatus, operationKey, type Attempt, type PaymentProvider, type ProviderIntent } from '../payment.domain.js';
+import { COMMIT_CONFLICT_RETRIES, WORK_LEASE_MS, customerPaymentStatus, operationKey, type Attempt, type PaymentProvider, type ProviderIntent } from '../payment.domain.js';
 import { isSerializationConflict } from '../transaction-conflict.js';
 import { cartRevision, requestHash } from '../checkout.domain.js';
 import { logger, loggingHealth } from '../../utils/logger.js';
@@ -1039,6 +1039,55 @@ describe('Durable payment processor (mocked DB/provider; not real transaction pr
     await service.process(id); expect(attempt.state).toBe('CANCELED'); expect(attempt.failureCode).toBe('INVENTORY_CONFLICT');
     expect(provider.cancel).toHaveBeenCalledTimes(1); expect(provider.capture).not.toHaveBeenCalled(); expect(attempt.orderId).toBeNull();
   });
+  it('last unit lost at commit: cancels the authorization and records CANCELED only after a fresh provider read confirms it', async () => {
+    Object.assign(attempt, { submittedAt: new Date(), state: 'AWAITING_INPUT' });
+    Object.assign(intent, { status: 'requires_capture', capturable: 1999, methodType: 'card' });
+    commit.mockRejectedValue(new AppError('Product is out of stock.', 409, 'CART_STOCK_CONFLICT'));
+    // The cancel reply claims success, but the provider has not applied it yet: the reply alone must not mark the purchase released.
+    provider.cancel.mockImplementation(async () => ({ ...intent, status: 'canceled', capturable: 0 }));
+    await service.process(id);
+    expect(attempt).toMatchObject({ state: 'CANCEL_PENDING', cancelRequested: true, failureCode: 'CART_STOCK_CONFLICT', orderId: null });
+    expect(attempt.providerStatus).not.toBe('canceled');
+    expect(provider.retrieve.mock.invocationCallOrder.at(-1)).toBeGreaterThan(provider.cancel.mock.invocationCallOrder[0]!);
+    expect(work.state).toBe('READY');
+    expect(provider.capture).not.toHaveBeenCalled();
+    // The provider applies the cancellation; the next pass verifies it and only then records the release.
+    Object.assign(intent, { status: 'canceled', capturable: 0 }); work.nextRunAt = new Date(0);
+    await service.process(id);
+    expect(attempt).toMatchObject({ state: 'CANCELED', providerStatus: 'canceled', failureCode: 'CART_STOCK_CONFLICT', orderId: null });
+    expect(work.state).toBe('DONE');
+    expect(provider.capture).not.toHaveBeenCalled(); expect(commit).toHaveBeenCalledTimes(1);
+    expect(customerPaymentStatus(attempt, work)).toBe('FAILED');
+  });
+  it('a commit that lost only to serialization contention is retried within the same pass (never cancelled) and the customer gets the result from that pass', async () => {
+    Object.assign(attempt, { submittedAt: new Date(), state: 'AWAITING_INPUT' });
+    Object.assign(intent, { status: 'requires_capture', capturable: 1999, methodType: 'card' });
+    const conflict = new AppError('Checkout changed. Retry the same checkout attempt safely.', 409, 'CHECKOUT_CONFLICT');
+    commit.mockRejectedValueOnce(conflict).mockRejectedValueOnce(conflict)
+      .mockImplementationOnce(async () => { attempt.orderId = 'order'; attempt.state = 'CAPTURE_PENDING'; });
+    await service.process(id);
+    expect(commit).toHaveBeenCalledTimes(3);
+    expect(provider.cancel).not.toHaveBeenCalled(); expect(provider.capture).toHaveBeenCalledTimes(1);
+    // One pass, no durable "checking" retry was scheduled for the conflict.
+    expect(work.lastError).not.toBe('CHECKOUT_CONFLICT'); expect(work.retryCount).toBe(0);
+  });
+  it('a commit conflict that persists past the bounded in-pass budget releases the authorization in that same pass without capture', async () => {
+    Object.assign(attempt, { submittedAt: new Date(), state: 'AUTHORIZED' });
+    Object.assign(intent, { status: 'requires_capture', capturable: 1999, methodType: 'card' });
+    commit.mockRejectedValue(new AppError('Checkout changed. Retry the same checkout attempt safely.', 409, 'CHECKOUT_CONFLICT'));
+    await service.process(id);
+    expect(commit).toHaveBeenCalledTimes(COMMIT_CONFLICT_RETRIES + 1);
+    expect(attempt).toMatchObject({ state: 'CANCELED', failureCode: 'CHECKOUT_CONFLICT', orderId: null, providerStatus: 'canceled' });
+    expect(provider.cancel).toHaveBeenCalledTimes(1); expect(provider.capture).not.toHaveBeenCalled();
+  });
+  it('a lease lost between in-pass commit rounds stops the pass without cancelling the authorization', async () => {
+    Object.assign(attempt, { submittedAt: new Date(), state: 'AUTHORIZED' });
+    Object.assign(intent, { status: 'requires_capture', capturable: 1999, methodType: 'card' });
+    commit.mockImplementation(async () => { work.leaseToken = 'another-worker'; throw new AppError('Checkout changed.', 409, 'CHECKOUT_CONFLICT'); });
+    await service.process(id);
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(provider.cancel).not.toHaveBeenCalled(); expect(provider.capture).not.toHaveBeenCalled(); expect(attempt.state).toBe('AUTHORIZED');
+  });
   it.each([false, true])('compensates A once without modifying a newer populated Cart (empty original Cart: %s)', async empty => {
     const productA = '22222222-2222-4222-8222-222222222222';
     const productB = '33333333-3333-4333-8333-333333333333';
@@ -1167,5 +1216,120 @@ describe('Durable payment processor (mocked DB/provider; not real transaction pr
       data: { status: 'PROCESSING', refundedAt: null, failureReason: 'PAYMENT_REFUND_INCIDENT' } });
     else expect(db.payment.update).not.toHaveBeenCalled();
     expect(db.order.update).not.toHaveBeenCalled(); expect(commit).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Task 06.2 (PR #51) — Remove failed payment: one server-decided action. A terminal failure is only hidden; a provider decline whose
+ * PaymentIntent is still open is cancelled by the fenced worker (verified by a fresh read) and hidden in that same write.
+ */
+describe('Remove failed payment (discard): cancel a still-open declined intent when needed, then hide', () => {
+  const declined = () => {
+    Object.assign(attempt, { state: 'DECLINED', failureCode: 'PAYMENT_DECLINED', submittedAt: new Date(Date.now() - 60_000) });
+    Object.assign(work, { state: 'DONE', nextRunAt: new Date(Date.now() + 60_000) });
+    Object.assign(intent, { declined: true, methodType: 'card' });
+  };
+  it('a declined purchase with an open intent: one verified provider cancellation, then CANCELED and hidden in the same write', async () => {
+    declined();
+    await expect(service.discard('customer', id)).resolves.toMatchObject({ attemptId: id, status: 'REMOVED' });
+    expect(provider.cancel).toHaveBeenCalledTimes(1);
+    expect(provider.capture).not.toHaveBeenCalled(); expect(provider.refund).not.toHaveBeenCalled(); expect(commit).not.toHaveBeenCalled();
+    expect(attempt).toMatchObject({ state: 'CANCELED', providerStatus: 'canceled', failureCode: 'PAYMENT_DISCARDED_BY_CUSTOMER', orderId: null });
+    expect(attempt.dismissedAt).toBeInstanceOf(Date);
+    // Not an abandonment: the purchase failed at the provider first.
+    expect(customerPaymentStatus(attempt)).toBe('FAILED');
+    expect(work.state).toBe('DONE');
+  });
+  it('is idempotent: a repeat (double-click, duplicate request) answers REMOVED without another provider call', async () => {
+    declined();
+    await service.discard('customer', id);
+    const calls = { retrieve: provider.retrieve.mock.calls.length, cancel: provider.cancel.mock.calls.length };
+    await expect(service.discard('customer', id)).resolves.toMatchObject({ status: 'REMOVED' });
+    expect(provider.cancel).toHaveBeenCalledTimes(calls.cancel); expect(provider.retrieve).toHaveBeenCalledTimes(calls.retrieve);
+  });
+  it('answers CANCEL_PENDING (never REMOVED) while the provider has not confirmed the cancellation; the retry finishes it once', async () => {
+    declined();
+    provider.cancel.mockImplementationOnce(async () => ({ ...intent })); // accepted, but the fresh read still shows it open
+    await expect(service.discard('customer', id)).resolves.toMatchObject({ status: 'CANCEL_PENDING', dismissedAt: null });
+    expect(attempt).toMatchObject({ state: 'CANCEL_PENDING', dismissedAt: null, cancelRequested: true });
+    await expect(service.discard('customer', id)).resolves.toMatchObject({ status: 'REMOVED' });
+    expect(attempt.state).toBe('CANCELED'); expect(attempt.dismissedAt).toBeInstanceOf(Date);
+  });
+  it('a provider failure during cancellation leaves the card in place with the request durable (nothing hidden, no false success)', async () => {
+    declined();
+    provider.cancel.mockRejectedValueOnce(new Error('provider unavailable'));
+    await expect(service.discard('customer', id)).resolves.toMatchObject({ status: 'CANCEL_PENDING' });
+    expect(attempt.dismissedAt).toBeNull(); expect(attempt.cancelRequested).toBe(true); expect(work.lastError).toBeTruthy();
+  });
+  it('an intent the provider already cancelled is recorded and hidden without a second cancellation', async () => {
+    declined(); Object.assign(intent, { status: 'canceled' });
+    await expect(service.discard('customer', id)).resolves.toMatchObject({ status: 'REMOVED' });
+    expect(provider.cancel).not.toHaveBeenCalled(); expect(attempt.state).toBe('CANCELED'); expect(attempt.dismissedAt).toBeInstanceOf(Date);
+  });
+  it.each([
+    ['is processing a confirmation', { status: 'processing' }],
+    ['holds an authorization', { status: 'requires_capture', capturable: 1999 }],
+    ['was captured', { status: 'succeeded', received: 1999 }],
+    ['is waiting on bank verification', { status: 'requires_action' }],
+  ] as const)('is refused (409) with nothing hidden and no cancellation request when the provider %s', async (_label, provided) => {
+    declined(); Object.assign(intent, provided);
+    // Recovery is woken and reconciles provider truth; whatever it decides, the discard itself records and hides nothing.
+    vi.spyOn(service, 'process').mockResolvedValue(null);
+    await expect(service.discard('customer', id)).rejects.toMatchObject({ statusCode: 409, code: 'PAYMENT_STATUS_UNCONFIRMED' });
+    expect(provider.cancel).not.toHaveBeenCalled();
+    expect(attempt).toMatchObject({ cancelRequested: false, failureCode: 'PAYMENT_DECLINED', dismissedAt: null });
+  });
+  it.each([
+    ['an authorization', { status: 'requires_capture', capturable: 1999 }],
+    ['a confirmation in progress', { status: 'processing' }],
+  ] as const)('provider truth wins over a recorded discard: %s observed by the worker is never cancelled or hidden', async (_label, provided) => {
+    declined(); Object.assign(attempt, { cancelRequested: true, failureCode: 'PAYMENT_DISCARDED_BY_CUSTOMER' }); Object.assign(work, { state: 'READY', nextRunAt: new Date(0) });
+    Object.assign(intent, provided);
+    await service.process(id).catch(() => undefined);
+    expect(provider.cancel).not.toHaveBeenCalled();
+    expect(attempt.cancelRequested).toBe(false); expect(attempt.dismissedAt).toBeNull();
+    expect(attempt.failureCode === 'PAYMENT_DISCARDED_BY_CUSTOMER').toBe(false);
+  });
+  it.each([
+    ['a paid purchase', { state: 'PAID', orderId: 'order', failureCode: null }],
+    ['a purchase still processing', { state: 'PROCESSING', failureCode: null }],
+    ['a refund still pending', { state: 'REFUND_PENDING', orderId: 'order', failureCode: null }],
+    ['a compensation still pending', { state: 'COMPENSATION_PENDING', orderId: 'order', failureCode: null }],
+    ['a failed order whose compensation has not committed', { state: 'COMPENSATED', orderId: 'order', compensatedAt: null, failureCode: null }],
+  ] as const)('refuses %s: no provider call, nothing hidden', async (_label, row) => {
+    Object.assign(attempt, { submittedAt: new Date(), ...row });
+    vi.spyOn(service, 'process').mockResolvedValue(null);
+    await expect(service.discard('customer', id)).rejects.toMatchObject({ statusCode: 409, code: 'PAYMENT_STATUS_UNCONFIRMED' });
+    expect(provider.retrieve).not.toHaveBeenCalled(); expect(provider.cancel).not.toHaveBeenCalled(); expect(provider.refund).not.toHaveBeenCalled();
+    expect(attempt.dismissedAt).toBeNull(); expect(attempt.cancelRequested).toBe(false);
+  });
+  it('refuses a failure whose outcome is unverified (recovery error recorded) and never hides it', async () => {
+    Object.assign(attempt, { state: 'CANCELED', submittedAt: new Date(), failureCode: 'CART_STOCK_CONFLICT' }); Object.assign(work, { state: 'READY', lastError: 'PAYMENT_PROVIDER_UNKNOWN' });
+    vi.spyOn(service, 'process').mockResolvedValue(null);
+    await expect(service.discard('customer', id)).rejects.toMatchObject({ code: 'PAYMENT_STATUS_UNCONFIRMED' });
+    expect(attempt.dismissedAt).toBeNull();
+  });
+  it.each(['CANCELED', 'COMPENSATED', 'REFUNDED'] as const)('an already-terminal %s failure is only hidden: the provider is never called', async state => {
+    Object.assign(attempt, { state, submittedAt: new Date(), failureCode: state === 'CANCELED' ? 'CART_STOCK_CONFLICT' : null,
+      ...(state === 'CANCELED' ? {} : { orderId: 'order', compensatedAt: new Date() }) });
+    Object.assign(work, { state: 'DONE' });
+    const dismiss = vi.spyOn(service, 'dismiss').mockResolvedValue({ attemptId: id, dismissedAt: new Date().toISOString() });
+    await expect(service.discard('customer', id)).resolves.toMatchObject({ status: 'REMOVED' });
+    expect(dismiss).toHaveBeenCalledWith('customer', id);
+    for (const operation of [provider.retrieve, provider.cancel, provider.refund, provider.capture]) expect(operation).not.toHaveBeenCalled();
+  });
+  it('is owner-scoped: another customer (or an unknown id) gets the same not-found and nothing is read from the provider', async () => {
+    declined(); db.paymentAttempt.findFirst.mockResolvedValue(null);
+    await expect(service.discard('someone-else', id)).rejects.toMatchObject({ statusCode: 404, code: 'PAYMENT_ATTEMPT_NOT_FOUND' });
+    expect(db.paymentAttempt.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id, userId: 'someone-else' } }));
+    expect(provider.retrieve).not.toHaveBeenCalled(); expect(attempt.cancelRequested).toBe(false);
+  });
+  it('waits out a routine recovery lease, and refuses (retryable) without recording anything if it does not clear', async () => {
+    declined(); Object.assign(work, { state: 'LEASED', leaseToken: 'other', leaseUntil: new Date(Date.now() + 60_000) });
+    vi.useFakeTimers();
+    const outcome = expect(service.discard('customer', id)).rejects.toMatchObject({ statusCode: 409, code: 'PAYMENT_NOT_DISMISSIBLE' });
+    await vi.advanceTimersByTimeAsync(10_000);
+    await outcome;
+    expect(attempt.cancelRequested).toBe(false); expect(provider.cancel).not.toHaveBeenCalled(); expect(attempt.dismissedAt).toBeNull();
   });
 });

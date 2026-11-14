@@ -1,0 +1,744 @@
+{
+  "rows": 200000,
+  "measurements": [
+    {
+      "label": "without price keyset index | catalog newest | offset page 1",
+      "medianMs": 0.214,
+      "minMs": 0.145,
+      "maxMs": 0.256,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Incremental Sort",
+        "Nested Loop",
+        "Index Scan(products_createdAt_idx)",
+        "Memoize",
+        "Index Scan(categories_pkey)"
+      ]
+    },
+    {
+      "label": "without price keyset index | catalog newest | offset page 100 (offset 1980)",
+      "medianMs": 3.819,
+      "minMs": 3.349,
+      "maxMs": 7.42,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Incremental Sort",
+        "Nested Loop",
+        "Index Scan(products_createdAt_idx)",
+        "Memoize",
+        "Index Scan(categories_pkey)"
+      ]
+    },
+    {
+      "label": "without price keyset index | catalog newest | old cap: offset 99,900 (page 1000 x 100)",
+      "medianMs": 198.032,
+      "minMs": 191.755,
+      "maxMs": 222.643,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Incremental Sort",
+        "Nested Loop",
+        "Index Scan(products_createdAt_idx)",
+        "Memoize",
+        "Index Scan(categories_pkey)"
+      ]
+    },
+    {
+      "label": "without price keyset index | catalog newest | keyset after row 9,900",
+      "medianMs": 0.205,
+      "minMs": 0.171,
+      "maxMs": 0.31,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Incremental Sort",
+        "Nested Loop",
+        "Index Scan(products_createdAt_idx)",
+        "Memoize",
+        "Index Scan(categories_pkey)"
+      ]
+    },
+    {
+      "label": "without price keyset index | catalog price-asc | offset page 1",
+      "medianMs": 333.491,
+      "minMs": 273.364,
+      "maxMs": 393.142,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "without price keyset index | catalog price-asc | offset page 100 (offset 1980)",
+      "medianMs": 290.919,
+      "minMs": 223.617,
+      "maxMs": 370.351,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "without price keyset index | catalog price-asc | old cap: offset 99,900 (page 1000 x 100)",
+      "medianMs": 536.192,
+      "minMs": 492.948,
+      "maxMs": 595.372,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "without price keyset index | catalog price-asc | keyset after row 9,900",
+      "medianMs": 218.394,
+      "minMs": 200.043,
+      "maxMs": 317.847,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "without price keyset index | category newest | offset page 1",
+      "medianMs": 0.202,
+      "minMs": 0.192,
+      "maxMs": 0.234,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Incremental Sort",
+        "Nested Loop",
+        "Index Scan(products_createdAt_idx)",
+        "Materialize",
+        "Index Scan(categories_slug_key)"
+      ]
+    },
+    {
+      "label": "without price keyset index | category newest | offset page 100 (offset 1980)",
+      "medianMs": 217.341,
+      "minMs": 182.163,
+      "maxMs": 234.921,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Index Scan(categories_slug_key)"
+      ]
+    },
+    {
+      "label": "without price keyset index | category newest | old cap: offset 99,900 (page 1000 x 100)",
+      "medianMs": 290.29,
+      "minMs": 246.182,
+      "maxMs": 358.226,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Index Scan(categories_slug_key)"
+      ]
+    },
+    {
+      "label": "without price keyset index | category newest | keyset after row 9,900",
+      "medianMs": 0.192,
+      "minMs": 0.143,
+      "maxMs": 0.251,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Incremental Sort",
+        "Nested Loop",
+        "Index Scan(products_createdAt_idx)",
+        "Materialize",
+        "Index Scan(categories_slug_key)"
+      ]
+    },
+    {
+      "label": "without price keyset index | category price-asc | offset page 1",
+      "medianMs": 244.276,
+      "minMs": 221.838,
+      "maxMs": 301.502,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Index Scan(categories_slug_key)"
+      ]
+    },
+    {
+      "label": "without price keyset index | category price-asc | offset page 100 (offset 1980)",
+      "medianMs": 299.632,
+      "minMs": 262.047,
+      "maxMs": 311.846,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Index Scan(categories_slug_key)"
+      ]
+    },
+    {
+      "label": "without price keyset index | category price-asc | old cap: offset 99,900 (page 1000 x 100)",
+      "medianMs": 420.579,
+      "minMs": 368.315,
+      "maxMs": 487.583,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Index Scan(categories_slug_key)"
+      ]
+    },
+    {
+      "label": "without price keyset index | category price-asc | keyset after row 9,900",
+      "medianMs": 274.221,
+      "minMs": 248.857,
+      "maxMs": 297.171,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Index Scan(categories_slug_key)"
+      ]
+    },
+    {
+      "label": "without price keyset index | catalog price-desc | offset page 1",
+      "medianMs": 327.364,
+      "minMs": 304.397,
+      "maxMs": 332.47,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "without price keyset index | catalog price-desc | offset page 100 (offset 1980)",
+      "medianMs": 269.16,
+      "minMs": 241.385,
+      "maxMs": 309.17,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "without price keyset index | catalog price-desc | old cap: offset 99,900 (page 1000 x 100)",
+      "medianMs": 565.747,
+      "minMs": 507.39,
+      "maxMs": 626.155,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "without price keyset index | catalog price-desc | keyset after row 9,900",
+      "medianMs": 231.472,
+      "minMs": 202.831,
+      "maxMs": 257.078,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "without price keyset index | catalog name-asc | offset page 1",
+      "medianMs": 226.825,
+      "minMs": 205.268,
+      "maxMs": 256.214,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "without price keyset index | catalog name-asc | offset page 100 (offset 1980)",
+      "medianMs": 214.741,
+      "minMs": 194.914,
+      "maxMs": 246.511,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "without price keyset index | catalog name-asc | old cap: offset 99,900 (page 1000 x 100)",
+      "medianMs": 443.294,
+      "minMs": 397.42,
+      "maxMs": 522.116,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "without price keyset index | catalog name-asc | keyset after row 9,900",
+      "medianMs": 228.844,
+      "minMs": 190.77,
+      "maxMs": 300.922,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | catalog newest | offset page 1",
+      "medianMs": 0.307,
+      "minMs": 0.209,
+      "maxMs": 0.409,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Incremental Sort",
+        "Nested Loop",
+        "Index Scan(products_createdAt_idx)",
+        "Memoize",
+        "Index Scan(categories_pkey)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | catalog newest | offset page 100 (offset 1980)",
+      "medianMs": 3.219,
+      "minMs": 3.141,
+      "maxMs": 4.96,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Incremental Sort",
+        "Nested Loop",
+        "Index Scan(products_createdAt_idx)",
+        "Memoize",
+        "Index Scan(categories_pkey)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | catalog newest | old cap: offset 99,900 (page 1000 x 100)",
+      "medianMs": 194.963,
+      "minMs": 174.04,
+      "maxMs": 257.342,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Incremental Sort",
+        "Nested Loop",
+        "Index Scan(products_createdAt_idx)",
+        "Memoize",
+        "Index Scan(categories_pkey)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | catalog newest | keyset after row 9,900",
+      "medianMs": 0.221,
+      "minMs": 0.15,
+      "maxMs": 0.539,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Incremental Sort",
+        "Nested Loop",
+        "Index Scan(products_createdAt_idx)",
+        "Memoize",
+        "Index Scan(categories_pkey)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | catalog price-asc | offset page 1",
+      "medianMs": 0.203,
+      "minMs": 0.152,
+      "maxMs": 0.324,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Nested Loop",
+        "Index Scan(products_price_createdAt_id_idx)",
+        "Memoize",
+        "Index Scan(categories_pkey)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | catalog price-asc | offset page 100 (offset 1980)",
+      "medianMs": 6.994,
+      "minMs": 5.292,
+      "maxMs": 7.392,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Nested Loop",
+        "Index Scan(products_price_createdAt_id_idx)",
+        "Memoize",
+        "Index Scan(categories_pkey)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | catalog price-asc | old cap: offset 99,900 (page 1000 x 100)",
+      "medianMs": 579.87,
+      "minMs": 478.574,
+      "maxMs": 752.637,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | catalog price-asc | keyset after row 9,900",
+      "medianMs": 0.485,
+      "minMs": 0.345,
+      "maxMs": 0.616,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Nested Loop",
+        "Index Scan(products_price_createdAt_id_idx)",
+        "Memoize",
+        "Index Scan(categories_pkey)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | category newest | offset page 1",
+      "medianMs": 0.179,
+      "minMs": 0.151,
+      "maxMs": 0.512,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Incremental Sort",
+        "Nested Loop",
+        "Index Scan(products_createdAt_idx)",
+        "Materialize",
+        "Index Scan(categories_slug_key)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | category newest | offset page 100 (offset 1980)",
+      "medianMs": 133.251,
+      "minMs": 127.951,
+      "maxMs": 145.311,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Index Scan(categories_slug_key)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | category newest | old cap: offset 99,900 (page 1000 x 100)",
+      "medianMs": 222.385,
+      "minMs": 218.608,
+      "maxMs": 236.675,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Index Scan(categories_slug_key)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | category newest | keyset after row 9,900",
+      "medianMs": 0.223,
+      "minMs": 0.132,
+      "maxMs": 0.617,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Incremental Sort",
+        "Nested Loop",
+        "Index Scan(products_createdAt_idx)",
+        "Materialize",
+        "Index Scan(categories_slug_key)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | category price-asc | offset page 1",
+      "medianMs": 0.208,
+      "minMs": 0.13,
+      "maxMs": 0.367,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Nested Loop",
+        "Index Scan(products_price_createdAt_id_idx)",
+        "Materialize",
+        "Index Scan(categories_slug_key)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | category price-asc | offset page 100 (offset 1980)",
+      "medianMs": 203.046,
+      "minMs": 172.548,
+      "maxMs": 223.825,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Index Scan(categories_slug_key)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | category price-asc | old cap: offset 99,900 (page 1000 x 100)",
+      "medianMs": 374.223,
+      "minMs": 315.801,
+      "maxMs": 410.181,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Index Scan(categories_slug_key)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | category price-asc | keyset after row 9,900",
+      "medianMs": 0.457,
+      "minMs": 0.419,
+      "maxMs": 0.579,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Nested Loop",
+        "Index Scan(products_price_createdAt_id_idx)",
+        "Materialize",
+        "Index Scan(categories_slug_key)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | catalog price-desc | offset page 1",
+      "medianMs": 0.485,
+      "minMs": 0.405,
+      "maxMs": 0.824,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Incremental Sort",
+        "Nested Loop",
+        "Index Scan(products_price_createdAt_id_idx)",
+        "Memoize",
+        "Index Scan(categories_pkey)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | catalog price-desc | offset page 100 (offset 1980)",
+      "medianMs": 9.645,
+      "minMs": 6.873,
+      "maxMs": 9.872,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Incremental Sort",
+        "Nested Loop",
+        "Index Scan(products_price_createdAt_id_idx)",
+        "Memoize",
+        "Index Scan(categories_pkey)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | catalog price-desc | old cap: offset 99,900 (page 1000 x 100)",
+      "medianMs": 498.058,
+      "minMs": 460.407,
+      "maxMs": 563.273,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | catalog price-desc | keyset after row 9,900",
+      "medianMs": 1.008,
+      "minMs": 0.63,
+      "maxMs": 1.328,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Incremental Sort",
+        "Nested Loop",
+        "Index Scan(products_price_createdAt_id_idx)",
+        "Memoize",
+        "Index Scan(categories_pkey)"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | catalog name-asc | offset page 1",
+      "medianMs": 185.544,
+      "minMs": 173.443,
+      "maxMs": 213.494,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | catalog name-asc | offset page 100 (offset 1980)",
+      "medianMs": 174.094,
+      "minMs": 160.412,
+      "maxMs": 179.396,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | catalog name-asc | old cap: offset 99,900 (page 1000 x 100)",
+      "medianMs": 520.997,
+      "minMs": 382.828,
+      "maxMs": 626.675,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    },
+    {
+      "label": "with products_price_createdAt_id_idx | catalog name-asc | keyset after row 9,900",
+      "medianMs": 158.714,
+      "minMs": 144.63,
+      "maxMs": 185.653,
+      "nodes": [
+        "Limit",
+        "WindowAgg",
+        "Gather Merge",
+        "Sort",
+        "Hash Join",
+        "Seq Scan",
+        "Hash",
+        "Seq Scan"
+      ]
+    }
+  ],
+  "postgres": "PostgreSQL 18.1 on x86_64-windows, compiled by msvc-19.44.35221, 64-bit",
+  "totalProducts": 200000
+}

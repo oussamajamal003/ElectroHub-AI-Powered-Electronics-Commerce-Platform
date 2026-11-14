@@ -41,7 +41,7 @@ The project intentionally avoids unnecessary framework and UI-library complexity
 | Forms | React Hook Form |
 | Validation | Zod |
 | Admin Tables | TanStack Table |
-| Backend Runtime | Node.js (v20.11.0 LTS) |
+| Backend Runtime | Node.js 22.19.0; npm >=10.9.3 <12 |
 | Backend Framework | Express.js |
 | ORM | Prisma |
 | Database | PostgreSQL |

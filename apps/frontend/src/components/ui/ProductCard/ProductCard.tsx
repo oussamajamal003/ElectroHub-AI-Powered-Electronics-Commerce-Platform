@@ -1,3 +1,4 @@
+import { toast } from '../Toast/toastStore';
 import { WishlistButton } from '../WishlistButton/WishlistButton';
 import { useEffect, useRef, useState } from 'react';
 import { ProductImage } from '../ProductImage';
@@ -89,11 +90,17 @@ export function ProductCard({
     additionPending.current = true;
     if (resetTimer.current) clearTimeout(resetTimer.current);
     setCartState('adding');
-    try { await onAddToCart(id); setCartState('added'); }
+    try {
+      await onAddToCart(id); setCartState('added');
+      // Visual confirmation only: the inline status below is the screen-reader announcement.
+      toast.success('Added to cart', { description: title, announce: false });
+    }
     catch (error) {
-      setCartError(error instanceof ApiError && error.code === 'CART_STOCK_CONFLICT' || error instanceof Error && /^Only \d+ items? (?:is|are) currently available\.$/.test(error.message)
-        ? error.message : 'Could not add item. Please try again.');
+      const message = error instanceof ApiError && error.code === 'CART_STOCK_CONFLICT' || error instanceof Error && /^Only \d+ items? (?:is|are) currently available\.$/.test(error.message)
+        ? error.message : 'Could not add item. Please try again.';
+      setCartError(message);
       setCartState('error');
+      toast.error('Couldn\'t add to cart', { description: message, announce: false });
     }
     additionPending.current = false;
     if (resetTimer.current) clearTimeout(resetTimer.current);

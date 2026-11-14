@@ -223,7 +223,10 @@ test('stages: ambient database variables are overridden, Stripe is blank, concur
   assert.equal(tests.env.PAYMENT_PG_TEST_DATABASE_URL, tests.env.DATABASE_URL);
   assert.equal(tests.env.PAYMENT_PG_DISPOSABLE_SCHEMA, identity.schema);
   for (const flag of ['--pool=forks', '--maxWorkers=1', '--no-file-parallelism']) assert.ok(tests.args.includes(flag), flag);
-  for (const file of disposable.TEST_FILES) { assert.ok(tests.args.includes(file)); assert.ok(fs.existsSync(path.resolve(__dirname, '..', file)), file); }
+  for (const file of disposable.SUITES['scenarios-A-S'].files) { assert.ok(tests.args.includes(file)); assert.ok(fs.existsSync(path.resolve(__dirname, '..', file)), file); }
+  assert.ok(!tests.args.includes(disposable.TEST_FILES[2])); // the default A-S run never picks up the A-Y-only file
+  assert.ok(!tests.args.includes(disposable.TEST_FILES[3])); // nor the A-Z-only last-unit file
+  for (const file of disposable.TEST_FILES) assert.ok(fs.existsSync(path.resolve(__dirname, '..', file)), file);
 });
 
 test('the native-engine TLS probe is read-only and embeds only validated identifiers', () => {
@@ -244,7 +247,7 @@ test('the native-engine TLS probe is read-only and embeds only validated identif
   assert.equal(written[0].options.mode, 0o600);
 });
 
-function report(titles, { files = disposable.TEST_FILES, status = 'passed', extra = {} } = {}) {
+function report(titles, { files = disposable.SUITES['scenarios-A-S'].files, status = 'passed', extra = {} } = {}) {
   const per = Math.ceil(titles.length / files.length);
   return JSON.stringify({ numTotalTestSuites: 2, success: true, numTotalTests: titles.length, numPassedTests: titles.length,
     numFailedTests: 0, numPendingTests: 0, numTodoTests: 0, ...extra,
@@ -275,7 +278,7 @@ test('A-J scope: its own exact authorization, only the A-J file, only A-J scenar
   assert.match(validate(ajEnv).error, /exact database, scenario set/);
   assert.equal(disposable.selectedScope(['--run', '--scope=scenarios-A-J']), 'scenarios-A-J');
   assert.equal(disposable.selectedScope(['--run']), 'scenarios-A-S');
-  assert.equal(disposable.selectedScope(['--run', '--scope=scenarios-A-Z']), null);
+  assert.equal(disposable.selectedScope(['--run', '--scope=scenarios-A-ZZ']), null);
   const { config } = validate(ajEnv, { scope: 'scenarios-A-J' });
   const tests = disposable.stageDefinitions(config, disposable.newRunIdentity(), { PATH: process.env.PATH }, { scope: 'scenarios-A-J' })[2];
   assert.ok(tests.args.includes(disposable.TEST_FILES[0]));
@@ -288,6 +291,53 @@ test('A-J scope: its own exact authorization, only the A-J file, only A-J scenar
   assert.throws(() => disposable.verifyReport(report(titles.slice(1), { files: suite.files }), undefined, suite), /FAILED_SKIPPED/);
   assert.throws(() => disposable.verifyReport(report([...titles.slice(0, 9), 'K — scenario K'], { files: suite.files }), undefined, suite), /SCENARIOS_MISSING/);
   assert.throws(() => disposable.verifyReport(report(titles, { files: disposable.TEST_FILES }), undefined, suite), /FAILED_SKIPPED/);
+});
+
+test('A-Y scope (Task 06.2): its own exact authorization, its three files, every scenario A-Y once; A-S approval cannot start it', certOptions, () => {
+  const ca = makeCa('ay');
+  const ayEnv = { ...baseEnv(ca.crt), PAYMENT_PG_DISPOSABLE_AUTHORIZATION: disposable.expectedAuthorization(DB, 'scenarios-A-Y') };
+  assert.equal(disposable.expectedAuthorization(DB, 'scenarios-A-Y'), 'DISPOSABLE:electrohub_ci:scenarios-A-Y:fixtures+reset-run-database');
+  assert.ok(validate(ayEnv, { scope: 'scenarios-A-Y' }).config);
+  assert.match(validate(baseEnv(ca.crt), { scope: 'scenarios-A-Y' }).error, /exact database, scenario set/);
+  assert.match(validate(ayEnv).error, /exact database, scenario set/);
+  assert.equal(disposable.selectedScope(['--run', '--scope=scenarios-A-Y']), 'scenarios-A-Y');
+  const { config } = validate(ayEnv, { scope: 'scenarios-A-Y' });
+  const tests = disposable.stageDefinitions(config, disposable.newRunIdentity(), { PATH: process.env.PATH }, { scope: 'scenarios-A-Y' })[2];
+  for (const file of disposable.TEST_FILES.slice(0, 3)) assert.ok(tests.args.includes(file));
+  assert.ok(!tests.args.includes(disposable.TEST_FILES[3]));
+  assert.equal(tests.env.PAYMENT_PG_DISPOSABLE_SCOPE, 'scenarios-A-Y');
+  const suite = disposable.SUITES['scenarios-A-Y'];
+  assert.equal(suite.scenarios.join(''), 'ABCDEFGHIJKLMNOPQRSTUVWXY');
+  const titles = suite.scenarios.map(letter => `${letter} — scenario ${letter}`);
+  assert.deepEqual(disposable.verifyReport(report(titles, { files: suite.files }), undefined, suite), { passed: 25, failed: 0, skipped: 0 });
+  assert.throws(() => disposable.verifyReport(report(titles.slice(1), { files: suite.files }), undefined, suite), /FAILED_SKIPPED/);
+  assert.throws(() => disposable.verifyReport(report([...titles.slice(0, 24), 'Z — scenario Z'], { files: suite.files }), undefined, suite), /SCENARIOS_MISSING/);
+  // The A-S suite still runs exactly its two files and cannot be satisfied by a T-Y title.
+  const asSuite = disposable.SUITES['scenarios-A-S'];
+  assert.equal(asSuite.files.length, 2);
+  assert.throws(() => disposable.verifyReport(report([...allTitles.slice(0, 18), 'T — scenario T']), undefined, asSuite), /SCENARIOS_MISSING/);
+});
+
+test('A-Z scope (PR #51 last unit): its own exact authorization, all four files, every scenario A-Z once; A-Y approval cannot start it', certOptions, () => {
+  const ca = makeCa('az');
+  const azEnv = { ...baseEnv(ca.crt), PAYMENT_PG_DISPOSABLE_AUTHORIZATION: disposable.expectedAuthorization(DB, 'scenarios-A-Z') };
+  assert.equal(disposable.expectedAuthorization(DB, 'scenarios-A-Z'), 'DISPOSABLE:electrohub_ci:scenarios-A-Z:fixtures+reset-run-database');
+  assert.ok(validate(azEnv, { scope: 'scenarios-A-Z' }).config);
+  const ayEnv = { ...baseEnv(ca.crt), PAYMENT_PG_DISPOSABLE_AUTHORIZATION: disposable.expectedAuthorization(DB, 'scenarios-A-Y') };
+  assert.match(validate(ayEnv, { scope: 'scenarios-A-Z' }).error, /exact database, scenario set/);
+  assert.match(validate(azEnv, { scope: 'scenarios-A-Y' }).error, /exact database, scenario set/);
+  assert.equal(disposable.selectedScope(['--run', '--scope=scenarios-A-Z']), 'scenarios-A-Z');
+  const { config } = validate(azEnv, { scope: 'scenarios-A-Z' });
+  const tests = disposable.stageDefinitions(config, disposable.newRunIdentity(), { PATH: process.env.PATH }, { scope: 'scenarios-A-Z' })[2];
+  assert.equal(disposable.TEST_FILES.length, 4);
+  for (const file of disposable.TEST_FILES) assert.ok(tests.args.includes(file));
+  assert.equal(tests.env.PAYMENT_PG_DISPOSABLE_SCOPE, 'scenarios-A-Z');
+  const suite = disposable.SUITES['scenarios-A-Z'];
+  assert.equal(suite.scenarios.join(''), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+  const titles = suite.scenarios.map(letter => `${letter} — scenario ${letter}`);
+  assert.deepEqual(disposable.verifyReport(report(titles, { files: suite.files }), undefined, suite), { passed: 26, failed: 0, skipped: 0 });
+  assert.throws(() => disposable.verifyReport(report(titles.slice(0, 25), { files: suite.files }), undefined, suite), /FAILED_SKIPPED/);
+  assert.throws(() => disposable.verifyReport(report(titles, { files: suite.files.slice(0, 3) }), undefined, suite), /FAILED_SKIPPED/);
 });
 
 test('the two scopes reject each other: the DEV runner refuses disposable settings, the disposable runner refuses DEV settings', certOptions, () => {

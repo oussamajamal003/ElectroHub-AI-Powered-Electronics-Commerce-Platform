@@ -136,4 +136,11 @@ export const customerListSchema = z.object({
 export const customerStatusSchema = z.object({ isActive: z.boolean(), expectedUpdatedAt }).strict();
 
 // ─── Dashboard ──────────────────────────────────────────
+/**
+ * The counts the administrator was shown, for the categories being acknowledged (one per click; the full set stays valid). The server
+ * clamps them to its own current counts. At least one category is required.
+ */
+const alertSeen = z.number().int().min(0).max(1_000_000).optional();
+export const alertAcknowledgeSchema = z.object({ lowStock: alertSeen, outOfStock: alertSeen, awaitingFulfillment: alertSeen, outForDelivery: alertSeen })
+  .strict().refine(value => Object.values(value).some(count => count !== undefined), { message: 'Choose at least one alert category.' });
 export const dashboardSchema = z.object({ days: z.enum(['7', '30', '90']).prefault('30').transform(Number) }).strict();

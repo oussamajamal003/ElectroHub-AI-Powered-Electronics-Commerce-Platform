@@ -1,3 +1,4 @@
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { BarChart3, Eye, SlidersHorizontal, Star, X } from 'lucide-react';
@@ -426,8 +427,8 @@ function PreviewPanel() {
         {cart.length > 0 && <ul className={styles.chosenList} aria-label="Products in the preview cart">
           {cart.map(item => <li key={item.id} className={styles.chosenItem}>
             <span>{item.name} <span className={styles.muted}>{item.sku}</span></span>
-            <button type="button" className={styles.chosenRemove} onClick={() => setCart(current => current.filter(row => row.id !== item.id))}
-              aria-label={`Remove ${item.name} from the preview cart`}><X aria-hidden="true" size={14} /></button>
+            <Tooltip content="Remove from preview cart"><button type="button" className={styles.chosenRemove} onClick={() => setCart(current => current.filter(row => row.id !== item.id))}
+              aria-label={`Remove ${item.name} from the preview cart`}><X aria-hidden="true" size={14} /></button></Tooltip>
           </li>)}
         </ul>}
       </div>}

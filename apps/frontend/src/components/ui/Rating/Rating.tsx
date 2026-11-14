@@ -6,6 +6,8 @@ export interface RatingProps {
   reviewCount?: number;
   className?: string;
   maxStars?: number;
+  /** Hide the visible numeric label when the surrounding UI already shows the value (the accessible name is unchanged). */
+  showLabel?: boolean;
 }
 
 export function Rating({
@@ -13,6 +15,7 @@ export function Rating({
   reviewCount,
   className = '',
   maxStars = 5,
+  showLabel = true,
 }: RatingProps) {
   const safeValue = Math.max(0, Math.min(value, maxStars));
   const hasRating = safeValue > 0;
@@ -51,7 +54,7 @@ export function Rating({
         )}
       </div>
       
-      <div className={styles.label} aria-hidden="true">
+      {showLabel && <div className={styles.label} aria-hidden="true">
         {hasRating ? (
           <>
             <span className={styles.value}>{safeValue.toFixed(1)}</span>
@@ -62,7 +65,7 @@ export function Rating({
         ) : (
           <span className={styles.noRating}>No rating</span>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

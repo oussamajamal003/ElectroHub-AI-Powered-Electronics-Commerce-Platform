@@ -21,7 +21,7 @@ export function describeCommerceEmailRuntime(environment: NodeJS.ProcessEnv = pr
   const warnings: string[] = [];
   const sends = config.dispatchEnabled && config.sendMode !== 'disabled';
   if (config.enqueueEnabled && !sends) warnings.push('EVENTS_QUEUE_BUT_NOTHING_SENDS: the producer is on but dispatch is off or the send mode is disabled; start the email worker with COMMERCE_EMAIL_DISPATCH_ENABLED=true and a send mode.');
-  if (!config.enqueueEnabled && sends) warnings.push('WORKER_BUT_NO_EVENTS: sending is configured but the producer is off in this process; purchases create no email events (set COMMERCE_EMAIL_ENQUEUE_ENABLED=true in every payment-finalizing process).');
+  if (!config.enqueueEnabled && sends) warnings.push('WORKER_BUT_NO_EVENTS: sending is configured but the producer is off in this process; registrations and fulfillment transitions create no email events (set COMMERCE_EMAIL_ENQUEUE_ENABLED=true in the API and every payment-finalizing process).');
   if (!config.enqueueEnabled && !sends) warnings.push('COMMERCE_EMAILS_OFF: no commerce emails will be created or sent (the safe default).');
   if (config.sendMode === 'allowlist' && !config.allowedRecipients.length) warnings.push('ALLOWLIST_EMPTY: allowlist mode with no recipients sends nothing.');
   if ((config.enqueueEnabled || sends) && !config.origin) warnings.push('ORIGIN_MISSING: set COMMERCE_EMAIL_ORIGIN (or FRONTEND_URL) to the trusted https frontend origin; emails link to it.');

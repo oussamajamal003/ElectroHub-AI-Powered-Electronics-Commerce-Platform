@@ -2,12 +2,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import { getViteServerConfig } from './src/config/viteServerConfig';
+import { getViteCacheDir, getViteServerConfig } from './src/config/viteServerConfig';
 
 export default defineConfig(({ command }) => {
   const server = getViteServerConfig(command, process.env, process.argv);
+  const cacheDir = getViteCacheDir(server);
   return {
     plugins: [react()],
+    ...(cacheDir ? { cacheDir } : {}),
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
@@ -15,6 +17,18 @@ export default defineConfig(({ command }) => {
     },
     // Keep generated Storybook output in this package from being scanned as a second app entry.
     optimizeDeps: { entries: ['index.html'] },
+    build: {
+      // CI budgets gzip across all output files; Terser reduces the full route set without dropping functionality.
+      minify: 'terser',
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            const normalizedId = id.replaceAll('\\', '/');
+            if (/\/node_modules\/(react|react-dom|scheduler|zod)(\/|$)/.test(normalizedId)) return 'core-vendor';
+          },
+        },
+      },
+    },
     test: {
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],

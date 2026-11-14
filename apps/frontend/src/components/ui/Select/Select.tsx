@@ -44,6 +44,8 @@ export const Select = forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger
             id={generatedId}
             className={clsx(styles.trigger, styles[`size-${selectSize}`], square && styles.square, isError && styles.error, triggerClassName)}
             aria-label={ariaLabel}
+            aria-invalid={isError || undefined}
+            aria-describedby={isError ? `${generatedId}-error` : undefined}
           >
             {leadingIcon && <span className={styles.leadingIcon} aria-hidden="true">{leadingIcon}</span>}
             <span className={styles.value}><SelectPrimitive.Value placeholder={placeholder} /></span>
@@ -83,7 +85,7 @@ export const Select = forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger
             </SelectPrimitive.Content>
           </SelectPrimitive.Portal>
         </SelectPrimitive.Root>
-        {isError && <span className={styles.errorMessage}>{error}</span>}
+        {isError && <span id={`${generatedId}-error`} className={styles.errorMessage}>{error}</span>}
       </div>
     );
   }

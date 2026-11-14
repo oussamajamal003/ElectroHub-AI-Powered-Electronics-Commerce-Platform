@@ -60,15 +60,15 @@ export function useMediaMutations(productId: string) {
       client.invalidateQueries({ queryKey: queryKeys.search.all }),
     ]);
   };
-  const upload = useMutation({ mutationFn: ({ file, altText = '', idempotencyKey }: { file: File; altText?: string; idempotencyKey: string }) => uploadFile(productId, file, altText, idempotencyKey), onSuccess: refresh });
-  const replace = useMutation({ mutationFn: ({ image, file, altText, idempotencyKey }: { image: MediaImage; file: File; altText: string; idempotencyKey: string }) => uploadFile(productId, file, altText, idempotencyKey, image), onSuccess: refresh });
-  const patch = useMutation({ mutationFn: ({ image, changes }: { image: MediaImage; changes: ImagePatch }) =>
+  const upload = useMutation({ meta: { action: "upload the photo" }, mutationFn: ({ file, altText = '', idempotencyKey }: { file: File; altText?: string; idempotencyKey: string }) => uploadFile(productId, file, altText, idempotencyKey), onSuccess: refresh });
+  const replace = useMutation({ meta: { action: "replace the photo" }, mutationFn: ({ image, file, altText, idempotencyKey }: { image: MediaImage; file: File; altText: string; idempotencyKey: string }) => uploadFile(productId, file, altText, idempotencyKey, image), onSuccess: refresh });
+  const patch = useMutation({ meta: { action: "update the photo" }, mutationFn: ({ image, changes }: { image: MediaImage; changes: ImagePatch }) =>
     apiClient<ApiData<MediaImage>>(`/api/admin/products/${encodeURIComponent(productId)}/images/${encodeURIComponent(image.id)}`,
       { method: 'PATCH', headers: { 'If-Match': mediaConcurrencyTag(image) }, data: changes }), onSuccess: refresh });
-  const remove = useMutation({ mutationFn: (image: MediaImage) => apiClient<ApiData<{ id: string }>>(
+  const remove = useMutation({ meta: { action: "delete the photo" }, mutationFn: (image: MediaImage) => apiClient<ApiData<{ id: string }>>(
     `/api/admin/products/${encodeURIComponent(productId)}/images/${encodeURIComponent(image.id)}`,
     { method: 'DELETE', headers: { 'If-Match': mediaConcurrencyTag(image) } }), onSuccess: refresh });
-  const retry = useMutation({ mutationFn: (image: MediaImage) => apiClient<ApiData<MediaImage>>(
+  const retry = useMutation({ meta: { action: "retry the photo" }, mutationFn: (image: MediaImage) => apiClient<ApiData<MediaImage>>(
     `/api/admin/products/${encodeURIComponent(productId)}/images/${encodeURIComponent(image.id)}/retry`, { method: 'POST' }), onSuccess: refresh });
   return { upload, replace, patch, remove, retry };
 }

@@ -13,7 +13,7 @@ import { adminNotifications } from './admin-notification.service.js';
 import { OrderService } from './order.service.js';
 import { stripeProvider } from './stripe.provider.js';
 import { ATTEMPT_LIFETIME_MS, SUBMITTED_ABANDON_GRACE_MS, WORK_LEASE_MS, MAX_PAYMENT_RETRIES, TERMINAL_PAYMENT_STATES,
-  cents, retryDelay, customerPaymentStatus, ABANDONMENT_FAILURE_CODES, NOT_CONFIRMED_FAILURE_CODE, CANCELED_BY_CUSTOMER_FAILURE_CODE, NEVER_CONFIRMED_GRACE_MS, CONFIRMATION_SIGNAL_GRACE_MS, SUBMITTED_UNRESOLVED_WINDOW_MS, confirmationSignalEnabled, verifyBinding, type Attempt, type PaymentProvider, type ProviderIntent } from './payment.domain.js';
+  cents, retryDelay, customerPaymentStatus, customerOutcomeReason, authorizationReleased, STOCK_FAILURE_CODES, COMMIT_CONFLICT_RETRIES, COMMIT_CONFLICT_BACKOFF_MS, ABANDONMENT_FAILURE_CODES, NOT_CONFIRMED_FAILURE_CODE, CANCELED_BY_CUSTOMER_FAILURE_CODE, DISCARDED_BY_CUSTOMER_FAILURE_CODE, NEVER_CONFIRMED_GRACE_MS, CONFIRMATION_SIGNAL_GRACE_MS, SUBMITTED_UNRESOLVED_WINDOW_MS, confirmationSignalEnabled, verifyBinding, type Attempt, type PaymentProvider, type ProviderIntent } from './payment.domain.js';
 import { isSerializationConflict } from './transaction-conflict.js';
 import { redactDeliveryForDeletedOwner } from './delivery-privacy.js';
 import { DeliveryPublisher } from '../sockets/delivery.publisher.js';
@@ -87,6 +87,40 @@ const notConfirmedStillUnrecorded = (attempt: Pick<Attempt, 'state' | 'failureCo
 const cancelEligible = (attempt: Pick<Attempt, 'state' | 'submittedAt' | 'orderId' | 'cancelRequested' | 'failureCode' | 'confirmationStartedAt'>) =>
   attempt.state === 'AWAITING_INPUT' && Boolean(attempt.submittedAt) && !attempt.orderId && !attempt.cancelRequested &&
   attempt.failureCode === NOT_CONFIRMED_FAILURE_CODE && !attempt.confirmationStartedAt;
+/** Failed outcomes a customer may hide (the list shows them as Failed or Declined). */
+const DISMISSIBLE_STATES: PaymentAttemptState[] = ['DECLINED', 'CANCELED', 'COMPENSATED', 'REFUNDED'];
+/**
+ * Server-side eligibility for removing a failed purchase card (never inferred on the client). A failed purchase that produced an Order is
+ * dismissible only once that Order's compensation committed (`compensatedAt`: stock restored, Order cancelled, payment released/refunded),
+ * so hiding the card can never hide an unfinished recovery. Work that is leased or carries an unresolved recovery error is never dismissible.
+ */
+const dismissEligible = (attempt: Pick<Attempt, 'state' | 'submittedAt' | 'orderId' | 'compensatedAt' | 'failureCode' | 'confirmationStartedAt'>,
+  work?: { state: string; lastError?: string | null } | null, { ignoreLease = false } = {}) =>
+  ['DECLINED', 'FAILED'].includes(customerPaymentStatus(attempt, work)) && DISMISSIBLE_STATES.includes(attempt.state) && Boolean(attempt.submittedAt) &&
+  (!attempt.orderId || (Boolean(attempt.compensatedAt) && ['COMPENSATED', 'REFUNDED'].includes(attempt.state))) &&
+  (ignoreLease || work?.state !== 'LEASED') && !work?.lastError;
+/** Remove failed payment on a declined purchase whose intent is still open: cancel at the provider, then hide. Provider truth still wins. */
+const discardCancellation = (attempt: Pick<Attempt, 'cancelRequested' | 'failureCode'>) =>
+  attempt.cancelRequested && attempt.failureCode === DISCARDED_BY_CUSTOMER_FAILURE_CODE;
+/** The provider-verified CANCELED write; a customer discard is hidden in the same write, so removal never depends on the browser staying open. */
+const canceledWrite = (attempt: Pick<Attempt, 'cancelRequested' | 'failureCode'>): Prisma.PaymentAttemptUpdateInput =>
+  ({ state: 'CANCELED', providerStatus: 'canceled', activeCartId: null, ...(discardCancellation(attempt) ? { dismissedAt: new Date() } : {}) });
+/**
+ * What the trash action on a failed-payment card does, decided only on the server:
+ *  REMOVE             already terminal and safe to hide (dismiss only; the provider is not called);
+ *  CANCEL_AND_REMOVE  a provider decline whose PaymentIntent is still open: cancel it (verified), then hide;
+ *  PENDING            that cancellation was requested and is not yet provider-verified;
+ *  CONFIRMING         shown as failed, but recovery/compensation is unfinished or the outcome is unverified: never hidden;
+ *  null               not a failed payment (pending, paid, abandoned): no removal action.
+ */
+export type RemovalPlan = 'REMOVE' | 'CANCEL_AND_REMOVE' | 'PENDING' | 'CONFIRMING' | null;
+const removalPlan = (attempt: Pick<Attempt, 'state' | 'submittedAt' | 'orderId' | 'compensatedAt' | 'failureCode' | 'confirmationStartedAt' | 'cancelRequested' | 'providerIntentId'>,
+  work?: { state: string; lastError?: string | null } | null): RemovalPlan => {
+  if (discardCancellation(attempt) && !attempt.orderId && ['DECLINED', 'CANCEL_PENDING'].includes(attempt.state)) return 'PENDING';
+  if (!['DECLINED', 'FAILED'].includes(customerPaymentStatus(attempt, work)) || !attempt.submittedAt) return null;
+  if (!dismissEligible(attempt, work, { ignoreLease: true })) return 'CONFIRMING';
+  return attempt.state === 'DECLINED' && attempt.providerIntentId && !attempt.cancelRequested ? 'CANCEL_AND_REMOVE' : 'REMOVE';
+};
 /** A customer cancellation request; provider truth (decline, authorization, capture) always takes precedence over it. */
 const customerCancellation = (attempt: Pick<Attempt, 'cancelRequested' | 'failureCode'>) =>
   attempt.cancelRequested && attempt.failureCode === CANCELED_BY_CUSTOMER_FAILURE_CODE;
@@ -151,6 +185,23 @@ function assertSavedTermsCurrent(userId: string,
   }
 }
 
+/**
+ * Last gate before the card is confirmed (submit runs before Stripe.js confirmation, so nothing has been authorized or charged yet).
+ * A read only, never a reservation: a line that is sold out, short, or withdrawn is reported as the standard stock 409 instead of the
+ * generic CHECKOUT_CHANGED, so the shopper corrects the Cart instead of having a card authorized for an item that cannot be sold.
+ */
+export function assertStillPurchasable(items: ReadonlyArray<{ availability: string; availableQuantity: number; quantity: number; product: { name: string } | null }>) {
+  for (const item of items) {
+    const name = item.product?.name ?? 'An item in your order';
+    if (item.availability === 'OUT_OF_STOCK') throw new AppError(`${name} is out of stock. Nothing was charged.`, 409, 'CART_STOCK_CONFLICT');
+    if (item.availability === 'LOW_STOCK') {
+      throw new AppError(`Only ${item.availableQuantity} of ${name} ${item.availableQuantity === 1 ? 'is' : 'are'} available (you requested ${item.quantity}). Nothing was charged.`,
+        409, 'CART_STOCK_CONFLICT');
+    }
+    if (item.availability !== 'AVAILABLE') throw new AppError(`${name} is no longer available. Nothing was charged.`, 409, 'PRODUCT_UNAVAILABLE');
+  }
+}
+
 /** /submit response: the accepted purchase's identity (all the client needs to hand off to Stripe confirmation). */
 type SubmitIdentity = { attemptId: string; checkoutId: string; cartIdentity: string; cartRevision: string; intentId: string | null;
   state: PaymentAttemptState; classification: 'PROCESSING'; scope: 'BUY_NOW' | 'CART_CHECKOUT'; submittedAt: string; committed: boolean;
@@ -186,9 +237,12 @@ export class PaymentService {
     return attempt;
   }
   private async projectStatus(userId: string, attempt: StatusAttempt, recoveryActive = false) {
-    const [cart, confirmation] = await Promise.all([
+    const outcomeReason = customerOutcomeReason(attempt);
+    const [cart, confirmation, unavailableItems] = await Promise.all([
       paymentOperation('cart_projection', 'database', () => currentCart(userId, this.database)).then(value => value.data),
       attempt.orderId ? new OrderService(this.database).getConfirmation(userId, attempt.orderId) : Promise.resolve(null),
+      // Only for a stock outcome (terminal or releasing; never on the routine poll path): what was requested and what is available now.
+      outcomeReason ? this.unavailableItems(attempt.id) : Promise.resolve(null),
     ]);
     const classification = customerPaymentStatus(attempt, attempt.work);
     return { classification, checkoutId: attempt.id, scope: attempt.request && typeof attempt.request === 'object' && !Array.isArray(attempt.request) && attempt.request.scope === 'BUY_NOW' ? 'BUY_NOW' : 'CART_CHECKOUT',
@@ -197,7 +251,8 @@ export class PaymentService {
       cancelable: cancelEligible(attempt),
       attemptId: attempt.id, cartIdentity: attempt.cartIdentity, cartRevision: attempt.revision, intentId: attempt.providerIntentId,
       state: attempt.state, providerStatus: attempt.providerStatus,
-      failureCode: attempt.failureCode, total: attempt.total.toFixed(2), currency: attempt.currency,
+      failureCode: attempt.failureCode, outcomeReason, authorizationReleased: authorizationReleased(attempt), unavailableItems,
+      total: attempt.total.toFixed(2), currency: attempt.currency,
       orderReference: attempt.orderId ? `ORD-${attempt.orderId.toUpperCase()}` : null,
       committed: Boolean(attempt.orderId), cart, recoveryRemainder: attempt.recoveryRemainder,
       recoveryActive: recoveryActive || (attempt.work?.state === 'LEASED' && Boolean(attempt.work.leaseUntil && attempt.work.leaseUntil.getTime() > Date.now())),
@@ -205,6 +260,16 @@ export class PaymentService {
   }
   async status(userId: string, id: string) {
     return this.projectStatus(userId, await this.ownedStatus(userId, id));
+  }
+  /** Saved lines of a purchase that could not be sold, with live availability (read-only; reserves nothing). */
+  private async unavailableItems(attemptId: string) {
+    const items = await this.database.paymentAttemptItem.findMany({ where: { attemptId }, orderBy: { productId: 'asc' } });
+    const live = (await purchaseItemsProjection(items.map(item => ({ productId: item.productId, quantity: item.quantity })), this.database)).data.items;
+    return items.map(item => {
+      const line = live.find(entry => entry.productId === item.productId);
+      return { productId: item.productId, name: item.productName, imageUrl: item.imageUrl, slug: line?.product?.slug ?? null, quantity: item.quantity,
+        availableQuantity: line?.availableQuantity ?? 0, availability: line?.availability ?? 'NOT_FOUND' };
+    });
   }
 
   /**
@@ -214,6 +279,18 @@ export class PaymentService {
   async confirmationStarted(userId: string, id: string) {
     this.assertMutationsAllowed();
     await this.owned(userId, id);
+    // PR #51: the last stock read before Stripe.js may authorize the card (the client confirms only after this call succeeds).
+    const refusal = await this.refuseSoldOutConfirmation(userId, id);
+    if (refusal?.settled) throw refusal.error; // already refused for stock (second tab, retry): same answer, nothing to cancel again
+    const soldOut = refusal?.error;
+    if (soldOut) {
+      // Nothing was confirmed, so the unconfirmed intent is cancelled now (cancel + fresh read) and the purchase settles as sold out.
+      logSafely('info', 'Card confirmation refused: an item sold out after submit.', { event: 'payment.confirmation.stock_refused', attemptId: id, code: soldOut.code });
+      await this.wake(id);
+      await this.process(id).catch((error: unknown) => logSafely('error', 'Sold-out cancellation deferred to the durable runner.', {
+        event: 'payment.recovery.background_failed', attemptId: id, error }));
+      throw soldOut;
+    }
     if (!confirmationSignalEnabled()) return { attemptId: id, confirmationStartedAt: null };
     const claimed = await this.database.paymentAttempt.updateMany({ where: { id, userId, submittedAt: { not: null }, confirmationStartedAt: null, orderId: null,
       cancelRequested: false, state: 'AWAITING_INPUT' }, data: { confirmationStartedAt: new Date() } });
@@ -221,6 +298,43 @@ export class PaymentService {
     if (!attempt?.confirmationStartedAt) throw new AppError('This payment can no longer be confirmed from here.', 409, 'PAYMENT_CONFIRMATION_NOT_ALLOWED');
     void claimed;
     return { attemptId: id, confirmationStartedAt: attempt.confirmationStartedAt.toISOString() };
+  }
+
+  /**
+   * Stock gate at the confirmation boundary. Submit already checked stock, but the shopper can spend minutes in card entry; this read (never a
+   * reservation) runs right before the card could be authorized. Applies only to a submitted, unconfirmed, uncancelled purchase still awaiting
+   * card input; anything else falls through to the ordinary claim rules. On refusal the cancellation decision is durable before any provider I/O.
+   */
+  private async refuseSoldOutConfirmation(userId: string, id: string): Promise<{ error: AppError; settled: boolean } | null> {
+    for (let retry = 0; ; retry++) {
+      try {
+        return await this.database.$transaction(async tx => {
+          await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "payment_attempts" WHERE "id" = ${id}::uuid FOR UPDATE`);
+          await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "payment_work" WHERE "attemptId" = ${id}::uuid FOR UPDATE`);
+          const latest = await tx.paymentAttempt.findFirst({ where: { id, userId }, include: { items: true } });
+          // A purchase that already lost its stock (refused here before, or lost at commit) is refused the same way on every later call,
+          // whether or not the confirmation signal is enabled. No "not charged" claim: the status read reports the verified release.
+          if (latest && !latest.orderId && latest.cancelRequested && (STOCK_FAILURE_CODES as readonly string[]).includes(latest.failureCode ?? '')) {
+            return { settled: true, error: new AppError('An item in this purchase sold out, so this payment can’t be confirmed.', 409,
+              latest.failureCode === 'CART_STOCK_CONFLICT' ? 'CART_STOCK_CONFLICT' : 'PRODUCT_UNAVAILABLE') };
+          }
+          if (!latest?.submittedAt || latest.confirmationStartedAt || latest.orderId || latest.cancelRequested || latest.state !== 'AWAITING_INPUT') return null;
+          const lines = (await purchaseItemsProjection(latest.items.map(item => ({ productId: item.productId, quantity: item.quantity })), tx)).data.items;
+          try {
+            assertStillPurchasable(latest.items.map(item => {
+              const line = lines.find(entry => entry.productId === item.productId);
+              return { availability: line?.availability ?? 'NOT_FOUND', availableQuantity: line?.availableQuantity ?? 0, quantity: item.quantity,
+                product: { name: item.productName } };
+            }));
+            return null;
+          } catch (error) {
+            if (!(error instanceof AppError)) throw error;
+            await tx.paymentAttempt.update({ where: { id }, data: { cancelRequested: true, failureCode: error.code ?? 'CART_STOCK_CONFLICT' } });
+            return { settled: false, error };
+          }
+        }, { isolationLevel: 'Serializable', timeout: PAYMENT_TRANSACTION_TIMEOUT_MS, maxWait: PAYMENT_TRANSACTION_MAX_WAIT_MS });
+      } catch (error) { if (isSerializationConflict(error) && retry < 2) continue; throw error; }
+    }
   }
 
   /** Transfer only the validated cart generation before exposing confirmation to Stripe.js.
@@ -258,6 +372,7 @@ export class PaymentService {
               throw new AppError('Checkout changed.', 409, 'CHECKOUT_CHANGED');
             }
             const current = await currentCart(userId, tx);
+            assertStillPurchasable(current.data.items);
             if (!current.data.canCheckout || current.data.revision !== attempt.revision ||
               current.data.items.length !== attempt.items.length) throw new AppError('Checkout changed.', 409, 'CHECKOUT_CHANGED');
             for (const item of attempt.items) {
@@ -267,6 +382,9 @@ export class PaymentService {
               const removed = await tx.cartItem.deleteMany({ where: { id: line.id, cartId, quantity: item.quantity } });
               if (removed.count !== 1) throw new AppError('Checkout changed.', 409, 'CHECKOUT_CHANGED');
             }
+          } else if (request.buyNow) {
+            // Buy Now has no Cart lines to transfer, but the same last gate applies before the card is confirmed.
+            assertStillPurchasable((await buyNowProjection(userId, request.buyNow, tx)).data.items);
           }
           const submittedAt = new Date();
           await tx.paymentAttempt.update({ where: { id }, data: { submittedAt, activeCartId: null } });
@@ -416,7 +534,13 @@ export class PaymentService {
       const restoredItems = attempt.items.map(item => ({ productId: item.productId,
         quantity: (current.data.items.find(line => line.productId === item.productId)?.quantity ?? 0) + item.quantity }));
       if (restoredItems.some(item => item.quantity > MAX_CART_QUANTITY)) throw new AppError('Cart quantity limit exceeded.', 409, 'INVALID_CART_QUANTITY');
-      if (!(await purchaseItemsProjection(restoredItems, tx)).data.canCheckout) {
+      const projected = (await purchaseItemsProjection(restoredItems, tx)).data;
+      // PR #51: a purchase that lost the last unit(s) returns to the Cart even while stock is 0 (a Cart line reserves nothing; the Cart shows it
+      // as out of stock and blocks checkout until restocked). A withdrawn product is never put back. Other outcomes keep the purchasable rule.
+      if (customerOutcomeReason(latest) === 'STOCK_UNAVAILABLE') {
+        const withdrawn = projected.items.find(item => !['AVAILABLE', 'LOW_STOCK', 'OUT_OF_STOCK'].includes(item.availability));
+        if (withdrawn) throw new AppError(`${withdrawn.product?.name ?? 'An item in this purchase'} is no longer sold, so it can’t be returned to your Cart.`, 409, 'PRODUCT_UNAVAILABLE');
+      } else if (!projected.canCheckout) {
         throw new AppError('Saved items are unavailable in this quantity.', 409, 'CHECKOUT_CHANGED');
       }
       for (const item of restoredItems) {
@@ -450,9 +574,16 @@ export class PaymentService {
       // Try Again: a provider decline or a bank verification. Cancel purchase: only a recovery-verified never-confirmed purchase.
       retryAllowed: ['DECLINED', 'AWAITING_CUSTOMER_ACTION'].includes(customerPaymentStatus(attempt, attempt.work)) && !attempt.orderId && !attempt.cancelRequested,
       cancelable: cancelEligible(attempt),
+      // Remove (trash): the rule dismiss() enforces, so the card never offers an action the server permanently refuses. A recovery lease
+      // (about a second, e.g. the periodic decline re-check) is transient: dismiss() answers 409 then and the card stays, so it is ignored here.
+      dismissible: dismissEligible(attempt, attempt.work, { ignoreLease: true }),
+      // The single trash action's server-decided meaning (see RemovalPlan); the discard endpoint re-verifies it against the provider.
+      removal: removalPlan(attempt, attempt.work),
       submittedAt: attempt.submittedAt?.toISOString() ?? null,
       // Copy only: distinguishes "confirming with the provider" from "checking the status of this purchase"; never an outcome.
       confirmationStarted: Boolean(attempt.confirmationStartedAt),
+      // Presentation detail: a stock outcome is shown as "sold out", never as a card failure; release is claimed only once provider-verified.
+      outcomeReason: customerOutcomeReason(attempt), authorizationReleased: authorizationReleased(attempt),
       items: attempt.items.map(item => ({ name: item.productName, quantity: item.quantity, imageUrl: item.imageUrl })) }));
   }
 
@@ -482,23 +613,24 @@ export class PaymentService {
   async dismiss(userId: string, id: string) {
     this.assertMutationsAllowed();
     const attemptId = attemptSchema.parse(id);
-    // Same states the customer list shows as failed: DECLINED, plus CANCELED/COMPENSATED/REFUNDED (customerPaymentStatus FAILED).
-    const dismissible: PaymentAttemptState[] = ['DECLINED', 'CANCELED', 'COMPENSATED', 'REFUNDED'];
     const notDismissible = () => new AppError('This payment cannot be dismissed right now.', 409, 'PAYMENT_NOT_DISMISSIBLE');
     try {
       return await this.database.$transaction(async tx => {
         const attempt = await tx.paymentAttempt.findFirst({ where: { id: attemptId, userId },
-          select: { id: true, state: true, orderId: true, submittedAt: true, dismissedAt: true, work: { select: { state: true, lastError: true } } } });
+          select: { id: true, state: true, orderId: true, compensatedAt: true, failureCode: true, confirmationStartedAt: true, submittedAt: true,
+            dismissedAt: true, work: { select: { state: true, lastError: true } } } });
         if (!attempt) throw new AppError('Payment attempt not found.', 404, 'PAYMENT_ATTEMPT_NOT_FOUND');
         if (attempt.dismissedAt) return { attemptId, dismissedAt: attempt.dismissedAt.toISOString() };
         // The list only shows submitted purchases whose customer classification is a failure; dismissal must match that exactly.
-        const classification = customerPaymentStatus(attempt, attempt.work);
-        if (!['DECLINED', 'FAILED'].includes(classification) || !dismissible.includes(attempt.state) || !attempt.submittedAt ||
-          attempt.orderId || attempt.work?.state === 'LEASED' || attempt.work?.lastError) throw notDismissible();
+        if (!dismissEligible(attempt, attempt.work)) throw notDismissible();
         const dismissedAt = new Date();
         const claimed = await tx.paymentAttempt.updateMany({
-          where: { id: attemptId, userId, dismissedAt: null, orderId: null, submittedAt: { not: null }, state: { in: dismissible },
-            OR: [{ work: { is: null } }, { work: { is: { state: { not: 'LEASED' }, lastError: null } } }] },
+          where: { id: attemptId, userId, dismissedAt: null, submittedAt: { not: null }, state: { in: DISMISSIBLE_STATES },
+            AND: [
+              // An Order-backed failure is hidden only after its compensation committed (re-checked here against a racing recovery).
+              { OR: [{ orderId: null }, { state: { in: ['COMPENSATED', 'REFUNDED'] }, compensatedAt: { not: null } }] },
+              { OR: [{ work: { is: null } }, { work: { is: { state: { not: 'LEASED' }, lastError: null } } }] },
+            ] },
           data: { dismissedAt } });
         if (claimed.count !== 1) throw notDismissible();
         return { attemptId, dismissedAt: dismissedAt.toISOString() };
@@ -507,6 +639,79 @@ export class PaymentService {
       if (isSerializationConflict(error)) throw notDismissible();
       throw error;
     }
+  }
+
+  /**
+   * Remove failed payment (the card's single trash action), decided and carried out by the server.
+   *  - Already terminal (REMOVE): the existing dismissal; the provider is not called.
+   *  - Provider decline with a still-open PaymentIntent (CANCEL_AND_REMOVE): a FRESH provider read must show nothing received or authorized
+   *    and no confirmation in flight; the request is then recorded under the attempt and work row locks (a lease, an order, a retry or any
+   *    state change refuses it) and the lease-fenced worker cancels the intent. The card is hidden in the same write that records the
+   *    provider-verified cancellation, so a closed browser or a restart cannot leave it half done. An authorization seen meanwhile wins.
+   *  - Anything unverified (CONFIRMING, or a provider state other than the above) is refused and recovery is woken: nothing is hidden.
+   * Idempotent: a repeat answers REMOVED or CANCEL_PENDING without a second request. Never refunds, never charges, never touches stock.
+   */
+  async discard(userId: string, id: string) {
+    this.assertMutationsAllowed();
+    const attemptId = attemptSchema.parse(id);
+    const unconfirmed = () => new AppError('We need to confirm this payment’s status before it can be removed.', 409, 'PAYMENT_STATUS_UNCONFIRMED');
+    const read = async () => {
+      const attempt = await this.database.paymentAttempt.findFirst({ where: { id: attemptId, userId }, include: { ...attemptInclude, work: true } });
+      if (!attempt) throw new AppError('Payment attempt not found.', 404, 'PAYMENT_ATTEMPT_NOT_FOUND');
+      return attempt;
+    };
+    const drive = async () => {
+      await this.wake(attemptId);
+      await this.process(attemptId).catch((error: unknown) => logSafely('error', 'Discard cancellation deferred to the durable runner.', {
+        event: 'payment.recovery.background_failed', attemptId, error }));
+    };
+    const answer = async () => {
+      const latest = await read();
+      if (latest.dismissedAt) return { attemptId, status: 'REMOVED' as const, dismissedAt: latest.dismissedAt.toISOString() };
+      // Provider truth overrode the request (e.g. an authorization from another tab): nothing was cancelled and nothing is hidden.
+      if (removalPlan(latest, latest.work) !== 'PENDING') throw unconfirmed();
+      return { attemptId, status: 'CANCEL_PENDING' as const, dismissedAt: null };
+    };
+    const attempt = await read();
+    if (attempt.dismissedAt) return { attemptId, status: 'REMOVED' as const, dismissedAt: attempt.dismissedAt.toISOString() };
+    const plan = removalPlan(attempt, attempt.work);
+    if (plan === 'REMOVE') return { ...await this.dismiss(userId, attemptId), status: 'REMOVED' as const };
+    if (plan === 'PENDING') { await drive(); return answer(); }
+    if (plan !== 'CANCEL_AND_REMOVE' || !attempt.providerIntentId) {
+      // Unfinished recovery is nudged (due work only, under its own lease); it is never hidden.
+      if (plan === 'CONFIRMING') await drive();
+      throw unconfirmed();
+    }
+    const intent = await paymentOperation('stripe.retrieve', 'stripe', () => this.provider.retrieve(attempt.providerIntentId!));
+    verifyBinding(attempt, intent);
+    // Only an intent with no confirmation in flight and nothing received or authorized may be cancelled from a failed-payment card.
+    if (!['requires_payment_method', 'canceled'].includes(intent.status) || intent.received !== 0 || intent.capturable !== 0) {
+      await drive();
+      throw unconfirmed();
+    }
+    for (let waited = 0; ; waited += SUBMIT_LEASE_POLL_MS) {
+      const recorded = await this.database.$transaction(async tx => {
+        await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "payment_attempts" WHERE "id" = ${attemptId}::uuid FOR UPDATE`);
+        await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "payment_work" WHERE "attemptId" = ${attemptId}::uuid FOR UPDATE`);
+        const latest = await tx.paymentAttempt.findFirst({ where: { id: attemptId, userId }, include: { work: true } });
+        if (!latest) throw new AppError('Payment attempt not found.', 404, 'PAYMENT_ATTEMPT_NOT_FOUND');
+        if (latest.dismissedAt || removalPlan(latest, latest.work) === 'PENDING') return true;
+        // A routine decline re-check holds the lease for about a second: wait it out rather than refuse the customer.
+        if (latest.work?.state === 'LEASED' && (!latest.work.leaseUntil || latest.work.leaseUntil.getTime() > Date.now())) return false;
+        if (removalPlan(latest, latest.work) !== 'CANCEL_AND_REMOVE' || latest.providerIntentId !== intent.id) throw unconfirmed();
+        await tx.paymentAttempt.update({ where: { id: attemptId }, data: { cancelRequested: true, failureCode: DISCARDED_BY_CUSTOMER_FAILURE_CODE } });
+        return true;
+      }, { isolationLevel: 'Serializable', timeout: PAYMENT_TRANSACTION_TIMEOUT_MS, maxWait: PAYMENT_TRANSACTION_MAX_WAIT_MS }).catch((error: unknown) => {
+        if (isSerializationConflict(error)) return false;
+        throw error;
+      });
+      if (recorded) break;
+      if (waited >= SUBMIT_LEASE_WAIT_MS) throw new AppError('This payment can’t be removed right now. Please try again in a moment.', 409, 'PAYMENT_NOT_DISMISSIBLE');
+      await new Promise(resolve => setTimeout(resolve, SUBMIT_LEASE_POLL_MS));
+    }
+    logSafely('info', 'Customer discard of a declined purchase requested.', { event: 'payment.discard.requested', attemptId });
+    await drive();
+    return answer();
   }
 
   async acknowledge(userId: string, id: string, state: PaymentAttemptState) {
@@ -887,15 +1092,17 @@ export class PaymentService {
       }
       let compatible = true;
       try { verifyBinding(attempt, intent); } catch { compatible = false; }
-      if (compatible && (expiryCancellation(attempt) || customerCancellation(attempt) || attempt.cancelRequested && attempt.failureCode === 'PAYMENT_SETUP_SUPERSEDED') &&
+      if (compatible && (expiryCancellation(attempt) || customerCancellation(attempt) || discardCancellation(attempt) || attempt.cancelRequested && attempt.failureCode === 'PAYMENT_SETUP_SUPERSEDED') &&
         ['requires_capture', 'processing', 'succeeded'].includes(intent.status) ||
         // A Stripe decline recorded meanwhile is a Payment failed (Try Again), never a cancelled purchase.
         compatible && customerCancellation(attempt) && intent.status === 'requires_payment_method' && intent.declined && !intent.received && !intent.capturable) {
         // Older setup decisions may already have persisted an expiry cancellation.
         // Provider authorization/recovery takes precedence over that local decision.
-        attempt = await this.fenced(id, token, async (tx, latest) => expiryCancellation(latest) || customerCancellation(latest) ||
+        attempt = await this.fenced(id, token, async (tx, latest) => expiryCancellation(latest) || customerCancellation(latest) || discardCancellation(latest) ||
           latest.cancelRequested && latest.failureCode === 'PAYMENT_SETUP_SUPERSEDED'
-          ? tx.paymentAttempt.update({ where: { id }, data: { cancelRequested: false, failureCode: null }, include: attemptInclude })
+          // A discard that already reached CANCEL_PENDING returns to card entry, so the authorization below is reconciled, not stranded.
+          ? tx.paymentAttempt.update({ where: { id }, data: { cancelRequested: false, failureCode: null,
+            ...(latest.state === 'CANCEL_PENDING' && discardCancellation(latest) ? { state: 'AWAITING_INPUT' as const } : {}) }, include: attemptInclude })
           : latest);
       }
       if (releaseCardEntry && compatible && ['requires_payment_method', 'requires_confirmation'].includes(intent.status) &&
@@ -940,7 +1147,7 @@ export class PaymentService {
         } else await this.refundUnexpected(attempt, token, intent);
       } else if (intent.status === 'canceled') {
         if (attempt.orderId) await this.compensate(attempt, token, false);
-        else await this.patch(id, token, { state: 'CANCELED', providerStatus: 'canceled', activeCartId: null });
+        else await this.patch(id, token, canceledWrite(attempt));
       } else if (compatible && neverConfirmedSubmission(attempt, intent)) {
         // Decided on the locked row: a confirmation announced meanwhile (marker set / state changed) wins and nothing is written.
         await this.fenced(id, token, async (tx, latest) => neverConfirmedSubmission(latest, intent!)
@@ -966,18 +1173,23 @@ export class PaymentService {
         intent = await paymentOperation('stripe.retrieve', 'stripe', () => this.provider.retrieve(intent!.id));
         if (intent.status === 'canceled') {
           if (attempt.orderId) await this.compensate(attempt, token, false);
-          else await this.patch(id, token, { state: 'CANCELED', providerStatus: 'canceled', activeCartId: null });
+          else await this.patch(id, token, canceledWrite(attempt));
         }
       } else if (intent.status === 'requires_capture') {
         if (!attempt.orderId) {
           await this.patch(id, token, { state: 'AUTHORIZED', providerStatus: intent.status, authorizationExpiresAt: intent.captureBefore });
-          try { await new OrderService(this.database, this.inventory).commitAuthorized(id, intent, token); }
+          try { await this.commitWithinPass(id, intent, token); }
           catch (error) {
             if (error instanceof AppError && error.code !== 'PAYMENT_CLAIM_LOST' && error.statusCode < 500) {
+              // The decision (never capture; release the authorization) is durable before the provider is touched.
               await this.patch(id, token, { cancelRequested: true, state: 'CANCEL_PENDING', failureCode: error.code ?? 'CHECKOUT_CONFLICT' });
-              intent = await paymentOperation('stripe.cancel', 'stripe', () => this.provider.cancel(attempt!));
-              if (intent.status === 'canceled') await this.patch(id, token, { state: 'CANCELED', providerStatus: 'canceled', activeCartId: null });
-              await this.finishWork(id, token, intent.status === 'canceled'); return intent;
+              const cancelled = await paymentOperation('stripe.cancel', 'stripe', () => this.provider.cancel(attempt!));
+              // A fresh read decides; the cancellation reply alone proves nothing (same rule as the explicit-cancellation path above).
+              intent = await paymentOperation('stripe.retrieve', 'stripe', () => this.provider.retrieve(cancelled.id));
+              const released = intent.status === 'canceled';
+              if (released) await this.patch(id, token, { state: 'CANCELED', providerStatus: 'canceled', activeCartId: null });
+              // Not released: CANCEL_PENDING stays durable and the next pass reconciles provider truth (cancel again, or refund if captured).
+              await this.finishWork(id, token, released); return intent;
             }
             throw error;
           }
@@ -1044,6 +1256,24 @@ export class PaymentService {
       return null;
     }
   }
+  /**
+   * Exhausted serialization retries are contention, not a verdict on stock or terms. The same authorized attempt is re-committed inside this
+   * pass (short jittered backoff, lease re-checked each round) a bounded number of times, so the customer gets the final result from this one
+   * pass instead of waiting through durable retries; only a persisting conflict reaches the caller, which then releases the authorization.
+   */
+  private async commitWithinPass(id: string, intent: ProviderIntent, token: string) {
+    const orders = new OrderService(this.database, this.inventory);
+    for (let round = 0; ; round++) {
+      try { return await orders.commitAuthorized(id, intent, token); }
+      catch (error) {
+        if (!(error instanceof AppError) || error.code !== 'CHECKOUT_CONFLICT' || round >= COMMIT_CONFLICT_RETRIES) throw error;
+        logSafely('info', 'Order commit lost to contention; retrying within this pass.', { event: 'payment.commit.conflict_retry', attemptId: id, round: round + 1 });
+        await new Promise(resolve => setTimeout(resolve, COMMIT_CONFLICT_BACKOFF_MS * 2 ** round + Math.floor(Math.random() * COMMIT_CONFLICT_BACKOFF_MS)));
+        await this.assertCurrentClaim(id, token);
+      }
+    }
+  }
+
   private async finishWork(id: string, token: string, done?: boolean) {
     await this.fenced(id, token, async (tx, attempt) => {
       const isDone = done ?? terminal(attempt.state);

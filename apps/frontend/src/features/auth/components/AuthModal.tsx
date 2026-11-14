@@ -1,3 +1,5 @@
+import { toast } from '@/components/ui/Toast';
+import { emailValidationError } from '@/lib/emailValidation';
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -33,7 +35,6 @@ export interface AuthModalProps {
   onSwitchToLogin?: () => void;
 }
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const maskEmail = (email: string) => email.replace(/^(.)([^@]*)(@.*)$/, (_match, first: string, _middle: string, domain: string) => `${first}***${domain}`);
 
 const normalizeErrorMessage = (err: unknown): string => {
@@ -236,15 +237,7 @@ export function AuthModal({
   };
 
   // Login validation
-  const validateLoginEmail = (value: string) => {
-    if (!value.trim()) {
-      return 'Email address is required.';
-    }
-    if (!EMAIL_REGEX.test(value.trim())) {
-      return 'Please enter a valid email address.';
-    }
-    return '';
-  };
+  const validateLoginEmail = emailValidationError;
 
   const validateLoginPassword = (value: string) => {
     if (!value) {
@@ -316,6 +309,7 @@ export function AuthModal({
       }
       onAuthenticated?.();
       onOpenChange(false);
+      toast.success('Signed in successfully');
       setLoginEmail('');
       setLoginPassword('');
       navigate(from, { replace: true });
@@ -342,9 +336,7 @@ export function AuthModal({
         if (!value.trim()) return 'Full name is required.';
         return '';
       case 'email':
-        if (!value.trim()) return 'Email address is required.';
-        if (!EMAIL_REGEX.test(value.trim())) return 'Please enter a valid email address.';
-        return '';
+        return emailValidationError(value);
       case 'password':
         if (!value) return 'Password is required.';
         if (value.length < 8) return 'Password must be at least 8 characters.';
@@ -454,6 +446,7 @@ export function AuthModal({
           confirmPassword: '',
         });
         onOpenChange(false);
+        toast.success('Account created', { description: 'Welcome to ElectroHub!' });
         navigate(from, { replace: true });
       }
     } catch (err: unknown) {
@@ -476,6 +469,7 @@ export function AuthModal({
       await verifyEmail({ email: targetEmail, code });
       onAuthenticated?.();
       onOpenChange(false);
+      toast.success('Email verified', { description: 'Your account is ready.' });
       navigate(from, { replace: true });
     } catch (err) {
       setVerifyError(normalizeErrorMessage(err));
@@ -490,6 +484,7 @@ export function AuthModal({
     setVerifyError('');
     try {
       const result = await authApi.resendVerification({ email: targetEmail });
+      toast.info('Verification code sent', { description: 'Check your inbox for a new code.', announce: false });
       setVerifyCode('');
       setResendAvailableAt(new Date(result.resendAvailableAt).getTime());
       setResendVersion((version) => version + 1);
@@ -589,8 +584,9 @@ export function AuthModal({
     e.preventDefault();
     if (isLoading) return;
     const newEmail = verificationEmail.trim().toLowerCase();
-    if (!EMAIL_REGEX.test(newEmail)) {
-      setChangeEmailError('Please enter a valid email address.');
+    const emailError = emailValidationError(newEmail);
+    if (emailError) {
+      setChangeEmailError(emailError);
       return;
     }
     setChangeEmailError('');
@@ -621,6 +617,7 @@ export function AuthModal({
     setResetError('');
     try {
       const result = await authApi.resendPasswordReset({ email: targetEmail });
+      toast.info('Reset code sent', { description: 'If the account exists, a new code is on its way.', announce: false });
       setResendAvailableAt(new Date(result.resendAvailableAt).getTime());
       setResendVersion((version) => version + 1);
     } catch (err) {
@@ -679,7 +676,7 @@ export function AuthModal({
             {mode === 'verify' && `Enter the 6-digit code sent to ${maskEmail(targetEmail)}`}
             {mode === 'changeVerificationEmail' && 'Enter the corrected email address for your pending account.'}
             {mode === 'forgot' && 'Enter your email to receive a reset code'}
-            {mode === 'resetVerify' && `Enter the 6-digit code sent to ${maskEmail(targetEmail)}`}
+            {mode === 'resetVerify' && `If ${maskEmail(targetEmail)} is eligible, a 6-digit verification code will be sent. Enter it below.`}
             {mode === 'resetNew' && 'Choose a new password for your account.'}
             {mode === 'resetSuccess' && 'Your password has been changed.'}
           </DialogDescription>
@@ -765,9 +762,8 @@ export function AuthModal({
 
         {mode === 'changeVerificationEmail' && (
           <>
-            {changeEmailError && <Alert variant="error" className={styles.alert}>{changeEmailError}</Alert>}
             <form onSubmit={handleChangeVerificationEmail} className={styles.form} noValidate>
-              <Input label="New Email Address" type="email" value={verificationEmail} onChange={(event) => setVerificationEmail(event.target.value)} disabled={isLoading} fullWidth autoComplete="email" />
+              <Input label="New Email Address" type="email" error={changeEmailError} value={verificationEmail} onChange={(event) => setVerificationEmail(event.target.value)} disabled={isLoading} fullWidth autoComplete="email" />
               <Button type="submit" className={styles.submitButton} disabled={isLoading} isLoading={isLoading}>Send Verification Code</Button>
             </form>
             <div className={styles.footer}><button type="button" onClick={() => setMode('verify')} className={styles.switchButton} disabled={isLoading}>Back to verification</button></div>

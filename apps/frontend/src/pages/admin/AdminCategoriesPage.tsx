@@ -1,3 +1,4 @@
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, EyeOff, FolderTree, Pencil, Plus, Trash2 } from 'lucide-react';
@@ -83,13 +84,16 @@ export function AdminCategoriesPage() {
     { key: 'status', title: 'Storefront', render: row => <ActivePill active={row.isActive} activeLabel="Visible" inactiveLabel="Hidden" /> },
     { key: 'created', title: 'Created', sortKey: 'createdAt', render: row => <span className={styles.muted}>{formatDate(row.createdAt)}</span> },
     { key: 'actions', title: 'Actions', align: 'right', render: row => <span className={styles.rowActions}>
-      <button type="button" className={styles.iconAction} aria-label={`Edit ${row.name}`} title="Edit" onClick={() => setEditing({ mode: 'edit', category: row })}>
-        <Pencil aria-hidden="true" /></button>
-      <button type="button" className={styles.iconAction} aria-label={row.isActive ? `Hide ${row.name}` : `Show ${row.name}`} title={row.isActive ? 'Hide' : 'Show'}
-        onClick={() => { status.reset(); setToggling(row); }}>{row.isActive ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}</button>
-      <button type="button" className={`${styles.iconAction} ${styles.iconActionDanger}`} aria-label={`Delete ${row.name}`}
-        title={row.productCount ? 'Only empty categories can be deleted' : 'Delete'} disabled={row.productCount > 0}
-        onClick={() => { remove.reset(); setDeleting(row); }}><Trash2 aria-hidden="true" /></button>
+      <Tooltip content="Edit category"><button type="button" className={styles.iconAction} aria-label={`Edit ${row.name}`} onClick={() => setEditing({ mode: 'edit', category: row })}>
+        <Pencil aria-hidden="true" /></button></Tooltip>
+      <Tooltip content={row.isActive ? 'Hide from the storefront' : 'Show on the storefront'}>
+        <button type="button" className={styles.iconAction} aria-label={row.isActive ? `Hide ${row.name}` : `Show ${row.name}`}
+          onClick={() => { status.reset(); setToggling(row); }}>{row.isActive ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}</button>
+      </Tooltip>
+      <Tooltip content={row.productCount ? 'Only empty categories can be deleted' : 'Delete category'} focusableWrapper={row.productCount > 0}>
+        <button type="button" className={`${styles.iconAction} ${styles.iconActionDanger}`} aria-label={`Delete ${row.name}`} disabled={row.productCount > 0}
+          onClick={() => { remove.reset(); setDeleting(row); }}><Trash2 aria-hidden="true" /></button>
+      </Tooltip>
     </span> },
   ];
 

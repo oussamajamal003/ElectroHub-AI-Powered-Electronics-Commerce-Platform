@@ -14,7 +14,7 @@
   transition: border-color $transition-normal, box-shadow $transition-normal, transform $transition-normal;
 
   &:hover { border-color: $color-primary; box-shadow: $shadow-md; transform: translateY(-2px); }
-  &:hover .meta { color: $color-primary; }
+  &:hover .meta { color: $color-primary-text; }
   &:hover .meta svg { opacity: 1; transform: translateX(0); }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
 

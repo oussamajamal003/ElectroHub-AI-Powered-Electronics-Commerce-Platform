@@ -13,6 +13,9 @@ import { addLocalDays, localDayWindow, storeTimeZone } from './reporting-timezon
  */
 const ORDER_STATUSES: OrderStatus[] = ['AWAITING_CAPTURE', 'CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
 
+export const ALERT_CATEGORIES = ['lowStock', 'outOfStock', 'awaitingFulfillment', 'outForDelivery'] as const;
+export type AlertCategory = typeof ALERT_CATEGORIES[number];
+
 export class AdminDashboardService {
   constructor(private readonly db: PrismaClient = prisma, private readonly inventory = new AdminInventoryService(),
     private readonly clock: () => Date = () => new Date()) {}
@@ -24,10 +27,67 @@ export class AdminDashboardService {
     return { awaitingFulfillment, preparing, outForDelivery };
   }
 
-  /** Actionable operational counts shared by the dashboard and the header alerts menu. */
-  async alerts() {
+  private async alertCounts() {
     const [stock, fulfillment] = await Promise.all([this.inventory.summary(), this.fulfillment()]);
-    return { lowStock: stock.lowStock, outOfStock: stock.outOfStock, ...fulfillment, generatedAt: this.clock().toISOString() };
+    return { lowStock: stock.lowStock, outOfStock: stock.outOfStock, awaitingFulfillment: fulfillment.awaitingFulfillment,
+      outForDelivery: fulfillment.outForDelivery, fulfillment };
+  }
+
+  /**
+   * Actionable operational counts shared by the dashboard and the header alerts menu. The counts are live business state and are
+   * NEVER changed by reading or acknowledging them. `unread` is the per-administrator remainder after the acknowledged baseline:
+   * unread = max(0, current - acknowledged). A baseline above the current count (the condition cleared) is lowered to the current
+   * count so a later recurrence counts as new rather than being swallowed by a stale baseline.
+   */
+  async alerts(userId?: string) {
+    const counts = await this.alertCounts();
+    const current = Object.fromEntries(ALERT_CATEGORIES.map(category => [category, counts[category]])) as Record<AlertCategory, number>;
+    const baseline = await this.baseline(userId, current);
+    const unread = Object.fromEntries(ALERT_CATEGORIES.map(category => [category, Math.max(0, current[category] - baseline[category])])) as Record<AlertCategory, number>;
+    return { lowStock: counts.lowStock, outOfStock: counts.outOfStock, ...counts.fulfillment,
+      unread: { ...unread, total: ALERT_CATEGORIES.reduce((sum, category) => sum + unread[category], 0) }, generatedAt: this.clock().toISOString() };
+  }
+
+  /**
+   * Marks what the administrator has SEEN as acknowledged, per category: only the categories present in `seen` change (opening one
+   * alert category never reads the others). `seen` is the count the client actually displayed; it is clamped to the current server
+   * count, so an alert that arrived after the list was rendered stays unread, and a client can never acknowledge more than exists.
+   * Only this administrator's own rows change; operational counts are never touched.
+   */
+  async acknowledgeAlerts(userId: string, seen: Partial<Record<AlertCategory, number>>) {
+    const categories = ALERT_CATEGORIES.filter(category => seen[category] !== undefined);
+    if (categories.length === 0) return this.alerts(userId);
+    const counts = await this.alertCounts();
+    // One atomic statement per category: concurrent tabs or requests can never lower a larger acknowledged baseline (no
+    // read-modify-write race), and the stored baseline never exceeds the current server count. Only the listed categories change.
+    await this.db.$transaction(categories.map(category => {
+      const current = counts[category];
+      const next = Math.min(seen[category]!, current);
+      return this.db.$executeRaw(Prisma.sql`
+        INSERT INTO "admin_alert_acknowledgements" ("userId", "category", "acknowledgedCount", "updatedAt")
+        VALUES (${userId}::uuid, ${category}, ${next}, NOW())
+        ON CONFLICT ("userId", "category") DO UPDATE
+        SET "acknowledgedCount" = LEAST(${current}, GREATEST("admin_alert_acknowledgements"."acknowledgedCount", EXCLUDED."acknowledgedCount")),
+            "updatedAt" = NOW()`);
+    }));
+    return this.alerts(userId);
+  }
+
+  private async baseline(userId: string | undefined, current: Record<AlertCategory, number>) {
+    const result: Record<AlertCategory, number> = { lowStock: 0, outOfStock: 0, awaitingFulfillment: 0, outForDelivery: 0 };
+    if (!userId) return result;
+    const rows = await this.db.adminAlertAcknowledgement.findMany({ where: { userId } });
+    for (const row of rows) {
+      if (!(ALERT_CATEGORIES as readonly string[]).includes(row.category)) continue;
+      const category = row.category as AlertCategory;
+      result[category] = Math.min(row.acknowledgedCount, current[category]);
+      if (row.acknowledgedCount > current[category]) {
+        // Best effort: a failed write only leaves the (already clamped) stored value to be clamped again on the next read.
+        // Guarded: only lowers a row that is still above the live count, so a concurrent acknowledgement is never overwritten.
+        await this.db.adminAlertAcknowledgement.updateMany({ where: { userId, category, acknowledgedCount: { gt: current[category] } }, data: { acknowledgedCount: current[category] } }).catch(() => undefined);
+      }
+    }
+    return result;
   }
 
   /** Card trends: the window vs the window before it, plus today. Revenue stays per currency; the others count new rows. */

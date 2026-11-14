@@ -1,0 +1,15 @@
+{
+  "recipientClassification": "DISPOSABLE_SYNTHETIC_CUSTOMER",
+  "transport": "CAPTURE",
+  "inboxReceipt": "NOT_VERIFIED",
+  "orderRoute": "/orders/ORD-F66004E9-5FC9-42E3-AE87-DCBEF5492288",
+  "events": [
+    {
+      "id": "1c430e4e-c3de-4923-812d-25d2ec5a0895",
+      "type": "ORDER_OUT_FOR_DELIVERY",
+      "dispatchState": "ACCEPTED",
+      "attemptCount": 1,
+      "providerMessageId": "capture-2c1cd950-4593-4f8f-85a9-553416b1a85b"
+    }
+  ]
+}

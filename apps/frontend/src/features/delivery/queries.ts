@@ -66,11 +66,11 @@ export function useAdminDeliveryMutations(orderReference: string) {
     client.setQueryData(queryKeys.delivery.admin(orderReference), { data: snapshot });
     void client.invalidateQueries({ queryKey: queryKeys.delivery.adminAll });
   };
-  const start = useMutation({
+  const start = useMutation({ meta: { action: "start delivery tracking" },
     mutationFn: () => apiClient<{ data: AdminDeliverySnapshot }>(adminPath(orderReference), { method: 'POST', data: {} }),
     onSuccess: response => settle(response.data),
   });
-  const update = useMutation({
+  const update = useMutation({ meta: { action: "update the delivery" },
     mutationFn: (body: AdminDeliveryUpdate) => apiClient<{ data: AdminDeliverySnapshot; meta: { changed: boolean } }>(adminPath(orderReference),
       { method: 'PATCH', data: body }),
     onSuccess: response => settle(response.data),
@@ -92,11 +92,11 @@ export function useDeliverySimulation(orderReference: string) {
     client.setQueryData(key, { data });
     void client.invalidateQueries({ queryKey: queryKeys.delivery.admin(orderReference), exact: true });
   };
-  const start = useMutation({
+  const start = useMutation({ meta: { action: "start the delivery simulation" },
     mutationFn: (routeId: string) => apiClient<{ data: DeliverySimulationStatus }>(`${adminPath(orderReference)}/simulation`, { method: 'POST', data: { routeId } }),
     onSuccess: response => settle(response.data),
   });
-  const stop = useMutation({
+  const stop = useMutation({ meta: { action: "stop the delivery simulation" },
     mutationFn: () => apiClient<{ data: DeliverySimulationStatus }>(`${adminPath(orderReference)}/simulation`, { method: 'DELETE' }),
     onSuccess: response => settle(response.data),
   });

@@ -45,6 +45,7 @@ export function deliveryFixtures(label: string) {
   async function cleanup() {
     const prisma = await db();
     if (orderIds.length) {
+      await prisma.commerceEmailAttempt.deleteMany({ where: { outbox: { orderId: { in: orderIds } } } });
       await prisma.commerceEmailOutbox.deleteMany({ where: { orderId: { in: orderIds } } });
       await prisma.payment.deleteMany({ where: { orderId: { in: orderIds } } });
       await prisma.order.deleteMany({ where: { id: { in: orderIds } } });

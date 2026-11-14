@@ -1,3 +1,4 @@
+import { emailValidationError } from '@/lib/emailValidation';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { DataTable, type Column } from '@/components/ui/DataTable';
@@ -156,8 +157,9 @@ export function AdminAdministratorsPage({ embedded = false }: { embedded?: boole
     event.preventDefault();
     if (busy) return;
     const email = inviteEmail.trim();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setInviteFieldError('Enter a valid email address.');
+    const validationError = emailValidationError(email);
+    if (validationError) {
+      setInviteFieldError(validationError);
       return;
     }
     setInviteFieldError('');

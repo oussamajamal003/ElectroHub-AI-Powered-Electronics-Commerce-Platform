@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowUpDown, Camera, ChevronDown, ChevronRight, ImageIcon, Search, SearchX, SlidersHorizontal } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -6,15 +6,17 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ProductCard, ProductCardSkeleton } from '@/components/ui/ProductCard';
-import { StaggerItem } from '@/components/motion/Motion';
+import { RevealItem } from '@/components/motion/Motion';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/Pagination';
 import { SearchField } from '@/components/ui/SearchField/SearchField';
 import { FilterSelect } from '@/components/ui/FilterControls/FilterControls';
-import { activeSearch, clearFilters, emptySearch, normalizeQuery, parseSearch, searchParams, type SearchState } from './searchState';
+import { activeSearch, clearFilters, emptySearch, MAX_OFFSET_PAGE, normalizeQuery, parseSearch, searchParams, type SearchState } from './searchState';
 import { productCardProps, type Suggestion } from './api';
+import type { ProductSummary } from '@/features/products/types';
+import { ApiError } from '@/lib/api';
 import { useCart } from '@/features/cart/context';
 import { useWishlist } from '@/features/wishlist/context';
-import { useBrands, useCategories, useSearchResults } from './queries';
+import { useBrands, useCategories, useSearchContinuation, useSearchResults } from './queries';
 import { getProductGridSkeletonCount } from './skeletonCount';
 import { shortcutLabel, useDiscovery } from './discovery/context';
 import styles from './SearchPage.module.scss';
@@ -160,7 +162,10 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
     minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(value));
   const priceText = state.minPrice && state.maxPrice ? `${priceLabel(state.minPrice)}–${priceLabel(state.maxPrice)}` :
     state.minPrice ? `${priceLabel(state.minPrice)}+` : state.maxPrice ? `Up to ${priceLabel(state.maxPrice)}` : '';
-  const totalPages = Math.min(results?.meta.totalPages ?? 0, 1000);
+  const totalPages = Math.min(results?.meta.totalPages ?? 0, MAX_OFFSET_PAGE);
+  // Numbered pages stop at the server's offset cap; past it the same filters continue with a signed keyset cursor.
+  const continuationCursor = state.page === MAX_OFFSET_PAGE && results?.meta.hasNextPage ? results.meta.nextCursor ?? null : null;
+  const productCard = (product: ProductSummary) => <ProductCard key={product.id} {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} />;
   const pages = Array.from({ length: Math.min(5, totalPages) }, (_, index) =>
     Math.max(1, Math.min(state.page - 2, totalPages - 4)) + index);
   return <>
@@ -224,14 +229,19 @@ export function SearchPage({ catalog = false }: { catalog?: boolean }) {
             {loading && <div className={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`} aria-hidden="true">{Array.from({ length: getProductGridSkeletonCount(state.pageSize) }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
             {error && <ErrorState headingLevel={2} className={styles.stateBlock} title="Search unavailable" description="Search is temporarily unavailable. Please try again." action={<Button type="button" onClick={() => void searchQuery.refetch()}>Retry search</Button>} />}
             {results && results.data.length > 0 && <div className={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`}>{results.data.map((product, index) => catalog
-              ? <StaggerItem key={product.id} replay index={index % 4}><ProductCard {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} /></StaggerItem>
-              : <ProductCard key={product.id} {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} />)}</div>}
+              // Keyed by product: a card already in the grid keeps its mount (and its finished reveal) across refetches and re-sorts.
+              ? <RevealItem key={product.id} index={index % 4}>{productCard(product)}</RevealItem>
+              : productCard(product))}</div>}
             {results && results.data.length === 0 && <EmptyState headingLevel={2} className={styles.stateBlock} icon={<SearchX aria-hidden="true" />} title={state.q ? `No results for “${state.q}”` : 'No products found'} description="Try adjusting your search or filters." action={<>{catalog && filterCount > 0 && <Button type="button" variant="link" onClick={clearAllFilters}>Reset filters</Button>}{state.q && <Button type="button" variant="link" onClick={() => { draftValue.current = ''; setDraft(''); update({ q: '' }); }}>Clear query</Button>}{state.page > 1 && <Button type="button" variant="link" onClick={() => commit({ ...state, page: 1 })}>First page</Button>}</>} />}
             {totalPages > 1 && <Pagination aria-label="Search result pages"><PaginationContent>
               <PaginationItem><PaginationPrevious disabled={state.page <= 1} onClick={() => commit({ ...state, page: state.page - 1 }, false, true)} /></PaginationItem>
               {pages.map(page => <PaginationItem key={page}><PaginationLink aria-label={`Go to page ${page}`} isActive={page === state.page} onClick={() => commit({ ...state, page }, false, true)}>{page}</PaginationLink></PaginationItem>)}
               <PaginationItem><PaginationNext disabled={state.page >= totalPages} onClick={() => commit({ ...state, page: state.page + 1 }, false, true)} /></PaginationItem>
             </PaginationContent></Pagination>}
+            {continuationCursor && results && <ResultsContinuation key={continuationCursor} state={requestState} cursor={continuationCursor}
+              seen={results.data} gridClassName={`${styles.grid} ${catalog ? styles.catalogGrid : ''}`}
+              renderCard={catalog ? (product, index) => <RevealItem key={product.id} index={index % 4}>{productCard(product)}</RevealItem> : productCard}
+              onRestart={() => commit({ ...state, page: 1 }, false, true)} />}
           </section>
           {!catalog && !active && !parsed.error && <StartPanel categories={categories.filter(category => category.productCount !== 0)}
             onOpen={options => discovery?.open(options)} available={Boolean(discovery)} />}
@@ -261,4 +271,47 @@ function StartPanel({ categories, onOpen, available }: {
       </li>)}</ul>
     </nav>}
   </section>;
+}
+
+/**
+ * Task 06.2: "Load more" past the last numbered page. Pages are appended from opaque server cursors and de-duplicated by
+ * product id. The parent keys this component by the starting cursor, so a filter/sort change (new page-100 response)
+ * discards appended results instead of mixing result sets.
+ */
+function ResultsContinuation({ state, cursor, seen, gridClassName, renderCard, onRestart }: {
+  state: SearchState; cursor: string; seen: ProductSummary[]; gridClassName: string;
+  renderCard: (product: ProductSummary, index: number) => ReactNode; onRestart: () => void;
+}) {
+  const [requested, setRequested] = useState(false);
+  const query = useSearchContinuation(state, cursor, requested);
+  const products = useMemo(() => {
+    const ids = new Set(seen.map(product => product.id));
+    const appended: ProductSummary[] = [];
+    for (const page of query.data?.pages ?? []) for (const product of page.data) {
+      if (!ids.has(product.id)) { ids.add(product.id); appended.push(product); }
+    }
+    return appended;
+  }, [query.data, seen]);
+  const stale = query.error instanceof ApiError && query.error.code === 'INVALID_CURSOR';
+  const loading = query.isFetching;
+  const finished = query.isSuccess && !query.hasNextPage;
+  const loadMore = () => {
+    if (!requested) { setRequested(true); return; }
+    void (query.data ? query.fetchNextPage() : query.refetch());
+  };
+  return <div className={styles.continuation}>
+    {products.length > 0 && <div className={gridClassName}>{products.map(renderCard)}</div>}
+    {loading && <div className={gridClassName} aria-hidden="true">{Array.from({ length: Math.min(state.pageSize, 4) }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
+    <div role="status" aria-live="polite" className={styles.visuallyHidden}>
+      {loading ? 'Loading more products…' : products.length ? `${products.length} more ${products.length === 1 ? 'product' : 'products'} loaded` : ''}
+    </div>
+    {query.isError && !loading
+      ? <ErrorState headingLevel={2} className={styles.stateBlock}
+        title={stale ? 'These results have changed' : 'More results unavailable'}
+        description={stale ? 'This list can no longer be continued. Start again from the first page.' : 'More products could not be loaded. Please try again.'}
+        action={stale ? <Button type="button" onClick={onRestart}>Back to first page</Button> : <Button type="button" onClick={loadMore}>Try again</Button>} />
+      : finished
+        ? <p className={styles.endOfResults}>You have reached the end of the results.</p>
+        : !loading && <div className={styles.loadMore}><Button type="button" variant="outline" onClick={loadMore}>Load more products</Button></div>}
+  </div>;
 }

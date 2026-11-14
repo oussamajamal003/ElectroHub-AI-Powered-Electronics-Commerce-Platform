@@ -1,6 +1,7 @@
-import { QueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryClient } from '@tanstack/react-query';
 import { ApiError, isAbortError } from './api';
 import { searchParams, type SearchState } from '@/features/search/searchState';
+import { describeError, toast } from '@/components/ui/Toast';
 
 export const cachePolicy = {
   reference: { staleTime: 10 * 60_000, gcTime: 30 * 60_000 },
@@ -63,17 +64,47 @@ export const queryKeys = {
 
 export function shouldRetry(failureCount: number, error: unknown) {
   if (failureCount >= 1 || isAbortError(error)) return false;
-  if (error instanceof ApiError) return error.status === 0 || error.status >= 500;
+  if (error instanceof ApiError) {
+    if ((error.retryAfterMs ?? 0) > 60_000) return false; // leave long waits to explicit user recovery
+    return error.status === 0 || error.status >= 500;
+  }
   return false;
 }
 
+/** Read retries only. Mutations remain retry:false, including payments, uploads and contact sends. */
+export function queryRetryDelay(attempt: number, error: unknown, random: () => number = Math.random) {
+  const base = Math.min(300 * 2 ** attempt, 2_000);
+  const jittered = Math.min(2_000, base + Math.floor(base * 0.25 * random()));
+  return Math.max(jittered, error instanceof ApiError ? error.retryAfterMs ?? 0 : 0);
+}
+
+declare module '@tanstack/react-query' {
+  interface Register {
+    /** `action`: verb phrase for failure feedback ("update this product"); `silent`: the caller owns all failure feedback. */
+    mutationMeta: { action?: string; silent?: boolean };
+  }
+}
+
+/**
+ * One failure path for every mutation in both caches (storefront and Admin Console). Differentiated and safe: a 403 is a permission
+ * message, a 409 asks for a refresh, 429 asks to wait, 5xx/offline say so. Not raised here: validation (400/422), which the form shows
+ * inline next to the field; 401, which the session-expiry flow owns; and aborts. Identical failures in a burst collapse by id.
+ */
+export function reportMutationFailure(error: unknown, meta?: { action?: string; silent?: boolean }): void {
+  if (meta?.silent || isAbortError(error)) return;
+  if (error instanceof ApiError && (error.status === 400 || error.status === 401 || error.status === 422)) return;
+  const feedback = describeError(error, meta?.action ?? 'save your changes');
+  const raise = feedback.kind === 'unavailable' || feedback.kind === 'unexpected' ? toast.error : toast.warning;
+  raise(feedback.title, { description: feedback.description, id: `mutation-failure:${feedback.kind}`, announce: feedback.kind !== 'conflict' });
+}
+
 export function createQueryClient() {
-  return new QueryClient({ defaultOptions: {
+  return new QueryClient({ mutationCache: new MutationCache({ onError: (error, _variables, _context, mutation) => reportMutationFailure(error, mutation.meta) }), defaultOptions: {
     queries: {
       staleTime: 30_000,
       gcTime: 5 * 60_000,
       retry: shouldRetry,
-      retryDelay: attempt => Math.min(300 * 2 ** attempt, 2_000),
+      retryDelay: queryRetryDelay,
       refetchOnWindowFocus: false,
       refetchOnReconnect: true,
       refetchOnMount: true,

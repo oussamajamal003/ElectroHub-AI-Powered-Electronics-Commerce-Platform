@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Routes, Route, Outlet, useLocation } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { adminQueryClient } from '@/lib/query';
@@ -17,6 +17,11 @@ import { CheckoutDraftSession } from '@/features/checkout/CheckoutDraftSession';
 import { PaymentLockProvider } from '@/features/checkout/PaymentLockContext';
 import { OrdersPage } from '@/pages/customer/OrdersPage';
 import { useCart } from '@/features/cart/context';
+import { CustomerAccountSkeleton } from '@/features/account/AccountSkeleton';
+import { DetailsSkeleton } from '@/features/orders/OrderDetailsSkeleton';
+import { TrackingSkeleton } from '@/features/delivery/TrackingSkeleton';
+import orderStyles from '@/features/orders/Orders.module.scss';
+import { CookiePolicy } from '@/features/privacy/CookiePolicy';
 
 function CartRouteValidation() {
   const { isMutating, validateRoute } = useCart();
@@ -74,9 +79,15 @@ const AdminSessionsPage = lazy(() => import('@/pages/admin/AdminSessionsPage').t
 const AdminInvitePage = lazy(() => import('@/pages/admin/AdminInvitePage').then(module => ({ default: module.AdminInvitePage })));
 const AdminForgotPasswordPage = lazy(() => import('@/pages/admin/AdminForgotPasswordPage').then(module => ({ default: module.AdminForgotPasswordPage })));
 const AdminActivatePage = lazy(() => import('@/pages/admin/AdminActivatePage').then(module => ({ default: module.AdminActivatePage })));
-const route = (content: React.ReactNode) => <Suspense fallback={<ElectroHubLoader page />}>{content}</Suspense>;
-// Inside the admin shell a page's code chunk loads behind a page-shaped skeleton; the full-page loader is kept for a whole-app reload.
-const adminRoute = (content: React.ReactNode) => <Suspense fallback={<AdminPageSkeleton />}>{content}</Suspense>;
+const route = (content: React.ReactNode, fallback: React.ReactNode = <ElectroHubLoader page />) => <Suspense fallback={fallback}>{content}</Suspense>;
+// The first matched route after a document load uses the brand loader. Once
+// the app has mounted, admin client-side navigation keeps its page skeletons.
+function AdminRoute({ content, fallback = <AdminPageSkeleton /> }: { content: React.ReactNode; fallback?: React.ReactNode }) {
+  const [initialDocumentLoad, setInitialDocumentLoad] = useState(true);
+  useEffect(() => { setInitialDocumentLoad(false); }, []);
+  return <Suspense fallback={initialDocumentLoad ? <ElectroHubLoader page /> : fallback}>{content}</Suspense>;
+}
+const adminRoute = (content: React.ReactNode, fallback?: React.ReactNode) => <AdminRoute content={content} fallback={fallback} />;
 
 /** Task 05.2: every /admin page reads and writes the administrator's own query cache, never the storefront's. */
 function AdminQueryBoundary() { return <QueryClientProvider client={adminQueryClient}><Outlet /></QueryClientProvider>; }
@@ -96,6 +107,7 @@ export function AppRoutes() {
           <Route path="/" element={route(<HomePage />)} />
           <Route path="/about" element={route(<AboutPage />)} />
           <Route path="/contact" element={route(<ContactPage />)} />
+          <Route path="/cookie-policy" element={<CookiePolicy />} />
           <Route path="/search" element={route(<SearchPage />)} />
           <Route path="/products" element={route(<SearchPage catalog />)} />
           <Route path="/products/:slug" element={route(<ProductDetailPage />)} />
@@ -103,9 +115,9 @@ export function AppRoutes() {
           <Route path="/wishlist" element={route(<WishlistPage />)} />
           <Route path="/orders" element={<OrdersPage />} />
           {/* Same session boundary as /orders (sign-in card for guests); ownership is enforced by the API. */}
-          <Route path="/orders/:orderReference" element={route(<OrderDetailsPage />)} />
+          <Route path="/orders/:orderReference" element={route(<OrderDetailsPage />, <div className={orderStyles.page}><DetailsSkeleton /></div>)} />
           {/* Task 04.5: same session boundary; the API enforces ownership (identical 404 for other customers). */}
-          <Route path="/orders/:orderReference/tracking" element={route(<DeliveryTrackingPage />)} />
+          <Route path="/orders/:orderReference/tracking" element={route(<DeliveryTrackingPage />, <div className={orderStyles.page}><TrackingSkeleton /></div>)} />
 
           <Route element={<ProtectedRoute requiredRole="CUSTOMER" redirectTo="/cart" requireVerifiedSession preserveReturnPath />}>
             <Route path="/account/payment-retry/:attemptId" element={route(<PaymentRetryPage />)} />
@@ -116,8 +128,8 @@ export function AppRoutes() {
           </Route>
           {/* Customer Protected Routes — must be logged in */}
           <Route element={<ProtectedRoute requiredRole="CUSTOMER" redirectTo="/" />}>
-            <Route path="/account" element={route(<AccountPage />)} />
-            <Route path="/account/profile" element={route(<ProfilePage />)} />
+            <Route path="/account" element={route(<AccountPage />, <CustomerAccountSkeleton />)} />
+            <Route path="/account/profile" element={route(<ProfilePage />, <CustomerAccountSkeleton variant="profile" />)} />
           </Route>
         </Route>
 
@@ -152,9 +164,9 @@ export function AppRoutes() {
             <Route path="/admin/analytics" element={adminRoute(<AdminAnalyticsPage />)} />
             <Route path="/admin/settings" element={adminRoute(<AdminSettingsPage />)} />
             <Route path="/admin/settings/administrators" element={adminRoute(<AdministratorsAccessGate><AdminAdministratorsPage /></AdministratorsAccessGate>)} />
-            <Route path="/admin/profile" element={adminRoute(<AdminProfilePage />)} />
-            <Route path="/admin/profile/security" element={adminRoute(<AdminSecurityPage />)} />
-            <Route path="/admin/profile/sessions" element={adminRoute(<AdminSessionsPage />)} />
+            <Route path="/admin/profile" element={adminRoute(<AdminProfilePage />, <ElectroHubLoader page />)} />
+            <Route path="/admin/profile/security" element={adminRoute(<AdminSecurityPage />, <ElectroHubLoader page />)} />
+            <Route path="/admin/profile/sessions" element={adminRoute(<AdminSessionsPage />, <ElectroHubLoader page />)} />
             <Route path="/admin/*" element={adminRoute(<AdminNotFoundPage />)} />
           </Route>
         </Route>

@@ -1,5 +1,4 @@
-@use '@/styles/abstracts/variables' as *;
-@use '@/styles/abstracts/mixins' as *;
+@use '@/styles/abstracts' as *;
 
 .page {
   min-height: calc(100vh - 80px);
@@ -37,7 +36,7 @@
 
 .pageEyebrow {
   margin: 0;
-  color: $color-primary;
+  color: $color-primary-text;
   font-size: $font-size-xs;
   font-weight: $font-weight-semibold;
   letter-spacing: 0.08em;
@@ -46,14 +45,19 @@
 
 // ─── Profile Card ──────────────────────────────────────────
 .profileCard {
+  // Identity header (Task 06.2): neutral card, quiet brand hairline, no fake stats.
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: $spacing-6;
   border: 1px solid $color-border;
-  border-top: 3px solid $color-primary;
   border-radius: $radius-lg;
-  padding: $spacing-6;
-  background-color: $color-background;
+  padding: $spacing-6 $spacing-8;
+  background:
+    linear-gradient(90deg, $color-primary, $color-accent) top / 100% 3px no-repeat,
+    linear-gradient(135deg, theme-alpha($color-primary, .05), transparent 55%),
+    $color-background;
   box-shadow: $shadow-sm;
   
   @media (max-width: $breakpoint-sm) {
@@ -70,20 +74,22 @@
 }
 
 .avatar {
-  width: 64px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
   font-size: $font-size-2xl;
+  box-shadow: 0 0 0 4px $color-background, 0 0 0 5px $color-border;
 }
 
 .profileDetails {
   display: flex;
   flex-direction: column;
   gap: $spacing-1;
+  min-width: 0;
 }
 
 .profileName {
   font-family: $font-family-heading;
-  font-size: $font-size-xl;
+  font-size: $font-size-2xl;
   font-weight: $font-weight-bold;
   color: $color-text-primary;
   margin: 0;
@@ -140,6 +146,8 @@
   align-items: center;
   gap: $spacing-4;
   border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  color: inherit;
   padding: $spacing-5;
   min-height: 6.5rem;
   background-color: $color-background;
@@ -152,7 +160,7 @@
     transform: translateY(-1px);
     
     .itemTitle {
-      color: $color-primary;
+      color: $color-primary-text;
     }
   }
 
@@ -161,7 +169,13 @@
 
 
 .itemIcon {
-  color: $color-primary;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: $color-primary-text;
+  background: theme-alpha($color-primary, .08);
+  border: 1px solid theme-alpha($color-primary, .16);
   flex-shrink: 0;
 }
 
@@ -204,6 +218,28 @@
 .chevron {
   color: $color-text-muted;
   flex-shrink: 0;
+  transition: transform $transition-fast, color $transition-fast;
+}
+
+.gridItem:hover .chevron { color: $color-primary-text; transform: translateX(2px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .gridItem, .chevron { transition: none; }
+  .gridItem:hover:not(.gridItemDisabled), .gridItem:hover .chevron { transform: none; }
+}
+
+// Privacy shortcuts (Task 06.2): Cookie Policy and the shared Cookie Settings dialog.
+.privacyLinks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-2;
+  margin: 0;
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+
+  a, button { padding: 0; border: 0; background: none; color: $color-primary-text; font: inherit; font-weight: $font-weight-medium; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+  a:focus-visible, button:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: 2px; }
 }
 
 // ─── Sign Out Link ──────────────────────────────────────────
@@ -214,7 +250,7 @@
 }
 
 .signOutBtn {
-  color: $color-error;
+  color: $color-error-foreground;
   border-color: $color-error;
   width: 100%;
   max-width: 300px;
@@ -223,6 +259,7 @@
   &:hover {
     background-color: #FFF1F2;
     border-color: $color-error;
+    @include dark-theme { background-color: $color-error-background; }
   }
 }
 
@@ -246,7 +283,9 @@
 @media (max-width: $breakpoint-sm) {
   .container { padding: 0 $spacing-4; gap: $spacing-8; }
   .pageIntro h1 { font-size: $font-size-2xl; }
-  .profileCard { padding: $spacing-4; width: 100%; }
+  .profileCard { padding: $spacing-5 $spacing-4; width: 100%; }
+  .profileName { font-size: $font-size-xl; }
+  .avatar { width: 60px; height: 60px; font-size: $font-size-xl; }
   .profileInfo { gap: $spacing-3; min-width: 0; }
   .profileEmail { overflow-wrap: anywhere; }
   .reviewStrip { grid-auto-columns: minmax(13rem, 82vw); }

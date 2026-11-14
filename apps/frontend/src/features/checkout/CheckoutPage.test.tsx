@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,7 +12,7 @@ import { CheckoutPage } from './CheckoutPage';
 import { cart, confirmation, quote, shipping } from './fixtures';
 import { draftKey, newDraft, readSubmittedPurchase, rememberSubmittedPurchase, saveDraft } from './state';
 import { saveBuyNow } from './buyNow';
-import { announceConfirmation } from './confirmationSignal';
+import { ConfirmationStockRefused, announceConfirmation } from './confirmationSignal';
 import { CheckoutDraftSession } from './CheckoutDraftSession';
 import { queryKeys } from '@/lib/query';
 import type { CartData } from '@/features/cart/types';
@@ -585,7 +585,7 @@ describe('Checkout page integration', () => {
       throw new Error(`Unexpected ${url}`);
     });
     show('/checkout?step=payment');
-    expect(await screen.findByRole('heading', { name: 'Payment failed' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Payment canceled' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Try Again' })).toBeEnabled();
     expect(setupCalls).toBe(2); expect(actions.retryCart).toHaveBeenCalledTimes(1); expect(actions.confirm).not.toHaveBeenCalled();
   });
@@ -663,8 +663,9 @@ describe('Checkout page integration', () => {
     // Stage 1 ends when the request settles; a settled disconnect is shown as unconfirmed (not failure, not permanent checking).
     expect(await screen.findByRole('heading', { name: 'We couldn’t confirm your payment yet' })).toBeVisible();
     expect(screen.queryByRole('heading', { name: /Processing your order/ })).not.toBeInTheDocument();
+    // One status check on the same attempt: no second check action and no new payment.
+    expect(screen.getAllByRole('button', { name: /Check/ })).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Check again' })).toBeEnabled();
-    expect(screen.queryByRole('button', { name: 'Check payment status' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Try Again' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Return to Cart' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Payment Failed' })).not.toBeInTheDocument();
@@ -1255,6 +1256,24 @@ describe('A refused submit (nothing submitted) returns to Review instead of reco
     expect(readSubmittedPurchase(userId, 'CART_CHECKOUT')).toBeNull();
     expect(JSON.parse(sessionStorage.getItem(draftKey(userId)) ?? '{}').draft.attempt.status).toBe('setup');
   });
+  it('a last-unit stock refusal at submit says which item sold out (standard 409), never shows Processing, and keeps the shopper on review', async () => {
+    reviewedDraft(); const calls3: string[] = [];
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      calls3.push(endpoint);
+      if (endpoint.endsWith('/submit')) throw new ApiError(409, 'Last Unit Phone is out of stock. Nothing was charged.', undefined, 'CART_STOCK_CONFLICT');
+      if (endpoint === '/api/checkout') return { data: quote } as never;
+      if (endpoint === '/api/checkout/payment-attempts') return { data: setup } as never;
+      if (endpoint.startsWith('/api/cart')) return { data: cart } as never;
+      throw new Error(`Unexpected endpoint ${endpoint}`);
+    });
+    show('/checkout?step=review'); await enterReview();
+    fireEvent.click(await screen.findByRole('button', { name: /Place Order/ }));
+    expect(await screen.findByText('Last Unit Phone is out of stock. Nothing was charged. Review your Cart to continue.')).toBeVisible();
+    expect(screen.queryByText(/Secure payment could not start/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Checking your payment|Processing/ })).not.toBeInTheDocument();
+    expect(calls3.some(endpoint => endpoint.endsWith('/confirmation-started') || endpoint.endsWith('/reconcile'))).toBe(false);
+    expect(readSubmittedPurchase(userId, 'CART_CHECKOUT')).toBeNull();
+  });
 });
 
 // Task 03.6 final closure — handoff contract after a slow /submit (DEV incidents: MacBook 8.5 s, Buds2 19.1 s, iPad 24.1 s, MacBook Starlight
@@ -1306,6 +1325,49 @@ describe('Place Order handoff after a slow /submit', () => {
     await waitFor(() => expect(actions.confirm).toHaveBeenCalledTimes(1));
     expect(providerReached).toBe(false);
     expect(urls().some(url => /release|cancel/.test(url))).toBe(false);
+  });
+  it('an item that sold out during card entry stops before Stripe and shows the sold-out outcome from the purchase status, never "outcome unknown"', async () => {
+    vi.mocked(announceConfirmation).mockRejectedValueOnce(new ConfirmationStockRefused('Last Unit Phone is out of stock. Nothing was charged.', 'CART_STOCK_CONFLICT'));
+    let providerReached = false;
+    actions.confirm.mockImplementation(async (before?: () => Promise<void>) => { await before?.(); providerReached = true; return { kind: 'confirmed' }; });
+    const soldOut = { ...setup, state: 'CANCELED', classification: 'FAILED', failureCode: 'CART_STOCK_CONFLICT', retryAllowed: false, submittedAt: new Date().toISOString(),
+      outcomeReason: 'STOCK_UNAVAILABLE', authorizationReleased: true, scope: 'CART_CHECKOUT',
+      unavailableItems: [{ productId: 'p1', name: 'Last Unit Phone', slug: 'last-unit-phone', imageUrl: null, quantity: 1, availableQuantity: 0, availability: 'OUT_OF_STOCK' }] };
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint.endsWith('/submit')) return { data: { ...setup, attemptId: endpoint.split('/').at(-2) } } as never;
+      if (endpoint === '/api/checkout') return { data: quote } as never;
+      if (endpoint === '/api/checkout/payment-attempts') return { data: setup } as never;
+      if (endpoint.startsWith('/api/cart')) return { data: cart } as never;
+      if (/\/payment-attempts\/[^/]+$/.test(endpoint)) return { data: { ...soldOut, attemptId: endpoint.split('/').at(-1) } } as never;
+      throw new Error(`Unexpected test request ${endpoint}`);
+    });
+    reviewedDraft(); show('/checkout?step=review'); await enterReview();
+    fireEvent.click(await screen.findByRole('button', { name: /Place Order/ }));
+    expect(await screen.findByRole('heading', { name: 'This item sold out' }, { timeout: 8000 })).toBeVisible();
+    expect(providerReached).toBe(false);
+    expect(screen.queryByText(/outcome is not yet known/)).not.toBeInTheDocument();
+    expect(urls().some(url => url.endsWith('/reconcile'))).toBe(false);
+  }, 15000);
+  it('Task 06.2 WP A: the processing card never claims success or offers a Cancel action before the server verifies payment', async () => {
+    let releaseConfirm!: (value: unknown) => void; let resolveReconcile!: (value: unknown) => void;
+    actions.confirm.mockImplementation(async (before?: () => Promise<void>) => { await before?.(); return new Promise(done => { releaseConfirm = done; }); });
+    const finish = slowSubmit();
+    const base = vi.mocked(apiClient).getMockImplementation()!;
+    vi.mocked(apiClient).mockImplementation(async (endpoint, options) => endpoint.endsWith('/reconcile')
+      ? new Promise(done => { resolveReconcile = done; }) as never : base(endpoint, options));
+    await placeOrder();
+    const card = () => screen.getByRole('heading', { name: /Processing your order/ }).closest('section, [role="region"], div')!;
+    expect(within(card() as HTMLElement).queryAllByRole('button')).toHaveLength(0);
+    await act(async () => { finish(); });
+    await waitFor(() => expect(screen.getByTestId('payment-lock-state')).toHaveTextContent('CONFIRMING_PAYMENT'));
+    expect(screen.getByText(/Keep this page open until this finishes/)).toBeVisible();
+    expect(within(card() as HTMLElement).queryAllByRole('button')).toHaveLength(0);
+    await act(async () => { releaseConfirm({ kind: 'confirmed' }); });
+    expect(document.body.textContent).not.toMatch(/\d+\s?%|seconds? left|Payment confirmed|Order Confirmed/);
+    await act(async () => { resolveReconcile({ data: { ...setup, state: 'PAID', committed: true, orderReference: confirmation.orderReference,
+      confirmation: { ...confirmation, paymentState: 'PAID' }, cart: emptyCart, recoveryActive: false } }); });
+    await screen.findByText('Persisted Confirmation');
+    expect(screen.queryByRole('heading', { name: /Processing your order/ })).not.toBeInTheDocument();
   });
 });
 

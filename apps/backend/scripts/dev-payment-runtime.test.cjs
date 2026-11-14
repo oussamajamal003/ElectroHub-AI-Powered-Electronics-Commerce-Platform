@@ -86,6 +86,7 @@ function fakeRuntime(onReady = () => {}) {
   const protocol = { runnerReady: false };
   let nextPid = 800;
   const deps = {
+    openControl: async () => ({ close: async () => {} }),
     acquireLock: () => lock,
     writeDiagnosticToken: token => { assert.match(token, /^[a-f0-9]{64}$/); },
     spawn: () => { const child = makeChild(nextPid++); children.push(child); return child; },
@@ -247,6 +248,44 @@ test('preflight-only mode never starts a runtime', async () => {
   } finally { console.log = priorLog; }
   assert.equal(starts, 0);
   assert.equal(output.some(value => value.includes(REVIEWED_ID) || value.includes(TASK04_ID)), false, 'preflight output never exposes private attempt IDs');
+});
+
+test('a parent stop received during preflight never creates a payment runtime', async () => {
+  let starts = 0; const log = console.log; console.log = () => {};
+  try {
+    assert.equal(await main(['--start', '--allow-dev-checkout', '--recovery-mode=checkout'], {
+      preflight: async () => { process.emit('message', { type: 'dev-stack.stop' }); return { port: 5000 }; },
+      supervise: async () => { starts++; },
+    }), 0);
+    assert.equal(starts, 0);
+  } finally { console.log = log; }
+});
+test('an explicitly reviewed READY decline is accepted only in exact-attempt mode and never widens incident scope', () => {
+  const decline = { id: REVIEWED_ID, state: 'DECLINED', failureCode: 'PAYMENT_DECLINED', providerStatus: 'requires_payment_method',
+    submittedAt: new Date(), cancelRequested: false, orderId: null, providerIntentId: 'pi_fixture', work: { state: 'READY' } };
+  assert.doesNotThrow(() => assertReviewedRecovery(decline, REVIEWED_ID, 'exact-attempt'));
+  assert.throws(() => assertReviewedRecovery(decline, REVIEWED_ID), /changed/);
+  for (const patch of [{ orderId: 'some-order' }, { cancelRequested: true }, { failureCode: null }, { submittedAt: null },
+    { providerStatus: 'requires_capture' }, { work: { state: 'LEASED' } }]) {
+    assert.throws(() => assertReviewedRecovery({ ...decline, ...patch }, REVIEWED_ID, 'exact-attempt'), /changed/);
+  }
+});
+test('decline-only preflight requires fresh provider decline truth and sends its restriction only to the exact worker', async () => {
+  const reviewedAttempt = { id: REVIEWED_ID, state: 'DECLINED', failureCode: 'PAYMENT_DECLINED', providerStatus: 'requires_payment_method',
+    submittedAt: new Date(), cancelRequested: false, orderId: null, providerIntentId: 'pi_fixture', work: { state: 'READY' } };
+  const options = argumentsFor(['--start', '--allow-dev-recovery', '--recovery-mode=exact-attempt', `--reviewed-recovery-attempt=${REVIEWED_ID}`]);
+  const dependencies = declined => preflightDependencies({ unfinishedWork: 1, reviewedAttempt, deps: {
+    retrieveIntent: async () => ({ livemode: false, status: 'requires_payment_method', received: 0, capturable: 0, declined }), verifyBinding: () => {},
+  } });
+  await assert.rejects(preflight(dependencies(false), options), /provider state changed/);
+  const config = await preflight(dependencies(true), options); assert.equal(config.declineOnly, true);
+  assert.deepEqual(config.workerAttemptIds, [REVIEWED_ID]);
+  const state = fakeRuntime(record => { if (record.readiness === 'PASS') process.emit('SIGINT'); });
+  await supervise(config, options, state.deps);
+  const worker = state.children.find(child => child.spawnArgs?.includes('--payment-worker'));
+  const api = state.children.find(child => child.spawnArgs?.length === 0);
+  assert.equal(worker.messages.find(message => message.type === 'payment-supervisor.prepare').declineOnly, true);
+  assert.equal(Object.hasOwn(api.messages.find(message => message.type === 'payment-supervisor.prepare'), 'declineOnly'), false);
 });
 
 test('supervisor refuses a missing allowlist before acquiring a lock or starting children', async () => {
@@ -643,4 +682,16 @@ test('expired-lease mode: one owner-named DECLINED attempt, frozen facts, Stripe
   assert.equal(api.messages.find(message => message.type === 'payment-supervisor.prepare').attemptIds, undefined);
   assert.equal(worker.spawnOptions.env.COMMERCE_EMAIL_SEND_MODE, 'disabled');
   assert.equal(state.logs.find(log => log.readiness === 'PASS').recoveryMode, 'expired-lease');
+});
+
+test('live email and push are separate explicit opt-ins; push always rides an email worker', () => {
+  const base = ['--start', '--allow-dev-checkout', '--recovery-mode=checkout'];
+  assert.deepEqual(argumentsFor([...base, '--allow-email-live', '--allow-push']),
+    { start: true, mode: 'checkout', allowEmailAllowlist: false, allowEmailLive: true, allowPush: true });
+  assert.deepEqual(argumentsFor([...base, '--allow-email-allowlist', '--allow-push']),
+    { start: true, mode: 'checkout', allowEmailAllowlist: true, allowPush: true });
+  assert.throws(() => argumentsFor([...base, '--allow-email-live', '--allow-email-allowlist']), /not both/);
+  assert.throws(() => argumentsFor([...base, '--allow-email-live', '--no-email']), /not both/);
+  assert.throws(() => argumentsFor([...base, '--allow-push']), /needs the email worker/);
+  assert.deepEqual(argumentsFor(base), { start: true, mode: 'checkout', allowEmailAllowlist: false }); // nothing implied
 });

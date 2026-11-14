@@ -1,5 +1,5 @@
 /**
- * Versioned, pure renderers for the seven commerce emails. Each renderer maps one typed snapshot to subject, preheader,
+ * Versioned, pure renderers for transactional customer emails. Each renderer maps one typed snapshot to subject, preheader,
  * HTML and plain text. Every dynamic value is escaped for HTML; the plain-text part keeps the same facts unescaped.
  */
 import {
@@ -113,6 +113,7 @@ function composeEmail(parts: EmailParts, orderReference: string, ctx: RenderCont
   const seller = ctx.seller ?? LEGACY_STORE_IDENTITY;
   const url = orderUrl(ctx.origin, orderReference);
   const html = renderLayout({
+    origin: ctx.origin,
     preheader: parts.preheader,
     statusLabel: parts.statusLabel,
     statusTone: parts.statusTone,
@@ -215,7 +216,7 @@ export function renderOrderPreparing(snapshot: SnapshotOf<'ORDER_PREPARING'>, ct
 export function renderOrderOutForDelivery(snapshot: SnapshotOf<'ORDER_OUT_FOR_DELIVERY'>, ctx: RenderContext): RenderedCommerceEmail {
   const date = formatInstant(snapshot.occurredAt);
   return composeEmail({
-    subject: `Your order is out for delivery — ${snapshot.orderReference}`,
+    subject: 'Your ElectroHub Order Is Out for Delivery!',
     preheader: 'Your order is out for delivery.',
     heading: 'Your order is out for delivery',
     statusLabel: 'Out for delivery',
@@ -299,6 +300,7 @@ type RendererMap = { [K in CommerceEmailType]: (snapshot: SnapshotOf<K>, ctx: Re
 /** Renderer registry per template version. Future versions are added as new keys so old outbox rows still render. */
 const rendererRegistry: Readonly<Record<string, RendererMap>> = {
   v1: {
+    CUSTOMER_WELCOME: renderCustomerWelcome,
     ORDER_CONFIRMED: renderOrderConfirmed,
     PAYMENT_CONFIRMED: renderPaymentConfirmed,
     ORDER_PREPARING: renderOrderPreparing,
@@ -314,6 +316,7 @@ export function renderCommerceEmail(snapshot: CommerceEmailSnapshot, ctx: Render
   if (templateVersion !== TEMPLATE_VERSION || !renderers) throw new Error('UNSUPPORTED_TEMPLATE_VERSION');
   const renderContext = { ...ctx, seller: ctx.seller ?? snapshot.seller ?? LEGACY_STORE_IDENTITY };
   switch (snapshot.type) {
+    case 'CUSTOMER_WELCOME': return renderers.CUSTOMER_WELCOME(snapshot, renderContext);
     case 'ORDER_CONFIRMED': return renderers.ORDER_CONFIRMED(snapshot, renderContext);
     case 'PAYMENT_CONFIRMED': return renderers.PAYMENT_CONFIRMED(snapshot, renderContext);
     case 'ORDER_PREPARING': return renderers.ORDER_PREPARING(snapshot, renderContext);
@@ -322,4 +325,20 @@ export function renderCommerceEmail(snapshot: CommerceEmailSnapshot, ctx: Render
     case 'ORDER_CANCELLED': return renderers.ORDER_CANCELLED(snapshot, renderContext);
     case 'PAYMENT_REFUNDED': return renderers.PAYMENT_REFUNDED(snapshot, renderContext);
   }
+}
+
+export function renderCustomerWelcome(snapshot: SnapshotOf<'CUSTOMER_WELCOME'>, ctx: RenderContext): RenderedCommerceEmail {
+  const subject = 'Welcome to ElectroHub!';
+  const blocks = [greetingBlock(snapshot.recipientName), paragraphBlock('Welcome to ElectroHub! Your account is ready.'),
+    paragraphBlock('Explore electronics, discover products, and follow your orders from your account.')];
+  const seller = ctx.seller ?? snapshot.seller ?? LEGACY_STORE_IDENTITY;
+  const url = new URL('/products', ctx.origin).href;
+  const support = [seller.supportEmail, seller.supportPhone].filter(Boolean).join(' · ');
+  return { subject, preheader: 'Your ElectroHub account is ready.',
+    html: renderLayout({ origin: ctx.origin, preheader: 'Your ElectroHub account is ready.', heading: subject,
+      statusLabel: 'Welcome', statusTone: 'success', accountWelcome: true, eventDateLabel: formatInstant(snapshot.occurredAt),
+      bodyHtml: blocks.map(block => block.html).join(''), cta: { label: 'Explore products', url },
+      storeName: seller.storeName, supportEmail: seller.supportEmail, supportPhone: seller.supportPhone }),
+    text: [subject, ...blocks.flatMap(block => block.text), 'Explore products: ' + url,
+      'You received this email because you created an ElectroHub account.', support ? 'For help, contact ' + support : ''].filter(Boolean).join('\n\n') };
 }
