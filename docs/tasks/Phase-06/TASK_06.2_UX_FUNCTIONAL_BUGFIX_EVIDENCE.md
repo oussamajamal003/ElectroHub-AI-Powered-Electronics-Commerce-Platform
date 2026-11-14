@@ -84,6 +84,8 @@ Out of stock, Low stock, Paid orders awaiting fulfillment, Out for delivery. Bel
 ## 15. Dropdown width restoration
 Root cause measured: the "See all alerts" footer stretched the menu to 688 px at 1440; with the footer removed the menu is back to 368 px (`admin-alerts-badge.spec.ts`, sub-pixel tolerance).
 
+Superseded 2026-11-14: the owner chose a fixed 460 px panel. `.alertsMenu { width: 28.75rem }` now sets the width independently of the copy, capped at `100vw - 2rem`; see `TASK_06.2_DELIVERY_NOTIFICATIONS_MAIL_DRAIN_EVIDENCE.md`.
+
 ## 16. Product Description redesign (F) — SUPERSEDED by `e64af2af` (see §1)
 - `data-layout="compact"` for short descriptions: text, then facts and up to 4 key specifications as tiles below ("N more in the Specifications tab"); no empty sidebar column.
 - `data-layout="editorial"` for long descriptions: reading column (≤ 46rem) with the "At a glance" card beside it on wide screens.

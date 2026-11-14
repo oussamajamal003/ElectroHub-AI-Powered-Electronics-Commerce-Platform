@@ -49,6 +49,8 @@ $sidebar-rail: 4.5rem;
 
 // ─── Menus ────────────────────────────────────────────────
 .menu { min-width: 18rem; max-width: calc(100vw - 2rem); }
+// The operational-alerts panel is a fixed 460px so its width never depends on the copy inside it; `.menu` still caps it on narrow viewports.
+.alertsMenu { width: 28.75rem; }
 .animatedMenu {
   transform-origin: var(--radix-dropdown-menu-content-transform-origin, top right);
 

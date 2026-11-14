@@ -14,9 +14,16 @@ Theme isolation and per-category alert acknowledgement were already on the PR br
 | Mail-drain workflow | `npm run dev:stack:supervised:email`, `npm run dev:stack:restart:email` and root `npm run notifications:doctor`. `npm run dev:stack:status` now says when events are queued but not sent and names the command. No send permission, allowlist or default was widened. | `package.json`, `scripts/dev-stack.cjs`, `scripts/dev-stack.test.cjs`, runbook and development-runtime docs |
 | Out-for-delivery email button | New test: one "View Order Details" button whose link is `/orders/<reference>` on the validated origin, in the HTML and the text part. | `apps/backend/src/emails/commerce/__tests__/render.test.ts` |
 
-## Open decision: alerts panel width
+## Alerts panel width (decided 2026-11-14: widen to 460 px)
 
-The task asks for a panel of about 460 px to match an admin screenshot. That screenshot was not attached and is not in the repository. The branch deliberately keeps the original compact width and tests it ("the alerts dropdown keeps its original compact width", 288 to 400 px; measured 368 px at 1440 and 358 px at 390). The width was therefore left unchanged. **Matching the screenshot width: NOT DONE, awaiting a decision.**
+The owner chose the 460 px panel. `.alertsMenu { width: 28.75rem }` (`AdminLayout.module.scss`, applied only to the alerts menu, not the profile menu) fixes the width; the existing `.menu` cap of `100vw - 2rem` keeps it inside narrow viewports. The former test "keeps its original compact width" is replaced by "the alerts panel is 460px wide and stays inside narrow viewports" and the `playwright.critical-four.config.ts` filter was updated to match.
+
+| Viewport | Measured (Chromium and WebKit) | Capture |
+| --- | --- | --- |
+| 1440x900 | 460.0 px, right-aligned under the bell, no page overflow | `apps/frontend/test-results/alerts/alerts-menu-1440.png` (inspected) |
+| 390x900 | 358.0 px (viewport minus a 16 px gutter each side), no page overflow | `apps/frontend/test-results/alerts/alerts-menu-390.png` |
+
+Longer footer copy now wraps instead of stretching the panel (asserted in the same test). The admin reference screenshot was still not supplied, so the width follows the stated 460 px figure; comparison against that screenshot remains **NOT VERIFIED**.
 
 ## Why mail was not arriving in development (read-only investigation)
 
@@ -48,7 +55,7 @@ Frontend (`apps/frontend`)
 | `npm test` | 192 files, 1650 tests pass |
 | `npm run build` | pass |
 | `npx playwright test -c playwright.notifications.config.ts --project=chromium --project=webkit` | 10/10 pass (30/30 with `--repeat-each=3` before the rebase onto `bae8b7ea`) |
-| `npx playwright test -c playwright.critical-four.config.ts --project=chromium --project=webkit scoped-themes admin-alerts-badge` | 8/8 pass: two-tab customer/admin theme isolation, per-category acknowledgement, failed-acknowledgement rollback, compact width |
+| `npx playwright test -c playwright.critical-four.config.ts --project=chromium --project=webkit scoped-themes admin-alerts-badge` | 8/8 pass: two-tab customer/admin theme isolation, per-category acknowledgement, failed-acknowledgement rollback, 460 px panel width (re-run after the width change) |
 
 Backend (`apps/backend`) and root
 
@@ -73,7 +80,8 @@ The customer Account screenshot and the admin alert screenshot named in the task
 
 Firefox cannot launch on this machine (`browserType.launch: spawn UNKNOWN`), so Firefox is NOT VERIFIED locally; CI runs the notifications spec on all three engines.
 
-## Known limitations
+## Follow-up closed on 2026-11-14
 
-- The notifications spec stalled in `page.goto` in about 1 run in 4 while the machine was saturated by other suites, and 0 in 30 when run on its own. Cause not established.
-- In the "On" state the card shows the status line and the confirmation message with near-identical wording.
+- **Notifications spec stall: cause established.** Reproduced deliberately with `--workers=8 --repeat-each=6` on Chromium and WebKit (31 of 60 failed). Every failure listed only static build assets as pending (`/assets/AccountPage-*.js`, its CSS and its lazy dependencies) and no `/api/` request: under CPU saturation the lazy Account chunk does not finish loading within the 20 s wait. It is load starvation of the browser and the single `vite preview` process, not a card or fixture defect. At the configured `workers: 1` (what CI uses) the spec passed 10/10 after this change and 30/30 earlier.
+- **Duplicate "On" text removed.** A successful enable or turn-off no longer adds a second message; the status line, a live region, already states the new state.
+- **Two local edits committed** as their own commits: the admin route first-load loader in `apps/frontend/src/routes/index.tsx` (typecheck, lint and the 1650 unit tests pass with it; no browser test was run for it) and the supervised-restart section of `TASK_06.2_RUNTIME_RELIABILITY_EVIDENCE.md` (recorded by its author, not re-verified here).

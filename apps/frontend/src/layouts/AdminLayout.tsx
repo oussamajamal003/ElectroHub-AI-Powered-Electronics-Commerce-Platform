@@ -45,7 +45,7 @@ function AlertsMenu() {
         </button>
       </DropdownMenuTrigger>
     </Tooltip>
-    <DropdownMenuContent align="end" sideOffset={8} className={`${styles.menu} ${styles.animatedMenu}`}>
+    <DropdownMenuContent align="end" sideOffset={8} className={`${styles.menu} ${styles.alertsMenu} ${styles.animatedMenu}`}>
       <DropdownMenuLabel className={styles.menuLabel}>Operational alerts</DropdownMenuLabel>
       <DropdownMenuSeparator />
       {alerts.isPending && <p className={styles.menuNote} role="status">Loading alerts…</p>}

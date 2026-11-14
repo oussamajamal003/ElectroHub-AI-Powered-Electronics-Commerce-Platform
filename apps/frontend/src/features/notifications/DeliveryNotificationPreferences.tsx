@@ -61,8 +61,8 @@ export function DeliveryNotificationPreferences({ userId }: { userId: string }) 
     try {
       if (turningOff) await disablePush(userId);
       else await enablePush(userId);
+      // The status line below is a live region and already states the new on/off state, so no second message repeats it.
       setAvailability(turningOff ? 'ready' : 'enabled');
-      setMessage(turningOff ? 'Delivery notifications are off for this browser.' : 'Delivery notifications are on for this browser.');
     } catch (failure) {
       setError(true);
       setMessage(failure instanceof Error ? failure.message : 'We could not update your notification settings. Please try again.');

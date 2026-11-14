@@ -93,7 +93,7 @@ test('a failed acknowledgement rolls the badge back and says so', async ({ page 
   await expect(page.getByRole('alert')).toContainText('could not be marked as read');
 });
 
-test('the alerts dropdown keeps its original compact width', async ({ page }) => {
+test('the alerts panel is 460px wide and stays inside narrow viewports', async ({ page }) => {
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await fakeAdmin(page);
@@ -102,22 +102,24 @@ test('the alerts dropdown keeps its original compact width', async ({ page }) =>
     // The open animation uses perspective + rotateX, which widens the box until it settles; measure the settled menu.
     await menu(page).evaluate(element => Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished)));
     const box = (await menu(page).boundingBox())!;
-    // `.menu` is min-width 18rem / max-width 100vw - 2rem (unchanged since 628e256); the content, not the viewport, sets the width.
-    expect(box.width).toBeGreaterThanOrEqual(288);
-    expect(box.width).toBeLessThanOrEqual(Math.min(width - 32, 400) + 1); // WebKit sub-pixel rounding
+    // `.alertsMenu` is a fixed 28.75rem (460px); `.menu` caps it at 100vw - 2rem, so a phone gets the viewport minus a 16px gutter each side.
+    const expected = Math.min(460, width - 32);
     console.log(`alerts menu width at ${width}px viewport: ${box.width.toFixed(1)}px`);
+    expect(Math.abs(box.width - expected)).toBeLessThanOrEqual(1); // WebKit sub-pixel rounding
     expect(box.x).toBeGreaterThanOrEqual(-0.5);
+    expect(box.x + box.width).toBeLessThanOrEqual(width + 0.5);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    // The width is fixed, not content-driven: longer footer copy wraps instead of stretching the panel.
+    const stretched = await menu(page).evaluate(element => {
+      const foot = element.querySelector('p:last-of-type')!;
+      const original = foot.textContent;
+      foot.textContent = 'Live counts from orders and inventory. Reading alerts clears the unread badge; the counts clear only when the work is done.';
+      const measured = element.getBoundingClientRect().width;
+      foot.textContent = original;
+      return measured;
+    });
+    expect(Math.abs(stretched - box.width)).toBeLessThanOrEqual(1);
     await page.screenshot({ path: `test-results/alerts/alerts-menu-${width}.png` });
-    if (width === 1440) {
-      // Root-cause proof: the long footer sentence added in c95b6d3 alone stretches the menu well past its original width.
-      const regressed = await menu(page).evaluate(element => {
-        const foot = element.querySelector('p:last-of-type')!;
-        foot.textContent = 'Live counts from orders and inventory. Reading alerts clears the unread badge; the counts clear only when the work is done.';
-        return element.getBoundingClientRect().width;
-      });
-      console.log(`with the c95b6d3 footer copy: ${regressed.toFixed(1)}px`);
-      expect(regressed).toBeGreaterThan(box.width + 40);
-    }
     await page.keyboard.press('Escape');
   }
 });
