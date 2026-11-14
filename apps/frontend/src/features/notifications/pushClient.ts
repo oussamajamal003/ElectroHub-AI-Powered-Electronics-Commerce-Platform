@@ -45,7 +45,18 @@ export async function enablePush(userId: string) {
   const registration = await navigator.serviceWorker.register('/delivery-push-sw.js', { scope: '/', updateViaCache: 'none' });
   await navigator.serviceWorker.ready;
   const bytes = Uint8Array.from(atob(config.publicKey.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-  const subscription = await registration.pushManager.getSubscription() ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes });
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    try { subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes }); }
+    catch (error) {
+      // Chromium reports an unreachable/disabled browser push provider as this opaque DOMException.
+      // Keep the browser's permission grant intact and give the customer a useful recovery step.
+      if (error instanceof Error && /registration failed.*push service error/i.test(error.message)) {
+        throw new Error('Your browser could not reach its push service. Check that browser notifications are allowed, then try again.');
+      }
+      throw error;
+    }
+  }
   try {
     if (identityGeneration !== generation) throw new Error('Your session changed. Sign in again to enable notifications.');
     const response = await apiClient<{ data: { id: string } }>(endpoint, { method: 'POST', data: subscription.toJSON() });

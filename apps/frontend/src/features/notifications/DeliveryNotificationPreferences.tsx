@@ -112,13 +112,13 @@ export function DeliveryNotificationPreferences({ userId }: { userId: string }) 
           <p><strong>This browser is blocking notifications for ElectroHub.</strong> Allow notifications for this site in your browser settings, then check again.</p>
         </div>}
         <div className={styles.controls}>
-          <p className={styles.state} role="status" aria-busy={checking || undefined}>
+          <div className={styles.state} role="status" aria-busy={checking || undefined}>
             {checking
               ? <><span className={styles.srOnly}>Checking notification settings…</span><span aria-hidden="true"><Skeleton width="min(14rem, 70%)" height={18} /></span></>
               : enabled ? 'Notifications are on for this browser.'
                 : availability === 'unknown' ? 'Notification status could not be checked.'
                   : 'Notifications are off for this browser.'}
-          </p>
+          </div>
           <div className={styles.actions}>
             <Button type="button" disabled={busy || !canChange} onClick={() => void change()}>
               {busy ? 'Updating…' : enabled ? 'Turn off notifications' : 'Enable delivery notifications'}

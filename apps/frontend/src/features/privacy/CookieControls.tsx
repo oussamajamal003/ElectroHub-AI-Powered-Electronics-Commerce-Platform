@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Cookie, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/Button/Button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog/Dialog';
 import { OPEN_COOKIE_SETTINGS_EVENT, saveChoice, useChoiceStatus } from './consent';
@@ -29,15 +30,23 @@ export function CookieControls({ locked }: { locked: boolean }) {
     {status === 'unset' && !locked && <section className={styles.banner} aria-label="Cookie preferences">
       <div><strong>Your privacy matters</strong><p>We use essential storage for security and shopping. With your permission, we also use analytics to understand storefront visits, recommendations and image search. <Link className={styles.policyLink} to="/cookie-policy">Read the Cookie Policy</Link></p></div>
       {/* Accept and Reject carry equal visual weight: no dark pattern nudging toward consent. */}
-      <div className={styles.actions}><Button onClick={() => choose(true)}>Accept all</Button><Button onClick={() => choose(false)}>Reject optional</Button><Button variant="outline" onClick={customize}>Customize</Button></div>
+      <div className={styles.bannerActions}><Button onClick={() => choose(true)}>Accept all</Button><Button onClick={() => choose(false)}>Reject optional</Button><Button variant="outline" onClick={customize}>Customize</Button></div>
     </section>}
     <Dialog open={open} onOpenChange={setOpen}><DialogContent className={styles.dialog}>
-      <DialogTitle>Cookie Settings</DialogTitle><DialogDescription>Choose whether ElectroHub may use optional analytics. You can change this choice at any time.</DialogDescription>
-      <p className={styles.current}>Current choice: <strong>{currentChoice}</strong></p>
-      <div className={styles.category}><strong>Strictly necessary</strong><span>Always active</span><p>Security, sign-in, cart and checkout storage support services you request.</p></div>
-      <div className={styles.category}><label><input type="checkbox" checked={selected} onChange={e => setSelected(e.target.checked)} /> <strong>Analytics</strong></label><p>ElectroHub measures visible storefront time, recommendation impressions and clicks, and image-search outcomes and selections to improve the service.</p></div>
-      <p><Link className={styles.policyLink} to="/cookie-policy" onClick={() => setOpen(false)}>Read the Cookie Policy</Link></p>
-      <div className={styles.actions}><Button variant="outline" onClick={() => choose(true)}>Accept all</Button><Button variant="outline" onClick={() => choose(false)}>Reject optional</Button><Button onClick={() => choose(selected)}>Save preferences</Button></div>
+      <div className={styles.heading}>
+        <span className={styles.headingIcon} aria-hidden="true"><Cookie /></span>
+        <div><DialogTitle>Cookie Settings</DialogTitle><DialogDescription>Choose whether ElectroHub may use optional analytics. You can change this choice at any time.</DialogDescription></div>
+      </div>
+      <p className={styles.current}><span>Current choice</span><strong>{currentChoice}</strong></p>
+      <div className={`${styles.category} ${styles.essential}`}>
+        <span className={styles.categoryIcon} aria-hidden="true"><ShieldCheck /></span>
+        <div className={styles.categoryCopy}><div className={styles.categoryHeading}><strong>Strictly necessary</strong><span className={styles.alwaysActive}>Always active</span></div><p>Security, sign-in, cart and checkout storage support services you request.</p></div>
+      </div>
+      <div className={`${styles.category} ${styles.analytics}`}>
+        <div className={styles.categoryCopy}><label><input type="checkbox" checked={selected} onChange={e => setSelected(e.target.checked)} /> <strong>Analytics</strong></label><p>ElectroHub measures visible storefront time, recommendation impressions and clicks, and image-search outcomes and selections to improve the service.</p></div>
+      </div>
+      <p className={styles.policy}><Link className={styles.policyLink} to="/cookie-policy" onClick={() => setOpen(false)}>Read the Cookie Policy</Link></p>
+      <div className={styles.dialogActions}><Button variant="outline" onClick={() => choose(true)}>Accept all</Button><Button variant="outline" onClick={() => choose(false)}>Reject optional</Button><Button onClick={() => choose(selected)}>Save preferences</Button></div>
     </DialogContent></Dialog>
   </>;
 }
