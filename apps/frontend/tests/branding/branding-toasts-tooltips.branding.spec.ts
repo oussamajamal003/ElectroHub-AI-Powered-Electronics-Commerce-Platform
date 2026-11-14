@@ -148,6 +148,9 @@ test.describe('toasts', () => {
 
   test('respects prefers-reduced-motion', async ({ browser }) => {
     const context = await browser.newContext({ reducedMotion: 'reduce' });
+    await context.addInitScript(() => {
+      localStorage.setItem('electrohub.privacy.v1', JSON.stringify({ version: 1, analytics: false, savedAt: Date.now() }));
+    });
     const page = await context.newPage();
     await offlineApi(page, { '/api/store/contact': () => ({ status: 200, json: { data: { accepted: true } } }) });
     await page.goto('/contact');
