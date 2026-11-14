@@ -141,3 +141,15 @@ The development diagnostic also reports `contactRecipientsConfigured` (count > 0
 | Live doctor at handoff | Frontend/backend/database **UNAVAILABLE** — the legacy stack had been stopped; supervised stack not running |
 
 Remaining: start `npm run dev:stack:supervised`, confirm preflight passes (or run the approved decline-only reconciliation for the single reviewed attempt), then verify Contact delivery and the profile photo against the restarted backend.
+
+### Supervised restart result (2026-11-13, evening)
+
+| Step | Evidence | Status |
+| --- | --- | --- |
+| Prisma engine lock | Codex's isolated `task05-2-browser-stack.cjs` (API :5262) held the query-engine DLL; stopped with owner approval (that process tree only) | Resolved |
+| Restart preflight | Blocked only by approved declined attempt `a9fda204-…` (DECLINED / PAYMENT_DECLINED, no order, work READY) | Confirmed by read-only query |
+| Decline-only reconciliation | Exact-attempt preflight PASS (`declineOnly: true`, Stripe Test Mode account verified); scoped `--start --allow-dev-recovery --recovery-mode=exact-attempt` moved only that `PaymentWork` row to DONE. Attempt row unchanged (`updatedAt` 13:09:53Z). Backlog now 0/0 | VERIFIED |
+| Stale lock/control files | Recorded PIDs confirmed not running; files renamed `*.stale-*` (not deleted) | Resolved |
+| `npm run dev:stack:supervised` | Frontend :3000, Backend :5000, Database, Payment supervisor, Stripe Test Mode listener, Socket.IO, Swagger all READY | VERIFIED |
+| Profile photo route | `/api/account/profile-photo` returns 401 without credentials (was 404 on the stale backend) | Route VERIFIED; authenticated upload NOT VERIFIED |
+| Contact recipients | Doctor: eligible verified MFA administrators found | Configuration VERIFIED; Brevo delivery NOT VERIFIED (no live send made) |
