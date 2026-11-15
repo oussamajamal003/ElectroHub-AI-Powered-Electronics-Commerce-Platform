@@ -11,8 +11,11 @@ describe('push configuration and real transport encoding (no network sends)', ()
       WEB_PUSH_VAPID_PUBLIC_KEY: keys.publicKey, WEB_PUSH_VAPID_PRIVATE_KEY: keys.privateKey,
       WEB_PUSH_VAPID_SUBJECT: 'mailto:qa@example.invalid' };
     expect(pushConfig(source).enabled).toBe(true);
+    expect(pushConfig(source).availability).toBe('ready');
     expect(pushConfig({ ...source, CUSTOMER_PUSH_ENABLED: 'false' }).enabled).toBe(false);
+    expect(pushConfig({ ...source, CUSTOMER_PUSH_ENABLED: 'false' }).availability).toBe('disabled');
     expect(pushConfig({ ...source, WEB_PUSH_VAPID_PRIVATE_KEY: '' }).enabled).toBe(false);
+    expect(pushConfig({ ...source, WEB_PUSH_VAPID_PRIVATE_KEY: generateVAPIDKeys().privateKey }).availability).toBe('misconfigured');
     expect(pushDispatchAllowed({ kind: 'disposable', identity: 'test' }, source)).toBe(true);
     expect(pushDispatchAllowed({ kind: 'dev', identity: 'shared' }, source)).toBe(false);
     expect(pushDispatchAllowed({ kind: 'dev', identity: 'shared' }, { ...source, CUSTOMER_PUSH_APPROVED_TARGET: 'shared' })).toBe(true);

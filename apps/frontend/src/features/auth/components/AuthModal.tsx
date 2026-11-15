@@ -133,6 +133,7 @@ export function AuthModal({
     confirmPassword: '',
   });
   const [registerError, setRegisterError] = useState('');
+  const [registeredEmailConflict, setRegisteredEmailConflict] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -150,6 +151,7 @@ export function AuthModal({
       setLoginError('');
       setLoginSuccess('');
       setRegisterError('');
+      setRegisteredEmailConflict(false);
       setLoginEmailError('');
       setLoginPasswordError('');
       setLoginSubmitted(false);
@@ -198,6 +200,7 @@ export function AuthModal({
     setLoginError('');
     setLoginSuccess('');
     setRegisterError('');
+    setRegisteredEmailConflict(false);
     setLoginEmailError('');
     setLoginPasswordError('');
     setLoginSubmitted(false);
@@ -398,6 +401,7 @@ export function AuthModal({
 
     setRegisterSubmitted(true);
     setRegisterError('');
+    setRegisteredEmailConflict(false);
     setRegisterTouched({
       fullName: true,
       email: true,
@@ -450,7 +454,11 @@ export function AuthModal({
         navigate(from, { replace: true });
       }
     } catch (err: unknown) {
-      setRegisterError(normalizeErrorMessage(err));
+      const emailAlreadyRegistered = err instanceof ApiError && err.status === 409 && /email already registered/i.test(err.message);
+      setRegisteredEmailConflict(emailAlreadyRegistered);
+      setRegisterError(emailAlreadyRegistered
+        ? 'This email is already linked to an ElectroHub account. Customer registration cannot create an administrator account. If you were invited to the Admin Portal, use Admin sign-in to continue. Otherwise, sign in to your customer account.'
+        : normalizeErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -898,6 +906,7 @@ export function AuthModal({
             {registerError && (
               <Alert variant="error" className={styles.alert}>
                 {registerError}
+                {registeredEmailConflict && <p><Link to="/admin/login" onClick={() => onOpenChange(false)}>Go to Admin sign-in</Link></p>}
               </Alert>
             )}
 

@@ -105,22 +105,22 @@ for (const width of [390, 1280]) {
 
   test(`delivery preferences: backend reports push unavailable at ${width}px`, async ({ page }, info) => {
     const { server, section, permissionRequests } = await account(page, width, { available: false, permission: 'granted' });
-    const enable = section.getByRole('button', { name: 'Retry notifications setup' });
-    await expect(section.getByText('Notifications are temporarily unavailable.', { exact: false })).toBeVisible();
-    await expect(section.getByText('Temporarily unavailable', { exact: true })).toBeVisible();
-    await expect(enable).toBeEnabled();
+    const retry = section.getByRole('button', { name: 'Retry notifications setup' });
+    await expect(section.getByText('Server notification setup is unavailable.', { exact: false })).toBeVisible();
+    await expect(section.getByText('Setup unavailable', { exact: true })).toBeVisible();
+    await expect(retry).toBeEnabled();
     await expectFits(page, section, width);
     await capture(page, section, `push-preferences-unavailable-${width}`, file => info.outputPath(file));
 
     const before = server.statusReads;
     await section.getByRole('button', { name: 'Check again' }).click();
-    await expect(section.getByText('Checked just now: notifications still need setup. You can retry.')).toBeVisible();
+    await expect(section.getByText('Checked just now: server notification setup is unavailable.')).toBeVisible();
     expect(server.statusReads).toBeGreaterThan(before);
 
     server.available = true; // configuration recovered, but no active subscription means setup is still required
     await section.getByRole('button', { name: 'Check again' }).click();
-    await expect(enable).toBeEnabled();
-    await expect(section.getByRole('button', { name: 'Check again' })).toBeVisible();
+    await expect(section.getByRole('button', { name: 'Finish notification setup' })).toBeEnabled();
+    await expect(section.getByText('Setup required', { exact: true })).toBeVisible();
     expect(await permissionRequests()).toBe(0);
   });
 }
@@ -134,6 +134,6 @@ test('delivery preferences: a browser-level block is explained and never re-prom
   await capture(page, section, 'push-preferences-blocked-1280', file => info.outputPath(file));
   await setPermission('granted'); // Simulate a site-settings change without opening a browser permission dialog.
   await section.getByRole('button', { name: 'Check again' }).click();
-  await expect(section.getByText('Temporarily unavailable', { exact: true })).toBeVisible(); // Granted, but no registered push subscription.
+  await expect(section.getByText('Setup required', { exact: true })).toBeVisible(); // Granted, but no registered push subscription.
   expect(await permissionRequests()).toBe(0);
 });

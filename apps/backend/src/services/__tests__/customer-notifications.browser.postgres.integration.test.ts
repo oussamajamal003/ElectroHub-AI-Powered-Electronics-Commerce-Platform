@@ -99,7 +99,7 @@ describe.skipIf(!enabled)('notification real-browser journey on a disposable bac
         sent.push(message); return { success: true, messageId: `capture-${randomUUID()}` };
       } }, renderCommerceEmail, { sendMode: 'allowlist', allowedRecipients: [owner.email], origin, batchSize: 10, concurrency: 1, leaseMs: 60000 });
       for (const claim of await worker.claim()) { await worker.process(claim); await worker.process(claim); }
-      expect(sent.filter(message => message.subject === 'Your ElectroHub Order Is Out for Delivery!')).toEqual([
+      expect(sent.filter(message => message.subject === 'Your ElectroHub order is out for delivery')).toEqual([
         expect.objectContaining({ to: owner.email }),
       ]);
       expect((await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).status).toBe('OUT_FOR_DELIVERY');

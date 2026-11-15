@@ -10,6 +10,7 @@ const verifier = require('./stripe-webhook-verifier.cjs');
 const emailDev = require('./lib/commerce-email-dev.cjs');
 const { openControl } = require('../../../scripts/lib/dev-control.cjs');
 const backend = path.resolve(__dirname, '..');
+const NOTIFICATION_ORDER = /^--notification-order=([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 
 function existingPaymentProcesses() {
   if (process.platform === 'win32') {
@@ -123,6 +124,28 @@ function assertNoEmailBacklog(count) {
   if (count !== 0) throw new Error('Sendable commerce email backlog exists; allowlist dispatch is blocked.');
 }
 
+/** Permit a scoped DEV worker to resume only an untouched, still-fresh OOD email event for its exact order. */
+function classifyNotificationOrder(order, pushEvent, emailEvents, now = Date.now()) {
+  if (!order || order.payment?.status !== 'SUCCEEDED' || !order.user?.isActive || !order.user.emailVerifiedAt ||
+      order.user.role?.name !== 'CUSTOMER') {
+    throw new Error('Exact notification target must be a paid, active, email-verified customer order.');
+  }
+  if (['CONFIRMED', 'PREPARING'].includes(order.status)) {
+    if (pushEvent || emailEvents.length) throw new Error('The exact order already has notification events; inspect their durable outcomes.');
+    return 'new';
+  }
+  const email = order.user.email?.trim().toLowerCase();
+  const emailEvent = emailEvents[0];
+  const fresh = value => value instanceof Date && now - value.getTime() < 24 * 3_600_000 && value.getTime() <= now;
+  const pendingEmail = emailEvents.length === 1 && emailEvent?.type === 'ORDER_OUT_FOR_DELIVERY' &&
+    emailEvent.userId === order.userId && emailEvent.recipient?.trim().toLowerCase() === email &&
+    emailEvent.dispatchState === 'READY' && emailEvent.attemptCount === 0 && !emailEvent.suppressionReason &&
+    fresh(emailEvent.createdAt);
+  const pendingPush = pushEvent && pushEvent.userId === order.userId && fresh(pushEvent.occurredAt);
+  if (order.status === 'OUT_FOR_DELIVERY' && pendingPush && pendingEmail) return 'resume';
+  throw new Error('The exact order is not an untouched, fresh notification target; inspect its durable outcomes.');
+}
+
 function waitForChildExit(child, timeoutMs = 10000) {
   if (child.exitCode !== null || child.signalCode) return Promise.resolve(true);
   return new Promise(resolve => {
@@ -164,6 +187,9 @@ function governedSince(value, now = Date.now()) {
   return since.toISOString();
 }
 function argumentsFor(argv) {
+  const notificationArgs = argv.filter(arg => NOTIFICATION_ORDER.test(arg));
+  if (notificationArgs.length > 1) throw new Error('Pass --notification-order once.');
+  argv = argv.filter(arg => !NOTIFICATION_ORDER.test(arg));
   const sinceArgs = argv.filter(arg => GOVERNED_SINCE.test(arg));
   if (sinceArgs.length > 1) throw new Error('Pass --governed-since once.');
   argv = argv.filter(arg => !GOVERNED_SINCE.test(arg));
@@ -197,13 +223,17 @@ function argumentsFor(argv) {
   if (noEmail && argv.includes('--allow-email-allowlist')) throw new Error('Choose --allow-email-allowlist or --no-email, not both.');
   // Live mode sends to every customer recipient on this database. It is a per-start operator decision, never read from an env file.
   const live = argv.includes('--allow-email-live'); const push = argv.includes('--allow-push');
+  const notificationOrderId = notificationArgs[0]?.match(NOTIFICATION_ORDER)?.[1]?.toLowerCase();
   if (live && argv.includes('--allow-email-allowlist')) throw new Error('Choose --allow-email-allowlist or --allow-email-live, not both.');
   if (live && noEmail) throw new Error('Choose --allow-email-live or --no-email, not both.');
   if (live && mode === 'expired-lease') throw new Error('--recovery-mode=expired-lease runs with email disabled.');
   // Delivery push is dispatched by the commerce email worker, so it needs one of the email opt-ins.
   if (push && !live && !argv.includes('--allow-email-allowlist')) throw new Error('--allow-push needs the email worker: add --allow-email-allowlist or --allow-email-live.');
+  if (notificationOrderId && (!start || mode !== 'checkout' || !live || !push || argv.includes('--allow-email-allowlist'))) {
+    throw new Error('--notification-order is only valid for supervised checkout with --allow-email-live and --allow-push.');
+  }
   return { start, mode, allowEmailAllowlist: argv.includes('--allow-email-allowlist'), ...(live ? { allowEmailLive: true } : {}),
-    ...(push ? { allowPush: true } : {}), ...(noEmail ? { noEmail: true } : {}),
+    ...(push ? { allowPush: true } : {}), ...(notificationOrderId ? { notificationOrderId } : {}), ...(noEmail ? { noEmail: true } : {}),
     ...(sinceArgs.length ? { governedSince: governedSince(GOVERNED_SINCE.exec(sinceArgs[0])[1]) } : {}),
     ...(reviewed.length ? { reviewedRecoveryAttempt: reviewedIds[0], reviewedRecoveryAttempts: reviewedIds } : {}),
     ...(accepted.length ? { acceptedBacklogAttempt: accepted[0].split('=')[1].toLowerCase() } : {}) };
@@ -370,6 +400,20 @@ async function preflight(deps = {}, options = {}) {
         acceptedBacklogCount = 1;
       }
       assertNoPaymentBacklog(unfinishedWork - scopedWorkCount - acceptedBacklogCount, unresolvedAttempts);
+      let notificationOrderReady = false;
+      let notificationOrderMode = null;
+      if (options.notificationOrderId) {
+        if (!checkout || !options.allowEmailLive || !options.allowPush) throw new Error('An exact notification scope requires supervised checkout, live email opt-in and push opt-in.');
+        const order = await tx.order.findUnique({ where: { id: options.notificationOrderId }, select: { id: true, status: true,
+          userId: true, payment: { select: { status: true } }, user: { select: { email: true, isActive: true, emailVerifiedAt: true,
+            role: { select: { name: true } } } } } });
+        const pushEvent = await tx.customerNotification.findFirst({ where: { orderId: options.notificationOrderId, type: 'ORDER_OUT_FOR_DELIVERY' },
+          select: { id: true, userId: true, occurredAt: true } });
+        const emailEvents = await tx.commerceEmailOutbox.findMany({ where: { orderId: options.notificationOrderId, type: 'ORDER_OUT_FOR_DELIVERY' },
+          select: { type: true, userId: true, recipient: true, dispatchState: true, attemptCount: true, suppressionReason: true, createdAt: true } });
+        notificationOrderMode = classifyNotificationOrder(order, pushEvent, emailEvents);
+        notificationOrderReady = true;
+      }
       let emailBacklog = 0;
       if (options.allowEmailAllowlist) {
         const emailRuntime = (deps.describeEmail || emailDev.describeEmailRuntime)(process.env);
@@ -388,10 +432,17 @@ async function preflight(deps = {}, options = {}) {
         }
         // Reported, not blocking: the operator chose to send these. Rows older than 24 h are never claimed by the worker.
         emailBacklog = await tx.commerceEmailOutbox.count({ where: { dispatchState: { in: ['READY', 'LEASED', 'RETRY_WAIT'] },
-          createdAt: { gt: new Date(Date.now() - 24 * 3_600_000) } } });
+          createdAt: { gt: new Date(Date.now() - 24 * 3_600_000) }, ...(options.notificationOrderId
+            ? { orderId: options.notificationOrderId, type: 'ORDER_OUT_FOR_DELIVERY' } : {}) } });
+        if (options.notificationOrderId && emailBacklog && notificationOrderMode !== 'resume') {
+          throw new Error('The exact order already has a fresh pending out-for-delivery email; inspect its durable outcome.');
+        }
+        if (notificationOrderMode === 'resume' && emailBacklog !== 1) {
+          throw new Error('Exact-order recovery requires exactly one fresh pending out-for-delivery email.');
+        }
       }
       return { databaseMs, otherSessions: rows[0].others, migrationCount, unfinishedWork, unresolvedAttempts, historicalIncidents,
-        emailBacklog, reviewedAttempts, taskFixtureAttempt, workerAttemptIds, governedScopedWork };
+        emailBacklog, notificationOrderReady, notificationOrderMode, reviewedAttempts, taskFixtureAttempt, workerAttemptIds, governedScopedWork };
     });
     const stripeAccount = deps.stripeAccount ? await deps.stripeAccount() : await require('../dist/services/stripe.provider.js').stripeProvider.account();
     safety.assertCanonicalStripeAccount(stripeAccount);
@@ -428,6 +479,10 @@ async function preflight(deps = {}, options = {}) {
 async function supervise(config, options = {}, deps = {}) {
   if (typeof options.acquireLock === 'function' || typeof options.fork === 'function') { deps = options; options = {}; }
   const checkoutMode = options.mode === 'checkout';
+  if (options.notificationOrderId && (!checkoutMode || options.start !== true || !options.allowEmailLive || !options.allowPush ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(options.notificationOrderId))) {
+    throw new Error('Exact notification scope requires a development checkout with live email and push explicitly approved.');
+  }
   if (checkoutMode && (options.start !== true || (config.workerAttemptIds ?? []).length || options.reviewedRecoveryAttempt)) {
     throw new Error('Checkout mode starts no recovery worker and accepts no attempt scope.');
   }
@@ -502,13 +557,6 @@ async function supervise(config, options = {}, deps = {}) {
     void startShutdown();
   };
   try {
-    control = await (deps.openControl || openControl)(path.join(backend, '.cache/dev-payment-control.json'), `electrohub-payment:${backend}`,
-      () => ({ phase: controlPhase, mode: options.mode, backendPort: config.port,
-        apiPid: [...records].find(record => record.role === 'api')?.child.pid,
-        listenerAlive: [...records].some(record => record.role === 'stripe-cli' && !record.exited),
-        email: { ...(email.status ? email.status() : { started: email.started, ready: false, reason: email.reason }),
-          requested: Boolean(options.allowEmailAllowlist || options.allowEmailLive),
-          mode: options.allowEmailLive ? 'live' : options.allowEmailAllowlist ? 'allowlist' : 'disabled', push: Boolean(options.allowPush) } }), startShutdown);
     const listener = await (deps.startListener || verifier.startListener)({
       executable: verifier.resolveStripeExecutable(), apiKey: process.env.STRIPE_SECRET_KEY,
       forwardUrl: `http://127.0.0.1:${config.port}/api/webhooks/stripe`, spawnProcess: (...args) => {
@@ -526,6 +574,8 @@ async function supervise(config, options = {}, deps = {}) {
       fs.writeFileSync(path.join(backend, '.cache/dev-runtime-token.txt'), token, { mode: 0o600 });
     }))(diagnosticToken);
     const inheritedEnv = { ...process.env };
+    // A checked-in/local env value can never enable this narrow worker scope.
+    delete inheritedEnv.CUSTOMER_NOTIFICATION_ORDER_ID;
     delete inheritedEnv.PAYMENT_DEV_ATTEMPT_IDS;
     delete inheritedEnv.PAYMENT_DEV_SUPERVISED;
     delete inheritedEnv.PAYMENT_INPROCESS_RECOVERY;
@@ -576,6 +626,7 @@ async function supervise(config, options = {}, deps = {}) {
       const expected = options.allowEmailLive ? 'live' : 'allowlist';
       emailEnv.COMMERCE_EMAIL_DISPATCH_ENABLED = options.allowEmailLive ? 'true' : process.env.COMMERCE_EMAIL_DISPATCH_ENABLED;
       emailEnv.COMMERCE_EMAIL_SEND_MODE = options.allowEmailLive ? 'live' : process.env.COMMERCE_EMAIL_SEND_MODE;
+      if (options.notificationOrderId) emailEnv.CUSTOMER_NOTIFICATION_ORDER_ID = options.notificationOrderId;
       const report = (deps.describeEmail || emailDev.describeEmailRuntime)(emailEnv);
       const runner = path.join(backend, 'dist/commerce-email-runner.js');
       if (report.sendMode !== expected || !report.workerWillRun || !(deps.exists || fs.existsSync)(runner)) throw new Error(`Approved ${expected} email worker is not ready to start.`);
@@ -593,6 +644,17 @@ async function supervise(config, options = {}, deps = {}) {
     api.child.send({ type: 'payment-supervisor.activate', nonce });
     await Promise.race([waitFor(() => status.activated.has('api'), Boolean, { timeoutMs: 5000, intervalMs: 50 }), failed]);
     if (primaryFailure || stopping) throw primaryFailure || new Error('DEV runtime startup interrupted.');
+    // Publish ownership only after listener, API and supervisor IPC are ready.
+    // Earlier failures leave the process lock as recovery evidence, not a
+    // control record claiming that a runtime owns the services.
+    control = await (deps.openControl || openControl)(path.join(backend, '.cache/dev-payment-control.json'), `electrohub-payment:${backend}`,
+      () => ({ phase: controlPhase, mode: options.mode, backendPort: config.port,
+        apiPid: [...records].find(record => record.role === 'api')?.child.pid,
+        listenerAlive: [...records].some(record => record.role === 'stripe-cli' && !record.exited),
+        email: { ...(email.status ? email.status() : { started: email.started, ready: false, reason: email.reason }),
+          requested: Boolean(options.allowEmailAllowlist || options.allowEmailLive),
+          mode: options.allowEmailLive ? 'live' : options.allowEmailAllowlist ? 'allowlist' : 'disabled', push: Boolean(options.allowPush),
+          notificationOrderId: options.notificationOrderId ?? null } }), startShutdown);
     controlPhase = 'ready';
     (deps.log || console.log)(JSON.stringify({ readiness: 'PASS', backendPort: config.port, targetIdentity: config.targetIdentity,
       migrationCount: config.migrationCount, paymentBacklog: config.paymentBacklog, stripeAccountVerified: config.stripeAccountVerified,
@@ -649,4 +711,4 @@ async function main(argv = process.argv.slice(2), deps = {}) {
 }
 if (require.main === module) main().then(code => { process.exitCode = code; });
 module.exports = { argumentsFor, applyGovernedEmailDefault, assertAcceptedBacklog, allowlistedRecipients, migrationNames, migrationChecksumCandidates, verifyMigrationLedger, assertNoPaymentBacklog, assertNoEmailBacklog,
-  assertReviewedRecovery, assertExpiredLeaseRecovery, readTask04Fixture, assertTask04FixtureAttempt, normalizeWorkerAttemptIds, waitForChildExit, preflight, supervise, main };
+  assertReviewedRecovery, assertExpiredLeaseRecovery, readTask04Fixture, assertTask04FixtureAttempt, classifyNotificationOrder, normalizeWorkerAttemptIds, waitForChildExit, preflight, supervise, main };

@@ -114,8 +114,10 @@ function OwnedOrderDetails() {
           </div>}
         </section>
         <OrderDocumentsPanel orderReference={order.orderReference} variant="details" />
-        <TrackDeliveryAction className={styles.trackLink} orderReference={order.orderReference} status={order.status} paymentState={order.paymentState} />
-        <Link className={styles.backLink} to={backTo}>Back to Orders</Link>
+        <div className={styles.orderActions}>
+          <TrackDeliveryAction className={styles.trackLink} orderReference={order.orderReference} status={order.status} paymentState={order.paymentState} />
+          <Link className={styles.backLink} to={backTo}>Back to Orders</Link>
+        </div>
       </div>
     </div>
   </div>;

@@ -60,6 +60,13 @@ describe('ToastCenter', () => {
     expect(getToasts().map(item => item.title)).toEqual(['Careful', 'Broke']);
   });
 
+  it('portals the notification viewport to the document layer so dialogs cannot cover it', async () => {
+    render(<ToastCenter />);
+    raise(() => { toast.warning('Visible warning'); });
+    await screen.findByText('Visible warning');
+    expect(screen.getByTestId('toast-viewport').closest('[role="region"]')?.parentElement).toBe(document.body);
+  });
+
   it('runs a safe action once and closes the toast', async () => {
     const user = userEvent.setup();
     const retry = vi.fn();

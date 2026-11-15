@@ -75,17 +75,60 @@ function inspectWindows() {
   return { listeners: snapshot.listeners ?? [], processes: snapshot.processes ?? [] };
 }
 
-function runTaskkill(pid) {
-  execFileSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { encoding: 'utf8', windowsHide: true, stdio: 'ignore' });
+function runTaskkill(pid, force = false) {
+  execFileSync('taskkill.exe', ['/PID', String(pid), '/T', ...(force ? ['/F'] : [])], { encoding: 'utf8', windowsHide: true, stdio: 'ignore' });
+}
+
+function archiveName(file, now = new Date()) {
+  const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  let target = `${file}.stale-${stamp}`; let suffix = 1;
+  while (require('node:fs').existsSync(target)) target = `${file}.stale-${stamp}-${suffix++}`;
+  return target;
+}
+
+function inspectRecordedOwner(file, identity, snapshot) {
+  const fs = require('node:fs');
+  if (!fs.existsSync(file)) return false;
+  let record;
+  try { record = JSON.parse(fs.readFileSync(file, 'utf8')); }
+  catch { throw new Error('A malformed control record cannot be tied safely to a stopped owner; no record was archived.'); }
+  if (record.identity !== identity || !Number.isInteger(record.pid) || record.pid < 1) {
+    throw new Error('Control identity is invalid; no record was archived.');
+  }
+  if (snapshot.processes.some(process => Number(process.pid) === record.pid)) {
+    throw new Error('Recorded owner PID is still present; use its owner-aware stop or inspect it before recovery.');
+  }
+  return true;
+}
+
+function inspectPaymentLock(file, snapshot) {
+  const fs = require('node:fs');
+  if (!fs.existsSync(file)) return false;
+  let lock;
+  try { lock = JSON.parse(fs.readFileSync(file, 'utf8')); }
+  catch { throw new Error('Payment runtime lock is malformed; no record was archived.'); }
+  const pids = [lock.supervisorPid, ...(Array.isArray(lock.ownedPids) ? lock.ownedPids : [])].filter(Number.isInteger);
+  if (!Number.isInteger(lock.supervisorPid) || !Array.isArray(lock.ownedPids) ||
+      snapshot.processes.some(process => pids.includes(Number(process.pid)))) {
+    throw new Error('Payment runtime lock references a live or unverifiable process; no record was archived.');
+  }
+  return true;
 }
 
 async function recoverLegacy({ root, stackFile, paymentFile, platform = process.platform, inspect = inspectWindows, terminate = runTaskkill, wait = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
   if (platform !== 'win32') throw new Error('Legacy process recovery is supported only on Windows.');
   const fs = require('node:fs');
-  if (fs.existsSync(stackFile) || fs.existsSync(paymentFile)) throw new Error('Supervisor control record exists; use documented owner-aware recovery.');
+  const paymentLock = path.join(path.dirname(paymentFile), 'dev-payment-runtime.lock');
   const initial = inspect();
+  const staleStack = inspectRecordedOwner(stackFile, `electrohub-stack:${root}`, initial);
+  const stalePayment = inspectRecordedOwner(paymentFile, `electrohub-payment:${path.join(root, 'apps/backend')}`, initial);
+  const staleLock = inspectPaymentLock(paymentLock, initial);
+  const snapshotProcesses = initial.processes.filter(process => hasWorkspace(process.commandLine, root));
+  if (snapshotProcesses.some(process => workerMarkers.some(marker => normalized(process.commandLine).includes(marker)))) {
+    throw new Error('A payment or commerce runtime process is present; recovery refused.');
+  }
   const plan = planLegacyRecovery({ root, ...initial });
-  if (!plan.length) return { stopped: [], message: 'No eligible abandoned ElectroHub development processes found.' };
+  if (!plan.length && !staleStack && !stalePayment && !staleLock) return { stopped: [], archived: [], message: 'No abandoned ElectroHub development runtime found.' };
 
   // Revalidate PID creation identity and command ownership immediately before any termination.
   const current = inspect();
@@ -94,7 +137,7 @@ async function recoverLegacy({ root, stackFile, paymentFile, platform = process.
     const fresh = freshPlan.find(row => row.pid === target.pid && row.role === target.role && row.created === target.created);
     if (!fresh) throw new Error('Legacy process identity changed during recovery; no process was stopped.');
   }
-  for (const target of plan) terminate(target.pid);
+  for (const target of plan) terminate(target.pid, false);
   const tracked = plan.flatMap(target => [target.pid, ...target.members].map(pid => ({
     pid,
     created: current.processes.find(process => Number(process.pid) === pid)?.created,
@@ -110,10 +153,40 @@ async function recoverLegacy({ root, stackFile, paymentFile, platform = process.
     if (!remaining.length && !snapshot.listeners.some(row => serviceForPort.has(Number(row.port)))) break;
     await wait(100);
   }
+  if (remaining.length) {
+    // Revalidate every planned identity before escalating a still-running,
+    // verified project-owned process tree to forced termination.
+    const beforeForce = inspect();
+    const forcePlan = planLegacyRecovery({ root, ...beforeForce });
+    for (const target of plan) {
+      const current = forcePlan.find(row => row.pid === target.pid && row.role === target.role && row.created === target.created);
+      if (!current) throw new Error('Project process identity changed before forced shutdown; no further process was stopped.');
+    }
+    for (const target of plan) terminate(target.pid, true);
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const snapshot = inspect();
+      for (let index = remaining.length - 1; index >= 0; index -= 1) {
+        const original = remaining[index];
+        if (!snapshot.processes.some(row => Number(row.pid) === original.pid && row.created === original.created)) remaining.splice(index, 1);
+      }
+      if (!remaining.length) break;
+      await wait(100);
+    }
+  }
   if (remaining.length) throw new Error('A verified legacy process did not exit; inspect its owner before retrying.');
   const final = inspect();
   if (final.listeners.some(row => serviceForPort.has(Number(row.port)))) throw new Error('A project port remains occupied after recovery; no further process was stopped.');
-  return { stopped: plan.map(({ pid, role, port }) => ({ pid, role, port })), message: 'Verified legacy ElectroHub development process trees stopped.' };
+  inspectRecordedOwner(stackFile, `electrohub-stack:${root}`, final);
+  inspectRecordedOwner(paymentFile, `electrohub-payment:${path.join(root, 'apps/backend')}`, final);
+  inspectPaymentLock(paymentLock, final);
+  const archived = [];
+  for (const file of [stackFile, paymentFile, paymentLock]) {
+    if (!fs.existsSync(file)) continue;
+    const target = archiveName(file);
+    fs.renameSync(file, target); archived.push({ file: path.basename(file), archivedAs: path.basename(target) });
+  }
+  return { stopped: plan.map(({ pid, role, port }) => ({ pid, role, port })), archived,
+    message: plan.length ? 'Verified abandoned ElectroHub process trees stopped; stale ownership records archived.' : 'Verified stale ElectroHub ownership records archived.' };
 }
 
 module.exports = { inspectWindows, planLegacyRecovery, recoverLegacy };

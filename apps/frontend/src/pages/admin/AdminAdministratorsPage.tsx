@@ -166,9 +166,15 @@ export function AdminAdministratorsPage({ embedded = false }: { embedded?: boole
     setBusy(true);
     setDialogError(null);
     try {
-      await runWithStepUp(() => createInvitation.mutateAsync({ email, grantManageAdmins: inviteManage }));
+      const invitation = await runWithStepUp(() => createInvitation.mutateAsync({ email, grantManageAdmins: inviteManage }));
       setInviteOpen(false);
-      toast('Invitation sent.');
+      if (invitation.deliveryStatus === 'FAILED') {
+        toast(`Invitation created for ${email}, but the email could not be delivered. Use Resend in the Invitations list.`, 'warning');
+      } else if (invitation.deliveryStatus === 'PENDING') {
+        toast(`Invitation created for ${email}; email delivery is still pending.`, 'warning');
+      } else {
+        toast('Invitation sent.');
+      }
     } catch (error) {
       const message = teamFailure(error);
       if (message) setDialogError(message);
@@ -180,8 +186,10 @@ export function AdminAdministratorsPage({ embedded = false }: { embedded?: boole
   const doResend = async (invitation: AdminInvitation) => {
     setRowError(null);
     try {
-      await runWithStepUp(() => resendInvitation.mutateAsync(invitation.id));
-      toast('Invitation sent again.');
+      const resent = await runWithStepUp(() => resendInvitation.mutateAsync(invitation.id));
+      if (resent.deliveryStatus === 'FAILED') toast(`The invitation email to ${invitation.email} could not be delivered. Try Resend again shortly.`, 'warning');
+      else if (resent.deliveryStatus === 'PENDING') toast(`Email delivery to ${invitation.email} is still pending.`, 'warning');
+      else toast('Invitation sent again.');
     } catch (error) {
       const message = teamFailure(error);
       if (message) setRowError(message);

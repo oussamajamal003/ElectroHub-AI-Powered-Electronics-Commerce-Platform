@@ -92,6 +92,9 @@ declare module '@tanstack/react-query' {
  */
 export function reportMutationFailure(error: unknown, meta?: { action?: string; silent?: boolean }): void {
   if (meta?.silent || isAbortError(error)) return;
+  // A sensitive write first returns this expected challenge so useStepUp can open verification and retry the action.
+  // It is not a permission denial; surfacing it globally produces a misleading warning behind the dialog.
+  if (error instanceof ApiError && error.code === 'STEP_UP_REQUIRED') return;
   if (error instanceof ApiError && (error.status === 400 || error.status === 401 || error.status === 422)) return;
   const feedback = describeError(error, meta?.action ?? 'save your changes');
   const raise = feedback.kind === 'unavailable' || feedback.kind === 'unexpected' ? toast.error : toast.warning;

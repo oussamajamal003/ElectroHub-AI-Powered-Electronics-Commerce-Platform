@@ -53,8 +53,8 @@ describe('getFrontendServerConfig', () => {
 });
 
 describe('getViteCacheDir', () => {
-  it('keeps the default cache for :3000, builds and tests, and isolates every other dev port', () => {
-    expect(getViteCacheDir(getViteServerConfig('serve', {}, []))).toBeUndefined();
+  it('isolates the dependency optimizer for every dev port and leaves builds unchanged', () => {
+    expect(getViteCacheDir(getViteServerConfig('serve', {}, []))).toBe('node_modules/.vite-port-3000');
     expect(getViteCacheDir(getViteServerConfig('build', {}, ['--port', '3262']))).toBeUndefined();
     expect(getViteCacheDir(getViteServerConfig('serve', {}, ['--port', '3262']))).toBe('node_modules/.vite-port-3262');
     expect(getViteCacheDir(getViteServerConfig('serve', { E2E_FRONTEND_PORT: '3200', E2E_API_PROXY_TARGET: 'http://localhost:5200' })))

@@ -73,9 +73,9 @@ export function getViteServerConfig(command: 'serve' | 'build', environment: Fro
 
 /**
  * Dependency-optimizer cache per dev port. Playwright configs start their own `vite --port <n>` in the same checkout; with one shared
- * `node_modules/.vite`, each of those servers re-optimizes and overwrites the chunks the long-running :3000 server is still serving, so
- * the browser receives a Radix bundle wired to a different React copy ("Invalid hook call" in SelectProvider). :3000 keeps Vite's default.
+ * `node_modules/.vite`, each server can re-optimize and overwrite chunks another server is still serving. Mixing a Radix bundle with a
+ * different React chunk causes "Invalid hook call" in providers. Keep the main :3000 app isolated too, including from legacy Vite servers.
  */
 export function getViteCacheDir(server: { port: number } | undefined): string | undefined {
-  return server && server.port !== 3000 ? `node_modules/.vite-port-${server.port}` : undefined;
+  return server ? `node_modules/.vite-port-${server.port}` : undefined;
 }

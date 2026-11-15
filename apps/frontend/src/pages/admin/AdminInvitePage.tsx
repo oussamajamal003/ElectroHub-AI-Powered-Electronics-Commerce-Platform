@@ -46,6 +46,7 @@ function inviteProblems(values: Record<InviteField, string>): FieldErrors {
 type Preview =
   | { status: 'loading' }
   | { status: 'ready'; email: string }
+  | { status: 'setup-pending' }
   | { status: 'invalid' }
   | { status: 'error' };
 
@@ -56,7 +57,7 @@ type Stage =
 
 export function AdminInvitePage() {
   useDocumentTitle('Admin Invitation');
-  const { completeAdminSession } = useAdminAuth();
+  const { completeAdminSession, isAuthenticated, logout } = useAdminAuth();
   const navigate = useNavigate();
   // The token is read once and kept in state. The fragment is then removed from the address bar and history.
   const [token, setToken] = useState<string | null>(() => readInvitationToken(window.location.hash));
@@ -73,6 +74,7 @@ export function AdminInvitePage() {
   // Fields the administrator has typed in: their rule problems show live, as an error, on every keystroke.
   const [touched, setTouched] = useState<Partial<Record<InviteField, boolean>>>({});
   const [pending, setPending] = useState(false);
+  const [continuingSetup, setContinuingSetup] = useState(false);
 
   useEffect(() => {
     if (window.location.hash) {
@@ -91,6 +93,10 @@ export function AdminInvitePage() {
       .then((result) => { if (active) setPreview({ status: 'ready', email: result.email }); })
       .catch((err: unknown) => {
         if (!active) return;
+        if (err instanceof ApiError && err.code === 'INVITATION_SETUP_PENDING') {
+          setPreview({ status: 'setup-pending' });
+          return;
+        }
         const unavailable = err instanceof ApiError && (err.status === 410 || err.code === 'INVITATION_UNAVAILABLE');
         setPreview(unavailable ? { status: 'invalid' } : { status: 'error' });
       });
@@ -149,6 +155,19 @@ export function AdminInvitePage() {
     navigate('/admin', { replace: true });
   };
 
+  const continuePendingSetup = async () => {
+    if (continuingSetup) return;
+    setContinuingSetup(true);
+    try {
+      // Clear an existing admin session first so /admin/login cannot silently return this tab to another administrator's dashboard.
+      await logout();
+    } catch {
+      // AuthContext clears the local admin session in logout's finally block even if server-side revocation is unavailable.
+    } finally {
+      navigate('/admin/login', { replace: true });
+    }
+  };
+
   const renderBody = () => {
     if (stage.name === 'ended') {
       return (
@@ -181,11 +200,23 @@ export function AdminInvitePage() {
         </div>
       );
     }
+    if (preview.status === 'setup-pending') {
+      return (
+        <div className={styles.form}>
+          <Alert variant="info">
+            You already accepted this invitation and created your password, but did not finish setting up two-step verification.
+            Go to Admin sign in below and sign in with the email address and password you created. You can then finish two-step verification.
+          </Alert>
+          {isAuthenticated
+            ? <Button type="button" onClick={() => void continuePendingSetup()} isLoading={continuingSetup}>Sign out and continue setup</Button>
+            : <Link className={styles.textLink} to="/admin/login">Go to Admin sign in and finish setup</Link>}
+        </div>
+      );
+    }
     if (preview.status === 'invalid') {
       return (
         <div className={styles.form}>
           <Alert variant="error">This invitation link is invalid or has expired. Ask an administrator to send you a new invitation.</Alert>
-          <Link className={styles.textLink} to="/admin/login">Go to Admin sign in</Link>
         </div>
       );
     }
@@ -214,7 +245,7 @@ export function AdminInvitePage() {
       <div className={styles.loginCard}>
         <div className={styles.header}>
           <div className={styles.brand}><BrandLogo size="large" /><span className={styles.visuallyHidden}>ElectroHub</span></div>
-          <h1 className={styles.title}>Join the Admin Team</h1>
+          <h1 className={styles.title}>{preview.status === 'setup-pending' ? 'Finish Admin Account Setup' : 'Join the Admin Team'}</h1>
           <p className={styles.description}>Admin Portal</p>
         </div>
         {renderBody()}

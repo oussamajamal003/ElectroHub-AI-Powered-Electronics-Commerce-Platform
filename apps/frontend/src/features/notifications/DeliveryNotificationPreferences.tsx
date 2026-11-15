@@ -3,19 +3,21 @@ import { BellRing, Truck } from 'lucide-react';
 import clsx from 'clsx';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
-import { enablePush, disablePush, pushStatus, pushSupported } from './pushClient';
+import { enablePush, disablePush, pushStatus, pushSupported, PushSetupError } from './pushClient';
 import styles from './DeliveryNotificationPreferences.module.scss';
 
 /**
  * What the customer can do right now, decided from the server's answer and this browser's own permission.
  * `unknown` is a failed lookup: nothing is claimed about availability until a check succeeds.
  */
-type Availability = 'checking' | 'enabled' | 'permission-required' | 'blocked' | 'temporary';
+type Availability = 'checking' | 'enabled' | 'permission-required' | 'blocked' | 'setup-required' | 'configuration-unavailable' | 'temporary';
 
 const BADGES: Partial<Record<Availability, { label: string; tone: string | undefined }>> = {
   enabled: { label: 'On', tone: styles.badgeEnabled },
   'permission-required': { label: 'Permission required', tone: styles.badgeReady },
   blocked: { label: 'Permission blocked', tone: styles.badgeUnavailable },
+  'setup-required': { label: 'Setup required', tone: styles.badgeReady },
+  'configuration-unavailable': { label: 'Setup unavailable', tone: styles.badgeUnavailable },
   temporary: { label: 'Temporarily unavailable', tone: styles.badgeUnavailable },
 };
 
@@ -39,13 +41,14 @@ export function DeliveryNotificationPreferences({ userId }: { userId: string }) 
       const permission = typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
       const next: Availability = permission === 'denied' ? 'blocked'
         : permission === 'default' ? 'permission-required'
-          : state.enabled ? 'enabled' : 'temporary';
+          : state.enabled ? 'enabled' : !state.available ? 'configuration-unavailable' : 'setup-required';
       setAvailability(next);
-      if (announce) setMessage(next === 'temporary' ? 'Checked just now: notifications still need setup. You can retry.'
-        : next === 'blocked' ? 'Checked just now: this browser is still blocking notifications.'
+      if (announce) setMessage(next === 'blocked' ? 'Checked just now: this browser is still blocking notifications.'
           : next === 'enabled' ? 'Checked just now: delivery notifications are on for this browser.'
-            : next === 'permission-required' ? 'Checked just now: browser permission is still required.' : '');
-    } catch {
+            : next === 'permission-required' ? 'Checked just now: browser permission is still required.'
+              : next === 'configuration-unavailable' ? 'Checked just now: server notification setup is unavailable.'
+                : next === 'setup-required' ? 'Checked just now: browser permission is granted; finish device setup to enable alerts.' : '');
+    } catch (failure) {
       if (browserBlocked()) {
         setAvailability('blocked');
         setError(false);
@@ -53,7 +56,8 @@ export function DeliveryNotificationPreferences({ userId }: { userId: string }) 
       } else {
         setAvailability('temporary');
         setError(true);
-        setMessage('We could not check notification setup right now. Check your connection and try again.');
+        setMessage(failure instanceof PushSetupError ? failure.message
+          : 'We could not check notification setup right now. Check your connection and try again.');
       }
     }
   }, [userId]);
@@ -84,6 +88,7 @@ export function DeliveryNotificationPreferences({ userId }: { userId: string }) 
       setError(true);
       setMessage(failure instanceof Error ? failure.message : 'We could not update your notification settings. Please try again.');
       if (browserBlocked()) setAvailability('blocked');
+      else if (failure instanceof PushSetupError && failure.stage === 'server_configuration') setAvailability('configuration-unavailable');
       else if (failure instanceof Error) setAvailability('temporary');
     } finally {
       actionLock.current = false;
@@ -95,7 +100,8 @@ export function DeliveryNotificationPreferences({ userId }: { userId: string }) 
   const enabled = availability === 'enabled';
   const badge = supported ? BADGES[availability] : { label: 'Not supported here', tone: styles.badgeUnavailable };
   // Browser permission is requested in the click flow; server and push initialization failures remain retryable.
-  const canChange = enabled || availability === 'permission-required' || availability === 'temporary';
+  const canChange = enabled || availability === 'permission-required' || availability === 'setup-required' ||
+    availability === 'configuration-unavailable' || availability === 'temporary';
 
   return <section className={styles.card} aria-labelledby="delivery-notifications-title">
     <div className={styles.header}>
@@ -130,6 +136,12 @@ export function DeliveryNotificationPreferences({ userId }: { userId: string }) 
         {availability === 'blocked' && <div className={clsx(styles.notice, styles.noticeUnavailable)} role="status">
           <p><strong>Notifications are blocked for ElectroHub.</strong> Change this site’s notification permission in your browser settings, then check again.</p>
         </div>}
+        {availability === 'setup-required' && <div className={styles.notice} role="status">
+          <p><strong>Browser permission is granted; device setup is still required.</strong> Finish setup to create and link this browser’s push subscription. Order emails remain on separately.</p>
+        </div>}
+        {availability === 'configuration-unavailable' && <div className={clsx(styles.notice, styles.noticeUnavailable)} role="status">
+          <p><strong>Server notification setup is unavailable.</strong> Try again after the service configuration is restored; order emails remain unaffected.</p>
+        </div>}
         {availability === 'temporary' && <div className={clsx(styles.notice, styles.noticeUnavailable)} role="status">
           <p><strong>Notifications are temporarily unavailable.</strong> Setup could not be completed. Retry in a moment; order emails remain unaffected.</p>
         </div>}
@@ -140,13 +152,15 @@ export function DeliveryNotificationPreferences({ userId }: { userId: string }) 
               : enabled ? 'Notifications are on for this browser.'
                 : availability === 'permission-required' ? 'Browser permission has not been granted.'
                     : availability === 'blocked' ? 'Browser permission is blocked.'
+                      : availability === 'setup-required' ? 'Browser permission is granted; no active account subscription is linked.'
+                        : availability === 'configuration-unavailable' ? 'Server push configuration is unavailable.'
                       : 'Notifications are not active on this browser.'}
           </div>
           <div className={styles.actions}>
-            {availability !== 'blocked' && <Button type="button" disabled={busy || !canChange} onClick={() => void change()}>
-              {busy ? 'Updating…' : enabled ? 'Turn off notifications' : availability === 'temporary' ? 'Retry notifications setup' : 'Enable delivery notifications'}
+            {availability !== 'blocked' && <Button type="button" disabled={busy || checking || !canChange} onClick={() => void change()}>
+              {checking ? 'Checking notifications…' : busy ? 'Updating…' : enabled ? 'Turn off notifications' : availability === 'temporary' || availability === 'configuration-unavailable' ? 'Retry notifications setup' : availability === 'setup-required' ? 'Finish notification setup' : 'Enable delivery notifications'}
             </Button>}
-            {(availability === 'temporary' || availability === 'blocked') &&
+            {(availability === 'temporary' || availability === 'blocked' || availability === 'configuration-unavailable') &&
               <Button variant="outline" type="button" disabled={busy} onClick={() => void refresh(true)}>Check again</Button>}
           </div>
         </div>

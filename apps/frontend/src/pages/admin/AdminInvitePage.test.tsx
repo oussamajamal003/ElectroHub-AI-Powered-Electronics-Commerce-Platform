@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AdminInvitePage, readInvitationToken } from './AdminInvitePage';
 import { MIN_ADMIN_PASSWORD_LENGTH, passwordHint } from '@/features/admin/security/passwordPolicy';
 import { useAdminAuth } from '@/features/auth/context/AuthContext';
@@ -46,7 +46,7 @@ describe('passwordHint', () => {
 describe('AdminInvitePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useAdminAuth).mockReturnValue({ completeAdminSession: vi.fn() } as unknown as ReturnType<typeof useAdminAuth>);
+    vi.mocked(useAdminAuth).mockReturnValue({ completeAdminSession: vi.fn(), isAuthenticated: false, logout: vi.fn() } as unknown as ReturnType<typeof useAdminAuth>);
     window.history.replaceState(null, '', '/admin/invite');
   });
 
@@ -54,7 +54,26 @@ describe('AdminInvitePage', () => {
     render(<MemoryRouter><AdminInvitePage /></MemoryRouter>);
 
     expect(await screen.findByText(/This invitation link is invalid or has expired/i)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Go to Admin sign in' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Create a password/i)).not.toBeInTheDocument();
+  });
+
+  it('explains that an accepted invitation is pending two-step setup and signs out an existing admin before sign-in', async () => {
+    const logout = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(useAdminAuth).mockReturnValue({ completeAdminSession: vi.fn(), isAuthenticated: true, logout } as unknown as ReturnType<typeof useAdminAuth>);
+    window.history.replaceState(null, '', '/admin/invite#token=abcdefghijklmnop1234');
+    vi.mocked(adminAuthApi.previewInvitation).mockRejectedValueOnce(new ApiError(409, 'Setup pending.', {}, 'INVITATION_SETUP_PENDING'));
+    render(<MemoryRouter initialEntries={['/admin/invite']}><Routes>
+      <Route path="/admin/invite" element={<AdminInvitePage />} />
+      <Route path="/admin/login" element={<p>Admin sign-in screen</p>} />
+    </Routes></MemoryRouter>);
+
+    expect(await screen.findByRole('heading', { name: 'Finish Admin Account Setup' })).toBeInTheDocument();
+    expect(screen.getByText(/You already accepted this invitation and created your password/i)).toBeInTheDocument();
+    expect(screen.getByText(/sign in with the email address and password you created/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out and continue setup' }));
+    await waitFor(() => expect(logout).toHaveBeenCalledOnce());
+    expect(await screen.findByText('Admin sign-in screen')).toBeInTheDocument();
   });
 
   const fillForm = async (password: string) => {

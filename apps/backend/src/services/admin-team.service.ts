@@ -194,7 +194,15 @@ export class AdminTeamService {
   // ── Public, token-bound ──────────────────────────────────────────────────
   async previewInvitation(token: string) {
     if (typeof token !== 'string' || token.length < 20 || token.length > 200) throw unavailable();
-    const invitation = await prisma.adminInvitation.findUnique({ where: { tokenHash: sha256Hex(token) }, select: { email: true, status: true, expiresAt: true } });
+    const invitation = await prisma.adminInvitation.findUnique({ where: { tokenHash: sha256Hex(token) }, select: { email: true, status: true, expiresAt: true, acceptedUserId: true } });
+    if (invitation?.status === AdminInvitationStatus.ACCEPTED && invitation.acceptedUserId) {
+      const security = await prisma.adminAccountSecurity.findUnique({ where: { userId: invitation.acceptedUserId },
+        select: { enrollmentAllowedUntil: true, mfaEnrolledAt: true } });
+      if (security?.mfaEnrolledAt === null && security.enrollmentAllowedUntil && security.enrollmentAllowedUntil > new Date()) {
+        throw new AppError('This invitation was already accepted. Sign in with the password you created to finish two-step verification.',
+          409, 'INVITATION_SETUP_PENDING');
+      }
+    }
     if (!invitation || invitation.status !== AdminInvitationStatus.PENDING || invitation.expiresAt <= new Date()) throw unavailable();
     return { email: invitation.email, expiresAt: invitation.expiresAt };
   }

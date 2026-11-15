@@ -46,7 +46,7 @@ describe('subjects and headings', () => {
     ['orderConfirmed', `Order confirmed — ${REFERENCE}`, 'Your order is confirmed'],
     ['paymentConfirmed', `Payment confirmed — ${REFERENCE}`, 'Your payment is confirmed'],
     ['orderPreparing', `We’re preparing your order — ${REFERENCE}`, 'Your order is being prepared'],
-    ['orderOutForDelivery', 'Your ElectroHub Order Is Out for Delivery!', 'Your order is out for delivery'],
+    ['orderOutForDelivery', 'Your ElectroHub order is out for delivery', 'Your order is out for delivery'],
     ['orderDelivered', `Order delivered — ${REFERENCE}`, 'Your order is marked delivered'],
     ['orderCancelledUnpaid', `Order cancelled — ${REFERENCE}`, 'Your order was cancelled'],
     ['paymentRefunded', `Refund confirmed — ${REFERENCE}`, 'Your refund is confirmed'],
@@ -251,7 +251,7 @@ describe('static safety', () => {
     const { html } = render('orderConfirmed');
     expect(html).toContain('<meta name="color-scheme" content="light">');
     expect(html).not.toMatch(/border-radius:\s*[1-9]/i);
-    expect(html.match(/View Order Details/g)).toHaveLength(1);
+    expect(html.match(/View Your Order/g)).toHaveLength(1);
   });
 });
 
@@ -259,7 +259,7 @@ describe('CTA link', () => {
   it.each(NON_MALICIOUS)('%s links to the encoded order route on the validated origin', name => {
     const { html } = render(name);
     expect(html).toContain(`href="${ORDER_URL}"`);
-    expect(html).toContain('>View Order Details</a>');
+    expect(html).toContain('>View Your Order</a>');
   });
 });
 
@@ -314,10 +314,11 @@ describe('out-for-delivery email call to action', () => {
     const fixture = commerceEmailFixtures.orderOutForDelivery;
     const destination = `https://electrohub.example/orders/${encodeURIComponent(fixture.orderReference)}`;
     const { html, text } = render('orderOutForDelivery');
-    expect(html.match(/View Order Details/g)).toHaveLength(1);
+    expect(html.match(/View Your Order/g)).toHaveLength(1);
     // /orders/:orderReference is the session-gated order details route; ownership is enforced by the API.
     expect(html).toContain(`href="${destination}"`);
     expect(text).toContain(destination);
+    expect(text).toContain('left the dispatch hub');
     // No administrator or tracking-token destination leaks into a customer message.
     expect(html).not.toContain('/admin/');
   });

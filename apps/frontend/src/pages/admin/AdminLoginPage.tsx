@@ -1,7 +1,7 @@
 import { useDocumentTitle } from '@/lib/pageTitle';
 import { emailValidationError } from '@/lib/emailValidation';
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate, Navigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Fingerprint, KeyRound, Smartphone } from 'lucide-react';
 import { browserSupportsWebAuthn, startAuthentication } from '@simplewebauthn/browser';
 import { BrandLogo } from '@/components/ui/BrandLogo';
@@ -102,11 +102,6 @@ export function AdminLoginPage() {
     if (expired) restart(EXPIRED_MESSAGE);
     // restart only sets state; it is re-created each render with the same meaning.
   }, [expired]);
-
-  // If already authenticated as admin, redirect to dashboard
-  if (!isInitializing && isAuthenticated && user?.role === 'ADMIN') {
-    return <Navigate to={destination} replace />;
-  }
 
   /** Returns to step 1 with a truthful explanation. The pre-auth transaction is discarded: nothing stays in memory but the email field. */
   const restart = (message: string) => {
@@ -286,6 +281,15 @@ export function AdminLoginPage() {
           <h1 className={styles.title}>Sign In to Admin</h1>
           <p className={styles.description}>Admin Portal</p>
         </div>
+
+        {!isInitializing && isAuthenticated && user?.role === 'ADMIN' && (
+          <Alert variant="info" className={styles.alert} role="status">
+            You are currently signed in as {user.email}. To use another administrator account, sign out first or enter its credentials below.
+            <Button type="button" variant="outline" onClick={() => void logout()}>
+              Sign out of this account
+            </Button>
+          </Alert>
+        )}
 
         {error && (
           <Alert variant="error" className={styles.alert}>

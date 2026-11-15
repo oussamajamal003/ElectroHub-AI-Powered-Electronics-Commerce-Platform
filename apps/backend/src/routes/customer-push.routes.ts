@@ -25,7 +25,7 @@ router.get(prefix, async (req, res, next) => {
   try { const id = z.string().uuid().optional().safeParse(req.query.id);
     if (!id.success) { res.status(400).json({ error: 'Invalid device.' }); return; }
     const config = pushConfig();
-    res.json({ data: { available: config.enabled, publicKey: config.enabled ? config.publicKey : null,
+    res.json({ data: { available: config.enabled, availability: config.availability, publicKey: config.enabled ? config.publicKey : null,
       ...await service.current(req.user!.userId, req.cookies?.electrohub_customer_refresh, id.data) } });
   } catch (error) { next(error); }
 });

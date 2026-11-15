@@ -35,8 +35,10 @@ const toDraft = (profile: StoreProfile): Draft => ({
  */
 const supportedZones = (Intl as typeof Intl & { supportedValuesOf?: (key: 'timeZone') => string[] }).supportedValuesOf?.('timeZone') ?? [];
 
-export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload, onFailure }: {
+export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload, onFailure, readOnly = false }: {
   profile: StoreProfile;
+  /** Render the same store controls for administrators who may view but not change settings. */
+  readOnly?: boolean;
   onFailure?: (error: unknown) => void;
   onDirtyChange: (dirty: boolean) => void;
   /** The saved profile is already in the cache; the page remounts the form from it. */
@@ -60,7 +62,7 @@ export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload, o
   const toast = useAdminToast();
   const dirty = JSON.stringify(draft) !== JSON.stringify(baseline);
 
-  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => { onDirtyChange(readOnly ? false : dirty); }, [dirty, onDirtyChange, readOnly]);
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
 
   const update = (field: keyof Draft, value: string) => {
@@ -96,41 +98,41 @@ export function StoreSettingsForm({ profile, onDirtyChange, onSaved, onReload, o
   return <><form className={styles.form} onSubmit={submit} noValidate aria-label="Store information">
     {conflict && <SettingsConflictNotice subject="settings" onReload={onReload} />}
     {formError && <p className={styles.formError} role="alert">{formError}</p>}
-    {!profile.supportEmail && <Alert variant="warning" role="status" data-testid="store-email-missing">No store email is saved, so messages from the storefront Contact page cannot be delivered. Add the support mailbox that should receive them in Store email, then save.</Alert>}
+    {!readOnly && !profile.supportEmail && <Alert variant="warning" role="status" data-testid="store-email-missing">No store email is saved. Contact form messages are sent to eligible, email-verified administrators. Add a store email to send those messages only to that mailbox.</Alert>}
     <div className={styles.fieldGrid}>
       <h3 className={settingsStyles.groupHeading}>Store and contact</h3>
-      <Input label="Store name" value={draft.storeName} onChange={event => update('storeName', event.target.value)} error={errors.storeName}
+      <Input label="Store name" value={draft.storeName} onChange={event => update('storeName', event.target.value)} readOnly={readOnly} error={errors.storeName}
         maxLength={120} fullWidth autoComplete="organization" placeholder="Your store name" />
-      <Input label="Store email" type="email" value={draft.supportEmail} onChange={event => update('supportEmail', event.target.value)}
+      <Input label="Store email" type="email" value={draft.supportEmail} onChange={event => update('supportEmail', event.target.value)} readOnly={readOnly}
         error={errors.supportEmail} maxLength={255} fullWidth autoComplete="email" placeholder="support@example.com"
-        helperText={draft.supportEmail.trim() ? "Public. Customer messages from the Contact page are delivered here." : "Public. While empty, Contact page messages go privately to verified administrators instead. The backend email sender must be configured."} />
-      <Input label="Phone" type="tel" value={draft.supportPhone} onChange={event => update('supportPhone', event.target.value)}
+        helperText={draft.supportEmail.trim() ? "Public. Customer messages from the Contact form are sent only to this mailbox." : "Public. While empty, Contact form messages go to eligible, email-verified administrators. Enter a store email to send them only to that mailbox."} />
+      <Input label="Phone" type="tel" value={draft.supportPhone} onChange={event => update('supportPhone', event.target.value)} readOnly={readOnly}
         error={errors.supportPhone} maxLength={32} fullWidth autoComplete="tel" placeholder="+961 XX XXX XXX"
         helperText="Public. Digits, spaces and + ( ) . - only." />
-      <Input label="Business hours" value={draft.businessHours} onChange={event => update('businessHours', event.target.value)}
+      <Input label="Business hours" value={draft.businessHours} onChange={event => update('businessHours', event.target.value)} readOnly={readOnly}
         error={errors.businessHours} maxLength={255} fullWidth placeholder="Monday–Friday, 9:00 AM–6:00 PM"
         helperText="Public. Leave a field empty to hide it from the Contact page." />
       <Input label="Currency" value="USD – US Dollar (fixed)" readOnly fullWidth data-testid="store-currency" />
       <h3 className={settingsStyles.groupHeading}>Address and locale</h3>
-      <Input label="Address line 1" value={draft.addressLine1} onChange={event => update('addressLine1', event.target.value)}
+      <Input label="Address line 1" value={draft.addressLine1} onChange={event => update('addressLine1', event.target.value)} readOnly={readOnly}
         error={errors.addressLine1} maxLength={255} fullWidth autoComplete="address-line1" placeholder="Street and building" />
-      <Input label="Address line 2" value={draft.addressLine2} onChange={event => update('addressLine2', event.target.value)}
+      <Input label="Address line 2" value={draft.addressLine2} onChange={event => update('addressLine2', event.target.value)} readOnly={readOnly}
         error={errors.addressLine2} maxLength={255} fullWidth autoComplete="address-line2" placeholder="Apartment, floor or additional details (optional)" />
-      <Input label="City" value={draft.city} onChange={event => update('city', event.target.value)} error={errors.city} maxLength={100} fullWidth
+      <Input label="City" value={draft.city} onChange={event => update('city', event.target.value)} readOnly={readOnly} error={errors.city} maxLength={100} fullWidth
         autoComplete="address-level2" placeholder="Enter city" />
-      <Input label="State or region" value={draft.region} onChange={event => update('region', event.target.value)} error={errors.region}
+      <Input label="State or region" value={draft.region} onChange={event => update('region', event.target.value)} readOnly={readOnly} error={errors.region}
         maxLength={100} fullWidth autoComplete="address-level1" placeholder="Enter region" />
-      <Input label="Postal code" value={draft.postalCode} onChange={event => update('postalCode', event.target.value)} error={errors.postalCode}
+      <Input label="Postal code" value={draft.postalCode} onChange={event => update('postalCode', event.target.value)} readOnly={readOnly} error={errors.postalCode}
         maxLength={20} fullWidth autoComplete="postal-code" placeholder="Enter postal code" />
-      <Input label="Country" value={draft.country} onChange={event => update('country', event.target.value)} error={errors.country} maxLength={100}
+      <Input label="Country" value={draft.country} onChange={event => update('country', event.target.value)} readOnly={readOnly} error={errors.country} maxLength={100}
         fullWidth autoComplete="country-name" placeholder="Enter country" />
       <div className={styles.fieldFull}>
         <Select label="Time zone" options={timeZoneOptions} value={draft.timezone} onValueChange={value => update('timezone', value)}
-          error={errors.timezone} fullWidth aria-label="Time zone" />
+          error={errors.timezone} fullWidth aria-label="Time zone" disabled={readOnly} />
       </div>
     </div>
-    <div className={`${styles.formActions} ${settingsStyles.formActions}`}>
+    {!readOnly && <div className={`${styles.formActions} ${settingsStyles.storeFormActions}`}>
       <Button type="submit" isLoading={save.isPending} disabled={!dirty || save.isPending || verifying || conflict}>Save Changes</Button>
-    </div>
-  </form>{dialog}</>;
+    </div>}
+  </form>{!readOnly && dialog}</>;
 }

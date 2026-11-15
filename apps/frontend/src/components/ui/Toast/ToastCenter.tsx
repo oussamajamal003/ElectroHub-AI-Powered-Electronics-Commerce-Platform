@@ -1,4 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import { useInRouterContext, useLocation } from 'react-router-dom';
 import { Toast, ToastAction, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from './Toast';
 import { getActiveToastHost, getToasts, registerToastHost, subscribeToasts, toast, type ToastItem } from './toastStore';
@@ -22,7 +23,7 @@ export function ToastCenter() {
   return <ToastProvider swipeDirection="right" label="Notifications">
     {inRouter && <DismissPendingOnNavigation />}
     {items.map(item => <ToastEntry key={item.id} item={item} />)}
-    <ToastViewport data-testid="toast-viewport" />
+    {typeof document !== 'undefined' && createPortal(<ToastViewport data-testid="toast-viewport" />, document.body)}
   </ToastProvider>;
 }
 

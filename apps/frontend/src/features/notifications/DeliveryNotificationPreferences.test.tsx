@@ -2,7 +2,8 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DeliveryNotificationPreferences } from './DeliveryNotificationPreferences';
 
-const mocks = vi.hoisted(() => ({ pushStatus: vi.fn(), enablePush: vi.fn(), disablePush: vi.fn(), pushSupported: vi.fn() }));
+const mocks = vi.hoisted(() => ({ pushStatus: vi.fn(), enablePush: vi.fn(), disablePush: vi.fn(), pushSupported: vi.fn(),
+  PushSetupError: class PushSetupError extends Error { constructor(readonly stage: string, message: string) { super(message); } } }));
 vi.mock('./pushClient', () => mocks);
 
 const permission = (value: NotificationPermission) => vi.stubGlobal('Notification', { permission: value });
@@ -36,6 +37,20 @@ describe('Delivery notification preferences', () => {
     expect(mocks.disablePush).toHaveBeenCalledWith('customer');
   });
 
+  it('shows Turn off on initial load when this browser already has an active account subscription', async () => {
+    permission('granted');
+    mocks.pushStatus.mockResolvedValue({ available: true, enabled: true });
+    render(<DeliveryNotificationPreferences userId="customer" />);
+
+    // Until the authenticated server and browser subscription are checked, do not flash an Enable action.
+    expect(screen.getByRole('button', { name: 'Checking notifications…' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Enable delivery notifications' })).not.toBeInTheDocument();
+
+    expect(await screen.findByRole('button', { name: 'Turn off notifications' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Enable delivery notifications' })).not.toBeInTheDocument();
+    expect(card().getByText('On')).toBeVisible();
+  });
+
   it('explains an unsupported browser without offering a control or asking for permission', () => {
     mocks.pushSupported.mockReturnValue(false);
     render(<DeliveryNotificationPreferences userId="customer" />);
@@ -46,25 +61,34 @@ describe('Delivery notification preferences', () => {
     expect(mocks.enablePush).not.toHaveBeenCalled();
   });
 
-  it('reports configured push as temporarily unavailable when a granted browser lacks a subscription', async () => {
+  it('distinguishes server push configuration from a granted browser with no account subscription', async () => {
     permission('granted');
     mocks.pushStatus.mockResolvedValue({ available: false, enabled: false });
     render(<DeliveryNotificationPreferences userId="customer" />);
-    expect(await screen.findByText('Temporarily unavailable', { exact: true })).toBeVisible();
+    expect(await screen.findByText('Setup unavailable', { exact: true })).toBeVisible();
+    expect(screen.getByText(/Server notification setup is unavailable/)).toBeVisible();
     expect(screen.getByText(/Order emails are sent separately/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Retry notifications setup' })).toBeEnabled();
 
-    // Still unavailable: the customer is told the check ran, and the control stays disabled.
+    // Configuration remains unavailable, with a clear check result and a retry action.
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
-    expect(await screen.findByText('Checked just now: notifications still need setup. You can retry.')).toBeVisible();
+    expect(await screen.findByText('Checked just now: server notification setup is unavailable.')).toBeVisible();
     expect(mocks.pushStatus).toHaveBeenCalledTimes(2);
 
-    // Server setup recovering does not claim enabled before a browser subscription exists.
+    // Server setup recovering does not claim enabled before the browser subscription exists.
     mocks.pushStatus.mockResolvedValue({ available: true, enabled: false });
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Retry notifications setup' })).toBeEnabled());
-    expect(screen.getByRole('button', { name: 'Check again' })).toBeVisible();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Finish notification setup' })).toBeEnabled());
+    expect(screen.getByText(/Browser permission is granted; device setup is still required/)).toBeVisible();
     expect(mocks.enablePush).not.toHaveBeenCalled();
+  });
+
+  it('shows setup required when browser permission and server configuration are ready but no subscription is linked', async () => {
+    permission('granted');
+    render(<DeliveryNotificationPreferences userId="customer" />);
+    expect(await screen.findByText('Setup required', { exact: true })).toBeVisible();
+    expect(screen.getByText(/no active account subscription is linked/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Finish notification setup' })).toBeEnabled();
   });
 
   it('claims nothing about availability when the lookup fails, and recovers on Check again', async () => {
@@ -120,6 +144,16 @@ describe('Delivery notification preferences', () => {
     expect(screen.queryByText('Notifications are on for this browser.')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Retry notifications setup' }));
     expect(await screen.findByRole('button', { name: 'Turn off notifications' })).toBeEnabled();
+  });
+
+  it('keeps service-worker failure distinct and safe for retry', async () => {
+    mocks.enablePush.mockRejectedValue(new mocks.PushSetupError('service_worker', 'The notification worker could not be installed. Check browser site settings and retry.'));
+    render(<DeliveryNotificationPreferences userId="customer" />);
+    await waitFor(() => expect(enableButton()).toBeEnabled());
+    fireEvent.click(enableButton());
+    expect(await screen.findByRole('alert')).toHaveTextContent('notification worker could not be installed');
+    expect(card().getByText('Temporarily unavailable')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Retry notifications setup' })).toBeEnabled();
   });
 
   it('prevents repeated activation while an initialization is in flight', async () => {

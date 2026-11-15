@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { BrowserRouter, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AdminLoginPage } from './AdminLoginPage';
 import { useAdminAuth } from '@/features/auth/context/AuthContext';
 import { ApiError } from '@/lib/api';
@@ -342,23 +342,20 @@ describe('AdminLoginPage', () => {
     });
   });
 
-  describe('return path after sign-in', () => {
-    const Landing = () => { const location = useLocation(); return <p>at {location.pathname + location.search}</p>; };
-    const renderSignedIn = (state: unknown) => {
-      (useAdminAuth as any).mockReturnValue({ login: mockLogin, logout: mockLogout, isAuthenticated: true, user: { role: 'ADMIN' }, isInitializing: false });
-      render(<MemoryRouter initialEntries={[{ pathname: '/admin/login', state }]}>
-        <Routes><Route path="/admin/login" element={<AdminLoginPage />} /><Route path="*" element={<Landing />} /></Routes>
-      </MemoryRouter>);
-    };
-
-    it('returns to the deep-linked admin page with its list filters', () => {
-      renderSignedIn({ from: '/admin/orders', search: '?payment=PAID&status=CONFIRMED' });
-      expect(screen.getByText('at /admin/orders?payment=PAID&status=CONFIRMED')).toBeInTheDocument();
+  describe('account switching', () => {
+    it('keeps the login form available when another administrator is signed in', () => {
+      (useAdminAuth as any).mockReturnValue({ login: mockLogin, logout: mockLogout, isAuthenticated: true, user: { role: 'ADMIN', email: 'owner@electrohub.com' }, isInitializing: false });
+      renderComponent();
+      expect(screen.getByRole('status')).toHaveTextContent('You are currently signed in as owner@electrohub.com');
+      expect(screen.getByLabelText(/Email Address/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Sign In/i })).toBeInTheDocument();
     });
 
-    it('ignores a crafted return path, keeping the dashboard as the destination', () => {
-      renderSignedIn({ from: '//evil.example/admin', search: '?x=1' });
-      expect(screen.getByText('at /admin')).toBeInTheDocument();
+    it('lets the current administrator sign out before using another account', async () => {
+      (useAdminAuth as any).mockReturnValue({ login: mockLogin, logout: mockLogout, isAuthenticated: true, user: { role: 'ADMIN', email: 'owner@electrohub.com' }, isInitializing: false });
+      renderComponent();
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Sign out of this account' }));
+      expect(mockLogout).toHaveBeenCalledOnce();
     });
   });
 });

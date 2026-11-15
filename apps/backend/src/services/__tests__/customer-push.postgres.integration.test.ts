@@ -27,7 +27,7 @@ async function session(label: string) {
 async function event(userId: string) {
   const order = await fixture.order(userId, 'PREPARING', 'SUCCEEDED');
   await prisma.$transaction(tx => transitionFulfillment(tx, { orderId: order.id, to: 'OUT_FOR_DELIVERY' }));
-  return { order, notification: await prisma.customerNotification.findUniqueOrThrow({ where: { eventKey: `order:${order.id}:out-for-delivery` } }) };
+  return { order, notification: await prisma.customerNotification.findFirstOrThrow({ where: { orderId: order.id, type: 'ORDER_OUT_FOR_DELIVERY' } }) };
 }
 describe.skipIf(!enabled).sequential('Web Push on disposable PostgreSQL', () => {
   beforeAll(() => {
@@ -68,7 +68,7 @@ describe.skipIf(!enabled).sequential('Web Push on disposable PostgreSQL', () => 
     await Promise.all([worker.runBatch(), worker.runBatch()]); await worker.process(jobs[0]!.id);
     expect(send).toHaveBeenCalledTimes(1);
     const payload = JSON.parse(send.mock.calls[0]![1]); expect(payload).toEqual({ v: 1, bindingId: sub.id, eventId: notification.id });
-    expect(await service.receipt(a.raw, sub.id, notification.id)).toEqual({ url: `/orders/${order.reference}` });
+    expect(await service.receipt(a.raw, sub.id, notification.id)).toEqual({ url: `/orders/${order.reference}`, orderReference: order.reference, type: 'ORDER_OUT_FOR_DELIVERY' });
     await expect(service.receipt(b.raw, sub.id, notification.id)).rejects.toMatchObject({ statusCode: 404 });
     expect((await prisma.customerPushDelivery.findUniqueOrThrow({ where: { id: jobs[0]!.id } })).state).toBe('ACCEPTED');
   });

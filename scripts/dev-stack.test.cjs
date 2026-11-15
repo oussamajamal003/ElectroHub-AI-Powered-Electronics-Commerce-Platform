@@ -35,7 +35,7 @@ function harness(overrides = {}) {
 }
 test('single session builds, starts only checkout supervisor, binds Vite to 3000/5000 and drains owned children', async () => {
   const h = harness(); await start({}, h.deps);
-  assert.deepEqual(h.actions.slice(0, 7), ['control', 'free:3000', 'free:5000', 'build', 'supervisor', 'vite', 'report']);
+  assert.deepEqual(h.actions.slice(0, 7), ['free:3000', 'free:5000', 'build', 'supervisor', 'vite', 'control', 'report']);
   assert.deepEqual(h.children[0].args, ['--start', '--allow-dev-checkout', '--recovery-mode=checkout']);
   assert.equal(h.children[0].options.env.PORT, '5000');
   assert.equal(h.children[1].options.env.E2E_FRONTEND_PORT, '3000');
@@ -46,6 +46,17 @@ test('email opt-in is forwarded to existing backlog/configuration gates without 
   const h = harness(); await start({ email: true }, h.deps);
   assert.ok(h.children[0].args.includes('--allow-email-allowlist'));
   assert.equal(h.children[0].args.some(arg => arg.includes('allow-dev-recovery')), false);
+});
+test('notification acceptance scope is forwarded exactly and requires live email plus push', async () => {
+  const orderId = '4510e012-e03d-4939-bb3d-52746df0db4a';
+  const h = harness(); await start({ live: true, push: true, notificationOrderId: orderId }, h.deps);
+  assert.ok(h.children[0].args.includes(`--notification-order=${orderId}`));
+  assert.ok(h.children[0].args.includes('--allow-email-live'));
+  assert.ok(h.children[0].args.includes('--allow-push'));
+  for (const options of [{ notificationOrderId: orderId, live: true }, { notificationOrderId: orderId, push: true },
+    { notificationOrderId: orderId, email: true, push: true }]) {
+    await assert.rejects(start(options, harness().deps), /Exact notification scope/);
+  }
 });
 test('healthy authenticated checkout owner is reused and never stopped by a borrowing session', async () => {
   const h = harness({ paymentOwner: async () => ({ phase: 'ready' }) }); await start({}, h.deps);
@@ -72,6 +83,12 @@ test('supervisor crash stops Vite without restarting financial children', async 
   await assert.rejects(start({}, h.deps), /automatic payment restart is forbidden/);
   assert.equal(h.children.length, 2); assert.ok(h.actions.includes('frontend:drain'));
 });
+test('failed preflight creates no authoritative stack control record', async () => {
+  const h = harness({ build: async () => { throw new Error('preflight build failed'); } });
+  await assert.rejects(start({}, h.deps), /preflight build failed/);
+  assert.equal(h.actions.includes('control'), false);
+  assert.equal(h.actions.includes('closed'), false);
+});
 test('occupied dual-stack port is refused and original listener is left running', async () => {
   const listener = net.createServer(); await new Promise(resolve => listener.listen({ host: '::', port: 0 }, resolve));
   try { await assert.rejects(assertFree(listener.address().port), /occupied/); assert.equal(listener.listening, true); }
@@ -80,6 +97,8 @@ test('occupied dual-stack port is refused and original listener is left running'
 test('unknown flags and recovery scopes are rejected before any operation', async () => {
   for (const argv of [['start', '--allow-dev-recovery'], ['stop', '--allow-email-allowlist'], ['start', '--accepted-backlog-attempt=x']])
     await assert.rejects(main(argv), /Use start/);
+  await assert.rejects(main(['start', '--allow-email-live', '--allow-push', '--notification-order=not-a-uuid']), /Use start/);
+  await assert.rejects(main(['start', '--allow-email-allowlist', '--allow-push', '--notification-order=4510e012-e03d-4939-bb3d-52746df0db4a']), /Use start/);
 });
 test('production/insecure caller is refused before ownership, build or child operations', async () => {
   const prior = { NODE_ENV: process.env.NODE_ENV, NODE_TLS_REJECT_UNAUTHORIZED: process.env.NODE_TLS_REJECT_UNAUTHORIZED };
@@ -129,5 +148,6 @@ test('the email-enabled stack commands only add the approved allowlist flag', ()
   assert.equal(scripts['dev:stack:supervised:live'], 'node scripts/dev-stack.cjs start --allow-email-live --allow-push');
   assert.equal(scripts['dev:stack:restart:live'], 'node scripts/dev-stack.cjs restart --allow-email-live --allow-push');
   assert.match(emailEvidence({ email: { ready: true, producerEnabled: true, mode: 'live', push: true } }), /every customer \(live mode\); delivery push on/);
+  assert.match(emailEvidence({ email: { ready: true, producerEnabled: true, mode: 'live', push: true, notificationOrderId: '4510e012-e03d-4939-bb3d-52746df0db4a' } }), /scoped to one approved order \(4510e012-e03d-4939-bb3d-52746df0db4a\); delivery push on/);
   assert.equal(scripts['dev:stack:supervised'], 'node scripts/dev-stack.cjs start');
 });

@@ -62,7 +62,7 @@ function publicDependencyStatuses(store, photoRoute, contactConfigured) {
 function emailEvidence(owner) {
   if (!owner) return 'No supervised runtime: nothing drains queued mail. Start with npm run dev:stack:supervised:email';
   if (owner.email?.ready && owner.email?.producerEnabled) return owner.email?.mode === 'live'
-    ? `Worker is sending to every customer (live mode)${owner.email?.push ? '; delivery push on' : ''}. READY is not provider acceptance or inbox delivery`
+    ? `${owner.email?.notificationOrderId ? `Worker is scoped to one approved order (${owner.email.notificationOrderId})` : 'Worker is sending to every customer (live mode)'}${owner.email?.push ? '; delivery push on' : ''}. READY is not provider acceptance or inbox delivery`
     : 'Worker is draining allowlisted recipients. READY is not provider acceptance or inbox delivery';
   if (owner.email?.started || owner.email?.requested) return `${owner.email?.reason ?? 'Worker requested but not ready'}. Check with npm run notifications:doctor`;
   return `${owner.email?.reason ?? 'disabled-by-default'}: events are still queued but NOT sent. Restart with npm run dev:stack:restart:email (approved allowlist) or npm run dev:stack:restart:live (every customer, plus push); inspect the queue with npm run notifications:doctor`;
@@ -141,6 +141,10 @@ async function start(options = {}, deps = {}) {
   if (process.env.NODE_ENV === 'production' || process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') {
     throw new Error('The local development profile refuses production invocation or disabled TLS verification.');
   }
+  if (options.notificationOrderId && (!options.live || !options.push || options.email ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(options.notificationOrderId))) {
+    throw new Error('Exact notification scope requires --allow-email-live and --allow-push, with no allowlist mode.');
+  }
   const requestControl = deps.controlRequest || controlRequest;
   const getOwner = deps.paymentOwner || paymentOwner;
   const verifyOwner = deps.verifiedPayment || verifiedPayment;
@@ -153,6 +157,12 @@ async function start(options = {}, deps = {}) {
   const existing = await requestControl(stackFile, identity);
   if (existing) {
     if (existing.phase !== 'ready' || !await verifyOwner(await getOwner())) throw new Error('Owned stack exists but is not ready. Run doctor; do not launch a duplicate.');
+    if (options.notificationOrderId) {
+      const owner = await getOwner();
+      if (owner?.email?.notificationOrderId !== options.notificationOrderId) {
+        throw new Error('Existing notification worker has a different order scope; no dispatcher was attached.');
+      }
+    }
     const front = await read('http://localhost:3000/@vite/client');
     if (!front.ok) throw new Error('Owned frontend is unavailable; run doctor before restarting.');
     await diagnose(); return;
@@ -176,7 +186,6 @@ async function start(options = {}, deps = {}) {
     if (children.some(child => !exited(child))) { failure ||= new Error('An owned process did not drain; control record retained for inspection.'); finish(); return; }
     await control?.close(); finish();
   };
-  control = await (deps.openControl || openControl)(stackFile, identity, () => ({ phase, frontendPid: frontend?.pid, ownsPayment: Boolean(ownedPayment) }), stop);
   const watch = child => {
     children.push(child);
     child.once('error', () => { failure ||= new Error('Owned child failed to start.'); void stop(); });
@@ -191,13 +200,17 @@ async function start(options = {}, deps = {}) {
     if (owner) {
       if (!await verifyOwner(owner)) throw new Error('Existing supervisor/API ownership or readiness failed. No replacement started.');
       if ((options.email || options.live) && !owner.email?.started) throw new Error('Existing runtime has email disabled; restart it with the email option you want.');
+      if (options.notificationOrderId && owner.email?.notificationOrderId !== options.notificationOrderId) {
+        throw new Error('Existing notification worker has a different order scope; no dispatcher was attached. Stop it through its owner before a scoped start.');
+      }
     } else {
       await free(5000);
       if (inspectDisk().status === 'BLOCKED') throw new Error('Workspace disk has less than 256 MiB free; free space before building/starting another runtime. No payment supervisor started.');
       await compile();
       if (stopping) return;
       const args = ['--start', '--allow-dev-checkout', '--recovery-mode=checkout', ...(options.email ? ['--allow-email-allowlist'] : []),
-        ...(options.live ? ['--allow-email-live'] : []), ...(options.push ? ['--allow-push'] : [])];
+        ...(options.live ? ['--allow-email-live'] : []), ...(options.push ? ['--allow-push'] : []),
+        ...(options.notificationOrderId ? [`--notification-order=${options.notificationOrderId}`] : [])];
       ownedPayment = watch(forkChild(path.join(backend, 'scripts/dev-payment-runtime.cjs'), args,
         { cwd: backend, windowsHide: true, stdio: ['ignore', 'inherit', 'inherit', 'ipc'], env: { ...process.env, PORT: '5000', NODE_ENV: 'development' } }));
       await until(async () => { if (failure || stopping) throw failure || new Error('Startup stopped.'); return verifyOwner(await getOwner()); });
@@ -215,7 +228,13 @@ async function start(options = {}, deps = {}) {
       const proxied = await read('http://localhost:3000/api/internal/development-runtime', token);
       return direct.ok && proxied.ok && direct.data?.instanceId === proxied.data?.instanceId;
     }, 30000);
-    phase = 'ready'; await diagnose();
+    // Publish stack ownership only after both services and the proxy identity
+    // check are ready. An interrupted build/start therefore cannot leave an
+    // authoritative-looking control record behind.
+    phase = 'ready';
+    control = await (deps.openControl || openControl)(stackFile, identity,
+      () => ({ phase, frontendPid: frontend?.pid, ownsPayment: Boolean(ownedPayment) }), stop);
+    await diagnose();
     let checking = false;
     monitor = setInterval(async () => {
       if (stopping || checking) return;
@@ -236,10 +255,14 @@ async function start(options = {}, deps = {}) {
 }
 async function main(argv = process.argv.slice(2)) {
   const [command = 'status', ...flags] = argv;
+  const notificationScopes = flags.filter(flag => /^--notification-order=[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(flag));
+  const ordinaryFlags = flags.filter(flag => !notificationScopes.includes(flag));
   const known = ['--allow-email-allowlist', '--allow-email-live', '--allow-push'];
-  if (flags.some(flag => !known.includes(flag)) || new Set(flags).size !== flags.length || !['start', 'status', 'doctor', 'stop', 'restart', 'recover-legacy'].includes(command) ||
+  if (notificationScopes.length > 1 || flags.length - ordinaryFlags.length !== notificationScopes.length || ordinaryFlags.some(flag => !known.includes(flag)) ||
+      new Set(flags).size !== flags.length || !['start', 'status', 'doctor', 'stop', 'restart', 'recover-legacy'].includes(command) ||
       flags.length && !['start', 'restart'].includes(command) || flags.includes('--allow-email-allowlist') && flags.includes('--allow-email-live') ||
-      flags.includes('--allow-push') && flags.length === 1) {
+      flags.includes('--allow-push') && ordinaryFlags.length === 1 || notificationScopes.length &&
+        (!flags.includes('--allow-email-live') || !flags.includes('--allow-push') || flags.includes('--allow-email-allowlist'))) {
     throw new Error('Use start/status/doctor/stop/restart/recover-legacy; start/restart accept --allow-email-allowlist or --allow-email-live, optionally with --allow-push.');
   }
   if (command === 'recover-legacy') {
@@ -259,7 +282,8 @@ async function main(argv = process.argv.slice(2)) {
     if (stopped) await until(() => !fs.existsSync(stackFile), 55000);
     if (command === 'stop') return;
   }
-  return start({ email: flags.includes('--allow-email-allowlist'), live: flags.includes('--allow-email-live'), push: flags.includes('--allow-push') });
+  return start({ email: flags.includes('--allow-email-allowlist'), live: flags.includes('--allow-email-live'), push: flags.includes('--allow-push'),
+    ...(notificationScopes.length ? { notificationOrderId: notificationScopes[0].split('=')[1].toLowerCase() } : {}) });
 }
 if (require.main === module) {
   const restoreOut = safety.installSanitizedOutput(process.stdout); const restoreErr = safety.installSanitizedOutput(process.stderr);

@@ -9,7 +9,6 @@ const { randomBytes, timingSafeEqual } = require('node:crypto');
 async function openControl(file, identity, snapshot, stop) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const token = randomBytes(32).toString('hex');
-  const fd = fs.openSync(file, 'wx', 0o600); // races and stale records fail closed
   let record;
   const server = http.createServer((req, res) => {
     const supplied = Buffer.from(req.headers.authorization ?? '');
@@ -28,10 +27,15 @@ async function openControl(file, identity, snapshot, stop) {
   try {
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
     record = { identity, pid: process.pid, port: server.address().port, token };
-    fs.writeFileSync(fd, JSON.stringify(record));
+    // Publish complete records atomically. A crash can leave a temporary file,
+    // but readers will never mistake a partial JSON record for a live owner.
+    const temporary = `${file}.${process.pid}.${randomBytes(8).toString('hex')}.tmp`;
+    fs.writeFileSync(temporary, JSON.stringify(record), { flag: 'wx', mode: 0o600 });
+    try { fs.linkSync(temporary, file); } finally { fs.unlinkSync(temporary); }
   } catch (error) {
-    server.close(); fs.unlinkSync(file); throw error;
-  } finally { fs.closeSync(fd); }
+    server.close();
+    throw error;
+  }
   return { close: async () => {
     await new Promise(resolve => server.close(resolve));
     // Another owner must never lose its record during cleanup.

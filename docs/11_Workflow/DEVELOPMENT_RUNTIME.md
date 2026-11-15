@@ -37,11 +37,19 @@ The backend environment must already have `COMMERCE_EMAIL_ENQUEUE_ENABLED=true`,
 
 The email worker owns durable email and (when independently configured/authorized) push dispatch. It restarts auxiliary crashes with the existing bounded backoff, tracks actual per-process readiness/heartbeats, and drains its current batch after IPC disconnect. Five crashes in five minutes exhaust its restart budget. Exit 78 is not restarted. Provider acceptance, inbox delivery and OS push presentation remain separate evidence; READY is not a delivery claim. See the [commerce runbook](../10_Operations/COMMERCE_EMAIL_RUNBOOK.md).
 
+For a single controlled DEV acceptance order, use the supervised checkout profile with an explicit exact-order scope:
+
+```powershell
+node scripts/dev-stack.cjs start --allow-email-live --allow-push --notification-order=<paid-customer-order-uuid>
+```
+
+This opt-in is restricted to a paid order owned by an active, email-verified customer. A new acceptance target must be in `CONFIRMED` or `PREPARING` with no existing out-for-delivery notification event. For recovery, an already `OUT_FOR_DELIVERY` order is accepted only when it has exactly one fresh push event owned by that customer and exactly one matching email outbox row still `READY` with zero attempts. Prior email attempts, accepted/suppressed email, stale events, or mismatched ownership are rejected. Push deliveries continue to follow their own durable claim and retry states, so resuming a pending email cannot resend an accepted push. The email worker may claim/recover only fresh `ORDER_OUT_FOR_DELIVERY` email events for that order; the push worker may claim/settle only its `ORDER_OUT_FOR_DELIVERY` deliveries. This does not fabricate push deliveries when no subscription existed at transition time. It skips global subscription cleanup and provider-delivery reconciliation is scoped to that order. Other customers' and orders' queued work is not dispatched or modified by this profile. The supervisor still runs all normal DEV database, migration, Stripe Test Mode and payment-backlog gates; this scope does not grant payment recovery authority. A scoped worker cannot be attached to an existing runtime with a different scope. Use the broad live profile only when intentionally approving all fresh customer email backlog.
+
 Capture-mode email remains available in the existing **disposable** `dev:isolated` workflow; this shared-DEV checkout wrapper does not widen capture/send permissions or replay old queued mail. Contact mail and administrator security/operational mail use their existing independent provider paths; commerce-worker readiness does not prove those paths succeeded.
 
 ## Ownership, reuse and conflicts
 
-The root session and payment supervisor each create an exclusive, git-ignored control record under `.cache/` with a random local capability. Commands authenticate to a loopback-only control endpoint; the secret never appears in status output. Browser Origin requests are rejected. No command kills a PID read from a file.
+The root session and payment supervisor each publish an exclusive, git-ignored control record under `.cache/` with a random local capability only after their required services complete readiness. Records are written atomically. Commands authenticate to a loopback-only control endpoint; the secret never appears in status output. Browser Origin requests are rejected. No command kills a PID read from a file.
 
 An already running **new-protocol** checkout supervisor is reusable only after authenticated owner status plus the private API diagnostic prove its child PID, parent PID, DEV identity/TLS/readiness and live payment authority. A reused supervisor stays with its original owner; stopping the borrowing stack stops only its frontend. Stop the original foreground supervisor with Ctrl+C when it is no longer needed.
 
@@ -49,9 +57,9 @@ An existing healthy root session is reused without starting more processes. A co
 
 **One-time upgrade from an older runtime:** stop that runtime using Ctrl+C in its original owning terminal, then run the new stack command. The new launcher cannot safely adopt an older runtime that lacks process/authority attestation. Do not delete its live lock or kill `node.exe` broadly.
 
-If an old ElectroHub Vite/API session is abandoned and its terminal is unavailable, run `npm run dev:stack:recover-legacy` before startup. This explicit Windows-only recovery checks both fixed service ports, the exact workspace command identity, process creation identity, descendants, and the absence of live supervisor controls and payment/commerce workers. It terminates only validated legacy Vite/API process trees and verifies the ports are released. Foreign listeners, unknown descendants, active control records, and worker processes fail closed. This command does not recover or alter stale control/lock files; use the procedure below for those.
+If an old ElectroHub Vite/API session is abandoned and its terminal is unavailable, run `npm run dev:stack:recover-legacy` before startup. This explicit Windows-only recovery checks both fixed service ports, the exact workspace command identity, process creation identity, descendants, and payment/commerce workers. It gracefully stops validated legacy Vite/API process trees, uses forced termination only after revalidating the same process identities, and verifies the ports are released. A control or payment lock record is archived only after its owner and every recorded process are absent and the fixed service ports are free. A live or unverifiable owner, foreign listener, malformed record, unknown descendant, or worker process fails closed.
 
-If a control/lock file remains after a crash, inspect its recorded PID *and process creation/command identity*, descendants and port owners. PID reuse is possible. Archive a stale file only after proving that its owner and every recorded child have stopped. The launcher deliberately never guesses that a stale lock is safe to remove.
+If a control/lock file remains after a crash, use `npm run dev:stack:recover-legacy`. It verifies recorded owner and child PIDs against a fresh Windows process snapshot and checks listener ownership before archiving stale records with a timestamp suffix. PID reuse or a still-running owner blocks recovery; records are preserved for inspection.
 
 ## Backend updates and shutdown
 

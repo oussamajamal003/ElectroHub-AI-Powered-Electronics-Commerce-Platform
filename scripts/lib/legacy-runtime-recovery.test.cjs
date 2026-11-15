@@ -72,6 +72,37 @@ test('recovery refuses when process identity changes before termination', async 
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
+test('recovery archives stale controls and payment lock only after recorded PIDs and ports are absent', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'electrohub-stale-owner-'));
+  const stackFile = path.join(directory, 'dev-stack-control.json');
+  const paymentFile = path.join(directory, 'dev-payment-control.json');
+  const lockFile = path.join(directory, 'dev-payment-runtime.lock');
+  fs.writeFileSync(stackFile, JSON.stringify({ identity: `electrohub-stack:${root}`, pid: 9000, port: 45000, token: 'a'.repeat(64) }));
+  fs.writeFileSync(paymentFile, JSON.stringify({ identity: `electrohub-payment:${path.join(root, 'apps/backend')}`, pid: 9001, port: 45001, token: 'b'.repeat(64) }));
+  fs.writeFileSync(lockFile, JSON.stringify({ supervisorPid: 9001, ownedPids: [9002] }));
+  try {
+    const result = await recoverLegacy({ root, stackFile, paymentFile, platform: 'win32',
+      inspect: () => ({ listeners: [], processes: [] }), terminate: () => assert.fail('no process should be terminated'), wait: async () => {} });
+    assert.equal(result.stopped.length, 0);
+    assert.equal(result.archived.length, 3);
+    assert.equal(fs.existsSync(stackFile), false);
+    assert.equal(fs.existsSync(paymentFile), false);
+    assert.equal(fs.existsSync(lockFile), false);
+    assert.equal(fs.readdirSync(directory).filter(name => name.includes('.stale-')).length, 3);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('recovery never archives a control record while its recorded PID is present', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'electrohub-live-owner-'));
+  const stackFile = path.join(directory, 'dev-stack-control.json');
+  fs.writeFileSync(stackFile, JSON.stringify({ identity: `electrohub-stack:${root}`, pid: 9000, port: 45000, token: 'a'.repeat(64) }));
+  try {
+    await assert.rejects(recoverLegacy({ root, stackFile, paymentFile: path.join(directory, 'payment-control.json'), platform: 'win32',
+      inspect: () => ({ listeners: [], processes: [{ pid: 9000, name: 'node.exe', commandLine: `${root}\\scripts\\dev-stack.cjs` }] }) }), /Recorded owner PID is still present/);
+    assert.equal(fs.existsSync(stackFile), true);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
 test('recovery is unavailable outside Windows', async () => {
   await assert.rejects(recoverLegacy({ root, stackFile: 'missing-stack', paymentFile: 'missing-payment', platform: 'linux' }), /only on Windows/);
 });

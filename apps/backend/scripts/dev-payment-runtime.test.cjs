@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const safety = require('./stripe-gate-safety.cjs');
 const { argumentsFor, migrationNames, migrationChecksumCandidates, verifyMigrationLedger, assertNoPaymentBacklog,
-  assertNoEmailBacklog, assertReviewedRecovery, assertExpiredLeaseRecovery, assertTask04FixtureAttempt, normalizeWorkerAttemptIds, preflight, supervise, main } = require('./dev-payment-runtime.cjs');
+  assertNoEmailBacklog, assertReviewedRecovery, assertExpiredLeaseRecovery, assertTask04FixtureAttempt, classifyNotificationOrder, normalizeWorkerAttemptIds, preflight, supervise, main } = require('./dev-payment-runtime.cjs');
 
 const REVIEWED_ID = '11111111-1111-4111-8111-111111111111';
 const TASK04_ID = '22222222-2222-4222-8222-222222222222';
@@ -57,7 +57,10 @@ function fakePrisma(overrides = {}) {
     paymentAttempt: { count: async ({ where }) => where.state === 'INCIDENT' ? overrides.historicalIncidents ?? 0 : overrides.unresolvedAttempts ?? 0,
       findUnique: async () => overrides.reviewedAttempt, findMany: async () => overrides.fixtureAttempts ?? [] },
     user: { findFirst: async () => overrides.fixtureOwner === undefined ? { id: TASK04_USER_ID } : overrides.fixtureOwner },
-    commerceEmailOutbox: { count: async () => overrides.emailBacklog ?? 0 },
+    order: { findUnique: async () => overrides.notificationOrder ?? null },
+    customerNotification: { findFirst: async () => overrides.notificationPushEvent ?? null },
+    commerceEmailOutbox: { count: async () => overrides.emailBacklog ?? 0,
+      findMany: async () => overrides.notificationEmailEvents ?? [] },
     stripeEvent: { count: async () => overrides.signedEvents ?? 0 },
   };
   return {
@@ -694,4 +697,61 @@ test('live email and push are separate explicit opt-ins; push always rides an em
   assert.throws(() => argumentsFor([...base, '--allow-email-live', '--no-email']), /not both/);
   assert.throws(() => argumentsFor([...base, '--allow-push']), /needs the email worker/);
   assert.deepEqual(argumentsFor(base), { start: true, mode: 'checkout', allowEmailAllowlist: false }); // nothing implied
+});
+
+test('exact notification dispatch scope is development checkout only with live email and push', () => {
+  const base = ['--start', '--allow-dev-checkout', '--recovery-mode=checkout', '--allow-email-live', '--allow-push'];
+  const orderId = '4510e012-e03d-4939-bb3d-52746df0db4a';
+  assert.deepEqual(argumentsFor([...base, `--notification-order=${orderId}`]),
+    { start: true, mode: 'checkout', allowEmailAllowlist: false, allowEmailLive: true, allowPush: true, notificationOrderId: orderId });
+  assert.throws(() => argumentsFor([...base, '--notification-order=not-a-uuid']));
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-checkout', '--recovery-mode=checkout', '--allow-email-live', `--notification-order=${orderId}`]), /only valid/);
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-checkout', '--recovery-mode=checkout', '--allow-email-allowlist', '--allow-push', `--notification-order=${orderId}`]), /only valid/);
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-recovery', '--notification-order=' + orderId]));
+});
+
+test('exact-order notification recovery accepts only its untouched fresh owner event', () => {
+  const now = Date.now();
+  const order = { status: 'OUT_FOR_DELIVERY', userId: 'customer-b', payment: { status: 'SUCCEEDED' }, user: { email: 'customer-b@example.test',
+    isActive: true, emailVerifiedAt: new Date(now - 1_000), role: { name: 'CUSTOMER' } } };
+  const pushEvent = { userId: 'customer-b', occurredAt: new Date(now - 1_000), pushDeliveries: [] };
+  const emailEvent = { type: 'ORDER_OUT_FOR_DELIVERY', userId: 'customer-b', recipient: 'customer-b@example.test', dispatchState: 'READY',
+    attemptCount: 0, suppressionReason: null, createdAt: new Date(now - 1_000) };
+  assert.equal(classifyNotificationOrder(order, pushEvent, [emailEvent], now), 'resume');
+  assert.throws(() => classifyNotificationOrder(order, pushEvent, [{ ...emailEvent, userId: 'customer-a' }], now), /untouched, fresh/);
+  assert.throws(() => classifyNotificationOrder(order, pushEvent, [{ ...emailEvent, recipient: 'customer-a@example.test' }], now), /untouched, fresh/);
+  assert.throws(() => classifyNotificationOrder(order, pushEvent, [{ ...emailEvent, attemptCount: 1 }], now), /untouched, fresh/);
+  assert.throws(() => classifyNotificationOrder(order, pushEvent, [{ ...emailEvent, dispatchState: 'ACCEPTED' }], now), /untouched, fresh/);
+  assert.throws(() => classifyNotificationOrder(order, pushEvent, [emailEvent], now - 24 * 3_600_000 - 1), /untouched, fresh/);
+  assert.throws(() => classifyNotificationOrder(order, { ...pushEvent, userId: 'customer-a' }, [emailEvent], now), /untouched, fresh/);
+  assert.equal(classifyNotificationOrder(order, { ...pushEvent, pushDeliveries: [{ state: 'ACCEPTED', attempts: 1 }] }, [emailEvent], now), 'resume');
+  assert.equal(classifyNotificationOrder({ ...order, status: 'PREPARING' }, null, [], now), 'new');
+  assert.throws(() => classifyNotificationOrder({ ...order, status: 'PREPARING' }, pushEvent, [], now), /already has notification events/);
+  assert.throws(() => classifyNotificationOrder({ ...order, status: 'OUT_FOR_DELIVERY', user: { ...order.user, emailVerifiedAt: null } }, pushEvent, [emailEvent], now), /email-verified/);
+});
+
+test('checkout preflight permits exactly one pending email only when resuming the same fresh verified order event', async () => {
+  const previous = { nodeEnv: process.env.NODE_ENV, tls: process.env.NODE_TLS_REJECT_UNAUTHORIZED, source: process.env.DB_RUNTIME_URL_SOURCE };
+  process.env.NODE_ENV = ''; delete process.env.NODE_TLS_REJECT_UNAUTHORIZED; process.env.DB_RUNTIME_URL_SOURCE = 'direct';
+  const orderId = '44444444-4444-4444-8444-444444444444'; const now = new Date();
+  const notificationOrder = { id: orderId, userId: 'customer-b', status: 'OUT_FOR_DELIVERY', payment: { status: 'SUCCEEDED' },
+    user: { email: 'customer-b@example.test', isActive: true, emailVerifiedAt: now, role: { name: 'CUSTOMER' } } };
+  const notificationPushEvent = { id: 'event-b', userId: 'customer-b', occurredAt: now, pushDeliveries: [] };
+  const notificationEmailEvents = [{ type: 'ORDER_OUT_FOR_DELIVERY', userId: 'customer-b', recipient: 'customer-b@example.test',
+    dispatchState: 'READY', attemptCount: 0, suppressionReason: null, createdAt: now }];
+  try {
+    const config = await preflight(preflightDependencies({ notificationOrder, notificationPushEvent, notificationEmailEvents, emailBacklog: 1,
+      deps: { describeEmail: () => ({ producerEnabled: true, brevoKeyPresent: true, originConfigured: true }) } }),
+    { start: true, mode: 'checkout', allowEmailLive: true, allowPush: true, notificationOrderId: orderId });
+    assert.equal(config.notificationOrderReady, true);
+    assert.equal(config.notificationOrderMode, 'resume');
+    assert.equal(config.emailBacklog, 1);
+    await assert.rejects(preflight(preflightDependencies({ notificationOrder, notificationPushEvent, notificationEmailEvents, emailBacklog: 2,
+      deps: { describeEmail: () => ({ producerEnabled: true, brevoKeyPresent: true, originConfigured: true }) } }),
+    { start: true, mode: 'checkout', allowEmailLive: true, allowPush: true, notificationOrderId: orderId }), /exactly one fresh pending/);
+  } finally {
+    for (const [name, value] of [['NODE_ENV', previous.nodeEnv], ['NODE_TLS_REJECT_UNAUTHORIZED', previous.tls], ['DB_RUNTIME_URL_SOURCE', previous.source]]) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+  }
 });

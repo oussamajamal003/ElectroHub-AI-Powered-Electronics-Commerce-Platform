@@ -11,6 +11,8 @@ export default defineConfig(({ command }) => {
     plugins: [react()],
     ...(cacheDir ? { cacheDir } : {}),
     resolve: {
+      // Prevent linked packages or future dependency graph changes from loading a second React renderer/runtime pair.
+      dedupe: ['react', 'react-dom'],
       alias: {
         '@': path.resolve(__dirname, './src'),
       },

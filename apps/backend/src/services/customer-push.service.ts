@@ -57,6 +57,7 @@ export class CustomerPushService {
       subscription: { userId: session.userId, familyId: session.familyId, revokedAt: null },
       notification: { userId: session.userId, order: { userId: session.userId } } }, include: { notification: true } });
     if (!row) throw new AppError('Notification unavailable.', 404, 'PUSH_NOT_FOUND');
-    return { url: `/orders/ORD-${row.notification.orderId.toUpperCase()}` };
+    const reference = `ORD-${row.notification.orderId.toUpperCase()}`;
+    return { url: `/orders/${reference}`, orderReference: reference, type: row.notification.type };
   }
 }

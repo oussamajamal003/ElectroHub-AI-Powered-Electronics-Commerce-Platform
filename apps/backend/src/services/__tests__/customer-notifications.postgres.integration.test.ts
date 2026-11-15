@@ -192,7 +192,7 @@ describe.skipIf(!enabled).sequential('customer notifications: disposable Postgre
     const retry = (await worker.claim()).find(item => item.id === row.id)!;
     await worker.process(retry); await worker.process(retry);
     expect(send).toHaveBeenCalledTimes(2);
-    expect(send.mock.calls[1]![0]).toMatchObject({ subject: 'Your ElectroHub Order Is Out for Delivery!', to: row.recipient });
+    expect(send.mock.calls[1]![0]).toMatchObject({ subject: 'Your ElectroHub order is out for delivery', to: row.recipient });
     expect((await service.list(userId)).items).toHaveLength(1);
   });
 

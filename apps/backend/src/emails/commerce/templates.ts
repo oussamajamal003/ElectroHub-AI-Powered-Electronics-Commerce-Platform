@@ -15,7 +15,7 @@ import { formatCardBrand, formatEstimate, formatInstant, formatMoney } from './f
 import { FONT_STACK, MONO_STACK, renderLayout, type StatusTone } from './layout.js';
 import { LEGACY_STORE_IDENTITY } from '../../services/store-identity.js';
 
-const CTA_LABEL = 'View Order Details';
+const CTA_LABEL = 'View Your Order';
 const P_STYLE = `margin:0 0 16px 0;font-family:${FONT_STACK};font-size:16px;line-height:24px;color:#0F172A;`;
 const LABEL_STYLE = `margin:0 0 8px 0;font-family:${FONT_STACK};font-size:14px;line-height:20px;font-weight:600;color:#0F172A;`;
 
@@ -216,7 +216,7 @@ export function renderOrderPreparing(snapshot: SnapshotOf<'ORDER_PREPARING'>, ct
 export function renderOrderOutForDelivery(snapshot: SnapshotOf<'ORDER_OUT_FOR_DELIVERY'>, ctx: RenderContext): RenderedCommerceEmail {
   const date = formatInstant(snapshot.occurredAt);
   return composeEmail({
-    subject: 'Your ElectroHub Order Is Out for Delivery!',
+    subject: 'Your ElectroHub order is out for delivery',
     preheader: 'Your order is out for delivery.',
     heading: 'Your order is out for delivery',
     statusLabel: 'Out for delivery',
@@ -224,7 +224,7 @@ export function renderOrderOutForDelivery(snapshot: SnapshotOf<'ORDER_OUT_FOR_DE
     eventDateLabel: date,
     blocks: [
       greetingBlock(snapshot.recipientName),
-      paragraphBlock(`Your order moved to Out for Delivery on ${date}.`),
+      paragraphBlock(`Your order left the dispatch hub on ${date} and is on its way.`),
       deliveryBlock(snapshot.delivery, 'estimate only', false),
     ],
   }, snapshot.orderReference, ctx);

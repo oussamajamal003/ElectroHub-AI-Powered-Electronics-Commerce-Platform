@@ -22,6 +22,8 @@ describe('administrator invitation conflicts', () => {
   it('directs an existing administrator to management controls', () => {
     const message = teamFailure(fail('ADMIN_ALREADY_EXISTS')) ?? '';
     expect(message).toMatch(/administrator already exists/i);
+    expect(message).toMatch(/no new invitation email was sent/i);
+    expect(message).toMatch(/Setup pending/i);
     expect(message).toMatch(/Manage Administrators/);
   });
 });

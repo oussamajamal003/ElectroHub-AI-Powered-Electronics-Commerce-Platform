@@ -55,7 +55,7 @@ async function main() {
           workerPermission: configuration.dispatchPermission(configuration.email, target),
           schema: (schema as Array<unknown>)[0],
           emailQueue: health,
-          push: { enabled: configuration.push.enabled, configured: configuration.push.configured,
+          push: { enabled: configuration.push.enabled, configured: configuration.push.configured, availability: configuration.push.availability,
             workerAllowed: configuration.pushDispatchAllowed(target) },
           workerRunning: 'NOT_PROVEN_BY_CONFIGURATION: verify recent email_worker_ready/email_worker_heartbeat logs',
           nextStep: 'Run npm run email:worker in the same explicitly approved environment. API dev alone does not start this worker. Never replay UNCERTAIN rows.',

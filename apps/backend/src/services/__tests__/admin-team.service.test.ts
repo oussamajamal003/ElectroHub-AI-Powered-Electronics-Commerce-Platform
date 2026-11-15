@@ -23,7 +23,7 @@ const state = vi.hoisted(() => {
       }
       return { count: 1 };
     }),
-    findUnique: vi.fn(async () => ({ ...row, invitedBy: null })),
+    findUnique: vi.fn(async (): Promise<Record<string, unknown>> => ({ ...row, invitedBy: null })),
   };
   const db: Record<string, unknown> = {
     adminInvitation: invitation,
@@ -49,7 +49,7 @@ const email = vi.hoisted(() => ({ sendAdminInvitationEmail: vi.fn(async () => tr
 vi.mock('../../lib/prisma.js', () => ({ prisma: state.db }));
 vi.mock('../admin-audit.js', () => ({ recordAdminAudit: audit.recordAdminAudit }));
 vi.mock('../admin-invitation-email.js', () => ({ sendAdminInvitationEmail: email.sendAdminInvitationEmail }));
-vi.mock('../admin-mfa.service.js', () => ({ adminMfaService: {}, INVITE_ENROLLMENT_WINDOW_MS: 86_400_000 }));
+vi.mock('../admin-mfa.service.js', () => ({ adminMfaService: { factorSummary: vi.fn(async () => ({ totp: 0, passkeys: 0, recoveryCodes: 0 })) }, INVITE_ENROLLMENT_WINDOW_MS: 86_400_000 }));
 vi.mock('../../sockets/delivery.publisher.js', () => ({ DeliveryPublisher: {} }));
 vi.mock('../admin-notification.service.js', () => ({ adminNotifications: {} }));
 
@@ -201,5 +201,32 @@ describe('AdminTeamService.createInvitation collisions', () => {
     state.invitation.create.mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError('unique', { code: 'P2002', clientVersion: 'test' }));
     await expect(new AdminTeamService().createInvitation(owner, { email: 'person@example.com', grantManageAdmins: false }))
       .rejects.toMatchObject({ statusCode: 409, code: 'INVITATION_EXISTS' });
+  });
+});
+
+describe('AdminTeamService.previewInvitation after acceptance', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    state.reset();
+  });
+
+  it('identifies an accepted invite whose administrator still has an active setup window', async () => {
+    state.invitation.findUnique.mockResolvedValueOnce({ email: 'person@example.com', status: AdminInvitationStatus.ACCEPTED,
+      expiresAt: new Date(Date.now() + 60_000), acceptedUserId: 'admin-user-id' });
+    const security = state.db.adminAccountSecurity as { findUnique: ReturnType<typeof vi.fn> };
+    security.findUnique.mockResolvedValueOnce({ enrollmentAllowedUntil: new Date(Date.now() + 60_000), mfaEnrolledAt: null });
+
+    await expect(new AdminTeamService().previewInvitation('an-invitation-token-long-enough'))
+      .rejects.toMatchObject({ statusCode: 409, code: 'INVITATION_SETUP_PENDING' });
+  });
+
+  it('keeps other used or expired invitation states unavailable', async () => {
+    state.invitation.findUnique.mockResolvedValueOnce({ email: 'person@example.com', status: AdminInvitationStatus.ACCEPTED,
+      expiresAt: new Date(Date.now() + 60_000), acceptedUserId: 'admin-user-id' });
+    const security = state.db.adminAccountSecurity as { findUnique: ReturnType<typeof vi.fn> };
+    security.findUnique.mockResolvedValueOnce({ enrollmentAllowedUntil: new Date(Date.now() - 60_000), mfaEnrolledAt: null });
+
+    await expect(new AdminTeamService().previewInvitation('an-invitation-token-long-enough'))
+      .rejects.toMatchObject({ statusCode: 410, code: 'INVITATION_UNAVAILABLE' });
   });
 });
