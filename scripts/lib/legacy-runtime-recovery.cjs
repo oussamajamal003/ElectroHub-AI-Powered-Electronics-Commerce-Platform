@@ -7,7 +7,12 @@ const serviceForPort = new Map([[3000, 'frontend'], [5000, 'backend']]);
 const workerMarkers = ['--payment-worker', '--commerce-email-worker', 'dev-payment-runtime'];
 
 function normalized(value) { return String(value ?? '').replaceAll('/', '\\').toLowerCase(); }
-function hasWorkspace(commandLine, root) { return normalized(commandLine).includes(normalized(path.resolve(root))); }
+function hasWorkspace(commandLine, root) {
+  // Runtime recovery is Windows-only, but the ownership planner is also exercised in Linux CI.
+  // Resolve the supplied workspace using Windows path rules so Windows-shaped fixtures remain valid.
+  const workspace = path.win32.resolve(root);
+  return normalized(commandLine).includes(normalized(workspace));
+}
 
 function isRoleProcess(process, role, root) {
   if (!process || String(process.name).toLowerCase() !== 'node.exe' || !hasWorkspace(process.commandLine, root)) return false;
@@ -112,3 +117,4 @@ async function recoverLegacy({ root, stackFile, paymentFile, platform = process.
 }
 
 module.exports = { inspectWindows, planLegacyRecovery, recoverLegacy };
+
