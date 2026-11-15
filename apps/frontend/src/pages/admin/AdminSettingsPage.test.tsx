@@ -113,10 +113,11 @@ describe('store section', () => {
   it.each([false, true])('renders selectable details without editing for non-Owner, manager=%s', manager => {
     asAdministrator({ isOwner: false, canManageAdmins: manager });
     renderPage();
-    expect(screen.getByText(profile.supportEmail)).toBeVisible();
-    expect(screen.getByText(/Only an Owner can update/)).toBeVisible();
+    expect(screen.getByLabelText('Store email')).toHaveValue(profile.supportEmail);
+    expect(screen.getByLabelText('Store email')).toHaveAttribute('readonly');
+    expect(screen.getByText(/Only the Owner can make changes/)).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Save Changes' })).toBeNull();
-    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.getByLabelText('Store name')).toHaveAttribute('readonly');
   });
 
   it('announces the loading state without exposing decorative placeholder controls', () => {
