@@ -37,6 +37,8 @@ export interface ProductCardProps {
   className?: string;
   showActions?: boolean;
   square?: boolean;
+  /** Cart surfaces provide their own inline confirmation and can suppress the global success toast. */
+  showAddToast?: boolean;
 }
 
 export function ProductCard({
@@ -65,6 +67,7 @@ export function ProductCard({
   className = '',
   showActions = true,
   square = false,
+  showAddToast = true,
 }: ProductCardProps) {
   const stock = stockPresentation(stockStatus === undefined ? availability === 'AVAILABLE' ? 'IN_STOCK' : null : stockStatus);
   const unavailable = stockStatus === 'OUT_OF_STOCK' || purchasable === false || availability === 'UNAVAILABLE';
@@ -93,7 +96,7 @@ export function ProductCard({
     try {
       await onAddToCart(id); setCartState('added');
       // Visual confirmation only: the inline status below is the screen-reader announcement.
-      toast.success('Added to cart', { description: title, announce: false });
+      if (showAddToast) toast.success('Added to cart', { description: title, announce: false });
     }
     catch (error) {
       const message = error instanceof ApiError && error.code === 'CART_STOCK_CONFLICT' || error instanceof Error && /^Only \d+ items? (?:is|are) currently available\.$/.test(error.message)

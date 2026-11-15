@@ -1,12 +1,15 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
+import { ToastCenter } from '@/components/ui/Toast';
 import type { ProductSummary } from '@/features/products/types';
 import { railCopy } from '../labels';
 import type { RecommendationSection } from '../types';
 import { RecommendationSectionRail } from './RecommendationSectionRail';
 
-vi.mock('../useStoreCardActions', () => ({ useStoreCardActions: () => ({ navigate: vi.fn(), cardActions: {} }) }));
+const { addToCart } = vi.hoisted(() => ({ addToCart: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../useStoreCardActions', () => ({ useStoreCardActions: () => ({ navigate: vi.fn(), cardActions: { onAddToCart: addToCart } }) }));
 vi.mock('../tracking', () => ({ useImpressionTracking: () => ({ observe: () => () => undefined, click: vi.fn() }) }));
 vi.mock('../queries', () => ({ recordRecommendationClick: vi.fn() }));
 
@@ -26,6 +29,18 @@ const section = (overrides: Partial<RecommendationSection> = {}): Recommendation
 });
 
 describe('RecommendationSectionRail featured placement', () => {
+  it('keeps add-to-cart feedback inline without a success toast on the Cart page', async () => {
+    addToCart.mockClear();
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={['/cart']}><RecommendationSectionRail id="cart-suggestions" section={section()} /><ToastCenter /></MemoryRouter>);
+
+    await user.click(screen.getByRole('button', { name: 'Add Pinned Headphones to cart' }));
+
+    expect(addToCart).toHaveBeenCalledWith(pinned.id);
+    expect(screen.queryByText('Added to cart')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Pinned Headphones added to cart.');
+  });
+
   it('labels only the administrator-pinned card as Featured, in text, and keeps the organic card unlabelled', () => {
     render(<MemoryRouter><RecommendationSectionRail id="popular" section={section()} /></MemoryRouter>);
     expect(screen.getAllByRole('listitem')).toHaveLength(2);

@@ -27,6 +27,7 @@ export interface RecommendationRailProps {
   wishlistPending?: readonly string[];
   onToggleWishlist?: (productId: string, product: ProductSummary) => void;
   onAddToCart?: (productId: string) => Promise<void> | void;
+  showAddToast?: boolean;
   onNavigate?: (href: string, product: ProductSummary) => void;
   onRemove?: (productId: string) => void;
   removeDisabled?: boolean;
@@ -44,7 +45,7 @@ export interface RecommendationRailProps {
  */
 export function RecommendationRail({
   id, title, description, products, loading = false, error = false, onRetry, skeletonCount = 4, columns = 4, action,
-  headingLevel = 'h2', wishlistIds, wishlistPending, onToggleWishlist, onAddToCart, onNavigate, cardRef, footer,
+  headingLevel = 'h2', wishlistIds, wishlistPending, onToggleWishlist, onAddToCart, showAddToast = true, onNavigate, cardRef, footer,
   onRemove, removeDisabled = false, featuredIds,
 }: RecommendationRailProps) {
   const Heading = headingLevel;
@@ -76,6 +77,7 @@ export function RecommendationRail({
           isWishlisted={wishlistIds?.includes(product.id)} wishlistPending={wishlistPending?.includes(product.id)}
           onToggleWishlist={onToggleWishlist ? (_, summary) => onToggleWishlist(product.id, summary ?? product) : undefined}
           onAddToCart={onAddToCart ? () => onAddToCart(product.id) : undefined}
+          showAddToast={showAddToast}
           onNavigate={onNavigate ? href => onNavigate(href, product) : undefined} />
         {onRemove && <Button type="button" variant="ghost" disabled={removeDisabled} onClick={() => onRemove(product.id)} aria-label={`Remove ${product.name} from recently viewed`}>Remove from history</Button>}
       </li>)}
