@@ -7,6 +7,7 @@ npm run dev:stack:supervised
 npm run dev:stack:doctor
 npm run dev:stack:status
 npm run dev:stack:stop
+npm run dev:stack:recover-legacy
 ```
 
 Keep the first command running. Open `http://localhost:3000`; API, Swagger (`http://localhost:5000/api/docs/`), customer/admin routes, signed Stripe webhooks and Socket.IO all use backend port 5000. Route navigation does not start, stop or replace a backend. Vite HMR affects only frontend code.
@@ -47,6 +48,8 @@ An already running **new-protocol** checkout supervisor is reusable only after a
 An existing healthy root session is reused without starting more processes. A concurrently starting/degraded session is refused. An unmanaged frontend/backend, a legacy supervisor without the control protocol, an unavailable owner or a stale record causes an actionable conflict. Unknown processes are never terminated; ports are never silently changed. Windows checks both owner inventory and IPv4/IPv6 accepting sockets before attempting a bind.
 
 **One-time upgrade from an older runtime:** stop that runtime using Ctrl+C in its original owning terminal, then run the new stack command. The new launcher cannot safely adopt an older runtime that lacks process/authority attestation. Do not delete its live lock or kill `node.exe` broadly.
+
+If an old ElectroHub Vite/API session is abandoned and its terminal is unavailable, run `npm run dev:stack:recover-legacy` before startup. This explicit Windows-only recovery checks both fixed service ports, the exact workspace command identity, process creation identity, descendants, and the absence of live supervisor controls and payment/commerce workers. It terminates only validated legacy Vite/API process trees and verifies the ports are released. Foreign listeners, unknown descendants, active control records, and worker processes fail closed. This command does not recover or alter stale control/lock files; use the procedure below for those.
 
 If a control/lock file remains after a crash, inspect its recorded PID *and process creation/command identity*, descendants and port owners. PID reuse is possible. Archive a stale file only after proving that its owner and every recorded child have stopped. The launcher deliberately never guesses that a stale lock is safe to remove.
 

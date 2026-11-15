@@ -32,7 +32,7 @@ export function CookieControls({ locked }: { locked: boolean }) {
       {/* Accept and Reject carry equal visual weight: no dark pattern nudging toward consent. */}
       <div className={styles.bannerActions}><Button onClick={() => choose(true)}>Accept all</Button><Button onClick={() => choose(false)}>Reject optional</Button><Button variant="outline" onClick={customize}>Customize</Button></div>
     </section>}
-    <Dialog open={open} onOpenChange={setOpen}><DialogContent className={styles.dialog}>
+    <Dialog open={open} onOpenChange={setOpen}><DialogContent containerClassName={styles.dialogContainer} className={`${styles.dialog} ${styles.dialogSheet}`}>
       <div className={styles.heading}>
         <span className={styles.headingIcon} aria-hidden="true"><Cookie /></span>
         <div><DialogTitle>Cookie Settings</DialogTitle><DialogDescription>Choose whether ElectroHub may use optional analytics. You can change this choice at any time.</DialogDescription></div>

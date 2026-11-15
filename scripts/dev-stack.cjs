@@ -4,6 +4,7 @@ const path = require('node:path');
 const net = require('node:net');
 const { fork, spawn } = require('node:child_process');
 const { openControl, controlRequest } = require('./lib/dev-control.cjs');
+const { recoverLegacy } = require('./lib/legacy-runtime-recovery.cjs');
 const safety = require('../apps/backend/scripts/stripe-gate-safety.cjs');
 const verifier = require('../apps/backend/scripts/stripe-webhook-verifier.cjs');
 const root = path.resolve(__dirname, '..');
@@ -236,10 +237,16 @@ async function start(options = {}, deps = {}) {
 async function main(argv = process.argv.slice(2)) {
   const [command = 'status', ...flags] = argv;
   const known = ['--allow-email-allowlist', '--allow-email-live', '--allow-push'];
-  if (flags.some(flag => !known.includes(flag)) || new Set(flags).size !== flags.length || !['start', 'status', 'doctor', 'stop', 'restart'].includes(command) ||
+  if (flags.some(flag => !known.includes(flag)) || new Set(flags).size !== flags.length || !['start', 'status', 'doctor', 'stop', 'restart', 'recover-legacy'].includes(command) ||
       flags.length && !['start', 'restart'].includes(command) || flags.includes('--allow-email-allowlist') && flags.includes('--allow-email-live') ||
       flags.includes('--allow-push') && flags.length === 1) {
-    throw new Error('Use start/status/doctor/stop/restart; start/restart accept --allow-email-allowlist or --allow-email-live, optionally with --allow-push.');
+    throw new Error('Use start/status/doctor/stop/restart/recover-legacy; start/restart accept --allow-email-allowlist or --allow-email-live, optionally with --allow-push.');
+  }
+  if (command === 'recover-legacy') {
+    if (flags.length) throw new Error('Legacy recovery accepts no flags.');
+    const result = await recoverLegacy({ root, stackFile, paymentFile });
+    console.log(`${result.message}${result.stopped.length ? ` Stopped: ${result.stopped.map(item => `${item.role} PID ${item.pid} (port ${item.port})`).join(', ')}.` : ''}`);
+    return result;
   }
   if (command === 'status' || command === 'doctor') {
     const result = await report();

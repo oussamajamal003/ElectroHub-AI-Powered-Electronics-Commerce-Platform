@@ -4,6 +4,9 @@
 .banner p, .category p { margin: $spacing-2 0 0; line-height: 1.6; }
 .bannerActions { display: flex; flex-wrap: wrap; gap: $spacing-2; flex-shrink: 0; }
 .dialog { max-width: 42rem; gap: $spacing-5; padding: $spacing-8; border-radius: $radius-xl; background: $color-elevated; }
+.dialogContainer { align-items: flex-end; padding: 0; }
+.dialogSheet { max-width: 48rem; margin: 0 auto; border-radius: $radius-xl $radius-xl 0 0; animation: cookie-sheet-enter 260ms cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes cookie-sheet-enter { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }
 .heading { display: flex; align-items: flex-start; gap: $spacing-4; padding-right: $spacing-8; }
 .heading > div { display: grid; gap: $spacing-2; }
 .headingIcon, .categoryIcon { display: grid; flex: 0 0 auto; place-items: center; color: $color-primary-text; background: $color-primary-subtle; }
@@ -31,6 +34,7 @@
   .banner { flex-direction: column; align-items: stretch; }
   .bannerActions > button { flex: 1 1 auto; }
   .dialog { padding: $spacing-5; gap: $spacing-4; }
+  .dialogSheet { max-height: min(90dvh, 48rem); padding-bottom: max(#{$spacing-5}, env(safe-area-inset-bottom)); }
   .heading { gap: $spacing-3; }
   .headingIcon { width: 2.5rem; height: 2.5rem; }
   .category { padding: $spacing-4; gap: $spacing-3; }
