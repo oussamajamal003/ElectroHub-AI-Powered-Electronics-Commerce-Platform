@@ -33,6 +33,7 @@ describe.skipIf(!enabled).sequential('Web Push on disposable PostgreSQL', () => 
   beforeAll(() => {
     const url = new URL(process.env.DATABASE_URL!); expect(['localhost','127.0.0.1']).toContain(url.hostname); expect(url.pathname).toMatch(/^\/electrohub_(disposable|ci)/);
     const vapid = createECDH('prime256v1'); vapid.generateKeys();
+    vi.stubEnv('NODE_ENV', 'test');
     vi.stubEnv('CUSTOMER_PUSH_ENABLED', 'true'); vi.stubEnv('WEB_PUSH_VAPID_PUBLIC_KEY', vapid.getPublicKey().toString('base64url'));
     vi.stubEnv('WEB_PUSH_VAPID_PRIVATE_KEY', vapid.getPrivateKey().toString('base64url')); vi.stubEnv('WEB_PUSH_VAPID_SUBJECT', 'mailto:qa@example.invalid');
     vi.stubEnv('COMMERCE_EMAIL_ORIGIN', 'http://localhost:5173');
