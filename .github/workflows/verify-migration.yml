@@ -7,6 +7,14 @@ name: Verify Prisma Migrations on Linux
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'apps/backend/prisma/**'
+      - '.github/workflows/verify-migration.yml'
+      - '.github/actions/disposable-postgres/**'
   pull_request:
     branches:
       - develop
