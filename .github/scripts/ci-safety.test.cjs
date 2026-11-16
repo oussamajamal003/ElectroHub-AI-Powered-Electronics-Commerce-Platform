@@ -363,6 +363,7 @@ test('checkDestructiveSql flags destructive statements and permits safe additive
   assert.ok(plan.checkDestructiveSql('m', 'DROP TABLE products;').length > 0);
   assert.ok(plan.checkDestructiveSql('m', 'DROP COLUMN price;').length > 0);
   assert.ok(plan.checkDestructiveSql('m', 'ALTER TABLE users DROP COLUMN email;').length > 0);
+  assert.ok(plan.checkDestructiveSql('m', 'ALTER TABLE users DROP CONSTRAINT users_email_key;').length > 0);
   assert.ok(plan.checkDestructiveSql('m', 'DROP SCHEMA public;').length > 0);
   assert.ok(plan.checkDestructiveSql('m', 'DROP DATABASE electrohub;').length > 0);
   assert.ok(plan.checkDestructiveSql('m', 'DROP TYPE status_enum;').length > 0);
@@ -377,6 +378,7 @@ test('checkDestructiveSql flags destructive statements and permits safe additive
   assert.deepEqual(plan.checkDestructiveSql('m', 'CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;'), []);
   assert.deepEqual(plan.checkDestructiveSql('m', 'GRANT SELECT, INSERT, UPDATE, DELETE ON ai.table TO role;'), []);
   assert.deepEqual(plan.checkDestructiveSql('m', 'ALTER TABLE child ADD CONSTRAINT fk FOREIGN KEY (p) REFERENCES parent(id) ON DELETE CASCADE;'), []);
+  assert.deepEqual(plan.checkDestructiveSql('m', 'ALTER TABLE commerce_email_outbox ALTER COLUMN "orderId" DROP NOT NULL;'), []);
   assert.deepEqual(plan.checkDestructiveSql('m', '-- Comment with DROP TABLE should not trigger\nCREATE INDEX idx ON tbl(col);'), []);
 });
 

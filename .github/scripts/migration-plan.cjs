@@ -157,8 +157,9 @@ function planMigrations(local, ledger) {
 }
 
 const DESTRUCTIVE_SQL_PATTERNS = [
-  { pattern: /\bDROP\s+(?:TABLE|COLUMN|SCHEMA|DATABASE|TYPE|EXTENSION|ROLE)\b/i, desc: 'DROP statement' },
-  { pattern: /\bALTER\s+TABLE\s+[^;]+\bDROP\s+(?:COLUMN\s+)?/i, desc: 'ALTER TABLE ... DROP' },
+  { pattern: /\bDROP\s+(?:TABLE|COLUMN|CONSTRAINT|SCHEMA|DATABASE|TYPE|EXTENSION|ROLE)\b/i, desc: 'DROP statement' },
+  // Keep rejecting dropped columns, constraints and defaults, but allow DROP NOT NULL: relaxing nullability preserves existing rows.
+  { pattern: /\bALTER\s+TABLE\s+[^;]+\bDROP\s+(?!NOT\s+NULL\b)(?:COLUMN\s+)?/i, desc: 'ALTER TABLE ... DROP' },
   { pattern: /\bTRUNCATE(?:\s+TABLE)?\b/i, desc: 'TRUNCATE statement' },
   { pattern: /\bDELETE\s+FROM\b/i, desc: 'DELETE FROM statement' },
 ];
