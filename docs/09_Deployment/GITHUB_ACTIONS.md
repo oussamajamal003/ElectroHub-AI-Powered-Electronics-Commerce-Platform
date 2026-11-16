@@ -8,10 +8,12 @@ feed **Required / Quality Gate**. A skipped, failed or cancelled dependency fail
 Security Audit remains a separate required check. Repository branch-protection configuration requires an owner/admin;
 the workflow file alone does not enforce branch protection. Reports/traces have 14-day retention.
 
-**Operational change for independent review:** PROD migrations are now manual-dispatch only, require the full approved SHA,
-refuse non-`develop` dispatches, and retain protected-environment, TLS identity and migration pre/post checks.
-Merging ordinary development work no longer starts a production write. No migration workflow was dispatched by Task 06.2.
-DEV remains manual-only. Infrastructure deployment is reserved for Task 06.4.
+PROD migrations run only after the `Development CI` workflow succeeds for a push to `develop`. The migration workflow checks
+the completed CI result, branch, push event, repository identity and commit SHA, then checks out that exact commit. It retains
+the protected `electrohub-prod-database` environment, project identity, TLS, checksum/order, additive-SQL and migration
+pre/post checks, plus a non-cancelling concurrency lock. Pull requests, failed CI runs, feature branches, and runs from
+another repository cannot start a production migration. DEV migrations remain manual-only. Infrastructure deployment is
+reserved for Task 06.4.
 
 Evidence and commands: [Task 06.2](../tasks/Phase-06/TASK_06.2_ACCESSIBILITY_QA_CI_CD.md).
 

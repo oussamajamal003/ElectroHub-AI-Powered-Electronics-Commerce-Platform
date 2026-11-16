@@ -95,9 +95,18 @@ function checkWorkflow(name, rawText) {
         fail(`DEV workflow must be triggered by workflow_dispatch only (found: ${on.join(', ') || 'none'})`);
       }
     } else if (name === 'prod-migration.yml') {
-      if (on.length !== 1 || on[0] !== 'workflow_dispatch') fail('PROD workflow must be workflow_dispatch only');
-      if (!/approved_commit:[\s\S]*?required:\s*true/.test(text)) fail('PROD must require the approved commit input');
-      if (!text.includes('"$GITHUB_REF" != refs/heads/develop')) fail('PROD must restrict manual dispatch to develop');
+      if (on.length !== 1 || on[0] !== 'workflow_run') fail('PROD workflow must run only after Development CI completes');
+      if (!/workflows:\s*\[\s*["']Development CI["']\s*\]/.test(text)) fail('PROD workflow must be triggered by Development CI');
+      if (!/types:\s*\[\s*completed\s*\]/.test(text)) fail('PROD workflow must wait for CI completion');
+      if (!/branches:\s*\r?\n\s+-\s+develop/.test(text)) fail('PROD workflow must filter to develop');
+      for (const required of [
+        "github.event.workflow_run.conclusion == 'success'",
+        "github.event.workflow_run.head_branch == 'develop'",
+        "github.event.workflow_run.event == 'push'",
+        'github.event.workflow_run.head_repository.full_name == github.repository',
+      ]) {
+        if (!text.includes(required)) fail(`PROD workflow must verify trusted successful develop CI (${required})`);
+      }
     }
 
     if (!/^\s+environment:\s*\S+/m.test(text)) fail('deployment job must declare a protected GitHub Environment');

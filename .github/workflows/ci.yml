@@ -224,8 +224,8 @@ jobs:
     name: Backend / Test
     runs-on: ubuntu-latest
     # No shared-database secret is available to, or referenced by, this job. All database work targets a
-    # disposable PostgreSQL started below. Migrations are deployed to shared environments only by the
-    # approval-gated .github/workflows/dev-migration.yml.
+    # disposable PostgreSQL started below. Shared DEV migrations use the approval-gated dev-migration.yml;
+    # PROD migrations run only after this Development CI workflow succeeds on a trusted develop push.
     steps:
       - uses: actions/checkout@v4
         with:
