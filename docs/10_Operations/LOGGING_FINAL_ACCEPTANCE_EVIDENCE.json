@@ -1,0 +1,180 @@
+{
+  "reviewDate": "2026-10-14",
+  "branch": "feature/Stripe",
+  "baseCommit": "3d69b97",
+  "classification": "INDETERMINATE",
+  "databaseQueriesPerformed": 0,
+  "databaseMutationsPerformed": 0,
+  "configuredTarget": {
+    "environment": "shared DEV electrohub-dev",
+    "projectRef": "pzxekjybdiulzmssalfo",
+    "host": "aws-0-ap-northeast-2.pooler.supabase.com",
+    "database": "postgres",
+    "schema": "public",
+    "directPort": 5432,
+    "transactionPort": 6543,
+    "historicalInheritedEnvironment": "NOT FULLY CAPTURED",
+    "databaseConfirmedTarget": false
+  },
+  "incidentExecution": {
+    "id": "exec-12f6dadc-876c-4f34-9744-ebc97440105e",
+    "command": "\"C:\\\\Users\\\\ouss0\\\\.cache\\\\codex-runtimes\\\\codex-primary-runtime\\\\dependencies\\\\native\\\\powershell\\\\pwsh.exe\" -Command 'npx vitest run tests/logging-continuity.test.ts tests/logging-http.test.ts tests/logger.test.ts tests/requestId.test.ts src/middleware/__tests__/errorHandler.test.ts src/lib/prisma.test.ts src/services/__tests__/stripe.provider.test.ts src/controllers/__tests__/auth.controller.test.ts src/routes/checkout.routes.test.ts src/routes/stripe-webhook.routes.test.ts tests/health.test.ts tests/env.test.ts tests/google.configuration.test.ts tests/google.integration.test.ts tests/google.provider.test.ts src/services/__tests__/auth.service.test.ts src/services/__tests__/cart.service.test.ts'",
+    "exitCode": 1,
+    "durationMs": 278059,
+    "startUtc": "2026-10-13T12:32:39Z",
+    "vitestDurationSeconds": 269.47,
+    "files": 17,
+    "total": 174,
+    "passed": 167,
+    "failed": 7
+  },
+  "localLogEvidence": {
+    "scope": {
+      "start": "2026-10-13T12:31:00.000Z",
+      "end": "2026-10-13T12:39:00.000Z"
+    },
+    "files": [
+      "app-2026-10-13.1.log.gz",
+      "app-2026-10-14.1.log.gz",
+      "app.log",
+      "error-2026-10-12.1.log.gz",
+      "error-2026-10-14.1.log.gz",
+      "error.log"
+    ],
+    "matchingRecordsAcrossBothFiles": 176,
+    "legacyLinesUnattributable": 6,
+    "recoveredFixtureMarkers": [],
+    "googleAssociatedRuntime": {
+      "pid": 159040,
+      "instanceId": "47a29a61-9a53-4bf8-b795-300a595b83db",
+      "first": "2026-10-13T12:33:07.490Z",
+      "last": "2026-10-13T12:37:08.478Z",
+      "count": 153,
+      "operations": {
+        "db.select": 79,
+        "db.insert": 25,
+        "db.rollback": 3,
+        "db.error": 6,
+        "db.commit": 4,
+        "http.started": 12,
+        "http.completed": 13,
+        "auth.google.callback.failed": 2,
+        "http.handled_error": 6,
+        "auth.refresh.failure": 1,
+        "db.delete": 2
+      },
+      "codes": {
+        "DATABASE_ERROR": 6,
+        "GOOGLE_ORIGIN_INVALID": 3,
+        "GOOGLE_STATE_INVALID": 3,
+        "GOOGLE_LINK_FAILED": 3,
+        "HTTP_401": 2
+      }
+    },
+    "limitations": [
+      "Error-level records intentionally appear in both files; counts are not distinct exception counts.",
+      "Commit/delete operation completion does not provide affected row counts or prove current durable cleanup.",
+      "No preincident database snapshot or fixture UUID was captured."
+    ]
+  },
+  "closureVerification": {
+    "reused": {
+      "tests": 174,
+      "files": 16,
+      "exitCode": 0,
+      "scope": "unchanged policy and boundary evidence; not rerun"
+    },
+    "newFocused": {
+      "testsPassed": 29,
+      "testsSkipped": 18,
+      "filesPassed": 7,
+      "filesSkipped": 1,
+      "exitCode": 0,
+      "runtime": "Node 22.19.0",
+      "startUtc": "2026-10-14T14:28:58Z"
+    },
+    "launcherGuards": {
+      "testsPassed": 6,
+      "exitCode": 0
+    },
+    "typecheckExitCode": 0,
+    "targetedLintExitCode": 0,
+    "buildExitCode": 0,
+    "node20Execution": "NOT VERIFIED"
+  },
+  "reviewedSourceFingerprints": [
+    {
+      "file": "apps/backend/src/utils/logger.ts",
+      "sha256": "87b9ecbc5b8fbe0d54cabbe17791e564adf46a78923d615ca15ecd76621ef1a0"
+    },
+    {
+      "file": "apps/backend/src/utils/logTransport.ts",
+      "sha256": "9db222a45a09b691c7fc5f8ddfbc78ddaddba8ae27678c9ab83d44f7b0aff778"
+    },
+    {
+      "file": "apps/backend/src/utils/logContext.ts",
+      "sha256": "a75dfa3e16969cfdf35aee5f6e169c152b3c9ba247740d6c3fc1d50a9367b916"
+    },
+    {
+      "file": "apps/backend/src/bootstrap.ts",
+      "sha256": "9906a674f741a5c0bc94b2e2d3771061674a3bb9c20fd55262892c345498088f"
+    },
+    {
+      "file": "apps/backend/src/server.ts",
+      "sha256": "0533893a2fdef63cb7cabc008e8db512e355dd202d2c270084a1a2c9c34abc10"
+    },
+    {
+      "file": "apps/backend/src/lib/prisma.ts",
+      "sha256": "c6c4a74538ba567034dd08ddcd7e9ecaa8787f15f527370816b1f1234ce3adba"
+    },
+    {
+      "file": "apps/backend/src/payment-runner.ts",
+      "sha256": "5b7a88509590346eba40191cdb221897dfbddcef0a246eace7aa5bae79bcdc03"
+    },
+    {
+      "file": "apps/backend/src/middleware/requestLogger.ts",
+      "sha256": "be988c8e876596e3a4ffe7f154ee1853a8e8c097df91e3fcbfbfbf5bf802e781"
+    },
+    {
+      "file": "apps/backend/src/middleware/errorHandler.ts",
+      "sha256": "548c46b4a44226214aec0d2690f844e20822a156b894102d7d8fdca32ace6656"
+    },
+    {
+      "file": "apps/backend/src/controllers/auth.controller.ts",
+      "sha256": "c957bc23ddbe47be72dd762881285560a9dbc8550acb3ea9e47c33be36d1e4e4"
+    },
+    {
+      "file": "apps/backend/src/controllers/google.controller.ts",
+      "sha256": "2ad9ac793e06fe6e54c2ade339a4ae2275525473dd03622a3f7d65497a8b4eed"
+    },
+    {
+      "file": "apps/backend/src/services/auth.service.ts",
+      "sha256": "43d15b03cf35b68d6dbf2573dcba8e0efb413b6a43f3cc48af1e658ff05a1477"
+    },
+    {
+      "file": "apps/backend/src/services/cart.service.ts",
+      "sha256": "db477d6d0caed2b180ef429f9ea5e0229ac012c3a7560c4fb3d168bdd268b42b"
+    },
+    {
+      "file": "apps/backend/src/services/order.service.ts",
+      "sha256": "eaee4e7fe96fb4814e7871db86129a1215e131493ab143a4157f7b3eb9f71aef"
+    },
+    {
+      "file": "apps/backend/src/services/payment.service.ts",
+      "sha256": "86230b868bb7c0dd1a9121089559cbba6445c4f68cbceff076e38268d5e769a5"
+    },
+    {
+      "file": "apps/backend/src/services/stripe.provider.ts",
+      "sha256": "cf8ea18aa72d60b4fdc2a5918c4ae861ccb824b6fb0f03c15bd99158985ba05f"
+    },
+    {
+      "file": "apps/backend/package.json",
+      "sha256": "cdce8dfae0509d3df552898947a7217a07aa468db0de2982b1ee156520c4b247"
+    },
+    {
+      "file": "package-lock.json",
+      "sha256": "80cbed7c7badcff12f3d94224d49b545d71c82fe230ba385d1e999db5eaf953d"
+    }
+  ],
+  "ownershipChangesBetweenReviewedSnapshotAndFinalCheck": []
+}

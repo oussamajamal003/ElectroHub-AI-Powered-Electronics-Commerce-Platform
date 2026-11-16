@@ -1,0 +1,9 @@
+{
+  "name": "siglip2-b16-p256-d1",
+  "modelVersion": "siglip2-b16-p256-d1",
+  "embeddingVersion": "siglip2-b16-p256-d1-b3900dd9fad5",
+  "preprocessVersion": "siglip2-rgb-r224-bilinear-norm05-v1",
+  "embeddingDimension": 256,
+  "artifactFormat": "safetensors",
+  "artifactSha256": "b3900dd9fad5222758071cdaede682cb375a1ae8cf06624c30346abd1aff243a"
+}

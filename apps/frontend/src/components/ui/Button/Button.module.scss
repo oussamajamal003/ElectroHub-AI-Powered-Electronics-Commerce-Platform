@@ -1,0 +1,203 @@
+@use '../../../styles/abstracts/variables' as *;
+@use '../../../styles/abstracts/mixins' as *;
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  appearance: none;
+  font-family: $font-family-base;
+  font-weight: $font-weight-semibold;
+  font-size: $font-size-sm;
+  line-height: $line-height-normal;
+  letter-spacing: 0.005em;
+  text-align: center;
+  white-space: nowrap;
+  border-radius: 0;
+  transition: background-color $transition-fast, border-color $transition-fast, color $transition-fast,
+    box-shadow $transition-fast, transform 100ms ease;
+  cursor: pointer;
+  border: 1px solid transparent; // for outline variant consistency
+  -webkit-tap-highlight-color: transparent;
+
+  /* Default Spacing */
+  padding: 0 $spacing-6;
+
+  &:focus-visible {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  &.loading {
+    cursor: wait;
+    opacity: 0.85;
+  }
+
+  &:disabled,
+  &.disabled {
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .content {
+    display: inline-flex;
+    align-items: center;
+    gap: $spacing-2;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+    margin-right: $spacing-2;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    &:active:not(:disabled) { transform: none; }
+    .spinner { animation-duration: 1.5s; }
+  }
+}
+
+/* SIZES */
+.size-small {
+  height: 32px;
+  padding: 0 $spacing-4;
+  font-size: 0.8125rem; // 13px
+}
+.size-medium {
+  height: 40px;
+}
+.size-large {
+  height: 48px;
+  font-size: $font-size-base;
+  padding: 0 $spacing-8;
+}
+
+/* VARIANTS */
+.variant-primary {
+  background-color: $color-primary;
+  color: $color-text-inverse;
+
+  &:hover:not(:disabled) {
+    background-color: $color-primary-dark;
+    box-shadow: $shadow-primary-glow;
+  }
+
+  &:active:not(:disabled) {
+    background-color: $color-primary-active;
+  }
+
+  &:disabled {
+    background-color: $color-background;
+    border-color: $color-border;
+    color: $color-text-muted;
+  }
+}
+
+.variant-secondary {
+  background-color: $color-accent;
+  color: $color-accent-foreground;
+
+  &:hover:not(:disabled) {
+    background-color: $color-accent-hover;
+  }
+
+  &:disabled {
+    background-color: $color-background;
+    border-color: $color-border;
+    color: $color-text-muted;
+  }
+}
+
+.variant-outline {
+  background-color: $color-background;
+  border-color: $color-border;
+  color: $color-primary-text;
+
+  &:hover:not(:disabled) {
+    border-color: $color-primary;
+    background-color: rgb(37 99 235 / 0.04);
+  }
+
+  &:active:not(:disabled) {
+    background-color: rgb(37 99 235 / 0.1);
+  }
+
+  &:disabled {
+    color: $color-text-muted;
+  }
+}
+
+.variant-ghost {
+  background-color: transparent;
+  color: $color-text-primary;
+
+  &:hover:not(:disabled) {
+    background-color: $color-surface-hover;
+    color: $color-primary-text;
+  }
+
+  &:active:not(:disabled) {
+    background-color: $color-border;
+  }
+
+  &:disabled {
+    color: $color-text-muted;
+  }
+}
+
+.variant-destructive {
+  background-color: $color-error-fill;
+  color: $color-text-inverse;
+
+  &:hover:not(:disabled) {
+    background-color: $color-error-fill-hover;
+  }
+
+  &:disabled {
+    background-color: $color-background;
+    border-color: $color-border;
+    color: $color-text-muted;
+  }
+}
+
+.variant-link {
+  background-color: transparent;
+  color: $color-primary-text;
+  padding: 0;
+  height: auto;
+  border: none;
+  font-weight: $font-weight-medium;
+  text-underline-offset: 3px;
+
+  &:hover:not(:disabled) {
+    color: $color-primary-text-hover;
+    text-decoration: underline;
+  }
+
+  &:active:not(:disabled) {
+    transform: none;
+  }
+
+  &:disabled {
+    color: $color-text-muted;
+    text-decoration: none;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,95 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { RegisterModal } from './RegisterModal';
+import { useAuth } from '../context/AuthContext';
+import { ApiError } from '@/lib/api';
+
+import { BrowserRouter } from 'react-router-dom';
+
+// Mock useAuth
+vi.mock('../context/AuthContext', () => ({
+  useAuth: vi.fn()
+}));
+
+describe('RegisterModal', () => {
+  it('handles automatic login on successful registration', async () => {
+    const mockRegister = vi.fn().mockResolvedValue(undefined);
+    const mockOnOpenChange = vi.fn();
+    
+    (useAuth as any).mockReturnValue({
+      register: mockRegister,
+    });
+
+    render(
+      <BrowserRouter>
+        <RegisterModal 
+          open={true} 
+          onOpenChange={mockOnOpenChange} 
+          onSwitchToLogin={() => {}} 
+        />
+      </BrowserRouter>
+    );
+
+    // Fill form
+    fireEvent.change(screen.getByLabelText(/Full Name/i), { target: { value: 'Test User' } });
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'test@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password/i), { target: { value: 'password123' } });
+    fireEvent.change(screen.getByLabelText(/Confirm Password/i), { target: { value: 'password123' } });
+
+    const submitButton = screen.getByRole('button', { name: /Create Account/i });
+    fireEvent.click(submitButton);
+
+    expect(screen.getByRole('button', { name: /Creating account\.\.\./i })).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(mockRegister).toHaveBeenCalledWith({
+        email: 'test@example.com',
+        password: 'password123',
+        firstName: 'Test',
+        lastName: 'User'
+      });
+    });
+
+    await waitFor(() => {
+      expect(mockOnOpenChange).toHaveBeenCalledWith(false);
+    });
+  });
+
+  it('shows error if registration fails', async () => {
+    const mockRegister = vi.fn().mockRejectedValue(new ApiError(409, 'Email already registered'));
+    const mockOnOpenChange = vi.fn();
+    
+    (useAuth as any).mockReturnValue({
+      register: mockRegister,
+    });
+
+    render(
+      <BrowserRouter>
+        <RegisterModal 
+          open={true} 
+          onOpenChange={mockOnOpenChange} 
+          onSwitchToLogin={() => {}} 
+        />
+      </BrowserRouter>
+    );
+
+    // Fill form
+    fireEvent.change(screen.getByLabelText(/Full Name/i), { target: { value: 'Test User' } });
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'test@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password/i), { target: { value: 'password123' } });
+    fireEvent.change(screen.getByLabelText(/Confirm Password/i), { target: { value: 'password123' } });
+
+    const submitButton = screen.getByRole('button', { name: /Create Account/i });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Customer registration cannot create an administrator account/i)).toBeInTheDocument();
+    });
+    expect(screen.getByRole('link', { name: 'Go to Admin sign-in' })).toHaveAttribute('href', '/admin/login');
+    
+    // Modal remains open
+    expect(mockOnOpenChange).not.toHaveBeenCalled();
+  });
+});
+

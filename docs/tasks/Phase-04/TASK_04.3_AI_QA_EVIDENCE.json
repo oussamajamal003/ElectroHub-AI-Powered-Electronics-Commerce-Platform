@@ -1,0 +1,62 @@
+{
+  "artifactSha256": "b3900dd9fad5222758071cdaede682cb375a1ae8cf06624c30346abd1aff243a",
+  "baseline": "legacy source A ranked first via PGVECTOR_GATEWAY",
+  "database": "electrohub_disposable_media_d143c85e42",
+  "dimension": 256,
+  "embeddingVersion": "siglip2-b16-p256-d1-b3900dd9fad5",
+  "failureGuards": {
+    "digest": "SOURCE_DIGEST_MISMATCH",
+    "lease": "REJECTED",
+    "wrongModel": "ACTIVE_MODEL_MISMATCH"
+  },
+  "imageA": {
+    "bytes": 105386,
+    "height": 1254,
+    "sha256": "04aebef7eed9c3b36d6f299d32dcd8197d7a985af77ee987214e659bf6a3970a",
+    "source": "headphones.jpg",
+    "width": 1254
+  },
+  "imageB": {
+    "bytes": 88684,
+    "height": 1254,
+    "sha256": "7689ed14359158510ece60f026875c1d0f02b6a091579deb7fad9377f764ba49",
+    "source": "laptops.jpg",
+    "width": 1254
+  },
+  "leastPrivilege": {
+    "readerActivePointerWrite": "DENIED",
+    "readerPublicUsers": "DENIED",
+    "workerBaseWrite": "DENIED",
+    "workerPublicUsers": "DENIED"
+  },
+  "modelVersion": "siglip2-b16-p256-d1",
+  "preprocessVersion": "siglip2-rgb-r224-bilinear-norm05-v1",
+  "readerActiveIdentity": "VERIFIED",
+  "readerCoverage": {
+    "eligible": 1,
+    "indexed": 1
+  },
+  "readerMode": "PGVECTOR_GATEWAY",
+  "replacementImmediate": {
+    "AExcluded": true,
+    "BPending": true,
+    "digest": "7689ed14359158510ece60f026875c1d0f02b6a091579deb7fad9377f764ba49",
+    "revision": "a701a63d-f647-4f4b-bbf2-feaa4997ae91"
+  },
+  "result": "PASS",
+  "retirement": {
+    "eventState": "SUPERSEDED",
+    "overlayRetained": true,
+    "searchExcludedImmediately": true
+  },
+  "tls": "verify-full",
+  "workerPublication": {
+    "BSearchable": true,
+    "activeVersionUnchanged": "siglip2-b16-p256-d1-b3900dd9fad5",
+    "baseRowsUnchanged": 1,
+    "digest": "7689ed14359158510ece60f026875c1d0f02b6a091579deb7fad9377f764ba49",
+    "eventState": "COMPLETED",
+    "formerAQueryUsesCurrentB": true,
+    "revision": "a701a63d-f647-4f4b-bbf2-feaa4997ae91"
+  }
+}

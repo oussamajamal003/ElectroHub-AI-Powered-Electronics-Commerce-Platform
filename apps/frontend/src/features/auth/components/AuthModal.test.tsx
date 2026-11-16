@@ -1,0 +1,491 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { AuthModal } from './AuthModal';
+import { useAuth } from '../context/AuthContext';
+import { ApiError } from '@/lib/api';
+
+const authApiMocks = vi.hoisted(() => ({
+  forgotPassword: vi.fn(),
+  verifyResetOtp: vi.fn(),
+  resetPassword: vi.fn(),
+  resendPasswordReset: vi.fn(),
+  resendVerification: vi.fn(),
+  changeVerificationEmail: vi.fn(),
+}));
+
+vi.mock('../api/auth', () => ({ authApi: authApiMocks }));
+
+// Mock useAuth
+vi.mock('../context/AuthContext', () => ({
+  useAuth: vi.fn(),
+}));
+
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => mockNavigate,
+  useLocation: () => ({ state: { from: '/account' } }),
+  Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a>,
+}));
+
+describe('AuthModal Component', () => {
+  const mockLogin = vi.fn();
+  const mockRegister = vi.fn();
+  const mockVerifyEmail = vi.fn();
+  const mockOnOpenChange = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authApiMocks.forgotPassword.mockResolvedValue({ message: 'If an account exists, you may receive password reset instructions shortly.' });
+    (useAuth as any).mockReturnValue({
+      login: mockLogin,
+      register: mockRegister,
+      verifyEmail: mockVerifyEmail,
+      isAuthenticated: false,
+    });
+  });
+
+  it.each(['/checkout', '/checkout/confirmation/ORD-33333333-3333-4333-8333-333333333333'] as const)('returns a successful login to the validated %s location', async returnTo => {
+    mockLogin.mockResolvedValue({});
+    render(<AuthModal open onOpenChange={mockOnOpenChange} returnTo={returnTo} />);
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'customer@example.invalid' } });
+    const password = screen.getByLabelText(/^Password$/i);
+    fireEvent.change(password, { target: { value: 'test-only-password' } });
+    const form = password.closest('form'); if (!form) throw new Error('Expected Login form');
+    fireEvent.submit(form);
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(returnTo, { replace: true }));
+    expect(mockOnOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('never signs in an administrator password proof: clears the password and points to the Admin Portal', async () => {
+    mockLogin.mockResolvedValue({ requiresMfa: true, mfaToken: 'opaque-challenge-token' });
+    render(<AuthModal open onOpenChange={mockOnOpenChange} />);
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'admin@example.invalid' } });
+    const password = screen.getByLabelText(/^Password$/i);
+    fireEvent.change(password, { target: { value: 'test-only-password' } });
+    const form = password.closest('form'); if (!form) throw new Error('Expected Login form');
+    fireEvent.submit(form);
+    expect(await screen.findByText(/This account is an administrator account\. Continue through the Admin Portal to complete secure sign-in\./)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Go to Admin Portal' })).toHaveAttribute('href', '/admin/login');
+    expect((screen.getByLabelText(/^Password$/i) as HTMLInputElement).value).toBe('');
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockOnOpenChange).not.toHaveBeenCalledWith(false);
+    expect(document.body.textContent).not.toContain('opaque-challenge-token');
+  });
+
+  it('preserves unfinished register values across an unauthenticated close and reopen', async () => {
+    const user = userEvent.setup();
+    const view = render(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="register" />);
+    await user.type(screen.getByLabelText(/Full Name/i), 'Alex Customer');
+    await user.type(screen.getByLabelText(/Email Address/i), 'alex@example.com');
+    await user.type(screen.getByLabelText(/^Password$/i), 'example-password');
+
+    view.rerender(<AuthModal open={false} onOpenChange={mockOnOpenChange} initialMode="register" />);
+    view.rerender(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="register" />);
+
+    expect(screen.getByLabelText(/Full Name/i)).toHaveValue('Alex Customer');
+    expect(screen.getByLabelText(/Email Address/i)).toHaveValue('alex@example.com');
+    expect(screen.getByLabelText(/^Password$/i)).toHaveValue('example-password');
+  });
+
+  it('clears registration and password drafts when authentication succeeds and remains clean after logout', async () => {
+    const user = userEvent.setup();
+    const view = render(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="register" />);
+    await user.type(screen.getByLabelText(/Full Name/i), 'Alex Customer');
+    await user.type(screen.getByLabelText(/Email Address/i), 'alex@example.com');
+    await user.type(screen.getByLabelText(/^Password$/i), 'example-password');
+    await user.type(screen.getByLabelText(/^Confirm Password$/i), 'example-password');
+
+    (useAuth as any).mockReturnValue({ login: mockLogin, register: mockRegister, verifyEmail: mockVerifyEmail, isAuthenticated: true });
+    view.rerender(<AuthModal open={false} onOpenChange={mockOnOpenChange} initialMode="register" />);
+
+    (useAuth as any).mockReturnValue({ login: mockLogin, register: mockRegister, verifyEmail: mockVerifyEmail, isAuthenticated: false });
+    view.rerender(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="register" />);
+
+    expect(screen.getByLabelText(/Full Name/i)).toHaveValue('');
+    expect(screen.getByLabelText(/Email Address/i)).toHaveValue('');
+    expect(screen.getByLabelText(/^Password$/i)).toHaveValue('');
+    expect(screen.getByLabelText(/^Confirm Password$/i)).toHaveValue('');
+  });
+
+  it('prefills Forgot Password from Login while keeping the email editable', async () => {
+    const user = userEvent.setup();
+    render(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="login" />);
+    await user.type(screen.getByLabelText(/Email Address/i), 'john@gmail.com');
+    await user.click(screen.getByRole('button', { name: 'Forgot Password?' }));
+
+    const email = screen.getByLabelText(/Email Address/i);
+    expect(email).toHaveValue('john@gmail.com');
+    expect(email).toBeEnabled();
+    await user.clear(email);
+    await user.type(email, 'anotheraccount@gmail.com');
+    expect(email).toHaveValue('anotheraccount@gmail.com');
+    fireEvent.submit(email.closest('form')!);
+
+    await waitFor(() => expect(authApiMocks.forgotPassword).toHaveBeenCalledWith({ email: 'anotheraccount@gmail.com' }));
+  });
+
+  it('shows one friendly inline error for an incorrect verification OTP', async () => {
+    const user = userEvent.setup();
+    mockLogin.mockRejectedValue(new ApiError(403, 'Verification required', { requiresVerification: true, email: 'customer@example.com' }));
+    mockVerifyEmail.mockRejectedValue(new ApiError(400, 'Incorrect verification code. Please try again.', {
+      error: { code: 'OTP_INCORRECT', message: 'Incorrect verification code. Please try again.' },
+    }));
+    render(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="login" />);
+    await user.type(screen.getByLabelText(/Email Address/i), 'customer@example.com');
+    await user.type(screen.getByLabelText(/^Password$/i), 'password123');
+    fireEvent.submit(screen.getByLabelText(/^Password$/i).closest('form')!);
+    const inputs = (await screen.findByRole('group', { name: 'Verification code' })).querySelectorAll('input');
+    for (const input of inputs) fireEvent.change(input, { target: { value: '5' } });
+    await user.click(screen.getByRole('button', { name: 'Verify' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Incorrect verification code. Please try again.');
+    expect(screen.getAllByText('Incorrect verification code. Please try again.')).toHaveLength(1);
+  });
+
+  it('shows controlled copy when password recovery is rate limited', async () => {
+    const user = userEvent.setup();
+    authApiMocks.forgotPassword.mockRejectedValue(new ApiError(429, 'Too many password reset attempts. Please try again in an hour.', {
+      error: { code: 'RATE_LIMITED', message: 'Too many password reset attempts. Please try again in an hour.' },
+    }));
+    render(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="login" />);
+    await user.type(screen.getByLabelText(/Email Address/i), 'john@gmail.com');
+    await user.click(screen.getByRole('button', { name: 'Forgot Password?' }));
+    fireEvent.submit(screen.getByLabelText(/Email Address/i).closest('form')!);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Too many password reset attempts. Please try again in an hour.');
+  });
+
+  it('completes reset as a separate step and returns to Login without auto-authenticating', async () => {
+    const user = userEvent.setup();
+    authApiMocks.verifyResetOtp.mockResolvedValue({ resetToken: 'one-time-reset-authorization' });
+    authApiMocks.resetPassword.mockResolvedValue({ message: 'Password has been reset successfully.' });
+    render(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="login" />);
+    await user.type(screen.getByLabelText(/Email Address/i), 'john@gmail.com');
+    await user.click(screen.getByRole('button', { name: 'Forgot Password?' }));
+    fireEvent.submit(screen.getByLabelText(/Email Address/i).closest('form')!);
+    const digits = (await screen.findByRole('group', { name: 'Verification code' })).querySelectorAll('input');
+    for (const input of digits) fireEvent.change(input, { target: { value: '1' } });
+    await user.click(screen.getByRole('button', { name: 'Verify' }));
+    expect(await screen.findByRole('heading', { name: 'Create new password' })).toBeInTheDocument();
+    expect(authApiMocks.verifyResetOtp).toHaveBeenCalledWith({ email: 'john@gmail.com', code: '111111' });
+    await user.type(screen.getByLabelText('New Password'), 'NewPassword#2026');
+    await user.type(screen.getByLabelText('Confirm Password'), 'NewPassword#2026');
+    const resetButton = screen.getByRole('button', { name: 'Reset Password' });
+    await waitFor(() => expect(resetButton).toBeEnabled());
+    const resetForm = screen.getByLabelText('New Password').closest('form')!;
+    fireEvent.submit(resetForm);
+    await waitFor(() => expect(authApiMocks.resetPassword).toHaveBeenCalledWith({
+      resetToken: 'one-time-reset-authorization',
+      newPassword: 'NewPassword#2026',
+    }));
+    expect(await screen.findByText(/Your password has been updated/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Continue to Login' }));
+
+    expect(screen.getByLabelText(/Email Address/i)).toHaveValue('john@gmail.com');
+    expect(screen.getByLabelText(/^Password$/i)).toHaveValue('NewPassword#2026');
+    expect(window.location.search).not.toContain('NewPassword#2026');
+    expect(window.location.hash).not.toContain('NewPassword#2026');
+    expect(window.localStorage.getItem('NewPassword#2026')).toBeNull();
+    expect(window.sessionStorage.getItem('NewPassword#2026')).toBeNull();
+    expect(mockLogin).not.toHaveBeenCalled();
+    expect(mockOnOpenChange).not.toHaveBeenCalledWith(false);
+    const loginForm = screen.getByLabelText(/^Password$/i).closest('form')!;
+    fireEvent.submit(loginForm);
+    await waitFor(() => expect(mockLogin).toHaveBeenCalledWith({ email: 'john@gmail.com', password: 'NewPassword#2026' }));
+  });
+
+  describe('Login Popup & Mode Switching', () => {
+    it('renders Login UI by default', () => {
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="login" />);
+
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByText('Welcome Back')).toBeInTheDocument();
+      expect(screen.getByLabelText(/Email Address/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^Password$/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Login$/i })).toBeInTheDocument();
+    });
+
+    it('switches from Login to Register in the same popup without closing', async () => {
+      const user = userEvent.setup();
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="login" />);
+
+      expect(screen.getByRole('heading', { name: /Welcome Back/i })).toBeInTheDocument();
+      const registerButton = screen.getByRole('button', { name: /^Register$/i });
+      await user.click(registerButton);
+
+      // Same dialog remains open, now showing Register
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /Create Account/i })).toBeInTheDocument();
+      expect(screen.getByLabelText(/Full Name/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^Confirm Password$/i)).toBeInTheDocument();
+      expect(mockOnOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('switches from Register back to Login in the same popup without closing', async () => {
+      const user = userEvent.setup();
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="register" />);
+
+      expect(screen.getByRole('heading', { name: /Create Account/i })).toBeInTheDocument();
+      const loginButton = screen.getByRole('button', { name: /^Login$/i });
+      await user.click(loginButton);
+
+      // Same dialog remains open, now showing Login
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /Welcome Back/i })).toBeInTheDocument();
+      expect(mockOnOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('allows close button to close the modal', async () => {
+      const user = userEvent.setup();
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="login" />);
+
+      const closeButton = screen.getByLabelText('Close');
+      await user.click(closeButton);
+
+      expect(mockOnOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it('has submit button enabled initially when form loads', () => {
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="login" />);
+      expect(screen.getByRole('button', { name: /^Login$/i })).not.toBeDisabled();
+    });
+  });
+
+  describe('Validation Timing & Interaction States', () => {
+    it('does not show validation errors on initial render', () => {
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="login" />);
+      expect(screen.queryByText('Email address is required.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Password is required.')).not.toBeInTheDocument();
+    });
+
+    it('does not show validation errors when typing the first character into untouched inputs before blur', () => {
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="login" />);
+
+      const emailInput = screen.getByLabelText(/Email Address/i);
+      fireEvent.focus(emailInput);
+      fireEvent.change(emailInput, { target: { value: 'a' } });
+
+      expect(screen.queryByText('Enter a valid email address.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Email address is required.')).not.toBeInTheDocument();
+
+      const passwordInput = screen.getByLabelText(/^Password$/i);
+      fireEvent.focus(passwordInput);
+      fireEvent.change(passwordInput, { target: { value: 'a' } });
+
+      expect(screen.queryByText('Password is required.')).not.toBeInTheDocument();
+    });
+
+    it('does not show validation errors when focusing and blurring untouched inputs', () => {
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="login" />);
+
+      const emailInput = screen.getByLabelText(/Email Address/i);
+      const passwordInput = screen.getByLabelText(/^Password$/i);
+
+      // Focus email then blur without typing
+      fireEvent.focus(emailInput);
+      fireEvent.blur(emailInput);
+      expect(screen.queryByText('Email address is required.')).not.toBeInTheDocument();
+
+      // Focus password then blur without typing
+      fireEvent.focus(passwordInput);
+      fireEvent.blur(passwordInput);
+      expect(screen.queryByText('Password is required.')).not.toBeInTheDocument();
+    });
+
+    it('does not show validation errors on Register when focusing and blurring untouched inputs', () => {
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="register" />);
+
+      const nameInput = screen.getByLabelText(/Full Name/i);
+      const emailInput = screen.getByLabelText(/Email Address/i);
+      const passwordInput = screen.getByLabelText(/^Password$/i);
+      const confirmInput = screen.getByLabelText(/^Confirm Password$/i);
+
+      fireEvent.focus(nameInput);
+      fireEvent.blur(nameInput);
+      fireEvent.focus(emailInput);
+      fireEvent.blur(emailInput);
+      fireEvent.focus(passwordInput);
+      fireEvent.blur(passwordInput);
+      fireEvent.focus(confirmInput);
+      fireEvent.blur(confirmInput);
+
+      expect(screen.queryByText('Full name is required.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Email address is required.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Password is required.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Please confirm your password.')).not.toBeInTheDocument();
+    });
+
+    it('shows errors when blurring invalid values and clears when corrected in Login', () => {
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="login" />);
+
+      const emailInput = screen.getByLabelText(/Email Address/i);
+
+      // Type invalid email and blur to touch field
+      fireEvent.change(emailInput, { target: { value: 'invalid-email' } });
+      fireEvent.blur(emailInput);
+      expect(screen.getByText('Enter a valid email address.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Login$/i })).toBeDisabled();
+
+      // Correct email dynamically clears error
+      fireEvent.change(emailInput, { target: { value: 'valid@example.com' } });
+      expect(screen.queryByText('Enter a valid email address.')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Login$/i })).not.toBeDisabled();
+    });
+
+    it('shows validation error messages when submitting empty Login form', () => {
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="login" />);
+
+      const form = document.querySelector('form')!;
+      fireEvent.submit(form);
+
+      expect(screen.getByText('Email address is required.')).toBeInTheDocument();
+      expect(screen.getByText('Password is required.')).toBeInTheDocument();
+      expect(mockLogin).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: /^Login$/i })).toBeDisabled();
+    });
+
+    it('shows validation error messages when submitting empty Register form', () => {
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="register" />);
+
+      const form = document.querySelector('form')!;
+      fireEvent.submit(form);
+
+      expect(screen.getByText('Full name is required.')).toBeInTheDocument();
+      expect(screen.getByText('Email address is required.')).toBeInTheDocument();
+      expect(screen.getByText('Password is required.')).toBeInTheDocument();
+      expect(screen.getByText('Please confirm your password.')).toBeInTheDocument();
+      expect(mockRegister).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: /^Create Account$/i })).toBeDisabled();
+    });
+
+    it('validates password length and matching confirmation on Register', () => {
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="register" />);
+
+      fireEvent.change(screen.getByLabelText(/Full Name/i), { target: { value: 'John Doe' } });
+      fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'john@example.com' } });
+      fireEvent.change(screen.getByLabelText(/^Password$/i), { target: { value: 'short' } });
+      fireEvent.change(screen.getByLabelText(/^Confirm Password$/i), { target: { value: 'different' } });
+
+      const form = document.querySelector('form')!;
+      fireEvent.submit(form);
+
+      expect(screen.getByText('Password must be at least 8 characters.')).toBeInTheDocument();
+      expect(screen.getByText('Passwords do not match.')).toBeInTheDocument();
+      expect(mockRegister).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Loading State & Dismissal Protection', () => {
+    it('Login loading keeps popup open and disables outside clicks, escape, and close button', async () => {
+      let resolveLogin: () => void;
+      mockLogin.mockImplementation(() => new Promise<void>((resolve) => {
+        resolveLogin = resolve;
+      }));
+
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="login" />);
+
+      fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'test@example.com' } });
+      fireEvent.change(screen.getByLabelText(/^Password$/i), { target: { value: 'password123' } });
+
+      const submitButton = screen.getByRole('button', { name: /^Login$/i });
+      expect(submitButton).not.toBeDisabled();
+      fireEvent.click(submitButton);
+
+      // In loading state
+      expect(screen.getByRole('button', { name: /Logging in\.\.\./i })).toBeDisabled();
+      expect(screen.getByLabelText('Close')).toBeDisabled();
+
+      // Escape key during loading must NOT trigger close
+      fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
+      expect(mockOnOpenChange).not.toHaveBeenCalled();
+
+      // Duplicate click does not trigger another call
+      fireEvent.click(screen.getByRole('button', { name: /Logging in\.\.\./i }));
+      expect(mockLogin).toHaveBeenCalledTimes(1);
+
+      // Resolve login
+      resolveLogin!();
+      await waitFor(() => {
+        expect(mockOnOpenChange).toHaveBeenCalledWith(false);
+      });
+    });
+
+    it('Register loading keeps popup open and disables outside clicks, escape, and close button', async () => {
+      let resolveRegister: () => void;
+      mockRegister.mockImplementation(() => new Promise<void>((resolve) => {
+        resolveRegister = resolve;
+      }));
+      mockLogin.mockResolvedValue(undefined);
+
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="register" />);
+
+      fireEvent.change(screen.getByLabelText(/Full Name/i), { target: { value: 'Jane Smith' } });
+      fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'jane@example.com' } });
+      fireEvent.change(screen.getByLabelText(/^Password$/i), { target: { value: 'password123' } });
+      fireEvent.change(screen.getByLabelText(/^Confirm Password$/i), { target: { value: 'password123' } });
+
+      const submitButton = screen.getByRole('button', { name: /^Create Account$/i });
+      expect(submitButton).not.toBeDisabled();
+      fireEvent.click(submitButton);
+
+      // In loading state
+      expect(screen.getByRole('button', { name: /Creating account\.\.\./i })).toBeDisabled();
+      expect(screen.getByLabelText('Close')).toBeDisabled();
+
+      // Escape key must not close
+      fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
+      expect(mockOnOpenChange).not.toHaveBeenCalled();
+
+      // Duplicate click does not trigger another call
+      fireEvent.click(screen.getByRole('button', { name: /Creating account\.\.\./i }));
+      expect(mockRegister).toHaveBeenCalledTimes(1);
+
+      // Resolve register
+      resolveRegister!();
+      await waitFor(() => {
+        expect(mockOnOpenChange).toHaveBeenCalledWith(false);
+      });
+    });
+    it('switches to verify mode and displays partial-success warning message when registration delivery fails', async () => {
+      mockRegister.mockResolvedValue({
+        requiresVerification: true,
+        deliveryFailed: true,
+        email: 'deliveryfailed@example.com',
+        message: 'Account created, but we could not send the verification code. Please request a new code shortly.',
+      });
+
+      render(<AuthModal open={true} onOpenChange={mockOnOpenChange} initialMode="register" />);
+
+      fireEvent.change(screen.getByLabelText(/Full Name/i), { target: { value: 'Jane Doe' } });
+      fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'deliveryfailed@example.com' } });
+      fireEvent.change(screen.getByLabelText(/^Password$/i), { target: { value: 'password123' } });
+      fireEvent.change(screen.getByLabelText(/^Confirm Password$/i), { target: { value: 'password123' } });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Create Account$/i }));
+
+      expect(await screen.findByRole('group', { name: 'Verification code' })).toBeInTheDocument();
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Account created, but we could not send the verification code. Please request a new code shortly.'
+      );
+    });
+
+    it('shows authoritative expired error message when OTP expires', async () => {
+      const user = userEvent.setup();
+      mockLogin.mockRejectedValue(new ApiError(403, 'Verification required', { requiresVerification: true, email: 'customer@example.com' }));
+      mockVerifyEmail.mockRejectedValue(new ApiError(400, 'This verification code has expired. Request a new code.', {
+        error: { code: 'OTP_EXPIRED', message: 'This verification code has expired. Request a new code.' },
+      }));
+      render(<AuthModal open onOpenChange={mockOnOpenChange} initialMode="login" />);
+      await user.type(screen.getByLabelText(/Email Address/i), 'customer@example.com');
+      await user.type(screen.getByLabelText(/^Password$/i), 'password123');
+      fireEvent.submit(screen.getByLabelText(/^Password$/i).closest('form')!);
+      const inputs = (await screen.findByRole('group', { name: 'Verification code' })).querySelectorAll('input');
+      for (const input of inputs) fireEvent.change(input, { target: { value: '5' } });
+      await user.click(screen.getByRole('button', { name: 'Verify' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('This verification code has expired. Request a new code.');
+    });
+  });
+});

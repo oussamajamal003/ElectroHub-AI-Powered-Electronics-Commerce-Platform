@@ -1,0 +1,564 @@
+import { Router, type NextFunction, type Request, type Response } from 'express';
+import { startGoogle, callbackGoogle, completeGoogle, linkGoogle, prepareGoogleDeletionReauth } from '../controllers/google.controller.js';
+import {
+  register,
+  login,
+  refreshFor,
+  retireLegacySession,
+  logoutFor,
+  getCurrentUser,
+  updateProfile,
+  forgotPassword,
+  resetPassword,
+  verifyResetOtp,
+  changePassword,
+  verifyEmail,
+  resendVerification,
+  changeVerificationEmail,
+  verifyPendingEmailChange,
+  resendPasswordReset,
+  resendPendingEmailChange,
+} from '../controllers/auth.controller.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
+import {
+  loginRateLimiter,
+  registerRateLimiter,
+  passwordResetRateLimiter,
+  resendVerificationRateLimiter,
+  verifyEmailRateLimiter,
+  accountDeletionRateLimiter,
+} from '../middleware/rateLimiter.js';
+
+const router = Router();
+
+/** Shared customer email routes fail closed for database-resolved administrators. */
+const rejectAdminEmailChange = (req: Request, res: Response, next: NextFunction) => {
+  if (req.user?.role === 'ADMIN') {
+    res.status(403).json({ error: { code: 'ADMIN_ENDPOINT_REQUIRED', message: 'Administrators change email through the admin security flow.' } });
+    return;
+  }
+  next();
+};
+const rejectAdminEmailPatch = (req: Request, res: Response, next: NextFunction) => {
+  if (req.user?.role === 'ADMIN' && req.body && Object.prototype.hasOwnProperty.call(req.body, 'email')) {
+    res.status(403).json({ error: { code: 'ADMIN_ENDPOINT_REQUIRED', message: 'Administrators change email through the admin security flow.' } });
+    return;
+  }
+  next();
+};
+/**
+ * @swagger
+ * /auth/google/start:
+ *   get:
+ *     tags: [Authentication]
+ *     summary: Start customer Google authorization with state, nonce and PKCE
+ *     responses:
+ *       302: { description: Redirect to Google; sets a five-minute HttpOnly OAuth transaction cookie }
+ *       200: { description: Configuration unavailable; safe popup failure notification }
+ *       429: { description: Login rate limit reached }
+ * /auth/google/callback:
+ *   get:
+ *     tags: [Authentication]
+ *     summary: Complete customer Google authorization
+ *     parameters:
+ *       - in: query
+ *         name: state
+ *         schema: { type: string }
+ *       - in: query
+ *         name: code
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Safe popup status success, linking_required, cancelled or failure; success sets the existing refresh cookie }
+ *       429: { description: Login rate limit reached }
+ * /auth/google/deletion-reauth/start:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Prepare Google re-authentication for account deletion
+ *     description: Requires the authenticated customer and exact configured frontend Origin. Google callback must match the linked provider subject; it does not create a login session.
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [channel]
+ *             properties:
+ *               channel: { type: string, format: uuid }
+ *     responses:
+ *       200: { description: Returns the Google authorization URL and sets a short-lived HttpOnly OAuth transaction cookie }
+ *       401: { description: Authentication required }
+ *       403: { description: Customer or request-origin check failed }
+ *       429: { description: Re-authentication rate limit reached }
+ * /auth/google/link:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Connect a verified Google identity after existing password ownership proof
+ *     description: Requires the five-minute HttpOnly OAuth transaction cookie and the configured frontend Origin. Email equality never links automatically.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [password]
+ *             properties:
+ *               password: { type: string, maxLength: 128 }
+ *     responses:
+ *       200: { description: Connected; returns existing customer user and access token, sets existing refresh cookie }
+ *       400: { description: Invalid password, unverified account or expired transaction }
+ *       403: { description: Invalid Origin or non-customer account }
+ *       409: { description: Provider identity cannot be reassigned }
+ *       429: { description: Login rate limit reached }
+ *       503: { description: Google configuration unavailable }
+ */
+router.get('/google/start', loginRateLimiter, startGoogle);
+router.post('/google/deletion-reauth/start', requireAuth, requireRole('CUSTOMER'), accountDeletionRateLimiter, prepareGoogleDeletionReauth);
+router.get('/google/callback', loginRateLimiter, callbackGoogle);
+router.get('/google/complete', completeGoogle);
+router.post('/google/link', loginRateLimiter, linkGoogle);
+
+/**
+ * @swagger
+ * tags:
+ *   name: Authentication
+ *   description: User authentication, registration, and session management
+ */
+
+/**
+ * @swagger
+ * /auth/register:
+ *   post:
+ *     summary: Register a new customer account
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *               - firstName
+ *               - lastName
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 minLength: 8
+ *               firstName:
+ *                 type: string
+ *               lastName:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Registration successful
+ *       400:
+ *         description: Validation failed or email already registered
+ *       429:
+ *         description: Too many registration attempts
+ */
+router.post('/register', registerRateLimiter, register);
+
+/**
+ * @swagger
+ * /auth/login:
+ *   post:
+ *     summary: Login and receive access and refresh tokens
+ *     description: Returns an access token in the JSON body and sets a refresh token in an HttpOnly cookie.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *       400:
+ *         description: Validation failed
+ *       401:
+ *         description: Invalid credentials
+ *       429:
+ *         description: Too many login attempts
+ */
+router.post('/login', loginRateLimiter, login);
+
+/**
+ * @swagger
+ * /auth/verify-email:
+ *   post:
+ *     summary: Verify email using a verification code
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - code
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               code:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Email verified successfully
+ *       400:
+ *         description: Invalid or expired verification code
+ *       429:
+ *         description: Too many requests
+ * 
+ * /auth/resend-verification:
+ *   post:
+ *     summary: Resend email verification code
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Generic acknowledgement regardless of account existence
+ *       400:
+ *         description: Invalid request
+ *       429:
+ *         description: IP request limit reached; challenge cooldown returns a generic acknowledgement
+ */
+router.post('/verify-email', verifyEmailRateLimiter, verifyEmail);
+router.post('/resend-verification', resendVerificationRateLimiter, resendVerification);
+
+/**
+ * @swagger
+ * /auth/change-verification-email:
+ *   post:
+ *     summary: Correct the address on an unverified customer account
+ *     description: Requires the current email and password. Responses are generic; the new address remains unverified until its OTP is consumed.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [currentEmail, password, newEmail]
+ *             properties:
+ *               currentEmail: { type: string, format: email }
+ *               password: { type: string }
+ *               newEmail: { type: string, format: email }
+ *     responses:
+ *       200: { description: Generic acknowledgement; verification remains required }
+ *       400: { description: Invalid request }
+ *       429: { description: Request limit reached }
+ */
+router.post('/change-verification-email', resendVerificationRateLimiter, changeVerificationEmail);
+
+/**
+ * @swagger
+ * /auth/refresh:
+ *   post:
+ *     summary: Refresh access token
+ *     description: Legacy shared route, retired. Always 401 and expires the old `electrohub_refresh` cookie. Use /api/auth/admin/refresh or /api/auth/customer/refresh, which read their own HttpOnly cookie. Rotates the refresh token.
+ *     tags: [Authentication]
+ *     responses:
+ *       200:
+ *         description: Successfully refreshed access token
+ *       401:
+ *         description: Refresh token missing, invalid, or expired
+ *       429:
+ *         description: Too many refresh attempts
+ */
+router.post('/refresh', retireLegacySession(401)); // legacy shared route: retires the old cookie, never authenticates
+router.post('/admin/refresh', refreshFor('admin'));
+router.post('/customer/refresh', refreshFor('customer'));
+
+/**
+ * @swagger
+ * /auth/forgot-password:
+ *   post:
+ *     summary: Request a password reset
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: If an account exists, you may receive password reset instructions shortly.
+ *       400:
+ *         description: Validation failed
+ *       429:
+ *         description: Too many requests
+ */
+router.post('/forgot-password', passwordResetRateLimiter, forgotPassword);
+
+/**
+ * @swagger
+ * /auth/resend-password-reset:
+ *   post:
+ *     summary: Resend a password reset OTP
+ *     description: Uses the PASSWORD_RESET purpose and an enumeration-safe response.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email: { type: string, format: email }
+ *     responses:
+ *       200: { description: Generic acknowledgement }
+ *       400: { description: Invalid request }
+ *       429: { description: Request limit reached }
+ */
+router.post('/resend-password-reset', passwordResetRateLimiter, resendPasswordReset);
+
+/**
+ * @swagger
+ * /auth/verify-reset-otp:
+ *   post:
+ *     summary: Verify a password reset OTP and issue a reset authorization
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, code]
+ *             properties:
+ *               email: { type: string, format: email }
+ *               code: { type: string, pattern: '^[0-9]{6}$' }
+ *     responses:
+ *       200: { description: OTP consumed; returns a ten-minute single-use reset authorization }
+ *       400: { description: Invalid or expired code }
+ *       429: { description: Request limit reached }
+ */
+router.post('/verify-reset-otp', passwordResetRateLimiter, verifyResetOtp);
+
+/**
+ * @swagger
+ * /auth/reset-password:
+ *   post:
+ *     summary: Reset password using a reset token
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - resetToken
+ *               - newPassword
+ *             properties:
+ *               resetToken:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 8
+ *     responses:
+ *       200:
+ *         description: Password has been reset successfully.
+ *       400:
+ *         description: Invalid or expired reset token, or validation failed
+ *       429:
+ *         description: Too many requests
+ */
+router.post('/reset-password', passwordResetRateLimiter, resetPassword);
+
+// Protected routes (requires valid access token)
+
+/**
+ * @swagger
+ * /auth/logout:
+ *   post:
+ *     summary: Logout and revoke refresh token
+ *     description: Legacy shared route, retired. Expires the old cookie only. Use /api/auth/admin/logout or /api/auth/customer/logout.
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ *       401:
+ *         description: Unauthenticated
+ */
+router.post('/logout', retireLegacySession(200));
+router.post('/admin/logout', logoutFor('admin'));
+router.post('/customer/logout', logoutFor('customer'));
+
+/**
+ * @swagger
+ * /auth/me:
+ *   get:
+ *     summary: Get current authenticated user details
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved user details, including available re-authentication methods
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     authMethods:
+ *                       type: object
+ *                       required: [password, google]
+ *                       properties:
+ *                         password: { type: boolean }
+ *                         google: { type: boolean }
+ *       401:
+ *         description: Unauthenticated or user not found
+ */
+router.get('/me', requireAuth, getCurrentUser);
+
+/**
+ * @swagger
+ * /auth/me:
+ *   patch:
+ *     summary: Update current authenticated user profile
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               firstName: { type: string, maxLength: 100 }
+ *               lastName: { type: string, maxLength: 100 }
+ *               email: { type: string, format: email, description: New address remains pending until verified }
+ *     responses:
+ *       200:
+ *         description: Successfully updated profile
+ *       400:
+ *         description: Validation failed
+ *       401:
+ *         description: Unauthenticated
+ *       409:
+ *         description: Email already registered
+ *       429:
+ *         description: Profile update rate limit reached
+ */
+router.patch('/me', requireAuth, rejectAdminEmailPatch, resendVerificationRateLimiter, updateProfile);
+
+/**
+ * @swagger
+ * /auth/me/verify-email-change:
+ *   post:
+ *     summary: Verify a pending profile email change
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [code]
+ *             properties:
+ *               code: { type: string, pattern: '^[0-9]{6}$' }
+ *     responses:
+ *       200: { description: Email promoted and EMAIL_CHANGED event recorded }
+ *       400: { description: Invalid or expired code }
+ *       401: { description: Unauthenticated }
+ */
+router.post('/me/verify-email-change', requireAuth, rejectAdminEmailChange, requireRole('CUSTOMER'), verifyPendingEmailChange);
+
+/**
+ * @swagger
+ * /auth/me/resend-email-change:
+ *   post:
+ *     summary: Resend the pending profile email change OTP
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Verification code resent }
+ *       400: { description: No pending email change }
+ *       401: { description: Unauthenticated }
+ *       429: { description: Resend cooldown or request limit reached }
+ */
+router.post('/me/resend-email-change', requireAuth, rejectAdminEmailChange, requireRole('CUSTOMER'), resendVerificationRateLimiter, resendPendingEmailChange);
+
+/**
+ * @swagger
+ * /auth/change-password:
+ *   post:
+ *     summary: Change current user password
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - currentPassword
+ *               - newPassword
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 8
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *       400:
+ *         description: Validation failed or incorrect current password
+ *       401:
+ *         description: Unauthenticated
+ */
+router.post('/change-password', requireAuth, changePassword);
+
+// Example of an admin-only route structure (for future use/testing RBAC)
+// router.get('/admin-only', requireAuth, requireRole('ADMINISTRATOR'), someAdminHandler);
+
+export default router;

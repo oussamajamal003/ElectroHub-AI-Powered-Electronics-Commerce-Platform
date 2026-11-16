@@ -1,0 +1,167 @@
+@use '../../../styles/abstracts/variables' as *;
+
+.tableContainer {
+  width: 100%;
+  overflow-x: auto;
+  background-color: $color-background;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  &:focus-visible {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.th {
+  padding: $spacing-4;
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $color-text-secondary;
+  border-bottom: 1px solid $color-border;
+  background-color: $color-surface;
+  white-space: nowrap;
+}
+
+.tr {
+  transition: background-color $transition-normal;
+  border-bottom: 1px solid $color-surface;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &.clickable {
+    cursor: pointer;
+  }
+
+  &:hover {
+    background-color: $color-surface;
+  }
+}
+
+.td {
+  padding: $spacing-4;
+  font-family: $font-family-mono; /* Data-oriented typography */
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  vertical-align: middle;
+}
+
+/* For textual columns, we might override JetBrains Mono to Poppins, but JetBrains Mono is the default for Data Tables. We can allow users to render custom spans if needed. */
+
+.align-left {
+  text-align: left;
+}
+
+.align-center {
+  text-align: center;
+}
+
+.align-right {
+  text-align: right;
+}
+
+.actionsHeader {
+  width: 60px;
+  text-align: center;
+}
+
+.actionsCell {
+  text-align: center;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: $radius-sm;
+  background: transparent;
+  border: none;
+  color: $color-text-secondary;
+  cursor: pointer;
+  transition: background-color $transition-normal, color $transition-normal;
+
+  &:hover {
+    background-color: $color-surface;
+    color: $color-text-primary;
+  }
+
+  &:focus-visible {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
+}
+
+.actionIcon {
+  width: 20px;
+  height: 20px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: $spacing-12 $spacing-4;
+  color: $color-text-muted;
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+}
+
+.caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.sortButton {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-1;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+
+  &:hover { color: $color-text-primary; }
+
+  &:focus-visible {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
+}
+
+.sortIcon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.sortIdle { opacity: 0.45; }
+
+.skeleton {
+  display: block;
+  height: 0.875rem;
+  width: 70%;
+  background: linear-gradient(90deg, $color-surface 0%, $color-border 50%, $color-surface 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}

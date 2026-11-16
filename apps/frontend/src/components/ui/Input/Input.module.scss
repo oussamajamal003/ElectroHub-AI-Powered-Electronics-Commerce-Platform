@@ -1,0 +1,156 @@
+@use '../../../styles/abstracts/variables' as *;
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+
+  &.fullWidth {
+    width: 100%;
+  }
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.labelRight {
+  display: flex;
+  align-items: center;
+}
+
+.label {
+  font-family: $font-family-base;
+  font-weight: $font-weight-medium;
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: $spacing-1;
+
+  &.labelDisabled {
+    color: $color-text-muted;
+  }
+
+  &.labelError {
+    color: $color-error-foreground;
+    font-weight: $font-weight-semibold;
+  }
+}
+
+.required {
+  color: $color-error;
+}
+
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.input {
+  width: 100%;
+  font-family: $font-family-base;
+  font-size: $font-size-base;
+  color: $color-text-primary;
+  background-color: $color-background;
+  border: 1px solid $color-border;
+  border-radius: 0 !important;
+  transition: all $transition-fast;
+  padding: 10px 12px;
+
+  &::placeholder {
+    color: $color-text-muted;
+  }
+
+  &:hover:not(:disabled):not(:focus) {
+    border-color: $color-text-muted;
+  }
+
+  &:focus {
+    outline: 2px solid $color-primary !important;
+    outline-offset: -2px !important;
+    border-color: $color-primary !important;
+  }
+
+  &:disabled {
+    background-color: $color-surface;
+    border-color: $color-border;
+    color: $color-text-muted;
+    cursor: not-allowed;
+  }
+
+  &.error {
+    background-color: #fff1f2;
+    border-color: #fca5a5;
+    color: $color-text-primary;
+
+    &:hover:not(:disabled):not(:focus) {
+      border-color: #f87171;
+    }
+
+    @include dark-theme {
+      background-color: $color-error-background;
+      border-color: $color-error-border;
+
+      &:hover:not(:disabled):not(:focus) { border-color: $color-error; }
+    }
+
+    &:focus {
+      outline: 2px solid $color-primary !important;
+      outline-offset: -2px !important;
+      border-color: $color-primary !important;
+    }
+  }
+
+  &.hasEndAdornment {
+    padding-right: 40px;
+  }
+}
+
+/* SIZES */
+.size-small {
+  height: 32px;
+}
+.size-medium {
+  height: 40px;
+}
+.size-large {
+  height: 48px;
+}
+
+.endAdornment {
+  position: absolute;
+  right: $spacing-3;
+  display: flex;
+  align-items: center;
+  color: $color-text-muted;
+}
+
+.errorMessage {
+  display: flex;
+  align-items: center;
+  gap: $spacing-1;
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-error-foreground;
+  margin: 0;
+  line-height: $line-height-normal;
+}
+
+.errorMessageIcon {
+  flex-shrink: 0;
+}
+
+.helperText {
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  margin: 0;
+}

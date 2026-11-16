@@ -1,0 +1,9 @@
+@use '../../../styles/abstracts' as *;
+
+.groups { display: grid; gap: $spacing-4; }
+.groups h3 { margin: 0 0 $spacing-3; }
+.list { margin: 0; border-top: 1px solid $color-border;
+  > div { display: grid; grid-template-columns: minmax(8rem, .7fr) minmax(0, 1fr); gap: $spacing-4; padding: $spacing-3 0; border-bottom: 1px solid $color-border; }
+  dt { color: $color-text-secondary; }
+  dd { margin: 0; }
+}

@@ -1,0 +1,971 @@
+# Frontend Architecture
+
+## 1. Purpose
+
+This document defines the frontend architecture for ElectroHub.
+
+The frontend is a React + TypeScript application responsible for the customer and administrator experiences.
+
+The architecture emphasizes:
+
+- Feature-oriented organization.
+- Reusable UI components.
+- Separation of server state and local UI state.
+- Typed API communication.
+- Accessibility.
+- Responsive design.
+- Testable feature boundaries.
+- SCSS and CSS Modules.
+
+---
+
+## 2. Technology Stack
+
+```text
+React
+TypeScript
+Vite
+SCSS
+CSS Modules
+React Query
+React Router
+React Hook Form
+Zod
+Framer Motion
+Radix UI
+Lucide React
+TanStack Table
+Socket.IO Client
+Leaflet
+OpenStreetMap
+Supabase Storage (Product Media Delivery)
+```
+
+Not used:
+
+```text
+Tailwind CSS
+shadcn/ui
+Bootstrap
+```
+
+---
+
+## 3. Frontend Responsibilities
+
+The frontend owns:
+
+- UI rendering.
+- Routing.
+- User interaction.
+- Form state.
+- Client-side validation.
+- Server-state consumption.
+- Authentication presentation.
+- Responsive behavior.
+- Accessibility.
+- Loading, empty, and error states.
+- Real-time UI updates.
+- Map visualization.
+
+The frontend does not own authoritative authorization, payment confirmation, inventory, order, delivery, or database state.
+
+---
+
+## 4. Recommended Structure
+
+```text
+apps/frontend/
+├── public/
+├── src/
+│   ├── app/
+│   ├── assets/
+│   ├── components/
+│   ├── features/
+│   ├── hooks/
+│   ├── layouts/
+│   ├── lib/
+│   ├── pages/
+│   ├── routes/
+│   ├── services/
+│   ├── styles/
+│   ├── types/
+│   └── main.tsx
+├── tests/
+├── package.json
+├── vite.config.ts
+└── tsconfig.json
+```
+
+The structure may evolve, but responsibilities must remain separated.
+
+---
+
+## 5. App Layer
+
+The `app/` area contains application-wide configuration:
+
+- Providers.
+- Query client.
+- Global configuration.
+- Authentication context where applicable.
+- Error boundaries.
+- Application initialization.
+
+Conceptually:
+
+```text
+App
+ ├── Router
+ ├── Query Provider
+ ├── Auth Provider
+ ├── Global UI Providers
+ └── Routes
+```
+
+---
+
+## 6. Components
+
+Reusable UI components live in `components/`.
+
+Examples:
+
+```text
+Button
+Input
+Dialog
+Toast
+SearchInput
+ProductCard
+OrderCard
+StatusBadge
+LoadingState
+EmptyState
+ErrorState
+```
+
+Components should remain reusable and should not contain unrelated business logic.
+
+Detailed standards are defined in `docs/02_Design/COMPONENTS.md`.
+
+---
+
+## 7. Feature Architecture
+
+The `features/` directory contains domain-specific frontend functionality.
+
+```text
+features/
+├── auth/
+├── products/
+├── categories/
+├── search/
+├── image-search/
+├── recommendations/
+├── cart/
+├── wishlist/
+├── checkout/
+├── payments/
+├── orders/
+├── delivery/
+├── inventory/
+├── admin/
+└── analytics/
+```
+
+A feature may contain:
+
+```text
+components/
+hooks/
+api/
+types/
+utils/
+schemas/
+```
+
+Feature code should remain close to the domain it serves.
+
+---
+
+## 8. Pages
+
+Pages compose features into route-level screens.
+
+Examples:
+
+```text
+HomePage
+SearchPage
+ProductDetailsPage
+CartPage
+WishlistPage
+CheckoutPage
+OrdersPage
+OrderDetailsPage
+DeliveryTrackingPage
+
+AdminDashboardPage
+AdminProductsPage
+AdminOrdersPage
+AdminInventoryPage
+AdminAnalyticsPage
+```
+
+Pages should primarily coordinate layout, routing, data requirements, and feature composition.
+
+---
+
+## 9. Layouts
+
+Shared layouts include:
+
+```text
+CustomerLayout
+AdminLayout
+AuthLayout
+```
+
+Customer:
+
+```text
+Header
+ ↓
+Main Content
+ ↓
+Footer
+```
+
+Admin:
+
+```text
+Sidebar
++
+Header
++
+Main Content
+```
+
+---
+
+## 10. Routing
+
+React Router manages navigation.
+
+Conceptually:
+
+```text
+/
+├── /search
+├── /products/:id
+├── /categories/:id
+├── /cart
+├── /wishlist
+├── /checkout
+├── /orders
+├── /orders/:id
+├── /orders/:id/tracking
+└── /admin
+    ├── /dashboard
+    ├── /products
+    ├── /categories
+    ├── /inventory
+    ├── /orders
+    ├── /delivery
+    └── /analytics
+```
+
+Frontend route protection improves UX; backend authorization remains authoritative.
+
+---
+
+## 11. API Layer
+
+API communication should be centralized.
+
+```text
+Feature Hook
+ ↓
+API Client
+ ↓
+HTTP Request
+ ↓
+Backend API
+```
+
+The API layer handles:
+
+- Base URL.
+- Authentication headers.
+- Serialization.
+- Response parsing.
+- Consistent error handling.
+
+Components should not construct arbitrary HTTP requests directly.
+
+---
+
+## 12. React Query
+
+React Query manages server state:
+
+- Fetching.
+- Caching.
+- Refetching.
+- Loading.
+- Errors.
+- Invalidation.
+- Mutation lifecycle.
+
+```text
+Component
+ ↓
+Feature Hook
+ ↓
+React Query
+ ↓
+API Client
+ ↓
+Backend
+```
+
+---
+
+## 13. Query and Mutation Strategy
+
+Query keys should be stable and domain-oriented.
+
+Examples:
+
+```text
+products
+products/list
+products/detail/:id
+orders
+orders/detail/:id
+inventory
+recommendations
+```
+
+Mutations include:
+
+```text
+Add to Cart
+Remove from Wishlist
+Create Order
+Update Profile
+Update Product
+Update Inventory
+Update Delivery
+```
+
+Successful mutations should invalidate or update related queries appropriately.
+
+---
+
+## 14. Local UI State
+
+Local React state is appropriate for:
+
+- Modal visibility.
+- Selected tabs.
+- Temporary input state.
+- Dropdown state.
+- Local visual state.
+
+Do not unnecessarily duplicate server state in local state.
+
+---
+
+## 15. Authentication
+
+Frontend authentication state may expose:
+
+```text
+Current User
+Authentication Status
+Role
+Session State
+```
+
+It may be used for UI and navigation decisions.
+
+Backend authorization remains the security boundary.
+
+---
+
+## 16. Forms
+
+Forms use:
+
+```text
+React Hook Form
++
+Zod
+```
+
+Flow:
+
+```text
+Input
+ ↓
+React Hook Form
+ ↓
+Zod
+ ↓
+API Mutation
+ ↓
+Backend Validation
+```
+
+Frontend validation improves UX; backend validation is mandatory.
+
+---
+
+## 17. Search
+
+```text
+SearchInput
+ ↓
+Search Hook
+ ↓
+React Query
+ ↓
+Backend Search API
+ ↓
+Results
+```
+
+The UI handles:
+
+- Typing.
+- Suggestions.
+- Loading.
+- Results.
+- No results.
+- Errors.
+- Keyboard interaction.
+
+---
+
+## 18. Image Search
+
+```text
+Search by Image
+ ↓
+Upload / Camera
+ ↓
+Preview
+ ↓
+Analyze
+ ↓
+Results
+```
+
+The frontend handles:
+
+- Camera permissions.
+- Camera availability.
+- File validation.
+- Upload failure.
+- Processing.
+- No results.
+- Results.
+
+The backend and FastAPI service perform the authoritative processing.
+
+---
+
+## 19. Product, Cart, and Wishlist
+
+Product data is consumed through React Query.
+
+Cart and wishlist are server-owned:
+
+```text
+UI
+ ↓
+Feature Hook
+ ↓
+React Query
+ ↓
+Backend
+ ↓
+Database
+```
+
+Optimistic updates may be used when safe, but the backend remains authoritative.
+
+---
+
+## 20. Checkout and Payments
+
+Checkout is a multi-step UI:
+
+```text
+Cart
+ ↓
+Shipping
+ ↓
+Payment
+ ↓
+Processing
+ ↓
+Confirmation
+```
+
+Frontend responsibilities:
+
+- Form state.
+- Validation.
+- Payment UI.
+- Loading.
+- Errors.
+- Confirmation presentation.
+
+Backend responsibilities:
+
+- Order validation.
+- Payment verification.
+- Inventory validation.
+- Order creation.
+
+Stripe is used in Test Mode.
+
+The frontend must never independently declare payment success.
+
+---
+
+## 21. Orders and PDFs
+
+The frontend provides:
+
+```text
+Order List
+Order Details
+Order Status
+Payment Status
+Delivery Status
+Invoice Download
+Payment Receipt Download
+```
+
+PDF flow:
+
+```text
+User Action
+ ↓
+Frontend Request
+ ↓
+Backend Authorization
+ ↓
+PDF Generation / Retrieval
+ ↓
+Authorized Download
+```
+
+The frontend must not generate trusted financial documents from client-side data.
+
+---
+
+## 22. Delivery Tracking
+
+Delivery combines:
+
+```text
+Order Data
++
+Socket.IO
++
+Leaflet
++
+OpenStreetMap
+```
+
+Flow:
+
+```text
+Backend
+ ↓
+Socket.IO Event
+ ↓
+Frontend
+ ↓
+Delivery State
+ ↓
+Timeline / Map
+```
+
+The frontend visualizes delivery state but does not determine it.
+
+---
+
+## 23. Socket.IO
+
+Socket.IO Client handles real-time delivery updates.
+
+The frontend must manage:
+
+- Connection.
+- Reconnection.
+- Event subscription.
+- Event cleanup.
+- Connection errors.
+- UI synchronization.
+
+Listeners must be cleaned up when components unmount or subscriptions change.
+
+---
+
+## 24. Leaflet
+
+Leaflet provides interactive maps.
+
+The frontend handles:
+
+- Map rendering.
+- Markers.
+- Route visualization.
+- Map interaction.
+- Responsive sizing.
+
+Backend delivery data remains authoritative.
+
+---
+
+## 25. Recommendations
+
+```text
+Product Page
+ ↓
+Recommendation Hook
+ ↓
+React Query
+ ↓
+Backend
+ ↓
+Recommendation Service / AI
+```
+
+Recommendation rules should not be implemented directly inside UI components.
+
+---
+
+## 26. Admin Architecture
+
+Admin features are organized by domain:
+
+```text
+features/admin/
+├── dashboard/
+├── products/
+├── categories/
+├── inventory/
+├── orders/
+├── delivery/
+└── analytics/
+```
+
+Admin screens reuse shared components and specialized operational components.
+
+---
+
+## 27. Tables
+
+TanStack Table is used for complex administrative tables.
+
+```text
+Admin Page
+ ↓
+Data Hook
+ ↓
+React Query
+ ↓
+TanStack Table
+ ↓
+Table UI
+```
+
+Tables should support appropriate:
+
+- Sorting.
+- Filtering.
+- Pagination.
+- Selection.
+- Loading.
+- Empty states.
+- Error states.
+
+---
+
+## 28. Product Image Uploads & Media Delivery Architecture
+
+Product image management integrates an administrator editing surface with server-authorized storage and durable AI synchronization:
+
+```text
+React Admin Media Gallery / Uploader
+ │ (Drag-and-drop / file input + client validation)
+ │ multipart/form-data with admin JWT credentials
+ ▼
+Express API (`requireRole('ADMIN')`)
+ │ MIME & payload verification, bounds check
+ ▼
+Supabase Storage (`product-media` bucket)
+ │ Canonical storage path & public CDN URL
+ ▼
+Prisma Transaction (`ProductImage` + `MediaOutbox`)
+ │ Atomic metadata & durable event write
+ ▼
+FastAPI AI Service Worker
+ │ Background pgvector embedding invalidation & re-indexing
+ ▼
+Storefront UI Delivery (Customer Catalog, Cards, Details)
+```
+
+### 28.1 React Admin Media Uploads
+- **Upload Flow:** The admin media editor in `apps/frontend/src/features/admin/products/` allows administrators to select or drag-and-drop real product photographs.
+- **Client-Side Validation:** Pre-validates files before upload (MIME types: `image/jpeg`, `image/png`, `image/webp`; max file size ≤ 8 MiB; aspect ratio sanity check).
+- **Direct Upload Restriction:** The browser NEVER uploads directly to Supabase Storage and never receives Supabase service-role credentials. All mutations flow through Express (`/api/admin/products/:id/images`).
+- **Management Capabilities:** Supports multi-file uploads, thumbnail previews, primary image designation (`isPrimary`), display ordering (`sortOrder`), alt text editing, and image removal.
+- **State & Invalidation:** Managed via TanStack Query (`useMutation`); invalidates `['admin', 'products', id]` and public product queries on success.
+
+### 28.2 Storefront Media Delivery
+- **Public CDN Endpoints:** Storefront components (`ProductCard`, `ProductGallery`, `CartItem`, `WishlistItem`) consume public CDN URLs delivered from Supabase Storage (`https://<project-ref>.supabase.co/storage/v1/object/public/product-media/...`).
+- **Backward Compatibility:** Catalog image rendering components gracefully handle both new Supabase Storage canonical URLs and legacy relative paths (`/images/products/...`).
+- **Fallback & Loading States:** Previews provide skeleton loading indicators, smooth transition upon load, and explicit broken-image fallbacks without layout shifts.
+- **Separation from Customer Search Photos:** Customer search photos (Discovery Console camera captures / file uploads) are strictly transient and processed in-memory. They are never rendered or stored as catalog product media.
+
+---
+
+## 29. Styling Architecture
+
+The frontend uses:
+
+```text
+SCSS
++
+CSS Modules
+```
+
+SCSS follows the 7-1 architecture.
+
+```text
+styles/
+├── abstracts/
+├── base/
+├── components/
+├── layout/
+├── pages/
+├── themes/
+├── vendors/
+└── main.scss
+```
+
+Component-specific styles should normally use CSS Modules.
+
+---
+
+## 30. UI Primitives and Icons
+
+Radix UI provides behavior/accessibility primitives where appropriate.
+
+The visual layer remains ElectroHub-specific.
+
+Lucide React is the approved icon library.
+
+---
+
+## 31. Motion
+
+Framer Motion is used for meaningful animation:
+
+- State transitions.
+- Feedback.
+- Navigation.
+- Loading.
+- Delivery updates.
+
+The frontend must respect `prefers-reduced-motion`.
+
+---
+
+## 32. Loading, Empty, and Error States
+
+Loading should exist at the correct level:
+
+```text
+Page
+Section
+Component
+Mutation
+```
+
+Use skeletons when final structure is known.
+
+Feature-aware empty states include:
+
+```text
+Empty Cart
+Empty Wishlist
+No Orders
+No Search Results
+No Recommendations
+No Inventory Results
+```
+
+Error states should distinguish validation, authentication, authorization, network, not-found, server, payment, and external-service errors.
+
+---
+
+## 33. Accessibility
+
+The frontend must support:
+
+- Semantic HTML.
+- Keyboard navigation.
+- Focus management.
+- Accessible names.
+- Form labels.
+- Screen-reader compatibility.
+- Contrast.
+- Reduced motion.
+- Touch targets.
+
+Accessibility should be implemented in reusable components.
+
+---
+
+## 34. Responsive Architecture
+
+Responsive behavior uses:
+
+```text
+SCSS
+CSS Media Queries
+Responsive Components
+Responsive Layouts
+```
+
+Supported viewports:
+
+```text
+Mobile
+Tablet
+Desktop
+Large Desktop
+```
+
+Follow `docs/02_Design/RESPONSIVE.md`.
+
+---
+
+## 35. Performance
+
+Frontend performance should consider:
+
+- Code splitting.
+- Lazy loading.
+- Image optimization.
+- React Query caching.
+- Efficient list rendering.
+- Avoiding unnecessary re-renders.
+- Limited animation.
+- Appropriate bundle size.
+
+Large feature areas may be lazy-loaded when beneficial.
+
+---
+
+## 36. Security
+
+Frontend security includes:
+
+- No secret exposure.
+- Safe HTML handling.
+- Client-side validation for UX.
+- Safe authentication-state handling.
+- No sensitive data in logs.
+- HTTPS in production.
+
+The frontend is never the security boundary.
+
+---
+
+## 37. Testing Architecture
+
+Testing should cover:
+
+```text
+Unit
+ ↓
+Component
+ ↓
+Integration
+ ↓
+E2E
+```
+
+Critical user journeys should have E2E coverage.
+
+Important reusable components should have focused component tests.
+
+---
+
+## 38. Completion Criteria
+
+The frontend architecture is complete when:
+
+- Feature boundaries are defined.
+- Routing is defined.
+- API access is centralized.
+- React Query manages server state.
+- Local state is separated from server state.
+- Forms use React Hook Form and Zod.
+- Components are reusable.
+- SCSS/CSS Modules are standardized.
+- Accessibility is integrated.
+- Responsive behavior is defined.
+- Error/loading/empty states are handled.
+- Real-time delivery is defined.
+- Image search is defined.
+- Checkout/payment flows are defined.
+- Admin architecture is defined.
+- Media upload and Supabase Storage delivery are defined.
+- Testing strategy is defined.
+
+---
+
+## 39. Frontend Principle
+
+> **Keep pages compositional, features isolated, server state centralized, and reusable UI independent from business logic.**
+
+## 30. Browser Branding, Toasts and Tooltips (Task 06.2 side task)
+
+**Browser identity.** `index.html` carries the official favicon set (SVG mark `/brand/electrohub-mark.svg`, `/favicon-32.png`,
+`/apple-touch-icon.png`, all root-absolute so they resolve from any route depth) and the default title
+`ElectroHub — Electronics Commerce Platform`. All route titles come from `src/lib/pageTitle.ts`: layouts use `usePageTitle`
+(h1-derived, `Admin ` prefix in the console), pages outside the layouts (admin sign-in/activation/invite/forgot-password, 404) use
+`useDocumentTitle`. Never hard-code `document.title` elsewhere, and never put tokens, OTPs or personal data in a title.
+The mark is the same artwork as `BrandLogo`; the PNG/SVG files in `public/brand/` are rasterized from it.
+
+**Toasts.** One module-level store (`components/ui/Toast/toastStore.ts`) and one renderer (`ToastCenter`, mounted once in `App`;
+`AdminToastProvider` is a thin page-level mount that stays inert when the app-level one owns the viewport). Call
+`toast.success|error|warning|info|loading(title, { description, id, action, announce })` from anywhere, including mutation callbacks.
+The store bounds the queue (3), collapses identical toasts raised within 1.5 s, and replaces by `id`. Errors/warnings are assertive,
+the rest polite; toasts never take focus; pass `announce: false` when an inline live region already speaks the same outcome.
+Failure wording comes from `describeError`/`toastError` (validation, 401, 403, 404, 409, 429, timeout, offline, 5xx, unexpected;
+raw exception text is never shown). Every TanStack mutation in both query caches reports failures through
+`reportMutationFailure` (`lib/query.ts`): validation (400/422) and 401 are left to inline forms and the session-expiry flow; set
+`meta: { action: 'save this product' }` to name the action, or `meta: { silent: true }` to own the feedback yourself.
+Existing bespoke surfaces are intentionally unchanged: payment-result notices (`PaymentNotifications`, authoritative backend state),
+delivery-tracking status toasts (announce-excluded by design), the image-search console's in-panel states, and inline copy confirmations.
+
+**Tooltips.** `components/ui/Tooltip` (Radix) with one app-level `TooltipProvider` (400 ms open, 200 ms skip). A tooltip is a hint,
+never the only carrier of meaning: it opens on hover and keyboard focus, closes on Escape, and is not opened by touch taps, so the
+control's accessible name must already say the same. `IconButton` shows its `aria-label` automatically (`tooltip` to override or
+`false` to opt out). For a disabled control use `focusableWrapper` (or `IconButton disabledReason`) so the reason stays reachable
+without enabling the action. Do not combine a tooltip with a native `title` on the same control.
+
+Verification: `npx playwright test -c playwright.branding.config.ts` (hermetic: every `/api/**` call is intercepted; engines
+chromium, firefox, webkit and 390/320 px viewports).

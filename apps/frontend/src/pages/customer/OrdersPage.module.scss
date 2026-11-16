@@ -1,0 +1,59 @@
+@use '@/styles/abstracts' as *;
+
+// My Orders (Task 03.7, "Orders page.png"): wide bordered cards across the page container, square corners, 4px spacing scale.
+.heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: $spacing-2 $spacing-4; margin: 0 0 $spacing-8;
+  h1 { margin: 0; font-size: clamp(2.25rem, 3.4vw, 3.75rem); line-height: $line-height-tight; // Focus is moved here programmatically (tabIndex -1) for screen readers; the heading is not interactive, so no ring.
+    &:focus { outline: none; } }
+}
+.count { color: $color-text-secondary; font-size: $font-size-base; white-space: nowrap; @include respond-to(md) { font-size: $font-size-lg; } }
+
+.orderList { margin: 0; padding: 0; list-style: none; display: grid; gap: $spacing-5;
+  &[data-stale] { opacity: .6; transition: opacity $transition-fast; }
+}
+.orderCard { position: relative; display: grid; gap: $spacing-5; padding: $spacing-5; border: 1px solid $color-border; background: $color-background; min-width: 0;
+  transition: border-color $transition-fast, box-shadow $transition-fast;
+  &:hover { border-color: $color-primary; box-shadow: $shadow-sm; }
+  &:focus-within { border-color: $color-primary; }
+  @include respond-to(md) { padding: $spacing-6; }
+}
+.cardTop { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: $spacing-3 $spacing-4; }
+.identity { display: grid; gap: $spacing-1; min-width: 0; flex: 1 1 16rem;
+  h2 { margin: 0; font-size: $font-size-lg; line-height: $line-height-tight; overflow-wrap: anywhere; @include respond-to(md) { font-size: $font-size-xl; } }
+}
+.eyebrow { font-size: $font-size-xs; font-weight: $font-weight-medium; letter-spacing: .04em; text-transform: uppercase; color: $color-text-secondary;
+  @include respond-to(md) { font-size: $font-size-sm; } }
+.cardLink { color: $color-primary-text; font-weight: $font-weight-bold; text-decoration: none;
+  // Stretch the single link across the card.
+  &::after { content: ''; position: absolute; inset: 0; }
+  &:hover { text-decoration: underline; text-underline-offset: 3px; }
+  &:focus-visible { outline: none; &::after { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: -2px; } }
+}
+.previews { display: flex; flex-wrap: wrap; gap: $spacing-2; @include respond-to(sm) { gap: $spacing-3; } margin: 0; padding: 0; list-style: none; }
+.previewImage { width: 3rem; height: 3rem; @include respond-to(sm) { width: 3.625rem; height: 3.625rem; } background: $color-surface; border: 1px solid $color-border; }
+.more { display: grid; place-items: center; width: 3rem; height: 3rem; @include respond-to(sm) { width: 3.625rem; height: 3.625rem; } border: 1px solid $color-border; background: $color-surface;
+  color: $color-text-secondary; font-size: $font-size-sm; font-weight: $font-weight-semibold; }
+.cardFooter { display: flex; align-items: center; justify-content: space-between; gap: $spacing-2; @include respond-to(md) { gap: $spacing-4; } padding-top: $spacing-5; border-top: 1px solid $color-border; }
+.meta { display: flex; flex-wrap: wrap; gap: $spacing-3 $spacing-5; margin: 0; @include respond-to(md) { gap: $spacing-4 $spacing-8; }
+  div { display: grid; gap: $spacing-1; min-width: 0; }
+  dt { font-size: $font-size-sm; color: $color-text-secondary; }
+  dd { margin: 0; font-size: $font-size-base; font-weight: $font-weight-semibold; color: $color-text-primary; white-space: nowrap; @include respond-to(md) { font-size: $font-size-lg; } }
+}
+.chevron { width: 1.5rem; height: 1.5rem; flex-shrink: 0; color: $color-primary-text; }
+// Task 03.9: the Documents action and chevron move to their own right-aligned row only when the metadata needs the full width.
+.cardFooter { flex-wrap: wrap; }
+.cardFooter > .meta { flex: 1 1 15rem; }
+.footerEnd { display: flex; align-items: center; gap: $spacing-2; flex-shrink: 0; margin-left: auto; @include respond-to(md) { gap: $spacing-4; } }
+
+// The true empty state: a bounded panel centered beneath the heading, balanced within the main content area, in normal flow.
+.emptyArea { display: grid; place-items: center; min-height: clamp(18rem, 42vh, 30rem); padding-block: $spacing-4 $spacing-8; }
+.empty { width: 100%; max-width: 32rem; padding: $spacing-10 $spacing-6; background: $color-background; @include respond-to(md) { padding: $spacing-12 $spacing-10; } }
+.state { max-width: 40rem; margin-inline: auto; }
+.pagination { margin-top: $spacing-8; }
+.footerActions { margin-top: $spacing-8; }
+
+// Loading placeholder: same geometry as .orderCard, never reacts to hover or focus.
+.skeletonCard { display: grid; gap: $spacing-5; padding: $spacing-5; border: 1px solid $color-border; background: $color-background; pointer-events: none;
+  @include respond-to(md) { padding: $spacing-6; }
+}
+
+@media (prefers-reduced-motion: reduce) { .orderCard, .orderList[data-stale] { transition: none; } }

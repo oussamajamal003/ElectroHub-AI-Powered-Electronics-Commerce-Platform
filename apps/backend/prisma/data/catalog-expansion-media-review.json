@@ -1,0 +1,1333 @@
+{
+  "manifestSha256": "6ba5eb93ed080989fc03286ad4ca57fbe030a4948cf4e8925d56e61994a6dae3",
+  "assets": [
+    {
+      "path": "/images/catalog/expansion/canon-eos-r50-primary.webp",
+      "sha256": "2d57f63c231005fa76e4a0d2c2103c185c5dd7dd545444abd83babfcd4a36332",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/canon-eos-r50-alternate.webp",
+      "sha256": "77ced766516fd25b05bef061480fd087a63f4d5fe8c9f6f53f67f88423aac0f4",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/canon-eos-r10-primary.webp",
+      "sha256": "fdebc22eb0121f1d8d9f53bb3c8e278f351c84c8b9e168e3b83c65a60ba1e4cd",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/canon-eos-r10-alternate.webp",
+      "sha256": "c947a6b907f28e945094a26ff55da4495983e647c6e1d87cbed1cfe79e80953f",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/canon-eos-r100-primary.webp",
+      "sha256": "461d6f397c1a600c681dd89fdb3a5e392d3b627095e8dda721bf57a7bfeeddf7",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/canon-eos-r100-alternate.webp",
+      "sha256": "853ead1e905744a537b6cc52fdd1cbc653bf685fa360d59b40eef3ec1557cbfe",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/canon-eos-r7-primary.webp",
+      "sha256": "88ca381c0585b554a6a109bff18183a0bdfc020c3ec6273689f27e0f90a84ee8",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/canon-eos-r7-alternate.webp",
+      "sha256": "7de68349b905cd308f2f53c514c669c417cc5c04c05a07931eb06ef976069d1e",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/canon-eos-r8-primary.webp",
+      "sha256": "dd578d1bfbcd358077e8a1d546dc6d77759ca5ad54b3bf12ae9203a136ed15a1",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/canon-eos-r8-alternate.webp",
+      "sha256": "e5a2b83a490740ff3761f975de8bfe3014e43ae11c9edeae3ac866f7ba10fa59",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/canon-eos-r6-mark-ii-primary.webp",
+      "sha256": "7d282a912ad91ee281a4e79cae5a2059b01ce605822d38d70111d32530be2f21",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/canon-eos-r6-mark-ii-alternate.webp",
+      "sha256": "d08d5a64bdb964753e6398886c93e45806ca69dd01d69baa50e0ed73cb422800",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/canon-eos-r5-primary.webp",
+      "sha256": "df23d5ad5c3094af8ed139e87d5ff03a96cdc6dea63da3a6a68185b2b0d595f1",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/canon-eos-r5-alternate.webp",
+      "sha256": "592389a6515acfca5efd73b6508bd092339d37e83e96bfd3584698031b238c52",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/canon-eos-r3-primary.webp",
+      "sha256": "3f6e00d6a2e79783fc9f37da014d39e4376741d57499a694c0ab530fe176cfd8",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/canon-eos-r3-alternate.webp",
+      "sha256": "339f06bab89043a009e7fc47cd6e9f93888f3fd0af2f063691983dcb1fd4927f",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/category-cameras-photography.webp",
+      "sha256": "a21d6f8f909d192ba93a93cbb12dab5061c88cfda3a2c7b6781142826cb8240b",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-go-3-primary.webp",
+      "sha256": "2e2ff4f72ca79157fac93cb7120cc146f31056d0d645a95853f165e281cfd861",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-go-3-alternate.webp",
+      "sha256": "9b0d9a543c9371207e2601a83097e3829070d307ea4985b4555cf632a6fea4ff",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-clip-4-primary.webp",
+      "sha256": "542488925b85651986716538f4903f08fbff38ffe38ace40ad4ca20cdc3c8445",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-clip-4-alternate.webp",
+      "sha256": "ff5560065886e0f84f102020b4927b471f5c1ae8fd07241e001d5ff39fe30b08",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-flip-6-primary.webp",
+      "sha256": "aae2723f6c33086cec080e275f68a9fb68ac796e7f8271bc6d296061ced52c7b",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-flip-6-alternate.webp",
+      "sha256": "5d01e98104df720820fe3a6cb5c2f62c699a544db94be5f5dc3ebad9625ca040",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-charge-5-primary.webp",
+      "sha256": "0f1611514771998692b7874582890c23902392c906aa27310cd87cf441e4e98e",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-charge-5-alternate.webp",
+      "sha256": "dba919921f6bf5b4ddbf17a0175ccbf2d513303d2fdda1f799624dc821f87bc3",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-xtreme-3-primary.webp",
+      "sha256": "130aa21c43d7ec850103a3768beec35c04fa087469b2206ad0ebb640dd49c060",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-xtreme-3-alternate.webp",
+      "sha256": "62c4fa3162ea670c366bd5d9a351ad74552d0d8dda7eed8c6af2d5456f4113ee",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-boombox-3-primary.webp",
+      "sha256": "197b5f6ba27bcb485f12b06b05439cff43605f087a76bc6f0034202aea0a5701",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-boombox-3-alternate.webp",
+      "sha256": "113dcfe4a123fd2938e7467369e1904937a537c2f10db2cebb979242b77560f8",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-pulse-5-primary.webp",
+      "sha256": "633853e794d98631fd6e5bce59b5b25cff03fe8733751fc97c992856527ceae7",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-pulse-5-alternate.webp",
+      "sha256": "f3624e8811708b635a7a4d2530b14b2a82e67558c9e7901e9fce3bf0126cb332",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-go-4-primary.webp",
+      "sha256": "1180d037ee9c0b16c7089d95bf73f80814fe191e3574fe6036db450634273c8e",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-go-4-alternate.webp",
+      "sha256": "c42e4bbcd03d21ec5b5e207c1d2e6ebec9c79186749602834bbcafb344cee96f",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-clip-5-primary.webp",
+      "sha256": "9a4aca150994b4c96a4503e77edf0364fb7e2ae6c379c8eeb5ccf4994f058f86",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-clip-5-alternate.webp",
+      "sha256": "1682a0ba8a4cad271312de44226575ef38b362628e7fd4fc9f2e0e64e2042611",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-xtreme-4-primary.webp",
+      "sha256": "d183d875d06c1d265f2d443db2b54034ffbc2ab40547c621ec07123f3fd2c5c3",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-xtreme-4-alternate.webp",
+      "sha256": "d836c40a0dc04e3946374a971e9c05d780743418b69ef0dbb5af11bf0c386f2e",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-bar-300-primary.webp",
+      "sha256": "ac9781cbc3fd976957bfa90105922fcc54b15ddc1cedb74e4159f464408fffc8",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-bar-300-alternate.webp",
+      "sha256": "1e806de018091b92a61c13c52d54b70ba579a8ae9f8d35e9b8c4c2652ab580bf",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-partybox-110-primary.webp",
+      "sha256": "1b39d420217cb1cd90702b0d67350b3002e640c47df860b2bf1eda4968e6d486",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/jbl-partybox-110-alternate.webp",
+      "sha256": "0346b2ae1354138c60023e56a6b004cf9ce6dab33ffa568c1347b4923d2839a4",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/category-speakers-audio.webp",
+      "sha256": "8855a943c97098f5e938393eba31fea81725a5c5b0221d6db9e513380cb61c65",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/category-storage-ssds.webp",
+      "sha256": "bc2d8eb1c01142ab8b244d21ff269671437559e4bcd9f05b3c06c6c09937d5f2",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/category-computer-components.webp",
+      "sha256": "c551c8fd2d5f61ad0a02bc0887fe9827b1dc2efc0292eca2b66679efb6683298",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/category-networking-wifi.webp",
+      "sha256": "88cfd49156165b5edc270aee08bebc8d5dc4e09ec7a3eff2c904a65d8a2ce7d5",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-990-pro-1tb-primary.webp",
+      "sha256": "0673ab9abca483e6875e65f4982a39b7359b7a05a3c599c2b10ade26e147370a",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-990-pro-1tb-alternate.webp",
+      "sha256": "1b746831fdb372f95b9004dfea2920816f6bb0131e46dcebcd73ccb864762a02",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-980-pro-1tb-primary.webp",
+      "sha256": "281c9eddbf45ff9efe2988bc3528729910081f8311593a58747b1bb572931341",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-980-pro-1tb-alternate.webp",
+      "sha256": "fff3b0ae0ff2e34a57eeb322b818fda957ca2402d6583f740368d05bb68cafa9",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-970-evo-plus-1tb-primary.webp",
+      "sha256": "96bf68eb1652ec0942215623d7eb0aece47dd52ea66ebb03c82c4713fce4dbeb",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-970-evo-plus-1tb-alternate.webp",
+      "sha256": "0b9a2265751b457a0eca8a982c113f79c99c7155964d62dbd6ba38a58c19f09a",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-980-1tb-primary.webp",
+      "sha256": "b8d29d26a3c8fe00d563e3ce05134e02b89a610d2ec860c03b0c47e88a2cf76b",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-980-1tb-alternate.webp",
+      "sha256": "e1712455740950c0cd3820a10394cf8ff15f580b20022e0f69f3c55790a82e26",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-870-evo-1tb-primary.webp",
+      "sha256": "822095dc649a542225ebc257ff7c3c7b512e3f07392f17e84f194a9a39d4adec",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-870-evo-1tb-alternate.webp",
+      "sha256": "220f1d7efc4186e9d9033e3e2a723f4035bdfd8b0a468ba4d64aacaf3f0fce39",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-870-qvo-2tb-primary.webp",
+      "sha256": "8ab695ed210206281ce9b29948e4554bf71e75aba37b37450adaf6e63973adfa",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-870-qvo-2tb-alternate.webp",
+      "sha256": "090ea92dfc77dc289f70e0c3a5f4f5b796a3b67da4af738490eca3ca28653645",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-t7-1tb-primary.webp",
+      "sha256": "89eb10bea251c1907172cd7e56845827e5f65f821e8ceeb8a34bead705510c50",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-t7-1tb-alternate.webp",
+      "sha256": "9a30ee214c0220e9ea8e53457a63561c9a21419c9eaeec3c7c67196464c17de1",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-t7-shield-1tb-primary.webp",
+      "sha256": "4ad17129b445c0f4b6c140f4052abe75279b38e741885c4801a14a72f4065b7d",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-t7-shield-1tb-alternate.webp",
+      "sha256": "55544c20cafe3e60bcd81713465b965dc1334f3bb450806e2fd5f05dae5f2129",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-t9-1tb-primary.webp",
+      "sha256": "9f605b37c4e40aaecb6c5c6b1fd718056fa9e1100b1fa3c9795e577e74bf3db6",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-t9-1tb-alternate.webp",
+      "sha256": "eae59e28934470ed79c11a9459a0ccd5d0926a3e55a647622d4e02e43059e8ed",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-t5-evo-2tb-primary.webp",
+      "sha256": "747a34cac776446c86b259cf20b8a870fe509c3fb2f9c598f9ddb4617a48f74c",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/samsung-t5-evo-2tb-alternate.webp",
+      "sha256": "b2c5d5072b0d9a0bd83af51026693b27e6824304b9b6097456f01f5cc386e19d",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-9-9950x-primary.webp",
+      "sha256": "e2f76c755995b1edb04b2b4a14012ac8aeeaa397091e4be75663b79c82b898a1",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-9-9950x-alternate.webp",
+      "sha256": "febc23adb377324e7a262e6757fa9cdec528f83430afa8353c7f2bcfbf1ff68f",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-9-9900x-primary.webp",
+      "sha256": "1b68dbcfda3d7e11ce46b066d9bf74c1efe24336a6be7786b95b76302b97eb49",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-9-9900x-alternate.webp",
+      "sha256": "286165fe764f80aedc8c9a53380a30bb1da26c2bff175eb397a460b269f52ee1",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-7-9700x-primary.webp",
+      "sha256": "08d946d618c0443a5b9db6e5c215098c5b3ce310d25da3f508dd29be226dea53",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-7-9700x-alternate.webp",
+      "sha256": "f944cecf1b90128dae6d3a0d61e46d7db3fd148a2ad8889a26f8475466024ae0",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-5-9600x-primary.webp",
+      "sha256": "b1d1f664812a6d520ce0c7531403b4aada451044bf27486f16d026619410dda8",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-5-9600x-alternate.webp",
+      "sha256": "b6b1da7d4f7d60b171947c1162a5f135fed1318aeb418e9d696a90541b4094fe",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-9-7950x-primary.webp",
+      "sha256": "820f3f2720bd060aa466ca48daee87981be23eb9c40de641016ddde92e060211",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-9-7950x-alternate.webp",
+      "sha256": "42c1478589b266f9285bc38b27dc23f8cc38e6932db5709a498b4943e5f56ad0",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-9-7900x-primary.webp",
+      "sha256": "154d8ee8cadc6e7553de472e97a11b3c0842232ae14cab39abc9840fe404d8f4",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-9-7900x-alternate.webp",
+      "sha256": "d7f4372c332c9715aa223142be36be44da1fb9c0494cfacb49f3bd938ccaee31",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-7-7700x-primary.webp",
+      "sha256": "f2ed2c8550349cb377113df974118347e1e51878fbd6ecf34b1f210a44276481",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-7-7700x-alternate.webp",
+      "sha256": "fb2383c5ebb77b8af759598864654dab341cd5693e38e7c2231121dc73de1764",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-5-7600x-primary.webp",
+      "sha256": "aa29b4e52bd8567289212f69e97ec224cf7820fb64faa58fade606757ea18a7a",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-5-7600x-alternate.webp",
+      "sha256": "45ac383a8461ea612bacc550680f2ee62859371aaacec937205e10bff8a770fb",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-9-7950x3d-primary.webp",
+      "sha256": "946a06f6a08291254fb657abdd7de6ac35a4ff762af23d31f5780c7f73f37a7f",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-9-7950x3d-alternate.webp",
+      "sha256": "8709a17962c3bc1048b0d0d29d812cf234f2ba915cfddcc10893dda99fe7cf5a",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-9-7900x3d-primary.webp",
+      "sha256": "fb7f028744cfcc08f9876d9983d5e878f36ae2a69d5c54e51575c028579a8aee",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-9-7900x3d-alternate.webp",
+      "sha256": "fed3496acec058a1434aa980113f1d9ebc34c3a52b6fa97a9a77b0d649713f69",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-7-7800x3d-primary.webp",
+      "sha256": "d7482bbab8774c80968d5561f0860b3acc700866da6a28a550572d301fe4e2a7",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-7-7800x3d-alternate.webp",
+      "sha256": "cb3a572660a7d924766f4a9dac585c3df2406736bd7752fdf132bc8826ef573b",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-9-7900-primary.webp",
+      "sha256": "2b7b1a3eea2435e7fdfbac805eee8868d44451d7037956509c7e549f8bc1c8f9",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-9-7900-alternate.webp",
+      "sha256": "84edbd3d59704209aa99aa0d41407f6e29790bc14e3a9958db4926a400b309a3",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-7-7700-primary.webp",
+      "sha256": "56e7b15ff0031d4e6b3a1f67eaa44e491272a8d4e1b0457b85aa29fc45e0f743",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-7-7700-alternate.webp",
+      "sha256": "9b24b05ed05446a0b7ce7e24b3a6d92ce32dfb161d462e85fdb64a248efb3d40",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-5-7600-primary.webp",
+      "sha256": "e9c13489d4a66fd5d9f5f996666e80bbc3abf99e5ccc47b41f77cc6e3740cde9",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-5-7600-alternate.webp",
+      "sha256": "91416a39dfdf6d980a27895797e7166f5e0013c823de7c145942be93369fc446",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-7-8700g-primary.webp",
+      "sha256": "fc4b514477b8ac85b54537f6c8628955d1eb60e9929bb93466e568d3bbbf463d",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/amd-ryzen-7-8700g-alternate.webp",
+      "sha256": "22daef64efe1b7e6f18fdf615fbd515f323f93f3c739de452acad8a16e3a5719",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tp-link-archer-ax55-primary.webp",
+      "sha256": "62190af39a1a6942d753316de322b824404baccd701b86d427fcf78068ae093f",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tp-link-archer-ax55-alternate.webp",
+      "sha256": "56faaf80169005a143bcd9526df2672dd207b39c40c6582365e4752789791196",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tp-link-archer-ax73-primary.webp",
+      "sha256": "fba65f7ecdc62d146d857324428d8905b523413b2dc0be9c36913e3cfc2e147b",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tp-link-archer-ax73-alternate.webp",
+      "sha256": "6c6cd7eaf6e2517af0459d652ca68e0867b0540fcbb5951953abc8820b99e80d",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tp-link-archer-axe75-primary.webp",
+      "sha256": "28306e77837478357172ab7bc3bd86c059ad1e8ec2a95bc9f50719242026a8e3",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tp-link-archer-axe75-alternate.webp",
+      "sha256": "3a82fe7b2a4b91bc7c113d28ee82e6fbf3c69e7e46200d94c08975b4e13bb919",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tp-link-archer-ax10-primary.webp",
+      "sha256": "bf779a5ccb8e70485dfa914fc2b2e9e54697d826ab1ed143805f62fad467934f",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tp-link-archer-ax10-alternate.webp",
+      "sha256": "1a566d3383f8ba5885be7fa9f09c7f0eca94a646c537defd1f85603e9ba93831",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tp-link-archer-ax23-primary.webp",
+      "sha256": "04a2f17431ee4187d63568dfbddc294bc3cbd8dfb0dd6671f8276da90cdde10b",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tp-link-archer-ax23-alternate.webp",
+      "sha256": "fe01126acc9a5bde9a21a4dd3bf8c3a68266ebaa6d23444bd605a975856edc56",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tp-link-archer-c6-primary.webp",
+      "sha256": "89b25055d45156f45b5d3d5d67ae56ffd3e40209c22bf4be449f27e85955e6d0",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tp-link-archer-c6-alternate.webp",
+      "sha256": "10282b800e8f630945c7ed4db8b0b5297097b40412ab6c2928bea20af7c43c45",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tp-link-tl-sg105-primary.webp",
+      "sha256": "a9239001933e0ed7798ca41c71aa26a47ff1db446e50696caf44c3e7bca5f77a",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tp-link-tl-sg105-alternate.webp",
+      "sha256": "3a8ec3a35f38bf5171d7335cb93f3c68322a304ff5b212a822e9d33215c967bc",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tp-link-archer-t3u-primary.webp",
+      "sha256": "dccd00e161e14abd5da107bd977798d89a738215e9874ede145a94d2535cf4cc",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tp-link-archer-t3u-alternate.webp",
+      "sha256": "fa0deba7e7c086422c670e7b9d9e3da701cb33df577737717187b8d7fbf732ad",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/category-smart-home.webp",
+      "sha256": "b6c76dc808e74b433f59e8b7e4f1b9bdf4946297cc7247ffeaeb899f3837ed87",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/category-keyboards-mice.webp",
+      "sha256": "27b6bd7aa012e71ab565629e1c6e494dc1d289123d9b5e31644852f2d3a6f54d",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-c200-v1-primary.webp",
+      "sha256": "b22877f926a107c97361b4d4fc78ace250e66eb0d1387513d178cf625b596607",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-c200-v1-alternate.webp",
+      "sha256": "827cc20885a65eda0ff6ee3105061e0c7fea83ef1814b2564dc515fece4793f4",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-c210-v1-primary.webp",
+      "sha256": "6adf1ba0ad30634846a421a711f4db9e0346249cce3402a2d75f12046846ff72",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-c210-v1-alternate.webp",
+      "sha256": "b2c7c7b76bce61cf8e870f4a2cb7f1b0a8b0a0fea327f1759dfbd5ea70804716",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-c110-v1-primary.webp",
+      "sha256": "f8994beffeb94c7ffbdc7ff42e5b54de945439b79f31edd110e3ddf1a941dec1",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-c110-v1-alternate.webp",
+      "sha256": "d8ce814b883c8735ff13a8f3bff1cfb3077ffcf5b99e5aa5906f88f17d90cd37",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-c310-v1-primary.webp",
+      "sha256": "ee587f948eeaae5509e981488305f21f5caafae920ca9debf7390e85e046ecf1",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-c310-v1-alternate.webp",
+      "sha256": "80d0f6bde29e55147635602afb9097f38ea5f2a52e3f9508fae291b948336d50",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-c320ws-v1-primary.webp",
+      "sha256": "2c9bc8c927123bcdf362e28931fb5a9b6927f0a4d24b0ad478fe21b226be5b53",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-c320ws-v1-alternate.webp",
+      "sha256": "5df870eb39846477bf6f820446f9bf18a7a5cc2cd1d32b77fbe95b51f06ec169",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-p100-eu-v1-primary.webp",
+      "sha256": "4b821ec6933d88d7dfc86d72aa5ca13f283a443b005d684e870b815d370430ef",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-p100-eu-v1-alternate.webp",
+      "sha256": "ff1c52b12e5dd8fec7348d1e4644b8a12123329885392bf1d9f40641be2987fd",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-p110-eu-v1-primary.webp",
+      "sha256": "407eff589618062126222896c68e0d281ec8886937b1ee5a169ab5e2bd26b261",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-p110-eu-v1-alternate.webp",
+      "sha256": "8db3c9b165062edce4406d0a9fdd9593888ab6daa2952eeb35ab13d9ed9616e0",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-l510e-e27-primary.webp",
+      "sha256": "626e3324bda72c08d6577ccf476e35bdd3b7b5b339eb7018c5d8d890bdfd3f46",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-l510e-e27-alternate.webp",
+      "sha256": "44aa353e37249f0cce7891e0b86492273cf3799d861dec59e04d8c2fecdb65a3",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-l530e-e27-primary.webp",
+      "sha256": "82aa33b5a2e4d068772723df77eaa5b86c466a93133c82518c2b32829d48932f",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-l530e-e27-alternate.webp",
+      "sha256": "89c34230bb61a53bfc181c5bae13ddacfe4da050150d4aa919c4ae00b1def57c",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-t110-eu-primary.webp",
+      "sha256": "122987dbd993d5c3da57faec0d98348ed6c88b82655a452e899d7fa765e3f3cc",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/tapo-t110-eu-alternate.webp",
+      "sha256": "1770672bc31f730d143df10d390722442754fb987f4f5f8f1c765f5b525d6082",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-mx-master-3s-bluetooth-edition-primary.webp",
+      "sha256": "12f9807f2f8916cefd1bbb7e9f6a80107dfb49bfc20d0c27980537bd66c2a5b1",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-mx-master-3s-bluetooth-edition-alternate.webp",
+      "sha256": "ed0a15706aa39c6bdd1654a3852d16e40901569ca0e73c4aa6631c7cc2d63e20",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-mx-anywhere-3s-primary.webp",
+      "sha256": "bed910879da3af4480fae2a892cb32b5b0e190e28ec63d0f4a1a2a819eb6ced6",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-mx-anywhere-3s-alternate.webp",
+      "sha256": "371308a99d83ed2977e7d442026586a4ea63bfa3086bb5521cc152fe1d21de6d",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-lift-right-handed-primary.webp",
+      "sha256": "130348b2d72bb9cd6bdcbd4db47f384ea251c41885ee5df09d545c584f0d4bb0",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-lift-right-handed-alternate.webp",
+      "sha256": "360ef53065cff20fdafd1bc7f65b2dd244815e098652c28612d27d4a80e6add6",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-signature-m650-primary.webp",
+      "sha256": "d124003182ed5a8a198c5f68a865710d86fbee5580703d6637c86b3388897dd5",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-signature-m650-alternate.webp",
+      "sha256": "124fbac62bd5f62b8f0a35f981de755b5a1bf6e4dde36ced1a96a0429c250418",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-m720-triathlon-primary.webp",
+      "sha256": "b0c3c56dda3e9f86176ca8b13b5e09072861ffc05ccb467abf84df4735358784",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-m720-triathlon-alternate.webp",
+      "sha256": "7a74a6b42bc88f16b7ceb247c9eff8f08685cf04af042d03c312a0bd2124f35c",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-mx-keys-s-primary.webp",
+      "sha256": "ad912254e9ad9c5efbb2f36a53263f4566bcb39dd18675598a0eb57a1fd5af1b",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-mx-keys-s-alternate.webp",
+      "sha256": "e0e26a4feb711da3b156b2ae842a044fe0315f1ae227492822a51dca292be790",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-mx-mechanical-tactile-quiet-primary.webp",
+      "sha256": "3dca98e2fcf18ea42e302774ceda99001ca54fb529ee93cfca85e15aa1b9794f",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-mx-mechanical-tactile-quiet-alternate.webp",
+      "sha256": "3ce48e465598c5710b54d98d02f76d08b433192d9d2d0035cbaffb68896dc9f3",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-k480-primary.webp",
+      "sha256": "0590ff38844df947903b4d7d17a0c02d8ef2e2382807490c456ae82723983f75",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-k480-alternate.webp",
+      "sha256": "d5a4a1a0ba3847cd88308e2d0a9dedcbb4c438d0c2fdebc90cf474ae52db517b",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-k780-primary.webp",
+      "sha256": "43f5e6ccb6903049843ae6d52af55a497714fe50dd6fda6d7a2b23043784070d",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-k780-alternate.webp",
+      "sha256": "050aa42d2c695526de3d1cd06a476b5e5ffd4e2fe5c24e4f118f08f33b360942",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-k120-primary.webp",
+      "sha256": "4bd63efc3458894d7cacc81468f853acfb754f7fa729f7264f652c4e6df64a0b",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/logitech-k120-alternate.webp",
+      "sha256": "79f26f87b813281cf63e22c22281c6bbea5169bea03414f90452e40b7c88a270",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/category-printers-scanners.webp",
+      "sha256": "4542b06934206d1d160a336e0567433545122d81c16ae56db89a8779dc9701e5",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/brother-hl-l2400d-primary.webp",
+      "sha256": "91c61768abb89e596a0671a29cf3ea6221afbf70d2791cdc8f910d3b411d0345",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/brother-hl-l2400d-alternate.webp",
+      "sha256": "b622207fcc82d5df57760154fa5338f83b031078a8dc489eaa02fe2ad27e8133",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/brother-hl-l2460dw-primary.webp",
+      "sha256": "511e62f21dd0d73dbd3206d8a2e78ab3f8c5053009f1c36be4d25f7f8b7e8b9a",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/brother-hl-l2460dw-alternate.webp",
+      "sha256": "d620cf9149841ca0a05f861fae03c6858349a99763fbe2433a4678884fbe6168",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/brother-dcp-l2640dw-primary.webp",
+      "sha256": "4e4c0a01f09b1dc5243417d309cee520c6f8b39b5ba7fcebe60755ecf49f7ebd",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/brother-dcp-l2640dw-alternate.webp",
+      "sha256": "548bdcde2c07f20e36281149fc9cff94e7eae0dedf043093597be93477cbcdfb",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/brother-mfc-j4355dw-primary.webp",
+      "sha256": "8aa52932393d899b6b7b2100eb0e407cbdfd22a8f61d47926de0e190ff9a1ecf",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/brother-mfc-j4355dw-alternate.webp",
+      "sha256": "9480b3df6157bc7a2e5a3ebadffa74fb7b2b1611e8747792fe7f60be7f5ce6d2",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/brother-ads-1300-primary.webp",
+      "sha256": "6b951f9799403cf259640c5718acb5636efbb8bb79d6fd906a344dd838e74005",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/brother-ads-1300-alternate.webp",
+      "sha256": "01ae55649c9452b25f2759dd238ab861f3f87688442c11dafedf108c85ef1dfd",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/brother-ads-1350w-primary.webp",
+      "sha256": "7c2f196369a0a86a7c6b8ccd1a23c6289641ff50d08092c01b9cd725208324ed",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    },
+    {
+      "path": "/images/catalog/expansion/brother-ads-1350w-alternate.webp",
+      "sha256": "b29fd894cff6dabb996997647bd735796868e84d1c51e6c1f59cd4612980ee44",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "visuallyApproved": true
+    }
+  ]
+}

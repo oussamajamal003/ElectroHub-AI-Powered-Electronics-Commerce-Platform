@@ -1,0 +1,107 @@
+name: Dev Database Migration
+
+# Applies the APPROVED pending Prisma migrations to the shared DEV Supabase project, and nothing else.
+#
+# Safety contract (see docs/06_Database/REFRESH_TOKEN_MIGRATION_CI_HANDOFF.md):
+#   * Manual only. No push, pull_request, schedule or workflow_run trigger may ever be added; the
+#     policy check in ci.yml (.github/scripts/check-workflow-policy.cjs) fails the build if one is.
+#   * The deploy job runs in the protected GitHub Environment `electrohub-dev-database`. Its required
+#     reviewers (DATABASE owner + Architect) approve each run, and the DEV database secrets must be defined
+#     ONLY as secrets of that Environment (never repository-level secrets).
+#   * Before any write, `migration-plan.cjs pre` proves: the URLs target the approved DEV project and never
+#     production; the Prisma ledger has no failed/rolled-back row; applied migrations match canonical SQL or
+#     one of four exact content-pinned LF/CRLF compatibility records; and pending migrations equal the approved list.
+#   * The run must be at the approved commit, and runs for one target never overlap or cancel each other.
+#   * This workflow never runs `migrate resolve`, `migrate reset`, `migrate dev` or `db push`.
+#   * A separate, equally gated workflow is required for PROD; none exists yet.
+
+on:
+  workflow_dispatch:
+    inputs:
+      approved_commit:
+        description: 'Full 40-character SHA of the approved commit. Must equal the commit this run was started from.'
+        required: true
+        type: string
+      approved_migrations:
+        description: 'Comma-separated, ordered names of exactly the migrations approved for this run.'
+        required: true
+        type: string
+      authorization_reference:
+        description: 'Reference to the written Project Owner / DATABASE owner approval for this DEV run.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: Deploy approved Prisma migrations to DEV
+    runs-on: ubuntu-latest
+    environment: electrohub-dev-database
+    concurrency:
+      group: db-migration-electrohub-dev
+      cancel-in-progress: false
+    env:
+      MIGRATION_TARGET: DEV
+      EXPECTED_PROJECT_REF: pzxekjybdiulzmssalfo
+      APPROVED_COMMIT: ${{ inputs.approved_commit }}
+      APPROVED_MIGRATIONS: ${{ inputs.approved_migrations }}
+      AUTHORIZATION_REFERENCE: ${{ inputs.authorization_reference }}
+    steps:
+      - name: Verify the run is for the approved commit
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$APPROVED_COMMIT" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "approved_commit must be a full 40-character lowercase SHA." >&2
+            exit 1
+          fi
+          if [ "$APPROVED_COMMIT" != "$GITHUB_SHA" ]; then
+            echo "This run is at a different commit than the approved one. Refusing." >&2
+            exit 1
+          fi
+          if [ -z "${AUTHORIZATION_REFERENCE// /}" ]; then
+            echo "authorization_reference is required." >&2
+            exit 1
+          fi
+          echo "Approved commit confirmed. Authorization reference: ${AUTHORIZATION_REFERENCE}"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.approved_commit }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.19.0'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Prisma version
+        run: npm exec --workspace=@electrohub/backend -- prisma --version
+
+      - name: Pre-check (read-only) - target, ledger and approved pending set
+        env:
+          DATABASE_URL: ${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}
+        run: node .github/scripts/migration-plan.cjs pre
+
+      - name: Deploy Prisma migrations
+        env:
+          DATABASE_URL: ${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}
+        run: npm exec --workspace=@electrohub/backend -- prisma migrate deploy
+
+      - name: Verify Prisma migration status
+        env:
+          DATABASE_URL: ${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}
+        run: npm exec --workspace=@electrohub/backend -- prisma migrate status
+
+      - name: Post-check (read-only) - nothing pending, approved set recorded as finished
+        env:
+          DATABASE_URL: ${{ secrets.ELECTROHUB_DEV_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.ELECTROHUB_DEV_DIRECT_URL }}
+        run: node .github/scripts/migration-plan.cjs post

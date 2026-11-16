@@ -1,0 +1,78 @@
+name: Verify Prisma Migrations on Linux
+
+# Replays the whole migration history on a brand-new disposable PostgreSQL 17 (Linux, LF checkout). It uses
+# no shared-database credentials and cannot reach DEV or PROD, so it is safe on pull requests and for manual
+# runs. It does NOT replace the approval-gated dev-migration.yml, which is the only workflow that may touch
+# a shared database.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'apps/backend/prisma/**'
+      - '.github/workflows/verify-migration.yml'
+      - '.github/actions/disposable-postgres/**'
+  pull_request:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'apps/backend/prisma/**'
+      - '.github/workflows/verify-migration.yml'
+      - '.github/actions/disposable-postgres/**'
+
+concurrency:
+  group: verify-migration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify-migration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start disposable PostgreSQL
+        uses: ./.github/actions/disposable-postgres
+
+      - name: Assert the database target is the disposable instance
+        run: |
+          node -e "
+          const urls = [process.env.DATABASE_URL, process.env.DIRECT_URL];
+          const ok = process.env.ELECTROHUB_DISPOSABLE_DATABASE === '1' && urls.every((value) => {
+            try { const u = new URL(value); return ['localhost', '127.0.0.1'].includes(u.hostname) && u.port === '55432'; } catch { return false; }
+          });
+          if (!ok) { console.error('Refusing to continue: database target is not the disposable loopback instance.'); process.exit(1); }
+          console.log('Database target: disposable loopback PostgreSQL.');
+          "
+
+      - name: Run Prisma Migrate Deploy (disposable database)
+        run: |
+          cd apps/backend
+          npx prisma migrate deploy
+
+      - name: Prisma Migrate Status (disposable database)
+        run: |
+          cd apps/backend
+          npx prisma migrate status
+
+      - name: Verify repeat deploy is a no-op (disposable database)
+        run: |
+          cd apps/backend
+          output="$(npx prisma migrate deploy)"
+          printf '%s\n' "$output"
+          printf '%s\n' "$output" | grep -F 'No pending migrations to apply.'

@@ -1,0 +1,4 @@
+# Licensed source photos, Kaggle outputs and model artifacts never enter Git.
+.data/
+.venv/
+.kaggle-venv/

@@ -1,0 +1,401 @@
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, useNavigate, useLocation } from 'react-router-dom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { SearchPage } from './SearchPage';
+import { getProductGridSkeletonCount } from './skeletonCount';
+import { useCart } from '@/features/cart/context';
+import { SearchField } from '@/components/ui/SearchField/SearchField';
+import { ApiError, apiClient } from '@/lib/api';
+import { activeSearch, clearFilters, emptySearch, parseSearch, searchParams } from './searchState';
+import type { Suggestion } from './api';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createQueryClient } from '@/lib/query';
+import { useBrands, useCategories } from './queries';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query';
+vi.mock('@/lib/api', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/api')>(), apiClient: vi.fn() }));
+vi.mock('@/features/cart/context', () => ({ useCart: vi.fn() }));
+const product = { id: 'product', name: 'Apple MacBook Air', slug: 'apple-macbook-air', price: '999.00', compareAtPrice: null,
+  currency: 'USD', category: { id: 'laptops', name: 'Laptops', slug: 'laptops' }, brand: null, availability: 'AVAILABLE', primaryImage: null,
+  averageRating: '4.7', reviewCount: 318 };
+const response = { data: [product], meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 } };
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(useCart).mockReturnValue({ addItem: vi.fn() } as unknown as ReturnType<typeof useCart>);
+  vi.mocked(apiClient).mockImplementation(async endpoint => {
+    if (endpoint.startsWith('/api/categories')) return { data: [{ id: 'cameras', name: 'Cameras & Photography', slug: 'cameras-photography', description: null, imageUrl: null, productCount: 8 },
+      { id: 'laptops', name: 'Laptops', slug: 'laptops', description: null, imageUrl: null, productCount: 49 }], meta: { total: 2 } } as never;
+    if (endpoint.startsWith('/api/brands')) return { data: [{ id: 'apple', name: 'Apple', slug: 'apple', description: null, logoUrl: null }], meta: { total: 1 } } as never;
+    if (endpoint.startsWith('/api/search/suggestions')) return { data: [{ id: 'product', type: 'PRODUCT', label: 'Apple MacBook Air', slug: 'apple-macbook-air' }] } as never;
+    return response as never;
+  });
+  URL.createObjectURL = vi.fn(() => 'blob:test-image'); URL.revokeObjectURL = vi.fn();
+});
+function Harness({ catalog = false }: { catalog?: boolean }) {
+  const navigate = useNavigate(); const location = useLocation(); const client = useQueryClient();
+  const state = (() => { try { return parseSearch(new URLSearchParams(location.search)); } catch { return emptySearch; } })();
+  return <><button onClick={() => navigate(-1)}>History back</button><button onClick={() => navigate(1)}>History forward</button><button onClick={() => void client.refetchQueries({ queryKey: queryKeys.search.products(state) })}>Refetch results</button><output data-testid="location">{location.search}</output><SearchPage catalog={catalog} /></>;
+}
+function ReferenceConsumers() {
+  const categoriesA = useCategories(true); const categoriesB = useCategories(true);
+  const brandsA = useBrands(true); const brandsB = useBrands(true);
+  return <div>{categoriesA.data && categoriesB.data && brandsA.data && brandsB.data ? 'References ready' : 'Loading references'}</div>;
+}
+// Radix Select opens on pointer down; options commit on click.
+async function chooseFilter(label: string, option: string) {
+  fireEvent.pointerDown(await screen.findByRole('combobox', { name: label }), { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  fireEvent.click(await screen.findByRole('option', { name: option }));
+}
+const page = (path: string | string[] = '/search', catalog = false) => render(<QueryClientProvider client={createQueryClient()}><MemoryRouter initialEntries={Array.isArray(path) ? path : [path]} initialIndex={Array.isArray(path) ? path.length - 1 : 0}><Harness catalog={catalog} /></MemoryRouter></QueryClientProvider>);
+describe('URL-backed Search state', () => {
+  it('normalizes queries, ignores unrelated keys and round-trips committed state', () => {
+    const state = parseSearch(new URLSearchParams('q=sony+++headphones&brand=sony&page=2&utm=demo'));
+    expect(state.q).toBe('sony headphones'); expect(parseSearch(searchParams(state))).toEqual(state);
+    expect(clearFilters(state)).toEqual({ q: 'sony headphones', page: 1, pageSize: 20 });
+    expect(activeSearch(parseSearch(new URLSearchParams()))).toBe(false);
+    expect(activeSearch(parseSearch(new URLSearchParams('minPrice=0')))).toBe(true);
+  });
+  it.each(['page=101', 'page=1001', 'pageSize=101', 'q=a&q=b', 'availability=stock', 'minPrice=-1', 'minPrice=1.234', 'minPrice=10&maxPrice=9', 'sort=featured'])('rejects malformed state %s', value => {
+    expect(() => parseSearch(new URLSearchParams(value))).toThrow();
+  });
+});
+describe('Search page', () => {
+  it('bounds structural catalog skeletons by the requested page size', () => {
+    expect([1, 3, 8, 12, 100].map(getProductGridSkeletonCount)).toEqual([1, 3, 8, 10, 10]);
+  });
+  it('accepts a new query while loading and ignores the cancelled response', async () => {
+    let finishOld: ((value: typeof response) => void) | undefined;
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint.includes('/api/search/products?q=old')) return new Promise(resolve => { finishOld = resolve; }) as never;
+      if (endpoint.includes('/api/search/products?q=new')) return { data: [], meta: { page: 1, pageSize: 20, total: 0, totalPages: 0 } } as never;
+      return { data: [], meta: { total: 0 } } as never;
+    });
+    page('/search?q=old');
+    await waitFor(() => expect(finishOld).toBeDefined());
+    const input = screen.getByRole('combobox', { name: 'Search products' });
+    fireEvent.change(input, { target: { value: 'new' } });
+    expect(await screen.findByRole('heading', { name: 'No results for “new”' })).toBeInTheDocument();
+    await act(async () => { finishOld?.(response); });
+    expect(screen.queryByText('Apple MacBook Air')).not.toBeInTheDocument();
+    expect(input).toHaveValue('new');
+  });
+  it('renders screenshot shell without loading products initially and warms shared reference data', async () => {
+    page(); await screen.findByRole('heading', { name: 'Search', level: 1 });
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Everything in ElectroHub, one search away' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /Laptops/ })).toHaveAttribute('href', '/products?category=laptops');
+    await waitFor(() => expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/categories') || endpoint.startsWith('/api/brands')).length).toBe(2));
+    expect(vi.mocked(apiClient).mock.calls.some(([endpoint]) => endpoint.startsWith('/api/search/products'))).toBe(false);
+    expect(screen.queryByText(/0 results/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Search' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Filters/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Product filters' })).not.toBeInTheDocument();
+  });
+  it('loads a bounded public catalog page on /products with no query', async () => {
+    page('/products', true);
+    expect(await screen.findByText('Apple MacBook Air')).toBeInTheDocument();
+    // The default catalog view rotates through categories; the default sort is requested but never written to the URL.
+    expect(vi.mocked(apiClient).mock.calls.some(([endpoint]) => endpoint === '/api/search/products?sort=category-mix')).toBe(true);
+    expect(screen.getByTestId('location')).toHaveTextContent(/^$/);
+    expect(screen.getByRole('combobox', { name: 'Sort by' })).toHaveTextContent('Category mix');
+  });
+  it('lets shoppers switch from the category mix to Newest and back via the URL', async () => {
+    page('/products', true); await screen.findByText('Apple MacBook Air');
+    await chooseFilter('Sort by', 'Newest');
+    expect(screen.getByTestId('location')).toHaveTextContent('sort=newest');
+    await waitFor(() => expect(vi.mocked(apiClient).mock.calls.some(([endpoint]) => endpoint === '/api/search/products?sort=newest')).toBe(true));
+    await chooseFilter('Sort by', 'Category mix');
+    expect(screen.getByTestId('location')).toHaveTextContent('sort=category-mix');
+  });
+  it('keeps relevance as the default for typed catalog queries', async () => {
+    page('/products?q=sony', true); await screen.findByText('Apple MacBook Air');
+    expect(vi.mocked(apiClient).mock.calls.some(([endpoint]) => endpoint === '/api/search/products?q=sony')).toBe(true);
+    expect(screen.getByRole('combobox', { name: 'Sort by' })).toHaveTextContent('Relevance');
+  });
+  it('requests only the selected page and restores a cached page without skeletons', async () => {
+    let finishPageTwo: ((value: typeof response) => void) | undefined;
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint.startsWith('/api/search/products?sort=category-mix&page=2')) return new Promise(resolve => { finishPageTwo = resolve; }) as never;
+      if (endpoint.startsWith('/api/search/products')) return { ...response, meta: { ...response.meta, total: 40, totalPages: 2 } } as never;
+      return { data: [], meta: { total: 0 } } as never;
+    });
+    page('/products?page=1', true);
+    expect(await screen.findByText('Apple MacBook Air')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Go to page 2' }));
+    await waitFor(() => expect(finishPageTwo).toBeDefined());
+    // The current page stays rendered while the next one loads, so the page never collapses mid-navigation.
+    expect(screen.queryByTestId('product-skeleton')).not.toBeInTheDocument();
+    expect(screen.getByText('Apple MacBook Air')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Search results' })).toHaveAttribute('aria-busy', 'true');
+    expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(2);
+    await act(async () => finishPageTwo?.({ ...response, data: [{ ...product, id: 'page-two', name: 'Page Two Product' }], meta: { ...response.meta, page: 2, total: 40, totalPages: 2 } }));
+    expect(await screen.findByText('Page Two Product')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'History back' }));
+    expect(screen.getByText('Apple MacBook Air')).toBeInTheDocument();
+    expect(screen.queryByTestId('product-skeleton')).not.toBeInTheDocument();
+    expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(2);
+  });
+  it('accepts the last numbered page (100) but never renders a page link beyond it', async () => {
+    vi.mocked(apiClient).mockImplementation(async endpoint => endpoint.startsWith('/api/search/products')
+      ? { ...response, meta: { page: 100, pageSize: 20, total: 5000, totalPages: 250, hasNextPage: true, nextCursor: null } } as never
+      : { data: [], meta: { total: 0 } } as never);
+    page('/products?sort=newest&page=100', true);
+    expect(await screen.findByText('Apple MacBook Air')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Go to page 100' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('button', { name: 'Go to page 101' })).not.toBeInTheDocument();
+    // No cursor (e.g. category-mix): numbered pagination simply ends; no Load more is offered.
+    expect(screen.queryByRole('button', { name: 'Load more products' })).not.toBeInTheDocument();
+  });
+  it('continues past page 100 with the server cursor, appends without duplicates and stops at the end', async () => {
+    const card = (id: string) => ({ ...product, id, name: `Product ${id}`, slug: id });
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint.includes('cursor=c1')) return { data: [card('p100'), card('p101')], meta: { pageSize: 20, total: null, hasNextPage: true, nextCursor: 'c2.sig' } } as never;
+      if (endpoint.includes('cursor=c2')) return { data: [card('p102')], meta: { pageSize: 20, total: null, hasNextPage: false, nextCursor: null } } as never;
+      if (endpoint.startsWith('/api/search/products')) return { data: [card('p100')], meta: { page: 100, pageSize: 20, total: 2003, totalPages: 101, hasNextPage: true, nextCursor: 'c1.sig' } } as never;
+      return { data: [], meta: { total: 0 } } as never;
+    });
+    page('/products?sort=newest&page=100', true);
+    expect(await screen.findByText('Product p100')).toBeInTheDocument();
+    expect(vi.mocked(apiClient).mock.calls.some(([endpoint]) => endpoint.includes('cursor='))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Load more products' }));
+    expect(await screen.findByText('Product p101')).toBeInTheDocument();
+    expect(screen.getAllByText('Product p100')).toHaveLength(1);
+    const continuation = vi.mocked(apiClient).mock.calls.map(([endpoint]) => endpoint).find(endpoint => endpoint.includes('cursor=c1'));
+    expect(continuation).toBe('/api/search/products?sort=newest&cursor=c1.sig');
+    fireEvent.click(screen.getByRole('button', { name: 'Load more products' }));
+    expect(await screen.findByText('Product p102')).toBeInTheDocument();
+    expect(screen.getByText('You have reached the end of the results.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Load more products' })).not.toBeInTheDocument();
+  });
+  it('a rejected (stale) cursor offers a restart from the first page instead of mixing result sets', async () => {
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint.includes('cursor=')) throw new ApiError(400, 'The pagination cursor is invalid or expired.', undefined, 'INVALID_CURSOR');
+      if (endpoint.startsWith('/api/search/products')) return { ...response, meta: { page: 100, pageSize: 20, total: 2003, totalPages: 101, hasNextPage: true, nextCursor: 'c1.sig' } } as never;
+      return { data: [], meta: { total: 0 } } as never;
+    });
+    page('/products?sort=newest&page=100', true);
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more products' }));
+    expect(await screen.findByText('These results have changed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to first page' }));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?sort=newest'));
+  });
+  it('submits exactly one product request and renders an actionable catalog card', async () => {
+    page(); fireEvent.change(screen.getByRole('combobox', { name: 'Search products' }), { target: { value: 'macbook' } });
+    expect(await screen.findByTestId('product-card')).toHaveTextContent('Apple MacBook Air');
+    expect(screen.getByTestId('product-card')).toHaveTextContent('999');
+    expect(screen.getByRole('img', { name: 'Rated 4.7 out of 5.' })).toBeInTheDocument();
+    expect(screen.getByText('(318)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add .* to cart/ })).toBeInTheDocument();
+    await waitFor(() => expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(1));
+    expect(screen.getByTestId('location')).toHaveTextContent('q=macbook');
+  });
+  it('debounces replacements and deletions, then returns to untouched state', async () => {
+    page(); const input = screen.getByRole('combobox', { name: 'Search products' });
+    fireEvent.change(input, { target: { value: 'mac' } });
+    fireEvent.change(input, { target: { value: 'macbook' } });
+    expect(screen.getByTestId('location')).not.toHaveTextContent('q=');
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('q=macbook'));
+    await waitFor(() => expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(1));
+    fireEvent.change(input, { target: { value: 'mac' } });
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('q=mac'));
+    fireEvent.change(input, { target: { value: '' } });
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe(''));
+    expect(screen.queryByText(/0 results/)).not.toBeInTheDocument();
+  });
+  it('does not let an older debounced URL update replace a newer query draft', async () => {
+    vi.useFakeTimers();
+    try {
+      page();
+      const input = screen.getByRole('combobox', { name: 'Search products' });
+      await act(async () => {
+        fireEvent.change(input, { target: { value: 'mac' } });
+        await vi.advanceTimersByTimeAsync(275);
+        fireEvent.change(input, { target: { value: 'macbook' } });
+      });
+      expect(screen.getByTestId('location')).toHaveTextContent('q=mac');
+      expect(input).toHaveValue('macbook');
+      fireEvent.submit(input.closest('form')!);
+      expect(screen.getByTestId('location')).toHaveTextContent('q=macbook');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it('commits Enter immediately without a duplicate debounced request', async () => {
+    page(); const input = screen.getByRole('combobox', { name: 'Search products' });
+    fireEvent.change(input, { target: { value: 'sony' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(screen.getByTestId('location')).toHaveTextContent('q=sony');
+    await screen.findByText('Apple MacBook Air');
+    fireEvent.submit(input.closest('form')!);
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 320)); });
+    expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(1);
+  });
+  it('applies filters automatically, debounces prices, counts them and removes chips independently', async () => {
+    page('/products?q=sony&page=2&brand=apple&availability=available', true); await screen.findByText('Apple MacBook Air');
+    fireEvent.click(screen.getByRole('button', { name: 'Filters (2)' }));
+    expect(screen.queryByRole('button', { name: 'Apply filters' })).not.toBeInTheDocument();
+    await chooseFilter('Category', 'Laptops (49)');
+    expect(screen.getByTestId('location')).toHaveTextContent('category=laptops');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Min price ($)' }), { target: { value: '50' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Max price ($)' }), { target: { value: '1000' } });
+    expect(screen.getByTestId('location')).not.toHaveTextContent('minPrice=');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Filters (4)' })).toBeInTheDocument(), { timeout: 15000 });
+    expect(screen.getByTestId('location')).not.toHaveTextContent('page=2');
+    expect(screen.getByTestId('location')).toHaveTextContent('minPrice=50');
+    expect(screen.queryByRole('button', { name: 'Apply prices' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove category filter Laptops' }));
+    expect(screen.getByRole('button', { name: 'Filters (3)' })).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('brand=apple');
+    fireEvent.click(screen.getByRole('button', { name: /Remove price filter/ }));
+    expect(screen.getByRole('button', { name: 'Filters (2)' })).toBeInTheDocument();
+    expect(screen.getByTestId('location')).not.toHaveTextContent('minPrice');
+  });
+  it('restores direct URL, filters and browser Back/Forward without typing history spam', async () => {
+    page(['/search?q=sony&sort=relevance', '/search?q=sony&sort=price-desc'], true); await screen.findByText('Apple MacBook Air');
+    expect(screen.getByRole('combobox', { name: 'Search products' })).toHaveValue('sony');
+    expect(screen.getByRole('combobox', { name: 'Sort by' })).toHaveTextContent('Price: high to low');
+    expect(screen.getByTestId('location')).toHaveTextContent('sort=price-desc');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Search products' }), { target: { value: 'macbook' } });
+    expect(screen.getByTestId('location')).toHaveTextContent('q=sony');
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('q=macbook'));
+    fireEvent.click(screen.getByText('History back')); await waitFor(() => expect(screen.getByRole('combobox', { name: 'Search products' })).toHaveValue('sony'));
+    fireEvent.click(screen.getByText('History forward')); await waitFor(() => expect(screen.getByRole('combobox', { name: 'Search products' })).toHaveValue('macbook'));
+  });
+  it('clears filters but retains query and permits filter-only discovery', async () => {
+    page('/search?q=sony&brand=apple', true); await screen.findByText('Apple MacBook Air');
+    fireEvent.click(screen.getByRole('button', { name: 'Filters (1)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all filters' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('?q=sony');
+    expect(screen.getByTestId('location')).not.toHaveTextContent('brand');
+    // The panel stays open after clearing; choosing a category applies it immediately.
+    await chooseFilter('Category', 'Laptops (49)');
+    expect(screen.getByTestId('location')).toHaveTextContent('category=laptops');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Search products' }), { target: { value: '' } });
+    await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('q='));
+    expect(screen.getByTestId('location')).toHaveTextContent('category=laptops');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove category filter Laptops' }));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(''));
+    expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
+  });
+  it('restores a category deep link as the page title, breadcrumb and selected API category', async () => {
+    page('/products?category=cameras-photography&sort=price-asc&page=2', true); await screen.findByText('Apple MacBook Air');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Cameras & Photography' })).toBeInTheDocument();
+    const breadcrumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(breadcrumb).toHaveTextContent('HomeProductsCameras & Photography');
+    expect(screen.getByRole('link', { name: 'Products' })).toHaveAttribute('href', '/products?sort=price-asc');
+    expect(screen.getByText('1 product')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Filters (1)' }));
+    expect(await screen.findByRole('combobox', { name: 'Category' })).toHaveTextContent('Cameras & Photography (8)');
+    // Every backend category is offered, with its live storefront count; switching resets pagination and keeps sort.
+    await chooseFilter('Category', 'Laptops (49)');
+    expect(screen.getByTestId('location')).toHaveTextContent('category=laptops');
+    expect(screen.getByTestId('location')).toHaveTextContent('sort=price-asc');
+    expect(screen.getByTestId('location')).not.toHaveTextContent('page=2');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Laptops' })).toBeInTheDocument();
+    await chooseFilter('Category', 'All categories');
+    expect(screen.getByTestId('location')).not.toHaveTextContent('category=');
+    expect(await screen.findByRole('heading', { level: 1, name: 'All Products' })).toBeInTheDocument();
+  });
+  it('keeps an unknown category slug as a removable filter titled All Products', async () => {
+    page('/products?category=retired-category', true); await screen.findByText('Apple MacBook Air');
+    expect(screen.getByRole('heading', { level: 1, name: 'All Products' })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove category filter retired-category' }));
+    expect(screen.getByTestId('location')).not.toHaveTextContent('category=');
+  });
+  it('handles invalid direct URL without issuing product requests', async () => {
+    page('/search?page=99999'); expect(await screen.findByRole('alert')).toHaveTextContent('invalid values');
+    expect(vi.mocked(apiClient).mock.calls.some(([endpoint]) => endpoint.startsWith('/api/search/products'))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' })); expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+  it('shows a sanitized failure with retry', async () => {
+    vi.mocked(apiClient).mockImplementation(async endpoint => { if (endpoint.startsWith('/api/search/products')) throw new Error('Prisma SQL private'); return { data: [], meta: { total: 0 } } as never; });
+    page('/search?q=sony'); expect(await screen.findByRole('alert')).not.toHaveTextContent(/Prisma|SQL|private/);
+    expect(screen.getByRole('button', { name: 'Retry search' })).toBeInTheDocument();
+  });
+  it('shows useful no-results recovery', async () => {
+    vi.mocked(apiClient).mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0, totalPages: 0 } });
+    page('/search?q=no-match'); expect(await screen.findByRole('heading', { name: 'No results for “no-match”' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear query' })).toBeInTheDocument();
+  });
+  it('routes photo search to the Discovery Console and never posts an image from the page', async () => {
+    page();
+    // Without the console provider (isolated render) the photo entry is present but inert rather than a dead end.
+    expect(await screen.findByRole('button', { name: 'Search by photo' })).toBeDisabled();
+    expect(screen.queryByLabelText('Choose image')).not.toBeInTheDocument();
+    expect(vi.mocked(apiClient).mock.calls.every(([endpoint]) => !endpoint.includes('image'))).toBe(true);
+  });
+  it('preserves visible results during a background refetch', async () => {
+    let finishRefetch: ((value: typeof response) => void) | undefined;
+    let calls = 0;
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint.startsWith('/api/search/products') && calls++ > 0) return new Promise(resolve => { finishRefetch = resolve; }) as never;
+      if (endpoint.startsWith('/api/categories')) return { data: [], meta: { total: 0 } } as never;
+      if (endpoint.startsWith('/api/brands')) return { data: [], meta: { total: 0 } } as never;
+      return response as never;
+    });
+    page('/search?q=macbook');
+    expect(await screen.findByText('Apple MacBook Air')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Refetch results' }));
+    await waitFor(() => expect(finishRefetch).toBeDefined());
+    expect(screen.getByText('Apple MacBook Air')).toBeInTheDocument();
+    expect(screen.queryByTestId('product-skeleton')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Search unavailable' })).not.toBeInTheDocument();
+    await act(async () => { finishRefetch?.({ ...response, data: [{ ...product, name: 'Updated MacBook' }] }); });
+    expect(await screen.findByText('Updated MacBook')).toBeInTheDocument();
+  });
+});
+describe('shared Category and Brand query consumers', () => {
+  it('deduplicates simultaneous consumers by query key', async () => {
+    const client = createQueryClient();
+    vi.mocked(apiClient).mockImplementation(async endpoint => endpoint.startsWith('/api/categories')
+      ? { data: [], meta: { total: 0 } } as never : { data: [], meta: { total: 0 } } as never);
+    render(<QueryClientProvider client={client}><ReferenceConsumers /></QueryClientProvider>);
+    expect(await screen.findByText('References ready')).toBeInTheDocument();
+    expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/categories'))).toHaveLength(1);
+    expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/brands'))).toHaveLength(1);
+  });
+});
+describe('Accessible debounced suggestions', () => {
+  it('starts suggestions after the independent 175 ms debounce', async () => {
+    vi.useFakeTimers();
+    vi.mocked(apiClient).mockResolvedValue({ data: [] });
+    try {
+      render(<QueryClientProvider client={createQueryClient()}><SearchField value="sam" onChange={vi.fn()} onSelect={vi.fn()} /></QueryClientProvider>);
+      fireEvent.focus(screen.getByRole('combobox'));
+      await act(async () => { await vi.advanceTimersByTimeAsync(174); });
+      expect(apiClient).not.toHaveBeenCalled();
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+      expect(apiClient).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); }
+  });
+  it('debounces, navigates by keyboard, selects with Enter and closes on Escape', async () => {
+    vi.mocked(apiClient).mockResolvedValue({ data: [{ id: 'one', type: 'PRODUCT', label: 'MacBook', slug: 'macbook' }] });
+    const select = vi.fn(); const change = vi.fn();
+    const client = createQueryClient();
+    const { rerender } = render(<QueryClientProvider client={client}><SearchField value="mac" onChange={change} onSelect={select} /></QueryClientProvider>);
+    fireEvent.focus(screen.getByRole('combobox')); expect(apiClient).not.toHaveBeenCalled();
+    expect(await screen.findByRole('option')).toHaveTextContent('MacBook');
+    expect(apiClient).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'ArrowDown' });
+    expect(screen.getByRole('combobox')).toHaveAttribute('aria-activedescendant');
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' }); expect(select).toHaveBeenCalledWith(expect.objectContaining({ label: 'MacBook' }));
+    fireEvent.focus(screen.getByRole('combobox')); rerender(<QueryClientProvider client={client}><SearchField value="macb" onChange={change} onSelect={select} /></QueryClientProvider>);
+    await screen.findByRole('option'); fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+  it('ignores a stale suggestion response and keeps manual input usable on failure', async () => {
+    let finishOld: ((response: { data: Suggestion[] }) => void) | undefined;
+    const load = vi.fn().mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }))
+      .mockResolvedValue({ data: [{ id: 'new', type: 'BRAND', label: 'Sony', slug: 'sony' }] });
+    vi.mocked(apiClient).mockImplementation(load);
+    const client = createQueryClient();
+    const { rerender } = render(<QueryClientProvider client={client}><SearchField value="mac" onChange={vi.fn()} onSelect={vi.fn()} /></QueryClientProvider>);
+    fireEvent.focus(screen.getByRole('combobox')); await waitFor(() => expect(load).toHaveBeenCalledTimes(1));
+    rerender(<QueryClientProvider client={client}><SearchField value="sony" onChange={vi.fn()} onSelect={vi.fn()} /></QueryClientProvider>);
+    expect(await screen.findByRole('option')).toHaveTextContent('Sony');
+    await act(async () => { finishOld?.({ data: [{ id: 'old', type: 'PRODUCT', label: 'Old Mac', slug: 'old' }] }); });
+    expect(screen.queryByText('Old Mac')).not.toBeInTheDocument();
+    load.mockRejectedValue(new Error('Suggestion unavailable')); rerender(<QueryClientProvider client={client}><SearchField value="fail" onChange={vi.fn()} onSelect={vi.fn()} /></QueryClientProvider>);
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(3)); expect(screen.getByRole('combobox')).not.toBeDisabled();
+  });
+});

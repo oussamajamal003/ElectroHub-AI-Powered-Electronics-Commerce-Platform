@@ -1,0 +1,154 @@
+import { apiClient, refreshPath, setAccessToken, type AuthScope } from '@/lib/api';
+import { User, LoginCredentials, RegisterData, AuthResponse, AdminMfaRequired, isAdminMfaRequired } from '../types';
+
+export type LoginResult = VerificationResponse | AdminMfaRequired;
+
+export interface VerifyEmailData {
+  email: string;
+  code: string;
+}
+
+export interface VerificationResponse extends AuthResponse {
+  user?: User & { pendingEmail?: string; requiresEmailVerification?: boolean; verificationDeliveryStatus?: 'ACCEPTED_BY_PROVIDER' | 'FAILED' | 'PENDING' };
+  requiresVerification?: boolean;
+  deliveryFailed?: boolean;
+  email?: string;
+  pendingEmail?: string;
+  requiresEmailVerification?: boolean;
+  verificationDeliveryStatus?: 'ACCEPTED_BY_PROVIDER' | 'FAILED' | 'PENDING';
+  message?: string;
+}
+
+export const authApi = {
+  /** Each portal refreshes only through its own endpoint and HttpOnly cookie (Task 05.2 session isolation). */
+  refreshSession: async (scope: AuthScope = 'customer'): Promise<{ accessToken: string; user?: User }> => {
+    return apiClient<{ accessToken: string; user?: User }>(refreshPath(scope), { method: 'POST' });
+  },
+  reauthenticateDeletionWithPassword: async (password: string): Promise<{ message: string }> => {
+    return apiClient('/api/account/deletion/reauth/password', { method: 'POST', data: { password } });
+  },
+
+  prepareGoogleDeletionReauth: async (channel: string): Promise<{ authorizationUrl: string }> => {
+    return apiClient('/api/auth/google/deletion-reauth/start', { method: 'POST', data: { channel } });
+  },
+
+  deleteAccount: async (): Promise<{ message: string }> => {
+    return apiClient('/api/account', { method: 'DELETE', data: { confirmation: 'DELETE' } });
+  },
+
+  finishGoogle: async (): Promise<{ user: User }> => {
+    const response = await apiClient<{ accessToken: string }>(refreshPath('customer'), { method: 'POST' });
+    setAccessToken(response.accessToken);
+    return apiClient('/api/auth/me');
+  },
+
+  linkGoogle: async (password: string): Promise<void> => {
+    const response = await apiClient<{ accessToken: string }>('/api/auth/google/link', { method: 'POST', data: { password } });
+    setAccessToken(response.accessToken);
+  },
+  login: async (credentials: LoginCredentials): Promise<LoginResult> => {
+    const response = await apiClient<LoginResult>('/api/auth/login', {
+      method: 'POST',
+      data: credentials,
+    });
+    // An administrator's password proof returns a restricted MFA challenge and no token: nothing is stored until the second factor passes.
+    if (isAdminMfaRequired(response)) return response;
+    if (response.accessToken) {
+      setAccessToken(response.accessToken);
+    }
+    return response;
+  },
+
+  register: async (data: RegisterData): Promise<VerificationResponse> => {
+    const response = await apiClient<VerificationResponse>('/api/auth/register', {
+      method: 'POST',
+      data,
+    });
+    return response;
+  },
+
+  verifyEmail: async (data: VerifyEmailData): Promise<VerificationResponse> => {
+    const response = await apiClient<VerificationResponse>('/api/auth/verify-email', {
+      method: 'POST',
+      data,
+    });
+    if (response.accessToken) {
+      setAccessToken(response.accessToken);
+    }
+    return response;
+  },
+
+  resendVerification: async (data: { email: string }): Promise<{ message: string; resendAvailableAt: string }> => {
+    return apiClient<{ message: string; resendAvailableAt: string }>('/api/auth/resend-verification', {
+      method: 'POST',
+      data,
+    });
+  },
+
+  changeVerificationEmail: async (data: { currentEmail: string; password: string; newEmail: string }): Promise<{ message: string; email: string; deliveryStatus: 'ACCEPTED_BY_PROVIDER' | 'FAILED' | 'PENDING' }> => {
+    return apiClient('/api/auth/change-verification-email', {
+      method: 'POST',
+      data,
+    });
+  },
+
+  /** Revokes only this scope's session family and clears only its cookie; the other portal's session is untouched. */
+  logout: async (scope: AuthScope = 'customer'): Promise<void> => {
+    try { await apiClient(`/api/auth/${scope}/logout`, { method: 'POST' }); }
+    finally { setAccessToken(null, scope); }
+  },
+
+  getCurrentUser: async (scope: AuthScope = 'customer'): Promise<{ user: User }> => {
+    return apiClient('/api/auth/me', { method: 'GET', scope });
+  },
+
+  updateProfile: async (data: { firstName?: string; lastName?: string; email?: string }): Promise<{ message: string; user: User & { pendingEmail?: string; requiresEmailVerification?: boolean; verificationDeliveryStatus?: 'ACCEPTED_BY_PROVIDER' | 'FAILED' | 'PENDING' } }> => {
+    return apiClient('/api/auth/me', {
+      method: 'PATCH',
+      data,
+    });
+  },
+
+  changePassword: async (data: { currentPassword: string; newPassword: string }): Promise<{ message: string }> => {
+    return apiClient('/api/auth/change-password', {
+      method: 'POST',
+      data,
+    });
+  },
+
+  forgotPassword: async (data: { email: string }): Promise<{ message: string }> => {
+    return apiClient('/api/auth/forgot-password', {
+      method: 'POST',
+      data,
+    });
+  },
+
+  resendPasswordReset: async (data: { email: string }): Promise<{ message: string; resendAvailableAt: string }> => {
+    return apiClient('/api/auth/resend-password-reset', { method: 'POST', data });
+  },
+
+  verifyResetOtp: async (data: { email: string; code: string }): Promise<{ message: string; resetToken: string; expiresAt: string }> => {
+    return apiClient('/api/auth/verify-reset-otp', {
+      method: 'POST',
+      data,
+    });
+  },
+
+  resetPassword: async (data: { resetToken: string; newPassword: string }): Promise<{ message: string }> => {
+    return apiClient('/api/auth/reset-password', {
+      method: 'POST',
+      data,
+    });
+  },
+
+  verifyEmailChange: async (data: { code: string }): Promise<{ message: string; user: User }> => {
+    return apiClient('/api/auth/me/verify-email-change', {
+      method: 'POST',
+      data,
+    });
+  },
+
+  resendEmailChange: async (): Promise<{ message: string; expiresAt: string; resendAvailableAt: string }> => {
+    return apiClient('/api/auth/me/resend-email-change', { method: 'POST' });
+  },
+};

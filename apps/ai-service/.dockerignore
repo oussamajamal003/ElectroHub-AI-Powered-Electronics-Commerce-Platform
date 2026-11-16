@@ -1,0 +1,36 @@
+# Keep secrets, local environments, caches, datasets and model weights out of the image.
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+tests/
+# Offline training code, its environments and the licensed Commons dataset never enter the serving image context.
+training/
+requirements-dev.txt
+*.ipynb
+.ipynb_checkpoints/
+data/
+datasets/
+models/
+artifacts/
+*.pt
+*.pth
+*.pkl
+*.ckpt
+*.onnx
+*.safetensors
+*.bin
+*.zip
+*.tar
+*.gz
+Dockerfile
+.dockerignore

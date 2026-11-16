@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "usage": "Illustrative storefront assets only; not authenticated model photos or ground-truth ML data",
+  "generationRecords": [
+    {
+      "filename": "amd-ryzen-9-9950x-primary.webp",
+      "source": "C:\\Users\\ouss0\\.codex\\generated_images\\01a1639a-1b08-7602-a608-553f3ee70043\\exec-845133bc-5ae6-4a10-8dc2-15a760a6ed60.png",
+      "method": "Codex built-in imagegen / ChatGPT Plus",
+      "reviewedBy": "Codex primary agent",
+      "reviewStatus": "approved",
+      "correction": "Replaced solid heat spreader with notched AM5 package illustration"
+    },
+    {
+      "filename": "amd-ryzen-9-9900x-primary.webp",
+      "source": "C:\\Users\\ouss0\\.codex\\generated_images\\01a1639a-1b08-7602-a608-553f3ee70043\\exec-1b7d6140-dd9b-4dd0-a7ea-760b8d81219c.png",
+      "method": "Codex built-in imagegen / ChatGPT Plus",
+      "reviewedBy": "Codex primary agent",
+      "reviewStatus": "approved",
+      "correction": "Replaced solid heat spreader with notched AM5 package illustration"
+    },
+    {
+      "filename": "samsung-870-evo-1tb-alternate.webp",
+      "source": "C:\\Users\\ouss0\\.codex\\generated_images\\01a1639a-1b08-7602-a608-553f3ee70043\\exec-ff6fd24c-160a-4756-96b5-8b32157d1b54.png",
+      "method": "Codex built-in imagegen / ChatGPT Plus",
+      "reviewedBy": "Codex primary agent",
+      "reviewStatus": "approved",
+      "correction": "Replaced multi-device collage with one SATA SSD alternate"
+    },
+    {
+      "filename": "samsung-t9-1tb-primary.webp",
+      "source": "C:\\Users\\ouss0\\.codex\\generated_images\\01a1639a-1b08-7602-a608-553f3ee70043\\exec-2c7d9236-a3a0-4555-afe6-890e7cdbf926.png",
+      "method": "Codex built-in imagegen / ChatGPT Plus",
+      "reviewedBy": "Codex primary agent",
+      "reviewStatus": "approved",
+      "correction": "Corrected T9 textured enclosure illustration"
+    }
+  ]
+}

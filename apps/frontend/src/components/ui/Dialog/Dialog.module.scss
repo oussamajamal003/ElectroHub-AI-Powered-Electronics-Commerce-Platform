@@ -1,0 +1,93 @@
+@use "@/styles/abstracts" as *;
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: $z-modal;
+  background-color: $color-overlay;
+  backdrop-filter: blur(4px);
+}
+
+.container {
+  position: fixed;
+  inset: 0;
+  z-index: $z-modal + 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-4;
+  overflow-y: auto;
+  pointer-events: none;
+}
+
+.content {
+  pointer-events: auto;
+  position: relative;
+  width: 100%;
+  max-width: 32rem; // 512px
+  background-color: $color-surface;
+  padding: $spacing-6;
+  border-radius: $radius-xl;
+  box-shadow: $shadow-xl;
+  border: 1px solid $color-border;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+  margin: auto;
+  // A tall dialog scrolls inside itself. Radix's scroll lock only lets the dialog content scroll, so the container's overflow
+  // never receives the wheel or touch gesture; the content must own its scrolling.
+  max-height: calc(100dvh - #{2 * $spacing-4});
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  &:focus-visible {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
+}
+
+.closeButton {
+  position: absolute;
+  top: $spacing-4;
+  right: $spacing-4;
+  background: transparent;
+  border: none;
+  padding: $spacing-1;
+  border-radius: $radius-sm;
+  color: $color-text-muted;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color $transition-fast, color $transition-fast;
+
+  &:hover {
+    background-color: $color-border;
+    color: $color-text-primary;
+  }
+
+  &:focus-visible {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
+}
+
+.closeIcon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.title {
+  font-family: $font-family-heading;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin: 0;
+}
+
+.description {
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  margin: 0;
+}

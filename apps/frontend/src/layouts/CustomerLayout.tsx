@@ -1,0 +1,108 @@
+import { lazy, Suspense } from 'react';
+import { PaymentNotifications } from '@/features/checkout/PaymentPurchases';
+import { Outlet } from 'react-router-dom';
+import { CustomerHeader } from '@/components/layout/CustomerHeader/CustomerHeader';
+import { Footer } from '@/components/layout/Footer';
+import { Link } from 'react-router-dom';
+import { Zap } from 'lucide-react';
+import styles from './CustomerLayout.module.scss';
+import { CustomerScrollRestoration } from './CustomerScrollRestoration';
+import { usePaymentLock } from '@/features/checkout/PaymentLockContext';
+import { DiscoveryProvider } from '@/features/search/discovery/DiscoveryProvider';
+import { ShopFooterLinks } from './ShopFooterLinks';
+import { useStorefrontSession } from '@/features/analytics/useStorefrontSession';
+import { useStorefrontProfile } from '@/features/storefront/api';
+import { usePageTitle } from './usePageTitle';
+import { brandTitle } from '@/lib/pageTitle';
+import { CookieControls } from '@/features/privacy/CookieControls';
+
+const CustomerDeliveryEvents = lazy(() => import('@/features/notifications/CustomerDeliveryEvents'));
+
+export function CustomerLayout() {
+  const { isLocked } = usePaymentLock();
+  const { data: storeProfile } = useStorefrontProfile();
+  useStorefrontSession();
+  usePageTitle('customer-main', brandTitle(storeProfile?.storeName));
+
+  return (
+    <DiscoveryProvider disabled={isLocked}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <CustomerScrollRestoration />
+      <Suspense fallback={null}><CustomerDeliveryEvents /></Suspense>
+      <div
+        data-testid="header-lock-wrapper"
+        className={styles.headerLockWrapper}
+        inert={isLocked ? true : undefined}
+        aria-disabled={isLocked ? true : undefined}
+        style={isLocked ? { pointerEvents: 'none', userSelect: 'none' } : undefined}
+        onClickCapture={isLocked ? e => { e.preventDefault(); e.stopPropagation(); } : undefined}
+        onKeyDownCapture={isLocked ? e => { e.preventDefault(); e.stopPropagation(); } : undefined}
+      >
+        <a href="#customer-main" tabIndex={0} className={styles.skipLink}>Skip to content</a>
+        <CustomerHeader />
+
+      </div>
+      <main id="customer-main" tabIndex={-1} style={{ flex: 1 }}>
+        <PaymentNotifications />
+        <Outlet />
+      </main>
+      <div
+        data-testid="footer-lock-wrapper"
+        inert={isLocked ? true : undefined}
+        aria-disabled={isLocked ? true : undefined}
+        style={isLocked ? { pointerEvents: 'none', userSelect: 'none' } : undefined}
+        onClickCapture={isLocked ? e => { e.preventDefault(); e.stopPropagation(); } : undefined}
+        onKeyDownCapture={isLocked ? e => { e.preventDefault(); e.stopPropagation(); } : undefined}
+      >
+        <Footer>
+        <div className={styles.footerContent}>
+          <div className={styles.footerGrid}>
+            <div className={styles.brandInfo}>
+              <Link className={styles.brand} to="/">
+                <span className={styles.brandMark} aria-hidden="true"><Zap size={16} /></span>
+                <span>{storeProfile?.storeName ?? <>Electro<span className={styles.brandHub}>Hub</span></>}</span>
+              </Link>
+              <p>Your destination for the<br />latest consumer electronics.</p>
+            </div>
+            <nav aria-label="Support" className={styles.navGroup}>
+                <h2>Support</h2>
+                <Link to="/contact">Help Center</Link>
+                <Link to="/contact">Returns & Refunds</Link>
+                <Link to="/contact">Warranty</Link>
+                <Link to="/contact">Privacy Policy</Link>
+                <Link to="/cookie-policy">Cookie Policy</Link>
+                <CookieControls locked={isLocked} />
+                <Link to="/contact">Terms of Service</Link>
+            </nav>
+
+            <nav aria-label="Shop" className={styles.navGroup}>
+              <h2>Shop</h2>
+              <ShopFooterLinks />
+            </nav>
+
+            <nav aria-label="Account" className={styles.navGroup}>
+              <h2>Account</h2>
+              <Link to="/account">My Account</Link>
+              <Link to="/orders">Orders</Link>
+              <Link to="/wishlist">Wishlist</Link>
+              <Link to="/orders">Track Delivery</Link>
+            </nav>
+
+            <nav aria-label="Company" className={styles.navGroup}>
+              <h2>Company</h2>
+              <Link to="/about">About Us</Link>
+              <Link to="/about">Careers</Link>
+              <Link to="/about">Press</Link>
+              <Link to="/contact">Contact</Link>
+            </nav>
+          </div>
+          <div className={styles.footerBottom}>
+            <span>© {new Date().getFullYear()} {storeProfile?.storeName ?? 'ElectroHub'}. All rights reserved.</span>
+          </div>
+        </div>
+      </Footer>
+      </div>
+    </div>
+    </DiscoveryProvider>
+  );
+}

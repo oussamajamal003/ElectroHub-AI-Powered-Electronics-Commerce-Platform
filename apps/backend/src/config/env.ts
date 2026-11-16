@@ -1,0 +1,177 @@
+import { z } from 'zod';
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Determine the environment based on NODE_ENV (default: development)
+const nodeEnv = process.env.NODE_ENV || 'development';
+const processPort = process.env.PORT;
+const processFrontendUrl = process.env.FRONTEND_URL;
+const processStripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const backendRoot = path.resolve(__dirname, '../..');
+
+const envFilesByEnvironment = {
+  development: ['.env', '.env.local'],
+  test: ['.env', '.env.test.local'],
+  production: ['.env', '.env.production.local'],
+} as const;
+
+/**
+ * Env files for an environment. `ELECTROHUB_ENV_FILES=none` (Task 06.1) loads no file at all, so a hermetic test stack (the release
+ * E2E suite) is configured only by the environment its launcher passes and can never inherit a developer's shared DEV database URL,
+ * provider keys or storage credentials from `.env`. It can only remove configuration sources, never add one.
+ */
+export function selectEnvFiles(environmentName: string, filesMode: string | undefined): readonly string[] {
+  if (filesMode === 'none') return [];
+  return envFilesByEnvironment[environmentName as keyof typeof envFilesByEnvironment] ?? envFilesByEnvironment.development;
+}
+
+const selectedEnvFiles = selectEnvFiles(nodeEnv, process.env.ELECTROHUB_ENV_FILES);
+
+const fileEnvironment: Record<string, string> = {};
+const loadedEnvFiles = selectedEnvFiles.filter((fileName, index) => {
+  const result = dotenv.config({
+    path: path.resolve(backendRoot, fileName),
+    override: index > 0,
+    processEnv: fileEnvironment,
+  });
+
+  return !result.error;
+});
+
+for (const [name, value] of Object.entries(fileEnvironment)) {
+  if (process.env[name] === undefined) process.env[name] = value;
+}
+
+process.env.NODE_ENV = nodeEnv;
+if (processPort) process.env.PORT = processPort;
+if (processFrontendUrl) process.env.FRONTEND_URL = processFrontendUrl;
+// The local CLI listener/hosted runtime supplies its own signing secret in memory.
+if (processStripeWebhookSecret) process.env.STRIPE_WEBHOOK_SECRET = processStripeWebhookSecret;
+
+export const envDiagnostics = {
+  nodeEnv,
+  selectedEnvFiles,
+  loadedEnvFiles,
+} as const;
+
+/**
+ * Environment variable schema.
+ * Validates required configuration at startup.
+ * Fails safely when required variables are missing.
+ */
+/** True only for a loopback PostgreSQL host (a disposable/local cluster), never for Supabase or any remote database. */
+export function isLoopbackDatabaseUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    return ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+const envSchema = z.object({
+  NODE_ENV: z
+    .enum(['development', 'production', 'test'])
+    .default('development'),
+  PORT: z.coerce.number().default(5000),
+  DATABASE_URL: z.string().url(),
+  DIRECT_URL: z.string().url(),
+  DB_SSL_CA_CERT_PATH: z.string().optional(),
+  DB_RUNTIME_URL_SOURCE: z.enum(['database', 'direct']).optional(),
+  E2E_OTP_OUTBOX_DIR: z.string().optional(),
+  E2E_TEST_SUPPORT_TOKEN: z.string().optional(),
+  JWT_SECRET: z.string().min(32).refine((secret) => {
+    const normalizedSecret = secret.trim().toLowerCase();
+    const rejectedValues = new Set([
+      'dev_secret_key_change_me_in_prod',
+      'your-jwt-secret-here',
+      'your-jwt-refresh-secret-here',
+      'test-jwt-secret',
+      'test-secret',
+      'changeme',
+      'change-me',
+      'placeholder',
+    ]);
+
+    return (
+      secret === secret.trim() &&
+      !rejectedValues.has(normalizedSecret) &&
+      !/(your-|change[-_ ]?me|placeholder|replace[-_ ]?(me|with)|example|password)/i.test(secret) &&
+      new Set(secret).size >= 8
+    );
+  }, 'JWT_SECRET must be a unique, non-placeholder value of at least 32 characters'),
+  JWT_REFRESH_SECRET: z.string().optional(),
+  // AI_SERVICE_* settings are validated by src/integrations/ai/ai.config.ts so an AI misconfiguration can never block commerce startup.
+  FRONTEND_URL: z.string().url().optional(),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REDIRECT_URI: z.string().url().optional(),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  BREVO_API_KEY: z.string().optional(),
+  BREVO_SENDER_EMAIL: z.string().email().optional(),
+  BREVO_SENDER_NAME: z.string().optional().default('ElectroHub'),
+  OTP_HASH_SECRET: z.string().optional(),
+  // Task 05.2 administrator MFA. Key ring "1:<base64 32 bytes>[,2:<...>]"; missing/invalid keys fail closed at use, never at boot,
+  // so customer traffic is unaffected while administrator MFA refuses to operate.
+  ADMIN_MFA_ENCRYPTION_KEYS: z.string().optional(),
+  // Operator-issued seed-administrator provisioning redemption (shared DEV / disposable only). Never mounted in production.
+  ADMIN_SEED_PROVISIONING_ENABLED: z.enum(['true', 'false']).optional(),
+  ADMIN_MFA_ACTIVE_KEY_VERSION: z.coerce.number().int().positive().optional(),
+  WEBAUTHN_RP_ID: z.string().optional(),
+  WEBAUTHN_RP_NAME: z.string().optional(),
+  WEBAUTHN_ORIGIN: z.string().url().optional(),
+}).superRefine((data, ctx) => {
+  // The local email outbox captures mail instead of sending it. It is allowed only for automated tests or a development server on
+  // a loopback (disposable) database, so a misconfigured shared DEV or production server can never silently divert real email.
+  if (data.E2E_OTP_OUTBOX_DIR && data.NODE_ENV !== 'test' && !(data.NODE_ENV === 'development' && isLoopbackDatabaseUrl(data.DATABASE_URL))) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['E2E_OTP_OUTBOX_DIR'],
+      message: 'E2E_OTP_OUTBOX_DIR is allowed only in test, or in development against a loopback database' });
+  }
+  if (data.ADMIN_SEED_PROVISIONING_ENABLED === 'true' && data.NODE_ENV === 'production') {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['ADMIN_SEED_PROVISIONING_ENABLED'],
+      message: 'Seed administrator provisioning cannot be enabled in production' });
+  }
+  if (data.NODE_ENV === 'production') {
+    if (!data.BREVO_API_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'BREVO_API_KEY is required in production',
+        path: ['BREVO_API_KEY'],
+      });
+    }
+    if (!data.BREVO_SENDER_EMAIL) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'BREVO_SENDER_EMAIL is required in production',
+        path: ['BREVO_SENDER_EMAIL'],
+      });
+    }
+    if (!data.OTP_HASH_SECRET || data.OTP_HASH_SECRET.length < 16) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'A secure OTP_HASH_SECRET of at least 16 characters is required in production',
+        path: ['OTP_HASH_SECRET'],
+      });
+    }
+  }
+});
+
+export type Env = z.infer<typeof envSchema>;
+
+export function validateEnvironment(source: NodeJS.ProcessEnv): Env {
+  return envSchema.parse(source);
+}
+
+function loadEnv(): Env {
+  const parsed = envSchema.safeParse(process.env);
+
+  if (!parsed.success) {
+    // Throw a safe diagnostic so bootstrap can persist and flush startup evidence.
+    throw new Error(`Invalid environment configuration (${Object.keys(parsed.error.flatten().fieldErrors).join(', ')})`);
+  }
+
+  return parsed.data;
+}
+
+export const env = loadEnv();

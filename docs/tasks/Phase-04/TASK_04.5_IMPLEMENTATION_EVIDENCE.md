@@ -1,0 +1,132 @@
+# Task 04.5 — Delivery Tracking Foundation: Implementation Evidence
+
+- **Branch:** `feature/04.5-04.7-delivery-tracking`, PR #40 against `develop` (baseline commit `75272d8`; closure fixes below). Not merged.
+- **Date:** 2026-10-31
+- **Scope:** 04.5 only. The map (04.6) and Socket.IO/simulation (04.7) are not started. No Phase 05 work.
+- **Design baseline:** refined artifact https://claude.ai/artifact/9uEiC6tbMUUTPViergzFCd, with [TASK_04.5_04.7_DESIGN_SYSTEM_HANDOFF.md](TASK_04.5_04.7_DESIGN_SYSTEM_HANDOFF.md) and [TASK_04.5_04.7_DESIGN_ARCHITECTURE.md](TASK_04.5_04.7_DESIGN_ARCHITECTURE.md).
+- **Figma:** DEFERRED TO PHASE 05 BY OWNER DECISION.
+
+## 1. What was built
+
+### Database (additive)
+Migration `apps/backend/prisma/migrations/20261031000000_delivery_tracking/` (with a manual `down.sql`):
+- `deliveries` gains `revision`, `location_label`, `location_source`, `location_updated_at`, `eta_updated_at`, `is_simulated`, and an index on `(status, updated_at)`.
+- A new `delivery_events` table, unique on `(delivery_id, revision)`, with cascade from the delivery.
+- Four new enums.
+- CHECK constraints on revisions, coordinate ranges and the coordinate pair.
+- RLS is enabled on `delivery_events` and client roles have their access revoked.
+- No existing column is altered or dropped.
+
+### Backend
+- `services/delivery.service.ts`: customer and admin snapshots, the admin list, `start`, `applyUpdate`.
+  - Every write locks the order row (`FOR UPDATE`), requires a SUCCEEDED payment inside the transaction, and checks `expectedRevision` (409 `DELIVERY_REVISION_CONFLICT`, returning the current snapshot).
+  - Status changes go through the existing `transitionFulfillment`, so they are forward-only and use the existing email-outbox hook.
+  - One event per accepted change. A request that changes nothing writes nothing.
+- `validators/delivery.validator.ts`: strict Zod schemas. The ETA must fall between 5 minutes ago and 30 days ahead; coordinates are range-checked; labels are at most 80 characters and notes at most 280.
+- `controllers/delivery.controller.ts` and `routes/delivery.admin.routes.ts` (ADMIN guard, 30 writes/min).
+- Customer route `GET /api/orders/:orderReference/delivery` in `checkout.routes.ts`: owner-scoped, 60/min/user, `private, no-store`. Another customer's order returns the same 404 as a missing one.
+- Customer projection:
+  - Location is returned only while the order is OUT_FOR_DELIVERY.
+  - Internal notes and actor IDs are never returned to customers.
+  - The timeline is capped at 50 entries.
+  - The response includes `serverTime`, used for the stale-location check (older than 30 min).
+- `account-deletion.service.ts` scrubs the location label/source and event coordinates/notes for completed orders.
+- Swagger: Delivery tag and paths.
+
+### Frontend
+- `features/delivery/`: types, presentation helpers, React Query hooks (`queryKeys.delivery.*`), `DeliveryTrackingPage`, `TrackDeliveryAction`, overview card, progress stepper, timeline, text-only location panel and state notices. Styling uses SCSS modules with tokens only and container queries.
+- `OrderDetailsPage` shows **Track delivery** only for paid CONFIRMED→DELIVERED orders.
+- Admin pages: `AdminDeliveriesPage` (list and filters) and `AdminDeliveryDetailPage`, plus `AdminDeliveryUpdatePanel`:
+  - Only the next status can be chosen.
+  - Location fields appear only for OUT_FOR_DELIVERY.
+  - Every change is shown in a confirm dialog first.
+  - A revision conflict shows a "Load latest" action.
+  - Focus returns to the button that opened the dialog.
+- Lazy routes plus a sidebar link in `AdminLayout`.
+- Shared `Textarea` helper text changed from the muted colour (2.56:1) to `$color-text-secondary` to pass WCAG AA contrast. The fix is in the shared component.
+
+## 2. Verification actually run
+
+| Gate | Command | Result |
+|---|---|---|
+| Backend typecheck / lint / build | `npm run typecheck`, `npm run lint`, `npm run build` (apps/backend) | pass |
+| Backend unit tests | delivery.unit.test.ts | **3/3** |
+| Disposable PostgreSQL gate | `node scripts/delivery-pg.cjs` (PG18 on a random loopback port, DB `electrohub_disposable_*`, all migrations applied) | **17/17** (13 service + 4 route); delivery-scoped schema drift **0** |
+| Frontend typecheck / lint / build | `npx tsc -b`, `npm run lint`, `npm run build` | pass |
+| Frontend unit / component tests | `npx vitest run` | **1060/1060** across 122 files (includes 14 tracking-page tests and the Order Details T5-19 matrix, 40 tests) |
+| Real Chromium QA | `node scripts/delivery-qa-stack.cjs` (backend), then `npx playwright test -c playwright.delivery.config.ts` (frontend) | **8/8** passed in 53.0 s |
+
+The disposable PG gate covers:
+- forward-only transitions
+- payment required (no payment, failed payment, awaiting capture)
+- cancelled orders
+- revision conflict
+- no-op updates
+- one event per change and event-type precedence
+- location visible only while out for delivery
+- stale location
+- other customers' orders return 404
+- the 60/min rate limit
+- account-deletion scrub
+- `transitionFulfillment` outbox behaviour
+
+The Chromium suite runs against the real API on a disposable, seeded database:
+1. Order Details → Track delivery → tracking page → back navigation.
+2. Every customer state at 1440 px: no horizontal overflow, axe reports no violations, no console errors.
+3. 390 / 768 / 1920 px and 200 % zoom: content order is kept and nothing overflows.
+4. Keyboard: focus order starts at the overview, the focus ring is visible, targets are at least 44 px, `aria-current` is set, and reduced motion is respected.
+5. Copy puts the tracking reference on the clipboard and the result is announced.
+6. Retry after a controlled API fault, then the real data loads.
+7. Another customer's order (IDOR) and signed-out access are both blocked.
+8. Admin: list → Start → update with the confirm dialog → revision conflict → Delivered; after a hard refresh the customer sees the history.
+
+The QA stack was stopped afterwards; run evidence is in `.cache/delivery-qa-stack-*` (git-ignored). Screenshots are in `apps/frontend/screenshots/delivery-04.5/`.
+
+**Not run / not verified:**
+- No NVDA or VoiceOver screen-reader testing.
+- No remote CI run.
+- No Stripe calls: payment rows are synthetic fixtures on the disposable database.
+- No Brevo sends.
+- The default backend suite fails 45 files and 274 tests on environment guards (`Payments are unavailable`, `DATABASE_TEST_TARGET_REQUIRED`, timeouts). These look pre-existing: they are guards outside the delivery code, and the new PG suites skip there. The suite was not run on unmodified HEAD to confirm this.
+
+## 3. Safety
+- Shared DEV mutations: **none**. PROD mutations: **none**. All migrations and writes ran only on disposable loopback clusters whose database names are required to match `electrohub_disposable_*`.
+- Payment and Stripe code and guards are unchanged. Delivery writes only read payment state; they never change it.
+
+## 4. Known limitations
+- Account deletion keeps an ACTIVE order's shipping snapshot and current location (needed to finish delivery); see the closure section for the lifecycle.
+- Order Details does not show a status line from cached tracking data. It shows the link only.
+- If the clipboard is unavailable, Copy only shows a "copy manually" message; there is no other fallback.
+- Screen-reader announcements were checked through the accessibility tree and axe only.
+
+## 5. Closure of review findings (PR #40)
+
+**Privacy (account deletion).** Root cause: `account-deletion.service.ts` treated an order as final only when it was DELIVERED/CANCELLED *and* its Delivery was absent or DELIVERED, so a CANCELLED order whose Delivery still said PREPARING/OUT_FOR_DELIVERY kept shipping data, coordinates and notes. Fix, inside the existing transaction and with no payment change:
+- A CANCELLED order is always final (delivery writes are refused once cancelled).
+- Historical `DeliveryEvent` coordinates and notes are cleared for **every** order of the deleted user. Only the current location is needed for an active delivery.
+- An ACTIVE order keeps its shipping snapshot and current location so it can be fulfilled. When it is later delivered for an anonymized owner, `DeliveryService.applyUpdate` redacts shipping, current location and events in the same transaction (`redactForDeletedOwner`).
+- Cancellation after deletion: closed in section 6.
+
+**Observability.** Every delivery endpoint (customer read, admin list/read, start, update) now emits one `delivery.<op>.timing` event: `delivery.customer_read`, `delivery.admin_list`, `delivery.admin_read`, `delivery.start`, `delivery.update`. Fields: request id, outcome or safe error code, HTTP status, `revisionConflict`, `changed`/`created`, duration, and the existing scoped DB metrics (operation count, timing, attribution). No coordinates, labels, notes, names, emails, references or user IDs are logged. The event is emitted in `finally`, inside `try/catch`, so it cannot change a response or mask an error.
+
+**Accessibility.** The tracking page no longer nests `<main>`; breadcrumb links have a 2.75 rem (44 px) minimum height; shared `Input` helper text uses `$color-text-secondary` (AA contrast), matching `Textarea`.
+
+**Focused results.** Backend controller timing tests 7/7 (plus unit 3/3); disposable PostgreSQL gate 20/20 (17 + 3 new deletion tests; 0 delivery drift); frontend `src/features`, `src/components/ui`, `src/pages/admin` vitest 858/858 (96 files); Chromium delivery suite 8/8 (includes axe); backend and frontend typecheck, lint and build pass. The broader backend suite still fails on the same environment guards noted above. Final-head GitHub CI is reported in the PR, not here.
+
+## 6. Closure: cancellation after account deletion (PR #40)
+
+The last privacy gap is closed. Both terminal outcomes now remove retained personal delivery data for an anonymized owner through one shared helper, `redactDeliveryForDeletedOwner` (`services/delivery-privacy.ts`), run inside the transaction that ends the order:
+- `DELIVERED`: `DeliveryService.applyUpdate` (behaviour unchanged, now calls the helper).
+- `CANCELLED`: `PaymentService.compensate` calls it right after the existing `CANCELLED` write, in the same fenced transaction. It is a privacy-only addition: it reads the owner and clears shipping, current location and event coordinates/notes. No payment, refund, Stripe, inventory or email code changed.
+
+It redacts only when the owner is inactive with a `@deleted.invalid` email, so active customers are untouched. Each write matches only rows that still hold data, so a repeat writes nothing; `compensate` itself already returns early once `compensatedAt` is set. Order items, payment rows, delivery revision/status and event ids are not modified.
+
+Verified (disposable PostgreSQL gate, `node scripts/delivery-pg.cjs`): 23/23, including T5-20e (deleted owner, active order, cancellation: scrubbed, payment/revision/events unchanged), T5-20f (repeat is a no-op; an active customer's cancellation is not redacted), T5-20g (a failure after redaction rolls back everything), and the existing T5-20/b/c/d (DELIVERED cleanup unchanged). Backend typecheck, lint and build pass.
+
+Not verified: the `compensate` call site is not executed by any test here. The payment unit suites fail identically before and after this change (166 failures on environment guards such as `Payments are unavailable`), and the payment lifecycle PostgreSQL runner needs PostgreSQL 17 with a CA-signed setup that was not available locally. The helper is exercised through the same transaction shape; the call is one awaited line after the `CANCELLED` write.
+
+## 7. Correction: shipping phone redaction (PR #40)
+
+`Order.shippingPhone` was left behind when an anonymized owner's order became terminal. It is non-nullable, so it now takes the placeholder `Redacted`, defined once with the other redacted shipping fields (`REDACTED_SHIPPING` in `services/delivery-privacy.ts`) and used by both `account-deletion.service.ts` (already-terminal orders) and `redactDeliveryForDeletedOwner` (DELIVERED/CANCELLED). The helper's write predicate now matches any not-yet-redacted personal shipping field (recipient, address lines, city, state, postal code, country, phone, coordinates), so a partial prior redaction is completed and a full one writes nothing. Active orders keep their contact details until terminal. Payment, order items, delivery revisions and event ids are untouched.
+
+Verified: disposable PostgreSQL gate 24/24 (phone assertions added to the deleted-owner DELIVERED, CANCELLED and already-terminal cases; active deleted owner and active customer keep the phone; new T5-20h covers partial redaction and repeat). Backend typecheck, lint, build and `git diff --check` pass.

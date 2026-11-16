@@ -1,0 +1,12 @@
+-- Task 06.2 (Work Package F): composite index for price-ordered catalog pages and keyset (cursor) pagination.
+--
+-- Matches the catalog price ORDER BY exactly (price ASC, createdAt DESC, id ASC): price-asc pages read it forward and the
+-- keyset seek (price >= cursor price AND ...) starts the range scan at the cursor instead of sorting the whole catalog.
+-- Measured on a disposable PostgreSQL 18.1 with 200,000 products (scripts/catalog-pagination-pg.cjs --bench; numbers in
+-- docs/tasks/Phase-06/TASK_06.2_PREMIUM_PAGES_CHECKOUT_AUTH_PAGINATION_EVIDENCE.md): without it every price-asc page is a
+-- sequential scan plus sort of the full catalog.
+--
+-- Additive only: no data change, no constraint change. A plain (non-CONCURRENTLY) CREATE INDEX takes a SHARE lock on
+-- "products" (reads continue; product writes wait) for the duration of the build, which is short at catalog scale.
+-- Rollback: DROP INDEX "products_price_createdAt_id_idx";
+CREATE INDEX "products_price_createdAt_id_idx" ON "products"("price", "createdAt" DESC, "id");

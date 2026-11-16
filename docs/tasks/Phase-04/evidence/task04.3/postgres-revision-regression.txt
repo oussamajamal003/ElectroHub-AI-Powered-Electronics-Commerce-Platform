@@ -1,0 +1,5 @@
+No pending migrations to apply.
+PASS clean replay, no-op replay and 24 exact migration checksums (electrohub_disposable_media_53cc1b1517)
+PASS actual PostgreSQL outbox rollback, duplicate replay, ownership/CAS and Storage-failure isolation (Storage is a double)
+PASS monotonic revisions for former primary, reordered peers and retirement successor under clock skew
+PASS concurrent primary invariant, concurrent replacement CAS, immutable URL, storefront retirement and revoked admin

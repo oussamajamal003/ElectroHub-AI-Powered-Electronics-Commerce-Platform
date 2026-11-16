@@ -1,0 +1,24 @@
+{
+  "source": "isolated QA public catalog; read in a PostgreSQL READ ONLY transaction",
+  "products": [
+    {"id":"076fadf5-bf71-5bf3-83e4-60e839224170","name":"TP-Link Archer AXE75","category":"networking-wifi"},
+    {"id":"1cda32c4-891f-58e3-9632-9a3d6ca33735","name":"TP-Link Archer C6","category":"networking-wifi"},
+    {"id":"3159105f-6cc9-57dd-b5f6-d9b9337a1cd1","name":"Logitech Lift Right-Handed","category":"keyboards-mice"},
+    {"id":"41e2cbae-5189-543e-a378-bff0f404c747","name":"TP-Link Archer AX23","category":"networking-wifi"},
+    {"id":"43e75f45-c5fa-517c-b937-e49668da53dc","name":"TP-Link Archer AX55","category":"networking-wifi"},
+    {"id":"9e8b028e-08dd-5c22-877c-22db966052c4","name":"Canon EOS R50","category":"cameras-photography"},
+    {"id":"a7459308-c2fe-4e05-82f4-5117462f0484","name":"Sony WH-1000XM5","category":"headphones"},
+    {"id":"aaaae01d-b7ae-55e5-a2b4-fea4825f4547","name":"Logitech Signature M650","category":"keyboards-mice"},
+    {"id":"acf5d217-0c84-56e3-b267-52cebec64d04","name":"Logitech MX Keys S","category":"keyboards-mice"},
+    {"id":"bb3a2c22-9a84-5139-9242-5daa699456da","name":"TP-Link Archer T3U","category":"networking-wifi"},
+    {"id":"be6339de-7f4d-5648-be6b-5943b6a5f151","name":"Logitech MX Anywhere 3S","category":"keyboards-mice"},
+    {"id":"c90de3d5-b4af-5f05-b3fa-9fc78078fe20","name":"Canon EOS R7","category":"cameras-photography"},
+    {"id":"cabfdf4c-5f81-5c06-a19a-b24c49f9181b","name":"Logitech M720 Triathlon","category":"keyboards-mice"},
+    {"id":"dbfd1fe1-30b3-42a1-a0fb-671f3f1a099f","name":"Apple MacBook Air 13 M3 16GB 1TB — Midnight","category":"laptops"},
+    {"id":"dcd715c4-0b3c-598c-9338-2da72c6abd6b","name":"TP-Link Archer AX10","category":"networking-wifi"},
+    {"id":"e2fe4c67-52fb-5488-9ef7-a1587108e54e","name":"Canon EOS R10","category":"cameras-photography"},
+    {"id":"e6bd0544-2863-5eb9-9c0a-dd7b002e7e63","name":"TP-Link Archer AX73","category":"networking-wifi"},
+    {"id":"e98ea145-6a84-5d53-8fd4-b7a2b2478c12","name":"Canon EOS R100","category":"cameras-photography"},
+    {"id":"ec7553cd-5bbb-5d99-a8d4-dfb2c1349ed4","name":"Logitech MX Master 3S Bluetooth Edition","category":"keyboards-mice"}
+  ]
+}

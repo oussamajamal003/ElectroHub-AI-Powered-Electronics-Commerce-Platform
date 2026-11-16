@@ -1,0 +1,17 @@
+@use '@/styles/abstracts' as *;
+
+// Task 04.7 ConnectionStatusIndicator: same pill geometry as the delivery pills (square, bordered); colour transitions only, motion-safe.
+.pill { display: inline-flex; align-items: center; gap: $spacing-1; width: fit-content; min-height: 1.5rem; padding: 0 $spacing-2; font-size: $font-size-sm;
+  font-weight: $font-weight-medium; border: 1px solid; svg { width: .875rem; height: .875rem; flex-shrink: 0; }
+  @media (prefers-reduced-motion: no-preference) { transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease; } }
+.info { background: $color-info-background; color: $color-info-foreground; border-color: $color-info-border; }
+.warning { background: $color-background; color: $color-warning-foreground; border-color: $color-warning-border; }
+.success { background: $color-success-background; color: $color-success-foreground; border-color: $color-success-border; }
+.neutral { background: $color-surface; color: $color-text-secondary; border-color: $color-border; }
+
+.banner { display: flex; flex-wrap: wrap; align-items: flex-start; gap: $spacing-3; padding: $spacing-4; border: 1px solid; margin-bottom: $spacing-6;
+  p { flex: 1 1 16rem; min-width: 0; margin: 0; font-size: $font-size-sm; color: $color-text-secondary; }
+  strong { display: block; color: $color-text-primary; font-weight: $font-weight-semibold; }
+  &.neutral { background: $color-background; } }
+.bannerIcon { width: 1.125rem; height: 1.125rem; flex: none; margin-top: 2px; }
+.refresh { flex-shrink: 0; min-height: 2.75rem; svg { width: 1rem; height: 1rem; } }

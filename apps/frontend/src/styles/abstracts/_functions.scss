@@ -1,0 +1,21 @@
+// ====================================
+// ElectroHub — SCSS Functions
+// ====================================
+// Colour tokens are CSS custom properties (see styles/themes), so Sass colour functions such as
+// `rgba($color-primary, .1)` cannot run on them at build time. `theme-alpha()` emits the equivalent runtime CSS so
+// translucent tints follow the active light/dark theme; former `color.adjust()` results are explicit tokens.
+
+/// A translucent version of a theme colour token: `theme-alpha($color-primary, .1)`.
+/// `$amount` is an opacity between 0 and 1 (same meaning as the second argument of `rgba()`).
+@function theme-alpha($color, $amount) {
+  @return color-mix(in srgb, #{$color} #{$amount * 100%}, transparent);
+}
+
+/// Dark-theme override for a component-specific (Figma) literal that has no shared semantic token.
+/// Light mode keeps the original literal untouched; use semantic tokens instead whenever one exists.
+///   .field { background: #fff1f2; @include dark-theme { background: $color-error-background; } }
+@mixin dark-theme {
+  :global([data-theme='dark']) & {
+    @content;
+  }
+}

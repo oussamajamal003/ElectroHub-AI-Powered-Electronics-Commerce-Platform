@@ -1,0 +1,144 @@
+// ====================================
+// ElectroHub — SCSS Variables 
+// ====================================
+// Design system tokens for the ElectroHub frontend.
+
+// Helpers for translucent/darkened theme colours (forwarded so modules that only `@use` this file get them too).
+@forward 'functions';
+
+// --- Colors ---
+// Every colour is a semantic CSS custom property defined for both themes in `styles/themes/_index.scss`
+// (`:root` / `[data-theme='light']` and `[data-theme='dark']`). Light values are unchanged from the original
+// design system; Sass colour functions must use `theme-alpha()` instead of `rgba()` (no `color.adjust()` on tokens).
+$color-primary: var(--eh-color-primary); // brand fill, borders, icons (#2563eb in both themes)
+$color-primary-light: var(--eh-color-primary-light);
+$color-primary-dark: var(--eh-color-primary-dark);
+$color-primary-active: var(--eh-color-primary-active);
+$color-primary-text: var(--eh-color-primary-text); // brand-coloured text/links: #2563eb light, lighter blue on dark surfaces
+$color-primary-text-hover: var(--eh-color-primary-text-hover);
+$color-primary-subtle: var(--eh-color-primary-subtle); // selected/active tint behind primary text
+$color-primary-foreground: var(--eh-color-primary-foreground); // text on a primary fill
+
+$color-secondary: var(--eh-color-secondary); // inverse slab (hero, tooltip) — always carries inverse text
+$color-secondary-light: var(--eh-color-secondary-light);
+
+$color-accent: var(--eh-color-accent);
+$color-accent-hover: var(--eh-color-accent-hover);
+$color-accent-foreground: var(--eh-color-accent-foreground); // text on an accent fill
+$color-accent-text: var(--eh-color-accent-text);
+$color-accent-subtle: var(--eh-color-accent-subtle);
+
+$color-success: var(--eh-color-success);
+$color-success-background: var(--eh-color-success-background);
+$color-success-border: var(--eh-color-success-border);
+$color-success-foreground: var(--eh-color-success-foreground);
+$color-warning: var(--eh-color-warning);
+$color-warning-background: var(--eh-color-warning-background);
+$color-warning-border: var(--eh-color-warning-border);
+$color-warning-foreground: var(--eh-color-warning-foreground);
+$color-error: var(--eh-color-error);
+$color-error-hover: var(--eh-color-error-hover);
+$color-error-fill: var(--eh-color-error-fill); // solid danger fill behind white text (destructive button, alert badge)
+$color-error-fill-hover: var(--eh-color-error-fill-hover);
+$color-error-background: var(--eh-color-error-background);
+$color-error-border: var(--eh-color-error-border);
+$color-error-foreground: var(--eh-color-error-foreground);
+$color-info: var(--eh-color-info);
+$color-info-background: var(--eh-color-info-background);
+$color-info-border: var(--eh-color-info-border);
+$color-info-foreground: var(--eh-color-info-foreground);
+
+$color-background: var(--eh-color-background); // cards, header, body
+$color-surface: var(--eh-color-surface); // subtle wash: admin canvas, table heads, hovers
+$color-surface-hover: var(--eh-color-surface-hover); // ghost/menu hover (was the #f1f5f9 literal)
+$color-elevated: var(--eh-color-elevated); // popovers, menus, dialogs
+$color-border: var(--eh-color-border);
+$color-border-strong: var(--eh-color-border-strong);
+$color-overlay: var(--eh-color-overlay); // modal/drawer backdrop
+$color-header-glass: var(--eh-color-header-glass); // translucent sticky header once scrolled
+$color-skeleton: var(--eh-color-skeleton);
+$color-image-well: var(--eh-color-image-well); // product-image placeholder well
+
+$color-text-primary: var(--eh-color-text-primary);
+$color-text-secondary: var(--eh-color-text-secondary);
+$color-text-muted: var(--eh-color-text-muted); // Muted copy still needs AA contrast: equals text-secondary in both themes.
+$color-text-inverse: var(--eh-color-text-inverse);
+
+// --- Typography ---
+$font-family-base: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+  Roboto, sans-serif;
+$font-family-heading: $font-family-base;
+$font-family-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+$font-size-xs: 0.75rem; // 12px
+$font-size-sm: 0.875rem; // 14px
+$font-size-base: 1rem; // 16px
+$font-size-lg: 1.125rem; // 18px
+$font-size-xl: 1.25rem; // 20px
+$font-size-2xl: 1.5rem; // 24px
+$font-size-3xl: 1.875rem; // 30px
+$font-size-4xl: 2.25rem; // 36px
+
+$font-weight-regular: 400;
+$font-weight-medium: 500;
+$font-weight-semibold: 600;
+$font-weight-bold: 700;
+
+$line-height-tight: 1.25;
+$line-height-normal: 1.5;
+$line-height-relaxed: 1.75;
+
+// --- Spacing ---
+$spacing-1: 0.25rem; // 4px
+$spacing-2: 0.5rem; // 8px
+$spacing-3: 0.75rem; // 12px
+$spacing-4: 1rem; // 16px
+$spacing-5: 1.25rem; // 20px
+$spacing-6: 1.5rem; // 24px
+$spacing-8: 2rem; // 32px
+$spacing-10: 2.5rem; // 40px
+$spacing-12: 3rem; // 48px
+$spacing-16: 4rem; // 64px
+
+// --- Breakpoints ---
+$breakpoint-sm: 640px;
+$breakpoint-md: 768px;
+$breakpoint-lg: 1024px;
+$breakpoint-xl: 1280px;
+$breakpoint-2xl: 1536px;
+
+// --- Border Radius ---
+$radius-sm: 0;
+$radius-md: 0;
+$radius-lg: 0;
+$radius-xl: 0;
+$radius-2xl: 0;
+$radius-full: 9999px;
+
+// --- Focus ---
+$focus-ring-width: 2px;
+$focus-ring-style: solid;
+$focus-ring-color: var(--eh-color-focus-ring);
+$focus-ring-offset: 2px;
+
+// --- Shadows ---
+$shadow-sm: var(--eh-shadow-sm);
+$shadow-md: var(--eh-shadow-md);
+$shadow-lg: var(--eh-shadow-lg);
+$shadow-xl: var(--eh-shadow-xl);
+$shadow-card-hover: var(--eh-shadow-card-hover);
+$shadow-header: var(--eh-shadow-header);
+$shadow-primary-glow: var(--eh-shadow-primary-glow);
+
+// --- Transitions ---
+$transition-fast: 150ms ease;
+$transition-normal: 250ms ease;
+$transition-slow: 350ms ease;
+
+// --- Z-Index ---
+$z-header: 50;
+$z-page-overlay: 40;
+$z-dropdown: 100;
+$z-modal: 200;
+$z-toast: 300;
+$z-tooltip: 400;

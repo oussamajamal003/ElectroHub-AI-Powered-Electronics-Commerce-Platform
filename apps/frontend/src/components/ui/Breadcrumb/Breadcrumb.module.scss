@@ -1,0 +1,71 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.nav {
+  display: block;
+}
+
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-2; // 8px gap
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-2;
+}
+
+.link {
+  color: $color-text-secondary;
+  font-family: $font-family-base;
+  font-size: $font-size-sm; // 14px
+  line-height: $line-height-normal;
+  text-decoration: none;
+  transition: color $transition-fast;
+  border-radius: $radius-sm;
+
+  @include focus-ring;
+
+  &:hover {
+    color: $color-text-primary;
+  }
+}
+
+.page {
+  color: $color-text-primary;
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  line-height: $line-height-normal;
+}
+
+.separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $color-text-muted;
+  
+  // Icon styling
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.ellipsis {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: $color-text-muted;
+  border-radius: $radius-sm;
+  
+  @include focus-ring;
+}

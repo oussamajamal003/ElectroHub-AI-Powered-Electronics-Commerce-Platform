@@ -1,0 +1,256 @@
+{
+  "date": "2026-10-14",
+  "authorization": {
+    "source": "Explicit human owner approval in current chat",
+    "approvedRule": "apps/backend/prisma/migrations/20260925020000_remove_users_phone/migration.sql -text",
+    "scope": "Preserve existing rules and migration bytes; no staging, commit, database access or migration execution"
+  },
+  "target": "apps/backend/prisma/migrations/20260925020000_remove_users_phone/migration.sql",
+  "before": {
+    "attributesBase64": "IyBLZWVwIHJldmlld2VkIGZvcndhcmQgY29tbWVyY2UgbWlncmF0aW9uIGNoZWNrc3VtcyBzdGFibGUgYWNyb3NzIFdpbmRvd3MvTGludXguCmFwcHMvYmFja2VuZC9wcmlzbWEvbWlncmF0aW9ucy8yMDI2MTAwNjAwMDAwMF9jaGVja291dF9jb3JlL21pZ3JhdGlvbi5zcWwgdGV4dCBlb2w9bGYKYXBwcy9iYWNrZW5kL3ByaXNtYS9taWdyYXRpb25zLzIwMjYxMDA3MDAwMDAwX3N0cmlwZV9vcmNoZXN0cmF0aW9uL21pZ3JhdGlvbi5zcWwgdGV4dCBlb2w9bGYK",
+    "attributesSha256": "470762e10c40da2f11cd945ec17980324a6cff13b50877f7f603deec16d5dfd6",
+    "migrations": [
+      {
+        "name": "20240101000000_database_foundation",
+        "bytes": 13984,
+        "sha256": "a41f086f7f9dc2f67621622a77f3e716027285e015991db470e8ab7bed1314a8"
+      },
+      {
+        "name": "20240102000000_authentication",
+        "bytes": 1878,
+        "sha256": "07188e26a17788f79856b8450824fba35f20c9d368fc0b4932c97d644dd9e56c"
+      },
+      {
+        "name": "20240103000000_email_otp_foundation",
+        "bytes": 3197,
+        "sha256": "ba99562ff2a870230d15990e107b59610f0aabc08678c342bc5509d9e45ad524"
+      },
+      {
+        "name": "20260925000000_security_events",
+        "bytes": 916,
+        "sha256": "52563f1a2f4317209d1b354a2f60a0d93e1c3963db6f076fd06d2271b735041a"
+      },
+      {
+        "name": "20260925010000_pending_email_reset_authorization",
+        "bytes": 302,
+        "sha256": "c72d439e8c2292b6aeb0e029c90be1ed25b1b9eac38e96d7afcea0a2257bdcdf"
+      },
+      {
+        "name": "20260925020000_remove_users_phone",
+        "bytes": 353,
+        "sha256": "15de2423e054cfc803989515209340260b5786ce9a4b3b3879b05ede5b81334f"
+      },
+      {
+        "name": "20260926000000_google_oauth",
+        "bytes": 1147,
+        "sha256": "a8fcd896906a67491282e2884dd5f1d1b23b4896b9015b51f9a74f9bd167bc16"
+      },
+      {
+        "name": "20260927000000_account_deleted_security_event",
+        "bytes": 61,
+        "sha256": "bd370aa529b47d7149a4c458360052877791e26628e327c176679f7d5e2dccbb"
+      },
+      {
+        "name": "20260928000000_product_foundation",
+        "bytes": 1809,
+        "sha256": "952dd305d5eddfe9ff94c01c8e99d320c2b8c321462a2f52faff303cb8a926b6"
+      },
+      {
+        "name": "20260928000000_product_reviews",
+        "bytes": 1060,
+        "sha256": "395d8cdac222a733f1c24883772e6d3000bcf773ed4fa14bdeeb26fa377ac89a"
+      },
+      {
+        "name": "20261005000000_inventory_nonnegative",
+        "bytes": 199,
+        "sha256": "da6b5a3f93d99126ba1514131fff5e5c92f03bbd01f77696055796b5e1b24040"
+      },
+      {
+        "name": "20261006000000_checkout_core",
+        "bytes": 1380,
+        "sha256": "4b8a8afbdaeee67ba9e6f58accc9f704d03692100e9a714bd04ba966f88893ca"
+      },
+      {
+        "name": "20261007000000_stripe_orchestration",
+        "bytes": 8347,
+        "sha256": "8efc55f8e823583e439f92dcbea0bd2b3e125c2eefaa9372cee5d2a82753090a"
+      },
+      {
+        "name": "20261009000000_product_test_fixture_visibility",
+        "bytes": 82,
+        "sha256": "007b9167866ba92aa4334a3e0490c351f751b27ccf3f0a7fc6ad5d4faec93f92"
+      },
+      {
+        "name": "20261012000000_storefront_product_visibility",
+        "bytes": 85,
+        "sha256": "21ae532f49ebead2976d5cb3097729f6d47053053c5da0eed747c68509c8cd38"
+      },
+      {
+        "name": "20261012120000_payment_purchase_ownership",
+        "bytes": 758,
+        "sha256": "0cf4bc6b88a2222b47e691100364b0e961b5bb20b61149dfb759b651ef177ff8"
+      },
+      {
+        "name": "20261013000000_refresh_token_rotation_lineage",
+        "bytes": 3925,
+        "sha256": "51495598e0e1a7e8d74b2d19f8e596fcae32a0e1afb2e626120fad7c06b2e991"
+      }
+    ],
+    "indexPath": ".git/index",
+    "indexFileSha256": "0adfc15d9d822a4d8e70d85a828aaf79c17a65547da227a1bd59c44833e8e305",
+    "targetIndexEntry": "100644 ac0546fc23b9d7cda493016121e6ad2e4ce6248b 0\tapps/backend/prisma/migrations/20260925020000_remove_users_phone/migration.sql\n",
+    "guardSha256": "2e13bc3793f312d6ee918e6ff89018441668ec722015e4e7717032a8d97c35c1",
+    "stagedPaths": ""
+  },
+  "after": {
+    "attributesText": "# Keep reviewed forward commerce migration checksums stable across Windows/Linux.\napps/backend/prisma/migrations/20261006000000_checkout_core/migration.sql text eol=lf\napps/backend/prisma/migrations/20261007000000_stripe_orchestration/migration.sql text eol=lf\napps/backend/prisma/migrations/20260925020000_remove_users_phone/migration.sql -text\n",
+    "attributesBase64": "IyBLZWVwIHJldmlld2VkIGZvcndhcmQgY29tbWVyY2UgbWlncmF0aW9uIGNoZWNrc3VtcyBzdGFibGUgYWNyb3NzIFdpbmRvd3MvTGludXguCmFwcHMvYmFja2VuZC9wcmlzbWEvbWlncmF0aW9ucy8yMDI2MTAwNjAwMDAwMF9jaGVja291dF9jb3JlL21pZ3JhdGlvbi5zcWwgdGV4dCBlb2w9bGYKYXBwcy9iYWNrZW5kL3ByaXNtYS9taWdyYXRpb25zLzIwMjYxMDA3MDAwMDAwX3N0cmlwZV9vcmNoZXN0cmF0aW9uL21pZ3JhdGlvbi5zcWwgdGV4dCBlb2w9bGYKYXBwcy9iYWNrZW5kL3ByaXNtYS9taWdyYXRpb25zLzIwMjYwOTI1MDIwMDAwX3JlbW92ZV91c2Vyc19waG9uZS9taWdyYXRpb24uc3FsIC10ZXh0Cg==",
+    "working": {
+      "bytes": 353,
+      "sha256": "15de2423e054cfc803989515209340260b5786ce9a4b3b3879b05ede5b81334f",
+      "lf": 7,
+      "cr": 1,
+      "bom": false
+    },
+    "index": {
+      "bytes": 352,
+      "sha256": "227201e489fb0d6a4734037e10e0604a3d04505d400d5f47d59d168c2b5ef6e5",
+      "lf": 7,
+      "cr": 0,
+      "bom": false
+    },
+    "head": {
+      "bytes": 352,
+      "sha256": "227201e489fb0d6a4734037e10e0604a3d04505d400d5f47d59d168c2b5ef6e5",
+      "lf": 7,
+      "cr": 0,
+      "bom": false
+    },
+    "effectiveAttributes": "apps/backend/prisma/migrations/20260925020000_remove_users_phone/migration.sql: text: unset\napps/backend/prisma/migrations/20260925020000_remove_users_phone/migration.sql: eol: unspecified\napps/backend/prisma/migrations/20260925020000_remove_users_phone/migration.sql: filter: unspecified\napps/backend/prisma/migrations/20260925020000_remove_users_phone/migration.sql: working-tree-encoding: unspecified\n",
+    "cachedAttributes": "apps/backend/prisma/migrations/20260925020000_remove_users_phone/migration.sql: text: unspecified\n",
+    "cleanFilteredObject": "6f1031a98bf916520155b048e883614130a6544f",
+    "rawObject": "6f1031a98bf916520155b048e883614130a6544f",
+    "computedRawObject": "6f1031a98bf916520155b048e883614130a6544f",
+    "eol": "i/lf    w/mixed attr/-text            \tapps/backend/prisma/migrations/20260925020000_remove_users_phone/migration.sql\n",
+    "targetIndexEntry": "100644 ac0546fc23b9d7cda493016121e6ad2e4ce6248b 0\tapps/backend/prisma/migrations/20260925020000_remove_users_phone/migration.sql\n",
+    "indexFileSha256": "0adfc15d9d822a4d8e70d85a828aaf79c17a65547da227a1bd59c44833e8e305",
+    "guardSha256": "2e13bc3793f312d6ee918e6ff89018441668ec722015e4e7717032a8d97c35c1",
+    "migrations": [
+      {
+        "name": "20240101000000_database_foundation",
+        "bytes": 13984,
+        "sha256": "a41f086f7f9dc2f67621622a77f3e716027285e015991db470e8ab7bed1314a8"
+      },
+      {
+        "name": "20240102000000_authentication",
+        "bytes": 1878,
+        "sha256": "07188e26a17788f79856b8450824fba35f20c9d368fc0b4932c97d644dd9e56c"
+      },
+      {
+        "name": "20240103000000_email_otp_foundation",
+        "bytes": 3197,
+        "sha256": "ba99562ff2a870230d15990e107b59610f0aabc08678c342bc5509d9e45ad524"
+      },
+      {
+        "name": "20260925000000_security_events",
+        "bytes": 916,
+        "sha256": "52563f1a2f4317209d1b354a2f60a0d93e1c3963db6f076fd06d2271b735041a"
+      },
+      {
+        "name": "20260925010000_pending_email_reset_authorization",
+        "bytes": 302,
+        "sha256": "c72d439e8c2292b6aeb0e029c90be1ed25b1b9eac38e96d7afcea0a2257bdcdf"
+      },
+      {
+        "name": "20260925020000_remove_users_phone",
+        "bytes": 353,
+        "sha256": "15de2423e054cfc803989515209340260b5786ce9a4b3b3879b05ede5b81334f"
+      },
+      {
+        "name": "20260926000000_google_oauth",
+        "bytes": 1147,
+        "sha256": "a8fcd896906a67491282e2884dd5f1d1b23b4896b9015b51f9a74f9bd167bc16"
+      },
+      {
+        "name": "20260927000000_account_deleted_security_event",
+        "bytes": 61,
+        "sha256": "bd370aa529b47d7149a4c458360052877791e26628e327c176679f7d5e2dccbb"
+      },
+      {
+        "name": "20260928000000_product_foundation",
+        "bytes": 1809,
+        "sha256": "952dd305d5eddfe9ff94c01c8e99d320c2b8c321462a2f52faff303cb8a926b6"
+      },
+      {
+        "name": "20260928000000_product_reviews",
+        "bytes": 1060,
+        "sha256": "395d8cdac222a733f1c24883772e6d3000bcf773ed4fa14bdeeb26fa377ac89a"
+      },
+      {
+        "name": "20261005000000_inventory_nonnegative",
+        "bytes": 199,
+        "sha256": "da6b5a3f93d99126ba1514131fff5e5c92f03bbd01f77696055796b5e1b24040"
+      },
+      {
+        "name": "20261006000000_checkout_core",
+        "bytes": 1380,
+        "sha256": "4b8a8afbdaeee67ba9e6f58accc9f704d03692100e9a714bd04ba966f88893ca"
+      },
+      {
+        "name": "20261007000000_stripe_orchestration",
+        "bytes": 8347,
+        "sha256": "8efc55f8e823583e439f92dcbea0bd2b3e125c2eefaa9372cee5d2a82753090a"
+      },
+      {
+        "name": "20261009000000_product_test_fixture_visibility",
+        "bytes": 82,
+        "sha256": "007b9167866ba92aa4334a3e0490c351f751b27ccf3f0a7fc6ad5d4faec93f92"
+      },
+      {
+        "name": "20261012000000_storefront_product_visibility",
+        "bytes": 85,
+        "sha256": "21ae532f49ebead2976d5cb3097729f6d47053053c5da0eed747c68509c8cd38"
+      },
+      {
+        "name": "20261012120000_payment_purchase_ownership",
+        "bytes": 758,
+        "sha256": "0cf4bc6b88a2222b47e691100364b0e961b5bb20b61149dfb759b651ef177ff8"
+      },
+      {
+        "name": "20261013000000_refresh_token_rotation_lineage",
+        "bytes": 3925,
+        "sha256": "51495598e0e1a7e8d74b2d19f8e596fcae32a0e1afb2e626120fad7c06b2e991"
+      }
+    ],
+    "stagedPaths": "",
+    "status": " M .gitattributes\n"
+  },
+  "result": {
+    "changedMigrationBytes": [],
+    "indexFileUnchanged": true,
+    "guardUnchanged": true,
+    "stagedPathsUnchanged": true,
+    "cleanEqualsRaw": true
+  },
+  "attributesPrefixVerification": {
+    "exitCode": 0,
+    "existingBytesRetained": true,
+    "approvedRuleLast": true
+  },
+  "gitCommandsUseNoOptionalLocks": true,
+  "limitations": [
+    "HEAD/index remain old until separately authorized source integration.",
+    "Git status currently lists only .gitattributes; staged byte verification remains mandatory.",
+    "PROD target checksum remains UNKNOWN; no PROD compatibility claim.",
+    "Only current working attributes are changed; cached attributes remain unspecified until future authorized staging."
+  ],
+  "operations": {
+    "databaseAccesses": 0,
+    "migrationsExecuted": 0,
+    "indexFileWritesDuringChangeAndVerification": 0,
+    "staging": 0,
+    "commits": 0,
+    "pushes": 0,
+    "ciExecutions": 0
+  }
+}

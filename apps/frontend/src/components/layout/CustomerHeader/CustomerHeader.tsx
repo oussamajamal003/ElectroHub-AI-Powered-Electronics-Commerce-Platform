@@ -1,0 +1,374 @@
+import { BrandLogo } from '@/components/ui/BrandLogo';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
+import {
+  ShoppingCart,
+  Heart,
+  LogOut,
+  Search,
+  User as UserIcon,
+  Menu,
+  X,
+  Package,
+  Shield,
+} from 'lucide-react';
+import { Avatar } from '@/components/ui/Avatar';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/DropdownMenu';
+import { useAuth } from '@/features/auth/context/AuthContext';
+import { useCart } from '@/features/cart/context';
+import { useWishlist } from '@/features/wishlist/context';
+import { AuthModal, AuthModalMode } from '@/features/auth/components/AuthModal';
+import { customerReturnPath, type CustomerReturnPath } from '@/features/auth/returnPath';
+import { SignOutModal } from '@/features/auth/components/SignOutModal';
+import { shortcutLabel, useDiscovery } from '@/features/search/discovery/context';
+import { toast } from '@/components/ui/Toast';
+import { Tooltip } from '@/components/ui/Tooltip';
+import styles from './CustomerHeader.module.scss';
+import { ThemeToggle } from '@/features/theme';
+import { useStorefrontProfile } from '@/features/storefront/api';
+import { useProfilePhoto } from '@/features/profilePhoto/queries';
+
+export interface CustomerHeaderProps {
+  cartCount?: number;
+  wishlistCount?: number;
+}
+
+export function CustomerHeader({ cartCount: countOverride, wishlistCount: wishlistOverride }: CustomerHeaderProps) {
+  const { data: storeProfile } = useStorefrontProfile();
+  const wishlist = useWishlist();
+  const { data: cartData } = useCart();
+  // Badges count exactly the items the Cart and Wishlist pages render, so they appear with the list and never before it.
+  // Cached or expected counts are not used: until the items resolve there is no badge.
+  const cartCount = countOverride ?? cartData?.totalQuantity ?? 0;
+  const wishlistCount = wishlistOverride ?? wishlist?.data?.items.length ?? 0;
+  // Unresolved state is announced without a number; no visual placeholder is rendered. "Unresolved" means no
+  // authoritative Cart yet — still loading OR the read failed — so a failed read never announces a false "0 items".
+  const cartCountUnresolved = countOverride === undefined && !cartData;
+  const wishlistCountUnresolved = wishlistOverride === undefined && wishlist?.isLoading && !wishlist.data;
+  const [authReturnTo, setAuthReturnTo] = useState<CustomerReturnPath | undefined>();
+  const { user, rememberedUser, isAuthenticated, isInitializing, isSessionVerified } = useAuth();
+  const headerUser = isInitializing ? rememberedUser : user;
+  const showAuthenticatedHeader = isInitializing ? Boolean(rememberedUser) : isAuthenticated;
+  // Only the verified session decides the role; the remembered header identity carries none, so nothing privileged is inferred while initializing.
+  const isAdmin = !isInitializing && user?.role === 'ADMIN';
+  const profilePhoto = useProfilePhoto(isAdmin ? 'admin' : 'customer', user?.id, isSessionVerified);
+  const navigate = useNavigate();
+
+  // Auth modals
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthModalMode>('login');
+  const [showSignOut, setShowSignOut] = useState(false);
+
+  // Mobile menu
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const mobileMenuToggle = useRef<HTMLButtonElement>(null);
+  const mobileSignOut = useRef(false);
+
+  // Scroll state
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  // Scroll listener
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 8);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const openAuth = (event: Event) => {
+      setAuthReturnTo(customerReturnPath((event as CustomEvent<{ returnTo?: string }>).detail?.returnTo));
+      setAuthMode('login'); setShowAuthModal(true);
+    };
+    window.addEventListener('electrohub:open-auth', openAuth);
+    return () => window.removeEventListener('electrohub:open-auth', openAuth);
+  }, []);
+
+  // Close mobile menu or search on Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isMobileMenuOpen) setIsMobileMenuOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isMobileMenuOpen]);
+
+  const getInitials = (firstName: string, lastName: string) => {
+    return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
+  };
+
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [isAuthenticated]);
+
+  const closeMobileMenu = useCallback(() => {
+    setIsMobileMenuOpen(false);
+  }, []);
+
+  const discovery = useDiscovery();
+  const handleSearchOpen = () => {
+    setIsMobileMenuOpen(false);
+    // The Discovery Console is the primary search surface; without its provider (isolated renders) fall back to /search.
+    if (discovery) discovery.open();
+    else navigate('/search');
+  };
+
+  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+    isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink;
+
+  const mobileNavClass = ({ isActive }: { isActive: boolean }) =>
+    isActive
+      ? `${styles.mobileMenuItem} ${styles.mobileMenuItemActive}`
+      : styles.mobileMenuItem;
+
+
+  return (
+    <>
+      {/* ─── Header Shell ────────────────────────────────────────── */}
+      <header
+        className={`${styles.header} ${isScrolled ? styles.scrolled : ''}`}
+        role="banner"
+      >
+
+        <div className={styles.container}>
+          <div
+            className={styles.headerMainContent}
+          >
+            {/* LEFT — Mobile Toggle + Brand */}
+            <div className={styles.leftSection}>
+              <Tooltip content={isMobileMenuOpen ? 'Close menu' : 'Open menu'}>
+              <button
+                ref={mobileMenuToggle}
+                type="button"
+                className={styles.mobileMenuToggle}
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                aria-label={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+                aria-expanded={isMobileMenuOpen}
+                aria-controls="mobile-nav"
+              >
+                {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+              </button>
+              </Tooltip>
+
+              <Link to="/" className={styles.logoLink} aria-label={`${storeProfile?.storeName ?? 'ElectroHub'} — Home`}>
+                <BrandLogo className={styles.brandLogo} name={storeProfile?.storeName ?? 'ElectroHub'} />
+              </Link>
+            </div>
+
+            {/* CENTER — Desktop Navigation */}
+            <nav className={styles.navigation} aria-label="Primary navigation">
+              <NavLink to="/" end className={navLinkClass}>Home</NavLink>
+              <NavLink to="/products" className={navLinkClass}>Products</NavLink>
+              {showAuthenticatedHeader && !isAdmin && (
+                <NavLink to="/orders" className={navLinkClass}>Orders</NavLink>
+              )}
+              <NavLink to="/about" className={navLinkClass}>About</NavLink>
+              <NavLink to="/contact" className={navLinkClass}>Contact</NavLink>
+            </nav>
+
+            {/* RIGHT — Utility Icons + Avatar + Unified Search */}
+            <div className={styles.actions}>
+
+                  <Tooltip content={`Search products (${shortcutLabel()})`}>
+                  <button
+                    type="button"
+                    className={`${styles.iconButton} ${styles.searchTrigger}`}
+                    aria-label="Search"
+                    aria-haspopup="dialog"
+                    aria-expanded={discovery ? discovery.isOpen : undefined}
+                    aria-keyshortcuts="Control+K Meta+K"
+                    onClick={handleSearchOpen}
+                  >
+                    <Search size={20} />
+                    <span className={styles.searchTriggerLabel} aria-hidden="true">Search</span>
+                    <span className={styles.searchTriggerKey} aria-hidden="true">{shortcutLabel()}</span>
+                  </button>
+                  </Tooltip>
+
+                  <ThemeToggle className={styles.iconButton} />
+
+                  {!isAdmin && (
+                    <>
+                  <Tooltip content="View shopping cart">
+                  <Link
+                    to="/cart"
+                    className={styles.iconButton}
+                    aria-label={cartCountUnresolved ? 'Cart' : cartCount > 0 ? `Cart, ${cartCount} ${cartCount === 1 ? 'item' : 'items'}` : 'Cart, 0 items'}
+                  >
+                    <ShoppingCart size={20} />
+                    {cartCount > 0 && (
+                      <span className={styles.badge} aria-hidden="true">
+                        {cartCount > 99 ? '99+' : cartCount}
+                      </span>
+                    )}
+                  </Link>
+                  </Tooltip>
+
+                  <Tooltip content="View wishlist">
+                  <Link
+                    to="/wishlist"
+                    className={styles.iconButton}
+                    aria-label={wishlistCount > 0 && !wishlistCountUnresolved ? `Wishlist (${wishlistCount})` : 'Wishlist'}
+                  >
+                    <Heart
+                      size={20}
+                      className={wishlistCount > 0 ? styles.heartActive : ''}
+                    />
+                    {wishlistCount > 0 && (
+                      <span className={styles.badge} aria-hidden="true">
+                        {wishlistCount > 99 ? '99+' : wishlistCount}
+                      </span>
+                    )}
+                  </Link>
+                  </Tooltip>
+                    </>
+                  )}
+
+                  {/* Unauthenticated — Account icon */}
+                  {isInitializing && !rememberedUser && <span className={styles.authPlaceholder} aria-hidden="true" />}
+                  {!isInitializing && !isAuthenticated && (
+                    <Tooltip content="Sign in or create an account">
+                    <button
+                      type="button"
+                      className={styles.iconButton}
+                      aria-label="Account"
+                      onClick={() => {
+                        setAuthReturnTo(undefined);
+                        setAuthMode('login');
+                        setShowAuthModal(true);
+                      }}
+                    >
+                      <UserIcon size={20} />
+                    </button>
+                    </Tooltip>
+                  )}
+
+                  {/* Authenticated — Avatar dropdown */}
+                  {showAuthenticatedHeader && headerUser && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          className={styles.avatarButton}
+                          aria-label={`Account menu for ${headerUser.firstName} ${headerUser.lastName}`}
+                          disabled={isInitializing}
+                        >
+                          <Avatar src={profilePhoto.data?.url ?? undefined} alt=""
+                            initials={getInitials(headerUser.firstName, headerUser.lastName)} />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className={styles.dropdown}>
+                        <div className={styles.userInfo}>
+                          <p className={styles.userName}>{headerUser.firstName} {headerUser.lastName}</p>
+                          {isAdmin && <p className={styles.userEmail}>Administrator</p>}
+                          {user && <p className={styles.userEmail}>{user.email}</p>}
+                        </div>
+                        <DropdownMenuSeparator />
+                        {isAdmin ? (
+                          <>
+                        <DropdownMenuItem asChild>
+                          <Link to="/admin" className={styles.dropdownLink}>
+                            <Shield size={15} aria-hidden="true" />
+                            <span>Admin Console</span>
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link to="/admin/profile" className={styles.dropdownLink}>
+                            <UserIcon size={15} aria-hidden="true" />
+                            <span>Admin Profile</span>
+                          </Link>
+                        </DropdownMenuItem>
+                          </>
+                        ) : (
+                          <>
+                        <DropdownMenuItem asChild>
+                          <Link to="/account" className={styles.dropdownLink}>
+                            <UserIcon size={15} aria-hidden="true" />
+                            <span>My Account</span>
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link to="/account/profile" className={styles.dropdownLink}>
+                            <UserIcon size={15} aria-hidden="true" />
+                            <span>My Profile</span>
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link to="/orders" className={styles.dropdownLink}>
+                            <Package size={15} aria-hidden="true" />
+                            <span>My Orders</span>
+                          </Link>
+                        </DropdownMenuItem>
+                          </>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={() => setShowSignOut(true)}
+                          className={styles.logoutItem}
+                        >
+                          <LogOut size={15} aria-hidden="true" />
+                          <span>Sign Out</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Mobile Vertical Expanded Sidebar (4 Items Only) ───────── */}
+        {isMobileMenuOpen && (
+          <nav
+            id="mobile-nav"
+            className={styles.mobileMenu}
+            aria-label="Mobile Navigation"
+          >
+            <NavLink to="/" end className={mobileNavClass} onClick={closeMobileMenu}>
+              Home
+            </NavLink>
+            <NavLink to="/products" className={mobileNavClass} onClick={closeMobileMenu}>
+              Products
+            </NavLink>
+            {showAuthenticatedHeader && !isAdmin && (
+              <NavLink to="/orders" className={mobileNavClass} onClick={closeMobileMenu}>
+                Orders
+              </NavLink>
+            )}
+            <NavLink to="/about" className={mobileNavClass} onClick={closeMobileMenu}>About</NavLink>
+            <NavLink to="/contact" className={mobileNavClass} onClick={closeMobileMenu}>Contact</NavLink>
+          </nav>
+        )}
+      </header>
+
+      {/* Auth Modals */}
+      <AuthModal
+        open={showAuthModal}
+        onOpenChange={setShowAuthModal}
+        onAuthenticated={closeMobileMenu}
+        initialMode={authMode}
+        returnTo={authReturnTo}
+      />
+      <SignOutModal
+        open={showSignOut}
+        onSignedOut={() => { toast.success('Signed out successfully.'); }}
+        onOpenChange={open => {
+          setShowSignOut(open);
+          if (!open && mobileSignOut.current) {
+            mobileSignOut.current = false;
+            requestAnimationFrame(() => mobileMenuToggle.current?.focus());
+          }
+        }}
+      />
+    </>
+  );
+}

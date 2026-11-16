@@ -1,0 +1,26 @@
+{
+  "scope": "CPU encoder only; checksum validation and warmup included in startup; excludes relevance gate, HTTP and vector retrieval",
+  "model": "siglip2-b16-p256-d1",
+  "environment": {
+    "os": "Windows",
+    "processor": "Intel64 Family 6 Model 186 Stepping 3, GenuineIntel",
+    "torchThreads": 2
+  },
+  "startupMs": 1957.23,
+  "sampleCount": 10,
+  "inferenceMs": [
+    513.21,
+    349.5,
+    507.39,
+    726.9,
+    414.46,
+    486.1,
+    269.8,
+    284.76,
+    315.66,
+    429.2
+  ],
+  "medianMs": 421.83,
+  "nearestRankP95Ms": 726.9,
+  "assessment": "Diagnostic baseline; not an end-to-end image-search or deployment latency claim"
+}

@@ -1,0 +1,2 @@
+ALTER TABLE "products"
+ADD COLUMN "isTestFixture" BOOLEAN NOT NULL DEFAULT false;

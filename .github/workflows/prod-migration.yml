@@ -1,0 +1,95 @@
+name: Production Database Migration
+
+# Production migration runs automatically only after the Development CI push run for develop succeeds.
+# The protected PROD environment, target/checksum/order validation, and additive-only SQL gate remain required.
+#
+# If the database is already up to date, the workflow performs a read-only verification
+# and cleanly exits as a successful no-op.
+
+on:
+  workflow_run:
+    workflows: ["Development CI"]
+    types: [completed]
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: Deploy pending Prisma migrations to PROD
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'develop' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository
+    environment: electrohub-prod-database
+    concurrency:
+      group: db-migration-electrohub-prod
+      cancel-in-progress: false
+    env:
+      MIGRATION_TARGET: PROD
+      EXPECTED_PROJECT_REF: yepfgjehdstlxbpespun
+      APPROVED_COMMIT: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Verify successful trusted develop CI run and commit SHA
+        shell: bash
+        env:
+          CI_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          CI_EVENT: ${{ github.event.workflow_run.event }}
+          CI_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ "$CI_BRANCH" != develop ] || [ "$CI_CONCLUSION" != success ] || [ "$CI_EVENT" != push ] || [ "$CI_REPOSITORY" != "$CURRENT_REPOSITORY" ]; then
+            echo "Production migrations require a successful push-triggered Development CI run from this repository's develop branch." >&2
+            exit 1
+          fi
+          if ! printf '%s' "$APPROVED_COMMIT" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "Development CI must provide a full 40-character lowercase commit SHA." >&2
+            exit 1
+          fi
+          echo "Successful Development CI run verified for develop commit $APPROVED_COMMIT. Pending migrations will be discovered from the checked-in Prisma migrations and PROD ledger."
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.APPROVED_COMMIT }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.19.0'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Prisma version
+        run: npm exec --workspace=@electrohub/backend -- prisma --version
+
+      - name: Pre-check (read-only) - target, checksums, ledger, and all pending migrations
+        id: pre
+        env:
+          DATABASE_URL: ${{ secrets.ELECTROHUB_PROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.ELECTROHUB_PROD_DIRECT_URL }}
+        run: node .github/scripts/migration-plan.cjs pre
+
+      - name: Deploy all safe pending Prisma migrations
+        if: steps.pre.outputs.has_pending == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.ELECTROHUB_PROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.ELECTROHUB_PROD_DIRECT_URL }}
+        run: npm exec --workspace=@electrohub/backend -- prisma migrate deploy
+
+      - name: Verify Prisma migration status
+        if: steps.pre.outputs.has_pending == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.ELECTROHUB_PROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.ELECTROHUB_PROD_DIRECT_URL }}
+        run: npm exec --workspace=@electrohub/backend -- prisma migrate status
+
+      - name: Post-check (read-only) - nothing pending and applied history intact
+        if: steps.pre.outputs.has_pending == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.ELECTROHUB_PROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.ELECTROHUB_PROD_DIRECT_URL }}
+        run: node .github/scripts/migration-plan.cjs post

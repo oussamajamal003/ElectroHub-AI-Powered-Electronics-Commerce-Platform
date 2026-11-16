@@ -1,0 +1,305 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.container {
+  position: relative;
+  isolation: isolate;
+  @include flex-center;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: $color-surface;
+  min-height: 100dvh;
+  background-image: linear-gradient(135deg, rgba(3, 11, 27, 0.84), rgba(5, 23, 48, 0.62) 50%, rgba(7, 30, 55, 0.76)),
+    url('/images/admin-auth-background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  padding: $spacing-6;
+}
+
+.loginCard {
+  position: relative;
+  z-index: 1;
+  width: min(480px, calc(100vw - 2rem));
+  max-width: 480px;
+  background-color: $color-background !important;
+  box-shadow: $shadow-xl !important;
+  border: 1px solid $color-border !important;
+  border-radius: 0 !important;
+  color-scheme: light;
+  display: flex;
+  flex-direction: column;
+  padding: $spacing-8;
+}
+
+:global([data-theme='light']) .container {
+  background-image: linear-gradient(135deg, rgba(4, 20, 43, 0.74), rgba(5, 33, 64, 0.46) 52%, rgba(7, 30, 55, 0.66)),
+    url('/images/admin-auth-background.jpg');
+}
+
+:global([data-theme='dark']) .container {
+  background-image: linear-gradient(135deg, rgba(2, 8, 22, 0.9), rgba(2, 20, 42, 0.72) 52%, rgba(3, 17, 34, 0.84)),
+    url('/images/admin-auth-background.jpg');
+}
+
+@media (prefers-color-scheme: dark) {
+  :global(html:not([data-theme='light'])) .container {
+    background-image: linear-gradient(135deg, rgba(2, 8, 22, 0.9), rgba(2, 20, 42, 0.72) 52%, rgba(3, 17, 34, 0.84)),
+      url('/images/admin-auth-background.jpg');
+  }
+}
+
+.header {
+  text-align: center;
+  margin-bottom: $spacing-6;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  .brand {
+    display: flex;
+    justify-content: center;
+    margin-bottom: $spacing-5;
+  }
+
+  .title {
+    font-family: $font-family-heading;
+    font-size: 28px;
+    font-weight: $font-weight-bold;
+    color: $color-text-primary;
+    margin: 0 0 $spacing-2 0;
+  }
+
+  .description {
+    color: $color-text-secondary;
+    font-size: $font-size-base;
+    margin: 0;
+  }
+}
+
+.alert {
+  margin-bottom: $spacing-6;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+  width: 100%;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+}
+
+.forgotPassword {
+  background: none;
+  border: none;
+  padding: 0;
+  color: $color-primary-text;
+  font-size: $font-size-sm;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.forgotLink {
+  align-self: flex-end;
+  color: $color-primary-text;
+  font-size: $font-size-sm;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $color-primary;
+    outline-offset: 2px;
+  }
+}
+
+.eyeButton {
+  background: none;
+  border: none;
+  padding: $spacing-1;
+  color: $color-text-muted;
+  cursor: pointer;
+  @include flex-center;
+
+  &:hover {
+    color: $color-text-primary;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.submitButton {
+  margin-top: $spacing-2;
+  width: 100%;
+  height: 48px;
+  font-size: $font-size-base;
+  font-weight: $font-weight-semibold;
+  border-radius: 0 !important;
+}
+
+@media (max-width: $breakpoint-sm) {
+  .container {
+    padding: $spacing-4;
+  }
+
+  .loginCard {
+    max-width: 100%;
+    padding: $spacing-6 $spacing-4;
+  }
+
+}
+
+.stepHeader {
+  display: grid;
+  gap: $spacing-2;
+  text-align: left;
+}
+
+.stepTitle {
+  font-family: $font-family-heading;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  margin: 0;
+}
+
+.stepText {
+  margin: 0;
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+}
+
+.methodSelector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: $spacing-2;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.methodOption {
+  min-width: 0;
+  min-height: 68px;
+  padding: $spacing-3 $spacing-2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-2;
+  border: 1px solid $color-border;
+  background: $color-background;
+  color: $color-text-secondary;
+  text-align: center;
+  line-height: 1.25;
+  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+
+  svg { width: 18px; height: 18px; flex: 0 0 auto; }
+  span { font-size: $font-size-xs; font-weight: $font-weight-semibold; overflow-wrap: anywhere; }
+
+  &:hover { border-color: $color-primary; color: $color-primary-text; }
+  &[data-state='active'] {
+    border-color: $color-primary;
+    background: rgba(37, 99, 235, 0.06);
+    color: $color-primary-text;
+    box-shadow: inset 0 -2px 0 $color-primary;
+  }
+  &:focus-visible {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+    z-index: 1;
+  }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .methodOption { transition: none; }
+}
+
+.textButton {
+  align-self: center;
+  background: none;
+  border: none;
+  padding: $spacing-2;
+  color: $color-primary-text;
+  font-size: $font-size-sm;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.textLink {
+  align-self: center;
+  color: $color-primary-text;
+  font-size: $font-size-sm;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: $focus-ring-width $focus-ring-style $focus-ring-color;
+    outline-offset: $focus-ring-offset;
+  }
+}
+
+.nameRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $spacing-4;
+  min-width: 0;
+}
+
+@media (max-width: $breakpoint-sm) {
+  .nameRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (max-width: $breakpoint-sm) {
+  .methodSelector { grid-template-columns: minmax(0, 1fr); }
+  .methodOption {
+    min-height: 48px;
+    flex-direction: row;
+    justify-content: flex-start;
+    padding-inline: $spacing-4;
+    text-align: left;
+
+    span { font-size: $font-size-sm; }
+  }
+}

@@ -1,0 +1,33 @@
+# Storefront visibility migration — 2026-10-12
+
+- DEV owner authorization received for only `20261012000000_storefront_product_visibility`.
+- DEV identity verified through project URL and project inventory: `electrohub-dev`, `pzxekjybdiulzmssalfo`, ap-northeast-2, database host `db.pzxekjybdiulzmssalfo.supabase.co`.
+- Reviewed complete SQL: adds `products.storefrontVisible BOOLEAN NOT NULL DEFAULT true`; Prisma schema agrees (`storefrontVisible Boolean @default(true)`). No deletion, financial-table changes, new index, or constraint removal. Existing catalog rows remain visible by default.
+- File SHA-256: `21ae532f49ebead2976d5cb3097729f6d47053053c5da0eed747c68509c8cd38`.
+- DEV preflight: 147 products; column `storefrontVisible` verified absent; exact Prisma migration record absent; no conflicting locks on `products`.
+- Authorized DEV migration executed via `prisma migrate deploy` on `DIRECT_URL` (`aws-0-ap-northeast-2.pooler.supabase.com:5432`).
+- DEV post-migration verification:
+  - Column `storefrontVisible` confirmed present: `boolean`, `is_nullable = 'NO'`, `column_default = 'true'`.
+  - Exactly 147 products preserved (100% catalog integrity).
+  - Recorded in `_prisma_migrations`: `20261012000000_storefront_product_visibility` with checksum `21ae532f49ebead2976d5cb3097729f6d47053053c5da0eed747c68509c8cd38`, finished at `2026-10-12T09:20:03.847Z`, 1 step applied.
+  - Active locks on `products`: none.
+- Read-only DEV catalog runtime verification (HTTP 200 OK):
+  - `/api/search/products`: 200 OK (total 129 storefront-visible products across 7 pages).
+  - `/api/products`: 200 OK.
+  - `/api/categories`: 200 OK (9 active categories).
+  - `/api/search/suggestions?q=ipad`: 200 OK (8 suggestions returned).
+  - `/api/wishlist/validate`: 200 OK (hydrated items validated).
+- Regression test suite execution:
+  - `tests/test-product-exclusion.test.ts`, `src/services/__tests__/wishlist.service.test.ts`, `src/routes/wishlist.routes.test.ts`, `tests/product.api.test.ts`, `tests/search.test.ts`.
+  - Result: 5 test files passed, 63 tests passed, 0 failed, 0 skipped.
+- PROD project inventory verified: `electrohub`, `yepfgjehdstlxbpespun`, ap-northeast-1, database host `db.yepfgjehdstlxbpespun.supabase.co`.
+- PROD preflight findings:
+  - WAL-G archiving enabled; PITR disabled (`pitr_enabled: false`, `backups: []`).
+  - No PROD schema modification executed. PROD migration status: NOT EXECUTED.
+  - Operator action required: create manual backup snapshot / dump prior to PROD execution.
+  - Planned PROD execution command prepared with local lock and statement timeouts.
+- Restrictions strictly adhered to:
+  - Auth refresh token rotation NOT executed (unauthorized).
+  - No fixture deletion, no financial records touched, no Stripe operations.
+  - No commits or deployments.
+- Merge status: NO (pending owner review and separate PROD GO decision).

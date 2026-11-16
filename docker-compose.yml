@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+    ports:
+      - '3000:3000'
+    environment:
+      - VITE_API_URL=http://localhost:5000/api
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    ports:
+      - '5000:5000'
+    env_file:
+      - ./apps/backend/.env
+    depends_on:
+      - ai-service
+
+  # Task 03.8: durable commerce email worker (Order/Payment confirmation emails). A SEPARATE supervised process: the API alone never sends
+  # them. Same image and database/provider environment as `backend`; inert until COMMERCE_EMAIL_DISPATCH_ENABLED=true and
+  # COMMERCE_EMAIL_SEND_MODE is set (see docs/10_Operations/COMMERCE_EMAIL_RUNBOOK.md for the activation sequence). It refuses to start
+  # when sending is not authorised for the resolved database, so `restart` only recovers crashes, never bypasses a safety gate.
+  commerce-email-worker:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    command: ['node', 'dist/bootstrap.js', '--commerce-email-worker']
+    env_file:
+      - ./apps/backend/.env
+    restart: unless-stopped
+    stop_grace_period: 30s
+    depends_on:
+      - backend
+
+  ai-service:
+    build:
+      context: ./apps/ai-service
+      dockerfile: Dockerfile
+    ports:
+      - '8000:8000'
+    env_file:
+      - ./apps/ai-service/.env

@@ -1,0 +1,27 @@
+@use '../../../styles/abstracts/variables' as *;
+
+.iconButton {
+  padding: 0; // Override default button padding
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  
+  // Icon styling
+  svg {
+    width: 1.25rem; // 20px
+    height: 1.25rem;
+  }
+}
+
+.size-small {
+  width: 32px;
+  height: 32px;
+}
+.size-medium {
+  width: 40px;
+  height: 40px;
+}
+.size-large {
+  width: 48px;
+  height: 48px;
+}

@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "date": "2026-10-24",
+  "status": "imported-visually-reviewed-awaiting-global-manifest",
+  "assets": [
+    {
+      "filename": "tapo-t110-eu-alternate.webp",
+      "path": "/images/catalog/expansion/tapo-t110-eu-alternate.webp",
+      "source": "C:\\Users\\ouss0\\.codex\\generated_images\\01a1639a-1b08-7602-a608-553f3ee70043\\exec-d83a90c9-4d1a-4df6-ab21-01d923324eed.png",
+      "prompt": "Use case: product-mockup. Generate ONE alternate catalog illustration of the SAME Tapo T110 white contact sensor set in the reference. Preserve the primary's white gently rounded broad rectangular main sensor body and separate narrow white magnet, same proportions and curved corners. Reference is ONLY shape/colour guide. CRITICAL: make a clearly different REAR THREE-QUARTER view. Lay both components face-DOWN at diagonal on studio surface, showing their flat rear mounting faces toward camera, with warm off-white/beige adhesive backing pads neatly attached within each rear outline, blank unprinted liners, white sidewall thickness and battery-cover seam visible. Main body and magnet separated by about half the main body's width, magnet parallel beside it, one contact-sensor kit total = exactly these TWO pieces. Main sensor front and LED face away; no upright front portrait, no detached third adhesive pad, no screw hardware, no doors, packaging, paper, text, logos or extra devices. Square1254x1254, white/lightgrey seamless studio background, soft diffuse light, gentle contact shadows, centered whole set fully visible with15percent margins. Polished illustrative product render, not authenticated model photograph.",
+      "method": "Codex built-in image_gen tool under existing ChatGPT sign-in; no API key, API, third-party generator or subagent",
+      "kind": "ai-generated",
+      "commercialDisplayRights": "approved",
+      "mlTrainingRights": "not authorized",
+      "redistributionRights": "not authorized",
+      "reviewStatus": "approved",
+      "reviewedBy": "Codex parent agent",
+      "view": "rear three-quarter, separated sensor and magnet with adhesive mounting backs visible",
+      "review": "Personally visually inspected generated output: clearly different from upright front primary; matching white rounded main sensor and slim separate magnet; rear mounting pads and side seams visible, two kit pieces only, no text/logos/extras, white studio background and soft contact shadows. Illustrative mounting view, not authenticated product photography.",
+      "officialProductPage": "https://www.tp-link.com/us/smart-home/smart-sensor/tapo-t110/",
+      "shapeReference": "/images/catalog/expansion/tapo-t110-eu-primary.webp",
+      "width": 1254,
+      "height": 1254,
+      "decoded": true,
+      "sha256": "1770672bc31f730d143df10d390722442754fb987f4f5f8f1c765f5b525d6082"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "browser": "headed persistent Chrome on Windows",
+  "subscriptionRegisteredThroughCustomerUI": true,
+  "ownerAssociationVerified": true,
+  "authoritativeTransition": "OUT_FOR_DELIVERY",
+  "eventId": "191b5d26-5e00-4676-bf33-f6eab0749cdd",
+  "deliveryId": "05b06497-ecbd-4779-8091-4d92ec752c31",
+  "dispatchState": "ACCEPTED",
+  "providerCode": "HTTP_201",
+  "tabClosedDuringSend": true,
+  "actualReceiptApiAuthorized": true,
+  "browserNotificationRecord": true,
+  "osToastVisible": "NOT_VERIFIED"
+}

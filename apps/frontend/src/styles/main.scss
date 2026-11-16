@@ -1,0 +1,25 @@
+// ====================================
+// ElectroHub — Main SCSS Entry Point
+// ====================================
+// 7-1 SCSS Architecture
+
+// 1. Abstracts (variables, mixins, functions)
+@use 'abstracts' as *;
+
+// 2. Vendors (third-party overrides)
+@use 'vendors';
+
+// 3. Base (reset, typography, global)
+@use 'base';
+
+// 4. Layout (structural layout patterns)
+@use 'layout';
+
+// 5. Components (reusable component-level global SCSS)
+@use 'components';
+
+// 6. Pages (page-specific global styles)
+@use 'pages';
+
+// 7. Themes (theme definitions)
+@use 'themes';

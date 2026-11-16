@@ -1,0 +1,177 @@
+@use '../../../styles/abstracts/variables' as *;
+@use './dropdown' as dropdown;
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+  min-width: 0;
+
+  &.fullWidth {
+    width: 100%;
+    
+    .trigger {
+      width: 100%;
+    }
+  }
+}
+
+.label {
+  font-family: $font-family-base;
+  font-weight: $font-weight-medium;
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: $spacing-1;
+
+  &.labelDisabled {
+    color: $color-text-muted;
+  }
+}
+
+.required {
+  color: $color-error;
+}
+
+.trigger {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-2;
+  border-radius: $radius-md;
+  padding: $spacing-2 $spacing-3;
+  font-size: $font-size-base;
+  line-height: $line-height-normal;
+  background-color: $color-background;
+  color: $color-text-primary;
+  border: 1px solid $color-border;
+  min-height: 44px;
+  transition: background-color $transition-fast, border-color $transition-fast, box-shadow $transition-fast;
+  font-family: $font-family-base;
+
+  &:hover {
+    background-color: $color-surface;
+    border-color: $color-text-muted;
+  }
+
+  &:focus {
+    box-shadow: 0 0 0 $focus-ring-width $focus-ring-color;
+    border-color: $color-primary;
+    outline: none;
+  }
+
+  &:active { background-color: $color-surface; }
+
+  &[data-placeholder] {
+    color: $color-text-muted;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    background-color: $color-surface;
+    color: $color-text-muted;
+  }
+
+  &.error {
+    border-color: $color-error-border;
+    background-color: $color-error-background;
+    color: $color-error;
+
+    &:focus {
+      box-shadow: 0 0 0 $focus-ring-width theme-alpha($color-error, 0.3);
+      border-color: $color-error;
+    }
+  }
+}
+
+/* SIZES */
+.size-small {
+  min-height: 44px;
+}
+.size-medium {
+  min-height: 44px;
+}
+.size-large {
+  min-height: 48px;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  flex-shrink: 0;
+  color: $color-text-muted;
+}
+
+.content {
+  @include dropdown.popup;
+  max-height: var(--radix-select-content-available-height);
+  overflow: hidden;
+  // At least as wide as the trigger, as wide as its longest option allows, never wider than the room beside it or 28rem.
+  min-width: var(--radix-select-trigger-width);
+  width: max-content;
+  max-width: min(28rem, var(--radix-select-content-available-width, calc(100vw - 1rem)), calc(100vw - 1rem));
+  max-height: min(22rem, var(--radix-select-content-available-height));
+}
+
+.viewport {
+  padding: $spacing-1;
+}
+
+.item {
+  @include dropdown.option;
+
+  &[data-disabled] {
+    color: $color-text-muted;
+    pointer-events: none;
+  }
+
+  &[data-highlighted] {
+    outline: none;
+    @include dropdown.highlighted;
+  }
+
+  &[data-state='checked']:not([data-highlighted]) { @include dropdown.selected; }
+}
+// Long labels wrap within the viewport instead of hiding part of an option.
+.itemText { min-width: 0; overflow-wrap: anywhere; }
+.square { border-radius: 0; }
+.squareItem { border-radius: 0; }
+
+.itemIndicator {
+  position: absolute;
+  left: $spacing-2;
+  width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scrollButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 25px;
+  background-color: $color-background;
+  color: $color-text-primary;
+  cursor: default;
+}
+
+.scrollUpIcon {
+  transform: rotate(180deg);
+}
+
+.errorMessage {
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  color: $color-error;
+  margin: 0;
+}
+
+.leadingIcon { display: inline-flex; flex: 0 0 auto; margin-right: $spacing-2; color: $color-text-muted; }
+// Keep the full label and leave room for font ascenders/descenders at every control size.
+.value { flex: 1 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; text-align: left; line-height: $line-height-normal; }

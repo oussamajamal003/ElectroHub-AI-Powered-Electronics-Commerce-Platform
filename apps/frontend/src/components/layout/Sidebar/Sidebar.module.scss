@@ -1,0 +1,120 @@
+@use '@/styles/abstracts/variables' as *;
+@use '@/styles/abstracts/mixins' as *;
+
+.sidebar {
+  display: none; // Hidden by default on mobile
+  flex-direction: column;
+  height: 100%;
+  background-color: $color-background;
+  width: 188px; // Tablet width verified from Figma
+  transition: width $transition-normal;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: $spacing-2; // 10px padding from Figma
+  gap: $spacing-2; // 10px gap between items
+
+  @include respond-to(md) {
+    display: flex; // Visible on tablet (188px)
+  }
+
+  @include respond-to(lg) {
+    width: 240px; // Retaining 240px established repository convention (Figma: 236px)
+  }
+
+  &.collapsed {
+    width: 109px;
+  }
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: $spacing-2; // 10px gap between items in group
+}
+
+.groupLabel {
+  display: flex;
+  align-items: center;
+  height: 39px; // Approx 39px from Figma
+  padding-left: $spacing-2;
+  color: $color-text-secondary; // closest to #64748b muted from Figma
+  font-family: $font-family-base;
+  font-size: $font-size-2xl; // 24px
+  line-height: $line-height-tight; // 16px line height in Figma vs 24px font size? 24px text with 16px line-height? Weird, let's use tight.
+  text-transform: uppercase;
+  overflow: hidden;
+  white-space: nowrap;
+  
+  &.collapsed {
+    justify-content: center;
+    padding-left: 0;
+    font-size: $font-size-base; // smaller when collapsed
+  }
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  padding: $spacing-4 $spacing-3; // 12px padding on tablet
+  gap: $spacing-3; // 12px gap on tablet
+  background-color: $color-background;
+  color: $color-text-primary;
+  border-radius: $radius-sm; 
+
+  @include respond-to(lg) {
+    padding: $spacing-4 $spacing-5; // 20px padding on desktop
+    gap: $spacing-5; // 20px gap on desktop
+  }
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: all $transition-fast;
+  width: 100%;
+  cursor: pointer;
+  outline: none;
+  border: 1px solid transparent; // Added to prevent layout shift on hover
+
+  @include focus-ring;
+
+  &:hover:not(:disabled) {
+    background-color: $color-accent;
+    border-color: $color-border;
+    color: $color-text-inverse;
+    @include dark-theme { color: $color-accent-foreground; }
+  }
+
+  &.active {
+    background-color: $color-primary;
+    border-color: $color-border;
+    color: $color-text-inverse;
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &.collapsed {
+    justify-content: center;
+    padding: $spacing-4; // adjust padding when collapsed
+  }
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.label {
+  font-family: $font-family-base;
+  font-size: $font-size-xl; // 20px
+  line-height: $line-height-normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

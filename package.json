@@ -1,0 +1,63 @@
+{
+  "name": "electrohub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ElectroHub — AI-Powered Electronics Commerce Platform",
+  "workspaces": [
+    "apps/frontend",
+    "apps/backend"
+  ],
+  "scripts": {
+    "dev:stack:supervised": "node scripts/dev-stack.cjs start",
+    "dev:stack:supervised:email": "node scripts/dev-stack.cjs start --allow-email-allowlist",
+    "dev:stack:status": "node scripts/dev-stack.cjs status",
+    "dev:stack:doctor": "node scripts/dev-stack.cjs doctor",
+    "dev:stack:stop": "node scripts/dev-stack.cjs stop",
+    "dev:stack:recover-legacy": "node scripts/dev-stack.cjs recover-legacy",
+    "dev:stack:restart": "node scripts/dev-stack.cjs restart",
+    "dev:stack:restart:email": "node scripts/dev-stack.cjs restart --allow-email-allowlist",
+    "dev:stack:supervised:live": "node scripts/dev-stack.cjs start --allow-email-live --allow-push",
+    "dev:stack:restart:live": "node scripts/dev-stack.cjs restart --allow-email-live --allow-push",
+    "notifications:doctor": "npm run notifications:doctor --workspace=apps/backend",
+    "test:runtime": "node --test scripts/dev-stack.test.cjs scripts/lib/dev-control.test.cjs scripts/lib/legacy-runtime-recovery.test.cjs apps/backend/scripts/dev-payment-runtime.test.cjs apps/backend/scripts/lib/commerce-email-dev.test.cjs",
+    "dev:frontend": "npm run dev --workspace=apps/frontend",
+    "dev:backend": "npm run dev --workspace=apps/backend",
+    "build:frontend": "npm run build --workspace=apps/frontend",
+    "build:backend": "npm run build --workspace=apps/backend",
+    "lint:frontend": "npm run lint --workspace=apps/frontend",
+    "lint:backend": "npm run lint --workspace=apps/backend",
+    "lint": "npm run lint:frontend && npm run lint:backend",
+    "typecheck:frontend": "npm run typecheck --workspace=apps/frontend",
+    "typecheck:backend": "npm run typecheck --workspace=apps/backend",
+    "typecheck": "npm run typecheck:frontend && npm run typecheck:backend",
+    "test:frontend": "npm run test --workspace=apps/frontend",
+    "test:backend": "npm run test --workspace=apps/backend",
+    "test": "npm run test:frontend && npm run test:backend",
+    "build": "npm run build:frontend && npm run build:backend",
+    "audit:ci": "node scripts/security-audit.mjs",
+    "audit": "npm audit --audit-level=high"
+  },
+  "engines": {
+    "node": "22.19.0",
+    "npm": ">=10.9.3 <12"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerce-Platform"
+  },
+  "dependencies": {
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1"
+  },
+  "overrides": {
+    "fast-uri": "^3.1.6",
+    "qs": "^6.16.0",
+    "js-yaml": "^5.0.0",
+    "vitest": "^4.1.11",
+    "deepmerge-ts": "^8.0.0",
+    "source-map-js": "^1.2.2"
+  }
+}

@@ -1,0 +1,147 @@
+{
+  "date": "2026-10-14",
+  "scope": "Offline reconciliation of 20260925020000_remove_users_phone only",
+  "branch": "feature/Stripe",
+  "headCommit": "3d69b97fbea4dbcb536ca1a7ed7bcd7dfa54ace4",
+  "target": "apps/backend/prisma/migrations/20260925020000_remove_users_phone/migration.sql",
+  "capturedDevLedger": {
+    "evidenceFile": "docs/10_Operations/LOGGING_DATABASE_INCIDENT_READ_ONLY_EVIDENCE.json",
+    "evidenceSha256": "5a24ab7b519a80b100a6bf42053de1cc8895d38ef80bbef5c55d93eab0553391",
+    "projectRef": "pzxekjybdiulzmssalfo",
+    "checksum": "15de2423e054cfc803989515209340260b5786ce9a4b3b3879b05ede5b81334f",
+    "completedAt": "2026-09-26T10:37:39.8617Z",
+    "readAgain": false
+  },
+  "identities": {
+    "workingTree": {
+      "size": 353,
+      "sha256": "15de2423e054cfc803989515209340260b5786ce9a4b3b3879b05ede5b81334f",
+      "lf": 7,
+      "cr": 1,
+      "bom": false
+    },
+    "index": {
+      "size": 352,
+      "sha256": "227201e489fb0d6a4734037e10e0604a3d04505d400d5f47d59d168c2b5ef6e5",
+      "lf": 7,
+      "cr": 0,
+      "bom": false,
+      "gitBlob": "ac0546fc23b9d7cda493016121e6ad2e4ce6248b"
+    },
+    "head": {
+      "size": 352,
+      "sha256": "227201e489fb0d6a4734037e10e0604a3d04505d400d5f47d59d168c2b5ef6e5",
+      "lf": 7,
+      "cr": 0,
+      "bom": false,
+      "gitBlob": "ac0546fc23b9d7cda493016121e6ad2e4ce6248b"
+    },
+    "introducingCommit": {
+      "commit": "a83a294b36ebf1aede0bcf8eea9b35ad681fb634",
+      "commitTime": "2026-09-26T17:54:37Z",
+      "size": 352,
+      "sha256": "227201e489fb0d6a4734037e10e0604a3d04505d400d5f47d59d168c2b5ef6e5",
+      "lf": 7,
+      "cr": 0,
+      "bom": false
+    }
+  },
+  "byteDifference": {
+    "insertionOffsetZeroBased": 351,
+    "line": 7,
+    "insertedHex": "0d",
+    "description": "The first 351 bytes are identical. HEAD ends 3b 0a; working copy ends 3b 0d 0a. Six LF lines precede one CRLF final line.",
+    "oneCarriageReturnExplainsEntireDifference": true,
+    "noBom": true
+  },
+  "sql": {
+    "statement": "ALTER TABLE \"users\" DROP COLUMN IF EXISTS \"phone\";",
+    "statementsAdded": 0,
+    "statementsRemoved": 0,
+    "statementsChanged": 0,
+    "commentsChanged": 0,
+    "constraintIndexDifferences": 0,
+    "freshSchemaOutcome": "Same statement and same outcome given identical starting schema; not executed"
+  },
+  "git": {
+    "coreAutocrlf": true,
+    "targetHasExplicitTextAttributes": false,
+    "indexEol": "lf",
+    "workingEol": "mixed",
+    "rawWorkingGitBlob": "6f1031a98bf916520155b048e883614130a6544f",
+    "cleanFilteredWorkingGitBlob": "ac0546fc23b9d7cda493016121e6ad2e4ce6248b",
+    "statusForMigration": "clean",
+    "pathChangesInAvailableLocalHistory": 1,
+    "introducingParentContainsPath": false
+  },
+  "origin": {
+    "verified": "The deployed-format working bytes and committed bytes differ only by final-line CRLF normalization; current Git clean conversion reproduces the exact index/HEAD blob. All available path-changing history contains the LF version.",
+    "unverified": [
+      "Original file authoring/editor/newline action",
+      "Whether the original September Git add used precisely the current conversion configuration",
+      "Original verification commands underlying the prior mixed-source summary",
+      "PROD checksum for this migration"
+    ]
+  },
+  "documentationCorrection": {
+    "trackedHistoricalCommittedBlobsMatchingCapturedDevLedger": 11,
+    "totalTrackedHistoricalMigrations": 12,
+    "incorrectClaim": "All 12 historical committed LF blobs match the DEV ledger",
+    "earlierAuthDocumentMethod": "Eight working-copy matches and eight committed-LF matches; not a universal committed-blob comparison"
+  },
+  "guardVerification": {
+    "offlineAssertionsPassed": 8,
+    "inventory": 17,
+    "ledgerRows": 16,
+    "before": {
+      "pending": [
+        "20261013000000_refresh_token_rotation_lineage"
+      ],
+      "problems": [
+        "applied migration 20260925020000_remove_users_phone differs from this checkout (checksum mismatch)"
+      ]
+    },
+    "after": {
+      "pending": [
+        "20261013000000_refresh_token_rotation_lineage"
+      ],
+      "problems": []
+    },
+    "databaseConnections": 0,
+    "migrationsExecuted": 0,
+    "exitCode": 0,
+    "method": "Require guard exports only; compare captured ledger to in-memory candidate with 12 HEAD migration hashes and five existing untracked migration hashes. Substitute target working hash in memory only.",
+    "noGuardCodeChanged": true,
+    "noExceptionIntroduced": true
+  },
+  "proposedReleaseCorrection": {
+    "executed": false,
+    "requiredOwners": [
+      "DATABASE",
+      "Principal Architect",
+      "Git attributes owner",
+      "Release integrator"
+    ],
+    "targetBytes": "15de2423e054cfc803989515209340260b5786ce9a4b3b3879b05ede5b81334f",
+    "attributesRule": "apps/backend/prisma/migrations/20260925020000_remove_users_phone/migration.sql -text",
+    "description": "On separate source-preservation authorization, include the already-existing 353-byte deployed-format file as the release Git blob and disable text conversion for this path; verify the released Git object exact bytes. Do not modify SQL statements or DB ledger. Attributes alone do not rewrite the existing 352-byte blob."
+  },
+  "safeguards": {
+    "expectedMigrations": 17,
+    "devCompletedCaptured": 16,
+    "authPending": true,
+    "authChecksum": "51495598e0e1a7e8d74b2d19f8e596fcae32a0e1afb2e626120fad7c06b2e991",
+    "prodReconciled": false,
+    "fourUntrackedAppliedFiles": "Remain byte-exact; CRLF payment migration must not be normalized",
+    "historicalProdExceptions": "Foundation BOM+CRLF and OTP CRLF remain separately documented; no new exception approved"
+  },
+  "restrictions": {
+    "databaseAccesses": 0,
+    "migrationExecutions": 0,
+    "sqlFileModifications": 0,
+    "indexWrites": 0,
+    "commits": 0,
+    "pushes": 0,
+    "ciExecutions": 0
+  }
+}

@@ -1,0 +1,11 @@
+@use '@/styles/abstracts' as *;
+
+.stack, .fields, .options, .field { display: grid; gap: $spacing-4; min-width: 0; }
+.stack { gap: $spacing-6; }
+.field { gap: $spacing-2; }
+.fieldGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: $spacing-4; }
+.option { display: flex; align-items: start; gap: $spacing-3; min-width: 0; }
+.action { display: flex; justify-content: flex-end; padding-top: $spacing-4; }
+.quote { display: flex; flex-wrap: wrap; align-items: end; gap: $spacing-2; }
+.quote .field { width: min(14rem, 100%); }
+@media (max-width: 600px) { .fieldGrid { grid-template-columns: minmax(0, 1fr); } }

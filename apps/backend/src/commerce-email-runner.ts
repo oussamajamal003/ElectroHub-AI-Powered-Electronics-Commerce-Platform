@@ -1,0 +1,126 @@
+import { CustomerPushDispatcher, realPushTransport, pushDispatchAllowed } from './services/customer-push.dispatcher.js';
+import { setTimeout as wait } from 'node:timers/promises';
+import { randomUUID } from 'node:crypto';
+import { prisma } from './lib/prisma.js';
+import { env } from './config/env.js';
+import { logger, logSafely, flushLogsWithDeadline, installFatalLogging } from './utils/logger.js';
+import { resolvePaymentIsolation } from './payment-isolation.js';
+import { commerceEmailConfig, dispatchPermission } from './services/commerce-email.config.js';
+import { CommerceEmailDispatcher, captureTransport, commerceEmailHealth, type CommerceEmailTransport } from './services/commerce-email.dispatcher.js';
+import { BrevoClient } from './integrations/brevo/brevo.client.js';
+import { BrevoProvider } from './integrations/brevo/brevo.provider.js';
+import { renderCommerceEmail } from './emails/commerce/templates.js';
+import { logCommerceEmailRuntime } from './services/commerce-email.runtime.js';
+import { brevoDeliveryEvents, DELIVERY_SYNC_INTERVAL_MS, reconcileDeliveries } from './services/commerce-email.delivery.js';
+
+/**
+ * Task 03.8 dedicated commerce email worker (`npm run email:worker`). Started only explicitly; importing services never starts it.
+ * Separate from the payment runner: its own leases, its own provider pause, bounded batch/concurrency, and no PaymentWork access.
+ */
+const workerInstanceId = randomUUID();
+const HEARTBEAT_MS = 60_000;
+installFatalLogging();
+const config = commerceEmailConfig();
+const isolation = resolvePaymentIsolation();
+const permission = dispatchPermission(config, { kind: isolation.target, identity: isolation.identity });
+logSafely(permission.allowed ? 'info' : 'error', 'Commerce email worker permission resolved', { event: 'email_worker_permission',
+  workerInstanceId, allowed: permission.allowed, reason: permission.reason, identity: permission.identity, sendMode: config.sendMode,
+  allowlistSize: config.allowedRecipients.length, batchSize: config.batchSize, concurrency: config.concurrency });
+const pushAllowed = pushDispatchAllowed({ kind: isolation.target, identity: isolation.identity });
+if (!permission.allowed && !pushAllowed) throw new Error(`Commerce email worker refused: ${permission.reason} (${permission.identity}).`);
+const notificationOrderId = process.env.CUSTOMER_NOTIFICATION_ORDER_ID?.trim() || undefined;
+if (notificationOrderId && (env.NODE_ENV !== 'development' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(notificationOrderId))) {
+  throw new Error('Notification order scope is valid only for a development UUID target.');
+}
+logCommerceEmailRuntime('email-worker');
+
+const transport: CommerceEmailTransport = !permission.allowed ? { name: 'CAPTURE', send: async () => ({ success: false, failure: { category: 'configuration' } }) } : config.sendMode === 'capture' ? captureTransport(config.captureDir!) : (() => {
+  const provider = new BrevoProvider(new BrevoClient({ apiKey: env.BREVO_API_KEY, timeoutMs: config.providerTimeoutMs }));
+  return { name: 'BREVO' as const, send: message => provider.sendTransactionalEmail({ to: message.to, subject: message.subject,
+    htmlContent: message.html, textContent: message.text, tags: message.tags }) };
+})();
+const dispatcher = new CommerceEmailDispatcher(prisma, transport, renderCommerceEmail, config, workerInstanceId, Date.now, notificationOrderId);
+// Provider delivery outcomes are read back (never resent) only when real Brevo sends happen; capture mode has no provider log.
+const deliverySource = config.sendMode !== 'capture' && env.BREVO_API_KEY ? brevoDeliveryEvents(env.BREVO_API_KEY, config.providerTimeoutMs) : null;
+let nextDeliverySync = 0;
+const pushDispatcher = pushAllowed ? new CustomerPushDispatcher(prisma, realPushTransport(), notificationOrderId) : null;
+
+let stopping = false;
+const shutdown = new AbortController();
+const stop = () => { stopping = true; shutdown.abort(); };
+process.on('SIGTERM', stop);
+process.on('SIGINT', stop);
+// A Node-owned IPC child can drain its current batch on Windows. A parent loss
+// stops new claims; durable leases remain authoritative after forced shutdown.
+if (process.connected) process.on('disconnect', stop);
+const once = process.argv.includes('--once');
+
+async function main() {
+  let ready = false; let failures = 0; let nextHeartbeat = 0;
+  try {
+    while (!stopping) {
+      let drained = false; let failedThisPass = false;
+      try {
+        if (!ready) {
+          // One cheap startup check (never per payment): the Task 03.8 tables must exist in THIS database. A supervisor does not restart exit code 78.
+          const [{ present }] = await prisma.$queryRaw<{ present: boolean }[]>`SELECT to_regclass('public.commerce_email_outbox') IS NOT NULL AS present`;
+          if (!present) {
+            logSafely('error', 'Commerce email worker cannot start: the commerce email schema is not migrated in this database.', {
+              event: 'email_worker_unavailable', workerInstanceId, reason: 'SCHEMA_NOT_READY', identity: permission.identity });
+            process.exitCode = 78; stopping = true; break;
+          }
+          if (pushDispatcher) {
+            const [{ present: pushPresent }] = await prisma.$queryRaw<{ present: boolean }[]>`SELECT to_regclass('public.customer_push_deliveries') IS NOT NULL AS present`;
+            if (!pushPresent) { process.exitCode = 78; stopping = true; logSafely('error', 'Push schema is not ready', { event: 'customer_push_unavailable', reason: 'SCHEMA_NOT_READY' }); break; }
+          }
+          ready = true;
+          logSafely('info', 'Commerce email worker ready', { event: 'email_worker_ready', workerInstanceId, sendMode: config.sendMode,
+            dispatchEnabled: config.dispatchEnabled, producerEnabledInThisEnvironment: config.enqueueEnabled, allowlistSize: config.allowedRecipients.length, pushEnabled: Boolean(pushDispatcher) }); }
+        const pass = permission.allowed ? await dispatcher.runBatch() : { claimed: 0 };
+        drained = pass.claimed >= config.batchSize;
+      } catch (error) {
+        failedThisPass = true;
+        logSafely('error', 'Commerce email batch failed', { event: 'email_worker_batch_failed', workerInstanceId, consecutiveFailures: failures, error });
+        if (once) { failedThisPass = true; }
+      }
+      // The channels are independent: a database/provider failure in one channel must not suppress the other channel's pass.
+      if (pushDispatcher && ready && !stopping) {
+        try { await pushDispatcher.runBatch(); }
+        catch (error) { failedThisPass = true; logSafely('error', 'Customer push batch failed', { event: 'customer_push_batch_failed', workerInstanceId, error }); }
+      }
+      failures = failedThisPass ? failures + 1 : 0;
+      if (failures >= 3) logSafely('error', 'Commerce notification worker unavailable', { event: 'email_worker_unavailable', workerInstanceId,
+        reason: 'REPEATED_BATCH_FAILURES', consecutiveFailures: failures });
+      if (once && failedThisPass) throw new Error('One or more notification channels failed during the requested batch.');
+      if (ready && Date.now() >= nextHeartbeat) {
+        nextHeartbeat = Date.now() + HEARTBEAT_MS;
+        try {
+          const health = await commerceEmailHealth(prisma, config.sendMode === 'allowlist' ? config.allowedRecipients : []);
+          const attention = (health.byState.UNCERTAIN ?? 0) > 0 || (health.oldestDueMs ?? 0) > 5 * 60_000 || health.expiredLeases > 0 || health.staleNeedingReview > 0;
+          logSafely(attention ? 'error' : 'info', 'Commerce email worker heartbeat', { event: 'email_worker_heartbeat', workerInstanceId,
+            paused: dispatcher.paused, attention, sendMode: config.sendMode, allowlistSize: config.allowedRecipients.length, ...health });
+          // Test-mode exclusion is deliberate, but silent exclusion looked like a stuck queue: name it (count only, never addresses).
+          if (health.allowlistExcluded) logSafely('warn', 'Commerce emails held by the allowlist', { event: 'email_allowlist_excluded', workerInstanceId,
+            excluded: health.allowlistExcluded, hint: 'recipients outside COMMERCE_EMAIL_ALLOWED_RECIPIENTS are never sent in allowlist mode' });
+        } catch (error) { logSafely('error', 'Commerce email health unavailable', { event: 'email_worker_unavailable', workerInstanceId, reason: 'HEALTH_QUERY_FAILED', error }); }
+      }
+      if (permission.allowed && ready && deliverySource && Date.now() >= nextDeliverySync) {
+        nextDeliverySync = Date.now() + DELIVERY_SYNC_INTERVAL_MS;
+        try {
+          const sync = await reconcileDeliveries(prisma, deliverySource, Date.now(), notificationOrderId);
+          if (sync.updated || sync.failed) logSafely(sync.failed ? 'warn' : 'info', 'Commerce email delivery outcomes recorded', { event: 'email_delivery_sync', workerInstanceId, ...sync });
+        } catch (error) { logSafely('warn', 'Commerce email delivery sync unavailable', { event: 'email_delivery_sync_failed', workerInstanceId, error }); }
+      }
+      if (once || stopping) break;
+      if (drained) continue;
+      try { await wait(failures ? Math.min(60_000, 1_000 * 2 ** Math.min(failures, 6)) : config.pollMs, undefined, { signal: shutdown.signal }); }
+      catch (error) { if (!shutdown.signal.aborted) throw error; }
+    }
+  } finally {
+    await prisma.$disconnect();
+    logger.info('Commerce email worker stopped', { event: 'email_worker_stopped', workerInstanceId });
+    if (!await flushLogsWithDeadline()) process.exit(1);
+  }
+}
+void main().catch(async error => { logSafely('error', 'Commerce email worker stopped on error', { event: 'email_worker_stopped', workerInstanceId, error });
+  process.exitCode = 1; if (!await flushLogsWithDeadline()) process.exit(1); });

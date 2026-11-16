@@ -1,0 +1,57 @@
+const parameter = (name: string, schema: object, required = false) => ({ name, in: 'query', required, schema });
+const error = { description: 'Structured sanitized error.', content: { 'application/json': { schema: { $ref: '#/components/schemas/ProductError' } } } };
+export const searchSchemas = {
+  SearchSuggestion: { type: 'object', required: ['id', 'type', 'label', 'slug'], properties: {
+    id: { type: 'string', format: 'uuid' }, type: { type: 'string', enum: ['PRODUCT', 'CATEGORY', 'BRAND'] },
+    label: { type: 'string' }, slug: { type: 'string' },
+  } },
+};
+export const searchPaths = {
+  '/search/products': { get: {
+    tags: ['Search'], summary: 'Search public products',
+    description: 'Every query token matches an approved field; filters combine with AND. A blank query returns one bounded newest-first page of the public catalog (used by /products); the dedicated /search page remains empty until the customer searches or filters. Relevance ranks exact, prefix, contains, model/SKU, brand/category, description, cross-field matches. Decimal prices are strings; inactive products/categories are hidden. Rate limit: 120 per minute per IP. Pagination: offset pages are bounded to page <= 100 (400 PAGE_LIMIT_EXCEEDED beyond). Keyset pagination (paginate=cursor, then cursor=<meta.nextCursor>) continues at any depth without OFFSET for every sort except category-mix (400 CURSOR_UNSUPPORTED_SORT); an offset page also returns nextCursor so a client can continue past page 100. Cursors are opaque and signed: a tampered or malformed cursor, or one reused with different filters or sort, answers 400 INVALID_CURSOR. page cannot be combined with cursor mode.',
+    parameters: [
+      parameter('q', { type: 'string', maxLength: 120 }),
+      ...['category', 'brand'].map(name => parameter(name, { type: 'string', maxLength: 120, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' })),
+      parameter('availability', { type: 'string', enum: ['available', 'unavailable'] }),
+      ...['minPrice', 'maxPrice'].map(name => parameter(name, { type: 'string', pattern: '^(0|[1-9][0-9]{0,9})(\\.[0-9]{1,2})?$' })),
+      parameter('sort', { type: 'string', enum: ['relevance', 'price-asc', 'price-desc', 'newest', 'name-asc', 'category-mix'] }),
+      parameter('page', { type: 'integer', minimum: 1, maximum: 100, default: 1 }),
+      parameter('pageSize', { type: 'integer', minimum: 1, maximum: 100, default: 20 }),
+      parameter('paginate', { type: 'string', enum: ['cursor'] }),
+      parameter('cursor', { type: 'string', maxLength: 1024, pattern: '^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$' }),
+    ], responses: {
+      '200': { description: 'Bounded summaries. Default sort: relevance with query, newest without query. Stable ID tie-breakers.', content: { 'application/json': { schema: {
+        type: 'object', required: ['data', 'meta'], properties: {
+          data: { type: 'array', items: { $ref: '#/components/schemas/ProductSummary' } },
+          meta: { type: 'object', required: ['pageSize', 'total', 'hasNextPage', 'nextCursor'], properties: {
+            page: { type: 'integer', minimum: 1, maximum: 100, description: 'Offset mode only.' },
+            totalPages: { type: 'integer', minimum: 0, description: 'Offset mode only.' },
+            pageSize: { type: 'integer', minimum: 1, maximum: 100 },
+            total: { type: 'integer', nullable: true, minimum: 0, description: 'Filtered total. Null on cursor continuation pages (computed only for the first page).' },
+            hasNextPage: { type: 'boolean' },
+            nextCursor: { type: 'string', nullable: true, description: 'Opaque cursor for the next keyset page; null on the last page and for category-mix.' },
+          } },
+        },
+      } } } }, '400': { ...error, description: 'VALIDATION_ERROR, PAGE_LIMIT_EXCEEDED, INVALID_CURSOR or CURSOR_UNSUPPORTED_SORT.' }, '429': error, '500': error,
+    },
+  } },
+  '/search/image': { post: {
+    tags: ['Search'], summary: 'Search products by photo (guest allowed)',
+    description: 'Multipart upload of exactly one JPEG, PNG or WebP photo in the image field (max 8 MiB, no other fields). The type is decided by magic bytes. The AI service ranks product ids; products are then loaded from the catalog with the same visibility rules as /search/products, with database prices and stock. Rate limit: 20 per 5 minutes per IP. Returns 503 IMAGE_SEARCH_UNAVAILABLE when visual search is not configured.',
+    parameters: [parameter('limit', { type: 'integer', minimum: 1, maximum: 24, default: 12 })],
+    requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['image'], properties: { image: { type: 'string', format: 'binary' } } } } } },
+    responses: {
+      '200': { description: 'Ranked product summaries in relevance order (AI rank preserved).', content: { 'application/json': { schema: { type: 'object', required: ['data', 'meta'], properties: {
+        data: { type: 'object', required: ['items'], properties: { items: { type: 'array', items: { $ref: '#/components/schemas/ProductSummary' } } } },
+        meta: { type: 'object', required: ['modelVersion', 'embeddingVersion', 'count'], properties: { modelVersion: { type: 'string' }, embeddingVersion: { type: 'string' }, count: { type: 'integer', minimum: 0 } } },
+      } } } } },
+      '400': error, '413': error, '415': error, '422': error, '429': error, '503': error, '504': error, '500': error,
+    },
+  } },
+  '/search/suggestions': { get: {
+    tags: ['Search'], summary: 'Suggest products, brands and active categories', description: 'Product exact/prefix/contains precedes brand and category; deterministic label/ID ties. Rate limit: 240 per minute per IP.',
+    parameters: [parameter('q', { type: 'string', minLength: 2, maxLength: 120 }, true), parameter('limit', { type: 'integer', minimum: 1, maximum: 10, default: 8 })],
+    responses: { '200': { description: 'Minimal suggestions.', content: { 'application/json': { schema: { type: 'object', required: ['data'], properties: { data: { type: 'array', items: { $ref: '#/components/schemas/SearchSuggestion' } } } } } } }, '400': error, '429': error, '500': error },
+  } },
+};

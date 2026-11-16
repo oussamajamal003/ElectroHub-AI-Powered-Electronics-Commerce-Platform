@@ -1,0 +1,610 @@
+{
+  "reviewDate": "2026-10-14",
+  "authorization": "Explicit owner authorization in this chat for shared DEV pzxekjybdiulzmssalfo; read-only incident scope only; no recovery permission.",
+  "target": {
+    "projectRef": "pzxekjybdiulzmssalfo",
+    "name": "electrohub-dev",
+    "region": "ap-northeast-2",
+    "database": "postgres",
+    "schema": "public",
+    "connector": "supabase_dev",
+    "managementAndConnectorIdentityMatch": true
+  },
+  "classification": "INDETERMINATE",
+  "classificationScope": "No identifiable fixture residue in the authorized current DEV snapshot; historical impact/ledger-baseline reconciliation remain indeterminate.",
+  "identity": [
+    {
+      "database": "postgres",
+      "effective_role": "supabase_read_only_user",
+      "session_role": "supabase_read_only_user",
+      "transaction_read_only": "on",
+      "default_transaction_read_only": "on",
+      "configured_project_ref": null,
+      "role_superuser": false
+    }
+  ],
+  "counts": [
+    {
+      "object_class": "carts",
+      "counts": {
+        "related_total": 0
+      }
+    },
+    {
+      "object_class": "detached_google_security_events_in_window",
+      "counts": {
+        "total": 0,
+        "attribution": "UNKNOWN unless owner audit links deleted fixture"
+      }
+    },
+    {
+      "object_class": "detached_synthetic_email_deliveries_in_window",
+      "counts": {
+        "total": 0
+      }
+    },
+    {
+      "object_class": "email_deliveries",
+      "counts": {
+        "related_total": 0
+      }
+    },
+    {
+      "object_class": "incident_linked_users",
+      "counts": {
+        "total": 0
+      }
+    },
+    {
+      "object_class": "oauth_accounts",
+      "counts": {
+        "related_total": 0
+      }
+    },
+    {
+      "object_class": "otp_challenges",
+      "counts": {
+        "related_total": 0
+      }
+    },
+    {
+      "object_class": "password_reset_tokens",
+      "counts": {
+        "related_total": 0
+      }
+    },
+    {
+      "object_class": "refresh_tokens",
+      "counts": {
+        "revoked": 0,
+        "related_total": 0,
+        "unrevoked_unexpired": 0
+      }
+    },
+    {
+      "object_class": "security_events",
+      "counts": {
+        "related_total": 0
+      }
+    },
+    {
+      "object_class": "snapshot",
+      "counts": {
+        "read_only": "on",
+        "observed_at": "2026-10-14T14:51:42.486522+00:00"
+      }
+    },
+    {
+      "object_class": "synthetic_oauth",
+      "counts": {
+        "cap_reached": false,
+        "after_window": 0,
+        "before_window": 0,
+        "incident_window": 0
+      }
+    },
+    {
+      "object_class": "synthetic_users",
+      "counts": {
+        "cap_reached": false,
+        "after_window": 0,
+        "before_window": 0,
+        "incident_window": 0
+      }
+    },
+    {
+      "object_class": "wishlists",
+      "counts": {
+        "related_total": 0
+      }
+    }
+  ],
+  "catalog": [
+    {
+      "section": "access",
+      "metadata": {
+        "bypass_rls": true,
+        "row_security": "on",
+        "can_create_role": false
+      }
+    },
+    {
+      "section": "foreign_keys",
+      "metadata": {
+        "table": "security_events",
+        "constraint": "security_events_userId_fkey",
+        "definition": "FOREIGN KEY (\"userId\") REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL"
+      }
+    },
+    {
+      "section": "foreign_keys",
+      "metadata": {
+        "table": "wishlists",
+        "constraint": "wishlists_userId_fkey",
+        "definition": "FOREIGN KEY (\"userId\") REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE"
+      }
+    },
+    {
+      "section": "foreign_keys",
+      "metadata": {
+        "table": "carts",
+        "constraint": "carts_userId_fkey",
+        "definition": "FOREIGN KEY (\"userId\") REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE"
+      }
+    },
+    {
+      "section": "foreign_keys",
+      "metadata": {
+        "table": "email_deliveries",
+        "constraint": "email_deliveries_userId_fkey",
+        "definition": "FOREIGN KEY (\"userId\") REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL"
+      }
+    },
+    {
+      "section": "foreign_keys",
+      "metadata": {
+        "table": "oauth_accounts",
+        "constraint": "oauth_accounts_userId_fkey",
+        "definition": "FOREIGN KEY (\"userId\") REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE"
+      }
+    },
+    {
+      "section": "foreign_keys",
+      "metadata": {
+        "table": "otp_challenges",
+        "constraint": "otp_challenges_userId_fkey",
+        "definition": "FOREIGN KEY (\"userId\") REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE"
+      }
+    },
+    {
+      "section": "foreign_keys",
+      "metadata": {
+        "table": "password_reset_tokens",
+        "constraint": "password_reset_tokens_userId_fkey",
+        "definition": "FOREIGN KEY (\"userId\") REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE"
+      }
+    },
+    {
+      "section": "foreign_keys",
+      "metadata": {
+        "table": "refresh_tokens",
+        "constraint": "refresh_tokens_userId_fkey",
+        "definition": "FOREIGN KEY (\"userId\") REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE"
+      }
+    },
+    {
+      "section": "tables",
+      "metadata": {
+        "table": "users",
+        "rls_forced": false,
+        "rls_enabled": false,
+        "select_allowed": true,
+        "rls_active_for_role": false
+      }
+    },
+    {
+      "section": "tables",
+      "metadata": {
+        "table": "carts",
+        "rls_forced": false,
+        "rls_enabled": false,
+        "select_allowed": true,
+        "rls_active_for_role": false
+      }
+    },
+    {
+      "section": "tables",
+      "metadata": {
+        "table": "_prisma_migrations",
+        "rls_forced": false,
+        "rls_enabled": false,
+        "select_allowed": true,
+        "rls_active_for_role": false
+      }
+    },
+    {
+      "section": "tables",
+      "metadata": {
+        "table": "wishlists",
+        "rls_forced": false,
+        "rls_enabled": false,
+        "select_allowed": true,
+        "rls_active_for_role": false
+      }
+    },
+    {
+      "section": "tables",
+      "metadata": {
+        "table": "email_deliveries",
+        "rls_forced": false,
+        "rls_enabled": false,
+        "select_allowed": true,
+        "rls_active_for_role": false
+      }
+    },
+    {
+      "section": "tables",
+      "metadata": {
+        "table": "oauth_accounts",
+        "rls_forced": false,
+        "rls_enabled": true,
+        "select_allowed": true,
+        "rls_active_for_role": false
+      }
+    },
+    {
+      "section": "tables",
+      "metadata": {
+        "table": "otp_challenges",
+        "rls_forced": false,
+        "rls_enabled": false,
+        "select_allowed": true,
+        "rls_active_for_role": false
+      }
+    },
+    {
+      "section": "tables",
+      "metadata": {
+        "table": "password_reset_tokens",
+        "rls_forced": false,
+        "rls_enabled": false,
+        "select_allowed": true,
+        "rls_active_for_role": false
+      }
+    },
+    {
+      "section": "tables",
+      "metadata": {
+        "table": "refresh_tokens",
+        "rls_forced": false,
+        "rls_enabled": false,
+        "select_allowed": true,
+        "rls_active_for_role": false
+      }
+    },
+    {
+      "section": "tables",
+      "metadata": {
+        "table": "roles",
+        "rls_forced": false,
+        "rls_enabled": false,
+        "select_allowed": true,
+        "rls_active_for_role": false
+      }
+    },
+    {
+      "section": "tables",
+      "metadata": {
+        "table": "security_events",
+        "rls_forced": false,
+        "rls_enabled": true,
+        "select_allowed": true,
+        "rls_active_for_role": false
+      }
+    }
+  ],
+  "rolesAndLedger": {
+    "roles": [
+      {
+        "role": "CUSTOMER",
+        "created_at": "2026-09-24T13:38:11.3",
+        "updated_at": "2026-09-24T13:38:11.3"
+      },
+      {
+        "role": "ADMIN",
+        "created_at": "2026-09-24T17:24:12.35",
+        "updated_at": "2026-09-24T17:24:12.35"
+      }
+    ],
+    "ledger": [
+      {
+        "checksum": "cb2baf5e79d8127f31fa9873c5e2cfd28b159f7a375d8d4d2856dd8766b5fd17",
+        "started_at": "2026-09-24T13:19:57.001046+00:00",
+        "finished_at": "2026-09-24T13:19:58.233044+00:00",
+        "migration_name": "20240101000000_database_foundation",
+        "rolled_back_at": null,
+        "applied_steps_count": 1
+      },
+      {
+        "checksum": "0b775e100c320af6becd743f1355ea8600c1b9922efc5a0c0049d7808d9340bf",
+        "started_at": "2026-09-24T13:19:58.606781+00:00",
+        "finished_at": "2026-09-24T13:19:59.552717+00:00",
+        "migration_name": "20240102000000_authentication",
+        "rolled_back_at": null,
+        "applied_steps_count": 1
+      },
+      {
+        "checksum": "e1a2b518c6d52b04211d2b078412794d2754b27016432028e87f7450f915b241",
+        "started_at": "2026-09-24T13:19:59.926295+00:00",
+        "finished_at": "2026-09-24T13:20:00.891685+00:00",
+        "migration_name": "20240103000000_email_otp_foundation",
+        "rolled_back_at": null,
+        "applied_steps_count": 1
+      },
+      {
+        "checksum": "52563f1a2f4317209d1b354a2f60a0d93e1c3963db6f076fd06d2271b735041a",
+        "started_at": "2026-09-25T13:09:51.938569+00:00",
+        "finished_at": "2026-09-25T13:09:55.017985+00:00",
+        "migration_name": "20260925000000_security_events",
+        "rolled_back_at": null,
+        "applied_steps_count": 1
+      },
+      {
+        "checksum": "c72d439e8c2292b6aeb0e029c90be1ed25b1b9eac38e96d7afcea0a2257bdcdf",
+        "started_at": "2026-09-25T17:24:29.835367+00:00",
+        "finished_at": "2026-09-25T17:24:29.835367+00:00",
+        "migration_name": "20260925010000_pending_email_reset_authorization",
+        "rolled_back_at": null,
+        "applied_steps_count": 4
+      },
+      {
+        "checksum": "15de2423e054cfc803989515209340260b5786ce9a4b3b3879b05ede5b81334f",
+        "started_at": "2026-09-26T10:37:39.8617+00:00",
+        "finished_at": "2026-09-26T10:37:39.8617+00:00",
+        "migration_name": "20260925020000_remove_users_phone",
+        "rolled_back_at": null,
+        "applied_steps_count": 1
+      },
+      {
+        "checksum": "5eb2ce0730ec84d92be1c719ed4570feecfff454e8701097fd757e793cf13cd1",
+        "started_at": "2026-09-26T18:22:54.208697+00:00",
+        "finished_at": "2026-09-26T18:22:55.839701+00:00",
+        "migration_name": "20260926000000_google_oauth",
+        "rolled_back_at": null,
+        "applied_steps_count": 1
+      },
+      {
+        "checksum": "9da85d0ffb90210db707f85bb7062911d03459ea99136004a7adbed3717a926b",
+        "started_at": "2026-09-27T09:54:55.13941+00:00",
+        "finished_at": "2026-09-27T09:54:57.691858+00:00",
+        "migration_name": "20260927000000_account_deleted_security_event",
+        "rolled_back_at": null,
+        "applied_steps_count": 1
+      },
+      {
+        "checksum": "95c21c9dc7b71aa60cdf0161688512d5c4d0a3d6483df5383a481903b6613a12",
+        "started_at": "2026-09-27T16:28:19.243818+00:00",
+        "finished_at": "2026-09-27T16:28:22.695258+00:00",
+        "migration_name": "20260928000000_product_foundation",
+        "rolled_back_at": null,
+        "applied_steps_count": 1
+      },
+      {
+        "checksum": "f6e5bbc6a410f29657c5fafa30f92a92ce6340abe6e5911a91bbb04464c26c2c",
+        "started_at": "2026-09-29T13:13:38.37267+00:00",
+        "finished_at": "2026-09-29T13:13:40.79476+00:00",
+        "migration_name": "20260928000000_product_reviews",
+        "rolled_back_at": null,
+        "applied_steps_count": 1
+      },
+      {
+        "checksum": "51822830a2019fb583f548b3fd11eb2a6582a9c4b2e5370cc2716faae864fcb6",
+        "started_at": "2026-10-05T14:19:37.09615+00:00",
+        "finished_at": "2026-10-05T14:19:41.482543+00:00",
+        "migration_name": "20261005000000_inventory_nonnegative",
+        "rolled_back_at": null,
+        "applied_steps_count": 1
+      },
+      {
+        "checksum": "4b8a8afbdaeee67ba9e6f58accc9f704d03692100e9a714bd04ba966f88893ca",
+        "started_at": "2026-10-06T10:05:12.163763+00:00",
+        "finished_at": "2026-10-06T10:05:13.892504+00:00",
+        "migration_name": "20261006000000_checkout_core",
+        "rolled_back_at": null,
+        "applied_steps_count": 1
+      },
+      {
+        "checksum": "8efc55f8e823583e439f92dcbea0bd2b3e125c2eefaa9372cee5d2a82753090a",
+        "started_at": "2026-10-07T09:43:45.846247+00:00",
+        "finished_at": "2026-10-07T09:43:49.54424+00:00",
+        "migration_name": "20261007000000_stripe_orchestration",
+        "rolled_back_at": null,
+        "applied_steps_count": 1
+      },
+      {
+        "checksum": "007b9167866ba92aa4334a3e0490c351f751b27ccf3f0a7fc6ad5d4faec93f92",
+        "started_at": "2026-10-09T13:14:39.275999+00:00",
+        "finished_at": "2026-10-09T13:14:46.859699+00:00",
+        "migration_name": "20261009000000_product_test_fixture_visibility",
+        "rolled_back_at": null,
+        "applied_steps_count": 1
+      },
+      {
+        "checksum": "21ae532f49ebead2976d5cb3097729f6d47053053c5da0eed747c68509c8cd38",
+        "started_at": "2026-10-12T09:19:53.829553+00:00",
+        "finished_at": "2026-10-12T09:20:03.847571+00:00",
+        "migration_name": "20261012000000_storefront_product_visibility",
+        "rolled_back_at": null,
+        "applied_steps_count": 1
+      },
+      {
+        "checksum": "0cf4bc6b88a2222b47e691100364b0e961b5bb20b61149dfb759b651ef177ff8",
+        "started_at": "2026-10-12T16:20:30.851353+00:00",
+        "finished_at": "2026-10-12T16:20:33.963583+00:00",
+        "migration_name": "20261012120000_payment_purchase_ownership",
+        "rolled_back_at": null,
+        "applied_steps_count": 1
+      }
+    ],
+    "summary": {
+      "ledger_rows": 16,
+      "incomplete_rows": 0,
+      "rolled_back_rows": 0,
+      "incident_window_rows": 0
+    }
+  },
+  "audit": {
+    "result": [
+      {
+        "command_tag": "INSERT",
+        "first_seen": "2026-10-13T12:33:36.794000",
+        "last_seen": "2026-10-13T12:33:36.794000",
+        "records": 1,
+        "severity": "LOG",
+        "sqlstate": "00000"
+      },
+      {
+        "command_tag": "INSERT waiting",
+        "first_seen": "2026-10-13T12:33:27.370000",
+        "last_seen": "2026-10-13T12:33:36.791000",
+        "records": 2,
+        "severity": "LOG",
+        "sqlstate": "00000"
+      },
+      {
+        "command_tag": "",
+        "first_seen": "2026-10-13T12:35:38.192000",
+        "last_seen": "2026-10-13T12:35:40.740000",
+        "records": 2,
+        "severity": "LOG",
+        "sqlstate": "00000"
+      }
+    ]
+  },
+  "queries": {
+    "identity": "BEGIN READ ONLY;\nSET LOCAL statement_timeout = '5000ms';\nSELECT current_database() AS database, current_user AS effective_role, session_user AS session_role,\n current_setting('transaction_read_only') AS transaction_read_only,\n current_setting('default_transaction_read_only') AS default_transaction_read_only,\n current_setting('supabase.project_ref', true) AS configured_project_ref,\n (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) AS role_superuser\n; ROLLBACK;",
+    "catalog": "BEGIN READ ONLY;\nSET LOCAL statement_timeout = '5000ms';\nSELECT 'access' AS section, jsonb_build_object('bypass_rls', r.rolbypassrls, 'can_create_role', r.rolcreaterole,\n 'row_security', current_setting('row_security')) AS metadata FROM pg_roles r WHERE r.rolname=current_user\nUNION ALL\nSELECT 'tables', jsonb_build_object('table',c.relname,'select_allowed',has_table_privilege(current_user,c.oid,'SELECT'),\n 'rls_enabled',c.relrowsecurity,'rls_forced',c.relforcerowsecurity,'rls_active_for_role',row_security_active(c.oid))\nFROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace\nWHERE n.nspname='public' AND c.relname IN ('users','roles','oauth_accounts','refresh_tokens','security_events','otp_challenges','password_reset_tokens','carts','wishlists','email_deliveries','_prisma_migrations')\nUNION ALL\nSELECT 'columns', jsonb_build_object('table',table_name,'column',column_name,'type',data_type)\nFROM information_schema.columns WHERE table_schema='public'\nAND table_name IN ('users','roles','oauth_accounts','refresh_tokens','security_events','otp_challenges','password_reset_tokens','carts','wishlists','email_deliveries','_prisma_migrations')\nAND column_name IN ('id','userId','email','pendingEmail','providerAccountId','provider','createdAt','updatedAt','expiresAt','isRevoked','familyId','recipient','type','started_at','finished_at','rolled_back_at','migration_name','checksum','applied_steps_count')\nUNION ALL\nSELECT 'foreign_keys', jsonb_build_object('table',c.relname,'constraint',con.conname,'definition',pg_get_constraintdef(con.oid))\nFROM pg_constraint con JOIN pg_class c ON c.oid=con.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace\nWHERE n.nspname='public' AND con.contype='f'\nAND c.relname IN ('oauth_accounts','refresh_tokens','security_events','otp_challenges','password_reset_tokens','carts','wishlists','email_deliveries')\nORDER BY section;\nROLLBACK;",
+    "counts": "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;\nSET LOCAL statement_timeout = '5000ms';\nSET LOCAL TIME ZONE 'UTC';\nWITH bounds AS (SELECT timestamp '2026-10-13 12:31:00' AS lo, timestamp '2026-10-13 12:39:00' AS hi),\nsynthetic_users AS MATERIALIZED (\n SELECT u.id,u.\"createdAt\" FROM public.users u WHERE u.email ~* '^(google-|local-google-|admin-google-|link-google-)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@electrohub-test[.]invalid$' OR u.\"pendingEmail\" ~* '^(google-|local-google-|admin-google-|link-google-)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@electrohub-test[.]invalid$' LIMIT 1001\n), synthetic_oauth AS MATERIALIZED (\n SELECT o.id,o.\"userId\",o.\"createdAt\" FROM public.oauth_accounts o WHERE o.provider::text='GOOGLE' AND o.\"providerAccountId\" ~* '^(google-|local-|admin-|http-link-)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' LIMIT 1001\n), incident_users AS MATERIALIZED (\n SELECT id FROM synthetic_users,bounds WHERE \"createdAt\">=lo AND \"createdAt\"<hi\n UNION SELECT \"userId\" FROM synthetic_oauth,bounds WHERE \"createdAt\">=lo AND \"createdAt\"<hi\n)\nSELECT 'snapshot' AS object_class, jsonb_build_object('observed_at',clock_timestamp(),'read_only',current_setting('transaction_read_only')) AS counts\nUNION ALL SELECT 'synthetic_users', jsonb_build_object('incident_window',count(*) FILTER(WHERE \"createdAt\">=lo AND \"createdAt\"<hi),'before_window',count(*) FILTER(WHERE \"createdAt\"<lo),'after_window',count(*) FILTER(WHERE \"createdAt\">=hi),'cap_reached',count(*)>=1001) FROM synthetic_users CROSS JOIN bounds\nUNION ALL SELECT 'synthetic_oauth', jsonb_build_object('incident_window',count(*) FILTER(WHERE \"createdAt\">=lo AND \"createdAt\"<hi),'before_window',count(*) FILTER(WHERE \"createdAt\"<lo),'after_window',count(*) FILTER(WHERE \"createdAt\">=hi),'cap_reached',count(*)>=1001) FROM synthetic_oauth CROSS JOIN bounds\nUNION ALL SELECT 'incident_linked_users', jsonb_build_object('total',count(*)) FROM incident_users\nUNION ALL SELECT 'oauth_accounts', jsonb_build_object('related_total',count(*)) FROM public.oauth_accounts WHERE \"userId\" IN (SELECT id FROM incident_users)\nUNION ALL SELECT 'refresh_tokens', jsonb_build_object('related_total',count(*),'revoked',count(*) FILTER(WHERE \"isRevoked\"),'unrevoked_unexpired',count(*) FILTER(WHERE NOT \"isRevoked\" AND \"expiresAt\">CURRENT_TIMESTAMP AT TIME ZONE 'UTC')) FROM public.refresh_tokens WHERE \"userId\" IN (SELECT id FROM incident_users)\nUNION ALL SELECT 'security_events', jsonb_build_object('related_total',count(*)) FROM public.security_events WHERE \"userId\" IN (SELECT id FROM incident_users)\nUNION ALL SELECT 'otp_challenges', jsonb_build_object('related_total',count(*)) FROM public.otp_challenges WHERE \"userId\" IN (SELECT id FROM incident_users)\nUNION ALL SELECT 'password_reset_tokens', jsonb_build_object('related_total',count(*)) FROM public.password_reset_tokens WHERE \"userId\" IN (SELECT id FROM incident_users)\nUNION ALL SELECT 'carts', jsonb_build_object('related_total',count(*)) FROM public.carts WHERE \"userId\" IN (SELECT id FROM incident_users)\nUNION ALL SELECT 'wishlists', jsonb_build_object('related_total',count(*)) FROM public.wishlists WHERE \"userId\" IN (SELECT id FROM incident_users)\nUNION ALL SELECT 'email_deliveries', jsonb_build_object('related_total',count(*)) FROM public.email_deliveries WHERE \"userId\" IN (SELECT id FROM incident_users)\nUNION ALL SELECT 'detached_synthetic_email_deliveries_in_window', jsonb_build_object('total',count(*)) FROM public.email_deliveries,bounds WHERE \"userId\" IS NULL AND recipient ~* '^(google-|local-google-|admin-google-|link-google-)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@electrohub-test[.]invalid$' AND \"createdAt\">=lo AND \"createdAt\"<hi\nUNION ALL SELECT 'detached_google_security_events_in_window', jsonb_build_object('total',count(*),'attribution','UNKNOWN unless owner audit links deleted fixture') FROM public.security_events,bounds WHERE \"userId\" IS NULL AND type::text='GOOGLE_CONNECTED' AND \"createdAt\">=lo AND \"createdAt\"<hi\nORDER BY object_class;\nROLLBACK;",
+    "ledger": "BEGIN READ ONLY; SET LOCAL statement_timeout='5000ms'; SET LOCAL TIME ZONE 'UTC';\nSELECT jsonb_build_object(\n'roles',(SELECT jsonb_agg(jsonb_build_object('role',name,'created_at',\"createdAt\",'updated_at',\"updatedAt\") ORDER BY name) FROM public.roles WHERE name IN ('CUSTOMER','ADMIN')),\n'ledger',(SELECT jsonb_agg(to_jsonb(m) ORDER BY started_at) FROM (SELECT migration_name,checksum,started_at,finished_at,rolled_back_at,applied_steps_count FROM public._prisma_migrations ORDER BY started_at LIMIT 101) m),\n'summary',(SELECT jsonb_build_object('ledger_rows',count(*),'incomplete_rows',count(*) FILTER(WHERE finished_at IS NULL AND rolled_back_at IS NULL),'rolled_back_rows',count(*) FILTER(WHERE rolled_back_at IS NOT NULL),\n'incident_window_rows',count(*) FILTER(WHERE started_at>=timestamptz '2026-10-13 12:31:00Z' AND started_at<timestamptz '2026-10-13 12:39:00Z' OR finished_at>=timestamptz '2026-10-13 12:31:00Z' AND finished_at<timestamptz '2026-10-13 12:39:00Z' OR rolled_back_at>=timestamptz '2026-10-13 12:31:00Z' AND rolled_back_at<timestamptz '2026-10-13 12:39:00Z')) FROM public._prisma_migrations)\n) AS evidence; ROLLBACK;",
+    "validatedForeignKeys": "BEGIN READ ONLY; SET LOCAL statement_timeout='5000ms';\nSELECT c.relname AS table_name,con.conname AS constraint_name,con.convalidated AS validated,\npg_get_constraintdef(con.oid) AS definition\nFROM pg_constraint con JOIN pg_class c ON c.oid=con.conrelid JOIN pg_class p ON p.oid=con.confrelid JOIN pg_namespace n ON n.oid=p.relnamespace\nWHERE con.contype='f' AND n.nspname='public' AND p.relname='users'\nAND c.relname IN ('oauth_accounts','refresh_tokens','security_events','otp_challenges','password_reset_tokens','carts','wishlists','email_deliveries')\nORDER BY c.relname; ROLLBACK;"
+  },
+  "executionNotes": [
+    "One catalog SELECT failed on UNION ORDER BY syntax; corrected without mutation.",
+    "An initial three-SELECT data batch returned only the final ledger summary; separate single-result reads captured counts and ledger metadata.",
+    "All database batches used BEGIN READ ONLY and ROLLBACK; database defaults were also read-only.",
+    "Three audit reads were confined to 2026-10-13T12:31:00Z–12:39:00Z: count, key names, aggregate command/severity/SQLSTATE metadata."
+  ],
+  "limitations": [
+    "The historical effective connection target is not independently captured; current target confirmation does not prove historical inherited environment.",
+    "No fixture UUID or preincident row/audit baseline is available.",
+    "Related counts are joins to the empty incident candidate set; they are not general session/customer counts.",
+    "Detached LOGIN_SUCCESS/LOGOUT or arbitrary null-user rows cannot be attributed without a marker and were not broadly scanned.",
+    "Five audit entries are not a complete statement/row audit and cannot prove historical absence of temporary effects or subsequent owner cleanup.",
+    "No full historical ledger-row checksum snapshot was available in the inspected approved documents to prove the disputed row's historical checksum."
+  ],
+  "databaseMutationsPerformed": 0,
+  "recoveryAuthorized": false,
+  "recoveryPerformed": false,
+  "testsRerun": 0,
+  "validatedForeignKeys": [
+    {
+      "table_name": "carts",
+      "constraint_name": "carts_userId_fkey",
+      "validated": true,
+      "definition": "FOREIGN KEY (\"userId\") REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE"
+    },
+    {
+      "table_name": "email_deliveries",
+      "constraint_name": "email_deliveries_userId_fkey",
+      "validated": true,
+      "definition": "FOREIGN KEY (\"userId\") REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL"
+    },
+    {
+      "table_name": "oauth_accounts",
+      "constraint_name": "oauth_accounts_userId_fkey",
+      "validated": true,
+      "definition": "FOREIGN KEY (\"userId\") REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE"
+    },
+    {
+      "table_name": "otp_challenges",
+      "constraint_name": "otp_challenges_userId_fkey",
+      "validated": true,
+      "definition": "FOREIGN KEY (\"userId\") REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE"
+    },
+    {
+      "table_name": "password_reset_tokens",
+      "constraint_name": "password_reset_tokens_userId_fkey",
+      "validated": true,
+      "definition": "FOREIGN KEY (\"userId\") REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE"
+    },
+    {
+      "table_name": "refresh_tokens",
+      "constraint_name": "refresh_tokens_userId_fkey",
+      "validated": true,
+      "definition": "FOREIGN KEY (\"userId\") REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE"
+    },
+    {
+      "table_name": "security_events",
+      "constraint_name": "security_events_userId_fkey",
+      "validated": true,
+      "definition": "FOREIGN KEY (\"userId\") REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL"
+    },
+    {
+      "table_name": "wishlists",
+      "constraint_name": "wishlists_userId_fkey",
+      "validated": true,
+      "definition": "FOREIGN KEY (\"userId\") REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE"
+    }
+  ],
+  "ledgerComparison": {
+    "approvedEvidenceDocuments": [
+      "docs/06_Database/AUTH_MIGRATION_RELEASE_PLAN.md",
+      "docs/06_Database/PRE_PUSH_INTEGRATION_READINESS.md"
+    ],
+    "summaryMatches": true,
+    "rows": 16,
+    "completed": 16,
+    "incomplete": 0,
+    "rolledBack": 0,
+    "incidentWindowLedgerRows": 0,
+    "sourceByteMatches": 15,
+    "sourceByteDiscrepancy": {
+      "migration": "20260925020000_remove_users_phone",
+      "ledgerChecksum": "15de2423e054cfc803989515209340260b5786ce9a4b3b3879b05ede5b81334f",
+      "existingWorkingCopyChecksum": "15de2423e054cfc803989515209340260b5786ce9a4b3b3879b05ede5b81334f",
+      "committedHeadChecksum": "227201e489fb0d6a4734037e10e0604a3d04505d400d5f47d59d168c2b5ef6e5",
+      "startedAt": "2026-09-26T10:37:39.8617Z",
+      "incidentAttribution": "NOT ESTABLISHED; timestamp predates incident; no evidence of ledger mutation in this investigation",
+      "conflictingPreviousClaim": "All 12 historical committed migration blobs match the DEV ledger",
+      "ownerReconciliationRequired": true
+    },
+    "currentWorkingCopyMatchesDiscrepantLedger": true
+  },
+  "loggingAcceptancePreserved": {
+    "testsReused": [
+      174,
+      29,
+      6
+    ],
+    "testsRerun": 0,
+    "reviewedSourceFingerprintsChecked": 18,
+    "changedReviewedSources": []
+  },
+  "readCounts": {
+    "postgresExecuteSqlCalls": 7,
+    "successful": 6,
+    "syntaxFailure": 1,
+    "auditAggregateCalls": 3,
+    "projectIdentityMetadataCalls": 2
+  },
+  "stopReason": "Prior approved migration evidence contradicts one current source/ledger byte comparison; full prior ledger checksum evidence or owner reconciliation required. No broader database investigation or repair performed.",
+  "auditQueries": {
+    "windowStart": "2026-10-13T12:31:00Z",
+    "windowEnd": "2026-10-13T12:39:00Z",
+    "queries": [
+      "SELECT source, count() AS records FROM logs WHERE source = 'postgres_logs' GROUP BY source",
+      "SELECT mapKeys(log_attributes) AS metadata_keys, count() AS records FROM logs WHERE source = 'postgres_logs' GROUP BY metadata_keys LIMIT 10",
+      "SELECT log_attributes['parsed.error_severity'] AS severity, log_attributes['parsed.sql_state_code'] AS sqlstate, log_attributes['parsed.command_tag'] AS command_tag, count() AS records, min(timestamp) AS first_seen, max(timestamp) AS last_seen FROM logs WHERE source = 'postgres_logs' GROUP BY severity, sqlstate, command_tag LIMIT 20"
+    ]
+  }
+}

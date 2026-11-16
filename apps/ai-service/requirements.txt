@@ -1,0 +1,6 @@
+# Runtime + test dependencies. CI (`.github/workflows/ci.yml`, job "AI Service / Test") installs this
+# file and runs `python -m pytest`, so test packages stay here. The Docker image installs only
+# requirements-runtime.txt.
+-r requirements-runtime.txt
+pytest==9.1.1
+httpx2==2.16.0
