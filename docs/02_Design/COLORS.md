@@ -190,13 +190,17 @@ Text Link
 
 ### Muted / Placeholder
 
-The verified muted/placeholder value is:
+The Task 06.2 implementation uses the existing Slate 600 value for muted/placeholder text:
 
 ``` text
-#64748B
+#475569
 ```
 
 This value is important for:
+
+Task 06.2 rendered scans found the former implementation (`#94A3B8`) failed normal-text contrast on pale surfaces.
+Slate 600 replaces it without adding a new palette color; this intentional accessibility correction also supersedes
+the older documented Slate 500 assignment. Keep disabled-state distinctions and verify the actual background.
 
 -   Placeholder text
 -   Secondary metadata
@@ -746,7 +750,7 @@ through Figma work and values that are implementation baselines.
 -   `#FFFFFF` Primary Foreground
 -   `#06B6D4` Accent
 -   Slate 900 → 50 neutral foundation
--   `#64748B` muted/placeholder
+-   `#475569` accessible muted/placeholder (Task 06.2)
 -   `#FDE68A` rating fill
 -   `#B45309` rating stroke
 -   2px focus ring

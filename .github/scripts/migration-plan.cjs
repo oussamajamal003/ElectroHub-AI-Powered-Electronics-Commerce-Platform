@@ -207,9 +207,22 @@ function compareApproved(pending, approved) {
 }
 
 /** Validate the complete discovered pending set; an approval list is optional and used by manual DEV only. */
-function validatePendingMigrations(local, ledger, approved = null) {
+function validatePendingMigrations(local, ledger, approved = null, mode = 'pre') {
   const { pending, problems } = planMigrations(local, ledger);
-  if (approved !== null) problems.push(...compareApproved(pending, approved));
+  if (!['pre', 'post'].includes(mode)) throw new Error('Usage: migration-plan.cjs pre|post');
+  if (mode === 'pre' && approved !== null) problems.push(...compareApproved(pending, approved));
+  if (mode === 'post') {
+    if (pending.length) problems.push(`migrations still pending after deploy: ${pending.join(', ')}`);
+    if (approved !== null) {
+      problems.push(...compareApproved(approved, approved));
+      for (const name of approved) {
+        if (!local.some(migration => migration.name === name) ||
+            !ledger.some(row => row.name === name && row.finished && !row.rolledBack)) {
+          problems.push(`approved migration not successfully applied: ${name}`);
+        }
+      }
+    }
+  }
   const localByName = new Map(local.map((migration) => [migration.name, migration]));
   for (const name of pending) {
     const migration = localByName.get(name);
@@ -276,7 +289,7 @@ async function main(mode) {
   const migrationsDir = process.env.MIGRATIONS_DIR || path.join(root, 'apps/backend/prisma/migrations');
   const local = localMigrations(migrationsDir);
   const { version, ledger } = await readLedger(root, urls.DIRECT_URL);
-  const { pending, problems } = validatePendingMigrations(local, ledger, approved);
+  const { pending, problems } = validatePendingMigrations(local, ledger, approved, mode);
   console.log(`PostgreSQL ${version}; ledger rows: ${ledger.length}; local migrations: ${local.length}; pending: ${pending.join(', ') || 'none'}`);
   const reconciled = ledger.filter((row) => {
     if (!row.finished || row.rolledBack) return false;

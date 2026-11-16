@@ -43,6 +43,16 @@ describe('AdminSecurityPage', () => {
 
   const renderPage = () => render(<MemoryRouter><AdminToastProvider><AdminSecurityPage /></AdminToastProvider></MemoryRouter>);
 
+  it('uses security-specific placeholders only until factors resolve', () => {
+    vi.mocked(useAdminFactors).mockReturnValue({ data: undefined, isPending: true, isError: false } as unknown as ReturnType<typeof useAdminFactors>);
+    const view = renderPage();
+    expect(screen.getByRole('status', { name: 'Loading security settings' })).toBeVisible();
+    vi.mocked(useAdminFactors).mockReturnValue({ data: factors, isPending: false, isFetching: true, isError: false } as unknown as ReturnType<typeof useAdminFactors>);
+    view.rerender(<MemoryRouter><AdminToastProvider><AdminSecurityPage /></AdminToastProvider></MemoryRouter>);
+    expect(screen.queryByRole('status', { name: 'Loading security settings' })).not.toBeInTheDocument();
+    expect(screen.getByText('Work phone')).toBeVisible();
+  });
+
   it('lists enrolled authenticator apps and the recovery code count', () => {
     renderPage();
 

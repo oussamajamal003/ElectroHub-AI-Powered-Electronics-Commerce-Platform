@@ -3,6 +3,13 @@ import { describe, it, expect } from 'vitest';
 import { Input } from './Input';
 
 describe('Input', () => {
+  it('preserves external instructions alongside validation and cannot mask an error as valid', () => {
+    render(<><p id="instructions">Use your work email.</p><Input label="Email" error="Invalid email address" aria-describedby="instructions" aria-invalid={false} /></>);
+    const input = screen.getByRole('textbox', { name: 'Email' });
+    expect(input).toHaveAccessibleDescription('Use your work email. Invalid email address');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+  });
+
   it('renders correctly with basic props', () => {
     render(<Input placeholder="Enter text" />);
     const input = screen.getByPlaceholderText(/enter text/i);

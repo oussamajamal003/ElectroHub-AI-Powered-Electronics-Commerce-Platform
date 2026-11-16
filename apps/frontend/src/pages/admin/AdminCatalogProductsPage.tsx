@@ -1,3 +1,4 @@
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Archive, Image as ImageIcon, ImageOff, Pencil, Plus, Send, Trash2 } from 'lucide-react';
@@ -133,20 +134,23 @@ export function AdminCatalogProductsPage() {
     { key: 'status', title: 'Status', render: row => <ActivePill active={row.status === 'ACTIVE'} activeLabel="Published" inactiveLabel="Unpublished" /> },
     { key: 'updated', title: 'Updated', sortKey: 'updatedAt', render: row => <span className={styles.muted}>{formatDate(row.updatedAt)}</span> },
     { key: 'actions', title: 'Actions', align: 'right', render: row => <span className={styles.rowActions}>
-      <Link className={styles.iconAction} to={`/admin/products/${row.id}/edit`} aria-label={`Edit ${row.name}`} title="Edit"><Pencil aria-hidden="true" /></Link>
-      <Link className={styles.iconAction} to={`/admin/products/${row.id}/media`} aria-label={`Manage media for ${row.name}`} title="Media"><ImageIcon aria-hidden="true" /></Link>
-      <button type="button" className={styles.iconAction}
-        aria-label={row.status === 'ACTIVE' ? `Unpublish ${row.name}` : `Publish ${row.name}`} title={row.status === 'ACTIVE' ? 'Unpublish' : 'Publish'}
-        onClick={() => { statusChange.reset(); setPending(row); }}>
-        {row.status === 'ACTIVE' ? <Archive aria-hidden="true" /> : <Send aria-hidden="true" />}
-      </button>
+      <Tooltip content="Edit product"><Link className={styles.iconAction} to={`/admin/products/${row.id}/edit`} aria-label={`Edit ${row.name}`}><Pencil aria-hidden="true" /></Link></Tooltip>
+      <Tooltip content="Manage photos"><Link className={styles.iconAction} to={`/admin/products/${row.id}/media`} aria-label={`Manage media for ${row.name}`}><ImageIcon aria-hidden="true" /></Link></Tooltip>
+      <Tooltip content={row.status === 'ACTIVE' ? 'Unpublish (hide from the storefront)' : 'Publish to the storefront'}>
+        <button type="button" className={styles.iconAction}
+          aria-label={row.status === 'ACTIVE' ? `Unpublish ${row.name}` : `Publish ${row.name}`}
+          onClick={() => { statusChange.reset(); setPending(row); }}>
+          {row.status === 'ACTIVE' ? <Archive aria-hidden="true" /> : <Send aria-hidden="true" />}
+        </button>
+      </Tooltip>
       {/* Unavailable deletion stays focusable (aria-disabled), so its reason is reachable by keyboard and screen readers, not only on hover. */}
-      <button type="button" className={`${styles.iconAction} ${styles.iconActionDanger}`} aria-disabled={!row.deletable || undefined}
-        aria-label={row.deletable ? `Delete ${row.name}` : `Delete ${row.name} (unavailable: ${row.deleteBlocker})`}
-        title={row.deletable ? 'Delete permanently' : `Cannot delete: ${row.deleteBlocker}`}
-        onClick={() => { if (row.deletable) { remove.reset(); setDeleting(row); } else toast(`${row.name} cannot be deleted. ${row.deleteBlocker}`, 'info'); }}>
-        <Trash2 aria-hidden="true" />
-      </button>
+      <Tooltip content={row.deletable ? 'Delete permanently' : `Cannot delete: ${row.deleteBlocker}`}>
+        <button type="button" className={`${styles.iconAction} ${styles.iconActionDanger}`} aria-disabled={!row.deletable || undefined}
+          aria-label={row.deletable ? `Delete ${row.name}` : `Delete ${row.name} (unavailable: ${row.deleteBlocker})`}
+          onClick={() => { if (row.deletable) { remove.reset(); setDeleting(row); } else toast(`${row.name} cannot be deleted. ${row.deleteBlocker}`, 'info'); }}>
+          <Trash2 aria-hidden="true" />
+        </button>
+      </Tooltip>
     </span> },
   ];
 

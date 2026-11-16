@@ -8,7 +8,7 @@ export function teamFailure(error: unknown): string | null {
   if (error instanceof ApiError) {
     switch (error.code) {
       case 'SELF_CHANGE': return 'You cannot change your own access from this list.';
-      case 'ADMIN_ALREADY_EXISTS': return 'This administrator already exists. An administrator account already uses this email address. Use Manage Administrators to review their access or reactivate them.';
+      case 'ADMIN_ALREADY_EXISTS': return 'This administrator already exists, so no new invitation email was sent. If their status is Setup pending, the earlier invitation was already accepted; they should sign in with the password they created to finish two-step verification. Use Manage Administrators to review their access.';
       case 'INVITATION_EXISTS': return 'An invitation is already pending for this address. Use Resend in the Invitations section instead.';
       case 'ACCOUNT_EXISTS': return 'This email address is already associated with an ElectroHub account and cannot be used for a new administrator invitation.';
       case 'ACTIVATION_PENDING': return 'An activation link is already pending for this administrator. Use Resend or Revoke instead.';

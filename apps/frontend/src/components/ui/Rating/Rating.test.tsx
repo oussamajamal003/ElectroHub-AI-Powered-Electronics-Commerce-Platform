@@ -23,4 +23,11 @@ describe('Rating Component', () => {
     const container = screen.getByRole('img', { name: 'Rated 5.0 out of 5.' });
     expect(container).toBeInTheDocument();
   });
+
+  it('can hide the visible numeric label while keeping the accessible name', () => {
+    const { container } = render(<Rating value={4.2} reviewCount={5} showLabel={false} />);
+    expect(screen.getByRole('img', { name: 'Rated 4.2 out of 5 based on 5 reviews.' })).toBeInTheDocument();
+    expect(container).not.toHaveTextContent('4.2');
+    expect(container).not.toHaveTextContent('(5 reviews)');
+  });
 });

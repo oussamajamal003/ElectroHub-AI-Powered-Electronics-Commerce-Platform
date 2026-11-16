@@ -478,3 +478,17 @@ The Phase 02.1 Backend Foundation establishes the foundational infrastructure re
 ## 28. Backend Principle
 
 > **Keep business logic centralized, security server-side, persistence consistent, and external integrations isolated behind clear service boundaries.**
+
+## Transactional email branding (Task 06.2 side task)
+
+Every application-generated HTML email renders the shared header from `src/emails/brand.ts` (`renderEmailHeader`): a table-based,
+inline-styled block with the official ElectroHub PNG logo (148×40, 2× source, alt text `ElectroHub`) or, when no trustworthy public
+origin is configured, the text wordmark — never a broken image. The logo URL is `EMAIL_LOGO_URL` if set, otherwise
+`<origin>/brand/electrohub-email-logo.png` where origin is the caller's trusted origin, then `COMMERCE_EMAIL_ORIGIN`, then
+`FRONTEND_URL`. Only https (or loopback http for development capture) without credentials, query or fragment is accepted, so no signed
+or private URL can reach the markup. A renamed store keeps its identity: its name is shown (escaped) under the logo. Producers:
+`services/email.service.ts` (verification, password reset, password changed), `admin-invitation-email.ts` (invitation, activation,
+owner granted/revoked), `admin-email-change-email.ts` (code + two notices), `admin-deletion-email.ts`, `admin-notification.service.ts`
+(order paid, low stock, invitation accepted), `stock-alert.service.ts`, `storefront-contact.service.ts`, and the commerce layout
+(`emails/commerce/layout.ts`, all order/payment templates). New email templates must use `renderEmailHeader`; `emails/__tests__/brand.test.ts`
+renders every producer and fails if one lacks it. Delivery acceptance by Brevo and remote image loading are not verified by these tests.

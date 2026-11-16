@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -153,7 +153,9 @@ describe('Product details loading and review auth state', () => {
 
   it('limits additions to remaining stock and resets a now-invalid selection', async () => {
     const view = renderPage();
-    expect(screen.getByText('13 more items available to add.')).toBeInTheDocument();
+    // Nothing in this Cart yet: the exact server quantity is the whole story; no redundant cart-relative line.
+    expect(screen.getByTestId('product-available-quantity')).toHaveTextContent('13 available');
+    expect(screen.queryByText(/more items? available to add/)).not.toBeInTheDocument();
     const increase = screen.getByRole('button', { name: 'Increase quantity for Test Tablet' });
     for (let index = 0; index < 6; index++) await userEvent.click(increase);
     expect(screen.getByText('7', { selector: '[aria-live="polite"]' })).toBeInTheDocument();
@@ -162,6 +164,8 @@ describe('Product details loading and review auth state', () => {
     view.rerender(<QueryClientProvider client={testQueryClient}><MemoryRouter initialEntries={['/products/test-tablet']}><Routes><Route path="/products/:slug" element={<ProductDetailPage />} /></Routes></MemoryRouter></QueryClientProvider>);
     expect(screen.getByText('1', { selector: '[aria-live="polite"]' })).toBeInTheDocument();
     expect(screen.getByText('5 more items available to add.')).toBeInTheDocument();
+    // Adding to a Cart reserves nothing: the sellable quantity shown to every shopper is unchanged.
+    expect(screen.getByTestId('product-available-quantity')).toHaveTextContent('13 available');
   });
 
   it('disables Add when the current Cart already contains all available stock', () => {
@@ -185,6 +189,35 @@ describe('Product details loading and review auth state', () => {
     expect(screen.queryByRole('heading', { name: 'Test Tablet' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Buy Now' })).not.toBeInTheDocument();
   });
+  it('keeps an already verified product on screen during a background refetch instead of remounting the page as a skeleton', () => {
+    const view = renderPage();
+    expect(screen.getByRole('heading', { name: 'Test Tablet' })).toBeInTheDocument();
+    const heading = screen.getByRole('heading', { name: 'Test Tablet' });
+    vi.mocked(useProduct).mockReturnValue({ data: { data: product }, isPending: false, isFetching: true, isError: false } as unknown as ReturnType<typeof useProduct>);
+    view.rerender(<QueryClientProvider client={testQueryClient}><MemoryRouter initialEntries={['/products/test-tablet']}><Routes><Route path="/products/:slug" element={<ProductDetailPage />} /></Routes></MemoryRouter></QueryClientProvider>);
+    expect(screen.queryByRole('status', { name: 'Loading product details' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Test Tablet' })).toBe(heading);   // same node: nothing was remounted
+  });
+  it('still removes a verified product at once when its refetch fails (404 / no longer public)', () => {
+    const view = renderPage();
+    expect(screen.getByRole('heading', { name: 'Test Tablet' })).toBeInTheDocument();
+    vi.mocked(useProduct).mockReturnValue({ data: { data: product }, isPending: false, isFetching: true, isError: false } as unknown as ReturnType<typeof useProduct>);
+    view.rerender(<QueryClientProvider client={testQueryClient}><MemoryRouter initialEntries={['/products/test-tablet']}><Routes><Route path="/products/:slug" element={<ProductDetailPage />} /></Routes></MemoryRouter></QueryClientProvider>);
+    vi.mocked(useProduct).mockReturnValue({ data: { data: product }, isPending: false, isFetching: false, isError: true, error: new ApiError(404, 'Not found') } as unknown as ReturnType<typeof useProduct>);
+    view.rerender(<QueryClientProvider client={testQueryClient}><MemoryRouter initialEntries={['/products/test-tablet']}><Routes><Route path="/products/:slug" element={<ProductDetailPage />} /></Routes></MemoryRouter></QueryClientProvider>);
+    expect(screen.queryByRole('heading', { name: 'Test Tablet' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add to Cart' })).not.toBeInTheDocument();
+  });
+  it('shows the review box with a visible placeholder, an accessible label and a described character count', () => {
+    vi.mocked(useAuth).mockReturnValue({ isInitializing: false, isAuthenticated: true, isSessionVerified: true, user: { id: 'u1', role: 'CUSTOMER' } } as unknown as ReturnType<typeof useAuth>);
+    vi.mocked(useMyReview).mockReturnValue({ data: { data: null }, isPending: false } as unknown as ReturnType<typeof useMyReview>);
+    render(<QueryClientProvider client={testQueryClient}><MemoryRouter initialEntries={['/products/test-tablet#reviews']}><Routes><Route path="/products/:slug" element={<ProductDetailPage />} /></Routes></MemoryRouter></QueryClientProvider>);
+    const box = screen.getByRole('textbox', { name: /Your review/ });
+    expect(box).toHaveAttribute('placeholder', 'Share your experience with this product...');
+    expect(box).toBeRequired();
+    expect(box).toHaveAttribute('maxLength', '2000');
+    expect(box).toHaveAccessibleDescription('0/2000 characters');
+  });
   it.each([['IN_STOCK', 8, 'In Stock'], ['LOW_STOCK', 2, 'Low Stock'], ['OUT_OF_STOCK', 0, 'Out of Stock']] as const)('renders %s with authoritative quantity controls', (stockStatus, availableQuantity, label) => {
     vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, stockStatus, availableQuantity, purchasable: availableQuantity > 0, availability: availableQuantity > 0 ? 'AVAILABLE' : 'UNAVAILABLE' } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
     renderPage();
@@ -192,6 +225,9 @@ describe('Product details loading and review auth state', () => {
     expect(screen.getByRole('button', { name: 'Add to Cart' }).hasAttribute('disabled')).toBe(availableQuantity === 0);
     expect(screen.getByRole('button', { name: 'Increase quantity for Test Tablet' }).hasAttribute('disabled')).toBe(availableQuantity === 0);
     if (stockStatus === 'LOW_STOCK') expect(screen.getByText('Only 2 left')).toBeInTheDocument();
+    const quantity = screen.queryByTestId('product-available-quantity');
+    if (stockStatus === 'IN_STOCK') expect(quantity).toHaveTextContent('8 available');
+    if (stockStatus === 'OUT_OF_STOCK') expect(quantity).not.toBeInTheDocument();
   });
   it.each([undefined, null])('treats missing inventory status as unavailable rather than Out of Stock (%s)', stockStatus => {
     vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, stockStatus, availableQuantity: 0, purchasable: false, availability: 'UNAVAILABLE' } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
@@ -200,5 +236,78 @@ describe('Product details loading and review auth state', () => {
     expect(screen.queryByText('Out of Stock', { exact: true })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add to Cart' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Increase quantity for Test Tablet' })).toBeDisabled();
+  });
+
+  describe('Task 06.2 premium Description and Customer Reviews', () => {
+    const withProduct = (overrides: Record<string, unknown>) => vi.mocked(useProduct).mockReturnValue({ data: { data: { ...product, ...overrides } }, isPending: false, isError: false } as unknown as ReturnType<typeof useProduct>);
+    const withSummary = (summary: unknown) => vi.mocked(useReviews).mockReturnValue({ data: { data: [], summary, meta: { page: 1, pageSize: 10, total: 0, totalPages: 0 } }, isPending: false, isError: false } as unknown as ReturnType<typeof useReviews>);
+
+    it('renders stored paragraphs as text, never as markup, and lists only real product facts', () => {
+      withProduct({ description: 'First paragraph.\n\n<img src=x onerror="alert(1)">Second paragraph.', brand: { id: 'b-1', name: 'Acme', slug: 'acme' }, modelNumber: 'TT-10',
+        specifications: [{ group: 'Display', items: [{ id: 's-1', group: 'Display', name: 'Size', value: '11 in', sortOrder: 0 }] }] });
+      const { container } = renderPage();
+      const panel = screen.getByRole('region', { name: 'Product Description' });
+      expect(within(panel).getByText('First paragraph.')).toBeInTheDocument();
+      expect(within(panel).getByText('<img src=x onerror="alert(1)">Second paragraph.')).toBeInTheDocument();
+      expect(container.querySelector('img[src="x"]')).toBeNull();
+      const glance = screen.getByRole('complementary', { name: 'At a glance' });
+      expect([...glance.querySelectorAll('dt')].map(node => node.textContent)).toEqual(['Category', 'Brand', 'SKU', 'Model', 'Size']);
+      expect(within(glance).getByText('TT-10')).toBeInTheDocument();
+      expect(within(glance).getByText('11 in')).toBeInTheDocument();
+    });
+
+    it('omits brand, model and specification highlights that the product does not have', () => {
+      withProduct({ description: '   ' });
+      renderPage();
+      const glance = screen.getByRole('complementary', { name: 'At a glance' });
+      expect([...glance.querySelectorAll('dt')].map(node => node.textContent)).toEqual(['Category', 'SKU']);
+      expect(screen.queryByTestId('description-highlights')).not.toBeInTheDocument();
+      expect(screen.getByText('No description is available.')).toBeInTheDocument();
+    });
+
+    it('draws the rating distribution from the server per-star counts with a text alternative', async () => {
+      withProduct({ averageRating: '4.2', reviewCount: 5 });
+      withSummary({ averageRating: '4.2', reviewCount: 5, distribution: [{ rating: 5, count: 3 }, { rating: 4, count: 1 }, { rating: 3, count: 0 }, { rating: 2, count: 0 }, { rating: 1, count: 1 }] });
+      renderPage();
+      await userEvent.click(screen.getByRole('tab', { name: 'Reviews (5)' }));
+      const summary = screen.getByTestId('review-summary');
+      expect(within(summary).getByText('4.2')).toBeInTheDocument();
+      expect(within(summary).getByText('Based on 5 reviews')).toBeInTheDocument();
+      const rows = within(screen.getByRole('list', { name: 'Rating distribution' })).getAllByRole('listitem');
+      expect(rows.map(row => row.querySelector('span')?.textContent)).toEqual([
+        '5 stars: 3 reviews, 60%', '4 stars: 1 review, 20%', '3 stars: 0 reviews, 0%', '2 stars: 0 reviews, 0%', '1 star: 1 review, 20%']);
+      expect(screen.getByText('★ 4.2 out of 5 · 5 reviews')).toBeInTheDocument();
+    });
+
+    it.each([
+      ['no distribution from the server', { averageRating: '4.0', reviewCount: 2 }],
+      ['counts that disagree with the total', { averageRating: '4.0', reviewCount: 2, distribution: [5, 4, 3, 2, 1].map(rating => ({ rating, count: rating === 4 ? 1 : 0 })) }],
+    ])('never estimates bars when there is %s', async (_case, summary) => {
+      withProduct({ averageRating: '4.0', reviewCount: 2 });
+      withSummary(summary);
+      renderPage();
+      await userEvent.click(screen.getByRole('tab', { name: 'Reviews (2)' }));
+      expect(within(screen.getByTestId('review-summary')).getByText('4.0')).toBeInTheDocument();
+      expect(screen.queryByRole('list', { name: 'Rating distribution' })).not.toBeInTheDocument();
+    });
+
+    it('shows an honest empty summary for an unrated product', async () => {
+      withSummary({ averageRating: null, reviewCount: 0, distribution: [5, 4, 3, 2, 1].map(rating => ({ rating, count: 0 })) });
+      renderPage();
+      await userEvent.click(screen.getByRole('tab', { name: 'Reviews (0)' }));
+      expect(within(screen.getByTestId('review-summary')).getByText('No ratings yet')).toBeInTheDocument();
+      expect(screen.queryByRole('list', { name: 'Rating distribution' })).not.toBeInTheDocument();
+    });
+
+    it('prompts signed-in customers with the review placeholder without changing the review rules', async () => {
+      vi.mocked(useAuth).mockReturnValue({ isInitializing: false, isAuthenticated: true, isSessionVerified: true } as ReturnType<typeof useAuth>);
+      vi.mocked(useMyReview).mockReturnValue({ isPending: false, data: { data: null } } as unknown as ReturnType<typeof useMyReview>);
+      renderPage();
+      await userEvent.click(screen.getByRole('tab', { name: 'Reviews (0)' }));
+      const textarea = screen.getByRole('textbox', { name: /Your review/ });
+      expect(textarea).toHaveAttribute('placeholder', 'Share your experience with this product...');
+      expect(textarea).toHaveAttribute('maxLength', '2000');
+      expect(textarea).toBeRequired();
+    });
   });
 });

@@ -84,7 +84,7 @@ describe('a denied process mutates nothing', () => {
     await expect(service.process('11111111-1111-4111-8111-111111111111')).resolves.toBeNull();
     const id = '11111111-1111-4111-8111-111111111111';
     for (const call of [() => service.submit('u', id), () => service.confirmationStarted('u', id),
-      () => service.resume('u', id), () => service.restore('u', id), () => service.dismiss('u', id), () => service.acknowledge('u', id, 'DECLINED'),
+      () => service.resume('u', id), () => service.restore('u', id), () => service.dismiss('u', id), () => service.discard('u', id), () => service.acknowledge('u', id, 'DECLINED'),
       () => service.reconcile('u', id), () => service.cancel('u', id), () => service.wake(id), () => service.setup('u', 'k', {})]) {
       await expect(call()).rejects.toMatchObject({ statusCode: 503, code: 'PAYMENT_MUTATIONS_DISABLED' });
     }

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { boundCorrelationForTests } from '../services/analytics-withdrawal.js';
 
 const router = Router();
 const runIdSchema = z.string().uuid();
@@ -18,6 +19,26 @@ router.use((request, response, next) => {
     return;
   }
   next();
+});
+
+/**
+ * Task 06.2 privacy verification: what the analytics store holds for one image search (by its random withdrawal reference) and one
+ * storefront tab (by its random session id). Read-only, test stack only, and keyed by values only the calling browser knows.
+ */
+router.post('/analytics-probe', async (request, response, next) => {
+  try {
+    const body = z.object({ ref: z.string().uuid().optional(), sessionId: z.string().uuid().optional() }).strict().parse(request.body);
+    const correlationId = body.ref ? boundCorrelationForTests(body.ref.toLowerCase()) : null;
+    const imageSearch = correlationId
+      ? await prisma.analyticsEvent.findMany({ where: { correlationId }, select: { type: true, outcome: true } })
+      : null;
+    const session = body.sessionId
+      ? await prisma.analyticsEvent.findFirst({ where: { idempotencyKey: `ses:${body.sessionId.toLowerCase()}` }, select: { durationMs: true } })
+      : null;
+    response.json({ bound: Boolean(correlationId), imageSearch, session });
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.post('/expire-otp', async (request, response, next) => {

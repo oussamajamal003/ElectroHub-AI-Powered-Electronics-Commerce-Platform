@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach } from 'vitest';
 import { cleanup, configure } from '@testing-library/react';
+import { resetToastsForTests } from '@/components/ui/Toast/toastStore';
 
 // findBy*/waitFor default to 1 s. Lazy routes and React Query settle well inside that alone, but the full suite runs ~160 files in
 // parallel workers and a busy machine pushed a few of them past 1 s (routing home heading, checkout, settings). 5 s keeps a
@@ -10,6 +11,8 @@ configure({ asyncUtilTimeout: 5000 });
 // Automatically cleanup DOM after each test
 afterEach(() => {
   cleanup();
+  // The toast queue is a module singleton; never let one test's toasts (or dedupe window) leak into the next.
+  resetToastsForTests();
 });
 
 // jsdom does not implement scrolling; the admin layout scrolls to the top on navigation.

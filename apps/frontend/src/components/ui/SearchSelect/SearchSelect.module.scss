@@ -21,7 +21,7 @@
   &[aria-expanded='true'] { border-color: $color-primary; }
   &:disabled { cursor: not-allowed; background: $color-surface; color: $color-text-muted; } }
 .error { border-color: $color-error-border; background: $color-error-background;
-  &:focus-visible { border-color: $color-error; box-shadow: 0 0 0 $focus-ring-width rgba($color-error, .3); } }
+  &:focus-visible { border-color: $color-error; box-shadow: 0 0 0 $focus-ring-width theme-alpha($color-error, .3); } }
 .value { flex: 1 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; text-align: left; line-height: $line-height-normal; }
 .placeholder { color: $color-text-muted; }
 .icon { width: 16px; height: 16px; margin-left: auto; flex-shrink: 0; color: $color-text-muted; transition: transform $transition-fast; }

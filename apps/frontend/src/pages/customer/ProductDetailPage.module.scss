@@ -4,7 +4,7 @@
 .productTop { display: grid; grid-template-columns: minmax(0, 1fr); gap: $spacing-8; @include respond-to(md) { grid-template-columns: repeat(2, minmax(0, 1fr)); } @include respond-to(lg) { grid-template-columns: minmax(0, 34fr) minmax(0, 66fr); gap: $spacing-12; } }
 .gallery { @include respond-to(md) { max-width: 35rem; } }
 .summary { h1 { margin: $spacing-2 0 $spacing-3; font-size: clamp($font-size-2xl, 2.25vw, 2.75rem); font-weight: $font-weight-bold; letter-spacing: -0.015em; line-height: $line-height-tight; } }
-.category { color: $color-primary; text-transform: uppercase; letter-spacing: 0.08em; font-size: $font-size-xs; font-weight: $font-weight-semibold; }
+.category { color: $color-primary-text; text-transform: uppercase; letter-spacing: 0.08em; font-size: $font-size-xs; font-weight: $font-weight-semibold; }
 .model { color: $color-text-secondary; font-size: $font-size-sm; }
 .rating { color: $color-warning-foreground; font-weight: $font-weight-medium; }
 .price { display: flex; flex-wrap: wrap; align-items: center; gap: $spacing-3; margin: $spacing-6 0 $spacing-4; padding-top: $spacing-6; border-top: 1px solid $color-border; strong { font-size: $font-size-4xl; font-weight: $font-weight-bold; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; } del { color: $color-text-muted; } }
@@ -12,6 +12,7 @@
 .availability, .unavailable { display: flex; flex-wrap: wrap; align-items: center; gap: $spacing-3; padding-top: $spacing-5; border-top: 1px solid $color-border; p { margin: 0; } }
 .availability { color: $color-success-foreground; font-weight: $font-weight-semibold; }
 .lowStockFeedback { color: $color-warning-foreground; }
+.stockQuantity { color: $color-text-secondary; font-weight: $font-weight-regular; }
 .unavailable { color: $color-error; font-weight: $font-weight-semibold; }
 .intro { max-width: 40rem; margin: 0 0 $spacing-6; color: $color-text-secondary; font-size: $font-size-base; line-height: $line-height-relaxed; }
 .cartActions { display: grid; justify-items: start; gap: $spacing-4; margin-top: $spacing-5; > p[role='status'] { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; } }
@@ -33,9 +34,10 @@
   h3 { margin: 0 0 $spacing-5; }
   form { display: grid; gap: $spacing-3; }
   label { font-weight: $font-weight-medium; }
-  textarea { width: 100%; border: 1px solid $color-border; padding: $spacing-3; font: inherit; resize: vertical; &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
+  textarea { width: 100%; min-height: 7.5rem; border: 1px solid $color-border; padding: $spacing-3; font: inherit; color: $color-text-primary; background: $color-background; resize: vertical; &::placeholder { color: $color-text-muted; opacity: 1; } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
   small { color: $color-text-secondary; text-align: right; }
 }
+.requiredMark { color: $color-text-muted; font-weight: $font-weight-regular; font-size: $font-size-sm; }
 .reviewActions { display: flex; flex-wrap: wrap; gap: $spacing-3; margin-top: $spacing-2; }
 .reviewConfirm { margin-top: $spacing-4; padding-top: $spacing-4; border-top: 1px solid $color-border; p { margin: 0; font-weight: $font-weight-medium; } }
 .reviewFeedback { margin: $spacing-4 0 0; padding-top: $spacing-3; border-top: 1px solid $color-border; color: $color-text-secondary; }
@@ -53,3 +55,106 @@
 .detailSkeletonSummary { display: grid; align-content: start; gap: $spacing-5; margin-top: $spacing-8; }
 .detailSkeletonTabs { margin-top: $spacing-12; }
 @media (max-width: 30rem) { .reviewForm { padding: $spacing-4; } .reviewActions > * { flex: 1 1 100%; } }
+
+// Task 06.2 WP C — premium Description and Customer Reviews summary. Same card vocabulary as the Contact method cards
+// (1px border, background, $shadow-sm, tinted primary icon chip) so the two pages read as one system.
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.cardIcon { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem;
+  border-radius: $radius-md; color: $color-primary; background: rgba($color-primary, 0.08); }
+.descriptionPanel {
+  display: grid;
+  gap: $spacing-6;
+  min-width: 0;
+  align-items: start;
+  // Wide screens: the description column is sized to its readable measure and "At a glance" uses the remaining width,
+  // so a long description never leaves an empty band beside it and a short one never stretches across the row.
+  @include respond-to(lg) { grid-template-columns: minmax(0, 46rem) minmax(20rem, 1fr); gap: $spacing-8; }
+}
+.descriptionBody {
+  min-width: 0;
+  padding: $spacing-5;
+  border: 1px solid $color-border;
+  border-inline-start: $spacing-1 solid $color-primary;
+  border-radius: $radius-lg;
+  background: linear-gradient(115deg, $color-primary-subtle, $color-background 65%);
+  @include respond-to(md) { padding: $spacing-8; }
+}
+.descriptionHeading {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  margin-bottom: $spacing-4;
+  h2 { margin: 0; font-size: $font-size-xl; letter-spacing: -0.02em; }
+  .cardIcon { background: $color-background; color: $color-primary-text; box-shadow: $shadow-sm; }
+}
+.descriptionCopy {
+  max-width: 72ch;
+  color: $color-text-primary;
+  font-size: $font-size-base;
+  line-height: $line-height-relaxed;
+  overflow-wrap: anywhere;
+  p { margin: 0 0 $spacing-4; white-space: pre-line; }
+  // The global reset removes list markers; descriptions show them so bullet lines read as a list, not loose lines.
+  ul { margin: 0 0 $spacing-4; padding-inline-start: $spacing-6; list-style: disc; }
+  li { padding-inline-start: $spacing-1; margin-bottom: $spacing-2; }
+  li::marker { color: $color-primary-text; }
+  > :last-child { margin-bottom: 0; }
+}
+.descriptionEmpty { color: $color-text-secondary; }
+.glanceCard {
+  min-width: 0;
+  h3 { display: flex; align-items: center; gap: $spacing-3; margin: 0 0 $spacing-4;
+    font-size: $font-size-lg; font-weight: $font-weight-semibold; }
+  h4 { margin: $spacing-6 0 $spacing-3; color: $color-text-secondary;
+    font-size: $font-size-xs; font-weight: $font-weight-semibold; letter-spacing: 0.08em; text-transform: uppercase; }
+  .cardIcon { background: $color-surface; color: $color-text-secondary; }
+}
+.glanceList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $spacing-5;
+  margin: 0;
+  padding: $spacing-5;
+  border-block: 1px solid $color-border;
+  background: $color-surface;
+  @include respond-to(md) { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+  > div { display: grid; align-content: start; gap: $spacing-1; min-width: 0; }
+  dt { color: $color-text-secondary; font-size: $font-size-xs; }
+  dd { margin: 0; font-size: $font-size-sm; font-weight: $font-weight-semibold; overflow-wrap: anywhere; }
+}
+.descriptionHighlights {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: $spacing-3;
+  margin: 0;
+  @include respond-to(sm) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @include respond-to(lg) { grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); }
+  > div { padding: $spacing-4; min-width: 0; border: 1px solid $color-border; border-radius: $radius-md;
+    background: $color-background; box-shadow: $shadow-sm; }
+  dt { color: $color-text-secondary; font-size: $font-size-sm; overflow-wrap: anywhere; }
+  dd { margin: $spacing-2 0 0; font-size: $font-size-lg; font-weight: $font-weight-semibold; overflow-wrap: anywhere; }
+}
+.glanceMore { margin: $spacing-3 0 0; color: $color-text-secondary; font-size: $font-size-sm; }
+.reviewSummary { display: grid; gap: $spacing-6; margin: $spacing-4 0 $spacing-6; padding: $spacing-5; border: 1px solid $color-border;
+  background: $color-background; box-shadow: $shadow-sm;
+  @include respond-to(md) { grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr); align-items: center; gap: $spacing-8; padding: $spacing-6; }
+}
+.reviewScore { display: grid; gap: $spacing-2; justify-items: start;
+  p { margin: 0; }
+}
+.reviewAverage { display: flex; align-items: baseline; gap: $spacing-2;
+  strong { font-size: $font-size-4xl; font-weight: $font-weight-bold; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  span { color: $color-text-secondary; }
+}
+.reviewAverageEmpty { font-size: $font-size-xl; font-weight: $font-weight-semibold; }
+.reviewStars { color: $color-warning-foreground; }
+.reviewTotal { color: $color-text-secondary; font-size: $font-size-sm; }
+.distribution { display: grid; gap: $spacing-2; margin: 0; padding: 0; list-style: none;
+  li { display: grid; grid-template-columns: 2.75rem minmax(0, 1fr) 2.5rem; align-items: center; gap: $spacing-3; font-size: $font-size-sm; }
+}
+.distributionLabel { color: $color-text-secondary; white-space: nowrap; }
+.distributionBar { height: 0.5rem; overflow: hidden; background: $color-surface; border: 1px solid $color-border;
+  > span { display: block; height: 100%; background: $color-primary; }
+}
+.distributionCount { color: $color-text-secondary; text-align: right; font-family: $font-family-mono; font-variant-numeric: tabular-nums; }
+.reviewForm textarea::placeholder { color: $color-text-muted; opacity: 1; }

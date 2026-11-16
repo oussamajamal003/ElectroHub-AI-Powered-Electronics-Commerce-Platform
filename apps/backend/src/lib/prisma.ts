@@ -25,6 +25,7 @@ import { logSafely } from '../utils/logger.js';
 import { logContext } from '../utils/logContext.js';
 import { resolveDatabaseTargets } from './database-target.js';
 import { deliveryQaPoolOptions } from '../delivery-qa-runtime.config.js';
+import { resolveDbPoolMax } from './db-pool-config.js';
 function createClient() {
   const targets = resolveDatabaseTargets({ ...process.env, NODE_ENV: env.NODE_ENV, DATABASE_URL: env.DATABASE_URL,
     DIRECT_URL: env.DIRECT_URL, DB_RUNTIME_URL_SOURCE: env.DB_RUNTIME_URL_SOURCE });
@@ -38,12 +39,13 @@ function createClient() {
     runtimeUrl.searchParams.delete(parameter);
   }
   const qaPool = deliveryQaPoolOptions(process.env);
+  const dbPoolMax = resolveDbPoolMax(process.env.DB_POOL_MAX);
   const adapter = new ObservablePrismaPg({
     connectionString: runtimeUrl.toString(),
     // Configured application maxima do not establish Supavisor tenant headroom.
     // pg min retains connections; it does not proactively warm an empty pool.
-    max: qaPool?.max ?? (env.NODE_ENV === 'production' ? 10 : 5),
-    min: qaPool?.min ?? (env.NODE_ENV === 'production' ? 2 : env.NODE_ENV === 'development' ? 1 : 0),
+    max: qaPool?.max ?? dbPoolMax ?? (env.NODE_ENV === 'production' ? 10 : 5),
+    min: qaPool?.min ?? (env.NODE_ENV === 'production' ? 2 : env.NODE_ENV === 'development' ? Math.min(1, dbPoolMax ?? 1) : 0),
     idleTimeoutMillis: qaPool?.idleTimeoutMillis ?? (env.NODE_ENV === 'test' ? 10000 : 300000),
     connectionTimeoutMillis: 30000,
     keepAlive: true,

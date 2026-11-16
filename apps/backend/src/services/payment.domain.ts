@@ -79,6 +79,13 @@ export const INCOMPLETE_FAILURE_CODE = 'PAYMENT_INCOMPLETE';
 /** The customer cancelled a verified never-confirmed purchase (Cancel purchase); its PaymentIntent was cancelled with nothing received. */
 export const CANCELED_BY_CUSTOMER_FAILURE_CODE = 'PAYMENT_CANCELED_BY_CUSTOMER';
 /**
+ * The customer discarded a failed (declined) purchase whose PaymentIntent was still open (Remove failed payment -> Cancel & Remove). The
+ * intent is cancelled by the lease-fenced worker with nothing received or authorized, and the card is hidden (dismissedAt) in the same
+ * write that records the provider-verified cancellation. It is deliberately NOT an abandonment code: the purchase failed at the provider
+ * first, and a provider authorization observed before the cancellation still wins over this request.
+ */
+export const DISCARDED_BY_CUSTOMER_FAILURE_CODE = 'PAYMENT_DISCARDED_BY_CUSTOMER';
+/**
  * Purchases that ended with NO provider decline and NO payment (system expiry, superseded setup, legacy release, customer cancellation of a
  * verified never-confirmed purchase). Documented presentation rule (Task 03.6): they are excluded from the customer's active payment lists
  * (never relabelled Payment failed, which requires provider evidence). Records are preserved; abandoned CART items stay restorable via
@@ -98,6 +105,31 @@ export const NOT_CONFIRMED_FAILURE_CODE = 'PAYMENT_NOT_CONFIRMED';
  * (8.5-37 s). Applies only where the confirmation signal is enabled, because only there is "no marker" evidence.
  */
 export const NEVER_CONFIRMED_GRACE_MS = 10 * 60_000;
+/**
+ * Order-commit refusals meaning the purchase could not be sold as authorized: the last unit(s) went to another customer first, or the
+ * product was withdrawn. Inventory is committed only at order commit (Cart, Checkout and card entry reserve nothing), so a customer whose
+ * card was authorized can still lose the item; the authorization is then cancelled, never captured.
+ */
+export const STOCK_FAILURE_CODES = ['CART_STOCK_CONFLICT', 'PRODUCT_UNAVAILABLE', 'INVENTORY_NOT_FOUND'] as const;
+/**
+ * Bounded re-attempts, within one processing pass, of an order commit that lost only to serialization contention (each attempt already
+ * retries serialization internally) before its authorization is released. Backoff is COMMIT_CONFLICT_BACKOFF_MS * 2^round plus jitter.
+ */
+export const COMMIT_CONFLICT_RETRIES = 3;
+export const COMMIT_CONFLICT_BACKOFF_MS = 50;
+export type CustomerOutcomeReason = 'STOCK_UNAVAILABLE' | null;
+/** Why a purchase without an order ended (or is ending). Presentation detail only; never changes the payment classification. */
+export function customerOutcomeReason(attempt: Pick<Attempt, 'state' | 'orderId'> & { failureCode?: string | null }): CustomerOutcomeReason {
+  return !attempt.orderId && ['CANCEL_PENDING', 'CANCELED'].includes(attempt.state) &&
+    (STOCK_FAILURE_CODES as readonly string[]).includes(attempt.failureCode ?? '') ? 'STOCK_UNAVAILABLE' : null;
+}
+/**
+ * True only once the provider's own fresh read showed the PaymentIntent cancelled (every CANCELED write follows such a read; a cancelled
+ * manual-capture intent was never captured). Until then a customer must not be told the authorization was released.
+ */
+export function authorizationReleased(attempt: Pick<Attempt, 'state' | 'orderId' | 'providerStatus'>) {
+  return attempt.state === 'CANCELED' && !attempt.orderId && attempt.providerStatus === 'canceled';
+}
 /** A failed provider read cannot turn stale card-entry/decline facts into a final outcome. */
 export function customerPaymentStatus(attempt: Pick<Attempt, 'state' | 'submittedAt' | 'orderId'> & { failureCode?: string | null; confirmationStartedAt?: Date | null },
   work?: { state: string; lastError?: string | null } | null): CustomerPaymentStatus {

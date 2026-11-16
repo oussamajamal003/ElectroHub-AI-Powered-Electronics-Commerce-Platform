@@ -1,3 +1,4 @@
+import { toast } from '@/components/ui/Toast';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/features/auth/context/AuthContext';
@@ -132,6 +133,7 @@ export function useDocumentActions(orderReference: string) {
       window.clearTimeout(cooldownTimer.current);
       cooldownTimer.current = window.setTimeout(() => setCoolingDown(false), RATE_LIMIT_COOLDOWN_MS);
     }
+    toast.error('Document unavailable', { description: message, id: `order-document-${kind}`, announce: false });
     if (inPreview) setPreview(current => current && current.entry.kind === kind ? { ...current, status: 'error', message } : current);
     else setErrors(current => ({ ...current, [kind]: message }));
   }, [orderReference, queryClient]);

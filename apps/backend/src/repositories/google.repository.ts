@@ -1,3 +1,4 @@
+import { enqueueCustomerWelcome } from '../services/commerce-email.producer.js';
 import { prisma } from '../lib/prisma.js';
 import { GoogleIdentity } from '../providers/google.provider.js';
 
@@ -13,7 +14,7 @@ export class GoogleRepository {
   createCustomer(identity: GoogleIdentity) {
     return prisma.$transaction(async transaction => {
       const role = await transaction.role.upsert({ where: { name: 'CUSTOMER' }, create: { name: 'CUSTOMER' }, update: {} });
-      return transaction.user.create({
+      const user = await transaction.user.create({
         data: {
           email: identity.email, passwordHash: null, firstName: identity.firstName, lastName: identity.lastName,
           emailVerifiedAt: new Date(), roleId: role.id,
@@ -21,6 +22,8 @@ export class GoogleRepository {
           securityEvents: { create: { type: 'GOOGLE_CONNECTED' } },
         }, include: { role: true },
       });
+      await enqueueCustomerWelcome(transaction, user.id, user.emailVerifiedAt!);
+      return user;
     }, { timeout: 15000 });
   }
 

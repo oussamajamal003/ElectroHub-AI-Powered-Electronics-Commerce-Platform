@@ -3,11 +3,14 @@ import { prisma } from '../lib/prisma.js';
 import type { SearchInput } from '../validators/search.validator.js';
 import { categoryMixPage, escapeLike, relevance, searchFrom, searchOrder, searchWhere, storefrontVisibility } from './search.sql.js';
 import { projectInventory } from './inventory.service.js';
+import { decodeCursor, effectiveSort, encodeCursor, filterFingerprint, keyProjection, keysFromRow, seekPredicate, supportsKeyset,
+  type KeysetRow } from './catalog-cursor.js';
+import { AppError } from '../middleware/errorHandler.js';
 
 export interface SearchSuggestion { id: string; type: 'PRODUCT' | 'BRAND' | 'CATEGORY'; label: string; slug: string }
 export type ProductListingProfile = Record<string, number>;
 
-interface ProductRow {
+interface ProductRow extends KeysetRow {
   total: bigint;
   id: string | null;
   name: string | null;
@@ -65,12 +68,19 @@ export function mapProductRow(row: Omit<ProductRow, 'total'>) {
 }
 
 export class SearchService {
+  /**
+   * Offset mode (default): bounded page/pageSize (page <= 100). The response also carries `nextCursor`/`hasNextPage` so a
+   * client can continue past the offset cap with keyset pagination from exactly where this page ends.
+   * Cursor mode (`paginate=cursor` or `cursor=`): keyset pagination, no OFFSET at any depth. See catalog-cursor.ts.
+   */
   async products(input: SearchInput, profile?: ProductListingProfile, dealsOnly = false) {
+    if (input.paginate === 'cursor' || input.cursor !== undefined) return this.productsByCursor(input, dealsOnly);
     const buildStart = performance.now();
     const where = dealsOnly
       ? Prisma.sql`${searchWhere(input)} AND p."compareAtPrice" > p."price"`
       : searchWhere(input);
     const order = searchOrder(input);
+    const sort = effectiveSort(input);
     if (profile) profile.filterBuild = performance.now() - buildStart;
     const queryStart = performance.now();
     const rows = await prisma.$queryRaw<ProductRow[]>(Prisma.sql`
@@ -79,11 +89,11 @@ export class SearchService {
       ), page AS (${input.sort === 'category-mix'
         ? categoryMixPage(where, input.pageSize, (input.page - 1) * input.pageSize)
         : Prisma.sql`
-        SELECT p."id", ROW_NUMBER() OVER (ORDER BY ${order}) AS ordinal
+        SELECT p."id", ROW_NUMBER() OVER (ORDER BY ${order}) AS ordinal, ${keyProjection(sort, input.q)}
         ${searchFrom} ${where}
         ORDER BY ${order} LIMIT ${input.pageSize} OFFSET ${(input.page - 1) * input.pageSize}`}
       ), rating AS (${ratingCte})
-      SELECT total.total, ${productSummaryColumns}
+      SELECT total.total, ${productSummaryColumns}${input.sort === 'category-mix' ? Prisma.empty : Prisma.sql`, page."kCreatedAt", page."kId", page."kPrice", page."kName", page."kRank"`}
       FROM total LEFT JOIN page ON true
       ${productSummaryJoins}
       ORDER BY page.ordinal`);
@@ -91,8 +101,45 @@ export class SearchService {
     const mapStart = performance.now();
     const total = Number(rows[0]?.total ?? 0);
     const data = rows.map(mapProductRow).filter((product): product is NonNullable<typeof product> => product !== null);
+    const hasNextPage = input.page * input.pageSize < total;
+    const last = rows[rows.length - 1];
+    const keys = hasNextPage && last && supportsKeyset(sort) ? keysFromRow(sort, last) : null;
+    const nextCursor = keys && supportsKeyset(sort) ? encodeCursor(sort, keys, filterFingerprint(input, sort, dealsOnly)) : null;
     if (profile) profile.mapping = performance.now() - mapStart;
-    return { data, meta: { page: input.page, pageSize: input.pageSize, total, totalPages: Math.ceil(total / input.pageSize) } };
+    return { data, meta: { page: input.page, pageSize: input.pageSize, total, totalPages: Math.ceil(total / input.pageSize), hasNextPage, nextCursor } };
+  }
+
+  private async productsByCursor(input: SearchInput, dealsOnly: boolean) {
+    const sort = effectiveSort(input);
+    if (!supportsKeyset(sort)) {
+      throw new AppError('Cursor pagination is not available for the category-mix order. Use page-based pagination or another sort.', 400, 'CURSOR_UNSUPPORTED_SORT');
+    }
+    const fingerprint = filterFingerprint(input, sort, dealsOnly);
+    const cursor = input.cursor === undefined ? null : decodeCursor(input.cursor, sort, fingerprint);
+    const base = dealsOnly ? Prisma.sql`${searchWhere(input)} AND p."compareAtPrice" > p."price"` : searchWhere(input);
+    const where = cursor ? Prisma.sql`${base} AND ${seekPredicate(cursor, input.q)}` : base;
+    const order = searchOrder(input);
+    // pageSize + 1 rows: the extra row only proves another page exists; it is never returned.
+    const rows = await prisma.$queryRaw<ProductRow[]>(Prisma.sql`
+      WITH page AS (
+        SELECT p."id", ROW_NUMBER() OVER (ORDER BY ${order}) AS ordinal, ${keyProjection(sort, input.q)}
+        ${searchFrom} ${where}
+        ORDER BY ${order} LIMIT ${input.pageSize + 1}
+      ), rating AS (${ratingCte})
+      SELECT 0::bigint AS total, ${productSummaryColumns}, page."kCreatedAt", page."kId", page."kPrice", page."kName", page."kRank"
+      FROM page
+      ${productSummaryJoins}
+      ORDER BY page.ordinal`);
+    const hasNextPage = rows.length > input.pageSize;
+    const pageRows = rows.slice(0, input.pageSize);
+    const last = pageRows[pageRows.length - 1];
+    const keys = hasNextPage && last ? keysFromRow(sort, last) : null;
+    // The (expensive) total is computed only for the first cursor page, where a client shows "N products".
+    const total = cursor ? null : Number((await prisma.$queryRaw<{ total: bigint }[]>(Prisma.sql`SELECT COUNT(*) AS total ${searchFrom} ${base}`))[0]?.total ?? 0);
+    return {
+      data: pageRows.map(mapProductRow).filter((product): product is NonNullable<typeof product> => product !== null),
+      meta: { pageSize: input.pageSize, total, hasNextPage, nextCursor: keys ? encodeCursor(sort, keys, fingerprint) : null },
+    };
   }
 
   /**

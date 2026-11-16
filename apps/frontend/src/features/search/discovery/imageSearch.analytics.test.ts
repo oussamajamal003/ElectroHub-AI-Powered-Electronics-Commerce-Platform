@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { saveChoice } from '@/features/privacy/consent';
 import { reportImageResultSelected } from './imageSearch';
 
 describe('Task 05.2 image-search result selection analytics', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { localStorage.clear(); vi.unstubAllGlobals(); });
 
   it('posts only the signed token and product id, with keepalive and no credentials', () => {
+    saveChoice(true);
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
     vi.stubGlobal('fetch', fetchMock);
     reportImageResultSelected('signed.token', '7d6f1b52-0c1e-4f7f-9d63-2f1d8c0b9a11');
@@ -16,6 +18,7 @@ describe('Task 05.2 image-search result selection analytics', () => {
   });
 
   it('sends nothing without a server-issued token and never throws when the request fails', async () => {
+    saveChoice(true);
     const fetchMock = vi.fn().mockRejectedValue(new TypeError('offline'));
     vi.stubGlobal('fetch', fetchMock);
     reportImageResultSelected(undefined, 'product');

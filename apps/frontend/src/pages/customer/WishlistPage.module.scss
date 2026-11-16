@@ -15,7 +15,7 @@
 .skeletons { grid-column: 1 / -1; }
 .notice { padding: $spacing-4; border: 1px solid $color-border; margin-bottom: $spacing-6; p { margin: 0 0 $spacing-3; } }
 .empty { min-height: 20rem; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: $spacing-4; padding: $spacing-8;
-  border: 1px solid $color-border; text-align: center; h2, p { margin: 0; } svg { color: $color-primary; }
+  border: 1px solid $color-border; text-align: center; h2, p { margin: 0; } svg { color: $color-primary-text; }
 }
 .primaryLink { display: inline-flex; background: $color-primary; color: #fff; padding: $spacing-3 $spacing-6; text-decoration: none; }
 .unavailable { border: 1px solid $color-border; padding: $spacing-6; display: flex; flex-direction: column; gap: $spacing-4; h2, p { margin: 0; } }

@@ -1,3 +1,4 @@
+import { useDocumentTitle } from '@/lib/pageTitle';
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/ui/BrandLogo';
@@ -65,6 +66,7 @@ type Stage = { name: 'form' } | { name: 'enroll'; mfaToken: string } | { name: '
  */
 export function AdminActivatePage({ mode = 'activation' }: { mode?: ActivationMode }) {
   const copy = MODE[mode];
+  useDocumentTitle(mode === 'provisioning' ? 'Set Up Admin Account' : 'Activate Admin Account');
   const { completeAdminSession } = useAdminAuth();
   const navigate = useNavigate();
   const [token, setToken] = useState<string | null>(() => readInvitationToken(window.location.hash));

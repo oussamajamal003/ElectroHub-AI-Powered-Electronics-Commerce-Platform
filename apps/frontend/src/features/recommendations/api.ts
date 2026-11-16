@@ -1,3 +1,4 @@
+import { analyticsAllowed } from '@/features/privacy/consent';
 import { apiClient } from '@/lib/api';
 import type {
   PersonalRecommendations, ProductRecommendations, RecentlyViewed, RecommendationPreferences, RecommendationSection,
@@ -32,7 +33,7 @@ export const recommendationsApi = {
  * purpose (telemetry must never block or break shopping), and no credentials are sent.
  */
 export function sendRecommendationEvents(token: string, events: { productId: string; type: 'IMPRESSION' | 'CLICK' }[]) {
-  if (events.length === 0 || typeof fetch !== 'function') return;
+  if (!analyticsAllowed() || events.length === 0 || typeof fetch !== 'function') return;
   try {
     void fetch('/api/recommendations/events', {
       method: 'POST', keepalive: true, credentials: 'omit',

@@ -37,7 +37,7 @@ function project(row: Row, held = 0) {
     image: row.images[0] ?? null,
     quantity: inventory?.quantity ?? null, held, lowStockAt: inventory?.lowStockAt ?? null,
     stockStatus: inventory ? deriveStockStatus(inventory.quantity, inventory.lowStockAt) : null,
-    // Physical stock and sellability are independent: a stocked product in an archived product/category is still not purchasable.
+    // Sellable stock (already net of placed orders; `held` is shown separately, never subtracted again) and sellability are independent: a stocked product in an archived product/category is still not purchasable.
     purchasable: Boolean(inventory && inventory.quantity > 0 && row.status === 'ACTIVE' && row.category.isActive),
     updatedAt: inventory?.updatedAt.toISOString() ?? null,
   };

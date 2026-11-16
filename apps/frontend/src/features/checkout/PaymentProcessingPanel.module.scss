@@ -1,0 +1,112 @@
+@use '@/styles/abstracts' as *;
+
+.panel {
+  display: grid;
+  width: 100%;
+  max-width: 64rem;
+  min-width: 0;
+  border: 1px solid $color-border;
+  background: $color-background;
+  box-shadow: $shadow-lg;
+  overflow: hidden;
+  @include respond-to(md) { grid-template-columns: minmax(14rem, .8fr) minmax(0, 1.2fr); }
+}
+.visual {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 13rem;
+  overflow: hidden;
+  isolation: isolate;
+  color: $color-text-inverse;
+  background: radial-gradient(ellipse at 30% 20%, theme-alpha($color-primary, .55), transparent 70%), $color-secondary;
+  @include respond-to(md) { min-height: 24rem; }
+}
+.visualGrid {
+  position: absolute;
+  inset: 0;
+  opacity: .16;
+  background-image: linear-gradient(theme-alpha($color-text-inverse, .2) 1px, transparent 1px), linear-gradient(90deg, theme-alpha($color-text-inverse, .2) 1px, transparent 1px);
+  background-size: 2rem 2rem;
+  mask-image: radial-gradient(ellipse at center, black, transparent 75%);
+}
+.orbit, .innerOrbit {
+  position: absolute;
+  width: 18rem;
+  height: 18rem;
+  border: 1px solid theme-alpha($color-text-inverse, .15);
+  border-radius: $radius-full;
+}
+.orbit::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border: 2px solid transparent;
+  border-top-color: $color-accent;
+  border-right-color: theme-alpha($color-primary-light, .5);
+  border-radius: inherit;
+  animation: orbit 9s linear infinite;
+}
+.innerOrbit { width: 14rem; height: 14rem; border-style: dashed; opacity: .65; }
+.paymentCard {
+  position: relative;
+  display: grid;
+  gap: $spacing-4;
+  width: 11.5rem;
+  padding: $spacing-5;
+  border: 1px solid theme-alpha($color-text-inverse, .4);
+  border-radius: $radius-lg;
+  background: linear-gradient(135deg, theme-alpha($color-primary-light, .8), $color-primary-dark 65%, $color-secondary);
+  box-shadow: $shadow-xl;
+  transform: rotate(-8deg);
+}
+.cardHeader { display: flex; align-items: center; justify-content: space-between; }
+.fingerprint { justify-self: center; }
+.cardLines { display: flex; gap: $spacing-2; i { height: .25rem; flex: 1; background: theme-alpha($color-text-inverse, .7); } }
+.secureSeal, .signal {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border: 1px solid theme-alpha($color-text-inverse, .35);
+  background: $color-secondary-light;
+  box-shadow: $shadow-lg;
+}
+.secureSeal { translate: 5.25rem 3rem; color: $color-accent; }
+.signal { width: 2.5rem; height: 2.5rem; translate: -6rem -3.5rem; }
+.visualCaption { position: absolute; bottom: $spacing-6; letter-spacing: .2em; font-size: $font-size-xs; font-family: $font-family-mono; display: none; @include respond-to(md) { display: block; } }
+.content { min-width: 0; padding: $spacing-6; @include respond-to(lg) { padding: $spacing-10; } }
+.brand { display: flex; flex-wrap: wrap; gap: $spacing-4; align-items: center; margin-bottom: $spacing-6; > span:last-child { font-family: $font-family-mono; font-size: $font-size-xs; letter-spacing: .12em; color: $color-text-secondary; } }
+.statusBadge { display: inline-flex; align-items: center; gap: $spacing-2; font-size: $font-size-xs; font-weight: $font-weight-medium; color: $color-primary-text; padding: $spacing-2 $spacing-3; background: $color-primary-subtle; margin-bottom: $spacing-4; > span { width: .375rem; height: .375rem; flex-shrink: 0; border-radius: $radius-full; background: currentColor; } }
+.copy {
+  h1 { font-size: clamp(1.5rem, 2.3vw, 2rem); line-height: $line-height-tight; letter-spacing: -.025em; margin: 0 0 $spacing-3; overflow-wrap: anywhere; }
+  p { color: $color-text-secondary; font-size: $font-size-sm; line-height: $line-height-relaxed; margin: 0; }
+  p + p { margin-top: $spacing-2; }
+}
+.stages {
+  display: grid;
+  list-style: none;
+  padding: 0;
+  margin: $spacing-6 0;
+  border-block: 1px solid $color-border;
+  li { display: flex; align-items: center; gap: $spacing-3; padding: $spacing-3 0; color: $color-text-secondary; min-width: 0; }
+  li + li { border-top: 1px solid $color-border; }
+  strong, small { display: block; }
+  strong { font-size: $font-size-sm; font-weight: $font-weight-medium; }
+  small { font-size: $font-size-xs; margin-top: $spacing-1; }
+  li[aria-current] { color: $color-text-primary; .stageIcon { background: $color-primary-subtle; color: $color-primary-text; border-color: theme-alpha($color-primary, .35); } }
+}
+.stageIcon { width: 2.25rem; height: 2.25rem; flex-shrink: 0; display: grid; place-items: center; background: $color-surface; border: 1px solid $color-border; }
+.security { display: flex; align-items: center; gap: $spacing-2; margin: 0; font-size: $font-size-xs; color: $color-text-secondary; line-height: $line-height-normal; svg { flex-shrink: 0; } }
+.actions { margin-top: $spacing-5; display: flex; align-items: center; flex-wrap: wrap; gap: $spacing-4; }
+@keyframes orbit { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .orbit::after { animation: none; } }
+
+// Phones: the same composition at a smaller scale, so the rotated card and seals stay inside the visual instead of being clipped.
+@media (max-width: 47.99rem) {
+  .visual { min-height: 14rem; }
+  .orbit, .innerOrbit, .paymentCard { scale: .78; }
+  .secureSeal { scale: .85; translate: 4rem 2.25rem; }
+  .signal { scale: .85; translate: -4.75rem -2.75rem; }
+}

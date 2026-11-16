@@ -26,6 +26,19 @@ describe('cart page states', () => {
     expect(screen.queryByText('Your cart is empty')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Proceed to Checkout' })).toBeDisabled();
   });
+  it('explains a temporarily disabled checkout while saving and enables it as soon as the cart settles', () => {
+    const data = { items: [{ id: 'line-1', productId: '8f2813b4-a388-44d3-b51e-5d4c40386677', quantity: 2,
+      product: { slug: 'phone', name: 'Phone', category: 'Phones', price: '20.00', image: null },
+      availableQuantity: 5, availability: 'AVAILABLE' as const, lineTotal: '40.00' }], totalQuantity: 2, subtotal: '40.00',
+      shipping: '0.00', total: '40.00', currency: 'USD' as const, canCheckout: true, revision: 'test-revision' };
+    const view = show({ ...base, isGuest: false, isMutating: true, data });
+    const checkout = screen.getByRole('button', { name: 'Proceed to Checkout' });
+    expect(checkout).toBeDisabled();
+    expect(checkout).toHaveAccessibleDescription(/Updating your cart/);
+    view.rerender(<MemoryRouter><CartPageContent cart={{ ...base, isGuest: false, isMutating: false, data }} /></MemoryRouter>);
+    expect(screen.getByRole('button', { name: 'Proceed to Checkout' })).toBeEnabled();
+    expect(screen.queryByText(/Updating your cart/)).not.toBeInTheDocument();
+  });
   it('reserves layout during loading and offers retry on error', () => {
     const view = show({ ...base, isLoading: true });
     expect(screen.getByRole('status', { name: 'Loading cart' })).toBeInTheDocument();

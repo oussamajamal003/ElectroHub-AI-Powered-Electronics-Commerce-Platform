@@ -1,7 +1,8 @@
+import { prisma } from '../lib/prisma.js';
 import type { DeliveryEventChange } from '@prisma/client';
 import { DeliveryService } from '../services/delivery.service.js';
 import { logSafely } from '../utils/logger.js';
-import { orderRoom, type DeliveryGateway } from './delivery.gateway.js';
+import { userRoom, orderRoom, type DeliveryGateway } from './delivery.gateway.js';
 import { realtimeMetrics } from './realtime-metrics.js';
 
 /**
@@ -62,6 +63,15 @@ async function publish(orderId: string, changed: PublishChange[]): Promise<void>
     target.namespace.to(orderRoom(orderId)).emit('delivery:updated', { v: 1, orderReference: projection.orderReference, revision: projection.revision,
       occurredAt: projection.occurredAt, changed, snapshot: projection.snapshot, timelineEntry: projection.timelineEntries[0] ?? null,
       timelineEntries: projection.timelineEntries, source: projection.source === 'SIMULATION' ? 'SIMULATION' : 'ADMIN' });
+    if (changed.includes('status') && projection.snapshot.status === 'OUT_FOR_DELIVERY') {
+      // This row can only exist after the authoritative OUT_FOR_DELIVERY transaction commits.
+      // Hints may repeat; consumers refetch the durable list instead of incrementing a counter.
+      const notification = await prisma.customerNotification.findUnique({ where: { eventKey: `order:${orderId}:out-for-delivery` } });
+      if (notification) target.namespace.to(userRoom(notification.userId)).emit('notification:created', {
+        v: 1, id: notification.id, type: 'ORDER_OUT_FOR_DELIVERY', orderReference: projection.orderReference,
+        occurredAt: notification.occurredAt.toISOString(),
+      });
+    }
     realtimeMetrics.increment('published');
   } catch (error) {
     realtimeMetrics.increment('publish_failed');

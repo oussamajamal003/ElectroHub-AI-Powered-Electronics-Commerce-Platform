@@ -9,22 +9,31 @@ export const searchSchemas = {
 export const searchPaths = {
   '/search/products': { get: {
     tags: ['Search'], summary: 'Search public products',
-    description: 'Every query token matches an approved field; filters combine with AND. A blank query returns one bounded newest-first page of the public catalog (used by /products); the dedicated /search page remains empty until the customer searches or filters. Relevance ranks exact, prefix, contains, model/SKU, brand/category, description, cross-field matches. Decimal prices are strings; inactive products/categories are hidden. Rate limit: 120 per minute per IP.',
+    description: 'Every query token matches an approved field; filters combine with AND. A blank query returns one bounded newest-first page of the public catalog (used by /products); the dedicated /search page remains empty until the customer searches or filters. Relevance ranks exact, prefix, contains, model/SKU, brand/category, description, cross-field matches. Decimal prices are strings; inactive products/categories are hidden. Rate limit: 120 per minute per IP. Pagination: offset pages are bounded to page <= 100 (400 PAGE_LIMIT_EXCEEDED beyond). Keyset pagination (paginate=cursor, then cursor=<meta.nextCursor>) continues at any depth without OFFSET for every sort except category-mix (400 CURSOR_UNSUPPORTED_SORT); an offset page also returns nextCursor so a client can continue past page 100. Cursors are opaque and signed: a tampered or malformed cursor, or one reused with different filters or sort, answers 400 INVALID_CURSOR. page cannot be combined with cursor mode.',
     parameters: [
       parameter('q', { type: 'string', maxLength: 120 }),
       ...['category', 'brand'].map(name => parameter(name, { type: 'string', maxLength: 120, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' })),
       parameter('availability', { type: 'string', enum: ['available', 'unavailable'] }),
       ...['minPrice', 'maxPrice'].map(name => parameter(name, { type: 'string', pattern: '^(0|[1-9][0-9]{0,9})(\\.[0-9]{1,2})?$' })),
       parameter('sort', { type: 'string', enum: ['relevance', 'price-asc', 'price-desc', 'newest', 'name-asc', 'category-mix'] }),
-      parameter('page', { type: 'integer', minimum: 1, maximum: 1000, default: 1 }),
+      parameter('page', { type: 'integer', minimum: 1, maximum: 100, default: 1 }),
       parameter('pageSize', { type: 'integer', minimum: 1, maximum: 100, default: 20 }),
+      parameter('paginate', { type: 'string', enum: ['cursor'] }),
+      parameter('cursor', { type: 'string', maxLength: 1024, pattern: '^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$' }),
     ], responses: {
       '200': { description: 'Bounded summaries. Default sort: relevance with query, newest without query. Stable ID tie-breakers.', content: { 'application/json': { schema: {
         type: 'object', required: ['data', 'meta'], properties: {
           data: { type: 'array', items: { $ref: '#/components/schemas/ProductSummary' } },
-          meta: { allOf: [{ $ref: '#/components/schemas/ProductPagination' }, { type: 'object', required: ['totalPages'], properties: { totalPages: { type: 'integer', minimum: 0 } } }] },
+          meta: { type: 'object', required: ['pageSize', 'total', 'hasNextPage', 'nextCursor'], properties: {
+            page: { type: 'integer', minimum: 1, maximum: 100, description: 'Offset mode only.' },
+            totalPages: { type: 'integer', minimum: 0, description: 'Offset mode only.' },
+            pageSize: { type: 'integer', minimum: 1, maximum: 100 },
+            total: { type: 'integer', nullable: true, minimum: 0, description: 'Filtered total. Null on cursor continuation pages (computed only for the first page).' },
+            hasNextPage: { type: 'boolean' },
+            nextCursor: { type: 'string', nullable: true, description: 'Opaque cursor for the next keyset page; null on the last page and for category-mix.' },
+          } },
         },
-      } } } }, '400': error, '429': error, '500': error,
+      } } } }, '400': { ...error, description: 'VALIDATION_ERROR, PAGE_LIMIT_EXCEEDED, INVALID_CURSOR or CURSOR_UNSUPPORTED_SORT.' }, '429': error, '500': error,
     },
   } },
   '/search/image': { post: {

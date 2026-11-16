@@ -1,0 +1,56 @@
+[
+  {
+    "timestamp": "2026-11-12T11:31:16.641Z",
+    "service": "backend",
+    "environment": "development",
+    "method": "GET",
+    "route": "/admin/settings/store",
+    "requestId": "e357928e-7e27-4509-9e11-037f14807344",
+    "prismaCode": "P2021"
+  },
+  {
+    "timestamp": "2026-11-12T11:31:16.655Z",
+    "service": "backend",
+    "environment": "development",
+    "method": "GET",
+    "route": "/admin/settings/store",
+    "requestId": "80f92081-b5f1-418b-9f3f-118ea71ec869",
+    "prismaCode": "P2021"
+  },
+  {
+    "timestamp": "2026-11-12T11:31:17.028Z",
+    "service": "backend",
+    "environment": "development",
+    "method": "GET",
+    "route": "/admin/settings/store",
+    "requestId": "8083721a-04ae-4e97-a75b-a4891b67333a",
+    "prismaCode": "P2021"
+  },
+  {
+    "timestamp": "2026-11-12T11:31:20.172Z",
+    "service": "backend",
+    "environment": "development",
+    "method": "GET",
+    "route": "/admin/dashboard/alerts",
+    "requestId": "29f99146-e1ea-4973-9913-3c6c9b193b4b",
+    "prismaCode": "P2021"
+  },
+  {
+    "timestamp": "2026-11-12T11:31:20.229Z",
+    "service": "backend",
+    "environment": "development",
+    "method": "GET",
+    "route": "/admin/dashboard/alerts",
+    "requestId": "902d9ac1-c8b0-4841-b526-147eedc1cafe",
+    "prismaCode": "P2021"
+  },
+  {
+    "timestamp": "2026-11-12T11:31:20.624Z",
+    "service": "backend",
+    "environment": "development",
+    "method": "GET",
+    "route": "/admin/dashboard/alerts",
+    "requestId": "7b056442-d022-407f-a6f0-cf691f72b831",
+    "prismaCode": "P2021"
+  }
+]

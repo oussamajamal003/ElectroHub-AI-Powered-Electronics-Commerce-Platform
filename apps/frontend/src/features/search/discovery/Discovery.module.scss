@@ -455,7 +455,7 @@
   color: $discovery-text-accent;
   cursor: pointer;
 
-  &:hover { color: $color-primary-dark; text-decoration: underline; text-underline-offset: 3px; }
+  &:hover { color: $color-primary-text-hover; text-decoration: underline; text-underline-offset: 3px; }
   &:focus-visible { outline: 2px solid $discovery-focus-ring; outline-offset: 2px; }
 }
 

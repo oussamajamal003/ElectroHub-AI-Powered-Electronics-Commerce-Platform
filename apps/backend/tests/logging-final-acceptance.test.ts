@@ -22,6 +22,13 @@ afterEach(async () => {
 });
 
 describe('final acceptance output boundaries', () => {
+  it('writes service and environment context to the error file', async () => {
+    const item = await runtime();
+    item.logger.error('Service context fixture');
+    await item.flush();
+    const record = JSON.parse(await fs.readFile(path.join(item.directory, 'error.log'), 'utf8'));
+    expect(record).toMatchObject({ service: 'backend', environment: 'test', severity: 'error' });
+  });
   it('cannot preserve unsanitized metadata beyond the sanitizer field limit', async () => {
     const item = await runtime();
     const metadata = Object.fromEntries(Array.from({ length: 110 }, (_, index) => [`field${index}`, index]));

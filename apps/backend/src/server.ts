@@ -7,6 +7,7 @@ import { prisma } from './lib/prisma.js';
 import { inProcessRecoveryEnabled, startInProcessRecovery } from './payment-inprocess-recovery.js';
 import { paymentIsolation } from './payment-isolation.js';
 import { logCommerceEmailRuntime } from './services/commerce-email.runtime.js';
+import { pushConfig } from './services/customer-push.config.js';
 import { startOperationalRecommendationRetentionRunner } from './recommendation-retention-runner.js';
 import { deliveryOrigin } from './config/delivery-map.config.js';
 import { attachDeliveryGateway, type DeliveryGateway } from './sockets/delivery.gateway.js';
@@ -35,6 +36,11 @@ logger.info('Server starting', { operation: 'server.starting' });
   logger[isolation.allowed ? 'info' : 'warn']('Payment isolation resolved', { event: 'payment.isolation.resolved', allowed: isolation.allowed,
     target: isolation.target, identity: isolation.identity, reason: isolation.reason });
   logCommerceEmailRuntime('api');
+  const push = pushConfig();
+  logger[push.enabled ? 'info' : 'warn']('Customer push configuration resolved', {
+    event: 'customer_push.configuration_resolved', enabled: push.enabled, configured: push.configured,
+    availability: push.availability,
+  });
 }
 
 /**

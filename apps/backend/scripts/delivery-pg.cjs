@@ -17,13 +17,16 @@ const { spawn, spawnSync } = require('node:child_process');
 const backend = path.resolve(__dirname, '..');
 const root = path.resolve(backend, '../..');
 fs.mkdirSync(path.join(root, '.cache'), { recursive: true });
-const work = fs.mkdtempSync(path.join(root, '.cache/delivery-pg-run-'));
+// Native PostgreSQL on Windows requires an ASCII cluster path.
+const work = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'electrohub-delivery-pg-'));
 const data = path.join(work, 'data');
 const binaries = process.env.ELECTROHUB_LOCAL_PG_BIN || 'C:/Program Files/PostgreSQL/18/bin';
 const exe = name => path.join(binaries, process.platform === 'win32' ? `${name}.exe` : name);
 const database = `electrohub_disposable_delivery_${crypto.randomBytes(4).toString('hex')}`;
 let started = false;
 let child;
+const testEnvFile = path.join(backend, '.env.test.local');
+let createdTestEnv = false;
 
 function command(executable, args, env = process.env) {
   const output = fs.openSync(path.join(work, 'provisioning.log'), 'a');
@@ -52,6 +55,8 @@ async function run() {
   command(exe('pg_ctl'), ['-D', data, '-l', path.join(work, 'postgres.log'), '-w', 'start']);
   started = true;
   command(exe('createdb'), ['-h', '127.0.0.1', '-p', String(port), '-U', 'postgres', database]);
+  command(exe('psql'), ['-h', '127.0.0.1', '-p', String(port), '-U', 'postgres', '-d', database, '-v', 'ON_ERROR_STOP=1', '-c',
+    'CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; GRANT USAGE ON SCHEMA public TO anon, authenticated; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated;']);
   const url = `postgresql://postgres@127.0.0.1:${port}/${database}`;
   // Every repository migration is applied in order, except the ones that create the pgvector `ai`/`extensions` objects (this host's
   // PostgreSQL has no pgvector extension) and the media overlay that depends on them. Delivery tracking reads/writes only public commerce
@@ -72,7 +77,7 @@ async function run() {
   const statements = (drift.stdout ?? '').split('\n').filter(line => line.trim() && !line.startsWith('--'));
   // Pre-existing drift on early auth tables (DB-side id/updatedAt defaults) predates Task 04.5 and is reported, not failed; any drift on a
   // delivery object fails the gate.
-  const deliveryDrift = statements.filter(line => /"(deliveries|delivery_events)"|"Delivery(Event|Location)/.test(line));
+  const deliveryDrift = statements.filter(line => /"(deliveries|delivery_events|customer_notifications|customer_push_subscriptions|customer_push_deliveries)"|"Delivery(Event|Location)/.test(line));
   console.log(`Prisma drift (migrated disposable DB -> schema.prisma): ${drift.status === 0 ? `${statements.length} statement(s), ${deliveryDrift.length} on delivery objects` : 'diff failed'}`);
   if (drift.status !== 0 || deliveryDrift.length) throw new Error(`Delivery schema drift detected; inspect ${path.relative(root, work)}/drift.sql`);
   const env = {
@@ -88,12 +93,28 @@ async function run() {
     DELIVERY_SIMULATION_ENABLED: 'true',
   };
   const vitest = path.join(path.dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
-  child = spawn(process.execPath, [vitest, 'run', '--config', 'vitest.delivery-pg.config.mts'], { cwd: backend, env, stdio: 'inherit', windowsHide: true });
+  // Match the ordinary CI unit/API pass. Specialized delivery suites have their
+  // own opt-in pass; enabling producers globally invalidates unrelated unit mocks.
+  if (process.env.DELIVERY_PG_FULL_SUITE === '1') {
+    env.DELIVERY_PG_RUN = '0';
+    env.COMMERCE_EMAIL_ENQUEUE_ENABLED = 'false';
+    env.PORT = '0'; // Server lifecycle tests must not bind the user's running API port.
+    env.STRIPE_SECRET_KEY = 'sk_test_placeholder'; // Nonfunctional CI fixture; provider operations remain mocked.
+    if (!fs.existsSync(testEnvFile)) {
+      fs.writeFileSync(testEnvFile, '# Disposable full-suite fixture; configuration is injected by delivery-pg.cjs.\n', { flag: 'wx' });
+      createdTestEnv = true;
+    }
+  }
+  const args = process.env.DELIVERY_PG_FULL_SUITE === '1'
+    ? ['run', '--maxWorkers=1', '--testTimeout=30000', '--hookTimeout=60000', '--exclude', 'tests/adminSeedLogin.test.ts', '--exclude', 'tests/auth.integration.test.ts']
+    : ['run', '--config', 'vitest.delivery-pg.config.mts'];
+  child = spawn(process.execPath, [vitest, ...args], { cwd: backend, env, stdio: 'inherit', windowsHide: true });
   return new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', code => resolve(code ?? 1)); });
 }
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child?.kill(signal));
 run().then(code => { process.exitCode = code; }).catch(error => { process.stderr.write(`${error.message}\n`); process.exitCode = 1; })
   .finally(() => {
+    if (createdTestEnv) fs.unlinkSync(testEnvFile);
     if (started) {
       try { command(exe('pg_ctl'), ['-D', data, '-m', 'immediate', '-w', 'stop']); }
       catch { process.stderr.write('Disposable PostgreSQL stop failed; inspect the run directory.\n'); process.exitCode = 1; }

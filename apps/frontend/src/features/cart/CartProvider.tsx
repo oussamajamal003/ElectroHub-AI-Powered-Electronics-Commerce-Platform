@@ -45,7 +45,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [guestItems, setGuestItems] = useState(readGuestCart);
   const [mergeError, setMergeError] = useState<string | null>(null);
   const [mergedForUser, setMergedForUser] = useState<string | null>(null);
-  const [isMutating, setMutating] = useState(false);
+  // Number of cart mutations queued or in flight. A boolean flag was flipped off by whichever queued operation settled first,
+  // re-enabling Checkout while later operations were still pending; a count is only zero when the queue is truly drained.
+  const [mutationCount, setMutationCount] = useState(0);
+  const isMutating = mutationCount > 0;
+  const queuedQuantities = useRef<Map<string, { quantity: number; started: boolean; promise?: Promise<void> }>>(new Map());
   const [isReconciling, setReconciling] = useState(false);
   const [pendingQuantities, setPendingQuantities] = useState<Record<string, number>>({});
   const [pendingRemovals, setPendingRemovals] = useState<Record<string, true>>({});
@@ -153,14 +157,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setGuestItems(items);
   };
 
-  const enqueueServer = (path: string, method: 'POST' | 'PATCH' | 'DELETE', data?: object) => {
+  const enqueueServer = (path: string, method: 'POST' | 'PATCH' | 'DELETE', data?: object | (() => object)) => {
     const requestUserId = user?.id;
+    setMutationCount(count => count + 1);
     const operation = mutationQueue.current.catch(() => undefined).then(async () => {
-      if (!requestUserId || identityRef.current !== requestUserId) throw new Error('Session changed. Please try again.');
-      setMutating(true);
       try {
+        if (!requestUserId || identityRef.current !== requestUserId) throw new Error('Session changed. Please try again.');
         await client.cancelQueries({ queryKey: queryKeys.cart.current(requestUserId) });
-        const response = await apiClient<{ data: CartData }>(path, { method, data });
+        const response = await apiClient<{ data: CartData }>(path, { method, data: typeof data === 'function' ? data() : data });
         // A read started during the POST may predate its commit. Cancel that
         // observer before publishing the authoritative mutation snapshot.
         await client.cancelQueries({ queryKey: queryKeys.cart.current(requestUserId) });
@@ -169,18 +173,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
           writeAuthenticatedCartCount(requestUserId, response.data.totalQuantity);
           authoritativeMutationReady.current = Date.now();
         }
-      } finally { setMutating(false); }
+      } finally { setMutationCount(count => count - 1); }
     });
     mutationQueue.current = operation.catch(() => undefined);
     return operation;
   };
 
   const enqueueGuest = (operation: () => Promise<void>) => {
+    setMutationCount(count => count + 1);
     const pending = mutationQueue.current.catch(() => undefined).then(async () => {
-      if (identityRef.current) throw new Error('Session changed. Please try again.');
-      setMutating(true);
-      try { await operation(); }
-      finally { setMutating(false); }
+      try {
+        if (identityRef.current) throw new Error('Session changed. Please try again.');
+        await operation();
+      } finally { setMutationCount(count => count - 1); }
     });
     mutationQueue.current = pending.catch(() => undefined);
     return pending;
@@ -289,6 +294,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  /**
+   * Latest wins: rapid +/- clicks on one line that have not reached the server yet collapse into a single PATCH carrying the
+   * final quantity, instead of N serial transactions that each keep Checkout disabled. A PATCH already on the wire is never altered.
+   */
+  const enqueueServerQuantity = (productId: string, quantity: number) => {
+    const queued = queuedQuantities.current.get(productId);
+    if (queued && !queued.started && queued.promise) { queued.quantity = quantity; return queued.promise; }
+    const entry: { quantity: number; started: boolean; promise?: Promise<void> } = { quantity, started: false };
+    queuedQuantities.current.set(productId, entry);
+    entry.promise = enqueueServer(`/api/cart/items/${encodeURIComponent(productId)}`, 'PATCH', () => {
+      entry.started = true;
+      if (queuedQuantities.current.get(productId) === entry) queuedQuantities.current.delete(productId);
+      return { quantity: entry.quantity };
+    });
+    return entry.promise;
+  };
+
   const setQuantity = async (productId: string, quantity: number) => {
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_CART_QUANTITY) throw new Error('Invalid quantity.');
     pendingQuantitiesRef.current = { ...pendingQuantitiesRef.current, [productId]: quantity };
@@ -296,7 +318,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     pendingQuantityVersions.current = { ...pendingQuantityVersions.current, [productId]: version };
     setPendingQuantities(pendingQuantitiesRef.current);
 
-    const operation = authenticated ? enqueueServer(`/api/cart/items/${encodeURIComponent(productId)}`, 'PATCH', { quantity }) : enqueueGuest(async () => {
+    const operation = authenticated ? enqueueServerQuantity(productId, quantity) : enqueueGuest(async () => {
       const current = readGuestCart();
       const currentQuantity = current.find(item => item.productId === productId)?.quantity;
       const isDecrease = currentQuantity !== undefined && quantity < currentQuantity;
@@ -353,10 +375,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   async function submitCheckout<T>(operation: () => Promise<{ cart: CartData; result: T }>): Promise<T> {
     const requestUserId = user?.id;
+    setMutationCount(count => count + 1);
     const purchase = mutationQueue.current.catch(() => undefined).then(async () => {
-      if (!authenticated || !requestUserId || identityRef.current !== requestUserId) throw new Error('Session changed. Please sign in again.');
-      setMutating(true);
       try {
+        if (!authenticated || !requestUserId || identityRef.current !== requestUserId) throw new Error('Session changed. Please sign in again.');
         await client.cancelQueries({ queryKey: queryKeys.cart.current(requestUserId) });
         const response = await operation();
         if (identityRef.current !== requestUserId) throw new Error('Session changed. Restore your order after signing in.');
@@ -364,7 +386,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         client.setQueryData(queryKeys.cart.current(requestUserId), { data: response.cart });
         lastServerCart.current = response.cart;
         return response.result;
-      } finally { setMutating(false); }
+      } finally { setMutationCount(count => count - 1); }
     });
     mutationQueue.current = purchase.catch(() => undefined);
     return purchase;

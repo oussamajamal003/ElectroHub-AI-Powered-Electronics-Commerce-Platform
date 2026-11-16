@@ -1,5 +1,13 @@
 # Performance Testing
 
+Task 06.2 adds `node scripts/frontend-budget.mjs` after a production frontend build. Gzip budgets:
+largest JS chunk **300,000 bytes**, all JS chunks **600,000 bytes**. The measured baseline was 278,303 / 560,504 bytes;
+these ceilings allow roughly 7% headroom and guard against material payload regressions, not user-network latency.
+The existing Vite large-chunk warning remains visible. Do not raise budgets without measured review.
+`performance.quality.spec.ts` records five sequential real API reads per operation and production route navigation,
+paint, LCP, layout shift and resource measurements. Local loopback samples are diagnostics, not field Core Web Vitals.
+See [Task 06.2 evidence](../tasks/Phase-06/evidence/task06.2/performance.json).
+
 ## 1. Purpose
 
 This document defines performance requirements and verification for ElectroHub.

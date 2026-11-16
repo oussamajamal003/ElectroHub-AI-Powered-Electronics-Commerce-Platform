@@ -6,6 +6,19 @@ const nonce = 'a'.repeat(64);
 const prepare = { type: 'payment-supervisor.prepare', identity, parentPid: 123, nonce };
 const attemptIds = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
 describe('supervisor IPC authority', () => {
+  it('decline-only policy is worker-only, exact-one-ID, active-channel bound and cannot widen to governed recovery', () => {
+    for (const bad of [{ ...prepare, declineOnly: true }, { ...prepare, attemptIds, declineOnly: true },
+      { ...prepare, createdSince: new Date().toISOString(), declineOnly: true }]) {
+      expect(new DevSupervisorAuthority(identity, 123, 'worker').receive(bad)).toBe('scope-rejected');
+    }
+    expect(new DevSupervisorAuthority(identity, 123).receive({ ...prepare, attemptIds: [attemptIds[0]], declineOnly: true })).toBe('scope-rejected');
+    const state = new DevSupervisorAuthority(identity, 123, 'worker');
+    expect(state.receive({ ...prepare, attemptIds: [attemptIds[0]], declineOnly: true })).toBe('prepared');
+    expect(state.declineOnly(identity, true)).toBe(false);
+    state.receive({ type: 'payment-supervisor.activate', nonce });
+    expect(state.declineOnly(identity, true)).toBe(true); expect(state.declineOnly(identity, false)).toBe(false);
+    state.revoke(); expect(state.declineOnly(identity, true)).toBe(false);
+  });
   it('does not grant API authority from prepare until activation', () => {
     const state = new DevSupervisorAuthority(identity, 123);
     expect(state.allows(identity, true)).toBe(false);

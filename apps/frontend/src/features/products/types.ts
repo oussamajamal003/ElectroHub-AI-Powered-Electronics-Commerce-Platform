@@ -58,12 +58,18 @@ export interface Review {
   createdAt: string;
   updatedAt: string;
 }
+/** Rating summary from stored reviews. `distribution` (Task 06.2, additive) lists star values 5..1 with their counts. */
+export interface ReviewSummary {
+  averageRating: string | null;
+  reviewCount: number;
+  distribution?: { rating: number; count: number }[];
+}
 export interface ReviewCollection extends ProductCollection<Review> {
   meta: ProductCollection<Review>['meta'] & { totalPages: number };
-  summary?: { averageRating: string | null; reviewCount: number };
+  summary?: ReviewSummary;
 }
 export interface ReviewMutationResponse extends ProductResponse<Review> {
-  summary: { averageRating: string | null; reviewCount: number };
+  summary: ReviewSummary;
 }
 export interface MyReviewItem extends Review {
   product: { slug: string; name: string; primaryImage: Pick<ProductImage, 'id' | 'url' | 'altText'> | null };

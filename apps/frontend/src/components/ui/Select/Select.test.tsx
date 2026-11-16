@@ -42,6 +42,8 @@ describe('Select', () => {
     render(<Select options={options} error="Please select a fruit" />);
     const errorMessage = screen.getByText(/please select a fruit/i);
     expect(errorMessage).toBeInTheDocument();
+    expect(screen.getByRole('combobox')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('combobox')).toHaveAccessibleDescription('Please select a fruit');
   });
 
   it('is disabled when disabled prop is true', () => {

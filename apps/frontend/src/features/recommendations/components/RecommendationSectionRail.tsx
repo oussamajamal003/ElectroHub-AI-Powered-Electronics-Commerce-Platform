@@ -2,6 +2,7 @@ import { railCopy } from '../labels';
 import { recordRecommendationClick } from '../queries';
 import { useImpressionTracking } from '../tracking';
 import { useStoreCardActions } from '../useStoreCardActions';
+import { useLocation } from 'react-router-dom';
 import type { RecommendationSection } from '../types';
 import { RecommendationRail, type RecommendationRailProps } from './RecommendationRail';
 
@@ -24,13 +25,14 @@ function featuredIds(section?: RecommendationSection): ReadonlySet<string> | und
 /** Renders one server section with truthful copy, real cart/wishlist actions and viewability/click attribution. */
 export function RecommendationSectionRail({ section, loading, error, loadingTitle, recordPersonalClicks = false, ...rail }: Props) {
   const { navigate, cardActions } = useStoreCardActions();
+  const location = useLocation();
   const tracking = useImpressionTracking(section?.impressionToken ?? null);
   const copy = section ? railCopy(section) : null;
 
   if (section && !copy) return null;
   if (!section && !loading && !error) return null;
 
-  return <RecommendationRail {...rail} {...cardActions}
+  return <RecommendationRail {...rail} {...cardActions} showAddToast={location.pathname !== '/cart'}
     title={copy?.title ?? loadingTitle ?? (loading ? undefined : 'Recommendations')} description={copy?.description && section?.isPersonalized && section.fallbackReason === 'AI_UNAVAILABLE'
       ? `${copy.description} Recommendations are temporarily unavailable; showing your last personalized results.`
       : copy?.description}

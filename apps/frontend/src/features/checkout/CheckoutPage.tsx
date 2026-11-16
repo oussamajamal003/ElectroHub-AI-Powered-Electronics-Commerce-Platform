@@ -2,7 +2,7 @@ import { useCallback, useEffect, useReducer, useRef, useState, type ReactNode } 
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight } from 'lucide-react';
-import { announceConfirmation } from './confirmationSignal';
+import { ConfirmationStockRefused, announceConfirmation } from './confirmationSignal';
 import { PAYMENTS_UNAVAILABLE_MESSAGE, isPaymentsDisabledError, paymentCapabilityQueryOptions, usePaymentCapability } from './paymentCapability';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { useCart } from '@/features/cart/context';
@@ -13,7 +13,7 @@ import { ElectroHubLoader } from '@/components/ui/ElectroHubLoader/ElectroHubLoa
 import { allowedStep, clearDraft, draftWasSubmitted, forgetSubmittedPurchase, newDraft, readDraft, readSubmittedPurchase, readPurchaseEntry, rememberPurchaseEntries, rememberSubmittedPurchase, saveDraft, shippingErrors, withoutCardEntry } from './state';
 import { clearBuyNow, readBuyNow } from './buyNow';
 import type { CheckoutDraft, CheckoutQuote, CheckoutScope, CheckoutStep, PaymentOutcome, PaymentSetup, SubmissionAttempt } from './types';
-import { CheckoutProcessing, CheckoutStepper, DeliveryStep, OrderSummary, PaymentSetupPending, PaymentStep, ReviewStep, ShippingStep } from './CheckoutComponents';
+import { CheckoutProcessing, CheckoutSkeleton, CheckoutStepper, DeliveryStep, OrderSummary, PaymentSetupPending, PaymentStep, ReviewSkeleton, ReviewStep, ShippingStep } from './CheckoutComponents';
 import { SavedPurchaseCheckout } from './SavedPurchaseCheckout';
 import { acknowledgePaymentOutcome, announceOrderConfirmed, isNotifiableOutcome, synchronizePaymentOutcome, usePresentedPaymentAttempt } from './PaymentPurchases';
 import { StripePaymentSession, type PaymentEntryActions } from './StripePaymentSession';
@@ -296,6 +296,20 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
     draftRef.current = next;
     setupGeneration.current++;
     return true;
+  };
+  /** PR #51: return a sold-out Cart purchase to the Cart (the server re-verifies the cancelled payment; idempotent), then open the Cart. */
+  const saveSoldOutToCart = async () => {
+    const attemptId = outcome?.attemptId;
+    if (!attemptId) return;
+    try { await apiClient(`${endpoint}/${attemptId}/restore`, { method: 'POST', data: {}, signal: AbortSignal.timeout(45_000) }); }
+    catch (error) {
+      throw new Error(error instanceof ApiError && error.code === 'PRODUCT_UNAVAILABLE' ? error.message
+        : 'These items could not be saved to your Cart right now. Please try again.');
+    }
+    await client.invalidateQueries({ queryKey: queryKeys.cart.current(userId) });
+    void client.invalidateQueries({ queryKey: ['payment-purchases', userId] });
+    if (clearTerminalBeforeLeaving() === false) return;
+    navigate('/cart');
   };
   const syncPaymentLock = (payment: PaymentOutcome) => {
     if (!payment.recoveryActive) {
@@ -779,10 +793,24 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
       paid = hasVerifiedPayment(result);
     } catch (error) {
       if (!current()) { staleAttempt = true; return; }
-      if (submitRejected) {
+      if (submitRejected && error instanceof ApiError && (error.code === 'CART_STOCK_CONFLICT' || error.code === 'PRODUCT_UNAVAILABLE')) {
+        // PR #51: the item sold out (or was withdrawn) before card confirmation. Nothing was submitted, authorized or charged; the server's
+        // message names the product and what is available. Refresh the Cart/quote so the order summary shows current availability.
+        setMessage(`${error.message} Review your ${isBuyNow ? 'order' : 'Cart'} to continue.`);
+        setPaymentState('IDLE');
+        void client.invalidateQueries({ queryKey: queryKeys.cart.current(userId) });
+        void client.invalidateQueries({ queryKey: ['checkout', userId] });
+      } else if (submitRejected) {
         // The server refused to start this payment (nothing was submitted or confirmed): the customer can simply try again.
         setMessage('Secure payment could not start. Nothing was charged. Please try Place Order again.');
         setPaymentState('IDLE');
+      } else if (error instanceof ConfirmationStockRefused) {
+        // PR #51: sold out between Place Order and card confirmation. Stripe was never asked to confirm, so nothing was authorized; the
+        // purchase's own status (read next) presents the sold-out outcome and whether its cancellation is verified.
+        setOutcome(null);
+        setMessage('');
+        setPaymentState('COMMITTING_ORDER');
+        void client.invalidateQueries({ queryKey: queryKeys.cart.current(userId) });
       } else if (error instanceof PaymentEntryValidationError) {
         setMessage(error.message);
         setPaymentState('IDLE');
@@ -883,13 +911,13 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
     // One scheduled recovery; retry has its own identity/generation/busy fences.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recovering, outcome]);
-  if (!isSessionVerified || draftOwner.current !== userId) return <ElectroHubLoader page />;
+  if (!isSessionVerified || draftOwner.current !== userId) return <CheckoutSkeleton step={step} />;
   if (recovering) {
     return (
       <div className={styles.recoveryWrapper}>
       <PaymentRecovery outcome={outcome} message={message} pending={pending || refreshingPrerequisites}
         onCheck={() => void check()} onRetry={() => { if (outcome?.submittedAt) retrySubmitted(); else void retry(); }}
-        onLeave={clearTerminalBeforeLeaving} />
+        onLeave={clearTerminalBeforeLeaving} onRestore={outcome?.outcomeReason === 'STOCK_UNAVAILABLE' ? saveSoldOutToCart : undefined} />
       </div>
     );
   }
@@ -904,7 +932,7 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
   if (isBuyNow) {
     if (!buyNow) return restoreOr(<div className={`${styles.page} ${styles.empty}`}><h1>Nothing to buy</h1><p>Choose a product to buy now.</p><Link className={styles.primaryLink} to="/products">Continue Shopping</Link></div>);
   } else {
-    if (!cart.data) return cart.isLoading ? <ElectroHubLoader page /> : <div className={styles.page}><h1>Checkout</h1><p role="alert">Checkout could not load.</p><Button onClick={() => void cart.retry()}>Retry Cart</Button></div>;
+    if (!cart.data) return cart.isLoading ? <CheckoutSkeleton step={step} /> : <div className={styles.page}><h1>Checkout</h1><p role="alert">Checkout could not load.</p><Button onClick={() => void cart.retry()}>Retry Cart</Button></div>;
     if (!cart.data.items.length && !pending) return restoreOr(<div className={`${styles.page} ${styles.empty}`}><h1>Your cart is empty</h1><p>Add products before starting checkout.</p><Link className={styles.primaryLink} to="/products">Continue Shopping</Link></div>);
   }
   const completed: CheckoutStep[] = [...(draft.shippingComplete ? ['shipping' as const] : []), ...(draft.deliveryComplete ? ['delivery' as const] : []), ...(draft.paymentComplete ? ['payment' as const] : [])];
@@ -954,7 +982,7 @@ function CheckoutSession({ scope }: { scope: CheckoutScope }) {
         )}
       </PaymentStep>
     )}
-    {step === 'review' && (delivery ? <ReviewStep shipping={draft.shipping} delivery={delivery} total={delivery.totals.total} blocked={blocked || !secret || !draft.paymentComplete} onEdit={go} onBack={() => go('payment')} onPlace={() => void place()} /> : <ElectroHubLoader />)}
+    {step === 'review' && (delivery ? <ReviewStep shipping={draft.shipping} delivery={delivery} total={delivery.totals.total} blocked={blocked || !secret || !draft.paymentComplete} onEdit={go} onBack={() => go('payment')} onPlace={() => void place()} /> : <section className={styles.panel}><h2>Review Your Order</h2><ReviewSkeleton /></section>)}
   </>;
   return <div className={styles.page}>
     {pending ? <div className={styles.processingWrapper}><CheckoutProcessing browserConfirming={paymentState === 'CONFIRMING_PAYMENT'} /></div> : <>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifySendResult, projectEmailConfirmation, retryDelayMs, usableRecipient, eventKeys, MAX_RETRY_AFTER_MS,
+import { classifySendResult, projectEmailConfirmation, retryDelayMs, usableRecipient, eventKeys, MAX_RETRY_AFTER_MS, COMMERCE_EMAIL_TYPES,
   type ConfirmationEventFacts } from '../commerce-email.domain.js';
 import { commerceEmailConfig, dispatchPermission, trustedOrigin } from '../commerce-email.config.js';
 import { parseRetryAfter } from '../../integrations/brevo/brevo.client.js';
@@ -9,6 +9,11 @@ const fact = (type: string, over: Partial<ConfirmationEventFacts> = {}): Confirm
   attemptCount: 0, createdAt: new Date(now - 1_000), updatedAt: new Date(now - 500), ...over });
 const both = (order: Partial<ConfirmationEventFacts>, payment: Partial<ConfirmationEventFacts> = order) =>
   projectEmailConfirmation([fact('ORDER_CONFIRMED', order), fact('PAYMENT_CONFIRMED', payment)], now)?.state;
+
+it('keeps out-for-delivery distinct and defines no shipped email event', () => {
+  expect(COMMERCE_EMAIL_TYPES).toContain('ORDER_OUT_FOR_DELIVERY');
+  expect(COMMERCE_EMAIL_TYPES.some(type => type.includes('SHIPPED'))).toBe(false);
+});
 
 describe('customer email projection (T25, T18, PARTIAL precedence)', () => {
   it('omits the projection when no event exists instead of inventing QUEUED', () => {

@@ -1,3 +1,4 @@
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Archive, Image as ImageIcon, Plus, Send, Trash2 } from 'lucide-react';
@@ -270,8 +271,10 @@ function ProductForm({ product, onReload }: { product?: AdminProduct; onReload: 
                   error={errors[`specifications.${index}.name`] ?? (errors[`specifications.${index}`] && !spec.name.trim() ? 'Required' : undefined)} />
                 <Input label="Value" placeholder="e.g. 6.1 in" value={spec.value} maxLength={1000} onChange={event => setSpec(spec.key, 'value', event.target.value)} fullWidth
                   error={errors[`specifications.${index}.value`] ?? (errors[`specifications.${index}`] && !spec.value.trim() ? 'Required' : undefined)} />
-                <button type="button" className={`${styles.iconAction} ${styles.iconActionDanger}`} aria-label={`Remove specification ${index + 1}`}
-                  onClick={() => set('specifications', draft.specifications.filter(item => item.key !== spec.key))}><Trash2 aria-hidden="true" /></button>
+                <Tooltip content="Remove specification">
+                  <button type="button" className={`${styles.iconAction} ${styles.iconActionDanger}`} aria-label={`Remove specification ${index + 1}`}
+                    onClick={() => set('specifications', draft.specifications.filter(item => item.key !== spec.key))}><Trash2 aria-hidden="true" /></button>
+                </Tooltip>
               </fieldset>)}
             {draft.specifications.length >= MAX_SPECS && <p className={styles.fieldHelp}>A product can have up to {MAX_SPECS} specifications.</p>}
           </section>

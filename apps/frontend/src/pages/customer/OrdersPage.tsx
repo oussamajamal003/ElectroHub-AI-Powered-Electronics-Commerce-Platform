@@ -108,7 +108,7 @@ function OwnedOrders() {
     setSearchParams(value === 1 ? {} : { page: String(value) });
   };
 
-  return <main className={shared.page}>
+  return <div className={shared.page}>
     <OrdersBreadcrumb items={crumbs} />
     <div className={styles.heading}>
       <h1 ref={heading} tabIndex={-1}>My Orders</h1>
@@ -138,5 +138,5 @@ function OwnedOrders() {
       <PaginationItem><PaginationNext disabled={page >= totalPages} onClick={() => goToPage(page + 1)} /></PaginationItem>
     </PaginationContent></Pagination>}
     <div className={styles.footerActions}><Link className={shared.outlineLink} to="/account">Back to Account</Link></div>
-  </main>;
+  </div>;
 }

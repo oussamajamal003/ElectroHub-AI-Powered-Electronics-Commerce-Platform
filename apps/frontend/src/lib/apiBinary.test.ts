@@ -5,7 +5,7 @@ afterEach(() => { vi.unstubAllGlobals(); setAccessToken(null); });
 
 const encoder = new TextEncoder();
 const pdfBytes = (text = '%PDF-1.7\n%test\n') => encoder.encode(text);
-const pdfResponse = (body: Uint8Array = pdfBytes(), headers: Record<string, string> = {}) => new Response(body, {
+const pdfResponse = (body: Uint8Array = pdfBytes(), headers: Record<string, string> = {}) => new Response(new Uint8Array(body).buffer, {
   status: 200,
   headers: { 'content-type': 'application/pdf', 'content-length': String(body.byteLength), ...headers },
 });

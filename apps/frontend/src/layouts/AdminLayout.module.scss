@@ -29,26 +29,28 @@ $sidebar-rail: 4.5rem;
   svg { width: 20px; height: 20px; }
   &:hover { background: $color-surface; color: $color-text-primary; }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
-  &[data-state='open'] { background: $color-surface; color: $color-primary; } }
+  &[data-state='open'] { background: $color-surface; color: $color-primary-text; } }
 .menuButton { display: none; }
 .badge { position: absolute; top: 5px; right: 3px; min-width: 1.125rem; height: 1.125rem; padding: 0 5px; display: grid; place-items: center;
-  border-radius: 999px; box-shadow: 0 0 0 2px $color-background; background: $color-error; color: $color-text-inverse; font-family: $font-family-base;
+  border-radius: 999px; box-shadow: 0 0 0 2px $color-background; background: $color-error-fill; color: $color-text-inverse; font-family: $font-family-base;
   font-size: 0.625rem; font-weight: $font-weight-semibold; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: .01em; }
 
 .brand { display: inline-flex; align-items: center; gap: $spacing-3; min-width: 0; color: $color-text-primary; text-decoration: none; padding: $spacing-1;
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
-.adminPill { padding: 2px $spacing-2; background: rgba($color-primary, .1); color: $color-primary; font-size: $font-size-xs; font-weight: $font-weight-semibold;
+.adminPill { padding: 2px $spacing-2; background: theme-alpha($color-primary, .1); color: $color-primary-text-hover; font-size: $font-size-xs; font-weight: $font-weight-semibold;
   letter-spacing: .06em; text-transform: uppercase; }
 
 .profileButton { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; padding: 0; border: 0; border-radius: 50%;
   background: transparent; cursor: pointer; transition: box-shadow $transition-fast;
-  &:hover .avatar, &[data-state='open'] .avatar { box-shadow: 0 0 0 3px rgba($color-primary, .2); }
+  &:hover .avatar, &[data-state='open'] .avatar { box-shadow: 0 0 0 3px theme-alpha($color-primary, .2); }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
-.avatar { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 50%; background: $color-primary; color: $color-text-inverse;
-  font-size: $font-size-xs; font-weight: $font-weight-semibold; flex-shrink: 0; transition: box-shadow $transition-fast; }
+// Size only: colour, fill and layout come from the shared Avatar so the fallback stays neutral and never stripes (Task 06.2).
+.avatar { width: 2.25rem; height: 2.25rem; font-size: $font-size-xs; font-weight: $font-weight-semibold; transition: box-shadow $transition-fast; }
 
 // ─── Menus ────────────────────────────────────────────────
 .menu { min-width: 18rem; max-width: calc(100vw - 2rem); }
+// The operational-alerts panel is a fixed 460px so its width never depends on the copy inside it; `.menu` still caps it on narrow viewports.
+.alertsMenu { width: 28.75rem; }
 .animatedMenu {
   transform-origin: var(--radix-dropdown-menu-content-transform-origin, top right);
 
@@ -73,11 +75,12 @@ $sidebar-rail: 4.5rem;
 .alertInfo { background: $color-info-background; color: $color-info-foreground; border-color: $color-info-border; }
 .alertNeutral { background: $color-surface; color: $color-text-secondary; border-color: $color-border; }
 .alertText { flex: 1; font-size: $font-size-sm; }
+.newMarker { font-size: $font-size-xs; font-weight: $font-weight-semibold; color: $color-primary; }
 .alertCount { font-family: $font-family-mono; font-size: $font-size-sm; font-weight: $font-weight-semibold; }
 .profileLabel { display: grid; gap: 2px; padding-top: $spacing-2; padding-bottom: $spacing-2;
   strong { font-size: $font-size-sm; color: $color-text-primary; }
   span { font-size: $font-size-xs; font-weight: $font-weight-regular; color: $color-text-secondary; overflow-wrap: anywhere; } }
-.rolePill { justify-self: start; margin-top: $spacing-1; padding: 1px $spacing-2; background: rgba($color-primary, .1); color: $color-primary !important;
+.rolePill { justify-self: start; margin-top: $spacing-1; padding: 1px $spacing-2; background: theme-alpha($color-primary, .1); color: $color-primary-text !important;
   font-weight: $font-weight-semibold !important; }
 .menuLink { display: flex; align-items: center; gap: $spacing-2; min-height: 2.5rem; text-decoration: none; color: inherit; svg { width: 16px; height: 16px; } }
 
@@ -97,13 +100,13 @@ $sidebar-rail: 4.5rem;
 .collapseButton { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; flex-shrink: 0; border: 1px solid transparent; background: transparent;
   color: $color-text-muted; cursor: pointer; transition: background-color $transition-fast, color $transition-fast;
   svg { width: 18px; height: 18px; }
-  &:hover { background: $color-surface; color: $color-primary; }
+  &:hover { background: $color-surface; color: $color-primary-text; }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
 .shellCollapsed .collapseButton { width: 3.5rem; height: 2.75rem; svg { width: 20px; height: 20px; } }
 .navList { display: grid; gap: $spacing-1; margin: 0; padding: 0; list-style: none; }
 .navLink { display: flex; align-items: center; gap: $spacing-3; min-height: 2.75rem; padding: 0 $spacing-3; color: $color-text-secondary; text-decoration: none;
   font-size: $font-size-sm; font-weight: $font-weight-medium; transition: background-color $transition-fast, color $transition-fast;
-  &:hover { background: rgba($color-primary, .06); color: $color-primary; }
+  &:hover { background: theme-alpha($color-primary, .06); color: $color-primary-text; }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: -2px; } }
 .navLinkActive { background: $color-primary; color: $color-text-inverse;
   &:hover { background: $color-primary-dark; color: $color-text-inverse; } }
@@ -127,6 +130,13 @@ $sidebar-rail: 4.5rem;
   .header { padding: 0 $spacing-3 0 $spacing-2; gap: $spacing-2; }
     .adminPill { display: none; }
   .main { padding: $spacing-4; }
+}
+// Narrow phones (320–374px): the theme toggle, alerts and avatar share the row with the brand; 40px targets (≥ WCAG 2.5.8's 24px).
+@media (max-width: 374px) {
+  .header { padding: 0 $spacing-2; gap: $spacing-1; }
+  .headerStart { gap: $spacing-1; }
+  .headerEnd { gap: 2px; }
+  .iconButton, .profileButton { width: 2.5rem; height: 2.5rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .iconButton, .navLink, .collapseButton, .avatar { transition: none; }

@@ -22,7 +22,7 @@
 }
 .eyebrow { font-size: $font-size-xs; font-weight: $font-weight-medium; letter-spacing: .04em; text-transform: uppercase; color: $color-text-secondary;
   @include respond-to(md) { font-size: $font-size-sm; } }
-.cardLink { color: $color-primary; font-weight: $font-weight-bold; text-decoration: none;
+.cardLink { color: $color-primary-text; font-weight: $font-weight-bold; text-decoration: none;
   // Stretch the single link across the card.
   &::after { content: ''; position: absolute; inset: 0; }
   &:hover { text-decoration: underline; text-underline-offset: 3px; }
@@ -38,7 +38,7 @@
   dt { font-size: $font-size-sm; color: $color-text-secondary; }
   dd { margin: 0; font-size: $font-size-base; font-weight: $font-weight-semibold; color: $color-text-primary; white-space: nowrap; @include respond-to(md) { font-size: $font-size-lg; } }
 }
-.chevron { width: 1.5rem; height: 1.5rem; flex-shrink: 0; color: $color-primary; }
+.chevron { width: 1.5rem; height: 1.5rem; flex-shrink: 0; color: $color-primary-text; }
 // Task 03.9: the Documents action and chevron move to their own right-aligned row only when the metadata needs the full width.
 .cardFooter { flex-wrap: wrap; }
 .cardFooter > .meta { flex: 1 1 15rem; }

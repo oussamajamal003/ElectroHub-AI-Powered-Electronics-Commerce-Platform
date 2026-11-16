@@ -1,3 +1,4 @@
+import { toast } from '@/components/ui/Toast';
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate, useParams, useNavigationType } from 'react-router-dom';
@@ -22,6 +23,7 @@ import { queryKeys } from '@/lib/query';
 import type { ProductDetail, ProductResponse } from '@/features/products/types';
 import styles from './ProductDetailPage.module.scss';
 import { ProductPurchaseActions } from './ProductPurchaseActions';
+import { ProductDescriptionPanel, ReviewSummaryCard } from './ProductDetailSections';
 import { saveBuyNow } from '@/features/checkout/buyNow';
 
 const RECOMMENDATION_LIMIT = 4;
@@ -61,9 +63,19 @@ export function ProductDetailPage() {
   // wishlist heart is disabled because the wishlist silently ignores toggles until the session has a verdict (defect D-2).
   const sessionChecking = !isSessionVerified && !sessionUnavailable;
   const productQuery = useProduct(slug);
-  // A stale cached detail may have become non-public (for example, a test fixture).
-  // Render only after a fresh server read so a denied product never flashes from cache.
-  const product = productQuery.isError || productQuery.isFetching ? undefined : productQuery.data?.data;
+  // A stale cached detail may have become non-public (for example, a test fixture). Render only after a fresh server read in THIS
+  // mount, so a denied product never flashes from cache. Once that read has verified this slug, a later background refetch (network
+  // reconnect, invalidation) keeps the verified product on screen instead of swapping the whole page for the skeleton, which used to
+  // remount every section and image and lose the visitor's place. A refetch that fails (404, no longer public) still removes it at once.
+  const [verifiedSlug, setVerifiedSlug] = useState<string | null>(null);
+  const freshRead = !productQuery.isPending && !productQuery.isFetching && !productQuery.isError && Boolean(productQuery.data);
+  useEffect(() => {
+    if (productQuery.isError) setVerifiedSlug(null);
+    else if (freshRead) setVerifiedSlug(slug);
+  }, [freshRead, productQuery.isError, slug]);
+  const verified = verifiedSlug === slug || freshRead;
+  const awaitingFreshRead = productQuery.isPending || (productQuery.isFetching && !verified);
+  const product = productQuery.isError || awaitingFreshRead ? undefined : productQuery.data?.data;
   useEffect(() => { setCartQuantity(1); setCartFeedback(''); }, [product?.id]);
   const currentCartQuantity = product ? cartData?.items.find(item => item.productId === product.id)?.quantity ?? 0 : 0;
   const remainingQuantity = product ? Math.max(0, Math.min(999, product.availableQuantity - currentCartQuantity)) : 0;
@@ -96,11 +108,11 @@ export function ProductDetailPage() {
     const summary = reviewQuery.data?.summary;
     if (!productId || !summary) return;
     queryClient.setQueryData<ProductResponse<ProductDetail>>(queryKeys.products.detail(slug), current =>
-      current?.data.id === productId ? { ...current, data: { ...current.data, ...summary } } : current);
+      current?.data.id === productId ? { ...current, data: { ...current.data, averageRating: summary.averageRating, reviewCount: summary.reviewCount } } : current);
   }, [product?.id, reviewQuery.data?.summary, queryClient, slug]);
 
-  if (productQuery.isPending || productQuery.isFetching) return <main className={styles.container} role="status" aria-label="Loading product details"><div aria-hidden="true"><Skeleton width="38%" height={20} /><div className={styles.productTop}><div><div className={styles.detailSkeletonGallery}><Skeleton width="100%" height="100%" /></div><div className={styles.detailSkeletonThumbnails}><Skeleton width={74} height={74} /><Skeleton width={74} height={74} /></div></div><div className={styles.detailSkeletonSummary}><Skeleton width="28%" height={18} /><Skeleton width="90%" height={42} /><Skeleton width="55%" height={20} /><Skeleton width="42%" height={36} /><Skeleton width="82%" height={80} /><Skeleton width="65%" height={20} /></div></div><div className={styles.detailSkeletonTabs}><Skeleton width="100%" height={50} /></div></div></main>;
-  if (!product) return <main className={styles.container}><h1>Product unavailable</h1><p>This product could not be loaded.</p><Button type="button" onClick={() => void productQuery.refetch()}>Retry</Button></main>;
+  if (awaitingFreshRead) return <div className={styles.container} role="status" aria-label="Loading product details"><div aria-hidden="true"><Skeleton width="38%" height={20} /><div className={styles.productTop}><div><div className={styles.detailSkeletonGallery}><Skeleton width="100%" height="100%" /></div><div className={styles.detailSkeletonThumbnails}><Skeleton width={74} height={74} /><Skeleton width={74} height={74} /></div></div><div className={styles.detailSkeletonSummary}><Skeleton width="28%" height={18} /><Skeleton width="90%" height={42} /><Skeleton width="55%" height={20} /><Skeleton width="42%" height={36} /><Skeleton width="82%" height={80} /><Skeleton width="65%" height={20} /></div></div><div className={styles.detailSkeletonTabs}><Skeleton width="100%" height={50} /></div></div></div>;
+  if (!product) return <div className={styles.container}><h1>Product unavailable</h1><p>This product could not be loaded.</p><Button type="button" onClick={() => void productQuery.refetch()}>Retry</Button></div>;
 
   const submitReview = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -131,10 +143,13 @@ export function ProductDetailPage() {
     try {
       await addItem(product.id, cartQuantity);
       setCartFeedback(`${product.name} added to cart.`);
+      toast.success('Added to cart', { description: product.name, announce: false });
     } catch (error) {
-      setCartFeedback(error instanceof ApiError && error.code === 'CART_STOCK_CONFLICT' || error instanceof Error && /^Only \d+ items? (?:is|are) currently available\.$/.test(error.message)
+      const message = (error instanceof ApiError && error.code === 'CART_STOCK_CONFLICT' || error instanceof Error && /^Only \d+ items? (?:is|are) currently available\.$/.test(error.message)
         ? error.message : error instanceof Error && error.message === SESSION_CHECK_MESSAGE ? 'We could not confirm your sign-in. Please try again.'
           : 'Could not add this product. Check availability and try again.');
+      setCartFeedback(message);
+      toast.error('Couldn\'t add to cart', { description: message, announce: false });
     } finally { cartAction.current = false; setCartPending(false); }
   };
   // Buy Now purchases only this product/quantity through a server-owned BUY_NOW scope; the persistent Cart is never read or changed.
@@ -144,7 +159,7 @@ export function ProductDetailPage() {
     navigate('/checkout/buy-now');
   };
 
-  return <main className={styles.container}>
+  return <div className={styles.container}>
     {productQuery.isError && <div role="status"><p>Current availability could not be refreshed. The last confirmed product is still visible.</p><Button type="button" variant="ghost" onClick={() => void productQuery.refetch()}>Retry availability</Button></div>}
     <nav className={styles.breadcrumb} aria-label="Breadcrumb"><Link to="/">Home</Link><ChevronRight size={16} aria-hidden="true" /><Link to="/products">Products</Link><ChevronRight size={16} aria-hidden="true" /><Link to={`/products?category=${encodeURIComponent(product.category.slug)}`}>{product.category.name}</Link><ChevronRight size={16} aria-hidden="true" /><span aria-current="page">{product.name}</span></nav>
     <div className={styles.productTop}>
@@ -166,14 +181,15 @@ export function ProductDetailPage() {
     </div>
 
     <ProductDetailsTabs className={styles.tabs} reviewCount={product.reviewCount} defaultValue={location.hash === '#reviews' ? 'reviews' : 'description'}
-      description={<section><h2>Product Description</h2><p>{product.description || 'No description is available.'}</p></section>}
+      description={<ProductDescriptionPanel product={product} />}
       specifications={<section><h2>Specifications</h2><ProductSpecifications groups={product.specifications} /></section>}
       reviews={<><div className={styles.reviewsHeading}><h2>Customer Reviews</h2><p>{product.averageRating === null ? 'Not yet rated' : `★ ${product.averageRating} out of 5`} · {product.reviewCount} {product.reviewCount === 1 ? 'review' : 'reviews'}</p></div>
+        <ReviewSummaryCard summary={reviewQuery.data?.summary ?? { averageRating: product.averageRating, reviewCount: product.reviewCount }} />
         <ProductReviews reviews={reviewQuery.data?.data ?? []} loading={reviewQuery.isPending}
           error={reviewQuery.isError && !reviewQuery.data} onRetry={() => void reviewQuery.refetch()} ownReviewId={ownQuery.data?.data?.id} />
         {reviewQuery.data && reviewQuery.data.meta.totalPages > 1 && <nav className={styles.reviewPages} aria-label="Review pages"><Button type="button" disabled={reviewPage <= 1} onClick={() => setReviewPage(page => page - 1)}>Previous</Button><span>Page {reviewPage} of {reviewQuery.data.meta.totalPages}</span><Button type="button" disabled={reviewPage >= reviewQuery.data.meta.totalPages} onClick={() => setReviewPage(page => page + 1)}>Next</Button></nav>}
         {isInitializing ? <div className={styles.reviewAuthLoading} role="status" aria-label="Checking review access"><Skeleton width="100%" height={96} /></div> : isAuthenticated ? <section className={styles.reviewForm}><h3>{ownQuery.data?.data ? 'Edit your review' : 'Write a review'}</h3>
-          {ownQuery.isPending ? <div role="status" aria-label="Loading your review"><Skeleton width="100%" height={120} /></div> : <form onSubmit={event => void submitReview(event)}><Select label="Rating" value={String(rating)} onValueChange={value => setRating(Number(value))} options={[5, 4, 3, 2, 1].map(value => ({ value: String(value), label: `${value} ${value === 1 ? 'star' : 'stars'}` }))} square fullWidth /><label htmlFor="review-body">Your review</label><textarea id="review-body" value={body} onChange={event => setBody(event.target.value)} minLength={1} maxLength={2000} required rows={5} /><small>{body.length}/2000 characters</small><div className={styles.reviewActions}><Button type="submit" isLoading={mutation.isPending}>{ownQuery.data?.data ? 'Update review' : 'Post review'}</Button>{ownQuery.data?.data && !confirmDelete && <Button type="button" variant="destructive" disabled={mutation.isPending} onClick={() => setConfirmDelete(true)}>Delete review</Button>}</div></form>}
+          {ownQuery.isPending ? <div role="status" aria-label="Loading your review"><Skeleton width="100%" height={120} /></div> : <form onSubmit={event => void submitReview(event)}><Select label="Rating" value={String(rating)} onValueChange={value => setRating(Number(value))} options={[5, 4, 3, 2, 1].map(value => ({ value: String(value), label: `${value} ${value === 1 ? 'star' : 'stars'}` }))} square fullWidth /><label htmlFor="review-body">Your review <span className={styles.requiredMark} aria-hidden="true">(required)</span></label><textarea id="review-body" value={body} onChange={event => setBody(event.target.value)} minLength={1} maxLength={2000} required aria-required="true" aria-describedby="review-body-count" placeholder="Share your experience with this product..." rows={5} /><small id="review-body-count">{body.length}/2000 characters</small><div className={styles.reviewActions}><Button type="submit" isLoading={mutation.isPending}>{ownQuery.data?.data ? 'Update review' : 'Post review'}</Button>{ownQuery.data?.data && !confirmDelete && <Button type="button" variant="destructive" disabled={mutation.isPending} onClick={() => setConfirmDelete(true)}>Delete review</Button>}</div></form>}
           {confirmDelete && <div className={styles.reviewConfirm} role="group" aria-label="Confirm review deletion"><p>Delete your review?</p><div className={styles.reviewActions}><Button type="button" variant="destructive" disabled={mutation.isPending} isLoading={mutation.isPending} onClick={() => void removeReview()}>Confirm delete</Button><Button type="button" variant="outline" disabled={mutation.isPending} onClick={() => setConfirmDelete(false)}>Cancel</Button></div></div>}
           {feedback && <p className={styles.reviewFeedback} role="status">{feedback}</p>}
         </section> : <section className={styles.reviewGuest}><h3>Share your experience</h3><p>Sign in to write a review of this product.</p><Button type="button" onClick={() => window.dispatchEvent(new Event('electrohub:open-auth'))}>Sign In</Button></section>}
@@ -186,5 +202,5 @@ export function ProductDetailPage() {
       section={section} recordPersonalClicks={personalizationEnabled}
       action={section.strategy === 'FALLBACK_CATEGORY' && section.context
         ? { href: `/products?category=${encodeURIComponent(section.context.categorySlug)}`, label: 'View category' } : undefined} />)}
-  </main>;
+  </div>;
 }

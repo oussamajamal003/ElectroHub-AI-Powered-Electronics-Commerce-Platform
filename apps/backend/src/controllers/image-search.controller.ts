@@ -7,6 +7,7 @@ import { IMAGE_SEARCH_DEFAULT_LIMIT, IMAGE_SEARCH_MAX_LIMIT, ImageSearchError, i
 import { imageSearchLifecycle } from '../middleware/imageSearchAdmission.js';
 import { recordImageSearchCompleted, recordImageSearchFailed } from '../services/analytics-events.service.js';
 import { issueAnalyticsToken } from '../services/analytics-token.js';
+import { bindAnalyticsRef, isAnalyticsRefRevoked, normalizeAnalyticsRef } from '../services/analytics-withdrawal.js';
 
 /** Public failure envelope code to a fixed, non-sensitive analytics and lifecycle category. */
 const FAILURE_CATEGORIES = { IMAGE_SEARCH_TIMEOUT: 'inference_timeout', IMAGE_SEARCH_UNAVAILABLE: 'upstream_unavailable',
@@ -37,7 +38,13 @@ export const imageSearchController = {
     const onClose = () => { if (!res.writableFinished) disconnect.abort(); };
     res.once('close', onClose);
     // Task 05.2: one correlation id per served search; analytics rows never contain the image, the request or the user.
-    const correlationId = randomUUID();
+    // Task 06.2: optional analytics only with the shopper's opt-in; the random per-search reference lets a withdrawal made while
+    // this search runs reach it (POST /api/analytics/withdrawals) so nothing is written, or what was written is erased.
+    const analyticsAllowed = req.get('X-ElectroHub-Analytics') === 'consented';
+    const correlationId = analyticsAllowed ? randomUUID() : undefined;
+    const analyticsRef = correlationId ? normalizeAnalyticsRef(req.get('X-ElectroHub-Analytics-Ref')) : null;
+    if (correlationId && analyticsRef) bindAnalyticsRef(analyticsRef, correlationId);
+    const measured = () => Boolean(correlationId) && !isAnalyticsRefRevoked(analyticsRef);
     const startedAt = Date.now();
     try {
       const sniffed = res.locals.sniffedImage as SniffedImage | undefined;
@@ -57,17 +64,18 @@ export const imageSearchController = {
       if (lifecycle) { lifecycle.outcome = 'completed'; lifecycle.modelVersion = body.meta.modelVersion;
         lifecycle.embeddingVersion = body.meta.embeddingVersion; lifecycle.resultCount = body.meta.count; }
       // Fire-and-forget: recording can neither delay nor change this response.
-      recordImageSearchCompleted({ correlationId, resultCount: body.meta.count, durationMs: Date.now() - startedAt });
+      const measure = measured();
+      if (measure && correlationId) recordImageSearchCompleted({ correlationId, resultCount: body.meta.count, durationMs: Date.now() - startedAt, ref: analyticsRef });
       const productIds = body.data.items.map(item => item.id);
       // Only a search that returned products can be followed by a selection, so only those responses carry a token.
-      const analyticsToken = productIds.length > 0 ? issueAnalyticsToken({ correlationId, productIds }) : undefined;
+      const analyticsToken = measure && correlationId && productIds.length > 0 ? issueAnalyticsToken({ correlationId, productIds }) : undefined;
       res.setHeader('Cache-Control', 'no-store');
       res.status(200).json(analyticsToken ? { ...body, analyticsToken } : body);
     } catch (error) {
       if (signal.aborted || res.writableEnded) return;
       const category = error instanceof ImageSearchError && error.code in FAILURE_CATEGORIES
         ? FAILURE_CATEGORIES[error.code as keyof typeof FAILURE_CATEGORIES] : 'failed';
-      recordImageSearchFailed({ correlationId, category, durationMs: Date.now() - startedAt });
+      if (measured() && correlationId) recordImageSearchFailed({ correlationId, category, durationMs: Date.now() - startedAt, ref: analyticsRef });
       if (lifecycle) {
         lifecycle.outcome = category;
       }

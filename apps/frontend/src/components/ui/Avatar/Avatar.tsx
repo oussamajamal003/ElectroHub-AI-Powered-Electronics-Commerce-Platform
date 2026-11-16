@@ -8,12 +8,14 @@ export interface AvatarProps extends React.ComponentPropsWithoutRef<typeof Avata
   src?: string;
   alt?: string;
   initials?: string;
+  /** Reports image load results so callers can refresh an expired signed URL. */
+  onImageLoadingStatusChange?: React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>['onLoadingStatusChange'];
 }
 
 export const Avatar = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Root>,
   AvatarProps
->(({ className, src, alt, initials, ...props }, ref) => {
+>(({ className, src, alt, initials, onImageLoadingStatusChange, ...props }, ref) => {
   return (
     <AvatarPrimitive.Root
       ref={ref}
@@ -24,6 +26,7 @@ export const Avatar = React.forwardRef<
         src={src}
         alt={alt}
         className={styles.image}
+        onLoadingStatusChange={onImageLoadingStatusChange}
       />
       <AvatarPrimitive.Fallback
         className={styles.fallback}

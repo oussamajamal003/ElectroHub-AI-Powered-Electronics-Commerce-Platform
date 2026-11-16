@@ -177,7 +177,7 @@ export function faultyDatabase(real: PrismaClient, shouldFail: () => boolean): P
 interface DisposableConfig { url: string; database: string; caFile: string; caPem: string }
 interface PgClientLike { connect(): Promise<void>; end(): Promise<void>; query(sql: string, params?: unknown[]): Promise<{ rows: Array<Record<string, unknown>> }> }
 interface DisposableModule {
-  validateConfiguration(env: NodeJS.ProcessEnv, options?: { scope?: 'scenarios-A-S' | 'scenarios-A-J' | 'stripe-live' }): { error?: string; config?: DisposableConfig };
+  validateConfiguration(env: NodeJS.ProcessEnv, options?: { scope?: 'scenarios-A-S' | 'scenarios-A-J' | 'scenarios-A-Y' | 'scenarios-A-Z' | 'stripe-live' }): { error?: string; config?: DisposableConfig };
   runUrl(config: DisposableConfig, schema: string): string;
   createClient(config: DisposableConfig): PgClientLike;
   verifyDisposableServer(client: PgClientLike, options: { expectedDatabase: string; allowedSchema: string | null }): Promise<unknown>;
@@ -192,8 +192,9 @@ export interface DisposableRun { schema: string; connectionString: string; datab
  */
 export async function assertDisposableRun(): Promise<DisposableRun> {
   const scope = requireFromBackend('./scripts/payment-pg-disposable.cjs') as DisposableModule;
-  // The runner names the suite; only the two PostgreSQL-only suites are valid here and each has its own exact authorization.
-  const suite = process.env.PAYMENT_PG_DISPOSABLE_SCOPE === 'scenarios-A-J' ? 'scenarios-A-J' : 'scenarios-A-S';
+  // The runner names the suite; only the PostgreSQL-only suites are valid here and each has its own exact authorization.
+  const named = process.env.PAYMENT_PG_DISPOSABLE_SCOPE;
+  const suite = named === 'scenarios-A-J' || named === 'scenarios-A-Y' || named === 'scenarios-A-Z' ? named : 'scenarios-A-S';
   const validated = scope.validateConfiguration(process.env, { scope: suite });
   if (!validated.config) throw new Error('Disposable scope configuration failed before fixture writes.');
   const runId = process.env.PAYMENT_PG_DISPOSABLE_RUN_ID ?? '';

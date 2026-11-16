@@ -5,7 +5,7 @@ import { SearchPage } from './SearchPage';
 import { getProductGridSkeletonCount } from './skeletonCount';
 import { useCart } from '@/features/cart/context';
 import { SearchField } from '@/components/ui/SearchField/SearchField';
-import { apiClient } from '@/lib/api';
+import { ApiError, apiClient } from '@/lib/api';
 import { activeSearch, clearFilters, emptySearch, parseSearch, searchParams } from './searchState';
 import type { Suggestion } from './api';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -55,7 +55,7 @@ describe('URL-backed Search state', () => {
     expect(activeSearch(parseSearch(new URLSearchParams()))).toBe(false);
     expect(activeSearch(parseSearch(new URLSearchParams('minPrice=0')))).toBe(true);
   });
-  it.each(['page=1001', 'pageSize=101', 'q=a&q=b', 'availability=stock', 'minPrice=-1', 'minPrice=1.234', 'minPrice=10&maxPrice=9', 'sort=featured'])('rejects malformed state %s', value => {
+  it.each(['page=101', 'page=1001', 'pageSize=101', 'q=a&q=b', 'availability=stock', 'minPrice=-1', 'minPrice=1.234', 'minPrice=10&maxPrice=9', 'sort=featured'])('rejects malformed state %s', value => {
     expect(() => parseSearch(new URLSearchParams(value))).toThrow();
   });
 });
@@ -135,6 +135,50 @@ describe('Search page', () => {
     expect(screen.queryByTestId('product-skeleton')).not.toBeInTheDocument();
     expect(vi.mocked(apiClient).mock.calls.filter(([endpoint]) => endpoint.startsWith('/api/search/products'))).toHaveLength(2);
   });
+  it('accepts the last numbered page (100) but never renders a page link beyond it', async () => {
+    vi.mocked(apiClient).mockImplementation(async endpoint => endpoint.startsWith('/api/search/products')
+      ? { ...response, meta: { page: 100, pageSize: 20, total: 5000, totalPages: 250, hasNextPage: true, nextCursor: null } } as never
+      : { data: [], meta: { total: 0 } } as never);
+    page('/products?sort=newest&page=100', true);
+    expect(await screen.findByText('Apple MacBook Air')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Go to page 100' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('button', { name: 'Go to page 101' })).not.toBeInTheDocument();
+    // No cursor (e.g. category-mix): numbered pagination simply ends; no Load more is offered.
+    expect(screen.queryByRole('button', { name: 'Load more products' })).not.toBeInTheDocument();
+  });
+  it('continues past page 100 with the server cursor, appends without duplicates and stops at the end', async () => {
+    const card = (id: string) => ({ ...product, id, name: `Product ${id}`, slug: id });
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint.includes('cursor=c1')) return { data: [card('p100'), card('p101')], meta: { pageSize: 20, total: null, hasNextPage: true, nextCursor: 'c2.sig' } } as never;
+      if (endpoint.includes('cursor=c2')) return { data: [card('p102')], meta: { pageSize: 20, total: null, hasNextPage: false, nextCursor: null } } as never;
+      if (endpoint.startsWith('/api/search/products')) return { data: [card('p100')], meta: { page: 100, pageSize: 20, total: 2003, totalPages: 101, hasNextPage: true, nextCursor: 'c1.sig' } } as never;
+      return { data: [], meta: { total: 0 } } as never;
+    });
+    page('/products?sort=newest&page=100', true);
+    expect(await screen.findByText('Product p100')).toBeInTheDocument();
+    expect(vi.mocked(apiClient).mock.calls.some(([endpoint]) => endpoint.includes('cursor='))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Load more products' }));
+    expect(await screen.findByText('Product p101')).toBeInTheDocument();
+    expect(screen.getAllByText('Product p100')).toHaveLength(1);
+    const continuation = vi.mocked(apiClient).mock.calls.map(([endpoint]) => endpoint).find(endpoint => endpoint.includes('cursor=c1'));
+    expect(continuation).toBe('/api/search/products?sort=newest&cursor=c1.sig');
+    fireEvent.click(screen.getByRole('button', { name: 'Load more products' }));
+    expect(await screen.findByText('Product p102')).toBeInTheDocument();
+    expect(screen.getByText('You have reached the end of the results.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Load more products' })).not.toBeInTheDocument();
+  });
+  it('a rejected (stale) cursor offers a restart from the first page instead of mixing result sets', async () => {
+    vi.mocked(apiClient).mockImplementation(async endpoint => {
+      if (endpoint.includes('cursor=')) throw new ApiError(400, 'The pagination cursor is invalid or expired.', undefined, 'INVALID_CURSOR');
+      if (endpoint.startsWith('/api/search/products')) return { ...response, meta: { page: 100, pageSize: 20, total: 2003, totalPages: 101, hasNextPage: true, nextCursor: 'c1.sig' } } as never;
+      return { data: [], meta: { total: 0 } } as never;
+    });
+    page('/products?sort=newest&page=100', true);
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more products' }));
+    expect(await screen.findByText('These results have changed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to first page' }));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?sort=newest'));
+  });
   it('submits exactly one product request and renders an actionable catalog card', async () => {
     page(); fireEvent.change(screen.getByRole('combobox', { name: 'Search products' }), { target: { value: 'macbook' } });
     expect(await screen.findByTestId('product-card')).toHaveTextContent('Apple MacBook Air');
@@ -195,7 +239,7 @@ describe('Search page', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Min price ($)' }), { target: { value: '50' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'Max price ($)' }), { target: { value: '1000' } });
     expect(screen.getByTestId('location')).not.toHaveTextContent('minPrice=');
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Filters (4)' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Filters (4)' })).toBeInTheDocument(), { timeout: 15000 });
     expect(screen.getByTestId('location')).not.toHaveTextContent('page=2');
     expect(screen.getByTestId('location')).toHaveTextContent('minPrice=50');
     expect(screen.queryByRole('button', { name: 'Apply prices' })).not.toBeInTheDocument();

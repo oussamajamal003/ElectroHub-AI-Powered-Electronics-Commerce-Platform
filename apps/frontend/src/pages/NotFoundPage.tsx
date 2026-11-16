@@ -1,8 +1,10 @@
+import { useDocumentTitle } from '@/lib/pageTitle';
 import { Link } from 'react-router-dom';
 import { Home } from 'lucide-react';
 import styles from './NotFoundPage.module.scss';
 
 export function NotFoundPage() {
+  useDocumentTitle('Page not found');
   return (
     <main className={styles.container}>
       <div className={styles.content}>

@@ -12,6 +12,7 @@
 .skeletonActions { display: flex; align-items: center; gap: $spacing-4; margin-inline-start: auto; }
 .skeletonSummary { min-height: 21rem; }
 .skeletonContinue { justify-self: center; }
+.syncNote { color: $color-text-secondary; margin: 0; font-size: $font-size-sm; }
 .warning { color: $color-error-foreground; margin: $spacing-2 $spacing-4 $spacing-4; font-size: $font-size-sm; }
 .summary { border: 1px solid $color-border; padding: $spacing-6; display: grid; gap: $spacing-4; h2 { margin: 0 0 $spacing-2; font-size: $font-size-xl; } .warning { margin: 0; } }
 .summaryLine { display: flex; justify-content: space-between; gap: $spacing-4; color: $color-text-secondary; }
@@ -19,8 +20,8 @@
 .total { border-top: 1px solid $color-border; padding-top: $spacing-4; color: $color-text-primary; }
 .checkout { width: 100%; min-height: 48px; font-size: $font-size-base; }
 .deferred { margin: -$spacing-2 0 0; color: $color-text-secondary; text-align: center; font-size: $font-size-sm; }
-.continue { text-align: center; color: $color-text-secondary; text-decoration: none; &:hover { color: $color-primary; } }
-.empty { min-height: 20rem; border: 1px solid $color-border; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: $spacing-4; text-align: center; padding: $spacing-8; h2, p { margin: 0; } svg { color: $color-primary; } }
+.continue { text-align: center; color: $color-text-secondary; text-decoration: none; &:hover { color: $color-primary-text; } }
+.empty { min-height: 20rem; border: 1px solid $color-border; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: $spacing-4; text-align: center; padding: $spacing-8; h2, p { margin: 0; } svg { color: $color-primary-text; } }
 .primaryLink { display: inline-flex; padding: $spacing-3 $spacing-6; background: $color-primary; color: white; text-decoration: none; }
 .notice { border: 1px solid $color-border; padding: $spacing-4; margin-bottom: $spacing-6; p { margin: 0 0 $spacing-3; } }
 @media (max-width: 30rem) { .summary { padding: $spacing-4; } }

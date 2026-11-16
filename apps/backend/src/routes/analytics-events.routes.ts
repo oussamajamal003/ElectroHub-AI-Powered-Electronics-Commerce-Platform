@@ -14,5 +14,7 @@ const eventsLimiter = rateLimit({
 });
 
 router.post('/analytics/events', eventsLimiter, analyticsEventsController.create);
+// Task 06.2: withdrawal of in-flight image-search analytics. Shares the per-IP event budget.
+router.post('/analytics/withdrawals', eventsLimiter, analyticsEventsController.withdraw);
 
 export default router;

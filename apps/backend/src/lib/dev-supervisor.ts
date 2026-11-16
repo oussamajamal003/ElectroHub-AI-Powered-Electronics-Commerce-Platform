@@ -47,6 +47,7 @@ export class DevSupervisorAuthority {
   private active = false;
   private revoked = false;
   private scope: SupervisorScope | null = null;
+  private onlyDeclined = false;
   constructor(private readonly identity: string, private readonly parentPid: number, private readonly role: Role = 'api') {}
 
   receive(message: unknown): 'prepared' | 'activated' | 'revoked' | 'scope-rejected' | null {
@@ -56,13 +57,16 @@ export class DevSupervisorAuthority {
       value.parentPid === this.parentPid && typeof value.nonce === 'string' && /^[a-f0-9]{64}$/.test(value.nonce)) {
       const hasIds = Object.prototype.hasOwnProperty.call(value, 'attemptIds');
       const hasSince = Object.prototype.hasOwnProperty.call(value, 'createdSince');
+      const hasDeclineOnly = Object.prototype.hasOwnProperty.call(value, 'declineOnly');
       if (this.role === 'worker') {
         // Exactly one scope form; both or neither is rejected.
         if (hasIds === hasSince) return 'scope-rejected';
         const since = hasSince ? validateGovernedSince(value.createdSince) : null;
         this.scope = hasIds ? validateSupervisorAttemptIds(value.attemptIds) : since ? Object.freeze({ createdSince: since }) : null;
         if (!this.scope) return 'scope-rejected';
-      } else if (hasIds || hasSince) return 'scope-rejected';
+        if (hasDeclineOnly && (value.declineOnly !== true || !Array.isArray(this.scope) || this.scope.length !== 1)) return 'scope-rejected';
+        this.onlyDeclined = hasDeclineOnly;
+      } else if (hasIds || hasSince || hasDeclineOnly) return 'scope-rejected';
       this.nonce = value.nonce;
       return 'prepared';
     }
@@ -82,6 +86,9 @@ export class DevSupervisorAuthority {
   workerScope(identity: string, connected: boolean): SupervisorScope | null {
     return this.role === 'worker' && this.scope && this.allows(identity, connected) ? this.scope : null;
   }
+  declineOnly(identity: string, connected: boolean): boolean {
+    return this.role === 'worker' && this.onlyDeclined && this.allows(identity, connected);
+  }
 }
 
 let authority: DevSupervisorAuthority | null = null;
@@ -93,6 +100,9 @@ export function devSupervisorAttemptIds(identity: string): readonly string[] | n
 }
 export function devSupervisorScope(identity: string): SupervisorScope | null {
   return authority?.workerScope(identity, process.connected === true) ?? null;
+}
+export function devSupervisorDeclineOnly(identity: string): boolean {
+  return authority?.declineOnly(identity, process.connected === true) ?? false;
 }
 /** Supervised DEV worker scope: exact IDs or a governed boundary; anything else fails closed. */
 export function requireSupervisedPaymentScope(value: SupervisorScope | null): string[] | { createdSince: Date } {

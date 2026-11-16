@@ -1,21 +1,17 @@
 name: Production Database Migration
 
-# Automated production path on develop push/merge, with optional manual workflow_dispatch.
-# Automatically discovers and deploys reviewed, non-destructive Prisma migrations to the PROD database
-# (project ref yepfgjehdstlxbpespun) when pushed or merged to develop.
+# Production writes require an independently approved manual dispatch at the reviewed SHA.
+# Ordinary develop merges validate code but do not authorize production migrations (Task 06.2).
 #
 # If the database is already up to date, the workflow performs a read-only verification
 # and cleanly exits as a successful no-op.
 
 on:
-  push:
-    branches:
-      - develop
   workflow_dispatch:
     inputs:
       approved_commit:
-        description: 'Full 40-character SHA of the reviewed commit; defaults to current HEAD if omitted.'
-        required: false
+        description: 'Full 40-character SHA of the independently reviewed and authorized production release.'
+        required: true
         type: string
 
 permissions:
@@ -32,12 +28,16 @@ jobs:
     env:
       MIGRATION_TARGET: PROD
       EXPECTED_PROJECT_REF: yepfgjehdstlxbpespun
-      APPROVED_COMMIT: ${{ inputs.approved_commit || github.sha }}
+      APPROVED_COMMIT: ${{ inputs.approved_commit }}
     steps:
       - name: Verify triggering event and commit SHA
         shell: bash
         run: |
           set -euo pipefail
+          if [ "$GITHUB_REF" != refs/heads/develop ]; then
+            echo "Production migrations require a reviewed develop commit." >&2
+            exit 1
+          fi
           echo "Triggering event: ${{ github.event_name }} on ref: ${{ github.ref }}"
           if ! printf '%s' "$APPROVED_COMMIT" | grep -Eq '^[0-9a-f]{40}$'; then
             echo "approved_commit must be a full 40-character lowercase SHA." >&2
@@ -51,12 +51,12 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.approved_commit || github.sha }}
+          ref: ${{ inputs.approved_commit }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.11.0'
+          node-version: '22.19.0'
           cache: 'npm'
 
       - name: Install dependencies

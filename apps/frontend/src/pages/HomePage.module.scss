@@ -15,7 +15,7 @@
 @media (prefers-reduced-motion: reduce) { .heroBg { transition: none; } }
 
 .heroCopy { position: relative; max-width: 42rem; h1 { font-size: clamp($font-size-3xl, 4vw, 3.75rem); font-weight: $font-weight-bold; line-height: 1.1; letter-spacing: -0.02em; margin: $spacing-2 0 $spacing-5; } p { color: $color-text-secondary; font-size: $font-size-lg; } }
-.hero .heroCopy p { color: $color-border; }
+.hero .heroCopy p { color: #e2e8f0; } // fixed: the hero art is dark in both themes
 .heroActions { display: flex; flex-wrap: wrap; gap: $spacing-3; align-items: center; }
 .secondaryLink { display: inline-flex; align-items: center; justify-content: center; min-height: $spacing-12; padding: $spacing-3 $spacing-8; margin-top: $spacing-4; border: 1px solid rgb(255 255 255 / 0.5); color: $color-text-inverse; text-decoration: none; font-size: $font-size-base; font-weight: $font-weight-semibold; transition: background-color $transition-fast, border-color $transition-fast;
   &:hover { background: rgb(255 255 255 / 0.1); border-color: #ffffff; } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
@@ -79,7 +79,7 @@
     }
   }
 }
-.eyebrow { color: $color-primary; font-size: $font-size-sm; font-weight: $font-weight-semibold; text-transform: uppercase; letter-spacing: .08em; }
+.eyebrow { color: $color-primary-text; font-size: $font-size-sm; font-weight: $font-weight-semibold; text-transform: uppercase; letter-spacing: .08em; }
 .hero .seasonBadge {
   display: inline-flex;
   align-items: center;
@@ -128,8 +128,8 @@
 .discoveryStrip + .section { max-width: none; background: $color-surface; > * { max-width: 84rem; margin-inline: auto; } }
 .sectionHeading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: $spacing-4; margin-bottom: $spacing-8;
   h2 { font-size: clamp($font-size-2xl, 2.4vw, 2.25rem); font-weight: $font-weight-bold; letter-spacing: -0.015em; margin: $spacing-2 0 0; } p { margin: 0; }
-  a { display: inline-flex; align-items: center; gap: $spacing-1; color: $color-primary; text-decoration: none; font-weight: $font-weight-semibold; text-underline-offset: 4px;
-    &:hover { color: $color-primary-dark; text-decoration: underline; }
+  a { display: inline-flex; align-items: center; gap: $spacing-1; color: $color-primary-text; text-decoration: none; font-weight: $font-weight-semibold; text-underline-offset: 4px;
+    &:hover { color: $color-primary-text-hover; text-decoration: underline; }
     &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
   }
 }
@@ -156,7 +156,7 @@
 }
 .categoryToggleOpen { transform: rotate(180deg); }
 .sectionError { display: flex; align-items: center; flex-wrap: wrap; gap: $spacing-4; padding: $spacing-5; border: 1px solid $color-border; background: $color-background;
-  > svg { flex: none; color: $color-primary; }
+  > svg { flex: none; color: $color-primary-text; }
   > div { flex: 1 1 16rem; }
   h3 { margin: 0; font-size: $font-size-base; }
   p { margin: $spacing-1 0 0; color: $color-text-secondary; }
@@ -173,7 +173,7 @@
   .eyebrow { color: #93c5fd; margin: 0 0 $spacing-2; }
   h2 { font-size: clamp($font-size-xl, 2.2vw, 2.125rem); font-weight: $font-weight-bold; line-height: $line-height-tight; letter-spacing: -0.01em; margin: 0 0 $spacing-3; color: $color-text-inverse; }
   p:not(.eyebrow) { margin: 0 0 $spacing-5; color: #e2e8f0; font-size: $font-size-lg; }
-  a { display: inline-flex; align-items: center; gap: $spacing-2; min-height: 2.75rem; padding: 0 $spacing-5; background: $color-background; color: $color-primary-dark; font-weight: $font-weight-semibold; text-decoration: none; cursor: pointer; transition: background-color $transition-fast, color $transition-fast;
+  a { display: inline-flex; align-items: center; gap: $spacing-2; min-height: 2.75rem; padding: 0 $spacing-5; background: $color-background; color: $color-primary-text-hover; font-weight: $font-weight-semibold; text-decoration: none; cursor: pointer; transition: background-color $transition-fast, color $transition-fast;
     &:hover { background: $color-primary; color: $color-text-inverse; }
     &:focus-visible { outline: $focus-ring-width $focus-ring-style #ffffff; outline-offset: $focus-ring-offset; }
   }

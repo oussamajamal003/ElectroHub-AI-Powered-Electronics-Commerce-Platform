@@ -1,0 +1,115 @@
+@use '@/styles/abstracts' as *;
+
+// Identity card: avatar (preview / edit trigger) + concise guidance + visible actions (Task 06.2).
+.manager {
+  display: flex;
+  align-items: center;
+  gap: $spacing-5;
+  min-width: 0;
+  padding: $spacing-4;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  background: $color-surface;
+}
+.avatarWrap { position: relative; flex: 0 0 auto; }
+.fileInput { display: none !important; }
+.avatarButton {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  transition: box-shadow $transition-fast;
+  &:hover:not(:disabled) { box-shadow: 0 0 0 3px theme-alpha($color-primary, .18); }
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
+  &:disabled { cursor: progress; }
+}
+.previewHint {
+  position: absolute; inset: auto 0 0; display: flex; align-items: center; justify-content: center;
+  gap: $spacing-1; padding: $spacing-1; background: $color-overlay; color: $color-text-inverse;
+  font-size: $font-size-xs; opacity: 0; transition: opacity $transition-fast;
+  svg { width: 0.875rem; height: 0.875rem; }
+}
+.avatarButton:hover .previewHint, .avatarButton:focus-visible .previewHint { opacity: 1; }
+.avatar { width: 4.5rem; height: 4.5rem; font-size: $font-size-xl; }
+.avatarLarge { width: 5.5rem; height: 5.5rem; font-size: $font-size-2xl; }
+.editAvatar {
+  position: absolute;
+  right: -0.25rem;
+  bottom: -0.25rem;
+  width: 2rem;
+  height: 2rem;
+  min-width: 2rem;
+  border: 2px solid $color-background;
+  border-radius: 50%;
+  box-shadow: $shadow-sm;
+}
+.editAvatar svg { width: 1rem; height: 1rem; }
+.details { display: grid; gap: $spacing-1; min-width: 0; }
+.title { color: $color-text-primary; font-weight: $font-weight-semibold; line-height: $line-height-tight; }
+.help { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; line-height: 1.5; }
+.privacy {
+  display: flex;
+  align-items: center;
+  gap: $spacing-1;
+  margin: 0;
+  color: $color-text-muted;
+  font-size: $font-size-xs;
+  svg { width: 0.875rem; height: 0.875rem; flex-shrink: 0; }
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-2;
+  margin-top: $spacing-2;
+  svg { width: 1rem; height: 1rem; }
+}
+.removeAction { color: $color-error-foreground; }
+.inlineAction {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-1;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: $color-primary-text;
+  font: inherit;
+  font-weight: $font-weight-medium;
+  text-decoration: underline;
+  cursor: pointer;
+  svg { width: 0.875rem; height: 0.875rem; }
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: 2px; }
+}
+.actionMenu svg { width: 1rem; height: 1rem; margin-right: $spacing-2; }
+// Always rendered (an empty live region) so screen readers announce the next message reliably.
+.status { margin: 0; color: $color-success-foreground; font-size: $font-size-sm; }
+.dialog { width: min(30rem, calc(100vw - 2rem)); }
+.preview, .camera { display: block; width: min(18rem, 70vw); height: min(18rem, 70vw); margin: $spacing-4 auto; border-radius: 50%; object-fit: cover; }
+.previewLarge { width: min(20rem, 72vw); height: min(20rem, 72vw); }
+.camera { background: #0b1220; }
+.cameraFallback { display: grid; justify-items: center; gap: $spacing-2; margin: 0 auto $spacing-4; text-align: center; }
+.dialogActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: $spacing-2; }
+.viewer { width: min(36rem, calc(100vw - 2rem)); }
+.viewerImage {
+  display: block;
+  width: 100%;
+  height: min(26rem, 52dvh);
+  margin: $spacing-4 auto;
+  border: 1px solid $color-border;
+  border-radius: $radius-lg;
+  background: $color-surface;
+  object-fit: contain;
+}
+
+@media (max-width: $breakpoint-sm) {
+  .manager { align-items: flex-start; gap: $spacing-4; padding: $spacing-3; }
+  .avatar, .avatarLarge { width: 4rem; height: 4rem; font-size: $font-size-lg; }
+}
+
+@media (max-width: 360px) {
+  .manager { flex-direction: column; align-items: stretch; }
+  .avatarWrap { align-self: flex-start; }
+}

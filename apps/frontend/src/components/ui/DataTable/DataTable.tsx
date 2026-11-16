@@ -48,7 +48,8 @@ export function DataTable<T>({
   const ariaSort = (col: Column<T>) => !col.sortKey || !onSortChange ? undefined
     : sort?.key === col.sortKey ? (sort.order === 'asc' ? 'ascending' : 'descending') : 'none';
   return (
-    <div className={`${styles.tableContainer} ${className}`} data-testid="data-table">
+    <div className={`${styles.tableContainer} ${className}`} data-testid="data-table" tabIndex={0}
+      role="region" aria-label={caption ?? 'Table scroll area'}>
       <table className={styles.table}>
         {caption && <caption className={styles.caption}>{caption}</caption>}
         <thead>

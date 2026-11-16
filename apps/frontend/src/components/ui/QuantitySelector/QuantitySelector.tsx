@@ -49,7 +49,10 @@ function useHoldAction(action: () => void, disabled: boolean) {
     stop();
     isHoldingRef.current = false;
     timeoutRef.current = setTimeout(() => {
+      // The click that ends a hold is swallowed, so the hold performs its first step itself. Otherwise a press released between
+      // the hold threshold and the first repeat (a slow tap) changed nothing at all.
       isHoldingRef.current = true;
+      actionRef.current();
       intervalRef.current = setInterval(() => {
         actionRef.current();
       }, 100);

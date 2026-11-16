@@ -44,6 +44,18 @@ export const resendVerificationRateLimiter = rateLimit({
 });
 
 /**
+ * Task 06.2: registration-verification code submission is unauthenticated. Each challenge already locks after five wrong codes;
+ * this per-IP budget additionally bounds how many challenges one client can probe in a window (a resend resets a challenge's attempts).
+ */
+export const verifyEmailRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many verification attempts. Please try again later.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * Task 04.2: public image search is guest-allowed and CPU-expensive, so it gets a tighter per-IP budget than text search.
  * Runs before the multipart body is read, so rejected requests never consume upload bandwidth.
  */

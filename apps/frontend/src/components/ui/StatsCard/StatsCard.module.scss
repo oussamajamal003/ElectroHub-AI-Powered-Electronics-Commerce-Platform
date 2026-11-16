@@ -72,11 +72,13 @@
 .trend-up {
   color: $color-success-foreground;
   background-color: #dcfce7; /* Component-specific Figma value */
+  @include dark-theme { background-color: $color-success-background; }
 }
 
 .trend-down {
   color: $color-error-foreground;
   background-color: #fee2e2; /* Component-specific Figma value */
+  @include dark-theme { background-color: $color-error-background; }
 }
 
 .trend-neutral {

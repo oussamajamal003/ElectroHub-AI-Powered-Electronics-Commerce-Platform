@@ -46,17 +46,27 @@ export class BrevoProvider {
   ): Promise<SendTransactionalEmailResult> {
     try {
       const recipientEmail = typeof options.to === 'string' ? options.to : options.to.email;
+      const recipients = [recipientEmail, ...(options.bcc ?? []).map(recipient => recipient.email)];
       const outbox = emailCaptureDirectory();
-      if (outbox && recipientEmail.endsWith('.invalid')) {
+      if (outbox && options.bcc?.length && !recipients.every(recipient => recipient.endsWith('.invalid'))) {
+        return { success: false, error: 'Email capture accepts only .invalid recipients', failure: { category: 'configuration' } };
+      }
+      if (outbox && recipients.every(recipient => recipient.endsWith('.invalid'))) {
         // The newest message per recipient and subject (tests read it by this name). Nothing is sent and nothing is logged.
-        const fileName = createHash('sha256').update(`${recipientEmail}:${options.subject}`).digest('hex');
         await mkdir(outbox, { recursive: true });
-        await writeFile(join(outbox, `${fileName}.json`), JSON.stringify({
-          to: recipientEmail,
-          subject: options.subject,
-          textContent: options.textContent,
-          sentAt: new Date().toISOString(),
-        }), { mode: 0o600 });
+        for (const recipient of recipients) {
+          const fileName = createHash('sha256').update(`${recipient}:${options.subject}`).digest('hex');
+          await writeFile(join(outbox, `${fileName}.json`), JSON.stringify({
+            to: recipient,
+            subject: options.subject,
+            textContent: options.textContent,
+            htmlContent: options.htmlContent,
+            replyTo: options.replyTo,
+            ...(options.idempotencyKey ? { headers: { idempotencyKey: options.idempotencyKey } } : {}),
+            sender: { email: options.sender?.email || this.defaultSenderEmail, name: options.sender?.name || this.defaultSenderName },
+            sentAt: new Date().toISOString(),
+          }), { mode: 0o600 });
+        }
         return { success: true, messageId: `e2e-${randomUUID()}` };
       }
       if (outbox && env.NODE_ENV !== 'test') {
@@ -80,6 +90,7 @@ export class BrevoProvider {
       const payload: BrevoSendEmailPayload = {
         sender,
         to: [recipient],
+        ...(options.bcc?.length ? { bcc: options.bcc } : {}),
         subject: options.subject,
         htmlContent: options.htmlContent,
         textContent: options.textContent,
@@ -87,6 +98,7 @@ export class BrevoProvider {
         templateId: options.templateId,
         params: options.params,
         replyTo: options.replyTo,
+        ...(options.idempotencyKey ? { headers: { idempotencyKey: options.idempotencyKey } } : {}),
       };
 
       const result = await this.client.sendSmtpEmail(payload);

@@ -70,3 +70,12 @@ export function getFrontendServerConfig(environment: FrontendServerEnvironment, 
 export function getViteServerConfig(command: 'serve' | 'build', environment: FrontendServerEnvironment, arguments_: string[] = []) {
   return command === 'serve' ? getFrontendServerConfig(environment, arguments_) : undefined;
 }
+
+/**
+ * Dependency-optimizer cache per dev port. Playwright configs start their own `vite --port <n>` in the same checkout; with one shared
+ * `node_modules/.vite`, each server can re-optimize and overwrite chunks another server is still serving. Mixing a Radix bundle with a
+ * different React chunk causes "Invalid hook call" in providers. Keep the main :3000 app isolated too, including from legacy Vite servers.
+ */
+export function getViteCacheDir(server: { port: number } | undefined): string | undefined {
+  return server ? `node_modules/.vite-port-${server.port}` : undefined;
+}

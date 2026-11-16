@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, apiClient } from '@/lib/api';
-import { ConfirmationSignalUncertain, announceConfirmation } from './confirmationSignal';
+import { ConfirmationSignalUncertain, ConfirmationStockRefused, announceConfirmation } from './confirmationSignal';
 
 vi.mock('@/lib/api', async importOriginal => ({ ...(await importOriginal<object>()), apiClient: vi.fn() }));
 const call = vi.mocked(apiClient);
@@ -31,6 +31,13 @@ describe('announceConfirmation', () => {
   it('a definitive refusal (409) blocks confirmation without any guessing read', async () => {
     call.mockRejectedValueOnce(new ApiError(409, 'no', undefined, 'PAYMENT_CONFIRMATION_NOT_ALLOWED'));
     await expect(announceConfirmation('a1')).rejects.toBeInstanceOf(ConfirmationSignalUncertain);
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+  it.each(['CART_STOCK_CONFLICT', 'PRODUCT_UNAVAILABLE'])('a sold-out refusal (%s) blocks confirmation with the server message and no extra read', async code => {
+    call.mockRejectedValueOnce(new ApiError(409, 'Last Unit Phone is out of stock. Nothing was charged.', undefined, code));
+    const refusal = await announceConfirmation('a1').catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(ConfirmationStockRefused);
+    expect(refusal).toMatchObject({ code, message: 'Last Unit Phone is out of stock. Nothing was charged.' });
     expect(call).toHaveBeenCalledTimes(1);
   });
 });

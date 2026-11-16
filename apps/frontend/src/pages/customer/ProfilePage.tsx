@@ -1,8 +1,10 @@
+import { toast, toastError } from '@/components/ui/Toast';
+import { emailValidationError } from '@/lib/emailValidation';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/Breadcrumb';
-import { Avatar } from '@/components/ui/Avatar';
+import { ProfilePhotoManager } from '@/components/profilePhoto/ProfilePhotoManager';
 import { Input } from '@/components/ui/Input';
 import { PasswordInput } from '@/components/ui/PasswordInput/PasswordInput';
 import { Button } from '@/components/ui/Button';
@@ -11,10 +13,11 @@ import { ApiError } from '@/lib/api';
 import { OtpVerification } from '@/components/ui/OtpVerification';
 import { authApi } from '@/features/auth/api/auth';
 import styles from './ProfilePage.module.scss';
+import { CustomerAccountSkeleton } from '@/features/account/AccountSkeleton';
 import { AccountDeletionDialog } from './AccountDeletionDialog';
 
 export function ProfilePage() {
-  const { user, updateProfile, verifyEmailChange } = useAuth();
+  const { user, isInitializing, isSessionVerified, updateProfile, verifyEmailChange } = useAuth();
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -24,6 +27,7 @@ export function ProfilePage() {
   });
   
   const [error, setError] = useState('');
+  const [emailError, setEmailError] = useState('');
   const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
@@ -39,6 +43,7 @@ export function ProfilePage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    if (name === 'email') setEmailError('');
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -51,10 +56,9 @@ export function ProfilePage() {
       setError('Enter a valid first and last name (up to 100 characters each).');
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
-      setError('Please enter a valid email address.');
-      return;
-    }
+    const validationError = emailValidationError(formData.email);
+    if (validationError) { setEmailError(validationError); return; }
+    setEmailError('');
     if (formData.firstName.trim() === user?.firstName && formData.lastName.trim() === user?.lastName && formData.email.trim().toLowerCase() === user?.email.toLowerCase()) {
       setSuccess('No changes to save.');
       return;
@@ -76,6 +80,7 @@ export function ProfilePage() {
           : 'A verification code was requested for the new address. Your current verified email remains active until you enter the code.');
       } else {
         setSuccess('Profile updated successfully.');
+        toast.success('Profile updated', { announce: false });
       }
     } catch (err: unknown) {
       if (err instanceof ApiError) {
@@ -83,10 +88,13 @@ export function ProfilePage() {
       } else {
         setError('Failed to update profile. Please try again later.');
       }
+      toastError(err, 'update your profile', { announce: false, preferServerMessage: true });
     } finally {
       setIsLoading(false);
     }
   };
+
+  if (isInitializing || !user) return <CustomerAccountSkeleton variant="profile" />;
 
   return (
     <div className={styles.page}>
@@ -118,11 +126,12 @@ export function ProfilePage() {
         <div className={styles.sections}>
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <Avatar initials={initial} className={styles.avatar} />
+            {user && <ProfilePhotoManager scope="customer" userId={user.id} sessionVerified={isSessionVerified} initials={initial}
+              displayName={`${user.firstName} ${user.lastName}`} size="large" />}
             <p className={styles.subtext}>Your profile information</p>
           </div>
 
-          <form className={styles.form} onSubmit={handleSave}>
+          <form className={styles.form} onSubmit={handleSave} noValidate>
             {error && <Alert variant="error">{error}</Alert>}
             {success && <Alert variant="success">{success}</Alert>}
 
@@ -146,6 +155,7 @@ export function ProfilePage() {
               label="Email Address"
               name="email"
               type="email"
+              error={emailError}
               value={formData.email}
               onChange={handleChange}
               disabled={isLoading || Boolean(pendingEmail)}
@@ -189,8 +199,10 @@ export function ProfilePage() {
                   setPendingEmail('');
                   setFormData((current) => ({ ...current, email: pendingEmail }));
                   setSuccess('Email changed successfully.');
+                  toast.success('Email address changed', { announce: false });
                 } catch (verifyError) {
                   setError(verifyError instanceof ApiError ? verifyError.message : 'Unable to verify this email. Please try again.');
+                  toast.error('Email not verified', { description: verifyError instanceof ApiError ? verifyError.message : 'Unable to verify this email. Please try again.', announce: false });
                 } finally {
                   setIsLoading(false);
                 }
@@ -201,6 +213,7 @@ export function ProfilePage() {
                 try {
                   const result = await authApi.resendEmailChange();
                   setResendAvailableAt(new Date(result.resendAvailableAt).getTime());
+                  toast.info('Verification code sent', { description: 'Check your inbox for the new code.', announce: false });
                 } catch (resendError) {
                   setError(resendError instanceof ApiError ? resendError.message : 'Unable to resend the code. Please try again.');
                 } finally {
@@ -279,6 +292,7 @@ function PasswordChangeForm() {
       const { authApi } = await import('@/features/auth/api/auth');
       await authApi.changePassword({ currentPassword, newPassword });
       setSuccess('Password changed successfully.');
+      toast.success('Password changed', { announce: false });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -290,6 +304,7 @@ function PasswordChangeForm() {
       } else {
         setError('Failed to change password. Please try again.');
       }
+      toastError(err, 'change your password', { announce: false, preferServerMessage: true });
     } finally {
       setIsLoading(false);
     }

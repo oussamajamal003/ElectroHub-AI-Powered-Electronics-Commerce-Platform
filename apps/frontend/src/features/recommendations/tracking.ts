@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { sendRecommendationEvents } from './api';
+import { useChoiceStatus } from '@/features/privacy/consent';
 
 export const IMPRESSION_VISIBLE_RATIO = 0.5;
 export const IMPRESSION_DWELL_MS = 1000;
@@ -14,7 +15,8 @@ export function resetImpressionDedupeForTests() { sent.clear(); }
  * one second while the tab is visible. Rendering, off-screen cards and hidden tabs never count. Events are batched and
  * sent without blocking anything; without a token (e.g. NO_DATA) nothing is tracked.
  */
-export function useImpressionTracking(token: string | null) {
+export function useImpressionTracking(batchToken: string | null) {
+  const token = useChoiceStatus() === 'accepted' ? batchToken : null;
   const timers = useRef(new Map<Element, ReturnType<typeof setTimeout>>());
   const ids = useRef(new Map<Element, string>());
   const inViewport = useRef(new Set<Element>());

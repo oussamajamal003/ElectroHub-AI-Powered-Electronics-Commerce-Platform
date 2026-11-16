@@ -1,9 +1,18 @@
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string, public readonly data?: unknown,
-    public readonly code?: string, public readonly requestId?: string) {
+    public readonly code?: string, public readonly requestId?: string, public readonly retryAfterMs?: number) {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+/** Retry-After is a minimum wait, never shortened to fit a client's backoff cap. */
+export function retryAfterMs(value: string | null, now = Date.now()): number | undefined {
+  if (!value?.trim()) return undefined;
+  const trimmed = value.trim();
+  const delay = /^\d+$/.test(trimmed) ? Number(trimmed) * 1000 :
+    /^[A-Za-z]{3}, /.test(trimmed) ? Date.parse(trimmed) - now : NaN;
+  return Number.isFinite(delay) && delay >= 0 ? delay : undefined;
 }
 
 /**
@@ -75,7 +84,7 @@ async function readResponse<T>(response: Response): Promise<T> {
       typeof error === 'string' ? error : typeof body.message === 'string' ? body.message : undefined;
     const safe = response.status < 500 && candidate && !/(prisma|sql|stack|\\|\/users\/|database|certificate|secret)/i.test(candidate);
     throw new ApiError(response.status, safe ? candidate : safeMessage(response.status), response.status >= 500 ? undefined : payload, code,
-      response.headers.get('x-request-id') ?? undefined);
+      response.headers.get('x-request-id') ?? undefined, retryAfterMs(response.headers.get('Retry-After')));
   }
   if (payload === null) {
     if (response.headers.get('content-length') === '0') return undefined as T;

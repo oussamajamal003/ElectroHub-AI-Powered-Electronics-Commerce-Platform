@@ -82,25 +82,25 @@ export function useRecommendationMutations() {
   // Every write changes what the storefront shows, so the admin views and any open previews are refetched together.
   const settle = () => void client.invalidateQueries({ queryKey: recommendationKeys.all });
 
-  const saveSection = useMutation({
+  const saveSection = useMutation({ meta: { action: "save this section" },
     mutationFn: ({ surface, mode, ...body }: { surface: RecommendationSurfaceKey; mode: RecommendationSectionMode; enabled?: boolean; itemLimit?: number; expectedVersion: number }) =>
       apiClient<{ data: SectionConfig }>(`/api/admin/recommendations/configurations/${surface}/${mode}`, { method: 'PATCH', data: body }),
     onSettled: settle,
   });
 
-  const createPin = useMutation({
+  const createPin = useMutation({ meta: { action: "feature this product" },
     mutationFn: (body: { productId: string; surface: RecommendationSurfaceKey; position: number; startsAt: string | null; endsAt: string | null; enabled: boolean }) =>
       apiClient<{ data: FeaturedPin }>('/api/admin/recommendations/featured', { method: 'POST', data: body }),
     onSettled: settle,
   });
 
-  const updatePin = useMutation({
+  const updatePin = useMutation({ meta: { action: "update the featured product" },
     mutationFn: ({ id, ...body }: { id: string; expectedVersion: number; position?: number; enabled?: boolean; startsAt?: string | null; endsAt?: string | null }) =>
       apiClient<{ data: FeaturedPin }>(`/api/admin/recommendations/featured/${encodeURIComponent(id)}`, { method: 'PATCH', data: body }),
     onSettled: settle,
   });
 
-  const deletePin = useMutation({
+  const deletePin = useMutation({ meta: { action: "remove the featured product" },
     mutationFn: ({ id, expectedVersion }: { id: string; expectedVersion: number }) =>
       apiClient<void>(`/api/admin/recommendations/featured/${encodeURIComponent(id)}${queryString({ expectedVersion })}`, { method: 'DELETE' }),
     onSettled: settle,

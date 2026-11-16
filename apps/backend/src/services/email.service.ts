@@ -1,3 +1,4 @@
+import { renderEmailHeader } from '../emails/brand.js';
 import { prisma } from '../lib/prisma.js';
 import { brevoProvider, BrevoProvider } from '../integrations/brevo/brevo.provider.js';
 import { EmailDeliveryStatus, EmailType } from '@prisma/client';
@@ -70,7 +71,7 @@ export class EmailService {
 </head>
 <body>
   <div class="card">
-    <div class="brand">ElectroHub</div>
+    ${renderEmailHeader()}
     <h1>Verify your email</h1>
     <p>Please enter the following 6-digit verification code to verify your ElectroHub account. This code is valid for 1 minute.</p>
     <div class="code-container">
@@ -193,7 +194,7 @@ export class EmailService {
 </head>
 <body>
   <div class="card">
-    <div class="brand">ElectroHub</div>
+    ${renderEmailHeader()}
     <h1>Reset your password</h1>
     <p>Please enter the following 6-digit code to reset your ElectroHub password. This code is valid for 1 minute.</p>
     <div class="code-container">
@@ -273,7 +274,7 @@ export class EmailService {
 </head>
 <body>
   <div class="card">
-    <div class="brand">ElectroHub</div>
+    ${renderEmailHeader()}
     <h1>Password Changed</h1>
     <p>This is a confirmation that the password for your ElectroHub account has been changed recently.</p>
     <p class="notice">If you did not make this change, please contact our support team immediately.</p>

@@ -44,7 +44,8 @@ export class CommerceEmailDispatcher {
   private pausedUntil = 0;
   constructor(private readonly db: PrismaClient, private readonly transport: CommerceEmailTransport, private readonly render: Renderer,
     private readonly config: Pick<CommerceEmailConfig, 'sendMode' | 'allowedRecipients' | 'origin' | 'batchSize' | 'concurrency' | 'leaseMs'>,
-    private readonly workerInstanceId: string = randomUUID(), private readonly now: () => number = Date.now) {}
+    private readonly workerInstanceId: string = randomUUID(), private readonly now: () => number = Date.now,
+    private readonly notificationOrderId?: string) {}
 
   get paused() { return this.now() < this.pausedUntil; }
 
@@ -67,11 +68,13 @@ export class CommerceEmailDispatcher {
   /** Short transaction: FOR UPDATE SKIP LOCKED, deterministic order, database time, fresh token per row. Commits before any rendering. */
   async claim(limit = this.config.batchSize): Promise<Claim[]> {
     const allowlist = this.config.sendMode === 'allowlist' ? Prisma.sql`AND "recipient" IN (${Prisma.join(this.config.allowedRecipients)})` : Prisma.empty;
+    const orderScope = this.notificationOrderId
+      ? Prisma.sql`AND "orderId" = ${this.notificationOrderId}::uuid AND "type" = 'ORDER_OUT_FOR_DELIVERY'` : Prisma.empty;
     return this.db.$queryRaw<Claim[]>(Prisma.sql`
       WITH due AS (
         SELECT "id" FROM "commerce_email_outbox"
         WHERE "dispatchState" IN ('READY', 'RETRY_WAIT') AND "nextAttemptAt" <= ${DB_NOW}
-          AND "createdAt" > ${DB_NOW} - make_interval(secs => ${MAX_RETRY_AGE_MS / 1000}::float8) ${allowlist}
+          AND "createdAt" > ${DB_NOW} - make_interval(secs => ${MAX_RETRY_AGE_MS / 1000}::float8) ${allowlist} ${orderScope}
         ORDER BY "nextAttemptAt", "createdAt", "id"
         LIMIT ${limit}
         FOR UPDATE SKIP LOCKED)
@@ -85,6 +88,7 @@ export class CommerceEmailDispatcher {
     const row = await this.db.commerceEmailOutbox.findUnique({ where: { id: claim.id }, select: { type: true, orderId: true, recipient: true,
       snapshot: true, templateVersion: true, createdAt: true, leaseToken: true } });
     if (!row || row.leaseToken !== claim.leaseToken) return 'LOST';
+    if (this.notificationOrderId && (row.orderId !== this.notificationOrderId || row.type !== 'ORDER_OUT_FOR_DELIVERY')) return this.release(claim);
     const log = { outboxId: claim.id, type: row.type, orderId: row.orderId, templateVersion: row.templateVersion, workerInstanceId: this.workerInstanceId };
     if (this.paused) return this.release(claim);
     const parsed = commerceEmailSnapshot.safeParse(row.snapshot);
@@ -227,9 +231,11 @@ export class CommerceEmailDispatcher {
    */
   async recoverExpired(limit = this.config.batchSize): Promise<number> {
     return this.db.$transaction(async tx => {
+      const orderScope = this.notificationOrderId
+        ? Prisma.sql`AND "orderId" = ${this.notificationOrderId}::uuid AND "type" = 'ORDER_OUT_FOR_DELIVERY'` : Prisma.empty;
       const expired = await tx.$queryRaw<Claim[]>(Prisma.sql`
         SELECT "id", "leaseToken"::text AS "leaseToken" FROM "commerce_email_outbox"
-        WHERE "dispatchState" = 'LEASED' AND "leaseUntil" <= ${DB_NOW}
+        WHERE "dispatchState" = 'LEASED' AND "leaseUntil" <= ${DB_NOW} ${orderScope}
         ORDER BY "leaseUntil", "id" LIMIT ${limit} FOR UPDATE SKIP LOCKED`);
       for (const claim of expired) {
         const attempt = await tx.commerceEmailAttempt.findFirst({ where: { outboxId: claim.id, leaseToken: claim.leaseToken },

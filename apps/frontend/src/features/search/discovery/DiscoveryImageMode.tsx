@@ -182,7 +182,7 @@ function Outcome({ outcome, issues, onNavigate, onRetry, onSearchText, onReplace
         const [stockLabel, stockTone] = stockOf(product);
         return <li key={product.id}>
           <a className={styles.resultCard} href={href} onClick={event => {
-            reportImageResultSelected(outcome.analyticsToken, product.id);
+            reportImageResultSelected(outcome.analyticsToken, product.id, outcome.consentGeneration);
             if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
             event.preventDefault(); onNavigate(href);
           }}>

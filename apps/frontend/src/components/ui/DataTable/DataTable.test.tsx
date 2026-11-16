@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { DataTable, Column } from './DataTable';
+import userEvent from '@testing-library/user-event';
 
 describe('DataTable', () => {
   interface TestData {
@@ -18,6 +19,12 @@ describe('DataTable', () => {
     { id: 1, name: 'Headphones', price: 129.99 },
     { id: 2, name: 'Keyboard', price: 89.50 }
   ];
+
+  it('makes its horizontal scroll area reachable by keyboard and names it from the caption', async () => {
+    render(<DataTable data={data} columns={columns} keyExtractor={item => item.id} caption="Products" />);
+    await userEvent.tab();
+    expect(screen.getByRole('region', { name: 'Products' })).toHaveFocus();
+  });
 
   it('renders headers and data correctly', () => {
     render(<DataTable data={data} columns={columns} keyExtractor={(item) => item.id} />);

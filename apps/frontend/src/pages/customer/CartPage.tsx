@@ -1,3 +1,4 @@
+import { toast } from '@/components/ui/Toast';
 import { PendingPurchases, usePaymentPurchases } from '@/features/checkout/PaymentPurchases';
 import { Component, useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -61,13 +62,19 @@ export function CartPageContent({ cart, pendingPurchases, hasPendingPurchases = 
     setActionError('');
   }, [cart.isGuest]);
 
-  const act = async (operation: () => Promise<void>) => {
+  const act = async (operation: () => Promise<void>, removedName?: string) => {
     setActionError('');
-    try { await operation(); }
+    try {
+      await operation();
+      // Quantity edits are visible in place; only a removal needs explicit confirmation. The row's inline status is not announced.
+      if (removedName) toast.info('Removed from cart', { description: removedName, announce: false });
+    }
     catch (error) {
-      if (error instanceof ApiError && error.code === 'CART_STOCK_CONFLICT') setActionError(error.message);
-      else if (error instanceof Error && /^Only \d+ items? (?:is|are) currently available\.$/.test(error.message)) setActionError(error.message);
-      else setActionError('Cart could not be updated. Please try again.');
+      let message = 'Cart could not be updated. Please try again.';
+      if (error instanceof ApiError && error.code === 'CART_STOCK_CONFLICT') message = error.message;
+      else if (error instanceof Error && /^Only \d+ items? (?:is|are) currently available\.$/.test(error.message)) message = error.message;
+      setActionError(message);
+      toast.error('Cart not updated', { description: message, announce: false });
     }
   };
   const line = (item: CartLine) => <div key={item.productId} className={styles.line}>
@@ -76,11 +83,11 @@ export function CartPageContent({ cart, pendingPurchases, hasPendingPurchases = 
       price={item.product ? Number(item.product.price) : null} imageUrl={item.product?.image?.url ?? ''} quantity={item.quantity}
       stockStatus={item.stockStatus} maxQuantity={Math.min(999, item.availableQuantity)} unavailable={item.availability === 'OUT_OF_STOCK' || item.availability === 'UNAVAILABLE' || item.availability === 'NOT_FOUND'}
       onQuantityChange={(_, quantity) => void act(() => cart.setQuantity(item.productId, quantity))}
-      onRemove={() => void act(() => cart.removeItem(item.productId))} />
+      onRemove={() => void act(() => cart.removeItem(item.productId), item.product?.name ?? 'Item')} />
       {item.availability !== 'AVAILABLE' && <p className={styles.warning} role="status">{item.availability === 'LOW_STOCK' ? `Only ${item.availableQuantity} left. Reduce quantity to continue.` : item.availability === 'OUT_OF_STOCK' ? 'Out of stock. Reduce quantity or remove this item to continue.' : 'This product is unavailable. Remove it to continue.'}</p>}
   </div>;
 
-  return <main className={styles.page}>
+  return <div className={styles.page}>
     <nav className={styles.breadcrumb} aria-label="Breadcrumb"><Link to="/">Home</Link><ChevronRight size={16} aria-hidden="true" /><span aria-current="page">Cart</span></nav>
     <h1>Shopping Cart</h1>
     {pendingPurchases}
@@ -98,13 +105,14 @@ export function CartPageContent({ cart, pendingPurchases, hasPendingPurchases = 
         <div className={styles.summaryLine}><span>Shipping</span><span className={styles.free}>Free</span></div>
         <div className={`${styles.summaryLine} ${styles.total}`}><strong>Total</strong><strong>{money(cart.data.total)}</strong></div>
         {!cart.data.canCheckout && <p className={styles.warning}>Remove unavailable items or reduce quantities to continue.</p>}
+        {!cart.isGuest && cart.isMutating && <p id="checkout-pending-note" className={styles.syncNote} role="status">Updating your cart… Checkout is available as soon as it is saved.</p>}
         {cart.isGuest ? <Button type="button" className={styles.checkout} disabled={!cart.data.canCheckout || cart.isError} onClick={() => window.dispatchEvent(new CustomEvent('electrohub:open-auth', { detail: { returnTo } }))}>Sign in to Checkout</Button>
-          : <Button type="button" className={styles.checkout} disabled={!cart.data.canCheckout || cart.isError || cart.isLoading || cart.isLoggingOut || cart.isMutating || Boolean(cart.mergeError)} onClick={() => navigate(returnTo)}>Proceed to Checkout</Button>}
+          : <Button type="button" className={styles.checkout} disabled={!cart.data.canCheckout || cart.isError || cart.isLoading || cart.isLoggingOut || cart.isMutating || Boolean(cart.mergeError)} aria-describedby={cart.isMutating ? 'checkout-pending-note' : undefined} onClick={() => navigate(returnTo)}>Proceed to Checkout</Button>}
         <Link className={styles.continue} to="/products">Continue shopping</Link>
       </aside>
     </div>}
     {cart.data && cart.data.items.length > 0 && suggestions}
-  </main>;
+  </div>;
 }
 
 export function CartPage() {

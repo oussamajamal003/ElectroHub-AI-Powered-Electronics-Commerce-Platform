@@ -7,8 +7,8 @@
 }
 .description { margin: $spacing-2 0 0; color: $color-text-secondary; }
 .action {
-  color: $color-primary; font-weight: $font-weight-semibold; text-decoration: none; text-underline-offset: 4px;
-  &:hover { color: $color-primary-dark; text-decoration: underline; }
+  color: $color-primary-text; font-weight: $font-weight-semibold; text-decoration: none; text-underline-offset: 4px;
+  &:hover { color: $color-primary-text-hover; text-decoration: underline; }
   &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; }
 }
 // Same breakpoints and gap as the existing product detail/related grid, so cards keep the store's dimensions.

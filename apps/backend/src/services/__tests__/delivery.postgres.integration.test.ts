@@ -94,12 +94,20 @@ describe.skipIf(!enabled).sequential('Task 04.5 DeliveryService on real PostgreS
     await service.applyUpdate(admin.id, order.reference, { expectedRevision: 1, status: 'PREPARING', estimatedAt: soon(30) });
     expect(await mirror(order.id)).toEqual({ order: 'PREPARING', delivery: 'PREPARING', revision: 2 });
     expect(await outbox(order.id)).toBe(1);
+    expect(await prisma.commerceEmailOutbox.findMany({ where: { orderId: order.id }, select: { type: true, userId: true } }))
+      .toEqual([{ type: 'ORDER_PREPARING', userId: customer.id }]);
 
     const out = await service.applyUpdate(admin.id, order.reference, { expectedRevision: 2, status: 'OUT_FOR_DELIVERY',
       location: { latitude: 33.8938, longitude: 35.5018, label: 'Beirut sorting hub' }, estimatedAt: soon(4), note: 'Loaded on van 3' });
     expect(out.changed).toBe(true);
     expect(await mirror(order.id)).toEqual({ order: 'OUT_FOR_DELIVERY', delivery: 'OUT_FOR_DELIVERY', revision: 3 });
     expect(await outbox(order.id)).toBe(2);
+    const emailEvents = await prisma.commerceEmailOutbox.findMany({ where: { orderId: order.id }, select: { type: true, userId: true } });
+    expect(emailEvents).toHaveLength(2);
+    expect(emailEvents).toEqual(expect.arrayContaining([
+      { type: 'ORDER_PREPARING', userId: customer.id },
+      { type: 'ORDER_OUT_FOR_DELIVERY', userId: customer.id },
+    ]));
     const rows = await events((await prisma.delivery.findUniqueOrThrow({ where: { orderId: order.id } })).id);
     expect(rows.map(row => [row.revision, row.type])).toEqual([[1, 'TRACKING_STARTED'], [2, 'STATUS_CHANGED'], [3, 'STATUS_CHANGED']]);
     expect(rows[2]).toMatchObject({ changes: ['STATUS', 'LOCATION', 'ETA'], fromStatus: 'PREPARING', toStatus: 'OUT_FOR_DELIVERY', source: 'ADMIN',

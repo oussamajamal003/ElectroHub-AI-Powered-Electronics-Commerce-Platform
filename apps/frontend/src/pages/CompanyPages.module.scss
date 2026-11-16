@@ -44,7 +44,7 @@
   p {
     max-width: 40rem;
     margin: 0 auto;
-    color: $color-border;
+    color: #e2e8f0; // fixed: the company hero is dark in both themes
     font-size: $font-size-lg;
     line-height: $line-height-relaxed;
   }
@@ -82,6 +82,13 @@
   @include respond-to(lg) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
+.gridTwo {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: $spacing-6;
+  @include respond-to(md) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .card {
   display: flex;
   flex-direction: column;
@@ -105,8 +112,8 @@
     width: 2.75rem;
     height: 2.75rem;
     border-radius: $radius-md;
-    background: rgba($color-primary, 0.08);
-    color: $color-primary;
+    background: theme-alpha($color-primary, 0.08);
+    color: $color-primary-text;
     margin-bottom: $spacing-3;
   }
 
@@ -185,6 +192,25 @@
 
   .ctaButtonWrapper {
     margin-top: $spacing-1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: $spacing-3;
+    justify-content: center;
+  }
+
+  .ctaSecondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 3rem;
+    padding: $spacing-3 $spacing-8;
+    color: $color-text-inverse;
+    border: 1px solid rgb(255 255 255 / 0.7);
+    text-decoration: none;
+    font-weight: $font-weight-semibold;
+    transition: background-color 0.2s ease;
+    &:hover { background: rgb(255 255 255 / 0.14); }
+    &:focus-visible { outline: $focus-ring-width $focus-ring-style $color-background; outline-offset: $focus-ring-offset; }
   }
 
   .ctaButton {
@@ -194,7 +220,7 @@
     gap: $spacing-2;
     min-height: 3rem;
     padding: $spacing-3 $spacing-8;
-    color: $color-primary-dark;
+    color: $color-primary-text-hover;
     background: $color-background;
     text-decoration: none;
     font-size: $font-size-base;
@@ -229,8 +255,228 @@
 .contactCards { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: $spacing-4; margin-top: $spacing-6; @include respond-to(sm) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .form { display: grid; gap: $spacing-4; padding: $spacing-6; border: 1px solid $color-border; background: $color-background; box-shadow: $shadow-sm; h2 { margin: 0; } }
 .field { display: grid; gap: $spacing-2; label { font-weight: $font-weight-medium; } input, textarea { width: 100%; min-height: $spacing-12; padding: $spacing-3; border: 1px solid $color-border; border-radius: $radius-md; font: inherit; } textarea { min-height: 8rem; resize: vertical; } input:focus-visible, textarea:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } }
-.error { margin: 0; color: #b91c1c; font-size: $font-size-sm; }
+.error { margin: 0; color: $color-error-foreground; font-size: $font-size-sm; }
+.emptyNote { margin: $spacing-4 0 0; padding: $spacing-4; border: 1px dashed $color-border; color: $color-text-secondary; font-size: $font-size-sm; line-height: $line-height-relaxed; }
+.helpLinks { margin: $spacing-6 0 0; color: $color-text-secondary; font-size: $font-size-sm; a { color: $color-primary-text; font-weight: $font-weight-medium; } }
+.counter { margin: 0; text-align: right; color: $color-text-secondary; font-size: $font-size-xs; }
+// Honeypot: out of the layout and the tab order, but still in the DOM for naive form fillers.
+.trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.contactCards .card { height: auto; p { overflow-wrap: anywhere; } }
 .notice { margin: 0; padding: $spacing-4; background: $color-surface; border: 1px solid $color-border; }
-.submit { min-height: $spacing-12; padding: $spacing-3 $spacing-6; border: 0; background: $color-primary; color: white; font: inherit; font-weight: $font-weight-semibold; cursor: pointer; &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } &:hover { background: $color-primary-dark; } }
+.submit { min-height: $spacing-12; padding: $spacing-3 $spacing-6; border: 0; background: $color-primary; color: $color-text-inverse; font: inherit; font-weight: $font-weight-semibold; cursor: pointer; &:disabled { opacity: .7; cursor: not-allowed; } &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: $focus-ring-offset; } &:hover { background: $color-primary-dark; } }
 
 @keyframes ctaPulse { from { transform: translate(-50%, -50%) scale(0.92); } to { transform: translate(-50%, -50%) scale(1.08); } }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Task 06.2 WP A: About hero with product mosaic, story, range gallery. Motion: SectionReveal/StaggerItem reveal once.
+// ---------------------------------------------------------------------------------------------------------------------
+.eyebrow, .eyebrowDark {
+  margin: 0 0 $spacing-3;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.eyebrow { color: #7dd3fc; } // sky-300 on the dark hero (about 10:1 against $color-secondary)
+.eyebrowDark { color: $color-primary; }
+
+.hero.aboutHero {
+  display: grid;
+  gap: $spacing-10;
+  align-items: center;
+  text-align: left;
+  @include respond-to(md) { padding-inline: $spacing-8; }
+  @include respond-to(lg) {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: $spacing-12;
+    padding-inline: max(#{$spacing-12}, calc((100vw - 84rem) / 2 + #{$spacing-12}));
+  }
+  h1 { margin: 0 0 $spacing-4; max-width: 34rem; }
+  .aboutHeroCopy > p:not(.eyebrow) { margin: 0; max-width: 34rem; }
+}
+
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-3;
+  margin-top: $spacing-8;
+  @media (max-width: 30rem) { flex-direction: column; > a { justify-content: center; } }
+}
+.heroPrimary, .heroSecondary {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-2;
+  min-height: 3rem;
+  padding: $spacing-3 $spacing-6;
+  font-weight: $font-weight-semibold;
+  text-decoration: none;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  &:focus-visible { outline: $focus-ring-width $focus-ring-style $color-background; outline-offset: $focus-ring-offset; }
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+}
+.heroPrimary {
+  color: $color-text-inverse;
+  background: $color-primary;
+  svg { transition: transform 0.2s ease; }
+  &:hover { background: $color-primary-dark; svg { transform: translateX(3px); } }
+  @media (prefers-reduced-motion: reduce) { svg { transition: none; } &:hover svg { transform: none; } }
+}
+.heroSecondary {
+  color: $color-text-inverse;
+  border: 1px solid rgb(255 255 255 / 0.35);
+  &:hover { border-color: $color-text-inverse; background: rgb(255 255 255 / 0.06); }
+}
+
+.heroMosaic {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $spacing-3;
+  width: 100%;
+  max-width: 36rem;
+  margin-inline: auto;
+  padding-bottom: $spacing-6;
+  @include respond-to(md) { gap: $spacing-4; }
+  @media (max-width: 30rem) { padding-bottom: 0; }
+}
+.mosaicTile {
+  display: block;
+  overflow: hidden;
+  background: $color-background;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  box-shadow: 0 18px 40px rgb(2 6 23 / 0.35);
+  img { display: block; width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; }
+  // Offset the right column for depth; static, so nothing moves while scrolling.
+  &:nth-child(even) { transform: translateY($spacing-6); }
+  @media (max-width: 30rem) { &:nth-child(even) { transform: none; } }
+}
+
+.story {
+  display: grid;
+  gap: $spacing-8;
+  align-items: center;
+  margin-bottom: $spacing-12;
+  @include respond-to(lg) { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: $spacing-12; }
+  h2 { font-size: $font-size-3xl; margin: 0 0 $spacing-4; line-height: $line-height-tight; }
+  p:not(.eyebrowDark) { color: $color-text-secondary; line-height: $line-height-relaxed; margin: 0 0 $spacing-4; max-width: 40rem; }
+}
+.storyImage {
+  display: block;
+  border: 1px solid $color-border;
+  background: $color-background;
+  img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; }
+}
+
+.sectionLead { margin: calc(-1 * #{$spacing-3}) 0 $spacing-6; color: $color-text-secondary; line-height: $line-height-relaxed; }
+
+.rangeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $spacing-4;
+  @include respond-to(lg) { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: $spacing-6; }
+}
+.rangeItem {
+  margin: 0;
+  height: 100%;
+  border: 1px solid $color-border;
+  background: $color-background;
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  img { display: block; width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; transition: transform 0.4s ease; }
+  figcaption { padding: $spacing-3 $spacing-4; font-weight: $font-weight-semibold; border-top: 1px solid $color-border; }
+  &:hover { border-color: $color-primary; box-shadow: $shadow-md; img { transform: scale(1.03); } }
+  @media (prefers-reduced-motion: reduce) { transition: none; img { transition: none; } &:hover img { transform: none; } }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Task 06.2 WP B: Contact. The information column no longer leaves a void beside the form: method cards stack in the
+// column with a response note below; with nothing configured, one composed empty-state panel takes that space.
+// ---------------------------------------------------------------------------------------------------------------------
+.contactLayout.contactLayoutPremium {
+  align-items: start;
+  @include respond-to(lg) { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: $spacing-12; }
+}
+.contactIntro {
+  h2 { font-size: $font-size-3xl; margin: 0 0 $spacing-2; line-height: $line-height-tight; }
+  > p { margin: 0; color: $color-text-secondary; line-height: $line-height-relaxed; }
+}
+.contactMethods {
+  display: grid;
+  gap: $spacing-4;
+  margin-top: $spacing-6;
+  @media (min-width: 40rem) and (max-width: 63.99rem) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.methodCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: $spacing-4;
+  align-items: start;
+  height: 100%;
+  padding: $spacing-5;
+  border: 1px solid $color-border;
+  background: $color-background;
+  box-shadow: $shadow-sm;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  &:hover, &:focus-within { border-color: $color-primary; box-shadow: $shadow-md; }
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+  h3 { margin: 0 0 $spacing-1; font-size: $font-size-base; font-weight: $font-weight-semibold; }
+  p { margin: 0; color: $color-text-secondary; font-size: $font-size-sm; line-height: $line-height-relaxed; overflow-wrap: anywhere; }
+  a {
+    color: $color-primary-dark;
+    font-weight: $font-weight-medium;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+    &:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+    &:focus-visible { outline: $focus-ring-width $focus-ring-style $focus-ring-color; outline-offset: 2px; }
+  }
+}
+.methodIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: $radius-md;
+  color: $color-primary;
+  background: rgba($color-primary, 0.08);
+}
+.methodSkeleton {
+  &:hover { border-color: $color-border; box-shadow: $shadow-sm; }
+  .methodIcon { background: $color-surface; }
+  span:not(.methodIcon) { display: block; height: 0.875rem; background: $color-border; margin-top: $spacing-2; }
+  div > span:first-child { width: 5rem; margin-top: 0; }
+  div > span:last-child { width: 70%; }
+}
+.contactEmpty {
+  display: grid;
+  gap: $spacing-3;
+  margin-top: $spacing-6;
+  padding: $spacing-6;
+  border: 1px dashed $color-border;
+  background: $color-surface;
+  h3 { margin: 0; font-size: $font-size-lg; }
+  p { margin: 0; color: $color-text-secondary; line-height: $line-height-relaxed; }
+}
+.contactNote {
+  display: flex;
+  gap: $spacing-3;
+  margin-top: $spacing-6;
+  padding: $spacing-4 $spacing-5;
+  border-left: 3px solid $color-primary;
+  background: $color-surface;
+  color: $color-text-secondary;
+  font-size: $font-size-sm;
+  line-height: $line-height-relaxed;
+  p { margin: 0; }
+  svg { flex-shrink: 0; color: $color-primary; margin-top: 2px; }
+}
+.form.formPremium {
+  gap: $spacing-5;
+  @include respond-to(md) { padding: $spacing-8; }
+  h2 { font-size: $font-size-2xl; }
+  > p { margin: 0; color: $color-text-secondary; }
+}
+.methodAddress { margin: 0; font-style: normal; color: $color-text-secondary; font-size: $font-size-sm; line-height: $line-height-relaxed; overflow-wrap: anywhere; }
+.srOnlyText { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.fieldRow { display: grid; gap: $spacing-5; @include respond-to(sm) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.field input[aria-invalid='true'], .field textarea[aria-invalid='true'] { border-color: #b91c1c; }
+.submit { display: inline-flex; align-items: center; justify-content: center; gap: $spacing-2; &:disabled { opacity: 0.7; cursor: progress; } }

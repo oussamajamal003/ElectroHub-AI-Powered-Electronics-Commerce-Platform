@@ -84,8 +84,9 @@ describe('RegisterModal', () => {
     fireEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/Email already registered/i)).toBeInTheDocument();
+      expect(screen.getByText(/Customer registration cannot create an administrator account/i)).toBeInTheDocument();
     });
+    expect(screen.getByRole('link', { name: 'Go to Admin sign-in' })).toHaveAttribute('href', '/admin/login');
     
     // Modal remains open
     expect(mockOnOpenChange).not.toHaveBeenCalled();

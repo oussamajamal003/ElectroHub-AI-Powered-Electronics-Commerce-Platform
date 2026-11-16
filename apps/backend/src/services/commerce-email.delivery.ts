@@ -27,10 +27,10 @@ export function classifyDelivery(events: ProviderDeliveryEvent[]): { outcome: De
 }
 
 type DeliveryDatabase = Pick<PrismaClient, 'commerceEmailOutbox'>;
-export async function reconcileDeliveries(database: DeliveryDatabase, source: DeliveryEventSource, now = Date.now()) {
+export async function reconcileDeliveries(database: DeliveryDatabase, source: DeliveryEventSource, now = Date.now(), orderId?: string) {
   const rows = await database.commerceEmailOutbox.findMany({
     where: { dispatchState: 'ACCEPTED', deliveryState: 'UNKNOWN', providerMessageId: { not: null },
-      acceptedAt: { gte: new Date(now - LOOKBACK_MS), lte: new Date(now - SETTLE_MS) } },
+      acceptedAt: { gte: new Date(now - LOOKBACK_MS), lte: new Date(now - SETTLE_MS) }, ...(orderId ? { orderId } : {}) },
     orderBy: { acceptedAt: 'asc' }, take: BATCH, select: { id: true, providerMessageId: true },
   });
   let updated = 0; let failed = 0;

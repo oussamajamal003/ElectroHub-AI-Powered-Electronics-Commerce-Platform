@@ -198,11 +198,11 @@ export function HomePage() {
     </section>
 
     <section className={`${styles.section} ${styles.categorySection}`} aria-labelledby="categories-title">
-      <SectionReveal replay className={styles.sectionHeading}><div><p className={styles.eyebrow}>Find your fit</p><h2 id="categories-title">Shop by Category</h2></div><Link to="/products">Browse all →</Link></SectionReveal>
+      <SectionReveal className={styles.sectionHeading}><div><p className={styles.eyebrow}>Find your fit</p><h2 id="categories-title">Shop by Category</h2></div><Link to="/products">Browse all →</Link></SectionReveal>
       {categories.isPending && <div role="status" aria-label="Loading categories" className={styles.categoryGrid}>{Array.from({ length: INITIAL_CATEGORY_COUNT }, (_, index) => <CategorySkeleton key={index} />)}</div>}
       {categories.isError && !categories.data && <SectionError title="Unable to load categories" message="Please try again in a moment." retry={() => void categories.refetch()} />}
       {categories.data && orderedCategories.length > 0 && <div id="home-category-grid">
-        <StaggerContainer replay className={styles.categoryGrid}>{visibleCategories.map((category, index) => <StaggerItem key={category.id} index={index % INITIAL_CATEGORY_COUNT} className={styles.categoryItem}><CategoryCard category={category} /></StaggerItem>)}</StaggerContainer>
+        <StaggerContainer className={styles.categoryGrid}>{visibleCategories.map((category, index) => <StaggerItem key={category.id} index={index % INITIAL_CATEGORY_COUNT} className={styles.categoryItem}><CategoryCard category={category} /></StaggerItem>)}</StaggerContainer>
       </div>}
       {categories.data && orderedCategories.length === 0 && <p className={styles.categoryEmpty}>No categories are available yet.</p>}
       {orderedCategories.length > INITIAL_CATEGORY_COUNT && <div className={styles.categoryToggleRow}>
@@ -214,10 +214,10 @@ export function HomePage() {
     </section>
 
     <section className={styles.section} aria-labelledby="deals-title">
-      <SectionReveal replay className={styles.sectionHeading}><div><p className={styles.eyebrow}>Worth a look</p><h2 id="deals-title">Featured Deals</h2></div><Link to="/products?sort=price-asc">Shop products →</Link></SectionReveal>
+      <SectionReveal className={styles.sectionHeading}><div><p className={styles.eyebrow}>Worth a look</p><h2 id="deals-title">Featured Deals</h2></div><Link to="/products?sort=price-asc">Shop products →</Link></SectionReveal>
       {deals.isPending && <div role="status" aria-label="Loading deals" className={styles.productGrid}>{Array.from({ length: 6 }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
       {deals.isError && !deals.data && <SectionError title="Unable to load deals" message="Today's deals couldn't be loaded." retry={() => void deals.refetch()} />}
-      {deals.data && <StaggerContainer replay className={styles.productGrid}>{deals.data.data.map((product, index) => <StaggerItem key={product.id} index={index}><ProductCard {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} /></StaggerItem>)}</StaggerContainer>}
+      {deals.data && <StaggerContainer className={styles.productGrid}>{deals.data.data.map((product, index) => <StaggerItem key={product.id} index={index}><ProductCard {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} /></StaggerItem>)}</StaggerContainer>}
       {deals.data?.data.length === 0 && <p>No deals are available right now.</p>}
     </section>
     {(personalSection || popularSection || personalLoading || popularLoading) && <div className={styles.recommendations}>
@@ -229,17 +229,17 @@ export function HomePage() {
     </div>}
     <section className={styles.promoGrid} aria-label="Explore electronics">
       {deals.isPending && Array.from({ length: 2 }, (_, index) => <div key={index} className={styles.promoSkeleton} aria-hidden="true"><span /><span /><span /></div>)}
-      {deals.data?.data.slice(0, 2).map((product, index) => <SectionReveal replay key={product.id}><article className={styles.promoCard}>
+      {deals.data?.data.slice(0, 2).map((product, index) => <SectionReveal key={product.id}><article className={styles.promoCard}>
         {product.primaryImage && <img className={styles.promoBg} src={product.primaryImage.url} alt="" loading="lazy" />}
         <div className={styles.promoCopy}><p className={styles.eyebrow}>{index === 0 ? 'Limited time' : 'Featured deal'}</p><h2>{product.name}</h2>
           <p>Now {formatPrice(product.price)}</p><Link to={`/products/${encodeURIComponent(product.slug)}`}>Shop now <span aria-hidden="true">→</span></Link></div>
       </article></SectionReveal>)}
     </section>
     <section className={styles.section} aria-labelledby="new-arrivals-title">
-      <SectionReveal replay className={styles.sectionHeading}><div><p className={styles.eyebrow}>Just arrived</p><h2 id="new-arrivals-title">New Arrivals</h2></div><Link to="/products">View all products →</Link></SectionReveal>
+      <SectionReveal className={styles.sectionHeading}><div><p className={styles.eyebrow}>Just arrived</p><h2 id="new-arrivals-title">New Arrivals</h2></div><Link to="/products">View all products →</Link></SectionReveal>
       {arrivals.isPending && <div role="status" aria-label="Loading new arrivals" className={styles.productGrid}>{Array.from({ length: 6 }, (_, index) => <ProductCardSkeleton key={index} />)}</div>}
       {arrivals.isError && !arrivals.data && <SectionError title="Unable to load new arrivals" message="We couldn't load the latest products right now." retry={() => void arrivals.refetch()} />}
-      {arrivals.data && <StaggerContainer replay className={styles.productGrid}>{arrivals.data.data.map((product, index) => <StaggerItem key={product.id} index={index}><ProductCard {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} /></StaggerItem>)}</StaggerContainer>}
+      {arrivals.data && <StaggerContainer className={styles.productGrid}>{arrivals.data.data.map((product, index) => <StaggerItem key={product.id} index={index}><ProductCard {...productCardProps(product)} isWishlisted={wishlist?.productIds.includes(product.id)} wishlistPending={wishlist?.pending.includes(product.id)} onToggleWishlist={wishlist ? (id, summary) => wishlist.toggle(String(id), summary) : undefined} onNavigate={navigate} onAddToCart={() => addItem(product.id)} /></StaggerItem>)}</StaggerContainer>}
       {arrivals.data?.data.length === 0 && <p>No products are available yet.</p>}
     </section>
   </div>;

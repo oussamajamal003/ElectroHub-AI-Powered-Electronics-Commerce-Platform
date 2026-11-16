@@ -13,6 +13,11 @@ function Harness() {
 }
 
 describe('SearchSelect', () => {
+  it('announces required selection without unsupported ARIA on a button', () => {
+    render(<SearchSelect label="Category" required value="" onValueChange={() => {}} options={[]} />);
+    const trigger = screen.getByRole('button', { name: /Category.*required/ });
+    expect(trigger).not.toHaveAttribute('aria-required');
+  });
   it('opens from the keyboard on the selected option and skips disabled options', () => {
     render(<Harness />);
     const trigger = screen.getByRole('button', { name: /Category/ });

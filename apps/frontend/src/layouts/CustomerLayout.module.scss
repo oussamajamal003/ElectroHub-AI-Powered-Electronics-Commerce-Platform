@@ -1,6 +1,18 @@
 @use '@/styles/abstracts/variables' as *;
 @use '@/styles/abstracts/mixins' as *;
 
+.skipLink {
+  position: absolute;
+  top: -100px;
+  left: $spacing-4;
+  z-index: $z-tooltip;
+  padding: $spacing-2 $spacing-4;
+  background: $color-primary;
+  color: $color-text-inverse;
+  @include focus-ring;
+  &:focus { top: $spacing-4; }
+}
+
 .footerContent {
   width: 100%;
   max-width: 120rem;
@@ -45,7 +57,7 @@
     align-items: center;
     gap: $spacing-2;
     align-self: flex-start;
-    color: $color-primary;
+    color: $color-primary-text;
     font-size: $font-size-2xl;
     font-weight: $font-weight-bold;
     text-decoration: none;
@@ -93,7 +105,9 @@
     color: $color-text-primary;
   }
 
-  a {
+  // Footer links and the Cookie Settings button (a real <button>, marked data-footer-link) share one look (Task 06.2).
+  a,
+  [data-footer-link] {
     position: relative;
     color: $color-text-secondary;
     font-size: $font-size-sm;
@@ -115,7 +129,7 @@
     }
 
     &:hover {
-      color: $color-primary;
+      color: $color-primary-text;
       &::after { transform: scaleX(1); }
     }
 

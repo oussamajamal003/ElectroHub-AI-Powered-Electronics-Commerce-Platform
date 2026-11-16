@@ -939,3 +939,33 @@ The frontend architecture is complete when:
 ## 39. Frontend Principle
 
 > **Keep pages compositional, features isolated, server state centralized, and reusable UI independent from business logic.**
+
+## 30. Browser Branding, Toasts and Tooltips (Task 06.2 side task)
+
+**Browser identity.** `index.html` carries the official favicon set (SVG mark `/brand/electrohub-mark.svg`, `/favicon-32.png`,
+`/apple-touch-icon.png`, all root-absolute so they resolve from any route depth) and the default title
+`ElectroHub — Electronics Commerce Platform`. All route titles come from `src/lib/pageTitle.ts`: layouts use `usePageTitle`
+(h1-derived, `Admin ` prefix in the console), pages outside the layouts (admin sign-in/activation/invite/forgot-password, 404) use
+`useDocumentTitle`. Never hard-code `document.title` elsewhere, and never put tokens, OTPs or personal data in a title.
+The mark is the same artwork as `BrandLogo`; the PNG/SVG files in `public/brand/` are rasterized from it.
+
+**Toasts.** One module-level store (`components/ui/Toast/toastStore.ts`) and one renderer (`ToastCenter`, mounted once in `App`;
+`AdminToastProvider` is a thin page-level mount that stays inert when the app-level one owns the viewport). Call
+`toast.success|error|warning|info|loading(title, { description, id, action, announce })` from anywhere, including mutation callbacks.
+The store bounds the queue (3), collapses identical toasts raised within 1.5 s, and replaces by `id`. Errors/warnings are assertive,
+the rest polite; toasts never take focus; pass `announce: false` when an inline live region already speaks the same outcome.
+Failure wording comes from `describeError`/`toastError` (validation, 401, 403, 404, 409, 429, timeout, offline, 5xx, unexpected;
+raw exception text is never shown). Every TanStack mutation in both query caches reports failures through
+`reportMutationFailure` (`lib/query.ts`): validation (400/422) and 401 are left to inline forms and the session-expiry flow; set
+`meta: { action: 'save this product' }` to name the action, or `meta: { silent: true }` to own the feedback yourself.
+Existing bespoke surfaces are intentionally unchanged: payment-result notices (`PaymentNotifications`, authoritative backend state),
+delivery-tracking status toasts (announce-excluded by design), the image-search console's in-panel states, and inline copy confirmations.
+
+**Tooltips.** `components/ui/Tooltip` (Radix) with one app-level `TooltipProvider` (400 ms open, 200 ms skip). A tooltip is a hint,
+never the only carrier of meaning: it opens on hover and keyboard focus, closes on Escape, and is not opened by touch taps, so the
+control's accessible name must already say the same. `IconButton` shows its `aria-label` automatically (`tooltip` to override or
+`false` to opt out). For a disabled control use `focusableWrapper` (or `IconButton disabledReason`) so the reason stays reachable
+without enabling the action. Do not combine a tooltip with a native `title` on the same control.
+
+Verification: `npx playwright test -c playwright.branding.config.ts` (hermetic: every `/api/**` call is intercepted; engines
+chromium, firefox, webkit and 390/320 px viewports).

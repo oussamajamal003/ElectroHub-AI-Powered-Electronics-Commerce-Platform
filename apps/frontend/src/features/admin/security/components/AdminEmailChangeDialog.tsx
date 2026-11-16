@@ -1,3 +1,4 @@
+import { emailValidationError } from '@/lib/emailValidation';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Mail, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -24,6 +25,7 @@ export function AdminEmailChangeDialog({ currentEmail }: { currentEmail: string 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>('details');
   const [newEmail, setNewEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [code, setCode] = useState('');
   const [challenge, setChallenge] = useState<AdminEmailChangeState | null>(null);
@@ -70,7 +72,7 @@ export function AdminEmailChangeDialog({ currentEmail }: { currentEmail: string 
 
   const reset = () => {
     setStep('details'); setNewEmail(''); setCurrentPassword(''); setCode(''); setChallenge(null);
-    setAttemptsRemaining(5); setError(''); setBusy(false); setCheckingStatus(false);
+    setAttemptsRemaining(5); setError(''); setEmailError(''); setBusy(false); setCheckingStatus(false);
   };
 
   const closeSafely = async () => {
@@ -98,6 +100,9 @@ export function AdminEmailChangeDialog({ currentEmail }: { currentEmail: string 
   const requestChange = async (event: FormEvent) => {
     event.preventDefault();
     if (busy || checkingStatus) return;
+    const validationError = emailValidationError(newEmail);
+    if (validationError) { setEmailError(validationError); newEmailRef.current?.focus(); return; }
+    setEmailError('');
     const normalized = newEmail.trim().toLowerCase();
     if (normalized === currentEmail.trim().toLowerCase()) { setError('Enter an email address different from your current one.'); return; }
     setBusy(true); setError('');
@@ -160,9 +165,9 @@ export function AdminEmailChangeDialog({ currentEmail }: { currentEmail: string 
           <DialogDescription>Your new email will become the address used to sign in and receive security notifications after verification.</DialogDescription>
           {error && <Alert variant="error" role="alert">{error}</Alert>}
           {checkingStatus && <p className={styles.status} role="status">Checking for an unfinished email change…</p>}
-          <form className={styles.form} onSubmit={requestChange}>
+          <form className={styles.form} onSubmit={requestChange} noValidate>
             <Input id="admin-email-current" name="currentEmail" label="Current email" value={currentEmail} readOnly fullWidth autoComplete="email" />
-            <Input ref={newEmailRef} id="admin-email-new" name="newEmail" label="New email" type="email" value={newEmail} onChange={event => setNewEmail(event.target.value)}
+            <Input ref={newEmailRef} id="admin-email-new" name="newEmail" label="New email" type="email" value={newEmail} error={emailError} onChange={event => { setNewEmail(event.target.value); setEmailError(''); }}
               autoComplete="email" maxLength={255} required fullWidth autoFocus disabled={busy} />
             <PasswordInput id="admin-email-current-password" name="currentPassword" label="Current password" value={currentPassword}
               onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" maxLength={128} required fullWidth disabled={busy} />

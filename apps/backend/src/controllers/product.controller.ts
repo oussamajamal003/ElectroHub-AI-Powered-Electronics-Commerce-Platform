@@ -3,13 +3,13 @@ import { z } from 'zod';
 import { ProductService } from '../services/product.service.js';
 import { CategoryService } from '../services/category.service.js';
 import { BrandService } from '../services/brand.service.js';
-import { paginationSchema, slugSchema } from '../validators/product.validator.js';
+import { paginationSchema, paginationValidationError, slugSchema } from '../validators/product.validator.js';
 import { AppError } from '../middleware/errorHandler.js';
 
 function handleError(error: unknown, next: NextFunction) {
-  next(error instanceof z.ZodError
-    ? new AppError('Invalid product request parameters.', 400, 'VALIDATION_ERROR')
-    : error);
+  if (!(error instanceof z.ZodError)) return next(error);
+  const mapped = paginationValidationError(error, 'Invalid product request parameters.');
+  next(new AppError(mapped.message, 400, mapped.code));
 }
 
 function readController(service: ProductService | CategoryService | BrandService, slugLimit: number) {

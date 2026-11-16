@@ -25,6 +25,7 @@ import {
   registerRateLimiter,
   passwordResetRateLimiter,
   resendVerificationRateLimiter,
+  verifyEmailRateLimiter,
   accountDeletionRateLimiter,
 } from '../middleware/rateLimiter.js';
 
@@ -249,7 +250,7 @@ router.post('/login', loginRateLimiter, login);
  *       429:
  *         description: IP request limit reached; challenge cooldown returns a generic acknowledgement
  */
-router.post('/verify-email', verifyEmail);
+router.post('/verify-email', verifyEmailRateLimiter, verifyEmail);
 router.post('/resend-verification', resendVerificationRateLimiter, resendVerification);
 
 /**

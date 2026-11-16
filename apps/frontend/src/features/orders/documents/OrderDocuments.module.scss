@@ -23,7 +23,7 @@
 .confirmation .row, .chooser .row {
   @include respond-to(md) { grid-template-columns: 2.25rem minmax(0, 1fr) auto; align-items: center; }
 }
-.icon { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; background: $color-surface; border: 1px solid $color-border; color: $color-primary;
+.icon { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; background: $color-surface; border: 1px solid $color-border; color: $color-primary-text;
   svg { width: 1.125rem; height: 1.125rem; }
 }
 .unavailableRow .icon { color: $color-text-secondary; }

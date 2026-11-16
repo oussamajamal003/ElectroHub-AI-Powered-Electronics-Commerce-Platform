@@ -54,6 +54,12 @@ beforeEach(() => {
 });
 
 describe('AdminAnalyticsPage', () => {
+  it('exposes statistic labels and values within description lists', () => {
+    const { container } = renderPage();
+    const terms = container.querySelectorAll('dt, dd');
+    expect(terms.length).toBeGreaterThan(0);
+    for (const term of terms) expect(term.closest('dl')).not.toBeNull();
+  });
   it('links the Dashboard breadcrumb to the admin dashboard route', () => {
     renderPage();
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/admin');

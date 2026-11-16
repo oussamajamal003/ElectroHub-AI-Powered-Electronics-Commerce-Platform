@@ -1,17 +1,27 @@
 import { apiClient } from '@/lib/api';
 import type { ProductSummary, ProductCollection, Category, Brand } from '@/features/products/types';
-import { searchParams, type SearchState } from './searchState';
+import { MAX_OFFSET_PAGE, searchParams, type SearchState } from './searchState';
 
-export interface SearchResults extends ProductCollection<ProductSummary> { meta: ProductCollection<ProductSummary>['meta'] & { totalPages: number } }
+export interface SearchResults extends ProductCollection<ProductSummary> {
+  meta: ProductCollection<ProductSummary>['meta'] & { totalPages: number; hasNextPage?: boolean; nextCursor?: string | null };
+}
+/** Keyset (cursor) page: no page number; `total` is only computed for a first cursor page. */
+export interface SearchContinuation { data: ProductSummary[]; meta: { pageSize: number; total: number | null; hasNextPage: boolean; nextCursor: string | null } }
 export interface Suggestion { id: string; type: 'PRODUCT' | 'CATEGORY' | 'BRAND'; label: string; slug: string }
 export const fetchSearch = async (state: SearchState, signal?: AbortSignal) => {
   return apiClient<SearchResults>(`/api/search/products?${searchParams(state)}`, { signal });
+};
+/** Continues a result set past the offset cap from an opaque, server-signed cursor (same filters and sort, never `page`). */
+export const fetchSearchContinuation = (state: SearchState, cursor: string, signal?: AbortSignal) => {
+  const params = searchParams({ ...state, page: 1 });
+  params.set('cursor', cursor);
+  return apiClient<SearchContinuation>(`/api/search/products?${params}`, { signal });
 };
 export const fetchSuggestions = (q: string, signal: AbortSignal) =>
   apiClient<{ data: Suggestion[] }>(`/api/search/suggestions?${new URLSearchParams({ q, limit: '8' })}`, { signal });
 export async function fetchCollection<Metadata extends Category | Brand>(resource: 'categories' | 'brands', signal?: AbortSignal) {
   const data: Metadata[] = [];
-  for (let page = 1; page <= 1000; page++) {
+  for (let page = 1; page <= MAX_OFFSET_PAGE; page++) {
     const response = await apiClient<ProductCollection<Metadata>>(`/api/${resource}?page=${page}&pageSize=100`, { signal });
     data.push(...response.data);
     if (data.length >= response.meta.total || !response.data.length) break;

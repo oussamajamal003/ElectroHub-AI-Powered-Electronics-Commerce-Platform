@@ -2,24 +2,51 @@
 @use '@/styles/abstracts/mixins' as *;
 
 .container {
+  position: relative;
+  isolation: isolate;
   @include flex-center;
   flex-direction: column;
   min-height: 100vh;
-  background-color: #f8fafc;
+  background-color: $color-surface;
+  min-height: 100dvh;
+  background-image: linear-gradient(135deg, rgba(3, 11, 27, 0.84), rgba(5, 23, 48, 0.62) 50%, rgba(7, 30, 55, 0.76)),
+    url('/images/admin-auth-background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   padding: $spacing-6;
 }
 
 .loginCard {
   position: relative;
+  z-index: 1;
   width: min(480px, calc(100vw - 2rem));
   max-width: 480px;
-  background-color: #ffffff !important;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+  background-color: $color-background !important;
+  box-shadow: $shadow-xl !important;
   border: 1px solid $color-border !important;
   border-radius: 0 !important;
+  color-scheme: light;
   display: flex;
   flex-direction: column;
   padding: $spacing-8;
+}
+
+:global([data-theme='light']) .container {
+  background-image: linear-gradient(135deg, rgba(4, 20, 43, 0.74), rgba(5, 33, 64, 0.46) 52%, rgba(7, 30, 55, 0.66)),
+    url('/images/admin-auth-background.jpg');
+}
+
+:global([data-theme='dark']) .container {
+  background-image: linear-gradient(135deg, rgba(2, 8, 22, 0.9), rgba(2, 20, 42, 0.72) 52%, rgba(3, 17, 34, 0.84)),
+    url('/images/admin-auth-background.jpg');
+}
+
+@media (prefers-color-scheme: dark) {
+  :global(html:not([data-theme='light'])) .container {
+    background-image: linear-gradient(135deg, rgba(2, 8, 22, 0.9), rgba(2, 20, 42, 0.72) 52%, rgba(3, 17, 34, 0.84)),
+      url('/images/admin-auth-background.jpg');
+  }
 }
 
 .header {
@@ -72,7 +99,7 @@
   background: none;
   border: none;
   padding: 0;
-  color: $color-primary;
+  color: $color-primary-text;
   font-size: $font-size-sm;
   cursor: pointer;
 
@@ -88,7 +115,7 @@
 
 .forgotLink {
   align-self: flex-end;
-  color: $color-primary;
+  color: $color-primary-text;
   font-size: $font-size-sm;
   text-decoration: none;
 
@@ -181,7 +208,7 @@
   justify-content: center;
   gap: $spacing-2;
   border: 1px solid $color-border;
-  background: #fff;
+  background: $color-background;
   color: $color-text-secondary;
   text-align: center;
   line-height: 1.25;
@@ -190,11 +217,11 @@
   svg { width: 18px; height: 18px; flex: 0 0 auto; }
   span { font-size: $font-size-xs; font-weight: $font-weight-semibold; overflow-wrap: anywhere; }
 
-  &:hover { border-color: $color-primary; color: $color-primary; }
+  &:hover { border-color: $color-primary; color: $color-primary-text; }
   &[data-state='active'] {
     border-color: $color-primary;
     background: rgba(37, 99, 235, 0.06);
-    color: $color-primary;
+    color: $color-primary-text;
     box-shadow: inset 0 -2px 0 $color-primary;
   }
   &:focus-visible {
@@ -214,7 +241,7 @@
   background: none;
   border: none;
   padding: $spacing-2;
-  color: $color-primary;
+  color: $color-primary-text;
   font-size: $font-size-sm;
   cursor: pointer;
 
@@ -235,7 +262,7 @@
 
 .textLink {
   align-self: center;
-  color: $color-primary;
+  color: $color-primary-text;
   font-size: $font-size-sm;
   text-decoration: none;
 

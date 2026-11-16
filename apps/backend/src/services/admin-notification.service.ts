@@ -1,3 +1,4 @@
+import { renderEmailHeader } from '../emails/brand.js';
 import { EmailDeliveryStatus, EmailType, Prisma, type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
@@ -42,7 +43,7 @@ const footer = 'You receive this because this alert is on in Settings > Notifica
 const wrapHtml = (heading: string, body: string) => `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(heading)}</title></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;margin:0;padding:24px;color:#0f172a">
 <div style="max-width:480px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;padding:32px">
-<div style="font-size:22px;font-weight:700;color:#2563eb;text-align:center;margin-bottom:24px">ElectroHub Admin</div>
+${renderEmailHeader()}<p style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#64748b;text-align:center;margin:-12px 0 20px">Admin Console</p>
 <h1 style="font-size:18px;font-weight:600;margin:0 0 12px">${escapeHtml(heading)}</h1>
 <div style="font-size:14px;line-height:1.6;color:#475569">${body}</div>
 <p style="font-size:12px;color:#94a3b8;margin-top:24px">${escapeHtml(footer)}</p></div></body></html>`;
@@ -59,7 +60,8 @@ export function adminOrderUrl(reference: string, configuredOrigin = process.env.
   return url.href;
 }
 
-const orderPaidEmail = (reference: string, total: string, currency: string, viewOrderUrl: string | null): OperationalEmail => {
+/** Exported for rendering tests only. */
+export const orderPaidEmail = (reference: string, total: string, currency: string, viewOrderUrl: string | null): OperationalEmail => {
   const paymentSummary = `Payment was confirmed for order <strong>${escapeHtml(reference)}</strong> (total ${escapeHtml(currency)} ${escapeHtml(total)}).`;
   const button = viewOrderUrl
     ? `<div style="margin:24px 0 12px"><a href="${escapeHtml(viewOrderUrl)}" style="display:inline-block;background:#2563eb;color:#ffffff;padding:12px 22px;font-size:14px;font-weight:600;text-decoration:none;border-radius:6px">View Order</a></div>
@@ -72,7 +74,7 @@ const orderPaidEmail = (reference: string, total: string, currency: string, view
   };
 };
 
-const lowStockEmail = (productName: string, status: 'LOW_STOCK' | 'OUT_OF_STOCK', quantity: number): OperationalEmail => {
+export const lowStockEmail = (productName: string, status: 'LOW_STOCK' | 'OUT_OF_STOCK', quantity: number): OperationalEmail => {
   const label = status === 'OUT_OF_STOCK' ? 'out of stock' : 'low on stock';
   return {
     subject: `Stock alert: ${productName} is ${label}`,
@@ -81,7 +83,7 @@ const lowStockEmail = (productName: string, status: 'LOW_STOCK' | 'OUT_OF_STOCK'
   };
 };
 
-const invitationAcceptedEmail = (): OperationalEmail => ({
+export const invitationAcceptedEmail = (): OperationalEmail => ({
   subject: 'Your administrator invitation was accepted',
   text: `An administrator you invited accepted the invitation. They must finish two-step verification before they can sign in.
 

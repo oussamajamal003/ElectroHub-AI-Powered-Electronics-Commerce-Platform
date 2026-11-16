@@ -75,6 +75,16 @@ cp apps/ai-service/.env.example apps/ai-service/.env
 
 ### Development
 
+For one long-lived, approved Stripe Test Mode checkout session on frontend `:3000` and backend `:5000`:
+
+```bash
+npm run dev:stack:supervised
+npm run dev:stack:doctor
+npm run dev:stack:stop
+```
+
+See [supervised development runtime](docs/11_Workflow/DEVELOPMENT_RUNTIME.md) for prerequisites, safe reuse, optional allowlisted email, one-time legacy-runtime upgrade and controlled backend restart. Existing watched development commands below retain their payment-isolation restrictions.
+
 ```bash
 # Start the frontend
 npm run dev:frontend

@@ -38,10 +38,13 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
+  // Use the registered route template, never originalUrl (which can contain private query/path values).
+  const http = { method: _req.method, route: typeof _req.route?.path === 'string' ? `${_req.baseUrl}${_req.route.path}` : 'unmatched' };
   if (err instanceof AppError) {
     res.locals.errorLogged = true;
     logSafely('error', 'Application error', {
       operation: 'http.handled_error',
+      ...http,
       error: err.diagnosticCause ?? err,
       requestId: _req.id,
       code: err.code,
@@ -63,6 +66,7 @@ export function errorHandler(
     logSafely('error', 'Unexpected error', {
     requestId: _req.id,
     operation: 'http.unexpected_error',
+    ...http,
     error: err,
   });
 

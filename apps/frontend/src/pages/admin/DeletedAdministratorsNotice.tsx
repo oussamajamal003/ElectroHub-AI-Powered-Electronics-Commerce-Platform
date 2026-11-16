@@ -1,3 +1,4 @@
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useState } from 'react';
 import { Info, X } from 'lucide-react';
 import { useAcknowledgeDeletionNotice, useDeletionNotice } from '@/features/admin/security/api';
@@ -26,13 +27,13 @@ export function DeletedAdministratorsNotice({ enabled }: { enabled: boolean }) {
           {' '}Required audit records remain available.
         </p>
       </div>
-      <button type="button" className={styles.dismiss} aria-label="Dismiss notice" onClick={() => {
+      <Tooltip content="Dismiss notice"><button type="button" className={styles.dismiss} aria-label="Dismiss notice" onClick={() => {
           const through = data.through!;
           setClosedThrough(through);
           acknowledge.mutate(through, { onError: () => setClosedThrough(null) });
         }}>
         <X aria-hidden="true" size={16} />
-      </button>
+      </button></Tooltip>
     </div>
   );
 }

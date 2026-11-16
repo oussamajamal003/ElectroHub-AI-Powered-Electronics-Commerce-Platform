@@ -31,6 +31,8 @@ export async function harness(page: Page, options: { guest?: boolean; empty?: bo
       path === '/api/auth/me' ? send({ user }) : send({ accessToken: 'intercepted-ui-test-token', user });
     if (path === '/api/cart') return send({ data: current });
     if (path === '/api/wishlist') return send({ data: { items: [], totalItems: 0 } });
+    // Supervised payment writes are enabled for intercepted runs (a7d62dc gates Checkout on this read; unknown keeps card entry closed).
+    if (path === '/api/checkout/payment-capability') return send({ data: { paymentsEnabled: true } });
     if (path === '/api/checkout') return send({ data: quote });
     if (path === '/api/checkout/payment-attempts' && method === 'GET') return send({ data: [] });
     if (path === '/api/checkout/payment-attempts') {

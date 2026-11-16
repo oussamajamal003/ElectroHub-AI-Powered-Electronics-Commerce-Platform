@@ -17,18 +17,18 @@ export function OrdersAccessGate({ title, loading, children }: { title: string; 
   const signedOutHere = useRef(false);
   if (isLoggingOut) signedOutHere.current = true;
   if (isLoggingOut || (signedOutHere.current && !isAuthenticated)) {
-    return <main className={styles.page} aria-busy="true"><h1 className={styles.gateTitle}>{title}</h1>{loading}
-      {signedOutHere.current && !isLoggingOut && !isInitializing && <Navigate to="/" replace />}</main>;
+    return <div className={styles.page} aria-busy="true"><h1 className={styles.gateTitle}>{title}</h1>{loading}
+      {signedOutHere.current && !isLoggingOut && !isInitializing && <Navigate to="/" replace />}</div>;
   }
-  if (isInitializing && sessionUnavailable) return <main className={styles.page}><h1 className={styles.gateTitle}>{title}</h1>
+  if (isInitializing && sessionUnavailable) return <div className={styles.page}><h1 className={styles.gateTitle}>{title}</h1>
     <ErrorState title="We could not verify your session." description="Your orders are safe. Please try again."
-      action={<Button onClick={retrySession}>Retry</Button>} /></main>;
-  if (isInitializing) return <main className={styles.page}><h1 className={styles.gateTitle}>{title}</h1>{loading}</main>;
+      action={<Button onClick={retrySession}>Retry</Button>} /></div>;
+  if (isInitializing) return <div className={styles.page}><h1 className={styles.gateTitle}>{title}</h1>{loading}</div>;
   if (isAuthenticated) return <>{children}</>;
-  return <main className={styles.signIn}><section className={styles.signInCard} aria-labelledby="sign-in-required">
+  return <div className={styles.signIn}><section className={styles.signInCard} aria-labelledby="sign-in-required">
     <div className={styles.signInIcon}><CircleAlert size={32} aria-hidden="true" /></div>
     <h1 id="sign-in-required">Sign In Required</h1>
     <p>Please sign in to access this page.</p>
     <Button type="button" onClick={() => window.dispatchEvent(new Event('electrohub:open-auth'))}>Sign In</Button>
-  </section></main>;
+  </section></div>;
 }

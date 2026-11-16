@@ -138,7 +138,7 @@ function RevenueChart({ points, currency, granularity }: {
 }
 
 function Stat({ label, value, note }: { label: string; value: ReactNode; note?: ReactNode }) {
-  return <div className={local.stat}><dt>{label}</dt><dd>{value}</dd>{note && <p className={local.statNote}>{note}</p>}</div>;
+  return <div className={local.stat}><dl><dt>{label}</dt><dd>{value}</dd></dl>{note && <p className={local.statNote}>{note}</p>}</div>;
 }
 
 function BarSeries({ rows, caption }: { rows: { bucket: string; count: number }[]; caption: string }) {

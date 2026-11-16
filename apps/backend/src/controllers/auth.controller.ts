@@ -15,8 +15,7 @@ import {
   resendVerificationSchema,
   changeVerificationEmailSchema,
 } from '../validators/auth.validator.js';
-import { otpService, OtpDeliveryError, OtpVerificationError, OTP_CONFIG } from '../services/otp.service.js';
-import { OtpPurpose } from '@prisma/client';
+import { OtpDeliveryError, OtpVerificationError } from '../services/otp.service.js';
 
 const authService = new AuthService();
 
@@ -156,32 +155,15 @@ export const verifyEmail = async (req: Request, res: Response, next: NextFunctio
 export const resendVerification = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = resendVerificationSchema.parse(req.body);
-    
-    const challengeId = await otpService.getChallengeIdByEmail(data.email, OtpPurpose.EMAIL_VERIFICATION);
-    if (!challengeId) {
-      return res.status(200).json({
-        message: 'If verification is pending, a code will be sent when available.',
-        success: true,
-        expiresAt: new Date(Date.now() + OTP_CONFIG.TTL_MS),
-        resendAvailableAt: new Date(Date.now() + OTP_CONFIG.RESEND_COOLDOWN_MS),
-      });
-    }
-
-    const metadata = await otpService.resendChallenge(challengeId);
-    
-    logger.info('AUTH_RESEND_VERIFICATION_SUCCESS');
-    res.status(200).json({ message: 'If verification is pending, a code will be sent when available.', ...metadata });
+    // Task 06.2: eligibility (active, unverified CUSTOMER with a live challenge for this exact address) is decided in the service;
+    // every ineligible request gets the same generic body and nothing is created or delivered.
+    const result = await authService.resendVerification(data.email);
+    logger.info('AUTH_RESEND_VERIFICATION_REQUEST');
+    res.status(200).json(result);
   } catch (error: unknown) {
+    if (respondWithOtpDeliveryError(error, res)) return;
     if (error instanceof ZodError) {
       return res.status(400).json({ error: 'Validation failed', details: error.issues });
-    }
-    if (error instanceof Error && error.message.includes('Please wait')) {
-      return res.status(200).json({
-        message: 'If verification is pending, a code will be sent when available.',
-        success: true,
-        expiresAt: new Date(Date.now() + OTP_CONFIG.TTL_MS),
-        resendAvailableAt: new Date(Date.now() + OTP_CONFIG.RESEND_COOLDOWN_MS),
-      });
     }
     next(error);
   }

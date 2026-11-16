@@ -40,7 +40,8 @@
     "qa:task05-2:browser-stack": "node scripts/task05-2-browser-stack.cjs",
     "catalog:expansion": "tsx scripts/catalog-expansion.ts",
     "catalog:expansion:finalize-media": "tsx scripts/catalog-expansion-finalize-media.ts",
-    "catalog:expansion:api": "tsx scripts/catalog-expansion-api-smoke.ts"
+    "catalog:expansion:api": "tsx scripts/catalog-expansion-api-smoke.ts",
+    "notifications:doctor": "tsx src/notification-doctor.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^6.12.0",
@@ -66,6 +67,7 @@
     "stripe": "^23.0.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
+    "web-push": "4.0.0",
     "winston": "^3.17.0",
     "zod": "^4.6.7"
   },
@@ -83,6 +85,7 @@
     "@types/supertest": "^6.0.2",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.7",
+    "@types/web-push": "3.6.4",
     "eslint": "^9.16.0",
     "pdfjs-dist": "4.10.38",
     "prisma": "^6.12.0",

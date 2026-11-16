@@ -5,6 +5,8 @@ export interface SearchState {
 }
 const keys = ['q', 'category', 'brand', 'availability', 'minPrice', 'maxPrice', 'sort', 'page', 'pageSize'] as const;
 export const emptySearch: SearchState = { q: '', page: 1, pageSize: 20 };
+/** Server offset-pagination cap (Task 06.2). Deeper results continue with keyset pagination ("Load more"). */
+export const MAX_OFFSET_PAGE = 100;
 export const normalizeQuery = (query: string) => query.trim().replace(/\s+/g, ' ');
 export function parseSearch(params: URLSearchParams): SearchState {
   for (const key of keys) if (params.getAll(key).length > 1) throw new Error('Repeated search parameter.');
@@ -16,7 +18,7 @@ export function parseSearch(params: URLSearchParams): SearchState {
     if (!/^[1-9]\d*$/.test(value) || Number(value) > maximum) throw new Error('Invalid pagination.');
     return Number(value);
   };
-  const state: SearchState = { q, page: integer('page', 1, 1000), pageSize: integer('pageSize', 20, 100) };
+  const state: SearchState = { q, page: integer('page', 1, MAX_OFFSET_PAGE), pageSize: integer('pageSize', 20, 100) };
   for (const key of ['category', 'brand'] as const) {
     const value = params.get(key);
     if (value !== null) {

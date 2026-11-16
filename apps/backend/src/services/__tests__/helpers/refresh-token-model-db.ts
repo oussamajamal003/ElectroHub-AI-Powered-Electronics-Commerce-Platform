@@ -282,6 +282,8 @@ export class RefreshTokenModelDb {
       oAuthAccount: { findFirst: async () => null },
       // Task 05.2: the model holds CUSTOMER accounts only, so no administrator session ever exists here.
       adminSession: { updateMany: async () => ({ count: 0 }), findFirst: async () => null },
+      // This refresh-token concurrency model has no browser push subscriptions.
+      customerPushSubscription: { updateMany: async () => ({ count: 0 }) },
       // Task 05.2: password reset also closes recovery/OTP challenges; the model holds none.
       adminAuthChallenge: { updateMany: async () => ({ count: 0 }) },
       otpChallenge: { updateMany: async () => ({ count: 0 }) },

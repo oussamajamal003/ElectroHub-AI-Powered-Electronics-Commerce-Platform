@@ -94,6 +94,13 @@
       border-color: #f87171;
     }
 
+    @include dark-theme {
+      background-color: $color-error-background;
+      border-color: $color-error-border;
+
+      &:hover:not(:disabled):not(:focus) { border-color: $color-error; }
+    }
+
     &:focus {
       outline: 2px solid $color-primary !important;
       outline-offset: -2px !important;

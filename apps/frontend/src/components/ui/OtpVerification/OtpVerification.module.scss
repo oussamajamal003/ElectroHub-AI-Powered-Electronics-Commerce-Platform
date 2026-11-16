@@ -25,7 +25,7 @@
   font-family: $font-family-heading;
   font-size: $font-size-2xl;
   font-weight: $font-weight-bold;
-  color: $color-primary;
+  color: $color-primary-text;
   margin-bottom: $spacing-3;
   text-align: center;
 }
@@ -191,12 +191,12 @@
   font-family: inherit;
   font-size: inherit;
   font-weight: $font-weight-semibold;
-  color: $color-primary;
+  color: $color-primary-text;
   cursor: pointer;
   transition: color $transition-fast;
 
   &:hover:not(:disabled) {
-    color: $color-primary-dark;
+    color: $color-primary-text-hover;
     text-decoration: underline;
   }
 

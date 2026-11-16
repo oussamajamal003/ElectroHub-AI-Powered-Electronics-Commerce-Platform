@@ -17,7 +17,8 @@ const { spawn, spawnSync } = require('node:child_process');
 const backend = path.resolve(__dirname, '..');
 const root = path.resolve(backend, '../..');
 fs.mkdirSync(path.join(root, '.cache'), { recursive: true });
-const work = fs.mkdtempSync(path.join(root, '.cache/commerce-email-pg-run-'));
+// PostgreSQL Windows binaries cannot initialize a cluster under a Unicode path.
+const work = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'electrohub-email-pg-'));
 const data = path.join(work, 'data');
 const binaries = process.env.ELECTROHUB_LOCAL_PG_BIN || 'C:/Program Files/PostgreSQL/18/bin';
 const exe = name => path.join(binaries, process.platform === 'win32' ? `${name}.exe` : name);

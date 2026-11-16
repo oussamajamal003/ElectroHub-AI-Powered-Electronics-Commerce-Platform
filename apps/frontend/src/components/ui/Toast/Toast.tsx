@@ -1,6 +1,6 @@
 import React from 'react';
 import * as ToastPrimitives from '@radix-ui/react-toast';
-import { X, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { X, CheckCircle2, AlertCircle, AlertTriangle, Info, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 import styles from './Toast.module.scss';
 
@@ -19,7 +19,7 @@ export const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName;
 
 export interface ToastProps extends React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> {
-  variant?: 'default' | 'success' | 'error' | 'info';
+  variant?: 'default' | 'success' | 'error' | 'warning' | 'info' | 'loading';
   hideIcon?: boolean;
 }
 
@@ -31,6 +31,8 @@ export const Toast = React.forwardRef<
   if (!hideIcon) {
     if (variant === 'success') DefaultIcon = <CheckCircle2 className={styles.iconSvg} />;
     else if (variant === 'error') DefaultIcon = <AlertCircle className={styles.iconSvg} />;
+    else if (variant === 'warning') DefaultIcon = <AlertTriangle className={styles.iconSvg} />;
+    else if (variant === 'loading') DefaultIcon = <Loader2 className={clsx(styles.iconSvg, styles.spin)} />;
     else if (variant === 'info') DefaultIcon = <Info className={styles.iconSvg} />;
   }
 

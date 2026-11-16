@@ -2,14 +2,19 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { describe, beforeEach, it, expect, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query';
+import { ORDERS_PAGE_SIZE } from '@/features/orders/types';
 import { AccountPage } from './AccountPage';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { useMyReviews } from '@/features/products/queries';
+import { useProfilePhoto } from '@/features/profilePhoto/queries';
 
 vi.mock('@/features/auth/context/AuthContext', () => ({
   useAuth: vi.fn(),
 }));
 vi.mock('@/features/products/queries', () => ({ useMyReviews: vi.fn() }));
+vi.mock('@/features/profilePhoto/queries', () => ({ useProfilePhoto: vi.fn() }));
 vi.mock('@/features/recommendations/queries', () => import('@/test/recommendationQueriesMock'));
 
 const mockNavigate = vi.fn();
@@ -27,6 +32,7 @@ describe('AccountPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useMyReviews).mockReturnValue({ data: { data: [] }, isPending: false, isError: false, refetch: vi.fn() } as unknown as ReturnType<typeof useMyReviews>);
+    vi.mocked(useProfilePhoto).mockReturnValue({ data: { url: null, expiresAt: null } } as never);
     vi.mocked(useAuth).mockReturnValue({
       user: { id: '1', firstName: 'John', lastName: 'Doe', email: 'john@example.com', role: 'CUSTOMER' },
       isAuthenticated: true,
@@ -36,8 +42,19 @@ describe('AccountPage', () => {
   });
 
   const renderWithRouter = (ui: React.ReactElement) => {
-    return render(<BrowserRouter>{ui}</BrowserRouter>);
+    const client = new QueryClient();
+    client.setQueryData(queryKeys.orders.list('1', 1, ORDERS_PAGE_SIZE), { data: [] });
+    return render(<QueryClientProvider client={client}><BrowserRouter>{ui}</BrowserRouter></QueryClientProvider>);
   };
+
+  it('uses an account-shaped skeleton while restoring a cached identity', () => {
+    vi.mocked(useAuth).mockReturnValue({ isInitializing: true, isAuthenticated: true,
+      user: { id: 'cached', firstName: 'Cached', email: 'private@example.test' } } as ReturnType<typeof useAuth>);
+    renderWithRouter(<AccountPage />);
+    expect(screen.getByRole('status', { name: 'Loading your account' })).toBeVisible();
+    expect(screen.queryByText('private@example.test')).not.toBeInTheDocument();
+    expect(useMyReviews).toHaveBeenCalledWith(false);
+  });
 
   it('renders breadcrumb', () => {
     renderWithRouter(<AccountPage />);

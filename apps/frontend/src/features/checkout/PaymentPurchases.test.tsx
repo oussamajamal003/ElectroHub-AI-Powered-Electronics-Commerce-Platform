@@ -34,7 +34,7 @@ it('recovers unread notification metadata automatically after a transient list f
   expect(reads).toBeGreaterThanOrEqual(2);
 }, 25000);
 it('does not claim that no charge occurred for an authoritatively refunded purchase', async () => {
-  vi.mocked(apiClient).mockResolvedValue({ data: [{ ...purchase, state: 'REFUNDED', classification: 'FAILED', pending: false, unread: false }] });
+  vi.mocked(apiClient).mockResolvedValue({ data: [{ ...purchase, state: 'REFUNDED', classification: 'FAILED', dismissible: true, pending: false, unread: false }] });
   show('/cart');
   expect(await screen.findByText('This payment was refunded. Its purchase details are saved separately from your Cart.')).toBeVisible();
   expect(screen.queryByText(/Nothing was charged/)).not.toBeInTheDocument();
@@ -54,7 +54,7 @@ it('a submitted purchase never confirmed at Stripe shows Processing with honest 
   expect(screen.queryByRole('button', { name: 'Dismiss payment notification' })).not.toBeInTheDocument();
 });
 it('a failed attempt can become pending again under the same identity, then disappear after capture', async () => {
-  let rows: SavedPurchase[] = [{ ...purchase, state: 'DECLINED', classification: 'DECLINED', pending: false, unread: false, retryAllowed: true }];
+  let rows: SavedPurchase[] = [{ ...purchase, state: 'DECLINED', classification: 'DECLINED', dismissible: true, pending: false, unread: false, retryAllowed: true }];
   vi.mocked(apiClient).mockImplementation(async () => ({ data: rows }) as never);
   const { client } = show('/cart');
   await screen.findByRole('heading', { name: 'Failed payments' });
@@ -75,7 +75,7 @@ it('an already-read captured outcome still invalidates Orders independently of t
   expect(screen.queryByText('Order confirmed! 🎉')).not.toBeInTheDocument();
 });
 it('a new captured result withdraws an older failure notice for the same attempt', async () => {
-  let rows: SavedPurchase[] = [{ ...purchase, state: 'DECLINED', classification: 'DECLINED', pending: false, unread: true }];
+  let rows: SavedPurchase[] = [{ ...purchase, state: 'DECLINED', classification: 'DECLINED', dismissible: true, pending: false, unread: true }];
   vi.mocked(apiClient).mockImplementation(async () => ({ data: rows }) as never);
   const { client } = show('/cart');
   await screen.findByText('Payment was not completed. Your saved purchase details are kept in your Cart history.');
@@ -134,7 +134,7 @@ it('retains the last verified pending purchase when a background read fails and 
   await client.invalidateQueries({ queryKey: ['payment-purchases'] });
   expect(await screen.findByText(/could not be updated/)).toBeVisible(); expect(screen.getByText('Product A')).toBeVisible();
   expect(screen.queryByText('Payment failed')).not.toBeInTheDocument();
-  unavailable = false; rows[0] = { ...purchase, state: 'DECLINED', classification: 'DECLINED', pending: false, retryAllowed: true };
+  unavailable = false; rows[0] = { ...purchase, state: 'DECLINED', classification: 'DECLINED', dismissible: true, pending: false, retryAllowed: true };
   await client.invalidateQueries({ queryKey: ['payment-purchases'] });
   await waitFor(() => expect(screen.queryByRole('heading', { name: 'Pending purchases' })).not.toBeInTheDocument());
   expect(screen.getByRole('heading', { name: 'Failed payments' })).toBeVisible();
@@ -206,7 +206,7 @@ it.each(['PAID', 'DECLINED'])('animates %s out of pending on Cart, notifies once
   } else expect(screen.queryByRole('link', { name: /^Try Again/ })).not.toBeInTheDocument(); // Paid: never a retry
 });
 it('already declined purchases render only in durable Saved purchases', async () => {
-  vi.mocked(apiClient).mockResolvedValue({ data: [{ ...purchase, state: 'DECLINED', classification: 'DECLINED', pending: false, retryAllowed: true }] });
+  vi.mocked(apiClient).mockResolvedValue({ data: [{ ...purchase, state: 'DECLINED', classification: 'DECLINED', dismissible: true, pending: false, retryAllowed: true }] });
   show('/cart'); await screen.findByRole('heading', { name: 'Failed payments' });
   expect(screen.queryByRole('heading', { name: 'Pending purchases' })).not.toBeInTheDocument();
   expect(screen.getByText('Product A')).toBeVisible();
@@ -218,7 +218,7 @@ it('simultaneous Cart outcomes exit independently with one toast each and durabl
   let rows = [purchase, { ...purchase, attemptId: 'attempt-c' }];
   vi.mocked(apiClient).mockImplementation(async () => ({ data: rows }) as never);
   const { client } = show('/cart'); await screen.findByRole('heading', { name: 'Pending purchases' });
-  rows = [{ ...purchase, state: 'PAID', classification: 'SUCCEEDED', pending: false, unread: true }, { ...purchase, attemptId: 'attempt-c', state: 'DECLINED', classification: 'DECLINED', pending: false, unread: true, retryAllowed: true }];
+  rows = [{ ...purchase, state: 'PAID', classification: 'SUCCEEDED', pending: false, unread: true }, { ...purchase, attemptId: 'attempt-c', state: 'DECLINED', classification: 'DECLINED', dismissible: true, pending: false, unread: true, retryAllowed: true }];
   await client.invalidateQueries({ queryKey: ['payment-purchases'] });
   expect(await screen.findByText('Payment confirmed')).toBeVisible(); expect(screen.getByText('Payment failed')).toBeVisible();
   await waitFor(() => expect(screen.queryByRole('heading', { name: 'Pending purchases' })).not.toBeInTheDocument());
@@ -282,7 +282,7 @@ it('the close icon dismisses one toast immediately and the other auto-dismisses 
 
 it('no toast while Checkout presents the attempt; one toast after leaving before the result, never repeated', async () => {
   function Presenting({ id }: { id: string }) { usePresentedPaymentAttempt(id); return <p>Processing your order…</p>; }
-  vi.mocked(apiClient).mockResolvedValue({ data: [{ ...purchase, state: 'DECLINED', classification: 'DECLINED', pending: false, unread: true }] });
+  vi.mocked(apiClient).mockResolvedValue({ data: [{ ...purchase, state: 'DECLINED', classification: 'DECLINED', dismissible: true, pending: false, unread: true }] });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 5 * 60_000 } } });
   const tree = (presenting: boolean) => <QueryClientProvider client={client}><MemoryRouter initialEntries={['/checkout']}>
     {presenting && <Presenting id="attempt-a" />}<PaymentNotifications /></MemoryRouter></QueryClientProvider>;
@@ -298,9 +298,9 @@ it('no toast while Checkout presents the attempt; one toast after leaving before
 
 it('groups a multi-item failed purchase into ONE card with one Try Again; a non-retryable failure has none', async () => {
   vi.mocked(apiClient).mockResolvedValue({ data: [
-    { ...purchase, state: 'DECLINED', classification: 'DECLINED', pending: false, retryAllowed: true, total: '378.00',
+    { ...purchase, state: 'DECLINED', classification: 'DECLINED', dismissible: true, pending: false, retryAllowed: true, total: '378.00',
       items: [{ name: 'Watch', quantity: 1 }, { name: 'Strap', quantity: 2 }] },
-    { ...purchase, attemptId: 'attempt-x', state: 'CANCELED', classification: 'FAILED', pending: false, retryAllowed: false, items: [{ name: 'Mouse', quantity: 1 }] }] });
+    { ...purchase, attemptId: 'attempt-x', state: 'CANCELED', classification: 'FAILED', dismissible: true, pending: false, retryAllowed: false, items: [{ name: 'Mouse', quantity: 1 }] }] });
   const { container } = show('/cart'); await screen.findByRole('heading', { name: 'Failed payments' });
   expect(container.querySelectorAll('article[data-purchase]')).toHaveLength(2);
   const grouped = container.querySelector('article[data-purchase="attempt-a"]') as HTMLElement;
@@ -413,11 +413,11 @@ it('a confirmation that reached the provider says so, and a bank verification re
 });
 
 // Task 03.6 product decision: after Place Order only Processing, Payment failed (Try Again) and Paid. A never-confirmed purchase is Payment failed.
-const notConfirmed = { ...purchase, state: 'DECLINED', classification: 'FAILED' as const, pending: false, unread: false, retryAllowed: true };
+const notConfirmed = { ...purchase, state: 'DECLINED', classification: 'FAILED' as const, dismissible: true, pending: false, unread: false, retryAllowed: true };
 // Task 03.6: no "Incomplete purchases" section, "Not completed" badge or "Restore items" anywhere; both kinds are Payment failed + Try Again.
 it('shows a provider decline and a never-confirmed purchase only under Failed payments, as Payment failed with Try Again', async () => {
   vi.mocked(apiClient).mockResolvedValue({ data: [
-    { ...purchase, attemptId: 'declined-a', checkoutId: 'declined-a', state: 'DECLINED', classification: 'DECLINED', pending: false, unread: false, retryAllowed: true },
+    { ...purchase, attemptId: 'declined-a', checkoutId: 'declined-a', state: 'DECLINED', classification: 'DECLINED', dismissible: true, pending: false, unread: false, retryAllowed: true },
     { ...notConfirmed, attemptId: 'not-confirmed-b', checkoutId: 'not-confirmed-b' }] });
   show('/cart');
   const failedSection = (await screen.findByRole('heading', { name: 'Failed payments' })).closest('section') as HTMLElement;
@@ -431,7 +431,7 @@ it('shows a provider decline and a never-confirmed purchase only under Failed pa
 it('while payment writes are disabled, the trash icon stays on every failed card but explains instead of removing; no write is sent', async () => {
   vi.mocked(apiClient).mockImplementation(async url => String(url) === '/api/checkout/payment-capability'
     ? { data: { paymentsEnabled: false } } as never
-    : { data: [{ ...purchase, attemptId: 'declined-a', checkoutId: 'declined-a', state: 'DECLINED', classification: 'DECLINED', pending: false, unread: false, retryAllowed: true }] } as never);
+    : { data: [{ ...purchase, attemptId: 'declined-a', checkoutId: 'declined-a', state: 'DECLINED', classification: 'DECLINED', dismissible: true, pending: false, unread: false, retryAllowed: true }] } as never);
   show('/cart');
   const trash = await screen.findByRole('button', { name: /Remove failed payment/ });
   // No Cart-level banner: the restriction is explained only where the customer acts.
@@ -446,7 +446,7 @@ it('while payment writes are disabled, the trash icon stays on every failed card
 it('a refused dismissal on a disabled backend explains the restriction, keeps the purchase and never claims removal', async () => {
   const { ApiError } = await import('@/lib/api');
   vi.mocked(apiClient).mockImplementation(async (url, options) => {
-    if (String(url).endsWith('/dismiss')) throw new ApiError(503, 'Payments are unavailable in this environment.', undefined, 'PAYMENT_MUTATIONS_DISABLED');
+    if (String(url).endsWith('/discard')) throw new ApiError(503, 'Payments are unavailable in this environment.', undefined, 'PAYMENT_MUTATIONS_DISABLED');
     if (String(url) === '/api/checkout/payment-capability') return { data: { paymentsEnabled: true } } as never; // capability not yet refreshed
     void options; return { data: [notConfirmed] } as never;
   });
@@ -460,7 +460,7 @@ it('a refused dismissal on a disabled backend explains the restriction, keeps th
   // The refusal itself claims nothing about charges (the card keeps its own provider-evidence copy).
   expect(within(screen.getByRole('dialog')).queryByText(/Nothing was charged|Please try again\. Your/)).not.toBeInTheDocument();
   expect(document.querySelector('[data-purchase="attempt-a"]')).not.toBeNull();
-  expect(vi.mocked(apiClient).mock.calls.filter(([url]) => String(url).endsWith('/dismiss'))).toHaveLength(1);
+  expect(vi.mocked(apiClient).mock.calls.filter(([url]) => String(url).endsWith('/discard'))).toHaveLength(1);
 });
 it('a dropped purchases read (for example a restarting dev server) is retried before any error is shown', async () => {
   let reads = 0;
@@ -474,9 +474,9 @@ it('a dropped purchases read (for example a restarting dev server) is retried be
 // Task 03.6 final acceptance: EVERY failed-payment card shows the trash icon (Cart, Buy Now, single and multi-item, FAILED and DECLINED).
 it('renders the trash icon and Payment failed on every failed-payment card', async () => {
   vi.mocked(apiClient).mockResolvedValue({ data: [
-    { ...purchase, attemptId: 'f1', checkoutId: 'f1', state: 'DECLINED', classification: 'DECLINED', pending: false, unread: false, retryAllowed: true },
-    { ...purchase, attemptId: 'f2', checkoutId: 'f2', scope: 'BUY_NOW', state: 'DECLINED', classification: 'DECLINED', pending: false, unread: false, retryAllowed: true },
-    { ...purchase, attemptId: 'f3', checkoutId: 'f3', state: 'COMPENSATED', classification: 'FAILED', pending: false, unread: false, retryAllowed: false,
+    { ...purchase, attemptId: 'f1', checkoutId: 'f1', state: 'DECLINED', classification: 'DECLINED', dismissible: true, pending: false, unread: false, retryAllowed: true },
+    { ...purchase, attemptId: 'f2', checkoutId: 'f2', scope: 'BUY_NOW', state: 'DECLINED', classification: 'DECLINED', dismissible: true, pending: false, unread: false, retryAllowed: true },
+    { ...purchase, attemptId: 'f3', checkoutId: 'f3', state: 'COMPENSATED', classification: 'FAILED', dismissible: true, pending: false, unread: false, retryAllowed: false,
       items: [{ name: 'Product A', quantity: 1 }, { name: 'Product B', quantity: 2 }] }] });
   show('/cart');
   const failedSection = (await screen.findByRole('heading', { name: 'Failed payments' })).closest('section') as HTMLElement;
@@ -486,14 +486,73 @@ it('renders the trash icon and Payment failed on every failed-payment card', asy
     expect(within(card).getByRole('button', { name: /^Remove failed payment for / })).toBeVisible();
   }
 });
+// PR #51: the trash action is on EVERY failed card. What it does is the server's decision; a card that is not safe to hide explains instead.
+it('keeps the trash action on a failed card the backend will not remove yet, and explains instead of removing', async () => {
+  vi.mocked(apiClient).mockResolvedValue({ data: [
+    { ...purchase, attemptId: 'ok', checkoutId: 'ok', state: 'COMPENSATED', classification: 'FAILED', pending: false, unread: false, retryAllowed: false, dismissible: true, removal: 'REMOVE' },
+    { ...purchase, attemptId: 'no', checkoutId: 'no', state: 'COMPENSATED', classification: 'FAILED', pending: false, unread: false, retryAllowed: false, dismissible: false, removal: 'CONFIRMING' }] });
+  show('/cart');
+  const failedSection = (await screen.findByRole('heading', { name: 'Failed payments' })).closest('section') as HTMLElement;
+  expect(within(failedSection.querySelector('[data-purchase="ok"]') as HTMLElement).getByRole('button', { name: /^Remove failed payment for / })).toBeVisible();
+  const refused = failedSection.querySelector('[data-purchase="no"]') as HTMLElement;
+  expect(within(refused).getByText('Payment failed')).toBeVisible();
+  expect(refused).toHaveAttribute('data-removal', 'CONFIRMING');
+  await act(async () => { fireEvent.click(within(refused).getByRole('button', { name: /^Remove failed payment for / })); });
+  const dialog = await screen.findByRole('dialog');
+  expect(within(dialog).getByText(/We need to confirm this payment’s status before it can be removed\./)).toBeInTheDocument();
+  expect(within(dialog).queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+  expect(within(dialog).getByRole('button', { name: 'Check payment status' })).toBeEnabled();
+  expect(vi.mocked(apiClient).mock.calls.some(([url]) => String(url).endsWith('/discard'))).toBe(false);
+});
+it('a declined payment still open at the provider offers Cancel & Remove; the card leaves only after the server confirms', async () => {
+  let rows: SavedPurchase[] = [{ ...purchase, state: 'DECLINED', classification: 'DECLINED', dismissible: true, removal: 'CANCEL_AND_REMOVE', pending: false, unread: false, retryAllowed: true }];
+  vi.mocked(apiClient).mockImplementation(async url => {
+    if (String(url).endsWith('/discard')) { rows = []; return { data: { attemptId: 'attempt-a', status: 'REMOVED', dismissedAt: '2026-10-15T10:00:00.000Z' } } as never; }
+    if (String(url) === '/api/checkout/payment-capability') return { data: { paymentsEnabled: true } } as never;
+    return { data: rows } as never;
+  });
+  show('/cart');
+  const card = await waitFor(() => { const found = document.querySelector('[data-purchase="attempt-a"]'); expect(found).not.toBeNull(); return found as HTMLElement; });
+  expect(card).toHaveAttribute('data-removal', 'CANCEL_AND_REMOVE');
+  expect(within(card).getByRole('link', { name: /Try Again/ })).toBeVisible();
+  await act(async () => { fireEvent.click(within(card).getByRole('button', { name: /^Remove failed payment for / })); });
+  expect(await screen.findByRole('heading', { name: 'Cancel and remove this payment?' })).toBeInTheDocument();
+  expect(document.querySelector('[data-purchase="attempt-a"]')).not.toBeNull();
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Cancel & Remove' })); });
+  await waitFor(() => expect(document.querySelector('[data-purchase="attempt-a"]')).toBeNull());
+  expect(vi.mocked(apiClient).mock.calls.filter(([url]) => String(url).endsWith('/discard'))).toHaveLength(1);
+  // No new payment attempt, no Cart write: only the discard request and reads were sent.
+  expect(vi.mocked(apiClient).mock.calls.every(([url, options]) => String(url).endsWith('/discard') || (options as { method?: string } | undefined)?.method !== 'POST'
+    || String(url).endsWith('/recover-overdue'))).toBe(true);
+});
+it('a cancellation that is not yet provider-confirmed stays listed as a failed payment being removed: no Try Again, no "Processing" card', async () => {
+  vi.mocked(apiClient).mockResolvedValue({ data: [{ ...purchase, state: 'CANCEL_PENDING', classification: 'PROCESSING', removal: 'PENDING', dismissible: false, pending: true, unread: false, retryAllowed: false }] });
+  show('/cart');
+  const failedSection = (await screen.findByRole('heading', { name: 'Failed payments' })).closest('section') as HTMLElement;
+  const card = failedSection.querySelector('[data-purchase="attempt-a"]') as HTMLElement;
+  expect(within(card).getByText('Removing')).toBeVisible();
+  expect(within(card).getByText(/will be removed as soon as our payment provider confirms it/)).toBeVisible();
+  expect(card).toHaveAttribute('aria-busy', 'true');
+  expect(within(card).queryByRole('link', { name: /Try Again/ })).not.toBeInTheDocument();
+  expect(within(card).queryByRole('link', { name: 'Check payment status' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Pending purchases' })).not.toBeInTheDocument();
+  expect(within(card).getByRole('button', { name: /^Remove failed payment for / })).toBeVisible();
+});
+it('a paid purchase never carries a removal action', async () => {
+  vi.mocked(apiClient).mockResolvedValue({ data: [{ ...purchase, state: 'PAID', classification: 'SUCCEEDED', orderReference: 'ORD-1', removal: null, dismissible: false, pending: false, unread: false, retryAllowed: false },
+    { ...purchase, attemptId: 'attempt-p', state: 'PROCESSING', classification: 'PROCESSING', removal: null, dismissible: false, pending: true, unread: false, retryAllowed: false }] });
+  show('/cart');
+  expect(await screen.findByRole('heading', { name: 'Pending purchases' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: /Remove failed payment/ })).not.toBeInTheDocument();
+});
 it('the remove dialog uses the agreed copy; Cancel keeps the card and sends nothing', async () => {
-  vi.mocked(apiClient).mockResolvedValue({ data: [{ ...purchase, state: 'DECLINED', classification: 'DECLINED', pending: false, unread: false, retryAllowed: true }] });
+  vi.mocked(apiClient).mockResolvedValue({ data: [{ ...purchase, state: 'DECLINED', classification: 'DECLINED', dismissible: true, pending: false, unread: false, retryAllowed: true }] });
   show('/cart');
   await act(async () => { fireEvent.click(await screen.findByRole('button', { name: /Remove failed payment/ })); });
   expect(await screen.findByText('Remove this failed payment from your list? Your payment history will be preserved.')).toBeInTheDocument();
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Cancel' })); });
   expect(document.querySelector('[data-purchase="attempt-a"]')).not.toBeNull();
-  expect(vi.mocked(apiClient).mock.calls.some(([url]) => String(url).endsWith('/dismiss'))).toBe(false);
+  expect(vi.mocked(apiClient).mock.calls.some(([url]) => String(url).endsWith('/discard'))).toBe(false);
 });
 
 // Task 03.6: Cancel purchase is a rare, server-verified exception on a Processing purchase (cancelable comes only from the backend).
@@ -599,5 +658,44 @@ describe('awaitCancellation', () => {
     clock = 0;
     expect(await awaitCancellation('attempt-a', 'CANCEL_PENDING', () => clock, sleep)).toBe('CANCEL_PENDING');
     expect(clock).toBeGreaterThanOrEqual(CANCEL_CONFIRM_TIMEOUT_MS);
+  });
+});
+
+describe('Sold-out saved purchase (PR #51 last unit)', () => {
+  const soldOut = { ...purchase, state: 'CANCELED', classification: 'FAILED', pending: false, unread: false, retryAllowed: false, dismissible: true,
+    failureCode: 'CART_STOCK_CONFLICT', outcomeReason: 'STOCK_UNAVAILABLE' };
+  it('says "sold out, not charged" only after the provider verified the release, and never offers Try Again', async () => {
+    vi.mocked(apiClient).mockResolvedValue({ data: [{ ...soldOut, authorizationReleased: true }] });
+    show('/cart');
+    const card = await screen.findByRole('article', { name: 'Sold-out purchase for Product A' });
+    expect(card).toHaveAttribute('data-reason', 'sold-out');
+    expect(within(card).getByText('Sold out · Not charged')).toBeVisible();
+    expect(within(card).getByText(/Your card was not charged and the payment was cancelled./)).toBeVisible();
+    expect(within(card).queryByText('Payment failed')).not.toBeInTheDocument();
+    expect(within(card).queryByRole('link', { name: /Try Again/ })).not.toBeInTheDocument();
+  });
+  it('while the cancellation is unverified it never claims "not charged"', async () => {
+    vi.mocked(apiClient).mockResolvedValue({ data: [{ ...soldOut, state: 'CANCEL_PENDING', classification: 'PROCESSING', pending: true, dismissible: false, authorizationReleased: false }] });
+    show('/cart');
+    const card = await screen.findByRole('article', { name: 'Sold-out purchase for Product A' });
+    expect(within(card).getByText('Sold out · Checking payment')).toBeVisible();
+    expect(within(card).getByText(/Please don’t submit another payment while this check is in progress\./)).toBeVisible();
+    expect(card).not.toHaveTextContent(/not charged/i);
+  });
+  it('Save to Cart returns a released sold-out Cart purchase to the Cart through restore and refreshes Cart and purchases', async () => {
+    vi.mocked(apiClient).mockImplementation(async (endpoint: string) => endpoint.endsWith('/restore') ? { data: {} } as never
+      : { data: [{ ...soldOut, scope: 'CART_CHECKOUT', authorizationReleased: true }] } as never);
+    const { client } = show('/cart');
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const card = await screen.findByRole('article', { name: 'Sold-out purchase for Product A' });
+    await act(async () => { fireEvent.click(within(card).getByRole('button', { name: 'Save to Cart: Product A' })); });
+    expect(apiClient).toHaveBeenCalledWith('/api/checkout/payment-attempts/attempt-a/restore', expect.objectContaining({ method: 'POST' }));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['payment-purchases', 'customer-a'] });
+  });
+  it('never offers Save to Cart for a sold-out Buy Now purchase', async () => {
+    vi.mocked(apiClient).mockResolvedValue({ data: [{ ...soldOut, scope: 'BUY_NOW', authorizationReleased: true }] });
+    show('/cart');
+    const card = await screen.findByRole('article', { name: 'Sold-out purchase for Product A' });
+    expect(within(card).queryByRole('button', { name: /Save to Cart/ })).not.toBeInTheDocument();
   });
 });

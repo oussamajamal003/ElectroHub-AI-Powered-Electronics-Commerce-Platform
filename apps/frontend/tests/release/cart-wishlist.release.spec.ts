@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { cartLink, customerApi, distinctClientAddress, expectNoHorizontalOverflow, fixtures, money, product, resetCustomerState, shopper,
-  signInCustomer } from './support';
+import { cartLink, customerApi, distinctClientAddress, expectNoHorizontalOverflow, fixtures, money, pressInView, product, rememberRejectedCookieChoice,
+  resetCustomerState, shopper, signInCustomer } from './support';
 
 /**
  * Cart and wishlist journeys on the real stack. Each project uses its own shopper, whose cart and wishlist are emptied before every test.
@@ -19,6 +19,7 @@ test.describe('cart', () => {
   });
 
   test('@responsive add, change quantity, remove and empty the cart with server-consistent totals that persist across reloads', async ({ page }, testInfo) => {
+    await rememberRejectedCookieChoice(page);
     await signInCustomer(page, shopper(testInfo, 'cart').email);
     await page.goto(`/products/${headphones().slug}`);
     await page.getByRole('button', { name: 'Add to Cart' }).click();
@@ -29,7 +30,7 @@ test.describe('cart', () => {
 
     await page.goto('/cart');
     await expect(page.getByRole('heading', { name: 'Shopping Cart', level: 1 })).toBeVisible();
-    await page.getByRole('button', { name: `Increase quantity for ${dock().name}` }).click();
+    await pressInView(page.getByRole('button', { name: `Increase quantity for ${dock().name}` }));
     await expect(cartLink(page, 3)).toBeVisible();
     const summary = page.getByRole('complementary', { name: 'Order Summary' });
     const expectedSubtotal = headphones().price + dock().price * 2;
@@ -45,11 +46,11 @@ test.describe('cart', () => {
     await expect(summary).toContainText(money(expectedSubtotal));
     await expectNoHorizontalOverflow(page, 'cart');
 
-    await page.getByRole('button', { name: `Decrease quantity for ${dock().name}` }).click();
+    await pressInView(page.getByRole('button', { name: `Decrease quantity for ${dock().name}` }));
     await expect(cartLink(page, 2)).toBeVisible();
-    await page.getByRole('button', { name: `Remove ${dock().name} from cart` }).click();
+    await pressInView(page.getByRole('button', { name: `Remove ${dock().name} from cart` }));
     await expect(cartLink(page, 1)).toBeVisible();
-    await page.getByRole('button', { name: `Remove ${headphones().name} from cart` }).click();
+    await pressInView(page.getByRole('button', { name: `Remove ${headphones().name} from cart` }));
     await expect(page.getByRole('heading', { name: 'Your cart is empty' })).toBeVisible();
     await expect.poll(async () => ((await (await api.get('/api/cart')).json()) as { data: { items: unknown[] } }).data.items.length).toBe(0);
     await api.dispose();

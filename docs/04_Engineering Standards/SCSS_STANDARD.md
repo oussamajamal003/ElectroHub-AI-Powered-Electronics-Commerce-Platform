@@ -208,6 +208,10 @@ Example:
 
 This is especially appropriate for light/dark theme switching.
 
+ElectroHub implements this with `--eh-*` custom properties in `src/styles/themes/_index.scss`, exposed through the existing
+`$color-*` / `$shadow-*` Sass variables. Use `theme-alpha()` instead of `rgba()` on colour tokens, `$color-primary-text` for
+brand-coloured text, and `@include dark-theme { … }` only for component-specific literals. See `docs/02_Design/DARK_MODE.md`.
+
 ---
 
 ## 10. Responsive Design

@@ -30,8 +30,8 @@
 
 .scrolled {
   border-bottom-color: transparent;
-  background-color: rgb(255 255 255 / 0.92);
-  box-shadow: 0 1px 0 rgb(15 23 42 / 0.06), 0 8px 24px -12px rgb(15 23 42 / 0.18);
+  background-color: $color-header-glass;
+  box-shadow: $shadow-header;
 
   @supports (backdrop-filter: blur(8px)) {
     backdrop-filter: saturate(180%) blur(12px);
@@ -49,7 +49,7 @@
 .utilityRow {
   width: 100%;
   height: 32px;
-  background-color: #f8fafc;
+  background-color: $color-surface;
   border-bottom: 1px solid $color-border;
   display: flex;
   align-items: center;
@@ -194,7 +194,7 @@
 
   &:hover {
     color: $color-text-primary;
-    background-color: #f1f5f9;
+    background-color: $color-surface-hover;
   }
 
   @include focus-ring;
@@ -205,7 +205,7 @@
 }
 
 .navLinkActive {
-  color: $color-primary;
+  color: $color-primary-text;
   font-weight: $font-weight-semibold;
 
   &::after {
@@ -213,7 +213,7 @@
   }
 
   &:hover {
-    color: $color-primary;
+    color: $color-primary-text;
     background-color: rgb(37 99 235 / 0.06);
   }
 }
@@ -248,7 +248,7 @@
   -webkit-tap-highlight-color: transparent;
 
   &:hover {
-    color: $color-primary;
+    color: $color-primary-text;
     background-color: rgb(37 99 235 / 0.06);
     border-color: rgb(37 99 235 / 0.16);
   }
@@ -340,7 +340,7 @@
   padding: 0 4px;
   border-radius: 0;
   background-color: $color-primary;
-  color: #ffffff;
+  color: $color-primary-foreground;
   font-family: $font-family-base;
   font-size: 10px;
   font-weight: $font-weight-bold;
@@ -367,7 +367,7 @@
 
 .heartActive {
   fill: $color-primary;
-  color: $color-primary;
+  color: $color-primary-text;
   transition: fill 180ms ease, color 180ms ease;
 
   @media (prefers-reduced-motion: reduce) {
@@ -525,7 +525,7 @@
   font-weight: $font-weight-medium;
   color: $color-text-primary;
   text-decoration: none;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid $color-surface-hover;
   border-left: 3px solid transparent;
   display: flex;
   align-items: center;
@@ -533,8 +533,8 @@
   -webkit-tap-highlight-color: transparent;
 
   &:hover {
-    background-color: #f8fafc;
-    color: $color-primary;
+    background-color: $color-surface;
+    color: $color-primary-text;
   }
 
   &:last-child {
@@ -545,7 +545,7 @@
 }
 
 .mobileMenuItemActive {
-  color: $color-primary;
+  color: $color-primary-text;
   font-weight: $font-weight-semibold;
   background-color: rgb(37 99 235 / 0.04);
   border-left-color: $color-primary;
@@ -628,8 +628,8 @@
     transition: background-color 150ms ease;
     -webkit-tap-highlight-color: transparent;
 
-    &:hover { background-color: #f1f5f9; }
-    &:active { background-color: #e2e8f0; }
+    &:hover { background-color: $color-surface-hover; }
+    &:active { background-color: $color-border; }
     @include focus-ring;
   }
 
@@ -656,26 +656,43 @@
 }
 
 // ─────────────────────────────────────────────────────────────
-// SMALL MOBILE (≤ 375px)
+// SMALL MOBILE (≤ 420px): keep the full shopper header inside narrow phone viewports such as 390px.
 // ─────────────────────────────────────────────────────────────
 
-@media (max-width: 375px) {
+@media (max-width: 420px) {
   .logoText {
     font-size: 18px;
   }
 
+  // 32px (≥ the WCAG 2.5.8 24px minimum) leaves room for the theme toggle beside search, cart, wishlist and the avatar at 320px.
   .iconButton {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
   }
 
   .mobileMenuToggle {
     width: 34px;
     height: 34px;
-    margin-right: 2px;
+    margin-right: 0;
+  }
+
+  .avatarButton {
+    margin-left: 2px;
   }
 
   .container {
-    padding: 0 12px;
+    padding: 0 10px;
   }
+}
+
+// ≤ 360px (320px phones, or ~400%+ browser zoom): the signed-in header carries bell, search, theme, cart, wishlist and avatar.
+// Slightly smaller avatar and logo keep every control reachable without horizontal page scroll (Task 06.2).
+@media (max-width: 360px) {
+  .brandLogo > span:last-child { font-size: 17px; }
+  .mobileMenuToggle { width: 32px; height: 32px; }
+  // 30px stays above the WCAG 2.5.8 24px minimum target size.
+  .iconButton { width: 30px; height: 30px; }
+  .avatarButton { padding: 1px; margin-left: 0; }
+  .avatarButton > span { width: 30px; height: 30px; font-size: 12px; }
+  .container { padding: 0 8px; }
 }

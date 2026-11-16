@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const safety = require('./stripe-gate-safety.cjs');
 const { argumentsFor, migrationNames, migrationChecksumCandidates, verifyMigrationLedger, assertNoPaymentBacklog,
-  assertNoEmailBacklog, assertReviewedRecovery, assertExpiredLeaseRecovery, assertTask04FixtureAttempt, normalizeWorkerAttemptIds, preflight, supervise, main } = require('./dev-payment-runtime.cjs');
+  assertNoEmailBacklog, assertReviewedRecovery, assertExpiredLeaseRecovery, assertTask04FixtureAttempt, classifyNotificationOrder, normalizeWorkerAttemptIds, preflight, supervise, main } = require('./dev-payment-runtime.cjs');
 
 const REVIEWED_ID = '11111111-1111-4111-8111-111111111111';
 const TASK04_ID = '22222222-2222-4222-8222-222222222222';
@@ -57,7 +57,10 @@ function fakePrisma(overrides = {}) {
     paymentAttempt: { count: async ({ where }) => where.state === 'INCIDENT' ? overrides.historicalIncidents ?? 0 : overrides.unresolvedAttempts ?? 0,
       findUnique: async () => overrides.reviewedAttempt, findMany: async () => overrides.fixtureAttempts ?? [] },
     user: { findFirst: async () => overrides.fixtureOwner === undefined ? { id: TASK04_USER_ID } : overrides.fixtureOwner },
-    commerceEmailOutbox: { count: async () => overrides.emailBacklog ?? 0 },
+    order: { findUnique: async () => overrides.notificationOrder ?? null },
+    customerNotification: { findFirst: async () => overrides.notificationPushEvent ?? null },
+    commerceEmailOutbox: { count: async () => overrides.emailBacklog ?? 0,
+      findMany: async () => overrides.notificationEmailEvents ?? [] },
     stripeEvent: { count: async () => overrides.signedEvents ?? 0 },
   };
   return {
@@ -86,6 +89,7 @@ function fakeRuntime(onReady = () => {}) {
   const protocol = { runnerReady: false };
   let nextPid = 800;
   const deps = {
+    openControl: async () => ({ close: async () => {} }),
     acquireLock: () => lock,
     writeDiagnosticToken: token => { assert.match(token, /^[a-f0-9]{64}$/); },
     spawn: () => { const child = makeChild(nextPid++); children.push(child); return child; },
@@ -247,6 +251,44 @@ test('preflight-only mode never starts a runtime', async () => {
   } finally { console.log = priorLog; }
   assert.equal(starts, 0);
   assert.equal(output.some(value => value.includes(REVIEWED_ID) || value.includes(TASK04_ID)), false, 'preflight output never exposes private attempt IDs');
+});
+
+test('a parent stop received during preflight never creates a payment runtime', async () => {
+  let starts = 0; const log = console.log; console.log = () => {};
+  try {
+    assert.equal(await main(['--start', '--allow-dev-checkout', '--recovery-mode=checkout'], {
+      preflight: async () => { process.emit('message', { type: 'dev-stack.stop' }); return { port: 5000 }; },
+      supervise: async () => { starts++; },
+    }), 0);
+    assert.equal(starts, 0);
+  } finally { console.log = log; }
+});
+test('an explicitly reviewed READY decline is accepted only in exact-attempt mode and never widens incident scope', () => {
+  const decline = { id: REVIEWED_ID, state: 'DECLINED', failureCode: 'PAYMENT_DECLINED', providerStatus: 'requires_payment_method',
+    submittedAt: new Date(), cancelRequested: false, orderId: null, providerIntentId: 'pi_fixture', work: { state: 'READY' } };
+  assert.doesNotThrow(() => assertReviewedRecovery(decline, REVIEWED_ID, 'exact-attempt'));
+  assert.throws(() => assertReviewedRecovery(decline, REVIEWED_ID), /changed/);
+  for (const patch of [{ orderId: 'some-order' }, { cancelRequested: true }, { failureCode: null }, { submittedAt: null },
+    { providerStatus: 'requires_capture' }, { work: { state: 'LEASED' } }]) {
+    assert.throws(() => assertReviewedRecovery({ ...decline, ...patch }, REVIEWED_ID, 'exact-attempt'), /changed/);
+  }
+});
+test('decline-only preflight requires fresh provider decline truth and sends its restriction only to the exact worker', async () => {
+  const reviewedAttempt = { id: REVIEWED_ID, state: 'DECLINED', failureCode: 'PAYMENT_DECLINED', providerStatus: 'requires_payment_method',
+    submittedAt: new Date(), cancelRequested: false, orderId: null, providerIntentId: 'pi_fixture', work: { state: 'READY' } };
+  const options = argumentsFor(['--start', '--allow-dev-recovery', '--recovery-mode=exact-attempt', `--reviewed-recovery-attempt=${REVIEWED_ID}`]);
+  const dependencies = declined => preflightDependencies({ unfinishedWork: 1, reviewedAttempt, deps: {
+    retrieveIntent: async () => ({ livemode: false, status: 'requires_payment_method', received: 0, capturable: 0, declined }), verifyBinding: () => {},
+  } });
+  await assert.rejects(preflight(dependencies(false), options), /provider state changed/);
+  const config = await preflight(dependencies(true), options); assert.equal(config.declineOnly, true);
+  assert.deepEqual(config.workerAttemptIds, [REVIEWED_ID]);
+  const state = fakeRuntime(record => { if (record.readiness === 'PASS') process.emit('SIGINT'); });
+  await supervise(config, options, state.deps);
+  const worker = state.children.find(child => child.spawnArgs?.includes('--payment-worker'));
+  const api = state.children.find(child => child.spawnArgs?.length === 0);
+  assert.equal(worker.messages.find(message => message.type === 'payment-supervisor.prepare').declineOnly, true);
+  assert.equal(Object.hasOwn(api.messages.find(message => message.type === 'payment-supervisor.prepare'), 'declineOnly'), false);
 });
 
 test('supervisor refuses a missing allowlist before acquiring a lock or starting children', async () => {
@@ -643,4 +685,73 @@ test('expired-lease mode: one owner-named DECLINED attempt, frozen facts, Stripe
   assert.equal(api.messages.find(message => message.type === 'payment-supervisor.prepare').attemptIds, undefined);
   assert.equal(worker.spawnOptions.env.COMMERCE_EMAIL_SEND_MODE, 'disabled');
   assert.equal(state.logs.find(log => log.readiness === 'PASS').recoveryMode, 'expired-lease');
+});
+
+test('live email and push are separate explicit opt-ins; push always rides an email worker', () => {
+  const base = ['--start', '--allow-dev-checkout', '--recovery-mode=checkout'];
+  assert.deepEqual(argumentsFor([...base, '--allow-email-live', '--allow-push']),
+    { start: true, mode: 'checkout', allowEmailAllowlist: false, allowEmailLive: true, allowPush: true });
+  assert.deepEqual(argumentsFor([...base, '--allow-email-allowlist', '--allow-push']),
+    { start: true, mode: 'checkout', allowEmailAllowlist: true, allowPush: true });
+  assert.throws(() => argumentsFor([...base, '--allow-email-live', '--allow-email-allowlist']), /not both/);
+  assert.throws(() => argumentsFor([...base, '--allow-email-live', '--no-email']), /not both/);
+  assert.throws(() => argumentsFor([...base, '--allow-push']), /needs the email worker/);
+  assert.deepEqual(argumentsFor(base), { start: true, mode: 'checkout', allowEmailAllowlist: false }); // nothing implied
+});
+
+test('exact notification dispatch scope is development checkout only with live email and push', () => {
+  const base = ['--start', '--allow-dev-checkout', '--recovery-mode=checkout', '--allow-email-live', '--allow-push'];
+  const orderId = '4510e012-e03d-4939-bb3d-52746df0db4a';
+  assert.deepEqual(argumentsFor([...base, `--notification-order=${orderId}`]),
+    { start: true, mode: 'checkout', allowEmailAllowlist: false, allowEmailLive: true, allowPush: true, notificationOrderId: orderId });
+  assert.throws(() => argumentsFor([...base, '--notification-order=not-a-uuid']));
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-checkout', '--recovery-mode=checkout', '--allow-email-live', `--notification-order=${orderId}`]), /only valid/);
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-checkout', '--recovery-mode=checkout', '--allow-email-allowlist', '--allow-push', `--notification-order=${orderId}`]), /only valid/);
+  assert.throws(() => argumentsFor(['--start', '--allow-dev-recovery', '--notification-order=' + orderId]));
+});
+
+test('exact-order notification recovery accepts only its untouched fresh owner event', () => {
+  const now = Date.now();
+  const order = { status: 'OUT_FOR_DELIVERY', userId: 'customer-b', payment: { status: 'SUCCEEDED' }, user: { email: 'customer-b@example.test',
+    isActive: true, emailVerifiedAt: new Date(now - 1_000), role: { name: 'CUSTOMER' } } };
+  const pushEvent = { userId: 'customer-b', occurredAt: new Date(now - 1_000), pushDeliveries: [] };
+  const emailEvent = { type: 'ORDER_OUT_FOR_DELIVERY', userId: 'customer-b', recipient: 'customer-b@example.test', dispatchState: 'READY',
+    attemptCount: 0, suppressionReason: null, createdAt: new Date(now - 1_000) };
+  assert.equal(classifyNotificationOrder(order, pushEvent, [emailEvent], now), 'resume');
+  assert.throws(() => classifyNotificationOrder(order, pushEvent, [{ ...emailEvent, userId: 'customer-a' }], now), /untouched, fresh/);
+  assert.throws(() => classifyNotificationOrder(order, pushEvent, [{ ...emailEvent, recipient: 'customer-a@example.test' }], now), /untouched, fresh/);
+  assert.throws(() => classifyNotificationOrder(order, pushEvent, [{ ...emailEvent, attemptCount: 1 }], now), /untouched, fresh/);
+  assert.throws(() => classifyNotificationOrder(order, pushEvent, [{ ...emailEvent, dispatchState: 'ACCEPTED' }], now), /untouched, fresh/);
+  assert.throws(() => classifyNotificationOrder(order, pushEvent, [emailEvent], now - 24 * 3_600_000 - 1), /untouched, fresh/);
+  assert.throws(() => classifyNotificationOrder(order, { ...pushEvent, userId: 'customer-a' }, [emailEvent], now), /untouched, fresh/);
+  assert.equal(classifyNotificationOrder(order, { ...pushEvent, pushDeliveries: [{ state: 'ACCEPTED', attempts: 1 }] }, [emailEvent], now), 'resume');
+  assert.equal(classifyNotificationOrder({ ...order, status: 'PREPARING' }, null, [], now), 'new');
+  assert.throws(() => classifyNotificationOrder({ ...order, status: 'PREPARING' }, pushEvent, [], now), /already has notification events/);
+  assert.throws(() => classifyNotificationOrder({ ...order, status: 'OUT_FOR_DELIVERY', user: { ...order.user, emailVerifiedAt: null } }, pushEvent, [emailEvent], now), /email-verified/);
+});
+
+test('checkout preflight permits exactly one pending email only when resuming the same fresh verified order event', async () => {
+  const previous = { nodeEnv: process.env.NODE_ENV, tls: process.env.NODE_TLS_REJECT_UNAUTHORIZED, source: process.env.DB_RUNTIME_URL_SOURCE };
+  process.env.NODE_ENV = ''; delete process.env.NODE_TLS_REJECT_UNAUTHORIZED; process.env.DB_RUNTIME_URL_SOURCE = 'direct';
+  const orderId = '44444444-4444-4444-8444-444444444444'; const now = new Date();
+  const notificationOrder = { id: orderId, userId: 'customer-b', status: 'OUT_FOR_DELIVERY', payment: { status: 'SUCCEEDED' },
+    user: { email: 'customer-b@example.test', isActive: true, emailVerifiedAt: now, role: { name: 'CUSTOMER' } } };
+  const notificationPushEvent = { id: 'event-b', userId: 'customer-b', occurredAt: now, pushDeliveries: [] };
+  const notificationEmailEvents = [{ type: 'ORDER_OUT_FOR_DELIVERY', userId: 'customer-b', recipient: 'customer-b@example.test',
+    dispatchState: 'READY', attemptCount: 0, suppressionReason: null, createdAt: now }];
+  try {
+    const config = await preflight(preflightDependencies({ notificationOrder, notificationPushEvent, notificationEmailEvents, emailBacklog: 1,
+      deps: { describeEmail: () => ({ producerEnabled: true, brevoKeyPresent: true, originConfigured: true }) } }),
+    { start: true, mode: 'checkout', allowEmailLive: true, allowPush: true, notificationOrderId: orderId });
+    assert.equal(config.notificationOrderReady, true);
+    assert.equal(config.notificationOrderMode, 'resume');
+    assert.equal(config.emailBacklog, 1);
+    await assert.rejects(preflight(preflightDependencies({ notificationOrder, notificationPushEvent, notificationEmailEvents, emailBacklog: 2,
+      deps: { describeEmail: () => ({ producerEnabled: true, brevoKeyPresent: true, originConfigured: true }) } }),
+    { start: true, mode: 'checkout', allowEmailLive: true, allowPush: true, notificationOrderId: orderId }), /exactly one fresh pending/);
+  } finally {
+    for (const [name, value] of [['NODE_ENV', previous.nodeEnv], ['NODE_TLS_REJECT_UNAUTHORIZED', previous.tls], ['DB_RUNTIME_URL_SOURCE', previous.source]]) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+  }
 });

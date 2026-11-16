@@ -74,4 +74,79 @@ describe('CustomerScrollRestoration', () => {
     await router.navigate('/scroll-test-smooth?page=2', { state: { smoothTop: true } });
     await waitFor(() => expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 0, behavior: 'smooth' })));
   });
+
+  async function leaveAndReturn(path: string, leftAt: number, shortHeight: number, setHeight: (h: number) => void) {
+    const router = createMemoryRouter([
+      { path, element: <ScrollControls /> },
+      { path: '/account', element: <ScrollControls /> },
+    ], { initialEntries: [path] });
+    render(<RouterProvider router={router} />);
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: leftAt });
+    fireEvent.scroll(window);
+    fireEvent.click(screen.getByRole('link', { name: 'Open account' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/account'));
+    setHeight(shortHeight);
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe(path));
+    return router;
+  }
+
+  it('waits for the returning page to grow tall enough instead of parking at a clamped bottom', async () => {
+    let scrollY = 0;
+    let height = 4000;
+    const positions: number[] = [];
+    vi.stubGlobal('scrollTo', (first: number | ScrollToOptions, second?: number) => {
+      const requested = typeof first === 'object' ? first.top ?? 0 : second ?? 0;
+      scrollY = Math.max(0, Math.min(requested, height - window.innerHeight));
+      positions.push(scrollY);
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: scrollY });
+    });
+    Object.defineProperty(document.documentElement, 'scrollHeight', { configurable: true, get: () => height });
+    window.requestAnimationFrame = callback => window.setTimeout(() => callback(performance.now()), 5);
+    window.cancelAnimationFrame = handle => window.clearTimeout(handle);
+    try {
+      await leaveAndReturn('/scroll-test-grow', 2400, 1200, h => { height = h; });
+      await new Promise(resolve => setTimeout(resolve, 60));
+      expect(scrollY).toBe(0);
+      height = 4000;
+      await waitFor(() => expect(scrollY).toBe(2400));
+      expect(positions).not.toContain(1200 - window.innerHeight);
+    } finally {
+      Reflect.deleteProperty(document.documentElement, 'scrollHeight');
+    }
+  });
+
+  it('visitor input cancels a pending restore', async () => {
+    let scrollY = 0;
+    let height = 4000;
+    vi.stubGlobal('scrollTo', (first: number | ScrollToOptions, second?: number) => {
+      scrollY = typeof first === 'object' ? first.top ?? 0 : second ?? 0;
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: scrollY });
+    });
+    Object.defineProperty(document.documentElement, 'scrollHeight', { configurable: true, get: () => height });
+    window.requestAnimationFrame = callback => window.setTimeout(() => callback(performance.now()), 5);
+    window.cancelAnimationFrame = handle => window.clearTimeout(handle);
+    try {
+      await leaveAndReturn('/scroll-test-input', 3000, 900, h => { height = h; });
+      fireEvent.wheel(window);
+      height = 4000;
+      await new Promise(resolve => setTimeout(resolve, 60));
+      expect(scrollY).toBe(0);
+    } finally {
+      Reflect.deleteProperty(document.documentElement, 'scrollHeight');
+    }
+  });
+
+  it('mirrors positions to sessionStorage so Back can restore after a document load', async () => {
+    vi.stubGlobal('scrollTo', (first: number | ScrollToOptions, second?: number) => {
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: typeof first === 'object' ? first.top ?? 0 : second ?? 0 });
+    });
+    window.requestAnimationFrame = callback => window.setTimeout(() => callback(performance.now()), 0);
+    window.cancelAnimationFrame = handle => window.clearTimeout(handle);
+    const router = createMemoryRouter([{ path: '/scroll-test-storage', element: <ScrollControls /> }], { initialEntries: ['/scroll-test-storage'] });
+    render(<RouterProvider router={router} />);
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 777 });
+    fireEvent.scroll(window);
+    await waitFor(() => expect(JSON.parse(sessionStorage.getItem('electrohub:scroll-positions') ?? '{}')).toMatchObject({ 'default:/scroll-test-storage': 777 }));
+  });
 });

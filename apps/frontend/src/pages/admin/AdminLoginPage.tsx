@@ -1,5 +1,7 @@
+import { useDocumentTitle } from '@/lib/pageTitle';
+import { emailValidationError } from '@/lib/emailValidation';
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate, Navigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Fingerprint, KeyRound, Smartphone } from 'lucide-react';
 import { browserSupportsWebAuthn, startAuthentication } from '@simplewebauthn/browser';
 import { BrandLogo } from '@/components/ui/BrandLogo';
@@ -19,7 +21,6 @@ import { PasskeySupportNotice } from '@/features/admin/security/components/Passk
 import { SIGN_IN_NOTICE_KEY } from '@/features/admin/security/components/AdminAccountSections';
 import styles from './AdminLoginPage.module.scss';
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Server pre-auth transactions live five minutes; the countdown mirrors it, the server remains authoritative. */
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const EXPIRED_MESSAGE = 'Your sign-in attempt expired. Start again.';
@@ -39,6 +40,7 @@ const formatRemaining = (ms: number) => {
 };
 
 export function AdminLoginPage() {
+  useDocumentTitle('Admin Login');
   const { login, logout, completeAdminSession, isAuthenticated, user, isInitializing } = useAdminAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -101,11 +103,6 @@ export function AdminLoginPage() {
     // restart only sets state; it is re-created each render with the same meaning.
   }, [expired]);
 
-  // If already authenticated as admin, redirect to dashboard
-  if (!isInitializing && isAuthenticated && user?.role === 'ADMIN') {
-    return <Navigate to={destination} replace />;
-  }
-
   /** Returns to step 1 with a truthful explanation. The pre-auth transaction is discarded: nothing stays in memory but the email field. */
   const restart = (message: string) => {
     setChallenge(null);
@@ -117,11 +114,7 @@ export function AdminLoginPage() {
     setError(message);
   };
 
-  const validateEmailField = (val: string) => {
-    if (!val.trim()) return 'Email address is required.';
-    if (!EMAIL_REGEX.test(val.trim())) return 'Please enter a valid email address.';
-    return '';
-  };
+  const validateEmailField = emailValidationError;
 
   const validatePasswordField = (val: string) => {
     if (!val) return 'Password is required.';
@@ -288,6 +281,15 @@ export function AdminLoginPage() {
           <h1 className={styles.title}>Sign In to Admin</h1>
           <p className={styles.description}>Admin Portal</p>
         </div>
+
+        {!isInitializing && isAuthenticated && user?.role === 'ADMIN' && (
+          <Alert variant="info" className={styles.alert} role="status">
+            You are currently signed in as {user.email}. To use another administrator account, sign out first or enter its credentials below.
+            <Button type="button" variant="outline" onClick={() => void logout()}>
+              Sign out of this account
+            </Button>
+          </Alert>
+        )}
 
         {error && (
           <Alert variant="error" className={styles.alert}>

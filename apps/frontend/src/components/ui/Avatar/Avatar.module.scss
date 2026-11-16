@@ -1,6 +1,7 @@
 @use '../../../styles/abstracts/variables' as *;
 
 .root {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -10,8 +11,11 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background-color: $color-background;
+  // Neutral default avatar: a soft wash with a subtle border, never a brand-colour block (Task 06.2).
+  background-color: $color-surface-hover;
   border: 1px solid $color-border;
+  color: $color-text-primary;
+  font-size: 14px;
   flex-shrink: 0;
 }
 
@@ -23,24 +27,27 @@
 }
 
 .fallback {
-  width: 100%;
-  height: 100%;
+  // Fill the root exactly so consumer display/grid overrides on the root cannot split or stripe the fallback.
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: $color-background;
+  border-radius: inherit;
+  background-color: $color-surface-hover;
   color: $color-text-primary;
 }
 
 .initials {
   font-family: $font-family-base;
   font-weight: $font-weight-medium;
-  font-size: 14px;
-  line-height: 20px;
+  font-size: inherit; // 14px from .root by default; avatar size classes scale it.
+  line-height: 1;
+  letter-spacing: 0.02em;
 }
 
 .icon {
-  width: 30px;
-  height: 30px;
+  width: 60%;
+  height: 60%;
   color: $color-text-secondary;
 }

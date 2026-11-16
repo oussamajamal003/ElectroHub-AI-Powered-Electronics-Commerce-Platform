@@ -8,7 +8,7 @@
 import { z } from 'zod';
 import { storeIdentitySchema } from './store-identity.js';
 
-export const COMMERCE_EMAIL_TYPES = ['ORDER_CONFIRMED', 'PAYMENT_CONFIRMED', 'ORDER_PREPARING', 'ORDER_OUT_FOR_DELIVERY',
+export const COMMERCE_EMAIL_TYPES = ['CUSTOMER_WELCOME', 'ORDER_CONFIRMED', 'PAYMENT_CONFIRMED', 'ORDER_PREPARING', 'ORDER_OUT_FOR_DELIVERY',
   'ORDER_DELIVERED', 'ORDER_CANCELLED', 'PAYMENT_REFUNDED'] as const;
 export type CommerceEmailType = typeof COMMERCE_EMAIL_TYPES[number];
 export const PAYMENT_EMAIL_TYPES: readonly CommerceEmailType[] = ['PAYMENT_CONFIRMED', 'PAYMENT_REFUNDED'];
@@ -20,6 +20,7 @@ export const SNAPSHOT_VERSION = 1;
 export const TEMPLATE_VERSION = 'v1';
 
 export const eventKeys = {
+  customerWelcome: (userId: string) => `customer:${userId}:welcome`,
   orderConfirmed: (orderId: string) => `order:${orderId}:confirmed`,
   paymentSucceeded: (paymentId: string) => `payment:${paymentId}:succeeded`,
   orderTransition: (orderId: string, transitionId: string) => `order:${orderId}:transition:${transitionId}`,
@@ -70,14 +71,21 @@ export const paymentRefundedSnapshot = z.object({ ...base, type: z.literal('PAYM
   refundId: z.string().regex(/^[A-Za-z0-9_]{1,255}$/), amount: money, currency, refundedAt: instant,
 }).strict();
 
-export const commerceEmailSnapshot = z.discriminatedUnion('type', [orderConfirmedSnapshot, paymentConfirmedSnapshot,
+export const customerWelcomeSnapshot = z.object({ v: z.literal(SNAPSHOT_VERSION), type: z.literal('CUSTOMER_WELCOME'),
+  occurredAt: instant, recipientName: text(100).nullable(), seller: storeIdentitySchema.optional() }).strict();
+
+export const commerceEmailSnapshot = z.discriminatedUnion('type', [customerWelcomeSnapshot, orderConfirmedSnapshot, paymentConfirmedSnapshot,
   orderPreparingSnapshot, orderOutForDeliverySnapshot, orderDeliveredSnapshot, orderCancelledSnapshot, paymentRefundedSnapshot]);
 export type CommerceEmailSnapshot = z.infer<typeof commerceEmailSnapshot>;
 export type SnapshotOf<T extends CommerceEmailType> = Extract<CommerceEmailSnapshot, { type: T }>;
 
 /** A SUPPRESSED event keeps identity and audit context only; it is never sendable. */
-export const suppressedSnapshot = z.object({ v: z.literal(SNAPSHOT_VERSION), type: z.enum(COMMERCE_EMAIL_TYPES),
-  orderReference: reference, occurredAt: instant, suppressed: z.literal(true) }).strict();
+export const suppressedSnapshot = z.union([
+  z.object({ v: z.literal(SNAPSHOT_VERSION), type: z.enum(COMMERCE_EMAIL_TYPES).exclude(['CUSTOMER_WELCOME']),
+    orderReference: reference, occurredAt: instant, suppressed: z.literal(true) }).strict(),
+  z.object({ v: z.literal(SNAPSHOT_VERSION), type: z.literal('CUSTOMER_WELCOME'),
+    occurredAt: instant, suppressed: z.literal(true) }).strict(),
+]);
 export type SuppressedSnapshot = z.infer<typeof suppressedSnapshot>;
 
 // ─── Recipient ──────────────────────────────────────────────────────────────────────────────────────────────────────

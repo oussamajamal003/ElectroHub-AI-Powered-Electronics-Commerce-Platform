@@ -54,8 +54,8 @@ fs.mkdirSync(home, { recursive: true });
 const outbox = path.join(home, 'outbox');
 fs.rmSync(outbox, { recursive: true, force: true });
 fs.mkdirSync(outbox, { recursive: true });
-const logs = path.join(home, 'logs');
-fs.mkdirSync(logs, { recursive: true });
+// Concurrent ports and a previous Windows child draining after shutdown must never contend for one logging lease.
+const logs = fs.mkdtempSync(path.join(home, 'logs-'));
 
 // Hermetic base: only what the OS/toolchain needs, never inherited application secrets.
 const passthrough = ['PATH', 'Path', 'PATHEXT', 'SystemRoot', 'SYSTEMROOT', 'TEMP', 'TMP', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'ComSpec',

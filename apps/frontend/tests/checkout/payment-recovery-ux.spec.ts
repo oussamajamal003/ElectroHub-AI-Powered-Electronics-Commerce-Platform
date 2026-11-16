@@ -2,12 +2,35 @@ import { expect, test } from '@playwright/test';
 import { harness, review, fillCard } from './stripe.harness';
 import { cart } from '../../src/features/checkout/fixtures';
 
-const viewports = [390, 768, 1440, 1920];
+const viewports = [320, 390, 768, 1024, 1440, 1920];
 
 test.describe('Payment Recovery Loading & Terminal Failure UX', () => {
+  // Evidence screenshots show the payment UI, not the first-visit banner: optional analytics declined (the privacy-preserving choice).
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => window.localStorage.setItem('electrohub.privacy.v1', JSON.stringify({ version: 1, analytics: false, savedAt: Date.now() })));
+  });
+
+
+  test('unconfirmed payment stays readable in dark mode with reduced motion and a same-attempt status check', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await harness(page, { unknown: true });
+    await page.goto('/checkout');
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+    await review(page);
+    await page.getByRole('button', { name: /Place Order/ }).click();
+    const panel = page.locator('section[aria-labelledby="checking-heading"]');
+    await expect(panel.getByRole('heading', { name: 'We couldn’t confirm your payment yet' })).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Check again' })).toBeEnabled();
+    expect(await panel.getByTestId('payment-processing-visual').evaluate(element =>
+      [...element.querySelectorAll('*')].every(node => getComputedStyle(node, '::after').animationName === 'none')
+    )).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: 'test-results/checkout/payment-unconfirmed-dark-reduced-motion.png', fullPage: true });
+  });
 
   for (const width of viewports) {
-    test(`Processing / recovery loading state at ${width}px has centered animated loader and ZERO action buttons`, async ({ page }) => {
+    test(`Processing at ${width}px has a visual payment panel without premature success or payment actions`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       const api = await harness(page);
       api.hold();
@@ -25,6 +48,10 @@ test.describe('Payment Recovery Loading & Terminal Failure UX', () => {
       await expect(processingSection).toBeVisible();
       await expect(processingSection.getByRole('button')).toHaveCount(0);
       await expect(processingSection.getByRole('link')).toHaveCount(0);
+      await expect(processingSection.getByTestId('payment-processing-visual')).toBeVisible();
+      await expect(processingSection.getByRole('list', { name: 'Payment processing stages' })).toBeVisible();
+      await expect(processingSection.getByText('Order confirmation').locator('..').locator('..')).not.toHaveAttribute('aria-current', 'step');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
       // 3. Verify specific action controls are absent
       await expect(page.getByRole('button', { name: 'Try Again' })).toHaveCount(0);
@@ -58,7 +85,7 @@ test.describe('Payment Recovery Loading & Terminal Failure UX', () => {
       await expect(page.getByRole('heading', { name: 'Checking your payment' })).toBeVisible();
 
       // Animated verification indicator is present.
-      await expect(recoverySection.locator('[class*="checkingVisual"]')).toBeVisible();
+      await expect(recoverySection.getByTestId('payment-processing-visual')).toBeVisible();
 
       // No payment action of any kind; the only control is safe navigation away.
       await expect(recoverySection.getByRole('button')).toHaveCount(0);
@@ -109,7 +136,9 @@ test.describe('Payment Recovery Loading & Terminal Failure UX', () => {
     });
   }
 
-  test('Confirmed AWAITING_INPUT failure screen displays "Payment needs a different card" with TWO enabled buttons', async ({ page }) => {
+  // A submitted payment whose provider still reports requires_payment_method is not a confirmed failure: the Checking screen stays,
+  // with no failure claim and no new payment action (same contract as PaymentRecovery.test.tsx).
+  test('An AWAITING_INPUT outcome after submission stays on "Checking your payment" with no failure claim or payment action', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await harness(page, { state: 'AWAITING_INPUT' });
 
@@ -117,19 +146,12 @@ test.describe('Payment Recovery Loading & Terminal Failure UX', () => {
     await review(page);
     await page.getByRole('button', { name: /Place Order/ }).click();
 
-    // 1. Verify heading and notice
-    const heading = page.getByRole('heading', { name: 'Payment needs a different card' });
-    await expect(heading).toBeVisible();
-    await expect(page.getByText('Payment not processed')).toBeVisible();
-    await expect(page.getByText('Your payment was not completed. Return to secure card entry to try another card.')).toBeVisible();
-
-    // 2. Verify TWO enabled action buttons
-    const tryAgainBtn = page.getByRole('button', { name: 'Try Again' });
-    const returnCartLink = page.getByRole('link', { name: 'Return to Cart' });
-
-    await expect(tryAgainBtn).toBeVisible();
-    await expect(tryAgainBtn).toBeEnabled();
-    await expect(returnCartLink).toBeVisible();
+    const recoverySection = page.locator('section[aria-labelledby="checking-heading"]');
+    await expect(page.getByRole('heading', { name: 'Checking your payment' })).toBeVisible();
+    await expect(page.getByText('Payment not processed')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Payment needs a different card' })).toHaveCount(0);
+    await expect(recoverySection.getByRole('button')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Try Again' })).toHaveCount(0);
 
     await page.screenshot({ path: 'test-results/checkout/payment-awaiting-input-1440.png' });
   });
