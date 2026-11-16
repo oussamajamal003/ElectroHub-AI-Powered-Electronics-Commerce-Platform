@@ -23,7 +23,6 @@ ElectroHub is an electronics commerce platform featuring:
 | Real-Time | Socket.IO |
 | Payments | Stripe (Test Mode) |
 | Email | Brevo |
-| Images | Cloudinary |
 | Maps | Leaflet, OpenStreetMap |
 | Infrastructure | Docker, Nginx, DigitalOcean |
 
