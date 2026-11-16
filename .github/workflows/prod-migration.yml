@@ -1,18 +1,17 @@
 name: Production Database Migration
 
-# Production writes require an independently approved manual dispatch at the reviewed SHA.
-# Ordinary develop merges validate code but do not authorize production migrations (Task 06.2).
+# Production migration runs automatically only after the Development CI push run for develop succeeds.
+# The protected PROD environment, target/checksum/order validation, and additive-only SQL gate remain required.
 #
 # If the database is already up to date, the workflow performs a read-only verification
 # and cleanly exits as a successful no-op.
 
 on:
-  workflow_dispatch:
-    inputs:
-      approved_commit:
-        description: 'Full 40-character SHA of the independently reviewed and authorized production release.'
-        required: true
-        type: string
+  workflow_run:
+    workflows: ["Development CI"]
+    types: [completed]
+    branches:
+      - develop
 
 permissions:
   contents: read
@@ -21,6 +20,7 @@ jobs:
   migrate:
     name: Deploy pending Prisma migrations to PROD
     runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'develop' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository
     environment: electrohub-prod-database
     concurrency:
       group: db-migration-electrohub-prod
@@ -28,30 +28,31 @@ jobs:
     env:
       MIGRATION_TARGET: PROD
       EXPECTED_PROJECT_REF: yepfgjehdstlxbpespun
-      APPROVED_COMMIT: ${{ inputs.approved_commit }}
+      APPROVED_COMMIT: ${{ github.event.workflow_run.head_sha }}
     steps:
-      - name: Verify triggering event and commit SHA
+      - name: Verify successful trusted develop CI run and commit SHA
         shell: bash
+        env:
+          CI_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          CI_EVENT: ${{ github.event.workflow_run.event }}
+          CI_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          if [ "$GITHUB_REF" != refs/heads/develop ]; then
-            echo "Production migrations require a reviewed develop commit." >&2
+          if [ "$CI_BRANCH" != develop ] || [ "$CI_CONCLUSION" != success ] || [ "$CI_EVENT" != push ] || [ "$CI_REPOSITORY" != "$CURRENT_REPOSITORY" ]; then
+            echo "Production migrations require a successful push-triggered Development CI run from this repository's develop branch." >&2
             exit 1
           fi
-          echo "Triggering event: ${{ github.event_name }} on ref: ${{ github.ref }}"
           if ! printf '%s' "$APPROVED_COMMIT" | grep -Eq '^[0-9a-f]{40}$'; then
-            echo "approved_commit must be a full 40-character lowercase SHA." >&2
+            echo "Development CI must provide a full 40-character lowercase commit SHA." >&2
             exit 1
           fi
-          if [ "$APPROVED_COMMIT" != "$GITHUB_SHA" ]; then
-            echo "This run is at a different commit than the approved one. Refusing." >&2
-            exit 1
-          fi
-          echo "Target commit: $APPROVED_COMMIT verified. Pending migrations will be discovered from the checked-in Prisma migrations and PROD ledger."
+          echo "Successful Development CI run verified for develop commit $APPROVED_COMMIT. Pending migrations will be discovered from the checked-in Prisma migrations and PROD ledger."
 
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.approved_commit }}
+          ref: ${{ env.APPROVED_COMMIT }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

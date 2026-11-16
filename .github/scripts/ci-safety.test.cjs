@@ -283,16 +283,19 @@ test('every real workflow in this repository satisfies the policy', () => {
   assert.deepEqual(policy.checkWorkflows(files), []);
 });
 
-test('DEV and PROD are manual-only with scoped secrets and a required release SHA', () => {
+test('DEV is manual-only and PROD follows only successful trusted develop CI with scoped secrets', () => {
   const files = policy.loadWorkflows(path.resolve(__dirname, '../workflows'));
   const dev = files.find((file) => file.name === 'dev-migration.yml');
   const prod = files.find((file) => file.name === 'prod-migration.yml');
   assert.ok(dev);
   assert.ok(prod);
   assert.deepEqual(policy.triggers(dev.text), ['workflow_dispatch']);
-  assert.deepEqual(policy.triggers(prod.text), ['workflow_dispatch']);
-  assert.equal(policy.getPushBranches(prod.text), null);
-  assert.match(prod.text, /approved_commit:[\s\S]*?required: true/);
+  assert.deepEqual(policy.triggers(prod.text), ['workflow_run']);
+  assert.match(prod.text, /workflows:\s*\["Development CI"\]/);
+  assert.match(prod.text, /branches:\s*\r?\n\s+- develop/);
+  assert.match(prod.text, /github\.event\.workflow_run\.conclusion == 'success'/);
+  assert.match(prod.text, /github\.event\.workflow_run\.event == 'push'/);
+  assert.match(prod.text, /head_repository\.full_name == github\.repository/);
   const holders = files.filter((file) => /secrets\.ELECTROHUB_/.test(file.text)).map((file) => file.name);
   assert.deepEqual(holders, ['dev-migration.yml', 'prod-migration.yml']);
   assert.doesNotMatch(prod.text, /APPROVED_MIGRATIONS|approved_migrations|20261029020000_recommendation_consent_consistency/);
@@ -330,24 +333,24 @@ test('shared DEV migration deploy pins the DEV project and uses only the entrypo
   assert.doesNotMatch(shared, /process\.env\.APPROVED_MIGRATIONS/);
 });
 
-test('policy rejects automatic PROD triggers or removal of the develop dispatch guard', () => {
+test('policy rejects unsafe PROD triggers and missing CI/develop guards', () => {
   const base = fs.readFileSync(path.resolve(__dirname, '../workflows/prod-migration.yml'), 'utf8');
 
-  // Push to main rejected
-  const pushMain = base.replace('on:', 'on:\n  push:\n    branches: [main]');
-  assert.match(policy.checkWorkflow('prod-migration.yml', pushMain).join(), /workflow_dispatch only/);
+  // A direct push trigger could deploy before Development CI finishes.
+  const directPush = base.replace('on:', 'on:\n  push:\n    branches: [develop]');
+  assert.match(policy.checkWorkflow('prod-migration.yml', directPush).join(), /only after Development CI completes/);
 
-  // Push to feature branch wildcard rejected
-  const pushFeature = base.replace('on:', "on:\n  push:\n    branches: ['feature/**']");
-  assert.match(policy.checkWorkflow('prod-migration.yml', pushFeature).join(), /workflow_dispatch only/);
+  const manual = base.replace('on:', 'on:\n  workflow_dispatch:');
+  assert.match(policy.checkWorkflow('prod-migration.yml', manual).join(), /only after Development CI completes/);
 
-  // Push to multiple branches rejected
-  const missingGuard = base.replace('"$GITHUB_REF" != refs/heads/develop', 'false');
-  assert.match(policy.checkWorkflow('prod-migration.yml', missingGuard).join(), /restrict manual dispatch to develop/);
+  const wrongWorkflow = base.replace('"Development CI"', '"Security Audit"');
+  assert.match(policy.checkWorkflow('prod-migration.yml', wrongWorkflow).join(), /must be triggered by Development CI/);
 
-  // Pull request trigger rejected
-  const withPR = base.replace('on:', 'on:\n  pull_request:\n    branches: [develop]');
-  assert.match(policy.checkWorkflow('prod-migration.yml', withPR).join(), /workflow_dispatch only/);
+  const missingSuccess = base.replace("github.event.workflow_run.conclusion == 'success' && ", '');
+  assert.match(policy.checkWorkflow('prod-migration.yml', missingSuccess).join(), /verify trusted successful develop CI/);
+
+  const wrongBranch = base.replace('      - develop', '      - main');
+  assert.match(policy.checkWorkflow('prod-migration.yml', wrongBranch).join(), /filter to develop/);
 });
 
 test('policy rejects DEV workflow if push trigger is introduced', () => {
