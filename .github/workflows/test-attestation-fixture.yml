@@ -1,0 +1,239 @@
+name: Test Non-Production Attestation Fixture
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Authorization reason for non-production fixture test'
+        required: false
+        default: 'Task 06.3Q Owner-Authorized Non-Production Attestation Fixture'
+
+permissions: {}
+
+jobs:
+  test-attestation:
+    name: Non-Production Attestation Verification Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Create disposable non-production payload
+        id: create-payload
+        run: |
+          set -euo pipefail
+          PAYLOAD_FILE="disposable-payload.txt"
+          cat <<EOF > "$PAYLOAD_FILE"
+          ElectroHub Non-Production Attestation Fixture
+          Run ID: ${{ github.run_id }}
+          Run Attempt: ${{ github.run_attempt }}
+          Commit SHA: ${{ github.sha }}
+          Ref: ${{ github.ref }}
+          Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          Notice: Strictly disposable non-production payload for cryptographic verification.
+          EOF
+
+          SHA256=$(sha256sum "$PAYLOAD_FILE" | awk '{print $1}')
+          echo "payload-path=$PAYLOAD_FILE" >> "$GITHUB_OUTPUT"
+          echo "payload-sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          echo "Created disposable payload ($PAYLOAD_FILE) with SHA256: $SHA256"
+          cat "$PAYLOAD_FILE"
+
+      - name: Generate artifact attestation
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ steps.create-payload.outputs.payload-path }}
+          show-summary: true
+
+      - name: Execute attestation verification suite
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAYLOAD: ${{ steps.create-payload.outputs.payload-path }}
+          EXPECTED_SHA256: ${{ steps.create-payload.outputs.payload-sha256 }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          ATTESTATION_ID: ${{ steps.attest.outputs.attestation-id }}
+          ATTESTATION_URL: ${{ steps.attest.outputs.attestation-url }}
+          REPO: ${{ github.repository }}
+          EXPECTED_WORKFLOW: .github/workflows/test-attestation-fixture.yml
+          EXPECTED_COMMIT: ${{ github.sha }}
+          EXPECTED_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+
+          echo "================================================================"
+          echo " 0. VERIFIER SUPPLY-CHAIN & RUNTIME CONTEXT"
+          echo "================================================================"
+          echo "gh CLI version:"
+          gh --version
+          echo "OpenSSL version:"
+          openssl version
+          echo "jq version:"
+          jq --version
+          echo "Repository: $REPO"
+          echo "Workflow: $EXPECTED_WORKFLOW"
+          echo "Commit SHA: $EXPECTED_COMMIT"
+          echo "Ref: $EXPECTED_REF"
+          echo "Payload: $PAYLOAD"
+          echo "Expected SHA256: $EXPECTED_SHA256"
+          echo "Bundle Path: $BUNDLE"
+          echo "Attestation ID: $ATTESTATION_ID"
+          echo "Attestation URL: $ATTESTATION_URL"
+
+          echo ""
+          echo "================================================================"
+          echo " TEST A: POSITIVE VERIFICATION"
+          echo "================================================================"
+          echo "--> A1. Verifying via local bundle with strict repo and workflow constraints..."
+          POSITIVE_BUNDLE_JSON=$(gh attestation verify "$PAYLOAD" \
+            --repo "$REPO" \
+            --signer-workflow "$EXPECTED_WORKFLOW" \
+            --bundle "$BUNDLE" \
+            --format json)
+          echo "Positive Bundle Verification Succeeded!"
+
+          echo "--> A2. Verifying via GitHub Attestation API..."
+          POSITIVE_API_JSON=$(gh attestation verify "$PAYLOAD" \
+            --repo "$REPO" \
+            --signer-workflow "$EXPECTED_WORKFLOW" \
+            --format json)
+          echo "Positive API Verification Succeeded!"
+
+          echo ""
+          echo "================================================================"
+          echo " TEST B: TAMPER REJECTION"
+          echo "================================================================"
+          cp "$PAYLOAD" "${PAYLOAD}.tampered"
+          echo "MALICIOUS_TAMPER_MODIFICATION_STRING" >> "${PAYLOAD}.tampered"
+          echo "Tampered payload created (appended modified bytes)."
+
+          set +e
+          gh attestation verify "${PAYLOAD}.tampered" \
+            --repo "$REPO" \
+            --signer-workflow "$EXPECTED_WORKFLOW" \
+            --bundle "$BUNDLE" > tamper_rejection.log 2>&1
+          TAMPER_STATUS=$?
+          set -e
+
+          if [ $TAMPER_STATUS -eq 0 ]; then
+            echo "CRITICAL DEFECT: gh attestation verify accepted tampered payload!"
+            cat tamper_rejection.log
+            exit 1
+          fi
+          echo "PASS: Tampered payload rejected as expected (exit code: $TAMPER_STATUS)."
+          echo "Log output:"
+          cat tamper_rejection.log
+
+          echo ""
+          echo "================================================================"
+          echo " TEST C: WRONG REPOSITORY REJECTION"
+          echo "================================================================"
+          WRONG_REPO="github/docs"
+          echo "Testing verification with incorrect repository: $WRONG_REPO..."
+
+          set +e
+          gh attestation verify "$PAYLOAD" \
+            --repo "$WRONG_REPO" \
+            --signer-workflow "$EXPECTED_WORKFLOW" \
+            --bundle "$BUNDLE" > wrong_repo_rejection.log 2>&1
+          WRONG_REPO_STATUS=$?
+          set -e
+
+          if [ $WRONG_REPO_STATUS -eq 0 ]; then
+            echo "CRITICAL DEFECT: gh attestation verify accepted wrong repository!"
+            cat wrong_repo_rejection.log
+            exit 1
+          fi
+          echo "PASS: Wrong repository rejected as expected (exit code: $WRONG_REPO_STATUS)."
+          echo "Log output:"
+          cat wrong_repo_rejection.log
+
+          echo ""
+          echo "================================================================"
+          echo " TEST D: WRONG SIGNER / WORKFLOW REJECTION"
+          echo "================================================================"
+          WRONG_WORKFLOW=".github/workflows/ci.yml"
+          echo "--> D1. Testing verification with incorrect signer workflow: $WRONG_WORKFLOW..."
+
+          set +e
+          gh attestation verify "$PAYLOAD" \
+            --repo "$REPO" \
+            --signer-workflow "$WRONG_WORKFLOW" \
+            --bundle "$BUNDLE" > wrong_workflow_rejection.log 2>&1
+          WRONG_WORKFLOW_STATUS=$?
+          set -e
+
+          if [ $WRONG_WORKFLOW_STATUS -eq 0 ]; then
+            echo "CRITICAL DEFECT: gh attestation verify accepted wrong signer workflow!"
+            cat wrong_workflow_rejection.log
+            exit 1
+          fi
+          echo "PASS: Wrong signer workflow rejected as expected (exit code: $WRONG_WORKFLOW_STATUS)."
+          echo "Log output:"
+          cat wrong_workflow_rejection.log
+
+          LOOKALIKE_WORKFLOW=".github/workflows/test-attestation-fixture.yml.attacker.yml"
+          echo "--> D2. Testing verification with lookalike / prefix workflow: $LOOKALIKE_WORKFLOW..."
+
+          set +e
+          gh attestation verify "$PAYLOAD" \
+            --repo "$REPO" \
+            --signer-workflow "$LOOKALIKE_WORKFLOW" \
+            --bundle "$BUNDLE" > lookalike_rejection.log 2>&1
+          LOOKALIKE_STATUS=$?
+          set -e
+
+          if [ $LOOKALIKE_STATUS -eq 0 ]; then
+            echo "CRITICAL DEFECT: gh attestation verify accepted lookalike prefix workflow!"
+            cat lookalike_rejection.log
+            exit 1
+          fi
+          echo "PASS: Lookalike workflow rejected as expected (exit code: $LOOKALIKE_STATUS)."
+          echo "Log output:"
+          cat lookalike_rejection.log
+
+          echo ""
+          echo "================================================================"
+          echo " TEST E: CLAIM INSPECTION & CRYPTOGRAPHIC PROVENANCE EVIDENCE"
+          echo "================================================================"
+          echo "--> E1. gh attestation verify JSON Structure:"
+          echo "$POSITIVE_BUNDLE_JSON" | jq .
+
+          echo "--> E2. in-toto Statement (DSSE Envelope Payload):"
+          STATEMENT_JSON=$(jq -r '.dsseEnvelope.payload' "$BUNDLE" | base64 -d)
+          echo "$STATEMENT_JSON" | jq .
+
+          echo "--> E3. Subject Digest Verification:"
+          STATEMENT_DIGEST=$(echo "$STATEMENT_JSON" | jq -r '.subject[0].digest.sha256')
+          echo "Statement subject sha256: $STATEMENT_DIGEST"
+          echo "Expected payload sha256:  $EXPECTED_SHA256"
+          if [ "$STATEMENT_DIGEST" != "$EXPECTED_SHA256" ]; then
+            echo "CRITICAL DEFECT: Subject digest in in-toto statement does not match payload sha256!"
+            exit 1
+          fi
+          echo "PASS: Subject digest strictly matches payload SHA-256."
+
+          echo "--> E4. Fulcio X.509 Certificate Extensions & SAN:"
+          CERT_RAW=$(jq -r '.verificationMaterial.certificate.rawBytes // .verificationMaterial.x509CertificateChain.certificates[0].rawBytes // empty' "$BUNDLE")
+          if [ -n "$CERT_RAW" ]; then
+            echo "$CERT_RAW" | base64 -d | openssl x509 -inform DER -text -noout > cert_text.txt
+            cat cert_text.txt
+          else
+            echo "Notice: Certificate rawBytes not in standard path. Inspecting verificationMaterial keys:"
+            jq '.verificationMaterial | keys' "$BUNDLE"
+          fi
+
+          echo "--> E5. Rekor Transparency Log Entry:"
+          jq '.verificationMaterial.tlogEntries // empty' "$BUNDLE"
+
+          echo ""
+          echo "================================================================"
+          echo " ALL NON-PRODUCTION ATTESTATION CHECKS PASSED SUCCESSFULLY"
+          echo "================================================================"
