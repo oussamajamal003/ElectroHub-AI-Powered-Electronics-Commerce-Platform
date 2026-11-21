@@ -75,7 +75,13 @@ jobs:
           echo " 0. VERIFIER SUPPLY-CHAIN & RUNTIME CONTEXT"
           echo "================================================================"
           echo "gh CLI version:"
-          gh --version
+          GH_VERSION_OUTPUT=$(gh --version | head -n 1)
+          echo "$GH_VERSION_OUTPUT"
+          REQUIRED_GH_VERSION="2.104.0"
+          if [ "$GH_VERSION_OUTPUT" != "gh version ${REQUIRED_GH_VERSION} (2026-11-12)" ]; then
+            echo "CRITICAL DEFECT: unsupported or unvalidated gh attestation verifier version: $GH_VERSION_OUTPUT"
+            exit 1
+          fi
           echo "OpenSSL version:"
           openssl version
           echo "jq version:"
@@ -129,11 +135,19 @@ jobs:
           echo " TEST A: POSITIVE VERIFICATION"
           echo "================================================================"
           echo "--> A1. Verifying via local bundle with strict repo and workflow constraints..."
+          EXPECTED_SAN="https://github.com/${REPO}/${EXPECTED_WORKFLOW}@${EXPECTED_REF}"
           POSITIVE_BUNDLE_JSON=$(gh attestation verify "$PAYLOAD" \
             --repo "$REPO" \
-            --signer-workflow "$EXPECTED_WORKFLOW" \
+            --signer-workflow "${REPO}/${EXPECTED_WORKFLOW}@${EXPECTED_REF}" \
+            --cert-identity "$EXPECTED_SAN" \
+            --cert-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --source-digest "$EXPECTED_COMMIT" \
+            --source-ref "$EXPECTED_REF" \
+            --predicate-type "https://slsa.dev/provenance/v1" \
             --bundle "$BUNDLE" \
             --format json)
+          printf '%s' "$POSITIVE_BUNDLE_JSON" > positive-verifier.json
+          node scratch/verify-attestation-fixture.cjs "$PAYLOAD" "$BUNDLE" positive-verifier.json "$REPO" "$EXPECTED_WORKFLOW" "$EXPECTED_COMMIT" "$EXPECTED_REF" "$EXPECTED_SHA256"
           echo "Positive Bundle Verification Succeeded!"
 
           echo "--> A2. Verifying via GitHub Attestation API..."
@@ -141,7 +155,12 @@ jobs:
           for attempt in 1 2 3; do
             if POSITIVE_API_JSON=$(gh attestation verify "$PAYLOAD" \
               --repo "$REPO" \
-              --signer-workflow "$EXPECTED_WORKFLOW" \
+              --signer-workflow "${REPO}/${EXPECTED_WORKFLOW}@${EXPECTED_REF}" \
+              --cert-identity "$EXPECTED_SAN" \
+              --cert-oidc-issuer "https://token.actions.githubusercontent.com" \
+              --source-digest "$EXPECTED_COMMIT" \
+              --source-ref "$EXPECTED_REF" \
+              --predicate-type "https://slsa.dev/provenance/v1" \
               --format json 2> api_err.log); then
               echo "Positive API Verification Succeeded on attempt $attempt!"
               break
@@ -167,7 +186,12 @@ jobs:
           set +e
           gh attestation verify "${PAYLOAD}.tampered" \
             --repo "$REPO" \
-            --signer-workflow "$EXPECTED_WORKFLOW" \
+            --signer-workflow "${REPO}/${EXPECTED_WORKFLOW}@${EXPECTED_REF}" \
+            --cert-identity "$EXPECTED_SAN" \
+            --cert-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --source-digest "$EXPECTED_COMMIT" \
+            --source-ref "$EXPECTED_REF" \
+            --predicate-type "https://slsa.dev/provenance/v1" \
             --bundle "$BUNDLE" > tamper_rejection.log 2>&1
           TAMPER_STATUS=$?
           set -e
@@ -186,9 +210,15 @@ jobs:
           echo "Testing verification with incorrect repository: $WRONG_REPO..."
 
           set +e
+          WRONG_SAN="https://github.com/${WRONG_REPO}/${EXPECTED_WORKFLOW}@${EXPECTED_REF}"
           gh attestation verify "$PAYLOAD" \
             --repo "$WRONG_REPO" \
-            --signer-workflow "$EXPECTED_WORKFLOW" \
+            --signer-workflow "${WRONG_REPO}/${EXPECTED_WORKFLOW}@${EXPECTED_REF}" \
+            --cert-identity "$WRONG_SAN" \
+            --cert-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --source-digest "$EXPECTED_COMMIT" \
+            --source-ref "$EXPECTED_REF" \
+            --predicate-type "https://slsa.dev/provenance/v1" \
             --bundle "$BUNDLE" > wrong_repo_rejection.log 2>&1
           WRONG_REPO_STATUS=$?
           set -e
@@ -207,9 +237,15 @@ jobs:
           echo "--> D1. Testing verification with incorrect signer workflow: $WRONG_WORKFLOW..."
 
           set +e
+          WRONG_WORKFLOW_SAN="https://github.com/${REPO}/${WRONG_WORKFLOW}@${EXPECTED_REF}"
           gh attestation verify "$PAYLOAD" \
             --repo "$REPO" \
-            --signer-workflow "$WRONG_WORKFLOW" \
+            --signer-workflow "${REPO}/${WRONG_WORKFLOW}@${EXPECTED_REF}" \
+            --cert-identity "$WRONG_WORKFLOW_SAN" \
+            --cert-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --source-digest "$EXPECTED_COMMIT" \
+            --source-ref "$EXPECTED_REF" \
+            --predicate-type "https://slsa.dev/provenance/v1" \
             --bundle "$BUNDLE" > wrong_workflow_rejection.log 2>&1
           WRONG_WORKFLOW_STATUS=$?
           set -e
@@ -224,9 +260,15 @@ jobs:
           echo "--> D2. Testing verification with lookalike / prefix workflow: $LOOKALIKE_WORKFLOW..."
 
           set +e
+          LOOKALIKE_WORKFLOW_SAN="https://github.com/${REPO}/${LOOKALIKE_WORKFLOW}@${EXPECTED_REF}"
           gh attestation verify "$PAYLOAD" \
             --repo "$REPO" \
-            --signer-workflow "$LOOKALIKE_WORKFLOW" \
+            --signer-workflow "${REPO}/${LOOKALIKE_WORKFLOW}@${EXPECTED_REF}" \
+            --cert-identity "$LOOKALIKE_WORKFLOW_SAN" \
+            --cert-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --source-digest "$EXPECTED_COMMIT" \
+            --source-ref "$EXPECTED_REF" \
+            --predicate-type "https://slsa.dev/provenance/v1" \
             --bundle "$BUNDLE" > lookalike_rejection.log 2>&1
           LOOKALIKE_STATUS=$?
           set -e
