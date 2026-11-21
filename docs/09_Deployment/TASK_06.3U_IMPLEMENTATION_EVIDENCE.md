@@ -6,7 +6,7 @@
 - Branch: `feature/06.3-production-infrastructure`
 - Implementation SHA: `74f57d18f6af0063ffb8c81178f78451fcbdb40`
 - Evidence commit SHA: `ef98a5da`
-- Remote branch HEAD at verification time: `ef98a5da`
+- Remote branch HEAD at verification time: `99744a6583fbcd23d64d5c33751a3854050f4f0c`
 
 ## Changed Files
 
@@ -47,6 +47,9 @@ New edge cases:
 - Linux job ID: `136982867122`
 - Implementation SHA: `74f57d18f6af0063ffb8c81178f78451fcbdb40`
 - Linux job status: SUCCESS
+- Overall exact-SHA Development CI status: CANCELLED
+
+The overall run was cancelled after failures in unrelated backend and cross-browser release jobs; the required Linux job completed successfully and is reported separately.
 
 ## Separate CI Observation
 
