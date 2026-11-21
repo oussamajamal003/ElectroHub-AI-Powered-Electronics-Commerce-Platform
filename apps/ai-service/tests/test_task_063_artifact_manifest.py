@@ -86,5 +86,3 @@ def test_manifest_verifier_binds_loader_source_artifact_directories_and_model_in
     loader_source.write_bytes(b"different loader bytes")
     with pytest.raises(ValueError, match="loader source"):
         verify(manifest_path, model_dir, relevance_dir, source_root)
-
-
