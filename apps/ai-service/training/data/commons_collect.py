@@ -35,7 +35,7 @@ def api(params: dict[str, str]) -> dict[str, Any]:
         time.sleep(wait)
     # POST keeps long title batches out of the URL (Commons rejects over-long query strings with HTTP 414).
     form = urllib.parse.urlencode({**params, "format": "json", "formatversion": "2", "maxlag": "5"}).encode()
-    request = urllib.request.Request(  # noqa: S310 - fixed Commons API host
+    request = urllib.request.Request(
         API, data=form, headers={"User-Agent": USER_AGENT, "Content-Type": "application/x-www-form-urlencoded"}
     )
     last_error = ""
