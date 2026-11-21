@@ -1,0 +1,35 @@
+worker_processes auto;
+pid /tmp/nginx.pid;
+
+events {
+    worker_connections 64;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    server_tokens off;
+    access_log /dev/stdout;
+    error_log /dev/stderr warn;
+
+    server {
+        listen 8080 default_server;
+        server_name _;
+        return 444;
+    }
+
+    server {
+        listen 8080;
+        server_name ${CANONICAL_HOST};
+
+        location ^~ /.well-known/acme-challenge/ {
+            root /var/www/acme;
+            default_type text/plain;
+            try_files $uri =404;
+        }
+
+        location / {
+            return 404;
+        }
+    }
+}

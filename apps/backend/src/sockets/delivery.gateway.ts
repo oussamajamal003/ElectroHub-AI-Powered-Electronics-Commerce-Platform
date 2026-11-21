@@ -40,7 +40,16 @@ export function attachDeliveryGateway(server: HttpServer, options: { corsOrigin:
   const adminSession = options.adminSession ?? liveAdminSession;
   const resolveOrder = options.resolveOrder ?? resolveSubscribableOrder;
   const clock = options.clock ?? Date.now;
+  const allowedOrigins = new Set((Array.isArray(options.corsOrigin) ? options.corsOrigin : [options.corsOrigin]).filter(Boolean));
   const io = new Server(server, { path: '/socket.io', cors: { origin: options.corsOrigin, credentials: true }, transports: ['websocket', 'polling'],
+    // Engine.IO CORS does not protect WebSocket upgrades. Browsers include Origin on these requests,
+    // so check it independently while leaving polling to the same exact credentialed CORS allowlist.
+    allowRequest: (request, callback) => {
+      if (request.headers.upgrade?.toLowerCase() !== 'websocket') return callback(null, true);
+      const origin = request.headers.origin;
+      if (typeof origin !== 'string' || !allowedOrigins.has(origin)) return callback('Origin not allowed', false);
+      return callback(null, true);
+    },
     maxHttpBufferSize: 4 * 1024, pingInterval: 25_000, pingTimeout: 20_000, serveClient: false });
   // The default namespace is not used; anything connecting there is refused.
   io.of('/').use((_socket, next) => next(socketError('UNAVAILABLE')));

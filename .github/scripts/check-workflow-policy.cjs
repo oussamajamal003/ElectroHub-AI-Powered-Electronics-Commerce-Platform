@@ -12,6 +12,8 @@ const path = require('node:path');
 
 /** The only workflows allowed to deploy migrations or read shared-database secrets. */
 const MIGRATION_WORKFLOWS = new Set(['dev-migration.yml', 'prod-migration.yml']);
+const PRODUCTION_RELEASE_WORKFLOW = 'deploy-production.yml';
+const PRIVILEGED_PRODUCTION_WORKFLOWS = new Set(['deploy-production.yml', 'prod-migration.yml']);
 const DISPOSABLE_ACTION = './.github/actions/disposable-postgres';
 const MUTATING_PRISMA = /\bprisma\s+(migrate\s+(deploy|resolve|reset|dev)|db\s+(push|execute))\b/;
 const SUPABASE_MUTATING = /\bsupabase\s+(db\s+(push|reset)|migration\s+up|link)\b/;
@@ -66,12 +68,35 @@ function getPushBranches(text) {
   return branches;
 }
 
+function checkPinnedActions(name, rawText, fail) {
+  if (!PRIVILEGED_PRODUCTION_WORKFLOWS.has(name)) return;
+  for (const line of rawText.split(/\r?\n/)) {
+    const match = /^\s*(?:-\s*)?uses:\s*([^\s#]+)(?:\s+#\s*(.*))?$/.exec(line);
+    if (!match) continue;
+    const reference = match[1].replace(/^['"]|['"]$/g, '');
+    if (reference.startsWith('./') || reference.startsWith('docker://')) continue;
+    const at = reference.lastIndexOf('@');
+    const action = at > 0 ? reference.slice(0, at) : reference;
+    const ref = at > 0 ? reference.slice(at + 1) : '';
+    if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/.test(action) || !/^[a-f0-9]{40}$/.test(ref)) {
+      fail(`privileged production workflow action must use a full reviewed 40-character commit SHA: ${reference}`);
+      continue;
+    }
+    if (!/^v\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(match[2] || '')) {
+      fail(`privileged production workflow action must include a human-readable version comment: ${reference}`);
+    }
+  }
+}
+
 function checkWorkflow(name, rawText) {
   const text = stripComments(rawText);
   const problems = [];
   const fail = (message) => problems.push(`${name}: ${message}`);
   const on = triggers(text);
   const isMigrationWorkflow = MIGRATION_WORKFLOWS.has(name);
+  const isProductionReleaseWorkflow = name === PRODUCTION_RELEASE_WORKFLOW;
+
+  checkPinnedActions(name, rawText, fail);
 
   if (on.includes('pull_request_target')) fail('uses pull_request_target (runs untrusted code with secrets)');
   if (SUPABASE_MUTATING.test(text) && !isMigrationWorkflow) fail('runs a mutating Supabase CLI command outside the migration workflow');
@@ -95,18 +120,14 @@ function checkWorkflow(name, rawText) {
         fail(`DEV workflow must be triggered by workflow_dispatch only (found: ${on.join(', ') || 'none'})`);
       }
     } else if (name === 'prod-migration.yml') {
-      if (on.length !== 1 || on[0] !== 'workflow_run') fail('PROD workflow must run only after Development CI completes');
-      if (!/workflows:\s*\[\s*["']Development CI["']\s*\]/.test(text)) fail('PROD workflow must be triggered by Development CI');
-      if (!/types:\s*\[\s*completed\s*\]/.test(text)) fail('PROD workflow must wait for CI completion');
-      if (!/branches:\s*\r?\n\s+-\s+develop/.test(text)) fail('PROD workflow must filter to develop');
-      for (const required of [
-        "github.event.workflow_run.conclusion == 'success'",
-        "github.event.workflow_run.head_branch == 'develop'",
-        "github.event.workflow_run.event == 'push'",
-        'github.event.workflow_run.head_repository.full_name == github.repository',
-      ]) {
-        if (!text.includes(required)) fail(`PROD workflow must verify trusted successful develop CI (${required})`);
+      if (on.length !== 1 || on[0] !== 'workflow_dispatch') fail('PROD workflow must be triggered by workflow_dispatch only');
+      for (const input of ['approved_commit', 'authorization_reference']) {
+        if (!new RegExp(`^ {6}${input}:\\s*$`, 'm').test(text)) fail(`PROD workflow must require the ${input} dispatch input`);
       }
+      if (!/if:\s*github\.ref == 'refs\/heads\/develop'/.test(text)) fail('PROD workflow must be restricted to develop');
+      if (!/\[\s*"?\$APPROVED_COMMIT"?\s*!=\s*"?\$GITHUB_SHA"?\s*\]/.test(text)) fail('PROD workflow must require the approved SHA to exactly match the workflow SHA');
+      if (!/\[ -z "\$\{AUTHORIZATION_REFERENCE/.test(text)) fail('PROD workflow must require a non-empty authorization reference');
+      if (/workflow_run|^\s{2}(?:push|pull_request|schedule):/m.test(text)) fail('PROD workflow must not have an automatic mutation trigger');
     }
 
     if (!/^\s+environment:\s*\S+/m.test(text)) fail('deployment job must declare a protected GitHub Environment');
@@ -120,6 +141,7 @@ function checkWorkflow(name, rawText) {
     if (!text.includes('migration-plan.cjs post')) fail('must run the migration-plan post-check');
     if (/\bprisma\s+migrate\s+(resolve|reset|dev)\b|\bprisma\s+db\s+(push|execute)\b/.test(text)) fail('must not run resolve, reset, dev or db push');
     if (!/permissions:\s*\r?\n\s+contents:\s*read/.test(text)) fail('must enforce least-privilege permissions (contents: read)');
+      if (name === 'prod-migration.yml' && !/permissions:\s*\r?\n\s+contents:\s*read\s*\r?\n\s+checks:\s*read/.test(text)) fail('PROD workflow must use checks: read to verify exact-SHA CI results');
 
     if (name === 'dev-migration.yml') {
       if (!text.includes('EXPECTED_PROJECT_REF: pzxekjybdiulzmssalfo')) fail('DEV workflow must pin the DEV project ref');
@@ -133,7 +155,32 @@ function checkWorkflow(name, rawText) {
       if (/APPROVED_MIGRATIONS|approved_migrations/.test(text)) fail('PROD workflow must discover pending migrations from the checked-in Prisma history and PROD ledger');
       if (/ELECTROHUB_DEV_(?:DATABASE|DIRECT)_URL/.test(text)) fail('PROD workflow must not expose DEV database secrets');
       if (!/prisma\s+migrate\s+status/.test(text)) fail('PROD workflow must run prisma migrate status after deploy');
+      if (!/ref:\s*\$\{\{ inputs\.approved_commit \}\}/.test(text)) fail('PROD workflow must check out the exact approved commit');
+      for (const requiredCheck of ['Required / Quality Gate', 'Security / NPM Audit']) {
+        if (!text.includes(requiredCheck)) fail(`PROD workflow must require the exact-SHA ${requiredCheck} check`);
+      }
+      if (!/github\.rest\.checks\.listForRef/.test(text)) fail('PROD workflow must verify check results for the approved SHA');
     }
+  } else if (isProductionReleaseWorkflow) {
+    if (on.length !== 1 || on[0] !== 'workflow_dispatch') fail('production release/deploy workflow must be triggered by workflow_dispatch only');
+    for (const input of ['approved_commit', 'authorization_reference', 'backup_evidence_reference']) {
+      if (!new RegExp(`^ {6}${input}:\\s*$`, 'm').test(text)) fail(`production release/deploy workflow must require the ${input} dispatch input`);
+    }
+    if (!/if:\s*github\.ref == 'refs\/heads\/develop'/.test(text)) fail('production release/deploy workflow must be restricted to develop');
+    if (!/\$APPROVED_COMMIT"\s*==\s*"\$GITHUB_SHA/.test(text)) fail('production release/deploy workflow must require the exact run SHA');
+    if (!/electrohub-production-deploy/.test(text)) fail('production deploy job must use the protected production environment');
+    if (!/cancel-in-progress:\s*false/.test(text) || !/group:\s*electrohub-production-release-deploy/.test(text)) fail('production deploy workflow must serialize releases without cancelling in-flight work');
+    if (!/checks\.listForRef/.test(text) || !text.includes('Required / Quality Gate') || !text.includes('Security / NPM Audit')) fail('production release must require quality and security checks for the exact SHA');
+    if (!/create-release-manifest\.cjs/.test(text) || !/verify-release-manifest\.cjs/.test(text)) fail('production release must create and verify its exact-SHA image manifest');
+    if (!text.includes('AI_PRODUCTION_RELEASE.json') || !text.includes('AI_MODEL_ARTIFACT_PRODUCTION.json')) fail('production release must require separate approved AI release and artifact manifests');
+    if (text.includes('AI_MODEL_ARTIFACT_CANDIDATE.json')) fail('production release must not package the local-only AI artifact candidate');
+    if (text.indexOf('Require a distinct approved AI production release before building images') === -1 ||
+      text.indexOf('Require a distinct approved AI production release before building images') > text.indexOf('docker build')) {
+      fail('production AI release gate must run before building application images');
+    }
+    if (/docker\s+push|\bdocker\/login|ghcr\.io|dockerhub/i.test(text)) fail('production release must not publish to an unapproved registry');
+    if (/workflow_run|^\s{2}(?:push|pull_request|schedule):/m.test(text)) fail('production release/deploy must not have an automatic deployment trigger');
+    if (/prisma\s+migrate\s+deploy/.test(text)) fail('application deployment workflow must keep database migration separate');
   } else if (on.some((trigger) => ['push', 'pull_request', 'schedule', 'workflow_run'].includes(trigger)) && /ELECTROHUB_[A-Z]*_(DATABASE|DIRECT)_URL/.test(text)) {
     fail('a push/PR/scheduled workflow references a shared database URL');
   }
@@ -151,7 +198,7 @@ function loadWorkflows(dir) {
     .map((name) => ({ name, text: fs.readFileSync(path.join(dir, name), 'utf8') }));
 }
 
-module.exports = { checkWorkflow, checkWorkflows, loadWorkflows, triggers, getPushBranches, MIGRATION_WORKFLOWS };
+module.exports = { checkWorkflow, checkWorkflows, loadWorkflows, triggers, getPushBranches, MIGRATION_WORKFLOWS, PRODUCTION_RELEASE_WORKFLOW, PRIVILEGED_PRODUCTION_WORKFLOWS, SHARED_DB_SECRET };
 
 if (require.main === module) {
   const dir = path.resolve(__dirname, '../workflows');

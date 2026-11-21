@@ -14,7 +14,7 @@ import { adminNotifications } from './admin-notification.service.js';
 import { activationDto } from './admin-activation.service.js';
 import { lockOwnerLifecycle } from './admin-account.service.js';
 import { env } from '../config/env.js';
-import { PROVISIONABLE_SEED_EMAILS } from '../utils/admin-seed.js';
+import { PROVISIONABLE_SEED_EMAILS, SEED_ADMIN_EMAILS } from '../utils/admin-seed.js';
 import { seedProvisioningRoutesEnabled } from '../utils/seed-provisioning-flag.js';
 
 /**
@@ -22,7 +22,9 @@ import { seedProvisioningRoutesEnabled } from '../utils/seed-provisioning-flag.j
  * to the exact email an invitation was issued for; the token is stored as a SHA-256 digest and consumed under a row lock.
  */
 export const INVITATION_TTL_MS = 72 * 60 * 60 * 1000;
+export const ADMIN_BOOTSTRAP_INVITATION_TTL_MS = 60 * 60 * 1000;
 export const RESEND_COOLDOWN_MS = 60 * 1000;
+const ADMIN_BOOTSTRAP_LOCK_KEY = 6_030_001;
 const unavailable = () => new AppError('This invitation is invalid, expired or has already been used. Ask an owner for a new one.', 410, 'INVITATION_UNAVAILABLE');
 
 export const normalizeEmail = (email: string) => email.toLowerCase().trim();
@@ -102,8 +104,8 @@ export class AdminTeamService {
     return { data: rows.map(row => invitationDto(row, now)), meta: { page: input.page, pageSize: input.pageSize, total, totalPages: Math.max(1, Math.ceil(total / input.pageSize)) } };
   }
 
-  private async deliver(invitationId: string, to: string, token: string, tokenHash: string, inviterId: string, expiresAt: Date) {
-    const inviter = await prisma.user.findUnique({ where: { id: inviterId }, select: { firstName: true, lastName: true } });
+  private async deliver(invitationId: string, to: string, token: string, tokenHash: string, inviterId: string | null, expiresAt: Date) {
+    const inviter = inviterId ? await prisma.user.findUnique({ where: { id: inviterId }, select: { firstName: true, lastName: true } }) : null;
     const sent = await sendAdminInvitationEmail({ to, token, expiresAt, inviterName: inviter ? `${inviter.firstName} ${inviter.lastName}`.trim() : null });
     // A slow provider completion must not overwrite delivery status for a newer token generation.
     await prisma.adminInvitation.updateMany({ where: { id: invitationId, tokenHash },
@@ -150,6 +152,66 @@ export class AdminTeamService {
     });
     // Provider call outside the transaction; a failed send is recorded as FAILED and can be resent — no privilege is created by it.
     return this.deliver(invitation.id, email, token, tokenHash, actor.userId, expiresAt);
+  }
+
+  /** Operator-only initial-owner path. No HTTP route calls this method; the guarded interactive CLI is the only entry point. */
+  async createBootstrapInvitation(input: { email: string; authorizationReference: string }) {
+    const email = normalizeEmail(input.email);
+    const authorizationReference = input.authorizationReference.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 255) {
+      throw new AppError('A valid initial administrator email is required.', 400, 'INVALID_EMAIL');
+    }
+    if ((SEED_ADMIN_EMAILS as readonly string[]).includes(email)) {
+      throw new AppError('Development seed administrator identities cannot be used for the PROD bootstrap.', 400, 'SEED_ADMIN_EMAIL_REFUSED');
+    }
+    if (authorizationReference.length < 4 || authorizationReference.length > 200 || /[\r\n\0]/.test(authorizationReference)) {
+      throw new AppError('A valid operator authorization reference is required.', 400, 'BOOTSTRAP_AUTHORIZATION_REQUIRED');
+    }
+
+    const token = randomToken();
+    const tokenHash = sha256Hex(token);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + ADMIN_BOOTSTRAP_INVITATION_TTL_MS);
+    const invitation = await prisma.$transaction(async tx => {
+      // Serialize operator bootstrap issuance and acceptance without blocking normal admin invitation operations.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${ADMIN_BOOTSTRAP_LOCK_KEY})`;
+      if (await tx.user.count({ where: { role: { name: 'ADMIN' } } }) > 0) {
+        throw new AppError('Initial administrator bootstrap is unavailable because an administrator already exists.', 409, 'BOOTSTRAP_UNAVAILABLE');
+      }
+      const acceptedBootstrap = await tx.adminInvitation.findFirst({ where: { isBootstrap: true, status: AdminInvitationStatus.ACCEPTED }, select: { id: true } });
+      if (acceptedBootstrap) {
+        throw new AppError('Initial administrator bootstrap has already been completed.', 409, 'BOOTSTRAP_ALREADY_USED');
+      }
+
+      const account = await tx.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } }, select: { role: { select: { name: true } } } });
+      if (account || await tx.user.findFirst({ where: { pendingEmail: { equals: email, mode: 'insensitive' } }, select: { id: true } })) {
+        throw new AppError('An account already exists for this email address.', 409, 'ACCOUNT_EXISTS');
+      }
+
+      const pending = await tx.adminInvitation.findFirst({ where: { isBootstrap: true, status: AdminInvitationStatus.PENDING } });
+      if (pending && pending.expiresAt > now && pending.deliveryStatus !== AdminInvitationDelivery.FAILED) {
+        throw new AppError('An initial administrator invitation is already pending.', 409, 'BOOTSTRAP_INVITATION_PENDING');
+      }
+      if (pending) {
+        await tx.adminInvitation.update({ where: { id: pending.id }, data: { status: AdminInvitationStatus.REVOKED, revokedAt: now } });
+        await recordAdminAudit({ actorId: null, action: 'ADMIN_BOOTSTRAP_INVITATION_REVOKED', resourceType: 'admin_invitation', resourceId: pending.id,
+          outcome: 'SUCCESS', details: { authorizationReference } }, tx);
+      }
+
+      const created = await tx.adminInvitation.create({ data: { email, tokenHash, invitedById: null, isBootstrap: true,
+        grantManageAdmins: true, expiresAt, lastSentAt: now } });
+      await recordAdminAudit({ actorId: null, action: 'ADMIN_BOOTSTRAP_INVITATION_CREATED', resourceType: 'admin_invitation', resourceId: created.id,
+        outcome: 'SUCCESS', details: { authorizationReference, expiresAt: expiresAt.toISOString() } }, tx);
+      return created;
+    }, ADMIN_AUTH_TX).catch(error => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new AppError('An initial administrator invitation is already pending.', 409, 'BOOTSTRAP_INVITATION_PENDING');
+      }
+      throw error;
+    });
+
+    // Token is kept in memory and sent only to the operator-approved mailbox; it is never returned or logged.
+    return this.deliver(invitation.id, email, token, tokenHash, null, expiresAt);
   }
 
   async resendInvitation(actor: Actor, id: string) {
@@ -212,10 +274,18 @@ export class AdminTeamService {
     const passwordHash = await hashPassword(input.password); // bcrypt outside the transaction
     const tokenHash = sha256Hex(input.token);
     const { created: user, invitedById } = await prisma.$transaction(async tx => {
-      const rows = await tx.$queryRaw<{ id: string; email: string; status: AdminInvitationStatus; expiresAt: Date; grantManageAdmins: boolean; invitedById: string | null }[]>`
-        SELECT "id", "email", "status", "expiresAt", "grantManageAdmins", "invitedById" FROM "admin_invitations" WHERE "tokenHash" = ${tokenHash} FOR UPDATE`;
+      const rows = await tx.$queryRaw<{ id: string; email: string; status: AdminInvitationStatus; expiresAt: Date; grantManageAdmins: boolean;
+        invitedById: string | null; isBootstrap: boolean }[]>`
+        SELECT "id", "email", "status", "expiresAt", "grantManageAdmins", "invitedById", "isBootstrap" FROM "admin_invitations" WHERE "tokenHash" = ${tokenHash} FOR UPDATE`;
       const invitation = rows[0];
       if (!invitation || invitation.status !== AdminInvitationStatus.PENDING || invitation.expiresAt <= new Date()) throw unavailable();
+      if (invitation.isBootstrap) {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(${ADMIN_BOOTSTRAP_LOCK_KEY})`;
+        const existingAdmin = await tx.user.count({ where: { role: { name: 'ADMIN' } } });
+        const earlierBootstrap = await tx.adminInvitation.findFirst({ where: { isBootstrap: true, status: AdminInvitationStatus.ACCEPTED,
+          id: { not: invitation.id } }, select: { id: true } });
+        if (existingAdmin > 0 || earlierBootstrap) throw unavailable();
+      }
       if (await tx.user.findFirst({ where: { OR: [{ email: invitation.email }, { pendingEmail: invitation.email }] }, select: { id: true } })) {
         throw new AppError('An account already exists for this email address. Ask an owner for help.', 409, 'ACCOUNT_EXISTS');
       }
@@ -225,11 +295,12 @@ export class AdminTeamService {
       // Possession of the emailed single-use token proves ownership of the invitation address (plan decision 9).
       const created = await tx.user.create({ data: { email: invitation.email, passwordHash, firstName: input.firstName.trim(), lastName: input.lastName.trim(),
         roleId: role.id, emailVerifiedAt: now }, include: { role: true } });
-      await tx.adminAccountSecurity.create({ data: { userId: created.id, canManageAdmins: invitation.grantManageAdmins,
+      await tx.adminAccountSecurity.create({ data: { userId: created.id, isOwner: invitation.isBootstrap,
+        canManageAdmins: invitation.isBootstrap || invitation.grantManageAdmins,
         enrollmentAllowedUntil: new Date(now.getTime() + INVITE_ENROLLMENT_WINDOW_MS) } });
       await tx.adminInvitation.update({ where: { id: invitation.id }, data: { status: AdminInvitationStatus.ACCEPTED, acceptedAt: now, acceptedUserId: created.id } });
       await recordAdminAudit({ actorId: created.id, action: 'ADMIN_INVITATION_ACCEPTED', resourceType: 'admin_invitation', resourceId: invitation.id,
-        outcome: 'SUCCESS', details: { invitedById: invitation.invitedById } }, tx);
+        outcome: 'SUCCESS', details: { invitedById: invitation.invitedById, bootstrap: invitation.isBootstrap } }, tx);
       return { created, invitedById: invitation.invitedById };
     }, ADMIN_AUTH_TX);
     // After commit, fire-and-forget; governed by the inviter's "invitation accepted" preference.

@@ -13,7 +13,7 @@ name: Dev Database Migration
 #     one of four exact content-pinned LF/CRLF compatibility records; and pending migrations equal the approved list.
 #   * The run must be at the approved commit, and runs for one target never overlap or cancel each other.
 #   * This workflow never runs `migrate resolve`, `migrate reset`, `migrate dev` or `db push`.
-#   * A separate, equally gated workflow is required for PROD; none exists yet.
+#   * PROD has a separate manual exact-SHA workflow using the protected electrohub-prod-database Environment.
 
 on:
   workflow_dispatch:

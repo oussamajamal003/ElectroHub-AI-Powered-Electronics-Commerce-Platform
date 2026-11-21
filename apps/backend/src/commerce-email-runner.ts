@@ -12,6 +12,7 @@ import { BrevoProvider } from './integrations/brevo/brevo.provider.js';
 import { renderCommerceEmail } from './emails/commerce/templates.js';
 import { logCommerceEmailRuntime } from './services/commerce-email.runtime.js';
 import { brevoDeliveryEvents, DELIVERY_SYNC_INTERVAL_MS, reconcileDeliveries } from './services/commerce-email.delivery.js';
+import { recordWorkerHealth } from './utils/worker-health.js';
 
 /**
  * Task 03.8 dedicated commerce email worker (`npm run email:worker`). Started only explicitly; importing services never starts it.
@@ -75,7 +76,8 @@ async function main() {
           }
           ready = true;
           logSafely('info', 'Commerce email worker ready', { event: 'email_worker_ready', workerInstanceId, sendMode: config.sendMode,
-            dispatchEnabled: config.dispatchEnabled, producerEnabledInThisEnvironment: config.enqueueEnabled, allowlistSize: config.allowedRecipients.length, pushEnabled: Boolean(pushDispatcher) }); }
+            dispatchEnabled: config.dispatchEnabled, producerEnabledInThisEnvironment: config.enqueueEnabled, allowlistSize: config.allowedRecipients.length, pushEnabled: Boolean(pushDispatcher) });
+          await recordWorkerHealth('ready'); }
         const pass = permission.allowed ? await dispatcher.runBatch() : { claimed: 0 };
         drained = pass.claimed >= config.batchSize;
       } catch (error) {
@@ -102,7 +104,7 @@ async function main() {
           // Test-mode exclusion is deliberate, but silent exclusion looked like a stuck queue: name it (count only, never addresses).
           if (health.allowlistExcluded) logSafely('warn', 'Commerce emails held by the allowlist', { event: 'email_allowlist_excluded', workerInstanceId,
             excluded: health.allowlistExcluded, hint: 'recipients outside COMMERCE_EMAIL_ALLOWED_RECIPIENTS are never sent in allowlist mode' });
-        } catch (error) { logSafely('error', 'Commerce email health unavailable', { event: 'email_worker_unavailable', workerInstanceId, reason: 'HEALTH_QUERY_FAILED', error }); }
+        } catch (error) { failedThisPass = true; logSafely('error', 'Commerce email health unavailable', { event: 'email_worker_unavailable', workerInstanceId, reason: 'HEALTH_QUERY_FAILED', error }); }
       }
       if (permission.allowed && ready && deliverySource && Date.now() >= nextDeliverySync) {
         nextDeliverySync = Date.now() + DELIVERY_SYNC_INTERVAL_MS;
@@ -111,6 +113,7 @@ async function main() {
           if (sync.updated || sync.failed) logSafely(sync.failed ? 'warn' : 'info', 'Commerce email delivery outcomes recorded', { event: 'email_delivery_sync', workerInstanceId, ...sync });
         } catch (error) { logSafely('warn', 'Commerce email delivery sync unavailable', { event: 'email_delivery_sync_failed', workerInstanceId, error }); }
       }
+      if (ready) await recordWorkerHealth(failedThisPass ? 'degraded' : 'ready');
       if (once || stopping) break;
       if (drained) continue;
       try { await wait(failures ? Math.min(60_000, 1_000 * 2 ** Math.min(failures, 6)) : config.pollMs, undefined, { signal: shutdown.signal }); }

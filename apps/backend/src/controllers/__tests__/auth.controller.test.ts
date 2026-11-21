@@ -7,6 +7,8 @@ import { AuthService } from '../../services/auth.service.js';
 import { AppError } from '../../middleware/errorHandler.js';
 import { logger } from '../../utils/logger.js';
 
+const sameOriginPost = (path: string) => request(app).post(path).set('Origin', 'http://localhost:3000');
+
 vi.mock('../../lib/prisma.js', () => ({
   prisma: {
     user: {
@@ -35,7 +37,7 @@ vi.mock('../../utils/logger.js', () => ({
 it('records a swallowed logout failure while preserving its successful cookie response', async () => {
   const failure = new Error('Synthetic logout storage failure');
   const logout = vi.spyOn(AuthService.prototype, 'logout').mockRejectedValueOnce(failure);
-  const response = await request(app).post('/api/auth/customer/logout').set('Cookie', 'electrohub_customer_refresh=customer.fixture');
+  const response = await sameOriginPost('/api/auth/customer/logout').set('Cookie', 'electrohub_customer_refresh=customer.fixture');
   expect(response.status).toBe(200);
   expect(logger.error).toHaveBeenCalledWith('AUTH_LOGOUT_FAILURE', expect.objectContaining({ error: failure }));
   logout.mockRestore();
@@ -155,7 +157,7 @@ describe('Auth Controller - /api/auth/me', () => {
 describe('Auth refresh cookie preservation', () => {
   it('keeps the refresh cookie on a transient backend failure', async () => {
     const refresh = vi.spyOn(AuthService.prototype, 'refreshSession').mockRejectedValueOnce(new Error('Temporary database failure'));
-    const response = await request(app).post('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=valid-token');
+    const response = await sameOriginPost('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=valid-token');
     expect(response.status).toBe(500);
     expect(response.headers['set-cookie']).toBeUndefined();
     refresh.mockRestore();
@@ -163,20 +165,20 @@ describe('Auth refresh cookie preservation', () => {
 
   it('clears the cookie for a confirmed invalid refresh token', async () => {
     const refresh = vi.spyOn(AuthService.prototype, 'refreshSession').mockRejectedValueOnce(new Error('Invalid or expired refresh token'));
-    const response = await request(app).post('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=invalid-token');
+    const response = await sameOriginPost('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=invalid-token');
     expect(response.status).toBe(401);
     expect(response.headers['set-cookie']).toBeDefined();
     refresh.mockRestore();
   });
 
   it('returns 401 when refresh token cookie is missing', async () => {
-    const response = await request(app).post('/api/auth/customer/refresh');
+    const response = await sameOriginPost('/api/auth/customer/refresh');
     expect(response.status).toBe(401);
     expect(response.body).toEqual({ error: 'Refresh token missing' });
   });
 
   it('rejects whitespace-only or empty refresh token cookie with 401', async () => {
-    const response = await request(app).post('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=   ');
+    const response = await sameOriginPost('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=   ');
     expect(response.status).toBe(401);
     expect(response.body).toEqual({ error: 'Refresh token missing' });
   });
@@ -189,7 +191,7 @@ describe('Auth refresh cookie preservation', () => {
       user: { id: 'usr-123', email: 'a@example.invalid', firstName: 'A', lastName: 'B', role: 'CUSTOMER', authMethods: { password: true, google: false } },
     });
 
-    const response = await request(app).post('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=valid-old-token');
+    const response = await sameOriginPost('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=valid-old-token');
     expect(response.status).toBe(200);
     // The identity rides along (same shape as /me); the refresh token itself never appears in the body.
     expect(response.body).toEqual({ accessToken: 'new-access-token-123',
@@ -205,7 +207,7 @@ describe('Auth refresh cookie preservation', () => {
   it('clears only the customer cookie and expires the legacy cookie on customer logout', async () => {
     const logoutSpy = vi.spyOn(AuthService.prototype, 'logout').mockResolvedValueOnce();
 
-    const response = await request(app).post('/api/auth/customer/logout').set('Cookie', 'electrohub_customer_refresh=customer.valid-cookie-to-logout');
+    const response = await sameOriginPost('/api/auth/customer/logout').set('Cookie', 'electrohub_customer_refresh=customer.valid-cookie-to-logout');
     expect(response.status).toBe(200);
     expect(logoutSpy).toHaveBeenCalledWith('customer.valid-cookie-to-logout', 'customer');
     expect(response.headers['set-cookie']).toBeDefined();
@@ -220,7 +222,7 @@ describe('Auth refresh cookie preservation', () => {
     const refresh = vi.spyOn(AuthService.prototype, 'refreshSession').mockRejectedValueOnce(
       new AppError('Session refresh already in progress. Retry.', 409, 'REFRESH_ROTATION_IN_PROGRESS'));
 
-    const response = await request(app).post('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=recently-rotated-token');
+    const response = await sameOriginPost('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=recently-rotated-token');
     expect(response.status).toBe(409);
     expect(response.headers['retry-after']).toBe('1');
     expect(response.body).toEqual({ error: { code: 'REFRESH_ROTATION_IN_PROGRESS', message: 'Session refresh already in progress. Retry.' } });
@@ -235,7 +237,7 @@ describe('Auth refresh cookie preservation', () => {
       new AppError('Invalid or expired refresh token', 401, 'REFRESH_TOKEN_REUSED')
     );
 
-    const response = await request(app).post('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=stolen-token');
+    const response = await sameOriginPost('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=stolen-token');
     expect(response.status).toBe(401);
     expect(response.body).toEqual({ error: 'Invalid or expired refresh token' });
     expect(response.headers['set-cookie']).toBeDefined();
@@ -248,10 +250,40 @@ describe('Auth refresh cookie preservation', () => {
       new AppError('Invalid or expired refresh token', 401, 'SESSION_REVOKED')
     );
 
-    const response = await request(app).post('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=logged-out-token');
+    const response = await sameOriginPost('/api/auth/customer/refresh').set('Cookie', 'electrohub_customer_refresh=logged-out-token');
     expect(response.status).toBe(401);
     expect(response.body).toEqual({ error: 'Invalid or expired refresh token' });
     expect(response.headers['set-cookie']).toBeDefined();
     refresh.mockRestore();
+  });
+});
+
+describe('refresh/logout Origin protection', () => {
+  it('rejects missing and untrusted Origin for both roles before touching refresh sessions', async () => {
+    const refresh = vi.spyOn(AuthService.prototype, 'refreshSession');
+    const logout = vi.spyOn(AuthService.prototype, 'logout');
+    const routes = [
+      ['/api/auth/customer/refresh', 'electrohub_customer_refresh=customer.fixture'],
+      ['/api/auth/admin/refresh', 'electrohub_admin_refresh=admin.fixture'],
+      ['/api/auth/customer/logout', 'electrohub_customer_refresh=customer.fixture'],
+      ['/api/auth/admin/logout', 'electrohub_admin_refresh=admin.fixture'],
+    ] as const;
+
+    try {
+      for (const [path, cookie] of routes) {
+        const missingOrigin = await request(app).post(path).set('Cookie', cookie);
+        expect(missingOrigin.status).toBe(403);
+        expect(missingOrigin.body.error.code).toBe('REQUEST_ORIGIN_INVALID');
+
+        const untrustedOrigin = await request(app).post(path).set('Cookie', cookie).set('Origin', 'https://attacker.invalid');
+        expect(untrustedOrigin.status).toBe(403);
+        expect(untrustedOrigin.body.error.code).toBe('REQUEST_ORIGIN_INVALID');
+      }
+      expect(refresh).not.toHaveBeenCalled();
+      expect(logout).not.toHaveBeenCalled();
+    } finally {
+      refresh.mockRestore();
+      logout.mockRestore();
+    }
   });
 });

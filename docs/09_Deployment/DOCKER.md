@@ -414,3 +414,9 @@ Docker configuration is complete when:
 # 21. Docker Principle
 
 > **Containers provide consistent, reproducible application environments while keeping service boundaries and production responsibilities explicit.**
+
+## Task 06.3 production configuration status
+
+The production-only stack now lives at `infrastructure/production/compose.yaml`; the root `docker-compose.yml` remains the development stack. Production Node builds use repository-root context and the repository-root `.dockerignore`. Only Nginx publishes ports; API, AI and worker services stay on private Compose networks. The production Compose file does not run migrations at container startup. Worker services require explicit profiles and separate host-side env files, and the example bind addresses/resource limits are intentionally blank until measured and approved.
+
+This is repository configuration, not a deployment-ready topology. Nginx now has a candidate SPA + API + Socket.IO single-origin template. Host limits are deliberately required-but-unset until measured. Browser-origin/session behavior, public hostname/OAuth, certificate lifecycle, host capacity, Docker runtime and PROD readiness remain unresolved; do not launch the stack or expose ports until those gates are independently approved and evidenced. See [the Task 06.3B implementation evidence](TASK_06.3_SINGLE_ORIGIN_IMPLEMENTATION_EVIDENCE.md).

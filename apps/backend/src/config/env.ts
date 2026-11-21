@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
 import path from 'path';
+import { isIP } from 'node:net';
 
 // Determine the environment based on NODE_ENV (default: development)
 const nodeEnv = process.env.NODE_ENV || 'development';
@@ -69,6 +70,71 @@ export function isLoopbackDatabaseUrl(url: string | undefined): boolean {
   }
 }
 
+const blockedProductionHostSuffixes = ['.localhost', '.local', '.internal', '.lan', '.test', '.invalid', '.example'];
+const blockedProductionHostLabels = new Set(['dev', 'development', 'staging', 'preview', 'qa', 'test']);
+const unresolvedSecretPattern = /(?:replace[-_ ]?with|change[-_ ]?me|your[-_ ]|placeholder|sample|example|dummy|default|password|server[-_ ]side[-_ ]secret)/i;
+
+/** Production OTP HMAC key contract: at least 256 bits of input, no templates/sequences, and meaningful character diversity. */
+function isStrongProductionOtpSecret(secret: string | undefined): boolean {
+  if (!secret || secret !== secret.trim() || Buffer.byteLength(secret, 'utf8') < 32) return false;
+  if (unresolvedSecretPattern.test(secret) || /^(.)\1+$/.test(secret) || /(.{8,})\1+$/.test(secret)) return false;
+  if (/(?:0123456789|9876543210|abcdefghijklmnopqrstuvwxyz|qwertyuiop|asdfghjkl)/i.test(secret)) return false;
+  return new Set(secret).size >= 12;
+}
+
+function ipv4IsPublic(host: string): boolean {
+  const [a, b, c] = host.split('.').map(Number);
+  if ([a, b, c].some(value => !Number.isInteger(value))) return false;
+  if (a === 0 || a === 10 || a === 127 || a >= 224) return false;
+  if (a === 100 && b! >= 64 && b! <= 127) return false;
+  if (a === 169 && b === 254) return false;
+  if (a === 172 && b! >= 16 && b! <= 31) return false;
+  if (a === 192 && (b === 0 && (c === 0 || c === 2) || b === 88 && c === 99 || b === 168)) return false;
+  if (a === 198 && (b === 18 || b === 19 || b === 51 && c === 100)) return false;
+  if (a === 203 && b === 0 && c === 113) return false;
+  return true;
+}
+
+function ipv6IsPublic(host: string): boolean {
+  if (host.includes('%') || host.includes('.')) return false;
+  const halves = host.toLowerCase().split('::');
+  if (halves.length > 2) return false;
+  const left = halves[0] ? halves[0].split(':') : [];
+  const right = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  const missing = 8 - left.length - right.length;
+  if ((halves.length === 1 && missing !== 0) || (halves.length === 2 && missing < 1)) return false;
+  const groups = [...left, ...Array(missing).fill('0'), ...right].map(value => Number.parseInt(value, 16));
+  if (groups.length !== 8 || groups.some(value => !Number.isInteger(value) || value < 0 || value > 0xffff)) return false;
+  const first = groups[0]!;
+  // Public IPv6 unicast is in 2000::/3. Exclude documentation, protocol-assignment and 6to4 ranges.
+  if (first < 0x2000 || first > 0x3fff || first === 0x2002) return false;
+  if (first === 0x2001 && (groups[1] === 0x0db8 || groups[1]! <= 0x01ff)) return false;
+  return true;
+}
+
+/** Syntactically screens production browser origins; DNS ownership and resolved-address reachability require deployment preflight. */
+export function isPublicProductionOrigin(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/' ||
+      (url.port !== '' && url.port !== '443') || value !== url.origin) return false;
+    const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (!host || host.endsWith('.') || host === 'localhost' || blockedProductionHostSuffixes.some(suffix => host.endsWith(suffix))) return false;
+    const ipVersion = isIP(host);
+    if (ipVersion === 4 && !ipv4IsPublic(host)) return false;
+    if (ipVersion === 6 && !ipv6IsPublic(host)) return false;
+    if (!ipVersion) {
+      const labels = host.split('.');
+      if (labels.length < 2 || labels.some(label => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label) ||
+        blockedProductionHostLabels.has(label) || /(^|[-_])(dev|development|staging|preview|qa|test)([-_]|$)/.test(label))) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
@@ -103,6 +169,7 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().optional(),
   // AI_SERVICE_* settings are validated by src/integrations/ai/ai.config.ts so an AI misconfiguration can never block commerce startup.
   FRONTEND_URL: z.string().url().optional(),
+  COMMERCE_EMAIL_ORIGIN: z.string().url().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REDIRECT_URI: z.string().url().optional(),
@@ -133,10 +200,39 @@ const envSchema = z.object({
       message: 'Seed administrator provisioning cannot be enabled in production' });
   }
   if (data.NODE_ENV === 'production') {
-    if (!data.BREVO_API_KEY) {
+    if (!isPublicProductionOrigin(data.FRONTEND_URL)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['FRONTEND_URL'],
+        message: 'FRONTEND_URL must be one canonical public HTTPS origin in production' });
+    }
+    if (data.COMMERCE_EMAIL_ORIGIN && !isPublicProductionOrigin(data.COMMERCE_EMAIL_ORIGIN)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['COMMERCE_EMAIL_ORIGIN'],
+        message: 'COMMERCE_EMAIL_ORIGIN must be one canonical public HTTPS origin in production' });
+    }
+    const googleConfigured = Boolean(data.GOOGLE_CLIENT_ID || data.GOOGLE_CLIENT_SECRET || data.GOOGLE_REDIRECT_URI);
+    if (googleConfigured && !(data.GOOGLE_CLIENT_ID && data.GOOGLE_CLIENT_SECRET && data.GOOGLE_REDIRECT_URI)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['GOOGLE_REDIRECT_URI'],
+        message: 'Google OAuth production settings must be configured together' });
+    }
+    const productionFrontendUrl = data.FRONTEND_URL;
+    if (googleConfigured && data.GOOGLE_REDIRECT_URI && productionFrontendUrl && isPublicProductionOrigin(productionFrontendUrl)) {
+      const callback = new URL(data.GOOGLE_REDIRECT_URI);
+      if (callback.origin !== new URL(productionFrontendUrl).origin || callback.pathname !== '/api/auth/google/callback' || callback.search || callback.hash) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['GOOGLE_REDIRECT_URI'],
+          message: 'GOOGLE_REDIRECT_URI must use FRONTEND_URL origin and the verified callback path' });
+      }
+    }
+    if (data.STRIPE_SECRET_KEY && !/^(?:sk|rk)_test_[A-Za-z0-9]+$/.test(data.STRIPE_SECRET_KEY)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['STRIPE_SECRET_KEY'],
+        message: 'Production Stripe credentials must be Stripe Test Mode keys' });
+    }
+    if (data.STRIPE_WEBHOOK_SECRET && !/^whsec_[A-Za-z0-9]+$/.test(data.STRIPE_WEBHOOK_SECRET)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['STRIPE_WEBHOOK_SECRET'],
+        message: 'STRIPE_WEBHOOK_SECRET must be a configured hosted webhook signing secret' });
+    }
+    if (!data.BREVO_API_KEY || unresolvedSecretPattern.test(data.BREVO_API_KEY)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'BREVO_API_KEY is required in production',
+        message: 'BREVO_API_KEY must be configured and must not contain an unresolved placeholder',
         path: ['BREVO_API_KEY'],
       });
     }
@@ -147,10 +243,11 @@ const envSchema = z.object({
         path: ['BREVO_SENDER_EMAIL'],
       });
     }
-    if (!data.OTP_HASH_SECRET || data.OTP_HASH_SECRET.length < 16) {
+    if (!isStrongProductionOtpSecret(data.OTP_HASH_SECRET) || data.OTP_HASH_SECRET === data.JWT_SECRET ||
+      data.OTP_HASH_SECRET === data.JWT_REFRESH_SECRET) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'A secure OTP_HASH_SECRET of at least 16 characters is required in production',
+        message: 'OTP_HASH_SECRET must be a unique, non-placeholder random key with at least 32 UTF-8 bytes and must differ from JWT signing secrets',
         path: ['OTP_HASH_SECRET'],
       });
     }

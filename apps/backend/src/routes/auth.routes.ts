@@ -20,6 +20,7 @@ import {
   resendPendingEmailChange,
 } from '../controllers/auth.controller.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireFrontendOrigin } from '../middleware/requireFrontendOrigin.js';
 import {
   loginRateLimiter,
   registerRateLimiter,
@@ -283,19 +284,21 @@ router.post('/change-verification-email', resendVerificationRateLimiter, changeV
  * /auth/refresh:
  *   post:
  *     summary: Refresh access token
- *     description: Legacy shared route, retired. Always 401 and expires the old `electrohub_refresh` cookie. Use /api/auth/admin/refresh or /api/auth/customer/refresh, which read their own HttpOnly cookie. Rotates the refresh token.
+ *     description: Legacy shared route, retired. Always 401 and expires the old `electrohub_refresh` cookie. Use /api/auth/admin/refresh or /api/auth/customer/refresh, which require the configured frontend Origin and read their own HttpOnly cookie. Rotates the refresh token.
  *     tags: [Authentication]
  *     responses:
  *       200:
  *         description: Successfully refreshed access token
+ *       403:
+ *         description: Missing or untrusted frontend Origin
  *       401:
  *         description: Refresh token missing, invalid, or expired
  *       429:
  *         description: Too many refresh attempts
  */
 router.post('/refresh', retireLegacySession(401)); // legacy shared route: retires the old cookie, never authenticates
-router.post('/admin/refresh', refreshFor('admin'));
-router.post('/customer/refresh', refreshFor('customer'));
+router.post('/admin/refresh', requireFrontendOrigin, refreshFor('admin'));
+router.post('/customer/refresh', requireFrontendOrigin, refreshFor('customer'));
 
 /**
  * @swagger
@@ -409,19 +412,21 @@ router.post('/reset-password', passwordResetRateLimiter, resetPassword);
  * /auth/logout:
  *   post:
  *     summary: Logout and revoke refresh token
- *     description: Legacy shared route, retired. Expires the old cookie only. Use /api/auth/admin/logout or /api/auth/customer/logout.
+ *     description: Legacy shared route, retired. Expires the old cookie only. Use /api/auth/admin/logout or /api/auth/customer/logout, which require the configured frontend Origin.
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Logged out successfully
+ *       403:
+ *         description: Missing or untrusted frontend Origin
  *       401:
  *         description: Unauthenticated
  */
 router.post('/logout', retireLegacySession(200));
-router.post('/admin/logout', logoutFor('admin'));
-router.post('/customer/logout', logoutFor('customer'));
+router.post('/admin/logout', requireFrontendOrigin, logoutFor('admin'));
+router.post('/customer/logout', requireFrontendOrigin, logoutFor('customer'));
 
 /**
  * @swagger

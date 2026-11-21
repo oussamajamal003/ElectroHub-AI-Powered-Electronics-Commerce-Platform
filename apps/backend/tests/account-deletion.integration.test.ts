@@ -144,7 +144,7 @@ describe('customer account deletion lifecycle', () => {
     expect(await prisma.securityEvent.findFirst({ where: { type: 'ACCOUNT_DELETED', userId, createdAt: { gte: startedAt } } })).not.toBeNull();
 
     await request(app).get('/api/auth/me').set('Authorization', `Bearer ${accessToken}`).expect(401);
-    await request(app).post('/api/auth/customer/refresh').set('Cookie', `electrohub_customer_refresh=${refreshToken}`).expect(401);
+    await request(app).post('/api/auth/customer/refresh').set('Origin', 'http://localhost:3000').set('Cookie', `electrohub_customer_refresh=${refreshToken}`).expect(401);
     await agent.delete('/api/account').set(headers).send({ confirmation: 'DELETE' }).expect(401);
   }, 60000);
 });

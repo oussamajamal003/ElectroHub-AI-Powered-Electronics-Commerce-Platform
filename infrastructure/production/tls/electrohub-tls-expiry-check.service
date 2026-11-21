@@ -1,0 +1,12 @@
+[Unit]
+Description=Check ElectroHub TLS certificate hostname and expiry
+OnFailure=electrohub-tls-alert@%n.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/electrohub/tls.env
+ExecStart=/bin/bash /var/lib/electrohub/current/source/infrastructure/production/tls/check-expiry.sh
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true

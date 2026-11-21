@@ -412,3 +412,9 @@ Backup and recovery operations are complete when:
 # 20. Recovery Principle
 
 > **A backup strategy is incomplete until restoration is understood, tested, and supported by evidence that the recovered system can operate correctly.**
+
+## Task 06.3 PROD recovery gate
+
+The repository currently does not contain verified evidence of the live Supabase PROD project's backup/PITR configuration, retention, or a successful restore rehearsal. Treat all three as **NOT VERIFIED** until an operator collects read-only provider evidence and an authorized isolated restore result. Do not run migrations or activate PROD AI vectors until backup/recovery readiness and the target project identity are reviewed. Application rollback, migration recovery and database restore remain separate procedures.
+
+For an explicitly approved one-month DigitalOcean experiment, export the approved deployment evidence and any approved backup before destroying the Droplet. Powering it off does not stop billing. After destruction, verify separately billed backups, snapshots, volumes and other resources are removed. No resource or backup was created by the repository implementation. See [Task 06.3 implementation evidence](../09_Deployment/TASK_06.3_IMPLEMENTATION_EVIDENCE.md).

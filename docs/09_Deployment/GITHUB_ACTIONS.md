@@ -8,12 +8,14 @@ feed **Required / Quality Gate**. A skipped, failed or cancelled dependency fail
 Security Audit remains a separate required check. Repository branch-protection configuration requires an owner/admin;
 the workflow file alone does not enforce branch protection. Reports/traces have 14-day retention.
 
-PROD migrations run only after the `Development CI` workflow succeeds for a push to `develop`. The migration workflow checks
-the completed CI result, branch, push event, repository identity and commit SHA, then checks out that exact commit. It retains
-the protected `electrohub-prod-database` environment, project identity, TLS, checksum/order, additive-SQL and migration
-pre/post checks, plus a non-cancelling concurrency lock. Pull requests, failed CI runs, feature branches, and runs from
-another repository cannot start a production migration. DEV migrations remain manual-only. Infrastructure deployment is
-reserved for Task 06.4.
+DEV migrations remain manual-only. PROD migrations are also manual-only: `prod-migration.yml` requires an approved full SHA
+that equals the workflow's `develop` SHA, a non-empty authorization reference, the protected `electrohub-prod-database`
+environment, successful `Required / Quality Gate` and `Security / NPM Audit` checks for that exact SHA, project identity, TLS,
+checksum/order, additive-SQL and migration pre/post checks, plus a non-cancelling concurrency lock. A successful push/CI run
+cannot start a PROD migration automatically. GitHub Environment reviewer rules
+must be verified in repository settings before any run; workflow YAML does not prove those account-level protections.
+
+Task 06.3 adds production repository configuration and a manual-only exact-SHA application release/deploy candidate. It does not make a release deployable until the public frontend/API origin and session compatibility gate, verified HTTPS hostname/certificate lifecycle, PROD preflight, cost approval, measured host capacity and protected Environment settings pass. The candidate workflow is not enabled or run from this task; all provider and host actions remain separately gated. Keep Task 06.4 as the later release/operations handoff after Task 06.3's approved experiment and evidence cleanup.
 
 Evidence and commands: [Task 06.2](../tasks/Phase-06/TASK_06.2_ACCESSIBILITY_QA_CI_CD.md).
 
@@ -521,7 +523,7 @@ Release Checklist
 
 # 28. CI/CD and Final Phase
 
-CI/CD infrastructure is intentionally deferred until the final deployment phase.
+Production deployment remains approval-gated. Task 06.3 now contains a manual exact-SHA candidate; its existence does not imply account-level Environment protection or host readiness.
 
 Earlier phases should still maintain:
 
@@ -556,3 +558,14 @@ GitHub Actions CI/CD is complete when:
 # 30. GitHub Actions Principle
 
 > **CI/CD automates verification and controlled delivery; automation must strengthen the release process rather than bypass testing, review, security, or operational safeguards.**
+
+## Task 06.3B names-only deployment inventory
+
+No values belong in this document. The manual candidate refers to these protected GitHub Environment secret names only:
+
+- `ELECTROHUB_DEPLOY_SSH_PRIVATE_KEY`
+- `ELECTROHUB_DEPLOY_SSH_KNOWN_HOSTS`
+- `ELECTROHUB_DEPLOY_SSH_HOST`
+- `ELECTROHUB_DEPLOY_SSH_USER`
+
+The separate gated migration workflow refers to `ELECTROHUB_PROD_DATABASE_URL` and `ELECTROHUB_PROD_DIRECT_URL`. These values were not read or configured. Host-only runtime files are named in `infrastructure/production/compose.yaml`: `backend-api.env`, `ai-api.env`, `backend-payment-worker.env`, `backend-email-worker.env`, and `ai-media-worker.env`, under the operator-configured `ELECTROHUB_RUNTIME_ENV_DIR`. `compose.env` and `tls.env` are also host-side configuration files. Do not upload runtime env files or TLS keys as workflow artifacts.

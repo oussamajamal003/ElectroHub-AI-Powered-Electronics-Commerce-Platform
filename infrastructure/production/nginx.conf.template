@@ -1,0 +1,186 @@
+worker_processes 1;
+pid /tmp/nginx.pid;
+
+events {
+    worker_connections 256;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    server_tokens off;
+    client_max_body_size 10m;
+    client_body_timeout 30s;
+    keepalive_timeout 65s;
+    send_timeout 60s;
+    log_format electrohub '$remote_addr $request_method $uri $status $body_bytes_sent $request_time';
+    access_log /dev/stdout electrohub;
+    error_log /dev/stderr warn;
+
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        '' close;
+    }
+
+    upstream electrohub_backend {
+        server api:5000;
+        keepalive 16;
+    }
+
+    # Unknown cleartext hosts receive no redirect or application response.
+    server {
+        listen 8080 default_server;
+        server_name _;
+        return 444;
+    }
+
+    server {
+        listen 8080;
+        server_name ${CANONICAL_HOST};
+
+        location ^~ /.well-known/acme-challenge/ {
+            root /var/www/acme;
+            default_type text/plain;
+            try_files $uri =404;
+        }
+
+        location / {
+            return 308 https://${CANONICAL_HOST}$request_uri;
+        }
+    }
+
+    # Reject unknown TLS SNI before serving an application certificate.
+    server {
+        listen 8443 ssl default_server;
+        server_name _;
+        ssl_reject_handshake on;
+        location / { return 444; }
+    }
+
+    server {
+        listen 8443 ssl;
+        server_name ${CANONICAL_HOST};
+
+        ssl_certificate /etc/nginx/tls/current/fullchain.pem;
+        ssl_certificate_key /etc/nginx/tls/current/privkey.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_session_cache shared:TLS:10m;
+        ssl_session_timeout 10m;
+        ssl_session_tickets off;
+
+        root /usr/share/nginx/html;
+        index index.html;
+
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Frame-Options DENY always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
+
+        location = /_edge_health {
+            allow 127.0.0.1;
+            allow ::1;
+            deny all;
+            access_log off;
+            return 204;
+        }
+
+        # Existing backend health responses include environment/observability details. Health is
+        # checked on the private container network; these paths are never public API responses.
+        location ^~ /api/health {
+            return 404;
+        }
+        location = /api/ready {
+            return 404;
+        }
+        location = /api/openapi.json {
+            return 404;
+        }
+        location ^~ /api/docs {
+            return 404;
+        }
+
+        # Keep signed Stripe request bytes intact; Nginx does not rewrite or parse request bodies.
+        location ^~ /api/ {
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_set_header Host ${CANONICAL_HOST};
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $remote_addr;
+            proxy_set_header X-Forwarded-Host ${CANONICAL_HOST};
+            proxy_set_header X-Forwarded-Port 443;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_connect_timeout 5s;
+            proxy_send_timeout 60s;
+            proxy_read_timeout 60s;
+            proxy_pass http://electrohub_backend;
+        }
+
+        location = /api {
+            return 404;
+        }
+
+        # Socket.IO's HTTP Engine.IO transport is /socket.io; /delivery is only its namespace.
+        location ^~ /socket.io/ {
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host ${CANONICAL_HOST};
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $remote_addr;
+            proxy_set_header X-Forwarded-Host ${CANONICAL_HOST};
+            proxy_set_header X-Forwarded-Port 443;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_buffering off;
+            proxy_connect_timeout 5s;
+            proxy_send_timeout 90s;
+            proxy_read_timeout 90s;
+            proxy_pass http://electrohub_backend;
+        }
+
+        location = /socket.io {
+            return 308 https://${CANONICAL_HOST}/socket.io/$is_args$args;
+        }
+
+        # Never publish source maps, including if a later frontend plugin emits them.
+        location ~* \.map$ {
+            return 404;
+        }
+
+        # Missing or non-hashed asset paths return 404 rather than the SPA document.
+        location /assets/ {
+            try_files $uri =404;
+        }
+
+        # Only Vite content-hashed filenames get immutable caching. HTML is always revalidated.
+        location ~* ^/assets/.+-[A-Za-z0-9_-]{8,}\.[A-Za-z0-9]+$ {
+            try_files $uri =404;
+            add_header Cache-Control "public, max-age=31536000, immutable" always;
+            add_header Strict-Transport-Security "max-age=31536000" always;
+            add_header X-Content-Type-Options nosniff always;
+            add_header X-Frame-Options DENY always;
+            add_header Referrer-Policy strict-origin-when-cross-origin always;
+            add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
+        }
+
+        location = /index.html {
+            add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+            add_header Pragma no-cache always;
+            add_header Strict-Transport-Security "max-age=31536000" always;
+            add_header X-Content-Type-Options nosniff always;
+            add_header X-Frame-Options DENY always;
+            add_header Referrer-Policy strict-origin-when-cross-origin always;
+            add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
+        }
+
+        location / {
+            try_files $uri $uri/ /index.html;
+            add_header Cache-Control "no-cache" always;
+            add_header Strict-Transport-Security "max-age=31536000" always;
+            add_header X-Content-Type-Options nosniff always;
+            add_header X-Frame-Options DENY always;
+            add_header Referrer-Policy strict-origin-when-cross-origin always;
+            add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self)" always;
+        }
+    }
+}

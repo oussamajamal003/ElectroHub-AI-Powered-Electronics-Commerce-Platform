@@ -190,7 +190,7 @@ The database, AI service, and backend internal ports should not be publicly reac
 
 # 10. Domain and DNS
 
-Production deployment requires a domain configured to point to the DigitalOcean VPS.
+The earlier deployment design assumed a purchased domain. Task 06.3 does not authorize a domain purchase, so no custom domain is selected or required for the current experiment.
 
 Expected flow:
 
@@ -206,7 +206,7 @@ Nginx
 Application
 ```
 
-The exact domain is environment-specific.
+The App Platform static candidate can use its provider-generated HTTPS hostname. The API candidate may use an IP-address certificate or a verified free hostname, but neither exact origin nor TLS lifecycle is approved or tested. The API must remain unexposed until HTTPS renewal/reload/recovery and browser-origin/session compatibility pass. See `SSL.md` and `TASK_06.3_IMPLEMENTATION_EVIDENCE.md`.
 
 ---
 
@@ -405,3 +405,9 @@ DigitalOcean deployment is complete when:
 # 21. DigitalOcean Principle
 
 > **The DigitalOcean VPS is the production compute layer for ElectroHub; managed data and external SaaS responsibilities remain separated from the application server.**
+
+## Task 06.3 budget and region check (2026-11-17)
+
+DigitalOcean's current public pricing lists up to three free static-site apps, 1 GiB outbound transfer per app, and $0.02/GiB overage; its billing documentation says accrued App Platform transfer allowance/cumulative usage is not currently visible. Therefore a public static site is not guaranteed to remain $0 without an operator usage/overage approval. The current Basic Droplet table lists the $6/month 1 GiB, 1 vCPU, 25 GiB SSD option. See [App Platform pricing](https://www.digitalocean.com/pricing/app-platform), [App Platform bandwidth billing](https://docs.digitalocean.com/platform/billing/bandwidth/), and [Droplet pricing](https://www.digitalocean.com/pricing/droplets).
+
+The repository records Supabase PROD as `ap-northeast-1` (Tokyo), but no live provider query was made in Task 06.3. DigitalOcean currently lists `sgp1` Singapore, `blr1` Bangalore, `sfo3` San Francisco, and `syd1` Sydney as Basic Droplet regions; a single-Droplet experiment must select one only after a consistent network comparison. See [DigitalOcean regional availability](https://docs.digitalocean.com/platform/regional-availability/). Do not provision several paid Droplets to compare regions.

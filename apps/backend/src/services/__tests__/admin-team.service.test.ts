@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => {
   const row: Record<string, unknown> = {};
+  let bootstrapAcceptanceRow: Record<string, unknown> | null = null;
   let transactionTail = Promise.resolve();
   const invitation = {
     findFirst: vi.fn(async (): Promise<unknown> => null),
@@ -27,20 +28,27 @@ const state = vi.hoisted(() => {
   };
   const db: Record<string, unknown> = {
     adminInvitation: invitation,
-    adminAccountSecurity: { findUnique: vi.fn(async () => ({ isOwner: false })) },
+    adminAccountSecurity: { findUnique: vi.fn(async () => ({ isOwner: false })), create: vi.fn(async () => undefined) },
+    role: { findUnique: vi.fn(async () => ({ id: 'admin-role' })) },
     user: {
       findUnique: vi.fn(async () => ({ firstName: 'Owner', lastName: 'Admin' })),
       findFirst: vi.fn(async (): Promise<unknown> => null),
+      count: vi.fn(async () => 0),
+      create: vi.fn(async () => ({ id: 'created-admin', role: { name: 'ADMIN' } })),
     },
-    $queryRaw: vi.fn(async () => [{ id: 'invite-id', status: AdminInvitationStatus.PENDING,
-      lastSentAt: row.lastSentAt ?? null, email: 'invitee@example.com' }]),
+    $queryRaw: vi.fn(async (strings: TemplateStringsArray) => {
+      const sql = strings.join('');
+      if (sql.includes('pg_advisory_xact_lock')) return [];
+      if (sql.includes('"tokenHash"')) return bootstrapAcceptanceRow ? [bootstrapAcceptanceRow] : [];
+      return [{ id: 'invite-id', status: AdminInvitationStatus.PENDING, lastSentAt: row.lastSentAt ?? null, email: 'invitee@example.com' }];
+    }),
     $transaction: vi.fn((callback: (tx: unknown) => Promise<unknown>) => {
       const next = transactionTail.then(() => callback(db));
       transactionTail = next.then(() => undefined, () => undefined);
       return next;
     }),
   };
-  return { row, invitation, db, reset() { transactionTail = Promise.resolve(); } };
+  return { row, invitation, db, setBootstrapAcceptanceRow(value: Record<string, unknown> | null) { bootstrapAcceptanceRow = value; }, reset() { transactionTail = Promise.resolve(); bootstrapAcceptanceRow = null; } };
 });
 
 const audit = vi.hoisted(() => ({ recordAdminAudit: vi.fn(async () => undefined) }));
@@ -49,9 +57,11 @@ const email = vi.hoisted(() => ({ sendAdminInvitationEmail: vi.fn(async () => tr
 vi.mock('../../lib/prisma.js', () => ({ prisma: state.db }));
 vi.mock('../admin-audit.js', () => ({ recordAdminAudit: audit.recordAdminAudit }));
 vi.mock('../admin-invitation-email.js', () => ({ sendAdminInvitationEmail: email.sendAdminInvitationEmail }));
-vi.mock('../admin-mfa.service.js', () => ({ adminMfaService: { factorSummary: vi.fn(async () => ({ totp: 0, passkeys: 0, recoveryCodes: 0 })) }, INVITE_ENROLLMENT_WINDOW_MS: 86_400_000 }));
+vi.mock('../admin-mfa.service.js', () => ({ adminMfaService: {
+  factorSummary: vi.fn(async () => ({ totp: 0, passkeys: 0, recoveryCodes: 0 })), startLogin: vi.fn(async () => ({ status: 'mfa-enrollment-required' })),
+}, INVITE_ENROLLMENT_WINDOW_MS: 86_400_000 }));
 vi.mock('../../sockets/delivery.publisher.js', () => ({ DeliveryPublisher: {} }));
-vi.mock('../admin-notification.service.js', () => ({ adminNotifications: {} }));
+vi.mock('../admin-notification.service.js', () => ({ adminNotifications: { notifyInvitationAccepted: vi.fn() } }));
 
 import { AdminTeamService } from '../admin-team.service.js';
 import { AppError } from '../../middleware/errorHandler.js';
@@ -201,6 +211,89 @@ describe('AdminTeamService.createInvitation collisions', () => {
     state.invitation.create.mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError('unique', { code: 'P2002', clientVersion: 'test' }));
     await expect(new AdminTeamService().createInvitation(owner, { email: 'person@example.com', grantManageAdmins: false }))
       .rejects.toMatchObject({ statusCode: 409, code: 'INVITATION_EXISTS' });
+  });
+});
+
+describe('AdminTeamService.createBootstrapInvitation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    state.reset();
+    for (const key of Object.keys(state.row)) delete state.row[key];
+    state.invitation.findFirst.mockReset().mockResolvedValue(null);
+    (state.db.user as { findFirst: ReturnType<typeof vi.fn>; count: ReturnType<typeof vi.fn> }).findFirst.mockReset().mockResolvedValue(null);
+    (state.db.user as { count: ReturnType<typeof vi.fn> }).count.mockReset().mockResolvedValue(0);
+    email.sendAdminInvitationEmail.mockResolvedValue(true);
+  });
+
+  it('creates a one-hour hashed-token bootstrap invitation with an operator-approval audit', async () => {
+    const result = await new AdminTeamService().createBootstrapInvitation({
+      email: ' First.Owner@Example.com ', authorizationReference: 'approval-1234',
+    });
+
+    expect(result).toMatchObject({ email: 'first.owner@example.com', status: AdminInvitationStatus.PENDING, deliveryStatus: AdminInvitationDelivery.SENT });
+    expect(state.invitation.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      email: 'first.owner@example.com', isBootstrap: true, invitedById: null, grantManageAdmins: true,
+      tokenHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    }) });
+    expect(email.sendAdminInvitationEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'first.owner@example.com', inviterName: null }));
+    expect(audit.recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({ actorId: null,
+      action: 'ADMIN_BOOTSTRAP_INVITATION_CREATED', details: { authorizationReference: 'approval-1234', expiresAt: expect.any(String) } }), state.db);
+    expect(JSON.stringify(result)).not.toMatch(/[a-f0-9]{64}/);
+  });
+
+  it('refuses bootstrap when any administrator already exists and does not send an invitation', async () => {
+    (state.db.user as { count: ReturnType<typeof vi.fn> }).count.mockResolvedValue(1);
+    await expect(new AdminTeamService().createBootstrapInvitation({ email: 'first@example.com', authorizationReference: 'approval-1234' }))
+      .rejects.toMatchObject({ statusCode: 409, code: 'BOOTSTRAP_UNAVAILABLE' });
+    expect(state.invitation.create).not.toHaveBeenCalled();
+    expect(email.sendAdminInvitationEmail).not.toHaveBeenCalled();
+  });
+
+  it('refuses a second bootstrap after an initial bootstrap invitation was accepted', async () => {
+    state.invitation.findFirst.mockResolvedValueOnce({ id: 'already-accepted' });
+    await expect(new AdminTeamService().createBootstrapInvitation({ email: 'first@example.com', authorizationReference: 'approval-1234' }))
+      .rejects.toMatchObject({ statusCode: 409, code: 'BOOTSTRAP_ALREADY_USED' });
+    expect(state.invitation.create).not.toHaveBeenCalled();
+    expect(email.sendAdminInvitationEmail).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed email and missing operator approval reference', async () => {
+    const service = new AdminTeamService();
+    await expect(service.createBootstrapInvitation({ email: 'not-an-email', authorizationReference: 'approval-1234' }))
+      .rejects.toMatchObject({ code: 'INVALID_EMAIL' });
+    await expect(service.createBootstrapInvitation({ email: 'first@example.com', authorizationReference: '   ' }))
+      .rejects.toMatchObject({ code: 'BOOTSTRAP_AUTHORIZATION_REQUIRED' });
+    expect(state.invitation.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['admin@electrohub.com', 'admin1@electrohub.com', 'admin2@electrohub.com'])(
+    'refuses the DEV seed administrator %s as the first PROD owner', async emailAddress => {
+      await expect(new AdminTeamService().createBootstrapInvitation({ email: emailAddress, authorizationReference: 'approval-1234' }))
+        .rejects.toMatchObject({ code: 'SEED_ADMIN_EMAIL_REFUSED' });
+      expect(state.invitation.create).not.toHaveBeenCalled();
+      expect(email.sendAdminInvitationEmail).not.toHaveBeenCalled();
+    });
+});
+
+describe('AdminTeamService.acceptInvitation bootstrap owner assignment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    state.reset();
+    state.setBootstrapAcceptanceRow({ id: 'invite-id', email: 'first@example.com', status: AdminInvitationStatus.PENDING,
+      expiresAt: new Date(Date.now() + 60_000), grantManageAdmins: true, invitedById: null, isBootstrap: true });
+    (state.db.user as { findFirst: ReturnType<typeof vi.fn>; count: ReturnType<typeof vi.fn> }).findFirst.mockReset().mockResolvedValue(null);
+    (state.db.user as { count: ReturnType<typeof vi.fn> }).count.mockReset().mockResolvedValue(0);
+  });
+
+  it('assigns initial owner/admin-management capabilities and starts mandatory MFA setup', async () => {
+    await expect(new AdminTeamService().acceptInvitation({ token: 'valid-bootstrap-token-value', firstName: 'First', lastName: 'Owner', password: 'Strong-password-123!' }))
+      .resolves.toMatchObject({ status: 'mfa-enrollment-required' });
+    expect(state.db.adminAccountSecurity).toHaveProperty('create');
+    expect((state.db.adminAccountSecurity as { create: ReturnType<typeof vi.fn> }).create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      userId: 'created-admin', isOwner: true, canManageAdmins: true,
+    }) });
+    expect(audit.recordAdminAudit).toHaveBeenCalledWith(expect.objectContaining({ action: 'ADMIN_INVITATION_ACCEPTED',
+      details: { invitedById: null, bootstrap: true } }), state.db);
   });
 });
 

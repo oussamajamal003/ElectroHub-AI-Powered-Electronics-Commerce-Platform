@@ -1307,6 +1307,8 @@ model AdminInvitation {
   status            AdminInvitationStatus   @default(PENDING)
   deliveryStatus    AdminInvitationDelivery @default(PENDING)
   grantManageAdmins Boolean                 @default(false)
+  /// One-time operator bootstrap invitation; only accepted as the initial owner while no ADMIN exists.
+  isBootstrap       Boolean                 @default(false)
   expiresAt         DateTime
   sendCount         Int                     @default(0)
   lastSentAt        DateTime?

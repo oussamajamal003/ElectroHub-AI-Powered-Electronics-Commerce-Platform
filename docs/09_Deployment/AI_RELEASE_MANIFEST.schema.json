@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ElectroHub AI production release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "releaseSha", "createdAt", "supabase", "model", "loader", "vectorIndex", "authorization"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "releaseSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "supabase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["environment", "projectRef", "region", "regionEvidenceReference"],
+      "properties": {
+        "environment": { "const": "production" },
+        "projectRef": { "type": "string", "pattern": "^[a-z]{20}$" },
+        "region": { "type": "string", "minLength": 1 },
+        "regionEvidenceReference": { "type": "string", "minLength": 1 }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "family", "modelVersion", "embeddingVersion", "modelIndexCompatibilityIdentifier", "preprocessVersion", "preprocessing", "tokenizer", "embeddingDimension", "artifactFormat", "artifactSha256", "descriptorSha256", "artifactFiles", "relevanceArtifact"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "family": { "type": "string", "minLength": 1 },
+        "modelVersion": { "type": "string", "minLength": 1 },
+        "embeddingVersion": { "type": "string", "minLength": 1 },
+        "modelIndexCompatibilityIdentifier": { "type": "string", "minLength": 1 },
+        "preprocessVersion": { "type": "string", "minLength": 1 },
+        "preprocessing": { "type": "string", "minLength": 1 },
+        "tokenizer": { "type": ["string", "null"] },
+        "embeddingDimension": { "type": "integer", "minimum": 1, "maximum": 4096 },
+        "artifactFormat": { "enum": ["safetensors", "onnx"] },
+        "artifactSha256": { "$ref": "#/$defs/sha256" },
+        "descriptorSha256": { "$ref": "#/$defs/sha256" },
+        "artifactFiles": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/artifactFile" }
+        },
+        "relevanceArtifact": { "$ref": "#/$defs/relevanceArtifact" }
+      }
+    },
+    "loader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["module", "sourcePath", "sourceSha256", "loaderVersion", "runtime"],
+      "properties": {
+        "module": { "type": "string", "minLength": 1 },
+        "sourcePath": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+$" },
+        "sourceSha256": { "$ref": "#/$defs/sha256" },
+        "loaderVersion": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "runtime": { "type": "string", "minLength": 1 }
+      }
+    },
+    "vectorIndex": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["environment", "projectRef", "embeddingVersion", "modelIndexCompatibilityIdentifier", "preprocessVersion", "embeddingDimension", "catalogSnapshotSha256", "productIdSetSha256", "eligibleProductCount", "expectedImageCount", "storedImageCount", "activeBefore", "activeAfter", "activationEvidenceReference"],
+      "properties": {
+        "environment": { "const": "production" },
+        "projectRef": { "type": "string", "pattern": "^[a-z]{20}$" },
+        "embeddingVersion": { "type": "string", "minLength": 1 },
+        "modelIndexCompatibilityIdentifier": { "type": "string", "minLength": 1 },
+        "preprocessVersion": { "type": "string", "minLength": 1 },
+        "embeddingDimension": { "type": "integer", "minimum": 1, "maximum": 4096 },
+        "catalogSnapshotSha256": { "$ref": "#/$defs/sha256" },
+        "productIdSetSha256": { "$ref": "#/$defs/sha256" },
+        "eligibleProductCount": { "type": "integer", "minimum": 0 },
+        "expectedImageCount": { "type": "integer", "minimum": 0 },
+        "storedImageCount": { "type": "integer", "minimum": 0 },
+        "activeBefore": { "type": ["string", "null"] },
+        "activeAfter": { "type": "string", "minLength": 1 },
+        "activationEvidenceReference": { "type": "string", "minLength": 1 }
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approvalReference", "operator"],
+      "properties": {
+        "approvalReference": { "type": "string", "minLength": 1 },
+        "operator": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "artifactFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sizeBytes", "sha256"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+$" },
+        "sizeBytes": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "relevanceArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relevanceVersion", "backboneModelVersion", "manifestSha256", "files"],
+      "properties": {
+        "relevanceVersion": { "type": "string", "minLength": 1 },
+        "backboneModelVersion": { "type": "string", "minLength": 1 },
+        "manifestSha256": { "$ref": "#/$defs/sha256" },
+        "files": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/artifactFile" } }
+      }
+    }
+  }
+}

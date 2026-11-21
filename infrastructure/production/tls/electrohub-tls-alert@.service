@@ -1,0 +1,6 @@
+[Unit]
+Description=Record an ElectroHub TLS unit failure
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/logger -p daemon.err -t electrohub-tls "TLS operation failed: %i"

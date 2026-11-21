@@ -39,7 +39,7 @@ const LEGACY_ADMIN = '11111111-1111-4111-8111-111111111111';
 const ip = () => `10.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
 const api = () => { const forwarded = ip(); return {
   post: (url: string, body?: object, token?: string, cookie?: string) => {
-    let call = request(app).post(url).set('X-Forwarded-For', forwarded);
+    let call = request(app).post(url).set('X-Forwarded-For', forwarded).set('Origin', env.FRONTEND_URL ?? 'http://localhost:3000');
     if (token) call = call.set('Authorization', `Bearer ${token}`);
     if (cookie) call = call.set('Cookie', cookie);
     return body ? call.send(body) : call;

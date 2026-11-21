@@ -364,3 +364,7 @@ Nginx configuration is complete when:
 # 22. Nginx Principle
 
 > **Nginx provides the controlled public entry point to ElectroHub, separating internet traffic from internal Docker services while handling HTTPS and reverse-proxy responsibilities.**
+
+## Task 06.3 repository configuration status
+
+`infrastructure/production/nginx.conf.template` is the single-origin candidate. It serves the React SPA, proxies `/api/` and `/socket.io/`, rejects untrusted hosts, denies public diagnostics, and serves only ACME challenge files over HTTP. The DNS-hostname TLS lifecycle candidate is under `infrastructure/production/tls/`; it is staging-only by default and has not been exercised. Nginx syntax, Compose routing, TLS, browser sessions and public traffic remain **NOT VERIFIED** because Docker/Nginx and a selected hostname are unavailable. See [the Task 06.3B single-origin design](TASK_06.3_SINGLE_ORIGIN_VPS_DESIGN.md), [implementation evidence](TASK_06.3_SINGLE_ORIGIN_IMPLEMENTATION_EVIDENCE.md) and [TLS lifecycle runbook](TLS_LIFECYCLE.md).

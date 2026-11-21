@@ -1,0 +1,71 @@
+{
+  "manifestVersion": 1,
+  "status": "LOCAL_ARTIFACT_CANDIDATE_NOT_PRODUCTION_RELEASE",
+  "sourceEvidence": "Checked-out ignored model directories; byte-level SHA-256 values computed locally on 2026-11-17. These artifacts are not tracked, bundled, or activated by this manifest.",
+  "expectedProductionProjectRefFromRepositoryConfig": "yepfgjehdstlxbpespun",
+  "catalogSnapshot": null,
+  "vectorIndex": {
+    "schemaMigrations": ["20261024000000_ai_vector_search", "20261028010000_catalog_media_overlay"],
+    "primaryTable": "ai.product_image_embeddings",
+    "overlayTable": "ai.media_image_embeddings",
+    "vectorType": "extensions.vector(256)",
+    "similarityOperator": "extensions.<=> cosine distance",
+    "normalization": "L2 unit norm, DB check tolerance 0.001",
+    "modelIndexCompatibilityIdentifier": "siglip2-b16-p256-d1-b3900dd9fad5",
+    "activeIndexVersion": null,
+    "productionSchemaApplied": null
+  },
+  "model": {
+    "artifactDirectory": "apps/ai-service/models/siglip2-b16-p256-d1",
+    "name": "electrohub-visual-search",
+    "family": "SigLIP 2 vision encoder with ElectroHub projection",
+    "modelVersion": "siglip2-b16-p256-d1",
+    "embeddingVersion": "siglip2-b16-p256-d1-b3900dd9fad5",
+    "modelIndexCompatibilityIdentifier": "siglip2-b16-p256-d1-b3900dd9fad5",
+    "preprocessVersion": "siglip2-rgb-r224-bilinear-norm05-v1",
+    "preprocessing": "RGB conversion; bilinear resize 224x224; no crop; uint8 to [0,1]; channel mean/std 0.5; projected output L2-normalized",
+    "tokenizer": null,
+    "embeddingDimension": 256,
+    "artifactFormat": "safetensors",
+    "weightsManifestSha256": "b3900dd9fad5222758071cdaede682cb375a1ae8cf06624c30346abd1aff243a",
+    "descriptorSha256": "d18f1cc6f8d219c1931275d0e2752aa140a07b1b81256aff41cf1f0b127ce189",
+    "artifactFiles": [
+      { "path": "descriptor.json", "sizeBytes": 363, "sha256": "d18f1cc6f8d219c1931275d0e2752aa140a07b1b81256aff41cf1f0b127ce189" },
+      { "path": "weights.json", "sizeBytes": 1231, "sha256": "b3900dd9fad5222758071cdaede682cb375a1ae8cf06624c30346abd1aff243a" },
+      { "path": "projection.safetensors", "sizeBytes": 789656, "sha256": "9e36be49d2ad148a6cfd4fa35e5ff9a3c6fac419d9d6aaf953946cedb8af326d" },
+      { "path": "vision/model-00001-of-00010.safetensors", "sizeBytes": 19207480, "sha256": "6dacce7b1454a5ee191f2793f96efbd1ae543a8314cdc35e071f72fe6e8990dd" },
+      { "path": "vision/model-00002-of-00010.safetensors", "sizeBytes": 15362120, "sha256": "9162175704662658b9d8520822eba5a2e98ca7975a36db7dc31a5f3bab17a9dc" },
+      { "path": "vision/model-00003-of-00010.safetensors", "sizeBytes": 18902384, "sha256": "5a72bc15d1e4cf084bfa5a5da862c472618fda33264873ff7f097ddd339d0a3a" },
+      { "path": "vision/model-00004-of-00010.safetensors", "sizeBytes": 18901048, "sha256": "455deb514a7023baaf987da228609316aa456b5946f3a920b4d6d413d978e592" },
+      { "path": "vision/model-00005-of-00010.safetensors", "sizeBytes": 18906320, "sha256": "272bc76934041738e6578de551fb932e3c43889851276dfc53881eb69741b45b" },
+      { "path": "vision/model-00006-of-00010.safetensors", "sizeBytes": 18902384, "sha256": "6d30d63c2c8cf07ba7462389ce2740f0a9aeb9a0bd988354c07d863b5138319a" },
+      { "path": "vision/model-00007-of-00010.safetensors", "sizeBytes": 18901048, "sha256": "d4d9c9dbf20d814ea0c8256ef25efc4d842cc898404b3344fd21a4754553684f" },
+      { "path": "vision/model-00008-of-00010.safetensors", "sizeBytes": 18906304, "sha256": "e079e3116f1aaf260c34cf8d66ec30c88c68f13d67705234e3cd9cf760d14950" },
+      { "path": "vision/model-00009-of-00010.safetensors", "sizeBytes": 18902400, "sha256": "df75e5aeae611fffbfda886dab2fcf239de5626b84c0f1c201c4697657efa406" },
+      { "path": "vision/model-00010-of-00010.safetensors", "sizeBytes": 18898808, "sha256": "c7f6b127b2bb92574dd7d2fd8bbb14592b25536bb7caf8717961104c07efd558" }
+    ],
+    "totalBytes": 186581546,
+    "relevanceArtifact": {
+      "artifactDirectory": "apps/ai-service/models/relevance-siglip2-d3",
+      "relevanceVersion": "siglip2-b16-p256-d1-family-gate-v2",
+      "backboneModelVersion": "siglip2-b16-p256-d1",
+      "manifestSha256": "3d2baad2bcd95ad77c474115c958056b01afb6e9498f52c6116fe4a07f114175",
+      "files": [
+        { "path": "relevance.json", "sizeBytes": 1379, "sha256": "3d2baad2bcd95ad77c474115c958056b01afb6e9498f52c6116fe4a07f114175" },
+        { "path": "head.safetensors", "sizeBytes": 17612, "sha256": "db8acc3ab3bc5ee669a4ea193e29e5dc8beb67748938ed91cc951d73fdbf6587" },
+        { "path": "family_gate.safetensors", "sizeBytes": 141632, "sha256": "be4e874667e7ab86742805788b7055d427eba8018dead5543b4755fdf7ba952a" }
+      ],
+      "totalBytes": 160623
+    }
+  },
+  "loader": {
+    "module": "app.models.siglip_loader.load_siglip_encoder",
+    "sourcePath": "apps/ai-service/app/models/siglip_loader.py",
+    "sourceSha256": "0beb6623007febaef3c82ac6d986f76e4549825eb47a8b4bcb2a553839892a0b",
+    "loaderVersion": "sha256:0beb6623007febaef3c82ac6d986f76e4549825eb47a8b4bcb2a553839892a0b",
+    "runtime": "Python 3.11, CPU-only PyTorch 2.13.0+cpu, torchvision 0.28.0+cpu, safetensors 0.6.2",
+    "loaderCodeShaRequiredAtRelease": true,
+    "activationCondition": "A separately authorized PROD index is complete and the AI readiness endpoint confirms the active embeddingVersion, modelVersion, preprocessVersion, dimension, and artifact SHA match this manifest.",
+    "rollbackCondition": "Restore the prior compatible model artifact and use the existing audited vector-index rollback only after the prior version is confirmed present and compatible; app rollback alone does not reverse index activation."
+  }
+}

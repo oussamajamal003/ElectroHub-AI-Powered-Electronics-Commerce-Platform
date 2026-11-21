@@ -144,7 +144,13 @@ jobs:
         with:
           node-version: '22.19.0'
       - name: Policy self-tests
-        run: node --test .github/scripts/*.test.cjs
+        run: node --test .github/scripts/*.test.cjs infrastructure/production/*.test.cjs infrastructure/production/tls/*.test.cjs
+      - name: Check offline deployment environment contract
+        run: python3 infrastructure/production/verify-production-env.test.py
+      - name: Check fail-closed production AI release contract
+        run: python3 infrastructure/production/production-ai-release.test.py
+      - name: Check privileged production bundle intake and rollback guards
+        run: python3 infrastructure/production/prepare-release-bundle.test.py
       - name: Check workflows cannot deploy migrations or use shared-database credentials
         run: node .github/scripts/check-workflow-policy.cjs
 

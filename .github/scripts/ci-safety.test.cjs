@@ -283,20 +283,52 @@ test('every real workflow in this repository satisfies the policy', () => {
   assert.deepEqual(policy.checkWorkflows(files), []);
 });
 
-test('DEV is manual-only and PROD follows only successful trusted develop CI with scoped secrets', () => {
+test('production release/deploy workflow is manual, exact-SHA, environment-gated, and does not publish or migrate', () => {
+  const file = fs.readFileSync(path.resolve(__dirname, '../workflows/deploy-production.yml'), 'utf8');
+  assert.deepEqual(policy.checkWorkflow('deploy-production.yml', file), []);
+  assert.match(policy.checkWorkflow('deploy-production.yml', file.replace('workflow_dispatch:', 'push:\n    branches: [develop]\n  workflow_dispatch:')).join(), /workflow_dispatch only/);
+  assert.match(policy.checkWorkflow('deploy-production.yml', file.replaceAll('"$APPROVED_COMMIT" == "$GITHUB_SHA"', '"$APPROVED_COMMIT" == "0000000000000000000000000000000000000000"')).join(), /exact run SHA/);
+  assert.match(policy.checkWorkflow('deploy-production.yml', file.replace('environment: electrohub-production-deploy', 'environment: unprotected')).join(), /protected production environment/);
+  assert.match(policy.checkWorkflow('deploy-production.yml', `${file}\n      - run: docker push registry.example/app:latest`).join(), /unapproved registry/);
+  assert.match(policy.checkWorkflow('deploy-production.yml', `${file}\n      - run: npx prisma migrate deploy`).join(), /keep database migration separate/);
+  assert.match(policy.checkWorkflow('deploy-production.yml', file.replaceAll('AI_MODEL_ARTIFACT_PRODUCTION.json', 'AI_MODEL_ARTIFACT_CANDIDATE.json')).join(), /separate approved AI release and artifact manifests|local-only AI artifact candidate/);
+});
+
+test('privileged production workflows require full Action SHAs with version comments', () => {
+  for (const name of ['deploy-production.yml', 'prod-migration.yml']) {
+    const file = fs.readFileSync(path.resolve(__dirname, `../workflows/${name}`), 'utf8');
+    assert.deepEqual(policy.checkWorkflow(name, file), []);
+    const tagged = file.replace(/@([a-f0-9]{40})\s+#\s+v\d+\.\d+\.\d+/g, '@v4');
+    assert.match(policy.checkWorkflow(name, tagged).join(), /full reviewed 40-character commit SHA/);
+    const missingVersion = file.replace(/\s+#\s+v\d+\.\d+\.\d+/g, '');
+    assert.match(policy.checkWorkflow(name, missingVersion).join(), /human-readable version comment/);
+  }
+});
+
+test('workflow-policy CI invokes nested TLS lifecycle policy tests', () => {
+  const ci = fs.readFileSync(path.resolve(__dirname, '../workflows/ci.yml'), 'utf8');
+  assert.match(ci, /infrastructure\/production\/tls\/\*\.test\.cjs/);
+  assert.match(ci, /production-ai-release\.test\.py/);
+});
+
+test('DEV and PROD migrations are manual-only, exact-SHA and scoped to their protected environments', () => {
   const files = policy.loadWorkflows(path.resolve(__dirname, '../workflows'));
   const dev = files.find((file) => file.name === 'dev-migration.yml');
   const prod = files.find((file) => file.name === 'prod-migration.yml');
   assert.ok(dev);
   assert.ok(prod);
   assert.deepEqual(policy.triggers(dev.text), ['workflow_dispatch']);
-  assert.deepEqual(policy.triggers(prod.text), ['workflow_run']);
-  assert.match(prod.text, /workflows:\s*\["Development CI"\]/);
-  assert.match(prod.text, /branches:\s*\r?\n\s+- develop/);
-  assert.match(prod.text, /github\.event\.workflow_run\.conclusion == 'success'/);
-  assert.match(prod.text, /github\.event\.workflow_run\.event == 'push'/);
-  assert.match(prod.text, /head_repository\.full_name == github\.repository/);
-  const holders = files.filter((file) => /secrets\.ELECTROHUB_/.test(file.text)).map((file) => file.name);
+  assert.deepEqual(policy.triggers(prod.text), ['workflow_dispatch']);
+  assert.match(prod.text, /approved_commit:/);
+  assert.match(prod.text, /authorization_reference:/);
+  assert.match(prod.text, /if: github\.ref == 'refs\/heads\/develop'/);
+  assert.match(prod.text, /\[\s*"\$APPROVED_COMMIT" != "\$GITHUB_SHA"\s*\]/);
+  assert.match(prod.text, /ref: \$\{\{ inputs\.approved_commit \}\}/);
+  assert.match(prod.text, /checks: read/);
+  assert.match(prod.text, /Required \/ Quality Gate/);
+  assert.match(prod.text, /Security \/ NPM Audit/);
+  assert.match(prod.text, /github\.rest\.checks\.listForRef/);
+  const holders = files.filter((file) => policy.SHARED_DB_SECRET.test(file.text)).map((file) => file.name);
   assert.deepEqual(holders, ['dev-migration.yml', 'prod-migration.yml']);
   assert.doesNotMatch(prod.text, /APPROVED_MIGRATIONS|approved_migrations|20261029020000_recommendation_consent_consistency/);
   assert.match(prod.text, /Pending migrations will be discovered from the checked-in Prisma migrations and PROD ledger/);
@@ -326,6 +358,15 @@ test('Task 04.4 consent consistency is a forward-only additive migration', () =>
   assert.deepEqual(plan.checkDestructiveSql(name, sql), []);
 });
 
+test('Task 06.3 administrator bootstrap migration is additive and limits pending bootstrap invitations to one', () => {
+  const name = '20261117120000_admin_bootstrap_invitation';
+  const sql = fs.readFileSync(path.resolve(__dirname, `../../apps/backend/prisma/migrations/${name}/migration.sql`), 'utf8');
+  assert.deepEqual(plan.checkDestructiveSql(name, sql), []);
+  assert.match(sql, /ADD COLUMN "isBootstrap" BOOLEAN NOT NULL DEFAULT false/);
+  assert.match(sql, /CREATE UNIQUE INDEX "admin_invitations_one_pending_bootstrap_key"/);
+  assert.match(sql, /WHERE "isBootstrap" = true AND "status" = 'PENDING'/);
+});
+
 test('shared DEV migration deploy pins the DEV project and uses only the entrypoint allowlist', () => {
   const shared = fs.readFileSync(path.resolve(__dirname, '../../apps/backend/scripts/dev-migrate.cjs'), 'utf8');
   assert.match(shared, /assertTarget\([^)]*'pzxekjybdiulzmssalfo', 'DEV'\)/);
@@ -333,24 +374,41 @@ test('shared DEV migration deploy pins the DEV project and uses only the entrypo
   assert.doesNotMatch(shared, /process\.env\.APPROVED_MIGRATIONS/);
 });
 
-test('policy rejects unsafe PROD triggers and missing CI/develop guards', () => {
+test('policy rejects unsafe PROD triggers and missing exact-SHA/develop/authorization guards', () => {
   const base = fs.readFileSync(path.resolve(__dirname, '../workflows/prod-migration.yml'), 'utf8');
 
-  // A direct push trigger could deploy before Development CI finishes.
+  // An automatic trigger could mutate PROD without an operator dispatch.
   const directPush = base.replace('on:', 'on:\n  push:\n    branches: [develop]');
-  assert.match(policy.checkWorkflow('prod-migration.yml', directPush).join(), /only after Development CI completes/);
+  assert.match(policy.checkWorkflow('prod-migration.yml', directPush).join(), /workflow_dispatch only/);
 
-  const manual = base.replace('on:', 'on:\n  workflow_dispatch:');
-  assert.match(policy.checkWorkflow('prod-migration.yml', manual).join(), /only after Development CI completes/);
+  const automatic = base.replace('workflow_dispatch:', 'workflow_run:\n    workflows: ["Development CI"]\n    types: [completed]\n  workflow_dispatch:');
+  assert.match(policy.checkWorkflow('prod-migration.yml', automatic).join(), /workflow_dispatch only/);
 
-  const wrongWorkflow = base.replace('"Development CI"', '"Security Audit"');
-  assert.match(policy.checkWorkflow('prod-migration.yml', wrongWorkflow).join(), /must be triggered by Development CI/);
+  const missingExactSha = base.replace('if [ "$APPROVED_COMMIT" != "$GITHUB_SHA" ]; then', 'if false; then');
+  assert.match(policy.checkWorkflow('prod-migration.yml', missingExactSha).join(), /exactly match the workflow SHA/);
 
-  const missingSuccess = base.replace("github.event.workflow_run.conclusion == 'success' && ", '');
-  assert.match(policy.checkWorkflow('prod-migration.yml', missingSuccess).join(), /verify trusted successful develop CI/);
+  const missingAuthorization = base.replace('if [ -z "${AUTHORIZATION_REFERENCE//[[:space:]]/}" ]; then', 'if false; then');
+  assert.match(policy.checkWorkflow('prod-migration.yml', missingAuthorization).join(), /non-empty authorization reference/);
 
-  const wrongBranch = base.replace('      - develop', '      - main');
-  assert.match(policy.checkWorkflow('prod-migration.yml', wrongBranch).join(), /filter to develop/);
+  const wrongBranch = base.replace("if: github.ref == 'refs/heads/develop'", "if: github.ref == 'refs/heads/main'");
+  assert.match(policy.checkWorkflow('prod-migration.yml', wrongBranch).join(), /restricted to develop/);
+
+  const missingInput = base.replace(/authorization_reference:/, 'auth_reference:');
+  assert.match(policy.checkWorkflow('prod-migration.yml', missingInput).join(), /authorization_reference dispatch input/);
+});
+
+test('CI, security audit and migration verification cover develop/main with push and pull request parity', () => {
+  const dir = path.resolve(__dirname, '../workflows');
+  for (const name of ['ci.yml', 'security.yml', 'verify-migration.yml']) {
+    const text = fs.readFileSync(path.join(dir, name), 'utf8');
+    const pushBranches = policy.getPushBranches(text);
+    assert.ok(pushBranches.includes('develop') && pushBranches.includes('main'), `${name} push branches`);
+    assert.match(text, /pull_request:\s*\r?\n\s+branches:\s*\r?\n\s+- develop\s*\r?\n\s+- main/, `${name} pull request branches`);
+  }
+  const ci = fs.readFileSync(path.join(dir, 'ci.yml'), 'utf8');
+  assert.match(ci, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
+  assert.match(ci, /name: Required \/ Quality Gate/);
+  assert.match(ci, /needs: \[frontend-lint, frontend-typecheck, frontend-test, frontend-build, backend-lint, backend-typecheck, backend-test, backend-build, workflow-policy, release-e2e, branding-e2e, ai, ai-docker, application-docker, payment-postgres\]/);
 });
 
 test('policy rejects DEV workflow if push trigger is introduced', () => {

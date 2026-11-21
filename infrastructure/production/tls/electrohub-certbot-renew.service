@@ -1,0 +1,14 @@
+[Unit]
+Description=Renew ElectroHub DNS TLS certificates
+OnFailure=electrohub-tls-alert@%n.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/electrohub/tls.env
+ExecStart=/bin/bash /var/lib/electrohub/current/source/infrastructure/production/tls/renew.sh
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/etc/letsencrypt /var/lib/letsencrypt /var/log/letsencrypt /var/lib/electrohub/acme /etc/electrohub/tls /run/lock

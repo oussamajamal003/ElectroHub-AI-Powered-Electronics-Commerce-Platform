@@ -6,6 +6,13 @@
 apps/*
 !apps/frontend
 !apps/backend
+!infrastructure
+!infrastructure/production
+infrastructure/production/*
+!infrastructure/production/Dockerfile.edge
+!infrastructure/production/nginx.conf.template
+!infrastructure/production/nginx-acme-bootstrap.conf.template
+!infrastructure/production/edge-entrypoint.sh
 .git
 .cache
 **/.cache

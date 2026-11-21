@@ -137,10 +137,10 @@ describe('Google OAuth ownership and sessions', () => {
     // The response also expires the retired shared cookie. supertest's jar keys by name only, so send the issued customer cookie explicitly.
     const issued = (linked.headers['set-cookie'] as unknown as string[]).find(cookie => cookie.startsWith('electrohub_customer_refresh=') && /Path=\/api\/auth\/customer;/.test(cookie));
     expect(issued).toBeTruthy();
-    const refresh = await request(app).post('/api/auth/customer/refresh').set('Cookie', issued!.split(';')[0]).expect(200);
+    const refresh = await request(app).post('/api/auth/customer/refresh').set('Origin', 'http://localhost:3000').set('Cookie', issued!.split(';')[0]).expect(200);
     expect(refresh.body.accessToken).toBeTruthy();
     const rotated = (refresh.headers['set-cookie'] as unknown as string[]).find(cookie => cookie.startsWith('electrohub_customer_refresh=') && /Path=\/api\/auth\/customer;/.test(cookie))!.split(';')[0];
-    await request(app).post('/api/auth/customer/logout').set('Cookie', rotated).expect(200);
-    await request(app).post('/api/auth/customer/refresh').set('Cookie', rotated).expect(401);
+    await request(app).post('/api/auth/customer/logout').set('Origin', 'http://localhost:3000').set('Cookie', rotated).expect(200);
+    await request(app).post('/api/auth/customer/refresh').set('Origin', 'http://localhost:3000').set('Cookie', rotated).expect(401);
   }, 60000);
 });

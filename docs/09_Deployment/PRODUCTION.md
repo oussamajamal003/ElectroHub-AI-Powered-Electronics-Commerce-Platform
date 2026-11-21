@@ -195,7 +195,7 @@ Documents must be access-controlled so customers can only retrieve documents bel
 
 Supabase Storage ('product-media' bucket) is used for catalog application media.
 
-Production credentials (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) must be stored as protected environment variables. Isolated buckets are maintained per environment (DEV vs PROD).
+Production Storage configuration uses `SUPABASE_URL`, `SUPABASE_PROJECT_REF`, and `SUPABASE_SECRET_KEY` (preferred) or the legacy `SUPABASE_SERVICE_ROLE_KEY` fallback, plus the `product-media` bucket. Store credentials server-side only and verify the effective Storage privileges; this code path does not itself prove least privilege. DEV and PROD projects/buckets remain isolated.
 
 ---
 
@@ -521,3 +521,7 @@ Production configuration is complete when:
 # 26. Production Principle
 
 > **Production is a controlled environment where application correctness, security, reliability, observability, and recoverability must all be demonstrated before release.**
+
+## Task 06.3 status
+
+The Task 06.3B repository candidate selects a single-origin VPS topology for compatibility with relative `/api`/Socket.IO requests and current host-only `SameSite=Lax` cookies. A manual exact-SHA workflow and candidate Nginx/Compose/TLS files exist but were not run. Free hostname/OAuth eligibility remains conditional, no browser-compatible production hostname was proven, and the $6/1 GiB Droplet is infeasible for the required full stack based on source-derived AI load memory estimates. Deployment remains **NO-GO** pending a viable hostname, browser/TLS evidence, measured host sizing, protected Environment verification, PROD backup/restore and read-only identity checks. No resource, PROD database or provider setting was changed. See [the architecture design](TASK_06.3_SINGLE_ORIGIN_VPS_DESIGN.md) and [implementation evidence](TASK_06.3_SINGLE_ORIGIN_IMPLEMENTATION_EVIDENCE.md).

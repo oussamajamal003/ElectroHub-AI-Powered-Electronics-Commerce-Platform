@@ -1,0 +1,26 @@
+FROM node:22.19.0-alpine AS frontend-builder
+
+WORKDIR /workspace
+COPY package.json package-lock.json ./
+COPY apps/frontend/package.json ./apps/frontend/package.json
+COPY apps/backend/package.json ./apps/backend/package.json
+RUN npm ci
+
+COPY apps/frontend ./apps/frontend
+WORKDIR /workspace/apps/frontend
+RUN npm run build
+
+FROM nginx:1.30.6-alpine3.24
+COPY infrastructure/production/nginx.conf.template /etc/electrohub/nginx.conf.template
+COPY infrastructure/production/nginx-acme-bootstrap.conf.template /etc/electrohub/nginx-acme-bootstrap.conf.template
+COPY infrastructure/production/edge-entrypoint.sh /usr/local/bin/electrohub-edge-entrypoint
+COPY --from=frontend-builder /workspace/apps/frontend/dist /usr/share/nginx/html
+RUN chmod 0555 /usr/local/bin/electrohub-edge-entrypoint \
+    && chown -R 0:0 /usr/share/nginx/html \
+    && find /usr/share/nginx/html -type d -exec chmod 0555 {} \; \
+    && find /usr/share/nginx/html -type f -exec chmod 0444 {} \;
+
+USER 101:101
+EXPOSE 8080 8443
+ENTRYPOINT ["/usr/local/bin/electrohub-edge-entrypoint"]
+CMD ["https"]

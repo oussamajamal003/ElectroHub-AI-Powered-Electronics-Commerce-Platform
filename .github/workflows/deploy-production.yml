@@ -1,0 +1,219 @@
+name: Single-origin production release and deploy
+
+# Manual only. Building produces a checksummed local image bundle; deployment waits for the
+# electrohub-production-deploy Environment and the separate host/backup preflight.
+on:
+  workflow_dispatch:
+    inputs:
+      approved_commit:
+        description: 'Full lowercase SHA of the reviewed develop commit; must equal this workflow run SHA.'
+        required: true
+        type: string
+      authorization_reference:
+        description: 'Reference to the written release/deployment approval.'
+        required: true
+        type: string
+      backup_evidence_reference:
+        description: 'Reference to the separately verified production backup evidence record.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  checks: read
+  actions: read
+
+concurrency:
+  group: electrohub-production-release-deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build exact-SHA images and release bundle
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    steps:
+      - name: Validate exact SHA and authorization references
+        shell: bash
+        env:
+          APPROVED_COMMIT: ${{ inputs.approved_commit }}
+          AUTHORIZATION_REFERENCE: ${{ inputs.authorization_reference }}
+          BACKUP_EVIDENCE_REFERENCE: ${{ inputs.backup_evidence_reference }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == refs/heads/develop ]]
+          [[ "$APPROVED_COMMIT" =~ ^[0-9a-f]{40}$ && "$APPROVED_COMMIT" == "$GITHUB_SHA" ]]
+          [[ "$AUTHORIZATION_REFERENCE" =~ ^[A-Za-z0-9][A-Za-z0-9._:/-]{3,199}$ ]]
+          [[ "$BACKUP_EVIDENCE_REFERENCE" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{3,199}$ ]]
+
+      - name: Fail closed pending approved whole-release provenance policy
+        shell: bash
+        run: |
+          echo "Production release is disabled until the whole-release provenance trust owner and host verification policy are approved and implemented." >&2
+          exit 1
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.approved_commit }}
+          persist-credentials: false
+
+      - name: Require a distinct approved AI production release before building images
+        shell: bash
+        run: |
+          set -euo pipefail
+          release="docs/09_Deployment/AI_PRODUCTION_RELEASE.json"
+          artifacts="docs/09_Deployment/AI_MODEL_ARTIFACT_PRODUCTION.json"
+          [[ -s "$release" && -s "$artifacts" ]] || {
+            echo "No approved production AI release is present; the local-only candidate cannot be deployed." >&2
+            exit 1
+          }
+          python3 - "$release" "$artifacts" <<'PY'
+          import json, pathlib, sys
+          release = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          artifacts = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+          approved = "APPROVED_PRODUCTION_RELEASE"
+          if release.get("schemaVersion") != 1 or release.get("status") != approved or artifacts.get("status") != approved:
+              raise SystemExit("AI production release metadata is absent or not explicitly approved")
+          if artifacts.get("status") == "LOCAL_ARTIFACT_CANDIDATE_NOT_PRODUCTION_RELEASE":
+              raise SystemExit("Local-only AI artifact candidate cannot be deployed")
+          PY
+
+      - name: Require exact-SHA quality and security checks
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        env:
+          APPROVED_COMMIT: ${{ inputs.approved_commit }}
+        with:
+          script: |
+            const sha = process.env.APPROVED_COMMIT;
+            const { data } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: sha,
+              per_page: 100,
+            });
+            for (const name of ['Required / Quality Gate', 'Security / NPM Audit']) {
+              const latest = data.check_runs
+                .filter((run) => run.name === name && run.head_sha === sha)
+                .sort((a, b) => Date.parse(b.completed_at ?? b.started_at ?? '') - Date.parse(a.completed_at ?? a.started_at ?? ''))[0];
+              if (!latest || latest.status !== 'completed' || latest.conclusion !== 'success') {
+                core.setFailed(`Required exact-SHA check is not successful: ${name}`);
+              }
+            }
+
+      - name: Build application images from the repository root context
+        env:
+          RELEASE_SHA: ${{ inputs.approved_commit }}
+        run: |
+          set -euo pipefail
+          docker build --pull -f apps/backend/Dockerfile -t "electrohub/backend:$RELEASE_SHA" .
+          docker build --pull -f apps/ai-service/Dockerfile -t "electrohub/ai-service:$RELEASE_SHA" apps/ai-service
+          docker build --pull -f infrastructure/production/Dockerfile.edge -t "electrohub/edge:$RELEASE_SHA" .
+
+      - name: Assemble and verify immutable release bundle
+        env:
+          RELEASE_SHA: ${{ inputs.approved_commit }}
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/electrohub-release"
+          mkdir -m 0700 -p "$bundle"
+          git archive --format=tar.gz --output="$bundle/source.tar.gz" "$RELEASE_SHA"
+          cp docs/09_Deployment/AI_PRODUCTION_RELEASE.json "$bundle/AI_PRODUCTION_RELEASE.json"
+          cp docs/09_Deployment/AI_MODEL_ARTIFACT_PRODUCTION.json "$bundle/AI_MODEL_ARTIFACT_PRODUCTION.json"
+          docker save --output="$bundle/images.tar" \
+            "electrohub/backend:$RELEASE_SHA" \
+            "electrohub/ai-service:$RELEASE_SHA" \
+            "electrohub/edge:$RELEASE_SHA"
+          node infrastructure/production/create-release-manifest.cjs \
+            "$RELEASE_SHA" "$bundle" "$bundle/release-manifest.json"
+          node infrastructure/production/verify-release-manifest.cjs \
+            "$bundle/release-manifest.json" "$RELEASE_SHA" "$bundle"
+
+      - name: Upload short-lived release bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: electrohub-release-${{ inputs.approved_commit }}
+          path: ${{ runner.temp }}/electrohub-release/
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    name: Deploy release to the approved VPS
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    environment: electrohub-production-deploy
+    steps:
+      - name: Recheck exact SHA and input format
+        shell: bash
+        env:
+          APPROVED_COMMIT: ${{ inputs.approved_commit }}
+          AUTHORIZATION_REFERENCE: ${{ inputs.authorization_reference }}
+          BACKUP_EVIDENCE_REFERENCE: ${{ inputs.backup_evidence_reference }}
+        run: |
+          set -euo pipefail
+          [[ "$APPROVED_COMMIT" =~ ^[0-9a-f]{40}$ && "$APPROVED_COMMIT" == "$GITHUB_SHA" ]]
+          [[ "$AUTHORIZATION_REFERENCE" =~ ^[A-Za-z0-9][A-Za-z0-9._:/-]{3,199}$ ]]
+          [[ "$BACKUP_EVIDENCE_REFERENCE" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{3,199}$ ]]
+
+      - name: Fail closed pending approved whole-release provenance policy
+        shell: bash
+        run: |
+          echo "Production release is disabled until the whole-release provenance trust owner and host verification policy are approved and implemented." >&2
+          exit 1
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.approved_commit }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: electrohub-release-${{ inputs.approved_commit }}
+          path: ${{ runner.temp }}/electrohub-release
+
+      - name: Verify bundle and loaded image identities
+        env:
+          APPROVED_COMMIT: ${{ inputs.approved_commit }}
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/electrohub-release"
+          node infrastructure/production/verify-release-manifest.cjs --files-only \
+            "$bundle/release-manifest.json" "$APPROVED_COMMIT" "$bundle"
+          docker load --input "$bundle/images.tar" >/dev/null
+          node infrastructure/production/verify-release-manifest.cjs \
+            "$bundle/release-manifest.json" "$APPROVED_COMMIT" "$bundle"
+
+      - name: Configure pinned SSH identities
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ELECTROHUB_DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.ELECTROHUB_DEPLOY_SSH_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.ELECTROHUB_DEPLOY_SSH_HOST }}
+          SSH_USER: ${{ secrets.ELECTROHUB_DEPLOY_SSH_USER }}
+        run: |
+          set -euo pipefail
+          [[ -n "$SSH_PRIVATE_KEY" && -n "$SSH_KNOWN_HOSTS" && "$SSH_HOST" =~ ^[A-Za-z0-9.-]+$ && "$SSH_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]] || {
+            echo "Protected host SSH settings are incomplete; expected secret names are documented." >&2
+            exit 1
+          }
+          install -m 0700 -d "$RUNNER_TEMP/electrohub-ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/electrohub-ssh/deploy_key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/electrohub-ssh/known_hosts"
+          chmod 0600 "$RUNNER_TEMP/electrohub-ssh/deploy_key" "$RUNNER_TEMP/electrohub-ssh/known_hosts"
+
+      - name: Upload release bundle and invoke fixed host deployment command
+        shell: bash
+        env:
+          APPROVED_COMMIT: ${{ inputs.approved_commit }}
+          AUTHORIZATION_REFERENCE: ${{ inputs.authorization_reference }}
+          BACKUP_EVIDENCE_REFERENCE: ${{ inputs.backup_evidence_reference }}
+          SSH_HOST: ${{ secrets.ELECTROHUB_DEPLOY_SSH_HOST }}
+          SSH_USER: ${{ secrets.ELECTROHUB_DEPLOY_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh_opts=(-i "$RUNNER_TEMP/electrohub-ssh/deploy_key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/electrohub-ssh/known_hosts")
+          remote_dir="/var/lib/electrohub/incoming/$APPROVED_COMMIT"
+          ssh "${ssh_opts[@]}" "$SSH_USER@$SSH_HOST" "test ! -e '$remote_dir' && install -d -m 0750 '$remote_dir'"
+          scp "${ssh_opts[@]}" "$RUNNER_TEMP/electrohub-release/"{source.tar.gz,images.tar,AI_PRODUCTION_RELEASE.json,AI_MODEL_ARTIFACT_PRODUCTION.json,release-manifest.json} "$SSH_USER@$SSH_HOST:$remote_dir/"
+          ssh "${ssh_opts[@]}" "$SSH_USER@$SSH_HOST" "sudo /usr/local/sbin/electrohub-deploy-release '$APPROVED_COMMIT' '$AUTHORIZATION_REFERENCE' '$BACKUP_EVIDENCE_REFERENCE'"
+

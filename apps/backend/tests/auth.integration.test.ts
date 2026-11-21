@@ -262,6 +262,7 @@ describe('5. POST /api/auth/customer/refresh — Refresh token rotation', () => 
     // Use cookie on refresh endpoint
     const refreshRes = await request(app)
       .post('/api/auth/customer/refresh')
+      .set('Origin', 'http://localhost:3000')
       .set('Cookie', refreshCookie!.split(';')[0]);
 
     expect(refreshRes.status).toBe(200);
@@ -272,7 +273,7 @@ describe('5. POST /api/auth/customer/refresh — Refresh token rotation', () => 
   }, 20000);
 
   it('5b. Returns 401 when no refresh cookie is provided', async () => {
-    const res = await request(app).post('/api/auth/customer/refresh');
+    const res = await request(app).post('/api/auth/customer/refresh').set('Origin', 'http://localhost:3000');
     expect(res.status).toBe(401);
     expect(res.body.error).toMatch(/missing/i);
   }, 10000);
@@ -280,6 +281,7 @@ describe('5. POST /api/auth/customer/refresh — Refresh token rotation', () => 
   it('5c. Returns 401 when an invalid/garbage refresh token is provided', async () => {
     const res = await request(app)
       .post('/api/auth/customer/refresh')
+      .set('Origin', 'http://localhost:3000')
       .set('Cookie', 'electrohub_customer_refresh=invalidgarbagetoken');
 
     expect(res.status).toBe(401);
@@ -299,6 +301,7 @@ describe('6. POST /api/auth/customer/logout', () => {
 
     const logoutRes = await request(app)
       .post('/api/auth/customer/logout')
+      .set('Origin', 'http://localhost:3000')
       .set('Cookie', refreshCookie!.split(';')[0]);
 
     expect(logoutRes.status).toBe(200);
@@ -314,7 +317,7 @@ describe('6. POST /api/auth/customer/logout', () => {
   }, 20000);
 
   it('6b. Logout succeeds even when no cookie is provided (idempotent)', async () => {
-    const res = await request(app).post('/api/auth/customer/logout');
+    const res = await request(app).post('/api/auth/customer/logout').set('Origin', 'http://localhost:3000');
     expect(res.status).toBe(200);
   }, 10000);
 });
@@ -384,7 +387,7 @@ describe('9. Password security and session invalidation', () => {
       .set('Authorization', `Bearer ${login.body.accessToken}`)
       .send({ currentPassword: testCustomer.password, newPassword: 'Changed#Test2026' });
     expect(changed.status).toBe(200);
-    expect((await request(app).post('/api/auth/customer/refresh').set('Cookie', oldCookie)).status).toBe(401);
+    expect((await request(app).post('/api/auth/customer/refresh').set('Origin', 'http://localhost:3000').set('Cookie', oldCookie)).status).toBe(401);
     expect((await request(app).post('/api/auth/login').send({ email: testCustomer.email, password: testCustomer.password })).status).toBe(401);
     expect((await request(app).post('/api/auth/login').send({ email: testCustomer.email, password: 'Changed#Test2026' })).status).toBe(200);
 
@@ -414,7 +417,7 @@ describe('9. Password security and session invalidation', () => {
       resetToken: verifiedOtp.body.resetToken, newPassword: 'Recovered#Test2026',
     });
     expect(reset.status).toBe(200);
-    expect((await request(app).post('/api/auth/customer/refresh').set('Cookie', oldCookie)).status).toBe(401);
+    expect((await request(app).post('/api/auth/customer/refresh').set('Origin', 'http://localhost:3000').set('Cookie', oldCookie)).status).toBe(401);
     expect((await request(app).post('/api/auth/login').send({ email: testCustomer.email, password: 'Changed#Test2026' })).status).toBe(401);
     expect((await request(app).post('/api/auth/login').send({ email: testCustomer.email, password: 'Recovered#Test2026' })).status).toBe(200);
     expect((await request(app).post('/api/auth/reset-password').set('X-Forwarded-For', '198.51.100.44').send({

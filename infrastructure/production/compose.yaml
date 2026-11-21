@@ -1,0 +1,267 @@
+name: electrohub-production
+
+services:
+  api:
+    image: electrohub/backend:${RELEASE_SHA:?Set RELEASE_SHA to the reviewed full Git SHA}
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: apps/backend/Dockerfile
+    env_file:
+      - ${ELECTROHUB_RUNTIME_ENV_DIR:-/etc/electrohub}/backend-api.env
+    environment:
+      NODE_ENV: production
+      PORT: "5000"
+      ELECTROHUB_ENV_FILES: none
+      AI_SERVICE_URL: http://ai-service:8000
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    mem_limit: ${API_MEMORY_LIMIT:?Set a measured API_MEMORY_LIMIT before deployment}
+    cpus: ${API_CPU_LIMIT:?Set a measured API_CPU_LIMIT before deployment}
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:5000/api/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - backend
+      - ai
+
+  ai-service:
+    image: electrohub/ai-service:${RELEASE_SHA:?Set RELEASE_SHA to the reviewed full Git SHA}
+    pull_policy: never
+    build:
+      context: ../../apps/ai-service
+      dockerfile: Dockerfile
+    env_file:
+      - ${ELECTROHUB_RUNTIME_ENV_DIR:-/etc/electrohub}/ai-api.env
+    environment:
+      AI_ENVIRONMENT: production
+      AI_PROCESS_ROLE: api
+      AI_BIND_HOST: 0.0.0.0
+      AI_PORT: "8000"
+      AI_DOCS_ENABLED: "false"
+      AI_MODEL_ARTIFACT_DIR: /srv/ai-models
+      AI_RELEVANCE_ARTIFACT_DIR: /srv/ai-relevance
+    volumes:
+      - ${PROD_AI_MODEL_ARTIFACT_DIRECTORY:?Set the approved read-only model artifact directory}:/srv/ai-models:ro
+      - ${PROD_AI_RELEVANCE_ARTIFACT_DIRECTORY:?Set the approved read-only relevance artifact directory}:/srv/ai-relevance:ro
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+      - /dev/shm:size=128m,mode=1777
+    mem_limit: ${AI_MEMORY_LIMIT:?Set a measured AI_MEMORY_LIMIT before deployment}
+    cpus: ${AI_CPU_LIMIT:?Set a measured AI_CPU_LIMIT before deployment}
+    pids_limit: 64
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      # Authenticated model/index readiness, not the public /health liveness route.
+      test: [CMD, python, -m, app.healthcheck]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 180s
+    networks:
+      - ai
+
+  edge:
+    image: electrohub/edge:${RELEASE_SHA:?Set RELEASE_SHA to the reviewed full Git SHA}
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: infrastructure/production/Dockerfile.edge
+    environment:
+      CANONICAL_HOST: ${CANONICAL_HOST:?Set the reviewed canonical DNS hostname}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - ${PROD_HTTP_BIND_ADDRESS:?Set the approved HTTP bind address}:80:8080
+      - ${PROD_HTTPS_BIND_ADDRESS:?Set the approved HTTPS bind address}:443:8443
+    volumes:
+      - ${PROD_TLS_DIRECTORY:?Set the versioned TLS certificate directory}:/etc/nginx/tls:ro
+      - ${PROD_ACME_WEBROOT:?Set the ACME challenge webroot}:/var/www/acme:ro
+    user: "101:101"
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 15s
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=32m,mode=0755,uid=101,gid=101
+      - /tmp:size=8m,mode=0755,uid=101,gid=101
+    mem_limit: ${EDGE_MEMORY_LIMIT:?Set a measured EDGE_MEMORY_LIMIT before deployment}
+    cpus: ${EDGE_CPU_LIMIT:?Set a measured EDGE_CPU_LIMIT before deployment}
+    pids_limit: 64
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: [CMD-SHELL, "wget -q --header='Host: ${CANONICAL_HOST}' --spider http://127.0.0.1:8080/_edge_health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - edge
+      - backend
+
+  edge-acme-bootstrap:
+    image: electrohub/edge:${RELEASE_SHA:?Set RELEASE_SHA to the reviewed full Git SHA}
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: infrastructure/production/Dockerfile.edge
+    command: ["acme-bootstrap"]
+    environment:
+      CANONICAL_HOST: ${CANONICAL_HOST:?Set the reviewed canonical DNS hostname}
+    profiles: [acme-bootstrap]
+    ports:
+      - ${PROD_HTTP_BIND_ADDRESS:?Set the approved HTTP bind address}:80:8080
+    volumes:
+      - ${PROD_ACME_WEBROOT:?Set the ACME challenge webroot}:/var/www/acme:ro
+    user: "101:101"
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=0755,uid=101,gid=101
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - edge
+
+  payment-worker:
+    image: electrohub/backend:${RELEASE_SHA:?Set RELEASE_SHA to the reviewed full Git SHA}
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: apps/backend/Dockerfile
+    command: ["node", "dist/bootstrap.js", "--payment-worker"]
+    env_file:
+      - ${ELECTROHUB_RUNTIME_ENV_DIR:-/etc/electrohub}/backend-payment-worker.env
+    environment:
+      NODE_ENV: production
+      ELECTROHUB_ENV_FILES: none
+      ELECTROHUB_WORKER_HEALTH_FILE: /run/electrohub/worker-health.json
+    profiles: [payment-worker]
+    init: true
+    restart: "no"
+    stop_grace_period: 45s
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+      - /run/electrohub:size=2m,mode=0700,uid=1000,gid=1000
+    mem_limit: ${PAYMENT_WORKER_MEMORY_LIMIT:?Set a measured PAYMENT_WORKER_MEMORY_LIMIT before deployment}
+    cpus: ${PAYMENT_WORKER_CPU_LIMIT:?Set a measured PAYMENT_WORKER_CPU_LIMIT before deployment}
+    pids_limit: 64
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: [CMD, node, dist/worker-healthcheck.js]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - workers
+
+  commerce-email-worker:
+    image: electrohub/backend:${RELEASE_SHA:?Set RELEASE_SHA to the reviewed full Git SHA}
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: apps/backend/Dockerfile
+    command: ["node", "dist/bootstrap.js", "--commerce-email-worker"]
+    env_file:
+      - ${ELECTROHUB_RUNTIME_ENV_DIR:-/etc/electrohub}/backend-email-worker.env
+    environment:
+      NODE_ENV: production
+      ELECTROHUB_ENV_FILES: none
+      ELECTROHUB_WORKER_HEALTH_FILE: /run/electrohub/worker-health.json
+    profiles: [commerce-email-worker]
+    init: true
+    restart: "no"
+    stop_grace_period: 45s
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+      - /run/electrohub:size=2m,mode=0700,uid=1000,gid=1000
+    mem_limit: ${EMAIL_WORKER_MEMORY_LIMIT:?Set a measured EMAIL_WORKER_MEMORY_LIMIT before deployment}
+    cpus: ${EMAIL_WORKER_CPU_LIMIT:?Set a measured EMAIL_WORKER_CPU_LIMIT before deployment}
+    pids_limit: 64
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: [CMD, node, dist/worker-healthcheck.js]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    networks:
+      - workers
+
+  media-worker:
+    image: electrohub/ai-service:${RELEASE_SHA:?Set RELEASE_SHA to the reviewed full Git SHA}
+    pull_policy: never
+    build:
+      context: ../../apps/ai-service
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.media_sync"]
+    env_file:
+      - ${ELECTROHUB_RUNTIME_ENV_DIR:-/etc/electrohub}/ai-media-worker.env
+    environment:
+      AI_ENVIRONMENT: production
+      AI_PROCESS_ROLE: media_worker
+      AI_BIND_HOST: 127.0.0.1
+      AI_MODEL_ARTIFACT_DIR: /srv/ai-models
+    volumes:
+      - ${PROD_AI_MODEL_ARTIFACT_DIRECTORY:?Set the approved read-only model artifact directory}:/srv/ai-models:ro
+    profiles: [media-worker]
+    init: true
+    restart: "no"
+    stop_grace_period: 60s
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+      - /dev/shm:size=128m,mode=1777
+    mem_limit: ${MEDIA_WORKER_MEMORY_LIMIT:?Set a measured MEDIA_WORKER_MEMORY_LIMIT before deployment}
+    cpus: ${MEDIA_WORKER_CPU_LIMIT:?Set a measured MEDIA_WORKER_CPU_LIMIT before deployment}
+    pids_limit: 64
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: [CMD, python, -m, app.worker_healthcheck]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 180s
+    networks:
+      - workers
+
+networks:
+  edge:
+    name: electrohub-production-edge
+  backend:
+    name: electrohub-production-backend
+    internal: true
+  ai:
+    name: electrohub-production-ai
+  workers:
+    name: electrohub-production-workers

@@ -43,8 +43,10 @@ async function start(limits = {}) {
   url = `http://127.0.0.1:${(http.address() as AddressInfo).port}/delivery`;
 }
 
-function client(token: string | undefined, options: { reconnection?: boolean } = {}) {
-  const socket = connect(url, { auth: token ? { token } : {}, transports: ['websocket'], reconnection: options.reconnection ?? false, forceNew: true });
+function client(token: string | undefined, options: { reconnection?: boolean; origin?: string | null; transports?: ('websocket' | 'polling')[] } = {}) {
+  const origin = options.origin === undefined ? 'http://localhost:5173' : options.origin;
+  const socket = connect(url, { auth: token ? { token } : {}, transports: options.transports ?? ['websocket'],
+    ...(origin === null ? {} : { extraHeaders: { Origin: origin } }), reconnection: options.reconnection ?? false, forceNew: true });
   clients.push(socket);
   return socket;
 }
@@ -68,6 +70,19 @@ afterEach(async () => {
 });
 
 describe('Task 04.7 /delivery gateway (real Socket.IO server and client)', () => {
+  it('rejects WebSocket handshakes with an untrusted or missing Origin before token authentication', async () => {
+    expect((await refused(client(token(customerA), { origin: 'https://attacker.example' }))).code).toBeUndefined();
+    expect((await refused(client(token(customerA), { origin: null }))).code).toBeUndefined();
+    const trusted = client(token(customerA));
+    await connected(trusted);
+  });
+
+  it('accepts same-origin Engine.IO polling as the fallback transport', async () => {
+    const socket = client(token(customerA), { transports: ['polling'] });
+    await connected(socket);
+    expect(socket.io.engine?.transport.name).toBe('polling');
+  });
+
   it('refuses handshakes without a valid token or for an inactive account', async () => {
     expect(await refused(client(undefined))).toEqual({ code: 'UNAUTHENTICATED' });
     expect(await refused(client('not-a-jwt'))).toEqual({ code: 'UNAUTHENTICATED' });

@@ -1,0 +1,12 @@
+[Unit]
+Description=Check ElectroHub TLS expiry every six hours
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=6h
+RandomizedDelaySec=10min
+Persistent=true
+Unit=electrohub-cert-expiry-check.service
+
+[Install]
+WantedBy=timers.target

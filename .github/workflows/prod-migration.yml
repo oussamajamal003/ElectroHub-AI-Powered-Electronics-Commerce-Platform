@@ -1,26 +1,32 @@
 name: Production Database Migration
 
-# Production migration runs automatically only after the Development CI push run for develop succeeds.
+# Manual exact-SHA operation. A successful CI run never starts a PROD mutation by itself.
 # The protected PROD environment, target/checksum/order validation, and additive-only SQL gate remain required.
 #
 # If the database is already up to date, the workflow performs a read-only verification
 # and cleanly exits as a successful no-op.
 
 on:
-  workflow_run:
-    workflows: ["Development CI"]
-    types: [completed]
-    branches:
-      - develop
+  workflow_dispatch:
+    inputs:
+      approved_commit:
+        description: 'Full 40-character SHA of the approved develop commit. Must equal this workflow run SHA.'
+        required: true
+        type: string
+      authorization_reference:
+        description: 'Reference to the written owner/DBA approval for this production migration.'
+        required: true
+        type: string
 
 permissions:
   contents: read
+  checks: read
 
 jobs:
   migrate:
     name: Deploy pending Prisma migrations to PROD
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'develop' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository
+    if: github.ref == 'refs/heads/develop'
     environment: electrohub-prod-database
     concurrency:
       group: db-migration-electrohub-prod
@@ -28,34 +34,61 @@ jobs:
     env:
       MIGRATION_TARGET: PROD
       EXPECTED_PROJECT_REF: yepfgjehdstlxbpespun
-      APPROVED_COMMIT: ${{ github.event.workflow_run.head_sha }}
+      APPROVED_COMMIT: ${{ inputs.approved_commit }}
+      AUTHORIZATION_REFERENCE: ${{ inputs.authorization_reference }}
     steps:
-      - name: Verify successful trusted develop CI run and commit SHA
+      - name: Verify exact develop SHA and recorded authorization
         shell: bash
-        env:
-          CI_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          CI_EVENT: ${{ github.event.workflow_run.event }}
-          CI_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
-          CURRENT_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          if [ "$CI_BRANCH" != develop ] || [ "$CI_CONCLUSION" != success ] || [ "$CI_EVENT" != push ] || [ "$CI_REPOSITORY" != "$CURRENT_REPOSITORY" ]; then
-            echo "Production migrations require a successful push-triggered Development CI run from this repository's develop branch." >&2
+          if [ "$GITHUB_REF" != refs/heads/develop ]; then
+            echo "Production migrations can only be dispatched at a commit on develop." >&2
             exit 1
           fi
           if ! printf '%s' "$APPROVED_COMMIT" | grep -Eq '^[0-9a-f]{40}$'; then
-            echo "Development CI must provide a full 40-character lowercase commit SHA." >&2
+            echo "approved_commit must be a full 40-character lowercase SHA." >&2
             exit 1
           fi
-          echo "Successful Development CI run verified for develop commit $APPROVED_COMMIT. Pending migrations will be discovered from the checked-in Prisma migrations and PROD ledger."
+          if [ "$APPROVED_COMMIT" != "$GITHUB_SHA" ]; then
+            echo "The approved SHA must exactly match this workflow run's checked-out develop commit." >&2
+            exit 1
+          fi
+          if [ -z "${AUTHORIZATION_REFERENCE//[[:space:]]/}" ]; then
+            echo "authorization_reference is required." >&2
+            exit 1
+          fi
+          echo "Exact develop SHA and authorization reference confirmed. Pending migrations will be discovered from the checked-in Prisma migrations and PROD ledger."
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ env.APPROVED_COMMIT }}
+          ref: ${{ inputs.approved_commit }}
+
+      - name: Require exact-SHA quality and security checks
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        env:
+          APPROVED_COMMIT: ${{ inputs.approved_commit }}
+        with:
+          script: |
+            const sha = process.env.APPROVED_COMMIT;
+            const { data } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: sha,
+              per_page: 100,
+            });
+            const required = ['Required / Quality Gate', 'Security / NPM Audit'];
+            for (const name of required) {
+              const runs = data.check_runs
+                .filter((run) => run.name === name && run.head_sha === sha)
+                .sort((a, b) => Date.parse(b.completed_at ?? b.started_at ?? '') - Date.parse(a.completed_at ?? a.started_at ?? ''));
+              const latest = runs[0];
+              if (!latest || latest.status !== 'completed' || latest.conclusion !== 'success') {
+                core.setFailed(`Required check did not succeed for approved SHA: ${name}`);
+              }
+            }
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22.19.0'
           cache: 'npm'

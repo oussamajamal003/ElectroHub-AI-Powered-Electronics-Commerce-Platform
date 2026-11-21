@@ -36,6 +36,7 @@
     "typecheck": "tsc --noEmit",
     "db:seed": "npx prisma db seed",
     "admin:security": "tsx scripts/admin-security.ts",
+    "admin:bootstrap": "node dist/admin-bootstrap.cli.js",
     "test:admin-security:pg": "node scripts/admin-security-pg.cjs",
     "qa:task05-2:browser-stack": "node scripts/task05-2-browser-stack.cjs",
     "catalog:expansion": "tsx scripts/catalog-expansion.ts",

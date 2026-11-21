@@ -1,0 +1,12 @@
+[Unit]
+Description=Check ElectroHub certificate renewal eligibility every six hours
+
+[Timer]
+OnBootSec=10min
+OnCalendar=*-*-* 00,06,12,18:00:00
+RandomizedDelaySec=20min
+Persistent=true
+Unit=electrohub-certbot-renew.service
+
+[Install]
+WantedBy=timers.target

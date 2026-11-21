@@ -306,3 +306,9 @@ SSL configuration is complete when:
 # 20. SSL Principle
 
 > **HTTPS is a production security requirement. Certificates, TLS configuration, renewal, and recovery must be treated as operational infrastructure rather than a one-time setup.**
+
+## Task 06.3 status
+
+The repository has a configurable DNS-hostname TLS listener in `infrastructure/production/nginx.conf.template` and a guarded lifecycle candidate in `infrastructure/production/tls/`. Its first certificate helper is Certbot staging-only and refuses by default. The candidate includes versioned host certificate storage, an atomic pointer switch, Nginx validation/reload, rollback, six-hour timers and local failure logs. It does not issue a browser-trusted certificate, send external alerts or support IP certificates, and it has not been installed or tested on a host. Google's current OAuth rules also make a raw IP redirect unsuitable while the implemented sign-in feature remains required. See [TLS lifecycle runbook](TLS_LIFECYCLE.md), [hostname/OAuth feasibility](TASK_06.3_HOSTNAME_TLS_OAUTH_FEASIBILITY.md) and the official [Let's Encrypt IP/short-lived certificate notice](https://letsencrypt.org/2026/03/11/shorter-certs-certbot).
+
+The HTTP listener serves ACME challenge files only and uses a fixed canonical hostname for HTTPS redirects. Do not expose it or claim TLS readiness until an exact hostname, Google OAuth eligibility, staging and production lifecycle, expiry alerting, reload rollback, and break-glass recovery have separately approved host evidence.

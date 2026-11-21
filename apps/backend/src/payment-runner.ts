@@ -14,6 +14,7 @@ import { devSupervisorScope, devSupervisorDeclineOnly, requireSupervisedPaymentS
 import { reconcileReviewedDecline } from './reviewed-decline-recovery.js';
 import { stripeProvider } from './services/stripe.provider.js';
 import type { PaymentWorkScope } from './services/payment.service.js';
+import { recordWorkerHealth } from './utils/worker-health.js';
 
 installFatalLogging();
 logger.info('Payment runner starting', { operation: 'payment.runner.starting' });
@@ -48,9 +49,18 @@ process.on('SIGINT', stop);
 async function main() {
   try {
   await runRecoveryLoop({
-    ready: () => prisma.$queryRaw`SELECT 1`,
-    batch: () => logContext.run({ requestId: randomUUID(), workerInstanceId }, () => declineOnly && Array.isArray(scope)
-      ? reconcileReviewedDecline(prisma, stripeProvider, scope) : paymentService.runBatch(scope)),
+    ready: async () => { await prisma.$queryRaw`SELECT 1`; await recordWorkerHealth('ready'); },
+    batch: async () => {
+      try {
+        const result = await logContext.run({ requestId: randomUUID(), workerInstanceId }, () => declineOnly && Array.isArray(scope)
+          ? reconcileReviewedDecline(prisma, stripeProvider, scope) : paymentService.runBatch(scope));
+        await recordWorkerHealth('ready');
+        return result;
+      } catch (error) {
+        await recordWorkerHealth('degraded');
+        throw error;
+      }
+    },
     attention: () => paymentRecoveryAttention(prisma, scope),
     report: (level, event, fields) => logSafely(level, 'Payment recovery lifecycle', { event, workerInstanceId, scoped: Boolean(scope),
       scopeKind: !scope ? 'none' : Array.isArray(scope) ? 'attempt-ids' : 'governed-since', ...fields }),

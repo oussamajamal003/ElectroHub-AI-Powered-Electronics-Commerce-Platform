@@ -614,6 +614,10 @@ Security operations are complete when:
 # 35. Security Principle
 
 > **Security is enforced at every trust boundary, with the backend and infrastructure treated as the primary enforcement layers rather than relying on client-side behavior.**
+
+## Task 06.3 browser-origin release gate
+
+The current refresh cookies are host-only, HttpOnly, Secure in production and `SameSite=Lax`. The frontend REST and delivery Socket.IO clients use same-origin paths. A DigitalOcean static hostname and separate VPS API host are cross-site; do not publish this split or change cookie policy until real-host login, refresh, rotation/reuse, logout, protected-route, OAuth and socket tests pass across the required browser/privacy matrix. Credentialed CORS must remain an exact origin allowlist. Socket authentication remains required. The delivery gateway's Engine.IO `allowRequest` callback checks the `Origin` header on WebSocket upgrade requests and rejects missing or non-allowlisted origins. Polling requests are not filtered by that callback and rely on the configured credentialed CORS allowlist. These source-level controls do not establish production browser/runtime compatibility. No browser-origin test or public exposure occurred. See [Task 06.3 implementation evidence](../09_Deployment/TASK_06.3_IMPLEMENTATION_EVIDENCE.md).
 # Customer account deletion
 
 Account deletion requires current customer authentication, short-lived purpose-bound re-authentication, the exact `DELETE` confirmation, and a same-origin request. Password re-auth validates the current hash; Google re-auth validates the exact linked provider subject through the existing OAuth state/PKCE/nonce callback and never establishes a new session. Rate limits apply to both re-authentication and deletion.
