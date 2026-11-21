@@ -186,24 +186,18 @@ jobs:
           set -euo pipefail
           docker compose --env-file "$FIXTURE/compose.env" -f infrastructure/production/compose.yaml config --quiet
           docker compose --env-file "$FIXTURE/compose.env" --profile '*' -f infrastructure/production/compose.yaml config --quiet
-          docker compose --env-file "$FIXTURE/compose.env" -f infrastructure/production/compose.yaml config > "$RUNNER_TEMP/compose-default.yaml"
-          docker compose --env-file "$FIXTURE/compose.env" --profile '*' -f infrastructure/production/compose.yaml config > "$RUNNER_TEMP/compose-all-profiles.yaml"
-          node - "$RUNNER_TEMP/compose-default.yaml" "$RUNNER_TEMP/compose-all-profiles.yaml" <<'NODE'
+          docker compose --env-file "$FIXTURE/compose.env" -f infrastructure/production/compose.yaml config --format json > "$RUNNER_TEMP/compose-default.json"
+          docker compose --env-file "$FIXTURE/compose.env" --profile '*' -f infrastructure/production/compose.yaml config --format json > "$RUNNER_TEMP/compose-all-profiles.json"
+          node scripts/validate-compose-port-exposure.cjs "$RUNNER_TEMP/compose-default.json"
+          node - "$RUNNER_TEMP/compose-default.json" "$RUNNER_TEMP/compose-all-profiles.json" <<'NODE'
           const fs = require('node:fs');
-          const [defaultText, allText] = process.argv.slice(2).map((file) => fs.readFileSync(file, 'utf8'));
-          const serviceBlock = (text, name) => {
-            const match = new RegExp(`^  ${name}:\\n([\\s\\S]*?)(?=^  [a-zA-Z][a-zA-Z0-9_-]*:\\n|^networks:\\n)`, 'm').exec(text);
-            return match ? match[1] : null;
-          };
-          if (!defaultText.includes('electrohub-production-edge') || !defaultText.includes('electrohub-production-backend')) process.exit(1);
+          const [defaultJson, allJson] = process.argv.slice(2).map((file) => JSON.parse(fs.readFileSync(file, 'utf8')));
+
+          if (!defaultJson.services || !defaultJson.services.edge || !defaultJson.services.api || !defaultJson.services['ai-service']) process.exit(1);
           for (const name of ['payment-worker', 'commerce-email-worker', 'media-worker']) {
-            if (!allText.includes(name)) process.exit(2);
+            if (!allJson.services || !Object.prototype.hasOwnProperty.call(allJson.services, name)) process.exit(2);
           }
-          if (!defaultText.includes('name: electrohub-production-backend')) process.exit(3);
-          for (const name of ['api', 'ai-service']) {
-            const block = serviceBlock(defaultText, name);
-            if (!block || /^  ports:/m.test(block)) process.exit(4);
-          }
+          if (!defaultJson.networks || !defaultJson.networks.backend || defaultJson.networks.backend.internal !== true) process.exit(3);
           NODE
       - name: Generate controlled TLS fixture
         env:
