@@ -6,7 +6,8 @@
 - Branch: `feature/06.3-production-infrastructure`
 - Task 06.3S implementation SHA: `55be97727bf70cb5bb47a1760ee8e29d76af28f0`
 - Task 06.3T implementation SHA: `e2e6067d8585eba3d6b79d0122826acedd167471`
-- Final remote HEAD: will be updated after the evidence-only commit is pushed
+- Task 06.3T evidence-only commit: `2a56841f8a8c56939d5745d966c4b0084ec01176`
+- Final remote HEAD: `2a56841f8a8c56939d5745d966c4b0084ec01176`
 
 ## Changed Files
 
@@ -64,6 +65,7 @@ Local Docker/Compose rendering could not run because Docker is not installed in 
 ## Exact-SHA CI
 
 - Development CI run: `44947217273`
+- Development CI exact-SHA status: IN PROGRESS at the last verified check
 - Security Audit run: `44947217268` at implementation SHA: SUCCESS
 - Required Linux job: `Production / Compose and Nginx Validation`
 - Linux job ID: `136977058384`
@@ -95,4 +97,4 @@ The current API and AI Compose services do not publish host ports. The rendered-
 ## Commit Distinction
 
 - Implementation commit: `e2e6067d8585eba3d6b79d0122826acedd167471`
-- Evidence-only commit: to be recorded after this document is committed and pushed.
+- Evidence-only commit: `2a56841f8a8c56939d5745d966c4b0084ec01176`
