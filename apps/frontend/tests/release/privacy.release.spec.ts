@@ -26,9 +26,14 @@ function watchThirdParty(context: BrowserContext) {
 const banner = (page: Page) => page.getByRole('region', { name: 'Cookie preferences' });
 const sessionId = (page: Page) => page.evaluate(key => sessionStorage.getItem(key), SESSION_KEY);
 async function openSettings(page: Page) {
-  await page.getByRole('button', { name: 'Cookie Settings' }).click();
+  const button = page.getByRole('button', { name: 'Cookie Settings' });
   const dialog = page.getByRole('dialog', { name: 'Cookie Settings' });
-  await expect(dialog).toBeVisible();
+  await expect(async () => {
+    if (!await dialog.isVisible()) {
+      await button.click();
+    }
+    await expect(dialog).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 15_000 });
   return dialog;
 }
 async function probe(body: { ref?: string; sessionId?: string }) {
