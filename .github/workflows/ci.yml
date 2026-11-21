@@ -132,6 +132,120 @@ jobs:
       - name: Lint
         run: npm run lint --workspace=@electrohub/backend
 
+  production-runtime-validation:
+    name: Production / Compose and Nginx Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify Docker Engine and Compose plugin
+        run: |
+          set -euo pipefail
+          docker version
+          docker compose version
+      - name: Prepare isolated Compose fixtures
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/electrohub-compose-fixture"
+          mkdir -p "$fixture/runtime" "$fixture/models" "$fixture/relevance" "$fixture/acme" "$fixture/tls/current"
+          touch "$fixture/runtime/backend-api.env" "$fixture/runtime/ai-api.env" "$fixture/runtime/backend-payment-worker.env"
+          touch "$fixture/runtime/backend-email-worker.env" "$fixture/runtime/ai-media-worker.env"
+          cat > "$fixture/compose.env" <<'EOF'
+          RELEASE_SHA=9bccb69ec251dadb79b5bff893506e10f6d6fae7
+          CANONICAL_HOST=ci.electrohub.local
+          ELECTROHUB_RUNTIME_ENV_DIR=$fixture/runtime
+          PROD_TLS_DIRECTORY=$fixture/tls
+          PROD_ACME_WEBROOT=$fixture/acme
+          PROD_AI_MODEL_ARTIFACT_DIRECTORY=$fixture/models
+          PROD_AI_RELEVANCE_ARTIFACT_DIRECTORY=$fixture/relevance
+          PROD_AI_RELEASE_MANIFEST_SHA256=0000000000000000000000000000000000000000000000000000000000000000
+          PROD_HTTP_BIND_ADDRESS=127.0.0.1
+          PROD_HTTPS_BIND_ADDRESS=127.0.0.1
+          API_MEMORY_LIMIT=256m
+          API_CPU_LIMIT=0.50
+          AI_MEMORY_LIMIT=512m
+          AI_CPU_LIMIT=0.50
+          EDGE_MEMORY_LIMIT=128m
+          EDGE_CPU_LIMIT=0.25
+          PAYMENT_WORKER_MEMORY_LIMIT=128m
+          PAYMENT_WORKER_CPU_LIMIT=0.25
+          EMAIL_WORKER_MEMORY_LIMIT=128m
+          EMAIL_WORKER_CPU_LIMIT=0.25
+          MEDIA_WORKER_MEMORY_LIMIT=256m
+          MEDIA_WORKER_CPU_LIMIT=0.25
+          EOF
+          sed -i "s|\$fixture|$fixture|g" "$fixture/compose.env"
+      - name: Validate Compose syntax and profiles
+        env:
+          FIXTURE: ${{ runner.temp }}/electrohub-compose-fixture
+        run: |
+          set -euo pipefail
+          docker compose --env-file "$FIXTURE/compose.env" -f infrastructure/production/compose.yaml config --quiet
+          docker compose --env-file "$FIXTURE/compose.env" --profile '*' -f infrastructure/production/compose.yaml config --quiet
+          docker compose --env-file "$FIXTURE/compose.env" -f infrastructure/production/compose.yaml config > "$RUNNER_TEMP/compose-default.yaml"
+          docker compose --env-file "$FIXTURE/compose.env" --profile '*' -f infrastructure/production/compose.yaml config > "$RUNNER_TEMP/compose-all-profiles.yaml"
+          node - "$RUNNER_TEMP/compose-default.yaml" "$RUNNER_TEMP/compose-all-profiles.yaml" <<'NODE'
+          const fs = require('node:fs');
+          const [defaultText, allText] = process.argv.slice(2).map((file) => fs.readFileSync(file, 'utf8'));
+          const serviceBlock = (text, name) => {
+            const match = new RegExp(`^  ${name}:\\n([\\s\\S]*?)(?=^  [a-zA-Z][a-zA-Z0-9_-]*:\\n|^networks:\\n)`, 'm').exec(text);
+            return match ? match[1] : null;
+          };
+          if (!defaultText.includes('electrohub-production-edge') || !defaultText.includes('electrohub-production-backend')) process.exit(1);
+          for (const name of ['payment-worker', 'commerce-email-worker', 'media-worker']) {
+            if (!allText.includes(name)) process.exit(2);
+          }
+          if (!defaultText.includes('name: electrohub-production-backend')) process.exit(3);
+          for (const name of ['api', 'ai-service']) {
+            const block = serviceBlock(defaultText, name);
+            if (!block || /^  ports:/m.test(block)) process.exit(4);
+          }
+          NODE
+      - name: Generate controlled TLS fixture
+        env:
+          FIXTURE: ${{ runner.temp }}/electrohub-compose-fixture
+        run: |
+          set -euo pipefail
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=ci.electrohub.local' -addext 'subjectAltName=DNS:ci.electrohub.local' -keyout "$FIXTURE/tls/current/privkey.pem" -out "$FIXTURE/tls/current/fullchain.pem" >/dev/null 2>&1
+          sed 's/${CANONICAL_HOST}/ci.electrohub.local/g' infrastructure/production/nginx.conf.template > "$RUNNER_TEMP/electrohub-nginx.conf"
+      - name: Validate Nginx syntax with controlled certificate
+        env:
+          FIXTURE: ${{ runner.temp }}/electrohub-compose-fixture
+        run: |
+          set -euo pipefail
+          docker run --rm --network none \
+            -v "$RUNNER_TEMP/electrohub-nginx.conf:/tmp/electrohub-nginx.conf:ro" \
+            -v "$FIXTURE/tls/current/fullchain.pem:/etc/nginx/tls/current/fullchain.pem:ro" \
+            -v "$FIXTURE/tls/current/privkey.pem:/etc/nginx/tls/current/privkey.pem:ro" \
+            nginx:1.30.6-alpine3.24 nginx -t -c /tmp/electrohub-nginx.conf
+      - name: Build and smoke test the edge image
+        env:
+          FIXTURE: ${{ runner.temp }}/electrohub-compose-fixture
+        run: |
+          set -euo pipefail
+          docker build -f infrastructure/production/Dockerfile.edge -t electrohub-edge-ci:9bccb69ec251dadb79b5bff893506e10f6d6fae7 .
+          docker run -d --name electrohub-edge-ci \
+            -e CANONICAL_HOST=ci.electrohub.local \
+            -p 127.0.0.1:18080:8080 -p 127.0.0.1:18443:8443 \
+            -v "$FIXTURE/tls/current:/etc/nginx/tls/current:ro" \
+            -v "$FIXTURE/acme:/var/www/acme:ro" \
+            electrohub-edge-ci:9bccb69ec251dadb79b5bff893506e10f6d6fae7
+          for attempt in $(seq 1 30); do
+            if curl -fsS --header 'Host: ci.electrohub.local' http://127.0.0.1:18080/_edge_health >/dev/null 2>&1; then break; fi
+            if [ "$attempt" = 30 ]; then docker logs electrohub-edge-ci; exit 1; fi
+            sleep 1
+          done
+          test "$(curl -sS -o /dev/null -w '%{http_code}' --header 'Host: ci.electrohub.local' http://127.0.0.1:18080/)" = "308"
+          test "$(curl -ksS -o /dev/null -w '%{http_code}' --header 'Host: ci.electrohub.local' --resolve ci.electrohub.local:18443:127.0.0.1 https://ci.electrohub.local:18443/)" = "200"
+      - name: Cleanup edge fixture
+        if: always()
+        run: |
+          docker rm -f electrohub-edge-ci >/dev/null 2>&1 || true
+
   workflow-policy:
     name: Workflow / Migration Safety Policy
     runs-on: ubuntu-latest

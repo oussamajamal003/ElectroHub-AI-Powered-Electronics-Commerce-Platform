@@ -2,7 +2,17 @@
 
 **Status: CONDITIONAL repository implementation; production release is NO-GO.** The deployment topology and browser-origin/session gate are unresolved. No application/API was exposed, no cloud resource was created, and no PROD system was accessed or changed.
 
-This report implements repository-side preparation under the approved task contract in `docs/tasks/Phase-06/TASK_06.3_PRODUCTION_INFRASTRUCTURE_DEPLOYMENT.md`. It uses `docs/09_Deployment/TASK_06.3_DEPLOYMENT_ARCHITECTURE_AUDIT.md` as discovery evidence and rechecked relevant source at the current branch head. The revised draft adds the same-origin/session gate and clarifies free-tier cost and Compose context requirements; the textual comparison found additions and clarifications, not a material contradiction with the approved task. The approved task remains the acceptance contract.
+## Task 06.3S current-SHA reconciliation
+
+- **Historical implementation baseline:** `053a271ba36ebcf436720bdc6aa87c7bb79cf149`.
+- **Reviewed Task 06.3 implementation baseline:** `9bccb69ec251dadb79b5bff893506e10f6d6fae7`.
+- **Current repository SHA during this reconciliation:** `9bccb69ec251dadb79b5bff893506e10f6d6fae7`, before Task 06.3S remediation commits.
+- The `053a271...` statements below describe historical evidence produced before the implementation commits and must not be rewritten as results for `9bccb69...`.
+- Exact-SHA Development CI run `44914676778` and Security Audit run `44914676756` passed at `9bccb69...`.
+- New Task 06.3S source and policy evidence is recorded in `TASK_06.3S_IMPLEMENTATION_EVIDENCE.md` after the remediation commit.
+- Docker/Compose/Nginx runtime execution remains Linux-CI evidence, not local Windows evidence. Local Docker availability was unavailable during Task 06.3S preflight.
+
+This report implements repository-side preparation under the approved task contract in `docs/tasks/Phase-06/TASK_06.3_PRODUCTION_INFRASTRUCTURE_DEPLOYMENT.md`. It uses `docs/09_Deployment/TASK_06.3_DEPLOYMENT_ARCHITECTURE_AUDIT.md` as discovery evidence and rechecked relevant source at the historical base, while Task 06.3S separately reconciles the live reviewed implementation. The revised draft adds the same-origin/session gate and clarifies free-tier cost and Compose context requirements; the textual comparison found additions and clarifications, not a material contradiction with the approved task. The approved task remains the acceptance contract.
 
 ## 1. Repository baseline and preservation
 

@@ -87,13 +87,54 @@ test('privileged intake guard and all release verification precede host activati
   assert.match(guard, /PROD_RELEASE_MAX_SOURCE_EXPANDED_BYTES/);
 });
 
-test('downloaded workflow bundle is checksum-verified before runner-side Docker load', () => {
+test('downloaded workflow bundle is checksum-verified before and after runner-side Docker load', () => {
   const workflow = fs.readFileSync(path.resolve(root, '../../.github/workflows/deploy-production.yml'), 'utf8');
-  const filePreflight = workflow.indexOf('verify-release-manifest.cjs --files-only');
-  const imageLoad = workflow.indexOf('docker load --input "$bundle/images.tar"', filePreflight);
-  const loadedImageCheck = workflow.indexOf('verify-release-manifest.cjs \\\n', imageLoad);
-  assert.ok(filePreflight >= 0 && imageLoad > filePreflight, 'downloaded bundle checksums must pass before runner Docker load');
-  assert.ok(loadedImageCheck > imageLoad, 'loaded Docker image identities must be checked after load');
+  const verifyOrder = (source) => {
+    const normalized = source.replace(/\r\n/g, '\n');
+    const stepName = '      - name: Verify bundle and loaded image identities';
+    const stepStart = normalized.indexOf(stepName);
+    assert.ok(stepStart >= 0, 'the Verify bundle and loaded image identities workflow step must exist');
+    const nextStep = normalized.indexOf('\n      - name:', stepStart + stepName.length);
+    const stepEnd = nextStep >= 0 ? nextStep : normalized.length;
+    const step = normalized.slice(stepStart, stepEnd);
+    const filePreflight = step.indexOf('verify-release-manifest.cjs --files-only');
+    const imageLoad = step.indexOf('docker load --input "$bundle/images.tar"');
+    const loadedImageCheck = step.indexOf('verify-release-manifest.cjs \\');
+    assert.ok(filePreflight >= 0 && filePreflight < imageLoad,
+      'downloaded bundle checksums must pass before runner Docker load');
+    assert.ok(imageLoad >= 0 && loadedImageCheck > imageLoad,
+      'loaded Docker image identities must be checked after load');
+  };
+
+  verifyOrder(workflow);
+  verifyOrder(workflow.replace(/\n/g, '\r\n'));
+
+  const removed = workflow.replace(/node infrastructure\/production\/verify-release-manifest\.cjs --files-only[^\n]*\n[^\n]*\n[^\n]*\n/, '');
+  assert.throws(() => verifyOrder(removed), /downloaded bundle checksums|Verify bundle/, 'removing the file preflight must fail the structural assertion');
+
+  const moved = workflow
+    .replace(/          docker load --input "\$bundle\/images\.tar" >\/dev\/null\n/, '')
+    .replace(/          node infrastructure\/production\/verify-release-manifest\.cjs --files-only/, '          docker load --input "$bundle/images.tar" >/dev/null\n          node infrastructure/production/verify-release-manifest.cjs --files-only');
+  assert.throws(() => verifyOrder(moved), /downloaded bundle checksums|loaded Docker image identities/, 'moving verification after Docker load must fail the protected ordering assertion');
+});
+
+test('provenance policy rejects missing authorization and has no bypass path', () => {
+  const workflow = fs.readFileSync(path.resolve(root, '../../.github/workflows/deploy-production.yml'), 'utf8');
+  const guard = read('prepare-release-bundle.py');
+  for (const input of ['approved_commit', 'authorization_reference', 'backup_evidence_reference']) {
+    assert.match(workflow, new RegExp(`^      ${input}:\\s*$`, 'm'), `workflow dispatch must require ${input}`);
+  }
+  const gateMessage = 'Production release is disabled until the whole-release provenance trust owner and host verification policy are approved and implemented.';
+  assert.match(workflow, new RegExp(gateMessage));
+  assert.match(guard, /Production release intake is disabled: whole-release provenance trust owner and verification policy are not approved or enrolled/);
+  assert.doesNotMatch(workflow, /check-claims=false|skip[_-]?provenance|bypass[_-]?provenance|disable[_-]?provenance/i,
+    'workflow must not contain a production provenance bypass switch');
+  assert.doesNotMatch(guard, /check-claims=false|skip[_-]?provenance|bypass[_-]?provenance|disable[_-]?provenance/i,
+    'host helper must not contain a provenance bypass switch');
+  assert.doesNotMatch(workflow, /id-token:\s*write|attestations:\s*write|actions\/attest@/,
+    'no production signer or attestation mechanism is claimed by this intentionally blocked workflow');
+  assert.match(guard, /def _require_approved_release_provenance\(\)[\s\S]*?raise IntakeError/,
+    'the host reject function must remain unconditional');
 });
 
 test('rollback restoration is verified before recovery Compose uses the explicit previous release', () => {
