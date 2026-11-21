@@ -211,6 +211,7 @@ jobs:
         run: |
           set -euo pipefail
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=ci.electrohub.local' -addext 'subjectAltName=DNS:ci.electrohub.local' -keyout "$FIXTURE/tls/current/privkey.pem" -out "$FIXTURE/tls/current/fullchain.pem" >/dev/null 2>&1
+          chmod 0644 "$FIXTURE/tls/current/privkey.pem" "$FIXTURE/tls/current/fullchain.pem"
           sed 's/${CANONICAL_HOST}/ci.electrohub.local/g' infrastructure/production/nginx.conf.template > "$RUNNER_TEMP/electrohub-nginx.conf"
       - name: Validate Nginx syntax with controlled certificate
         env:
