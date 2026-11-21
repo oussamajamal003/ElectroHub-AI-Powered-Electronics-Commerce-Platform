@@ -5,7 +5,7 @@
 - Starting feature SHA: `3906346ecaa0825934bee8208d3e24686269bdf3`
 - Branch: `feature/06.3-production-infrastructure`
 - Evidence commit SHA: `47dc5beadc542c22ab91e836cc8eabe696e2f91f`
-- Final evidence refresh SHA: PENDING
+- Final evidence refresh SHA: `0a9df0866624ffa6004ee73b9afac9ba60bbf2bb`
 - Fixture branch remote SHA: `2a54d2e2361306738ec9fe3545135c97510175c0`
 - Existing fixture run: `44902259883`
 - Existing fixture job: `136840423906`
