@@ -23,7 +23,7 @@ function validateComposePortExposure(compose, protectedServices = PROTECTED_SERV
       throw new Error(`Rendered Compose JSON has invalid service: ${serviceName}`);
     }
 
-    if (Object.prototype.hasOwnProperty.call(service, 'ports') && service.ports != null) {
+    if (Object.prototype.hasOwnProperty.call(service, 'ports')) {
       if (!Array.isArray(service.ports)) {
         throw new Error(`Rendered Compose service ${serviceName} has invalid ports data`);
       }

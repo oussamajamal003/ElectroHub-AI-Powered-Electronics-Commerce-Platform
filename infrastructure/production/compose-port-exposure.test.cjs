@@ -61,8 +61,33 @@ test('internal service networking and expose settings are not host exposure', ()
   )));
 });
 
+test('absent ports property passes', () => {
+  assert.doesNotThrow(() => validateComposePortExposure(composeWith({ expose: ['5000'] }, { expose: ['8000'] })));
+});
+
 test('empty ports arrays pass', () => {
   assert.doesNotThrow(() => validateComposePortExposure(composeWith({ ports: [] }, { ports: [] })));
+});
+
+test('null ports property is rejected', () => {
+  assert.throws(
+    () => validateComposePortExposure(composeWith({ ports: null }, {})),
+    /Rendered Compose service api has invalid ports data/,
+  );
+});
+
+test('object ports property is rejected', () => {
+  assert.throws(
+    () => validateComposePortExposure(composeWith({ ports: {} }, {})),
+    /Rendered Compose service api has invalid ports data/,
+  );
+});
+
+test('string ports property is rejected', () => {
+  assert.throws(
+    () => validateComposePortExposure(composeWith({}, { ports: '5000' })),
+    /Rendered Compose service ai-service has invalid ports data/,
+  );
 });
 
 test('CI uses rendered Compose JSON and reusable port-exposure validation', () => {
