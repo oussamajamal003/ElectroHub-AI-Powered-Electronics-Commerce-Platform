@@ -36,7 +36,7 @@ describe.skipIf(!enabled).sequential('Task 04.7 real-time delivery on real Postg
   const ownerEvents: Event[] = []; const otherEvents: Event[] = [];
 
   async function socketFor(user: { id: string }, reference: string, sink: Event[]) {
-    const socket = connect(`${base}/delivery`, { auth: { token: generateAccessToken({ userId: user.id, role: 'CUSTOMER' }) }, transports: ['websocket'], reconnection: false, forceNew: true });
+    const socket = connect(`${base}/delivery`, { auth: { token: generateAccessToken({ userId: user.id, role: 'CUSTOMER' }) }, transports: ['websocket'], extraHeaders: { Origin: 'http://localhost:5173' }, reconnection: false, forceNew: true });
     sockets.push(socket);
     await new Promise<void>((resolve, reject) => { socket.once('connect', () => resolve()); socket.once('connect_error', reject); });
     socket.on('delivery:updated', event => sink.push(event));

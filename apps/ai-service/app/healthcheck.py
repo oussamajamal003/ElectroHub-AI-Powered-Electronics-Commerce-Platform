@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from urllib.request import Request, urlopen
 
 
@@ -36,7 +35,7 @@ def main() -> int:
         },
     )
     try:
-        with urlopen(request, timeout=10) as response:
+        with urlopen(request, timeout=10) as response:  # noqa: S310 - internal loopback readiness probe only
             if response.status != 200:
                 return 1
             payload = json.loads(response.read(64 * 1024))
