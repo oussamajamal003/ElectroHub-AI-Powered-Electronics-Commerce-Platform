@@ -103,7 +103,7 @@ services:
     stop_grace_period: 15s
     read_only: true
     tmpfs:
-      - /var/cache/nginx:size=32m,mode=0755,uid=101,gid=101
+      - /var/cache/nginx:size=32m,mode=0775,uid=101,gid=101
       - /tmp:size=8m,mode=0755,uid=101,gid=101
     mem_limit: ${EDGE_MEMORY_LIMIT:?Set a measured EDGE_MEMORY_LIMIT before deployment}
     cpus: ${EDGE_CPU_LIMIT:?Set a measured EDGE_CPU_LIMIT before deployment}

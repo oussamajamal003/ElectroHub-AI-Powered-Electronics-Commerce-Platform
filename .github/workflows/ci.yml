@@ -237,6 +237,7 @@ jobs:
           docker run -d --name electrohub-nginx-api --network electrohub-edge-fixture --network-alias api nginx:1.30.6-alpine3.24 nginx -g 'daemon off;' >/dev/null
           docker run -d --name electrohub-edge-ci \
             --network electrohub-edge-fixture \
+            --tmpfs /var/cache/nginx:rw,size=32m,mode=0775,uid=101,gid=101 \
             -e CANONICAL_HOST=ci.electrohub.local \
             -p 127.0.0.1:18080:8080 -p 127.0.0.1:18443:8443 \
             -v "$FIXTURE/tls/current:/etc/nginx/tls/current:ro" \
