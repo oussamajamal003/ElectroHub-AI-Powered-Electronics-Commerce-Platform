@@ -217,18 +217,25 @@ jobs:
           FIXTURE: ${{ runner.temp }}/electrohub-compose-fixture
         run: |
           set -euo pipefail
-          docker run --rm --network none \
+          docker network create electrohub-nginx-fixture
+          docker run -d --name electrohub-nginx-api --network electrohub-nginx-fixture --network-alias api nginx:1.30.6-alpine3.24 nginx -g 'daemon off;' >/dev/null
+          docker run --rm --network electrohub-nginx-fixture \
             -v "$RUNNER_TEMP/electrohub-nginx.conf:/tmp/electrohub-nginx.conf:ro" \
             -v "$FIXTURE/tls/current/fullchain.pem:/etc/nginx/tls/current/fullchain.pem:ro" \
             -v "$FIXTURE/tls/current/privkey.pem:/etc/nginx/tls/current/privkey.pem:ro" \
             nginx:1.30.6-alpine3.24 nginx -t -c /tmp/electrohub-nginx.conf
+          docker rm -f electrohub-nginx-api >/dev/null
+          docker network rm electrohub-nginx-fixture >/dev/null
       - name: Build and smoke test the edge image
         env:
           FIXTURE: ${{ runner.temp }}/electrohub-compose-fixture
         run: |
           set -euo pipefail
           docker build -f infrastructure/production/Dockerfile.edge -t electrohub-edge-ci:9bccb69ec251dadb79b5bff893506e10f6d6fae7 .
+          docker network create electrohub-edge-fixture
+          docker run -d --name electrohub-nginx-api --network electrohub-edge-fixture --network-alias api nginx:1.30.6-alpine3.24 nginx -g 'daemon off;' >/dev/null
           docker run -d --name electrohub-edge-ci \
+            --network electrohub-edge-fixture \
             -e CANONICAL_HOST=ci.electrohub.local \
             -p 127.0.0.1:18080:8080 -p 127.0.0.1:18443:8443 \
             -v "$FIXTURE/tls/current:/etc/nginx/tls/current:ro" \
@@ -245,6 +252,8 @@ jobs:
         if: always()
         run: |
           docker rm -f electrohub-edge-ci >/dev/null 2>&1 || true
+          docker rm -f electrohub-nginx-api >/dev/null 2>&1 || true
+          docker network rm electrohub-edge-fixture >/dev/null 2>&1 || true
 
   workflow-policy:
     name: Workflow / Migration Safety Policy
