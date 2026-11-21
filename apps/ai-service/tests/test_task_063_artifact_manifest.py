@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -44,7 +45,7 @@ def test_manifest_verifier_binds_loader_source_artifact_directories_and_model_in
     loader_source.parent.mkdir(parents=True)
     loader_source.write_bytes(b"loader bytes")
     manifest_path = tmp_path / "candidate.json"
-    manifest = {
+    manifest: dict[str, Any] = {
         "status": "LOCAL_ARTIFACT_CANDIDATE_NOT_PRODUCTION_RELEASE",
         "loader": {
             "sourcePath": "apps/ai-service/app/models/siglip_loader.py",
