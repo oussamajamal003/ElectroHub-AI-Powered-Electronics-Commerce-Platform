@@ -1,12 +1,15 @@
 name: Test Non-Production Attestation Fixture
 
 on:
+  push:
+    branches:
+      - test/attestation-fixture
   workflow_dispatch:
     inputs:
       reason:
         description: 'Authorization reason for non-production fixture test'
         required: false
-        default: 'Task 06.3Q Owner-Authorized Non-Production Attestation Fixture'
+        default: 'Task 06.3Q-R Owner-Authorized Non-Production Attestation Fixture'
 
 permissions: {}
 
@@ -87,6 +90,40 @@ jobs:
           echo "Attestation ID: $ATTESTATION_ID"
           echo "Attestation URL: $ATTESTATION_URL"
 
+          # Helper function for verifying expected security policy rejections
+          verify_expected_failure() {
+            local test_name="$1"
+            local log_file="$2"
+            local exit_status="$3"
+            local expected_pattern="$4"
+
+            echo "--> Evaluating outcome for: $test_name"
+            echo "Observed exit status: $exit_status"
+            echo "--- Verifier output start ---"
+            cat "$log_file"
+            echo "--- Verifier output end ---"
+
+            # 1. Verification command must have returned non-zero
+            if [ "$exit_status" -eq 0 ]; then
+              echo "CRITICAL DEFECT: [$test_name] command unexpectedly SUCCEEDED when security rejection was required!"
+              exit 1
+            fi
+
+            # 2. Check for unexpected CLI, auth, or infrastructure failures (which must fail the test)
+            if grep -i -E "(unknown flag|unknown command|unknown shorthand flag|bad credentials|could not resolve to a user|rate limit|connection refused|command not found|could not read|permission denied|fatal:|panic:|segmentation fault|Error: failed to connect)" "$log_file"; then
+              echo "CRITICAL DEFECT: [$test_name] failed due to CLI syntax, authentication, or infrastructure error rather than security verification policy rejection!"
+              exit 1
+            fi
+
+            # 3. Check for specific verification policy failure message (disallowing generic terms like policy, signer, verification failed)
+            if ! grep -i -E "$expected_pattern" "$log_file"; then
+              echo "CRITICAL DEFECT: [$test_name] failure output did not match specific expected rejection pattern ('$expected_pattern')!"
+              exit 1
+            fi
+
+            echo "PASS: [$test_name] correctly rejected by verification policy (pattern matched: '$expected_pattern')."
+          }
+
           echo ""
           echo "================================================================"
           echo " TEST A: POSITIVE VERIFICATION"
@@ -100,11 +137,24 @@ jobs:
           echo "Positive Bundle Verification Succeeded!"
 
           echo "--> A2. Verifying via GitHub Attestation API..."
-          POSITIVE_API_JSON=$(gh attestation verify "$PAYLOAD" \
-            --repo "$REPO" \
-            --signer-workflow "$EXPECTED_WORKFLOW" \
-            --format json)
-          echo "Positive API Verification Succeeded!"
+          POSITIVE_API_JSON=""
+          for attempt in 1 2 3; do
+            if POSITIVE_API_JSON=$(gh attestation verify "$PAYLOAD" \
+              --repo "$REPO" \
+              --signer-workflow "$EXPECTED_WORKFLOW" \
+              --format json 2> api_err.log); then
+              echo "Positive API Verification Succeeded on attempt $attempt!"
+              break
+            fi
+            echo "API verification attempt $attempt failed, retrying in 3s..."
+            sleep 3
+          done
+
+          if [ -z "$POSITIVE_API_JSON" ]; then
+            echo "CRITICAL DEFECT: Positive API verification failed after 3 attempts!"
+            cat api_err.log
+            exit 1
+          fi
 
           echo ""
           echo "================================================================"
@@ -122,14 +172,11 @@ jobs:
           TAMPER_STATUS=$?
           set -e
 
-          if [ $TAMPER_STATUS -eq 0 ]; then
-            echo "CRITICAL DEFECT: gh attestation verify accepted tampered payload!"
-            cat tamper_rejection.log
-            exit 1
-          fi
-          echo "PASS: Tampered payload rejected as expected (exit code: $TAMPER_STATUS)."
-          echo "Log output:"
-          cat tamper_rejection.log
+          verify_expected_failure \
+            "Test B: Tampered Payload" \
+            "tamper_rejection.log" \
+            "$TAMPER_STATUS" \
+            "(no matching attestations found|no matching attestation|failed to find matching attestation|does not match bundle|attestation signature verification failed)"
 
           echo ""
           echo "================================================================"
@@ -146,14 +193,11 @@ jobs:
           WRONG_REPO_STATUS=$?
           set -e
 
-          if [ $WRONG_REPO_STATUS -eq 0 ]; then
-            echo "CRITICAL DEFECT: gh attestation verify accepted wrong repository!"
-            cat wrong_repo_rejection.log
-            exit 1
-          fi
-          echo "PASS: Wrong repository rejected as expected (exit code: $WRONG_REPO_STATUS)."
-          echo "Log output:"
-          cat wrong_repo_rejection.log
+          verify_expected_failure \
+            "Test C: Wrong Repository" \
+            "wrong_repo_rejection.log" \
+            "$WRONG_REPO_STATUS" \
+            "(expected SAN value to match|no matching CertificateIdentity found|failed to verify certificate identity|expected signer repository)"
 
           echo ""
           echo "================================================================"
@@ -170,14 +214,11 @@ jobs:
           WRONG_WORKFLOW_STATUS=$?
           set -e
 
-          if [ $WRONG_WORKFLOW_STATUS -eq 0 ]; then
-            echo "CRITICAL DEFECT: gh attestation verify accepted wrong signer workflow!"
-            cat wrong_workflow_rejection.log
-            exit 1
-          fi
-          echo "PASS: Wrong signer workflow rejected as expected (exit code: $WRONG_WORKFLOW_STATUS)."
-          echo "Log output:"
-          cat wrong_workflow_rejection.log
+          verify_expected_failure \
+            "Test D1: Wrong Signer Workflow" \
+            "wrong_workflow_rejection.log" \
+            "$WRONG_WORKFLOW_STATUS" \
+            "(expected SAN value to match|no matching CertificateIdentity found|failed to verify certificate identity|expected signer workflow)"
 
           LOOKALIKE_WORKFLOW=".github/workflows/test-attestation-fixture.yml.attacker.yml"
           echo "--> D2. Testing verification with lookalike / prefix workflow: $LOOKALIKE_WORKFLOW..."
@@ -190,50 +231,200 @@ jobs:
           LOOKALIKE_STATUS=$?
           set -e
 
-          if [ $LOOKALIKE_STATUS -eq 0 ]; then
-            echo "CRITICAL DEFECT: gh attestation verify accepted lookalike prefix workflow!"
-            cat lookalike_rejection.log
-            exit 1
-          fi
-          echo "PASS: Lookalike workflow rejected as expected (exit code: $LOOKALIKE_STATUS)."
-          echo "Log output:"
-          cat lookalike_rejection.log
+          verify_expected_failure \
+            "Test D2: Lookalike Signer Workflow" \
+            "lookalike_rejection.log" \
+            "$LOOKALIKE_STATUS" \
+            "(expected SAN value to match|no matching CertificateIdentity found|failed to verify certificate identity|expected signer workflow)"
 
           echo ""
           echo "================================================================"
           echo " TEST E: CLAIM INSPECTION & CRYPTOGRAPHIC PROVENANCE EVIDENCE"
           echo "================================================================"
-          echo "--> E1. gh attestation verify JSON Structure:"
-          echo "$POSITIVE_BUNDLE_JSON" | jq .
+          echo "--> E1. Verifier Output Schema Check:"
+          echo "$POSITIVE_BUNDLE_JSON" | jq -e '
+            type == "array" and length >= 1 and
+            (.[0] | has("attestation") and has("verificationResult")) and
+            (.[0].verificationResult | has("statement") and has("signature") and has("verifiedTimestamps")) and
+            (.[0].verificationResult.statement | has("subject") and has("predicateType") and has("predicate"))
+          ' > /dev/null || { echo "CRITICAL DEFECT: Positive verification JSON schema check failed!"; exit 1; }
+          echo "PASS: Verifier JSON output matches expected schema."
 
-          echo "--> E2. in-toto Statement (DSSE Envelope Payload):"
+          echo "--> E2. in-toto Statement & DSSE Envelope Structure:"
+          jq -e 'has("dsseEnvelope") and has("verificationMaterial")' "$BUNDLE" > /dev/null || {
+            echo "CRITICAL DEFECT: Bundle lacks dsseEnvelope or verificationMaterial!"; exit 1;
+          }
+          jq -e '.dsseEnvelope | has("payloadType") and has("payload") and has("signatures")' "$BUNDLE" > /dev/null || {
+            echo "CRITICAL DEFECT: DSSE envelope structure invalid!"; exit 1;
+          }
+          PAYLOAD_TYPE=$(jq -r '.dsseEnvelope.payloadType' "$BUNDLE")
+          if [ "$PAYLOAD_TYPE" != "application/vnd.in-toto+json" ]; then
+            echo "CRITICAL DEFECT: Unexpected payloadType: $PAYLOAD_TYPE"; exit 1;
+          fi
+
+          echo "--> Validating dsseEnvelope.signatures array:"
+          jq -e '
+            .dsseEnvelope.signatures |
+            type == "array" and length >= 1 and
+            (.[0] | type == "object" and has("sig") and (.sig | type == "string" and length > 0))
+          ' "$BUNDLE" > /dev/null || {
+            echo "CRITICAL DEFECT: dsseEnvelope.signatures is not an array containing at least one valid signature entry with non-empty sig string!";
+            exit 1;
+          }
+          SIG_COUNT=$(jq '.dsseEnvelope.signatures | length' "$BUNDLE")
+          echo "PASS: dsseEnvelope.signatures validated (count: $SIG_COUNT, first signature has valid non-empty 'sig' field)."
+
           STATEMENT_JSON=$(jq -r '.dsseEnvelope.payload' "$BUNDLE" | base64 -d)
+          echo "$STATEMENT_JSON" | jq -e '
+            (has("_type") or has("type")) and
+            has("subject") and ( .subject | type == "array" and length >= 1 ) and
+            has("predicateType") and has("predicate")
+          ' > /dev/null || {
+            echo "CRITICAL DEFECT: in-toto statement schema validation failed!"; exit 1;
+          }
+          echo "PASS: DSSE envelope and in-toto statement schema strictly validated."
+          echo "Decoded in-toto Statement:"
           echo "$STATEMENT_JSON" | jq .
 
           echo "--> E3. Subject Digest Verification:"
           STATEMENT_DIGEST=$(echo "$STATEMENT_JSON" | jq -r '.subject[0].digest.sha256')
           echo "Statement subject sha256: $STATEMENT_DIGEST"
           echo "Expected payload sha256:  $EXPECTED_SHA256"
+          if [ -z "$STATEMENT_DIGEST" ] || [ "$STATEMENT_DIGEST" = "null" ]; then
+            echo "CRITICAL DEFECT: Statement subject sha256 is null or empty!"; exit 1;
+          fi
           if [ "$STATEMENT_DIGEST" != "$EXPECTED_SHA256" ]; then
-            echo "CRITICAL DEFECT: Subject digest in in-toto statement does not match payload sha256!"
+            echo "CRITICAL DEFECT: Subject digest in in-toto statement does not match payload sha256!"; exit 1;
+          fi
+          echo "PASS: Subject digest strictly matches independently computed SHA-256."
+
+          echo "--> E4. Fulcio X.509 Certificate Extensions & SAN Exact Identity:"
+          CERT_RAW=$(jq -r '.verificationMaterial.certificate.rawBytes // .verificationMaterial.x509CertificateChain.certificates[0].rawBytes // empty' "$BUNDLE")
+          if [ -z "$CERT_RAW" ]; then
+            echo "CRITICAL DEFECT: Certificate rawBytes not found in verificationMaterial! Bundle keys:"
+            jq '.verificationMaterial | keys' "$BUNDLE"
             exit 1
           fi
-          echo "PASS: Subject digest strictly matches payload SHA-256."
 
-          echo "--> E4. Fulcio X.509 Certificate Extensions & SAN:"
-          CERT_RAW=$(jq -r '.verificationMaterial.certificate.rawBytes // .verificationMaterial.x509CertificateChain.certificates[0].rawBytes // empty' "$BUNDLE")
-          if [ -n "$CERT_RAW" ]; then
-            echo "$CERT_RAW" | base64 -d | openssl x509 -inform DER -text -noout > cert_text.txt
-            cat cert_text.txt
-          else
-            echo "Notice: Certificate rawBytes not in standard path. Inspecting verificationMaterial keys:"
-            jq '.verificationMaterial | keys' "$BUNDLE"
+          echo "$CERT_RAW" | base64 -d | openssl x509 -inform DER -text -noout > cert_text.txt
+          echo "--- Parsed X.509 Certificate ---"
+          cat cert_text.txt
+          echo "--- End X.509 Certificate ---"
+
+          # Structured extraction: Primary source is the verifier's parsed subjectAlternativeName
+          # from positive verificationResult JSON.
+          # Explicitly validate the type, structure, and presence of subjectAlternativeName.
+          echo "$POSITIVE_BUNDLE_JSON" | jq -e '
+            type == "array" and length >= 1 and
+            (.[0] |
+              type == "object" and
+              .verificationResult != null and (.verificationResult | type == "object") and
+              .verificationResult.signature != null and (.verificationResult.signature | type == "object") and
+              .verificationResult.signature.certificate != null and (.verificationResult.signature.certificate | type == "object") and
+              .verificationResult.signature.certificate.subjectAlternativeName != null and
+              (.verificationResult.signature.certificate.subjectAlternativeName | type == "string") and
+              ((.verificationResult.signature.certificate.subjectAlternativeName | length) > 0)
+            )
+          ' > /dev/null || {
+            echo "CRITICAL DEFECT: Verifier parsed subjectAlternativeName is missing, malformed, or not a non-empty string!"
+            echo "Positive bundle output was:"
+            echo "$POSITIVE_BUNDLE_JSON" | jq '.[0].verificationResult.signature.certificate // empty'
+            exit 1
+          }
+
+          VERIFIER_SAN=$(echo "$POSITIVE_BUNDLE_JSON" | jq -r '.[0].verificationResult.signature.certificate.subjectAlternativeName')
+          if [ -z "$VERIFIER_SAN" ] || [ "$VERIFIER_SAN" = "null" ]; then
+            echo "CRITICAL DEFECT: Extracted subjectAlternativeName is empty or null!"
+            exit 1
+          fi
+          # Normalize verifier SAN URI (strip optional leading 'URI:' prefix if present)
+          VERIFIER_SAN_URI="${VERIFIER_SAN#URI:}"
+
+          # Secondary independent extraction: Query OpenSSL certificate extensions specifically for subjectAltName
+          OPENSSL_SAN_EXT=$(echo "$CERT_RAW" | base64 -d | openssl x509 -inform DER -noout -ext subjectAltName 2>/dev/null || true)
+          OPENSSL_SAN_URI=$(echo "$OPENSSL_SAN_EXT" | tr -d '\r\n' | sed -e 's/.*URI://' -e 's/[, ].*//')
+
+          echo "Verifier parsed SAN URI: '$VERIFIER_SAN_URI'"
+          echo "OpenSSL extracted SAN:   '$OPENSSL_SAN_URI'"
+
+          EXPECTED_COMPLETE_IDENTITY="${REPO}/${EXPECTED_WORKFLOW}@${EXPECTED_REF}"
+          EXPECTED_FULL_URI="https://github.com/${EXPECTED_COMPLETE_IDENTITY}"
+
+          echo "Expected Complete Identity: '$EXPECTED_COMPLETE_IDENTITY'"
+          echo "Expected Full URI:          '$EXPECTED_FULL_URI'"
+
+          # Verify that Verifier SAN URI matches expected full URI exactly (no substring matching)
+          if [ "$VERIFIER_SAN_URI" != "$EXPECTED_FULL_URI" ]; then
+            echo "CRITICAL DEFECT: Exact verifier certificate full SAN URI mismatch!"
+            echo "Expected: '$EXPECTED_FULL_URI'"
+            echo "Observed: '$VERIFIER_SAN_URI'"
+            exit 1
           fi
 
-          echo "--> E5. Rekor Transparency Log Entry:"
-          jq '.verificationMaterial.tlogEntries // empty' "$BUNDLE"
+          # Extract and verify complete identity string (stripping https://github.com/)
+          VERIFIER_COMPLETE_IDENTITY="${VERIFIER_SAN_URI#https://github.com/}"
+          if [ "$VERIFIER_COMPLETE_IDENTITY" != "$EXPECTED_COMPLETE_IDENTITY" ]; then
+            echo "CRITICAL DEFECT: Exact verifier certificate complete identity mismatch!"
+            echo "Expected: '$EXPECTED_COMPLETE_IDENTITY'"
+            echo "Observed: '$VERIFIER_COMPLETE_IDENTITY'"
+            exit 1
+          fi
+
+          # Cross-verify with OpenSSL parsed SAN extension if present
+          if [ -n "$OPENSSL_SAN_URI" ]; then
+            if [ "$OPENSSL_SAN_URI" != "$EXPECTED_FULL_URI" ]; then
+              echo "CRITICAL DEFECT: OpenSSL extracted SAN URI does not match expected full URI!"
+              echo "Expected: '$EXPECTED_FULL_URI'"
+              echo "Observed: '$OPENSSL_SAN_URI'"
+              exit 1
+            fi
+            echo "PASS: OpenSSL extracted SAN URI strictly matches verifier and expected full URI."
+          fi
+
+          echo "PASS: Complete certificate SAN identity exactly matched: $VERIFIER_COMPLETE_IDENTITY"
+
+          echo "--> Parsed certificate summary from verificationResult:"
+          echo "$POSITIVE_BUNDLE_JSON" | jq '.[0].verificationResult.signature.certificate | { subjectAlternativeName, issuer, extensions: (.extensions // .customExtensions // empty) }'
+
+          echo "--> E5. Rekor Transparency Log Entry Validation:"
+          jq -e '
+            .verificationMaterial.tlogEntries |
+            type == "array" and length >= 1 and
+            (.[0] |
+              type == "object" and
+              has("logIndex") and has("integratedTime") and has("logId") and
+              # Validate logIndex is a non-negative integer (number or string representation)
+              (.logIndex != null and (
+                ((.logIndex | type == "number") and .logIndex >= 0 and (.logIndex == (.logIndex | floor))) or
+                ((.logIndex | type == "string") and (.logIndex | test("^[0-9]+$")))
+              )) and
+              # Validate integratedTime is a non-negative integer timestamp (number or string representation)
+              (.integratedTime != null and (
+                ((.integratedTime | type == "number") and .integratedTime >= 0 and (.integratedTime == (.integratedTime | floor))) or
+                ((.integratedTime | type == "string") and (.integratedTime | test("^[0-9]+$")))
+              )) and
+              # Validate logId against supported Sigstore schema: 64 hexadecimal characters
+              (.logId != null and (
+                ((.logId | type == "object") and (.logId.keyId != null) and (.logId.keyId | type == "string") and (.logId.keyId | test("^[0-9a-fA-F]{64}$"))) or
+                ((.logId | type == "string") and (.logId | test("^[0-9a-fA-F]{64}$")))
+              ))
+            )
+          ' "$BUNDLE" > /dev/null || {
+            echo "CRITICAL DEFECT: verificationMaterial.tlogEntries validation failed! Rekor entries must be an array with >=1 entry containing non-negative integer logIndex, non-negative integer integratedTime, and a 64-hexadecimal character logId.";
+            exit 1;
+          }
+          TLOG_COUNT=$(jq '.verificationMaterial.tlogEntries | length' "$BUNDLE")
+          TLOG_KEY_ID=$(jq -r '.verificationMaterial.tlogEntries[0].logId.keyId // .verificationMaterial.tlogEntries[0].logId // empty' "$BUNDLE")
+          TLOG_INDEX=$(jq -r '.verificationMaterial.tlogEntries[0].logIndex' "$BUNDLE")
+          TLOG_TIME=$(jq -r '.verificationMaterial.tlogEntries[0].integratedTime' "$BUNDLE")
+          echo "PASS: verificationMaterial.tlogEntries strictly validated:"
+          echo "  - Entry count:    $TLOG_COUNT"
+          echo "  - Log index:      $TLOG_INDEX"
+          echo "  - IntegratedTime: $TLOG_TIME"
+          echo "  - Log ID:         $TLOG_KEY_ID"
+          jq '.verificationMaterial.tlogEntries[] | { logIndex, logId, integratedTime }' "$BUNDLE"
 
           echo ""
           echo "================================================================"
-          echo " ALL NON-PRODUCTION ATTESTATION CHECKS PASSED SUCCESSFULLY"
+          echo " ALL NON-PRODUCTION ATTESTATION CHECKS (A, B, C, D, E) PASSED"
           echo "================================================================"
