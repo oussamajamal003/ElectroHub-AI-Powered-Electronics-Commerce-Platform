@@ -5,8 +5,10 @@
 **Branch:** `feature/06.3-production-infrastructure`
 **Base SHA:** `053a271ba36ebcf436720bdc6aa87c7bb79cf149`
 **Starting reviewed SHA:** `9bccb69ec251dadb79b5bff893506e10f6d6fae7`
-**Implementation SHA:** `13c3332bc8b2bcea2bd37a5b1c8f419e49b0d5ad`
-**Status:** Implementation complete; Linux exact-SHA CI evidence and remaining production gates pending.
+**Implementation remediation SHA:** `13c3332bc8b2bcea2bd37a5b1c8f419e49b0d5ad`
+**Final remediated SHA:** `55be97727bf70cb5bb47a1760ee8e29d76af28f0`
+**Task 06.3S commits:** `13c3332b` implementation, `eeefc6d8` evidence, `cd348e42` upstream fixture, `44d7699e` Nginx regex, `9b33cef6` TLS fixture permissions, `55be9772` edge cache permissions.
+**Status:** Implementation and Linux runtime verification complete; external production gates remain.
 **Production status:** STRICT NO-GO.
 
 ## 1. Repository State
@@ -81,7 +83,7 @@ The job:
 - Uses no production credentials or external provider access.
 
 Local Docker validation: NOT AVAILABLE on the Windows environment.
-Linux exact-SHA CI run: NOT YET AVAILABLE in this report; verify the run created for commit `13c3332b...` before marking this job passed.
+Linux exact-SHA CI run: SUCCESS at `55be97727bf70cb5bb47a1760ee8e29d76af28f0` in Development CI run `44934416917`, Linux job `136937825403`.
 
 ## 7. Workstream D — Provenance and Fail-Closed Verification
 
