@@ -149,7 +149,7 @@ This task repairs local fixture verification policy only. It does not establish 
 - Starting feature SHA: `f77c6bee9758f1260c2f64262617f028df2f1d89`.
 - Publication reconciliation commit SHA: `4a54d8cc`.
 - Feature evidence commit SHA: `47dc5beadc542c22ab91e836cc8eabe696e2f91f`.
-- Final feature evidence refresh SHA: `f1c5a52074ed16544b4890a4f63595d033c4833d`.
+- Final feature evidence refresh SHA: `e65967727c971a9bbed6ac4190a33f308cced865`.
 - Review branch: `review/06.3v-r-verifier-remediation`.
 - Remote review HEAD: `2bf237f348b5ed5d9d79b821cd76fc3dd6c7c7d9`.
 - Fixture branch remote HEAD: `2a54d2e2361306738ec9fe3545135c97510175c0`.
