@@ -5,7 +5,7 @@
 - Starting review SHA: `2bf237f348b5ed5d9d79b821cd76fc3dd6c7c7d9`
 - Implementation SHA: `2070d20bcb9a34bdb2d41b91466704ba0cda4d88`
 - Evidence commit SHA: `9419a8c6`
-- Final review SHA: `5997e4c23f93ec5febc790ccb2e580e9260f8bd6`
+- Final review SHA after implementation and evidence reconciliation: `02839e5c`
 - Review branch: `review/06.3v-r-verifier-remediation`
 - Fixture branch unchanged: `test/attestation-fixture` at `2a54d2e2361306738ec9fe3545135c97510175c0`
 - Existing hosted fixture run: `44902259883`
