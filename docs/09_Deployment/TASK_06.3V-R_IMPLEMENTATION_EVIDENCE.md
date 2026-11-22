@@ -143,3 +143,37 @@ No account settings, production files, or provider configuration changed.
 - Production status: **STRICT NO-GO**.
 
 This task repairs local fixture verification policy only. It does not establish production signer trust, host trust-root custody, replay protection, branch governance, or deployment authorization.
+
+## Publication Reconciliation — 06.3V-R.1
+
+- Starting feature SHA: `f77c6bee9758f1260c2f64262617f028df2f1d89`.
+- Feature evidence commit SHA: `47dc5beadc542c22ab91e836cc8eabe696e2f91f`.
+- Final feature evidence refresh SHA: `f77c6bee9758f1260c2f64262617f028df2f1d89`.
+- Review branch: `review/06.3v-r-verifier-remediation`.
+- Remote review HEAD: `2bf237f348b5ed5d9d79b821cd76fc3dd6c7c7d9`.
+- Fixture branch remote HEAD: `2a54d2e2361306738ec9fe3545135c97510175c0`.
+- Review branch contains the implementation commit chain `701df8e9f74c6c1cc1da9d4abef690700d066b20` followed by `2bf237f348b5ed5d9d79b821cd76fc3dd6c7c7d9`.
+- Exact test SHA: `2bf237f348b5ed5d9d79b821cd76fc3dd6c7c7d9`.
+
+Published files:
+
+- `.github/workflows/test-attestation-fixture.yml`
+- `scratch/verify-attestation-fixture.cjs`
+- `scratch/verify-attestation-fixture.test.cjs`
+
+Exact-SHA verification in a detached worktree:
+
+- `node --test scratch/verify-attestation-fixture.test.cjs`: 11 passed, 0 failed.
+- `git diff --check 2a54d2e2361306738ec9fe3545135c97510175c0..HEAD`: passed.
+- Workflow parse: workflow-level permissions `{}`, job permissions `contents: read`, `id-token: write`, `attestations: write`.
+- Action pins: `actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683` and `actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6`.
+
+Publication safety:
+
+- The fixture branch was not changed.
+- No hosted workflow was dispatched or trigger-pushed.
+- The fixture SHA still has exactly one existing run: `44902259883`.
+- The local review branch was published as a new branch, with no force-push or merge.
+- No GitHub account, production, provider, database, host, secret, trust-root, replay-ledger, or deployment change occurred.
+
+The review branch is ready for independent architecture and security review. This publication does not complete Task 06.3V-R or establish production readiness.
