@@ -6,17 +6,19 @@ const assert = require('node:assert/strict');
 const {
   OIDC_ISSUER,
   PREDICATE_TYPE,
+  sha256Hex,
   validateAttestationPolicy,
   buildVerifyArgs,
 } = require('./verify-attestation-fixture.cjs');
 
-const digest = '6cb395598f97d26d2bb2eb458463e14eaabbcc68888484483594d5b77b26e8e5';
+const payloadBytes = Buffer.from('ElectroHub synthetic fixture payload\n');
+const digest = sha256Hex(payloadBytes);
 const commit = '2a54d2e2361306738ec9fe3545135c97510175c0';
 const repo = 'oussamajamal003/ElectroHub-AI-Powered-Electronics-Commerce-Platform';
 const workflow = '.github/workflows/test-attestation-fixture.yml';
 const ref = 'refs/heads/test/attestation-fixture';
 
-function fixture(overrides = {}) {
+function fixture() {
   const san = `https://github.com/${repo}/${workflow}@${ref}`;
   const statement = {
     _type: 'https://in-toto.io/Statement/v1',
@@ -24,132 +26,138 @@ function fixture(overrides = {}) {
     predicateType: PREDICATE_TYPE,
     predicate: { fixture: true },
   };
-  const bundle = {
-    dsseEnvelope: {
-      payloadType: 'application/vnd.in-toto+json',
-      payload: Buffer.from(JSON.stringify(statement)).toString('base64'),
-      signatures: [{ sig: 'aabbcc' }],
-    },
-    verificationMaterial: {
-      tlogEntries: [{ logIndex: 1, integratedTime: 1770000000, logId: '0123456789abcdef' }],
-    },
-  };
-  const verifierOutput = [{
-    attestation: {},
-    verificationResult: {
-      statement,
-      signature: {
-        certificate: {
-          issuer: OIDC_ISSUER,
-          subjectAlternativeName: san,
-        },
+  return {
+    bundle: {
+      dsseEnvelope: {
+        payloadType: 'application/vnd.in-toto+json',
+        payload: Buffer.from(JSON.stringify(statement)).toString('base64'),
+        signatures: [{ sig: 'synthetic-signature-not-cryptographically-valid' }],
       },
-      verifiedTimestamps: [{ type: 'TlogTimestamp', timestamp: '2026-11-21T12:06:38Z' }],
+      verificationMaterial: {
+        tlogEntries: [{ logIndex: 1, integratedTime: 1770000000, logId: { keyId: '0'.repeat(64) } }],
+      },
     },
-  }];
-  return { bundle, verifierOutput, ...overrides };
+    verifierOutput: [{
+      attestation: {},
+      verificationResult: {
+        statement,
+        signature: { certificate: { issuer: OIDC_ISSUER, subjectAlternativeName: san } },
+        verifiedTimestamps: [{ type: 'SyntheticTimestamp', timestamp: '2026-11-21T12:06:38Z' }],
+      },
+    }],
+  };
 }
 
-function expectRejection(overrides, pattern) {
-  const value = fixture(overrides);
+function policyArgs(overrides = {}) {
+  const value = fixture();
+  return {
+    bundle: value.bundle,
+    verifierOutput: value.verifierOutput,
+    payloadBytes,
+    payloadSha256: digest,
+    repo,
+    workflow,
+    commit,
+    ref,
+    ...overrides,
+  };
+}
+
+// Synthetic policy tests only. gh attestation verify owns signature, certificate, trust-root, and Rekor verification.
+test('actual payload bytes and matching supplied digest pass', () => {
+  assert.equal(validateAttestationPolicy(policyArgs()), true);
+});
+
+test('missing payload bytes are rejected', () => {
+  assert.throws(() => validateAttestationPolicy(policyArgs({ payloadBytes: null })), /Payload bytes/);
+  assert.throws(() => validateAttestationPolicy(policyArgs({ payloadBytes: Buffer.alloc(0) })), /Payload bytes/);
+});
+
+test('malformed supplied payload digest is rejected', () => {
+  assert.throws(() => validateAttestationPolicy(policyArgs({ payloadSha256: 'not-a-digest' })), /malformed/);
+});
+
+test('supplied digest matching the attestation but differing from actual payload bytes is rejected', () => {
+  const value = fixture();
   assert.throws(() => validateAttestationPolicy({
-    bundle: value.bundle,
-    verifierOutput: value.verifierOutput,
-    payloadBytes: Buffer.from('fixture'),
+    ...policyArgs(),
+    payloadBytes: Buffer.from('tampered payload bytes'),
     payloadSha256: digest,
-    repo,
-    workflow,
-    commit,
-    ref,
-  }), pattern);
-}
-
-test('valid expected identity and bundle structure passes', () => {
-  const value = fixture();
-  assert.equal(validateAttestationPolicy({
-    bundle: value.bundle,
-    verifierOutput: value.verifierOutput,
-    payloadBytes: Buffer.from('fixture'),
-    payloadSha256: digest,
-    repo,
-    workflow,
-    commit,
-    ref,
-  }), true);
+  }), /differs from actual payload bytes/);
+  assert.equal(value.bundle.dsseEnvelope.payload.length > 0, true);
 });
 
-test('wrong repository is rejected', () => {
+test('verifier statement subject digest differing from actual payload is rejected', () => {
   const value = fixture();
-  value.verifierOutput[0].verificationResult.signature.certificate.subjectAlternativeName =
-    `https://github.com/github/docs/${workflow}@${ref}`;
-  assert.throws(() => validateAttestationPolicy({ bundle: value.bundle, verifierOutput: value.verifierOutput, payloadSha256: digest, repo, workflow, commit, ref }), /certificate SAN/);
+  value.verifierOutput[0].verificationResult.statement.subject[0].digest.sha256 = '0'.repeat(64);
+  assert.throws(() => validateAttestationPolicy({ bundle: value.bundle, verifierOutput: value.verifierOutput, payloadBytes, payloadSha256: digest, repo, workflow, commit, ref }), /verifier statement payload digest/);
 });
 
-test('wrong workflow path is rejected', () => {
+test('DSSE subject digest differing from actual payload is rejected', () => {
   const value = fixture();
-  value.verifierOutput[0].verificationResult.signature.certificate.subjectAlternativeName =
-    `https://github.com/${repo}/.github/workflows/ci.yml@${ref}`;
-  assert.throws(() => validateAttestationPolicy({ bundle: value.bundle, verifierOutput: value.verifierOutput, payloadSha256: digest, repo, workflow, commit, ref }), /certificate SAN/);
+  const statement = JSON.parse(Buffer.from(value.bundle.dsseEnvelope.payload, 'base64').toString('utf8'));
+  statement.subject[0].digest.sha256 = '1'.repeat(64);
+  value.bundle.dsseEnvelope.payload = Buffer.from(JSON.stringify(statement)).toString('base64');
+  assert.throws(() => validateAttestationPolicy({ bundle: value.bundle, verifierOutput: value.verifierOutput, payloadBytes, payloadSha256: digest, repo, workflow, commit, ref }), /bundle payload digest/);
 });
 
-test('wrong workflow ref or commit is rejected', () => {
+test('wrong repository is rejected by SAN policy and authoritative CLI repository constraint', () => {
   const value = fixture();
-  value.verifierOutput[0].verificationResult.signature.certificate.subjectAlternativeName =
-    `https://github.com/${repo}/${workflow}@refs/heads/main`;
-  assert.throws(() => validateAttestationPolicy({ bundle: value.bundle, verifierOutput: value.verifierOutput, payloadSha256: digest, repo, workflow, commit, ref }), /certificate SAN/);
-
-  const goodRefValue = fixture();
-  const args = buildVerifyArgs({ payload: 'fixture', bundle: 'bundle.json', repo, workflow, commit: '0123456789abcdef0123456789abcdef01234567', ref });
-  assert.ok(args.includes('0123456789abcdef0123456789abcdef01234567'));
-  assert.throws(() => validateAttestationPolicy({ bundle: goodRefValue.bundle, verifierOutput: goodRefValue.verifierOutput, payloadSha256: digest, repo, workflow, commit: 'bad', ref }), /full lowercase SHA/);
+  value.verifierOutput[0].verificationResult.signature.certificate.subjectAlternativeName = `https://github.com/github/docs/${workflow}@${ref}`;
+  assert.throws(() => validateAttestationPolicy({ bundle: value.bundle, verifierOutput: value.verifierOutput, payloadBytes, payloadSha256: digest, repo, workflow, commit, ref }), /certificate SAN/);
+  const args = buildVerifyArgs({ payload: 'payload.txt', bundle: 'bundle.json', repo: 'github/docs', workflow, commit, ref });
+  assert.ok(args.includes('--repo') && args.includes('github/docs'));
 });
 
-test('wrong certificate issuer is rejected', () => {
-  const value = fixture();
-  value.verifierOutput[0].verificationResult.signature.certificate.issuer = 'https://evil.example';
-  assert.throws(() => validateAttestationPolicy({ bundle: value.bundle, verifierOutput: value.verifierOutput, payloadSha256: digest, repo, workflow, commit, ref }), /certificate issuer/);
+test('wrong workflow path and lookalike workflow are rejected', () => {
+  for (const wrongWorkflow of ['.github/workflows/ci.yml', '.github/workflows/test-attestation-fixture.yml.attacker.yml']) {
+    const value = fixture();
+    value.verifierOutput[0].verificationResult.signature.certificate.subjectAlternativeName = `https://github.com/${repo}/${wrongWorkflow}@${ref}`;
+    assert.throws(() => validateAttestationPolicy({ bundle: value.bundle, verifierOutput: value.verifierOutput, payloadBytes, payloadSha256: digest, repo, workflow, commit, ref }), /certificate SAN/);
+  }
 });
 
-test('wrong certificate SAN identity is rejected', () => {
+test('wrong ref is rejected by SAN policy and authoritative CLI source-ref constraint', () => {
   const value = fixture();
-  value.verifierOutput[0].verificationResult.signature.certificate.subjectAlternativeName =
-    `https://github.com/${repo}/${workflow}.attacker.yml@${ref}`;
-  assert.throws(() => validateAttestationPolicy({ bundle: value.bundle, verifierOutput: value.verifierOutput, payloadSha256: digest, repo, workflow, commit, ref }), /certificate SAN/);
+  value.verifierOutput[0].verificationResult.signature.certificate.subjectAlternativeName = `https://github.com/${repo}/${workflow}@refs/heads/main`;
+  assert.throws(() => validateAttestationPolicy({ bundle: value.bundle, verifierOutput: value.verifierOutput, payloadBytes, payloadSha256: digest, repo, workflow, commit, ref }), /certificate SAN/);
+  const args = buildVerifyArgs({ payload: 'payload.txt', bundle: 'bundle.json', repo, workflow, commit, ref: 'refs/heads/main' });
+  assert.ok(args.includes('--source-ref') && args.includes('refs/heads/main'));
 });
 
-test('payload digest mismatch is rejected', () => {
-  const value = fixture();
-  assert.throws(() => validateAttestationPolicy({ bundle: value.bundle, verifierOutput: value.verifierOutput, payloadSha256: '0'.repeat(64), repo, workflow, commit, ref }), /payload digest|bundle payload digest/);
+test('valid-looking wrong commit is rejected by authoritative CLI source-digest constraint', () => {
+  const wrongCommit = '0123456789abcdef0123456789abcdef01234567';
+  const args = buildVerifyArgs({ payload: 'payload.txt', bundle: 'bundle.json', repo, workflow, commit: wrongCommit, ref });
+  assert.ok(args.includes('--source-digest') && args.includes(wrongCommit));
+  assert.throws(() => validateAttestationPolicy(policyArgs({ commit: 'bad' })), /full lowercase SHA/);
 });
 
-test('payload tampering is distinguished by mismatch', () => {
-  const value = fixture();
-  assert.throws(() => validateAttestationPolicy({ bundle: value.bundle, verifierOutput: value.verifierOutput, payloadSha256: '1'.repeat(64), repo, workflow, commit, ref }), /payload digest|bundle payload digest/);
+test('wrong certificate issuer and SAN are rejected', () => {
+  const issuerValue = fixture();
+  issuerValue.verifierOutput[0].verificationResult.signature.certificate.issuer = 'https://evil.example';
+  assert.throws(() => validateAttestationPolicy({ bundle: issuerValue.bundle, verifierOutput: issuerValue.verifierOutput, payloadBytes, payloadSha256: digest, repo, workflow, commit, ref }), /certificate issuer/);
+
+  const sanValue = fixture();
+  sanValue.verifierOutput[0].verificationResult.signature.certificate.subjectAlternativeName = `https://github.com/${repo}/${workflow}.attacker.yml@${ref}`;
+  assert.throws(() => validateAttestationPolicy({ bundle: sanValue.bundle, verifierOutput: sanValue.verifierOutput, payloadBytes, payloadSha256: digest, repo, workflow, commit, ref }), /certificate SAN/);
 });
 
-test('missing or malformed bundle is rejected', () => {
-  assert.throws(() => validateAttestationPolicy({ bundle: null, verifierOutput: [], payloadSha256: digest, repo, workflow, commit, ref }), /bundle|DSSE|verifier/i);
+test('missing or malformed bundle and transparency evidence are rejected', () => {
+  assert.throws(() => validateAttestationPolicy({ bundle: null, verifierOutput: [], payloadBytes, payloadSha256: digest, repo, workflow, commit, ref }), /Attestation bundle/);
   const value = fixture();
   value.bundle.dsseEnvelope.signatures = [];
-  assert.throws(() => validateAttestationPolicy({ bundle: value.bundle, verifierOutput: value.verifierOutput, payloadSha256: digest, repo, workflow, commit, ref }), /DSSE signatures/);
-});
-
-test('missing transparency-log evidence is rejected', () => {
-  const value = fixture();
+  assert.throws(() => validateAttestationPolicy({ bundle: value.bundle, verifierOutput: value.verifierOutput, payloadBytes, payloadSha256: digest, repo, workflow, commit, ref }), /DSSE signatures/);
+  value.bundle = fixture().bundle;
   value.bundle.verificationMaterial.tlogEntries = [];
-  assert.throws(() => validateAttestationPolicy({ bundle: value.bundle, verifierOutput: value.verifierOutput, payloadSha256: digest, repo, workflow, commit, ref }), /transparency-log/);
+  assert.throws(() => validateAttestationPolicy({ bundle: value.bundle, verifierOutput: value.verifierOutput, payloadBytes, payloadSha256: digest, repo, workflow, commit, ref }), /transparency-log/);
 });
 
 test('verify arguments preserve exact trust constraints', () => {
   const args = buildVerifyArgs({ payload: 'payload.txt', bundle: 'bundle.json', repo, workflow, commit, ref });
   assert.ok(args.includes('--cert-identity'));
   assert.ok(args.includes(`https://github.com/${repo}/${workflow}@${ref}`));
-  assert.ok(args.includes('--cert-oidc-issuer'));
-  assert.ok(args.includes(OIDC_ISSUER));
-  assert.ok(args.includes('--source-digest'));
-  assert.ok(args.includes(commit));
-  assert.ok(args.includes('--source-ref'));
-  assert.ok(args.includes(ref));
-  assert.ok(args.includes('--predicate-type'));
-  assert.ok(args.includes(PREDICATE_TYPE));
+  assert.ok(args.includes('--cert-oidc-issuer') && args.includes(OIDC_ISSUER));
+  assert.ok(args.includes('--source-digest') && args.includes(commit));
+  assert.ok(args.includes('--source-ref') && args.includes(ref));
+  assert.ok(args.includes('--predicate-type') && args.includes(PREDICATE_TYPE));
 });

@@ -42,6 +42,17 @@ function validateBundleStructure(bundle) {
 function validateAttestationPolicy({ bundle, verifierOutput, payloadBytes, payloadSha256, repo, workflow, commit, ref }) {
   validateBundleStructure(bundle);
 
+  if (!(payloadBytes instanceof Uint8Array) || payloadBytes.length === 0) {
+    throw new Error('Payload bytes are missing or invalid');
+  }
+  if (typeof payloadSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(payloadSha256)) {
+    throw new Error('Supplied expected payload SHA-256 is missing or malformed');
+  }
+  const actualPayloadSha = sha256Hex(Buffer.from(payloadBytes));
+  if (payloadSha256 !== actualPayloadSha) {
+    throw new Error(`Supplied expected payload SHA-256 differs from actual payload bytes: expected ${payloadSha256}, actual ${actualPayloadSha}`);
+  }
+
   if (!Array.isArray(verifierOutput) || verifierOutput.length !== 1) {
     throw new Error('Verifier output must contain exactly one attestation result');
   }
@@ -65,8 +76,8 @@ function validateAttestationPolicy({ bundle, verifierOutput, payloadBytes, paylo
   if (!Array.isArray(statement.subject) || statement.subject.length !== 1) {
     throw new Error('In-toto statement must contain exactly one subject');
   }
-  const expectedPayloadSha = payloadSha256 || sha256Hex(payloadBytes);
-  assertExact(statement.subject[0]?.digest?.sha256, expectedPayloadSha, 'payload digest');
+  const expectedPayloadSha = actualPayloadSha;
+  assertExact(statement.subject[0]?.digest?.sha256, expectedPayloadSha, 'verifier statement payload digest');
 
   let statementJson;
   try {
@@ -84,6 +95,10 @@ function validateAttestationPolicy({ bundle, verifierOutput, payloadBytes, paylo
   if (!commitPattern.test(commit)) {
     throw new Error('Expected commit is not a full lowercase SHA');
   }
+
+  // Source commit/ref/repository binding is enforced by gh attestation verify.
+  // The verifier JSON exposes certificate/SAN and statement fields used here,
+  // but this helper must not infer source identity from unverified predicate data.
 
   return true;
 }
@@ -121,6 +136,9 @@ if (require.main === module) {
   }
   try {
     const payloadBytes = fs.readFileSync(payloadPath);
+    if (payloadBytes.length === 0) {
+      throw new Error('Payload bytes are missing or empty');
+    }
     const bundle = JSON.parse(fs.readFileSync(bundlePath, 'utf8'));
     const verifierOutput = JSON.parse(fs.readFileSync(verifierJsonPath, 'utf8'));
     validateAttestationPolicy({ bundle, verifierOutput, payloadBytes, payloadSha256, repo, workflow, commit, ref });
