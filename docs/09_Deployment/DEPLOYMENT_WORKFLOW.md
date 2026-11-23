@@ -1,5 +1,7 @@
 # Deployment Workflow
 
+> **SUPERSEDED FOR HOST SELECTION:** The Render Free replacement workflow is [RENDER_FREE.md](RENDER_FREE.md) and [Task 06.3](TASK_06.3_RENDER_FREE_PRODUCTION_DEPLOYMENT.md). Do not deploy to DigitalOcean from this file. Generic approval and rollback concepts remain useful.
+
 ## 1. Purpose
 
 This document defines the standard production deployment workflow for ElectroHub.

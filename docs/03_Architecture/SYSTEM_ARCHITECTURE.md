@@ -17,9 +17,9 @@ ElectroHub is a full-stack electronics and technology e-commerce platform built 
 - Socket.IO real-time communication
 - Leaflet + OpenStreetMap delivery maps
 - Supabase Storage media storage
-- Docker-based services
+- Docker-based services for local/reusable runtimes
 - GitHub Actions CI/CD
-- DigitalOcean production deployment
+- Render Free production feasibility investigation
 
 The architecture is designed to keep responsibilities separated while allowing the services to operate as one coordinated product.
 
@@ -574,16 +574,19 @@ Secrets must never be committed to Git. AI calls require service authentication,
 
 ## 24. Deployment Architecture
 
-Production uses:
+Production hosting is under investigation using Render Free:
 
 ```text
-DigitalOcean Cloud VPS
-Ubuntu
-Docker
-Nginx
-SSL / HTTPS
+Render Static Site / Express Web Service
+        ↓
+Optional separate FastAPI Web Service
+        ↓
+Existing PROD Supabase PostgreSQL / Storage
+        ↓
+Stripe Test Mode / Brevo HTTPS / Maps
 ```
 
+No deployment or paid provider resource is authorized by Task 06.3 documentation work.
 Conceptually:
 
 ```text

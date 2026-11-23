@@ -1,15 +1,16 @@
 # ADR-005: DigitalOcean Production VPS
 
-- **Status:** Accepted
+- **Status:** Superceded for Task 06.3; retained only as historical decision evidence
+- **Replacement:** Render Free feasibility and deployment preparation
 - **Date:** 2026-08-10
 
-## Decision
+## Historical Decision
 
-ElectroHub will use a **DigitalOcean Cloud VPS** as the planned production application server.
+The original decision was to use a **DigitalOcean Cloud VPS** with Ubuntu, Docker and Nginx. This decision is superseded for Task 06.3 and must not be implemented as the provider choice.
 
-The server will run Ubuntu and host the Dockerized application services behind Nginx and HTTPS.
+Render Free is now the investigation target. Existing Supabase, application and security responsibilities remain unchanged.
 
-## Context
+## Historical Context
 
 The completed application requires a production environment capable of running:
 

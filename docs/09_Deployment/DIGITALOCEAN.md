@@ -1,12 +1,14 @@
 # DigitalOcean
 
-## 1. Purpose
+> **SUPERSEDED:** DigitalOcean is no longer the selected production target. Do not provision a Droplet or App Platform service from this document. The current investigation and replacement are [RENDER_FREE.md](RENDER_FREE.md) and [Task 06.3](TASK_06.3_RENDER_FREE_PRODUCTION_DEPLOYMENT.md). This file remains as historical context only.
 
-This document defines the planned DigitalOcean production environment for ElectroHub.
+## 1. Purpose — Historical
 
-DigitalOcean is the selected cloud VPS provider for the production deployment phase.
+This document previously defined the planned DigitalOcean production environment for ElectroHub.
 
-Production deployment is intentionally deferred until the final project phase.
+It is retained to explain prior planning and must not be used to select or provision DigitalOcean infrastructure now.
+
+Production deployment under the current direction is deferred and investigated as Render Free only.
 
 ---
 

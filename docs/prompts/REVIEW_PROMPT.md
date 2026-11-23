@@ -169,15 +169,31 @@ Nit
 - **Low:** minor issue with limited impact.
 - **Nit:** optional improvement.
 
+## Render Free review boundaries
+
+For Task 06.3/Render work:
+
+- Score documentation or implementation out of 100.
+- For documentation-only changes, avoid exhaustive hosted QA and low-risk requirements.
+- Do not score implementation as complete because a build or static URL exists.
+- Verify actual Render constraints and account eligibility only when external evidence is available.
+- Verify repository topology facts against the committed source, package scripts and startup code.
+- Do not approve resource provisioning, paid upgrades or provider account changes outside explicit authorization.
+- Do not claim complete $0 feasibility unless hosted service evidence, memory/cold-start behavior, instance-hour implications and integration smoke tests are present.
+- Do not reopen prior approved tasks or prior scores without a concrete defect or material new requirement.
+- Report residual risks and remaining operator approval gates.
+
 ## Decision
 
 Choose exactly one:
 
 ```text
-✅ Approve
-⚠ Request Changes
-❌ Reject
+Approve
+Request Changes
+Reject
 ```
+
+Document the score, decision, residual risks and any unresolved architecture questions.
 
 Do not approve incomplete work.
 

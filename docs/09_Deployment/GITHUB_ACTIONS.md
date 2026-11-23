@@ -1,5 +1,7 @@
 # GitHub Actions
 
+> **Task 06.3 Render supersession:** GitHub Actions may validate and, only after explicit approval, trigger a Render deployment. It must not provision resources or create paid infrastructure. Render runtime secrets belong in Render service settings, not necessarily in GitHub Actions. See [RENDER_FREE.md](RENDER_FREE.md).
+
 Task 06.2 implementation: `.github/workflows/ci.yml` checks the exact PR head SHA on Node 22.19.0,
 matching `.nvmrc` and both Node Dockerfiles. Existing locked dependencies require Node 22; Node 20.11 is no longer the supported baseline.
 Lint, typechecks, mandatory frontend/backend tests, real disposable payment concurrency/lifecycle integration,

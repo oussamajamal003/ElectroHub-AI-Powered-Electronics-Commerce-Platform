@@ -152,7 +152,7 @@ Do NOT implement:
 - PDF generation
 - Supabase Storage workflows
 - Production deployment
-- DigitalOcean production setup
+- Render Free production feasibility and controlled deployment preparation (DigitalOcean VPS setup is superseded)
 - Production SSL
 - Full monitoring/observability
 - Unrelated refactoring

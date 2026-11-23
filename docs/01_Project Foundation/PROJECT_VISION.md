@@ -679,20 +679,21 @@ During development:
 
 Production deployment is deferred until the final release phase.
 
-The planned production environment is:
+The selected investigation target is **Render Free** with a **$0/month** infrastructure budget. Render feasibility is not yet verified for the complete application.
 
+Candidate architecture:
 
+```text
+Render Static Site / Express Web Service
+        ↓
+Express Backend / Optional separate FastAI Web Service
+        ↓
+Existing PROD Supabase PostgreSQL + Storage
+        ↓
+Stripe Test Mode / Brevo HTTPS / Maps / AI
 ```
-DigitalOcean Cloud VPS
-        ↓
-Ubuntu
-        ↓
-Docker
-        ↓
-Nginx
-        ↓
-Frontend / Backend / AI Service
-```
+
+DigitalOcean VPS and Docker/Nginx instructions are historical and superseded for provider selection.
 
 Nginx will provide:
 

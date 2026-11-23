@@ -1,5 +1,7 @@
 # Production
 
+> **SUPERSEDED FOR INFRASTRUCTURE:** Production hosting is now under investigation for Render Free. Preserve existing Supabase/Stripe/Brevo requirements, but do not use this file to provision a VPS or external resource. See [RENDER_FREE.md](RENDER_FREE.md).
+
 ## 1. Purpose
 
 This document defines the production environment and operational requirements for ElectroHub.

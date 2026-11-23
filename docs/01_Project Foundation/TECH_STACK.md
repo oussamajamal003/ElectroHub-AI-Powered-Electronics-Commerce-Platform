@@ -61,10 +61,11 @@ The project intentionally avoids unnecessary framework and UI-library complexity
 | Image Storage | Supabase Storage |
 | Containers | Docker |
 | CI/CD | GitHub Actions |
-| Production Cloud | DigitalOcean |
-| Production OS | Ubuntu |
-| Reverse Proxy | Nginx |
-| SSL/TLS | SSL certificates |
+| Production Cloud (candidate) | Render Free; feasibility NOT VERIFIED |
+| Render Static Hosting | React/Vite static site |
+| Render Dynamic Hosting | Express/FastAPI free web services under investigation |
+| Authoritative Database | Existing Supabase PostgreSQL |
+| TLS | Managed HTTPS on verified public hostnames |
 | Version Control | Git + GitHub |
 
 ---
@@ -742,17 +743,17 @@ Production deployment is reserved for the final release phase.
 
 # 23. Production Infrastructure
 
-## 23.1 DigitalOcean
+## 23.1 Render Free investigation
 
-DigitalOcean is the planned production cloud provider.
+Render Free is the selected investigation target with a recurring infrastructure budget of $0/month. Complete feasibility is NOT VERIFIED.
 
-The application will be deployed to a DigitalOcean Cloud VPS.
+The candidate topology uses a Render Static Site and/or Render Node Web Service for React/Express, plus a separate FastAPI Web Service only if 512 MB RAM and shared instance-hour limits allow it.
 
-The VPS is intentionally introduced during the final deployment phase rather than during early development.
+Existing DigitalOcean VPS instructions are historical and superseded. No Render resources or paid upgrades are authorized by this documentation revision.
 
 ---
 
-## 23.2 Ubuntu
+## 23.2 Render responsibilities
 
 Ubuntu is the planned operating system for the production VPS.
 

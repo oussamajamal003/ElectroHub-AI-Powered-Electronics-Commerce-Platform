@@ -1,5 +1,7 @@
 # Deployment Architecture
 
+> **SUPERSEDED HOST SELECTION:** The VPS/Nginx architecture below is historical. Task 06.3 now investigates Render Free Static Site and/or Web Services while preserving existing Supabase and application responsibilities. Do not implement a DigitalOcean topology from this file. See [RENDER_FREE.md](../09_Deployment/RENDER_FREE.md).
+
 ## 1. Purpose
 
 This document defines the deployment architecture for ElectroHub.

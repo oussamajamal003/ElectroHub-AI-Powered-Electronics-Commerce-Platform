@@ -747,47 +747,40 @@ Docker Build
 
 Production deployment is reserved for the final release phase.
 
-### 06.3 Production Infrastructure & Production Deployment
+### 06.3 Render Free Production Infrastructure & Deployment Preparation
 
-Deploy using:
+Target: Render Free, recurring infrastructure cost **$0/month**. This milestone is an investigation and preparation phase, not authorization to deploy or provision paid infrastructure.
 
-```text
-DigitalOcean
-    ↓
-Ubuntu
-    ↓
-Docker
-    ↓
-Nginx
-    ↓
-Frontend / Backend / AI Service
-```
+The complete application remains in scope: React/Vite frontend, Express/Socket.IO backend, FastAPI AI service, existing PROD Supabase PostgreSQL/Storage, Stripe Test Mode, Brevo, OAuth, maps and admin/customer workflows.
 
-Configure:
+Milestones:
 
-- VPS
-- Docker
-- Nginx
-- HTTPS
-- SSL
-- Environment variables
-- Health checks
-- Production services
+- 06.3.1 Production architecture and Render Free feasibility.
+- 06.3.2 Render service/static-site configuration.
+- 06.3.3 Production environment and secret management.
+- 06.3.4 Existing PROD Supabase readiness.
+- 06.3.5 External integration preparation.
+- 06.3.6 Production AI artifact/index release controls.
+- 06.3.7 GitHub Actions and controlled release preparation.
+- 06.3.8 Hosted smoke-test plan and explicit deployment gate.
+- 06.3.9 Performance and capacity validation.
+- 06.3.10 Security, backup and rollback readiness.
+- 06.3.11 Evidence-based GO/NO-GO.
 
-Complete:
+Required decisions:
 
-- Production environment validation
-- Production build
-- Docker deployment
-- Nginx configuration
-- SSL
-- External service configuration
-- Database connectivity
-- Brevo configuration
-- Stripe configuration
-- Supabase Storage configuration
-- AI service configuration
-- Socket.IO configuration
+- Static-site versus combined Express-origin frontend topology.
+- Separate FastAPI service feasibility under the shared 750-hour workspace allowance.
+- 512 MB/0.1 CPU feasibility for backend and AI startup/inference.
+- Cold-start and 15-minute sleep impact.
+- Existing Supabase region and measured latency.
+- Redis requirement, with no Redis assumption for a single instance.
+- Stripe hosted Test Mode webhook and Brevo HTTPS API plan.
+- Production tile-provider decision.
+
+Strictly obsolete: DigitalOcean VPS/Droplet, Ubuntu server provisioning, Nginx/PM2 VPS setup and Docker Compose-as-VPS instructions. See [RENDER_FREE.md](../09_Deployment/RENDER_FREE.md) and [Task 06.3 specification](../09_Deployment/TASK_06.3_RENDER_FREE_PRODUCTION_DEPLOYMENT.md).
+
+Production status remains **STRICT NO-GO** until deployment and all required host, database, AI, payment, email, security and recovery evidence are authorized and verified.
 
 ### 06.4 Release Validation & Documentation Completion & Roadmap Completion Audit
 

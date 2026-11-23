@@ -220,17 +220,17 @@ Desktop
 
 ## 19. Production Environment
 
-Target production environment:
+Candidate target production environment:
 
 ```text
-DigitalOcean Cloud VPS
-Ubuntu
-Docker
-Nginx
-SSL
-GitHub Actions
+Render Static Site / Express Web Service
+Optional separate FastAPI Web Service
+Existing PROD Supabase PostgreSQL / Storage
+Managed HTTPS / GitHub Actions
+$0/month Render infrastructure target
 ```
 
+Do not run deployment or provisioning steps unless the separate implementation and provider approval gates are satisfied.
 - [ ] Production environment variables are configured.
 - [ ] Database connection is verified.
 - [ ] Required external services are configured.

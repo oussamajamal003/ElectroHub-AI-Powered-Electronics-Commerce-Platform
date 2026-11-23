@@ -300,11 +300,11 @@ The backend remains responsible for the application's authoritative business ope
 
 # 10. ADR-008 — DigitalOcean Production VPS
 
-**Status:** Accepted
+**Status:** Superseded by the Task 06.3 Render Free feasibility investigation
 
-## Decision
+## Historical Decision
 
-DigitalOcean will be the planned production cloud provider.
+This ADR previously recorded DigitalOcean as the planned production cloud provider. It is retained only for historical context; no DigitalOcean VPS/App Platform resource should be provisioned for this task.
 
 The production application will run on an Ubuntu VPS.
 
