@@ -1,0 +1,121 @@
+# Repository-side Render deployment definition.
+# Applying this Blueprint creates or changes resources when an authorized operator applies it.
+# It intentionally declares only Free compute plans. Existing Supabase remains external.
+services:
+  - type: web
+    name: electrohub-api
+    runtime: node
+    plan: free
+    branch: feature/06.3-production-infrastructure
+    region: frankfurt
+    buildCommand: npm ci && npm run prisma:generate --workspace=@electrohub/backend && npm run build --workspace=@electrohub/frontend && npm run build --workspace=@electrohub/backend
+    startCommand: npm run start --workspace=@electrohub/backend
+    healthCheckPath: /health/ready
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ELECTROHUB_ENV_FILES
+        value: none
+      - key: FRONTEND_URL
+        sync: false
+      - key: COMMERCE_EMAIL_ORIGIN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: DB_RUNTIME_URL_SOURCE
+        value: direct
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: OTP_HASH_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: PAYMENT_SHARED_MUTATIONS_APPROVED
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        value: ElectroHub
+      - key: COMMERCE_EMAIL_ENQUEUE_ENABLED
+        value: false
+      - key: COMMERCE_EMAIL_DISPATCH_ENABLED
+        value: false
+      - key: COMMERCE_EMAIL_SEND_MODE
+        value: disabled
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PROJECT_REF
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: PRODUCT_MEDIA_BUCKET
+        value: product-media
+      - key: AI_SERVICE_URL
+        sync: false
+      - key: AI_SERVICE_API_KEY
+        sync: false
+      - key: AI_SERVICE_ENVIRONMENT
+        value: production
+      - key: AI_SERVICE_TIMEOUT_MS
+        value: 15000
+      - key: WEBAUTHN_RP_ID
+        sync: false
+      - key: WEBAUTHN_RP_NAME
+        value: ElectroHub
+      - key: WEBAUTHN_ORIGIN
+        sync: false
+      - key: VITE_STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: VITE_IMAGE_SEARCH_ENABLED
+        value: false
+
+  - type: web
+    name: electrohub-ai
+    runtime: docker
+    plan: free
+    branch: feature/06.3-production-infrastructure
+    region: frankfurt
+    dockerfilePath: ./apps/ai-service/Dockerfile
+    dockerContext: ./apps/ai-service
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: AI_ENVIRONMENT
+        value: production
+      - key: AI_PROCESS_ROLE
+        value: api
+      - key: AI_BIND_HOST
+        value: 0.0.0.0
+      - key: AI_PORT
+        value: 8000
+      - key: AI_DOCS_ENABLED
+        value: false
+      - key: AI_LOG_LEVEL
+        value: INFO
+      - key: AI_TORCH_THREADS
+        value: 2
+      - key: AI_MAX_CONCURRENT_INFERENCES
+        value: 2
+      - key: AI_SERVICE_API_KEY
+        sync: false
+      - key: AI_VECTOR_DATABASE_URL
+        sync: false
+      - key: AI_MODEL_ARTIFACT_DIR
+        sync: false
+      - key: AI_RELEVANCE_ARTIFACT_DIR
+        sync: false

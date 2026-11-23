@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import cookieParser from 'cookie-parser';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './docs/swagger/index.js';
@@ -81,6 +83,26 @@ app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get('/api/openapi.json', (_req, res) => {
   res.json(swaggerSpec);
 });
+
+// Production single-origin frontend. API and Socket.IO routes remain owned by Express.
+if (env.NODE_ENV === 'production') {
+  const frontendDist = [
+    path.resolve(__dirname, '../../frontend/dist'),
+    path.resolve(process.cwd(), 'apps/frontend/dist'),
+    path.resolve(process.cwd(), '../frontend/dist'),
+  ].find((candidate) => existsSync(candidate));
+
+  if (frontendDist) {
+    app.use(express.static(frontendDist, { index: false, fallthrough: true }));
+    app.get('*', (req, res, next) => {
+      if (req.path === '/api' || req.path.startsWith('/api/') || req.path === '/socket.io' || req.path.startsWith('/socket.io/') || req.path.startsWith('/assets/')) {
+        next();
+        return;
+      }
+      res.sendFile(path.join(frontendDist, 'index.html'));
+    });
+  }
+}
 
 // 404 Not Found handler
 app.use(notFoundHandler);

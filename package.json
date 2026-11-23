@@ -35,6 +35,7 @@
     "test": "npm run test:frontend && npm run test:backend",
     "build": "npm run build:frontend && npm run build:backend",
     "audit:ci": "node scripts/security-audit.mjs",
+    "validate:render": "node scripts/validate-render-blueprint.cjs",
     "audit": "npm audit --audit-level=high"
   },
   "engines": {
