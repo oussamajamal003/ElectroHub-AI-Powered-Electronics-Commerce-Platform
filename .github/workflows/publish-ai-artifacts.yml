@@ -1,0 +1,42 @@
+name: Publish Approved AI Artifacts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-ai-artifacts
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish approved private artifact release
+    runs-on: ubuntu-latest
+    environment: ai-artifact-production
+    timeout-minutes: 30
+    steps:
+      - name: Checkout reviewed full SHA
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify workflow inputs and protected configuration
+        env:
+          TRUSTED_RELEASE_SHA256: ${{ secrets.AI_PRODUCTION_RELEASE_SHA256 }}
+        run: |
+          test -n "$TRUSTED_RELEASE_SHA256"
+          test -f docs/09_Deployment/AI_PRODUCTION_RELEASE.json
+          test -f docs/09_Deployment/AI_MODEL_ARTIFACT_PRODUCTION.json
+      - name: Package approved release
+        env:
+          TRUSTED_RELEASE_SHA256: ${{ secrets.AI_PRODUCTION_RELEASE_SHA256 }}
+          AI_ARTIFACT_PUBLISH_URL: ${{ secrets.AI_ARTIFACT_PUBLISH_URL }}
+          AI_ARTIFACT_PUBLISH_TOKEN: ${{ secrets.AI_ARTIFACT_PUBLISH_TOKEN }}
+        run: |
+          python apps/ai-service/scripts/publish_artifact_release.py \
+            --source-root "$GITHUB_WORKSPACE" \
+            --release docs/09_Deployment/AI_PRODUCTION_RELEASE.json \
+            --artifact-manifest docs/09_Deployment/AI_MODEL_ARTIFACT_PRODUCTION.json \
+            --trusted-release-sha256 "$TRUSTED_RELEASE_SHA256" \
+            --output "$RUNNER_TEMP/electrohub-ai-release.tar.gz"

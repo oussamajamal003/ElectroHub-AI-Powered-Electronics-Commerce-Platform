@@ -29,6 +29,13 @@ if (ai.runtime !== 'docker' || ai.dockerfilePath !== './apps/ai-service/Dockerfi
   throw new Error('electrohub-ai: Docker runtime or health configuration is invalid');
 }
 
+const aiEnvKeys = new Set((ai.envVars || []).map((entry) => entry.key));
+for (const key of ['AI_ARTIFACT_DOWNLOAD_URL', 'AI_ARTIFACT_RELEASE_ID', 'AI_PRODUCTION_RELEASE_SHA256', 'AI_ARTIFACT_ARCHIVE_SHA256', 'AI_ARTIFACT_CACHE_DIR']) {
+  if (!aiEnvKeys.has(key)) throw new Error(`electrohub-ai: missing artifact configuration ${key}`);
+}
+const cacheDir = ai.envVars.find((entry) => entry.key === 'AI_ARTIFACT_CACHE_DIR');
+if (!cacheDir || cacheDir.value !== '/tmp/electrohub-ai-artifacts') throw new Error('electrohub-ai: artifact cache must remain ephemeral');
+
 if ('databases' in doc || 'keyValue' in doc || 'services' in doc && services.some((service) => ['postgres', 'redis', 'keyvalue'].includes(service.type))) {
   throw new Error('Render datastore resources are forbidden by Task 06.3 Free guardrails');
 }

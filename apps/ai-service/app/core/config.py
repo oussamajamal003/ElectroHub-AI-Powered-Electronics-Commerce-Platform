@@ -231,11 +231,22 @@ class Settings(BaseSettings):
     AI_MAX_IMAGE_BYTES: int = Field(default=8_388_608, ge=65_536, le=16 * 1_048_576)
     AI_MAX_IMAGE_PIXELS: int = Field(default=40_000_000, ge=1_000_000, le=89_000_000)
     AI_TORCH_THREADS: int = Field(default=2, ge=1, le=16)
-    # Directory holding model.safetensors and descriptor.json, mounted read-only. Unset = no encoder (503).
+    # Directory holding model.safetensors and descriptor.json, mounted read-only or
+    # installed by the startup artifact installer.
     AI_MODEL_ARTIFACT_DIR: Path | None = None
     # Directory holding relevance.json and head.safetensors (calibrated no-match gate). Unset = every search returns
     # the nearest topK products, as before Task 04.2-Q.
     AI_RELEVANCE_ARTIFACT_DIR: Path | None = None
+    # Private, versioned signed archive URL. The URL is secret at rest and is never used by frontend code.
+    AI_ARTIFACT_DOWNLOAD_URL: SecretStr | None = None
+    AI_ARTIFACT_RELEASE_ID: str | None = None
+    AI_PRODUCTION_RELEASE_SHA256: str | None = None
+    AI_ARTIFACT_ARCHIVE_SHA256: str | None = None
+    AI_ARTIFACT_CACHE_DIR: Path = Path("/tmp/electrohub-ai-artifacts")  # noqa: S108 - ephemeral container cache
+    AI_ARTIFACT_MAX_DOWNLOAD_BYTES: int = Field(default=600 * 1024 * 1024, ge=1024, le=1024 * 1024 * 1024)
+    AI_ARTIFACT_MAX_EXTRACTED_BYTES: int = Field(default=900 * 1024 * 1024, ge=1024, le=2 * 1024 * 1024 * 1024)
+    AI_ARTIFACT_DOWNLOAD_TIMEOUT_SECONDS: int = Field(default=60, ge=5, le=300)
+    AI_ARTIFACT_DOWNLOAD_RETRIES: int = Field(default=3, ge=0, le=8)
     # Least-privilege, read-only connection to the ai schema (ai_vector_reader). Unset = no index (503).
     AI_VECTOR_DATABASE_URL: SecretStr | None = None
     # Task 04.4 feature flag: the D3 embedding recommender over the same read-only vector index. Off = NOT_READY
@@ -254,6 +265,10 @@ class Settings(BaseSettings):
     @field_validator(
         "AI_MODEL_ARTIFACT_DIR",
         "AI_RELEVANCE_ARTIFACT_DIR",
+        "AI_ARTIFACT_DOWNLOAD_URL",
+        "AI_ARTIFACT_RELEASE_ID",
+        "AI_PRODUCTION_RELEASE_SHA256",
+        "AI_ARTIFACT_ARCHIVE_SHA256",
         "AI_VECTOR_DATABASE_URL",
         "AI_MEDIA_WORKER_DATABASE_URL",
         "AI_MEDIA_STORAGE_BASE_URL",
@@ -307,6 +322,41 @@ class Settings(BaseSettings):
             raise ValueError("AI_MEDIA_STORAGE_BASE_URL must use HTTPS or loopback HTTP")
         return value.rstrip("/")
 
+    @field_validator("AI_ARTIFACT_DOWNLOAD_URL")
+    @classmethod
+    def _artifact_download_url_is_private_supabase(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None:
+            return None
+        raw = value.get_secret_value()
+        try:
+            parts = urlsplit(raw)
+            _ = parts.port
+        except ValueError as exc:
+            raise ValueError("AI_ARTIFACT_DOWNLOAD_URL must be a valid HTTPS URL") from exc
+        host = (parts.hostname or "").lower()
+        if (
+            parts.scheme != "https"
+            or parts.username is not None
+            or parts.password is not None
+            or parts.fragment
+            or host not in {f"{ref}.supabase.co" for ref in MEDIA_PROJECT_REFS.values()}
+            or not (
+                parts.path.startswith("/storage/v1/object/sign/")
+                or parts.path.startswith("/storage/v1/object/authenticated/")
+            )
+            or (parts.path.startswith("/storage/v1/object/sign/") and "token" not in parse_qs(parts.query))
+            or parts.port not in {None, 443}
+        ):
+            raise ValueError("AI_ARTIFACT_DOWNLOAD_URL must be a signed or authenticated Supabase Storage URL")
+        return value
+
+    @field_validator("AI_PRODUCTION_RELEASE_SHA256", "AI_ARTIFACT_ARCHIVE_SHA256")
+    @classmethod
+    def _artifact_sha256_pin(cls, value: str | None) -> str | None:
+        if value is not None and not re.fullmatch(r"[a-f0-9]{64}", value):
+            raise ValueError("artifact SHA-256 pins must be 64 lowercase hexadecimal characters")
+        return value
+
     @field_validator("AI_SERVICE_API_KEY")
     @classmethod
     def _strong_key(cls, value: SecretStr | None) -> SecretStr | None:
@@ -345,6 +395,13 @@ class Settings(BaseSettings):
                 raise ValueError("AI_DOCS_ENABLED cannot be enabled in production")
         if self.AI_PROCESS_ROLE == "api" and not self.binds_loopback and self.AI_SERVICE_API_KEY is None:
             raise ValueError("a non-loopback AI_BIND_HOST requires AI_SERVICE_API_KEY")
+        if self.AI_PROCESS_ROLE == "api" and self.AI_ARTIFACT_DOWNLOAD_URL is not None:
+            if not self.AI_ARTIFACT_RELEASE_ID:
+                raise ValueError("AI_ARTIFACT_RELEASE_ID is required with artifact download configuration")
+            if not self.AI_PRODUCTION_RELEASE_SHA256 or not self.AI_ARTIFACT_ARCHIVE_SHA256:
+                raise ValueError(
+                    "production and archive SHA-256 pins are required with artifact download configuration"
+                )
         if self.AI_PROCESS_ROLE == "api" and (
             self.AI_MEDIA_WORKER_DATABASE_URL is not None or self.AI_MEDIA_STORAGE_BASE_URL is not None
         ):

@@ -70,7 +70,7 @@ def create_app(settings: Settings | None = None, registry: ModelRegistry | None 
         version=SERVICE_VERSION,
         description="Internal AI service for ElectroHub (image search and recommendations). "
         "Called only by the Express backend with a per-environment service credential.",
-        lifespan=build_lifespan(runtime),
+        lifespan=build_lifespan(runtime, registry_factory=build_registry),
         docs_url="/docs" if docs else None,
         redoc_url=None,
         openapi_url="/openapi.json" if docs else None,

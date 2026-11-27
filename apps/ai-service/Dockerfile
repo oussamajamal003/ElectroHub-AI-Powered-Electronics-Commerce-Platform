@@ -22,12 +22,13 @@ ENV TMPDIR=/dev/shm
 
 RUN groupadd --system app && useradd --system --gid app --no-create-home --shell /usr/sbin/nologin app
 COPY --chown=root:root app ./app
+COPY --chown=root:root verify-model-artifact.py ./verify-model-artifact.py
 
-# Model artifacts are never baked into the image. Mount an artifact directory read-only at runtime and point
-# AI_MODEL_ARTIFACT_DIR at it, e.g.:
+# Model artifacts are never baked into the image. Production may download a private signed archive at startup;
+# existing Compose deployments may mount an approved artifact directory read-only, e.g.:
 #   docker run -v /srv/electrohub/ai-models:/srv/ai-models:ro -e AI_MODEL_ARTIFACT_DIR=/srv/ai-models ...
 # The mount point is root-owned, so the unprivileged service user can read it but never write to it.
-RUN mkdir -p /srv/ai-models && chmod 0755 /srv/ai-models
+RUN mkdir -p /srv/ai-models /tmp/electrohub-ai-artifacts && chmod 0755 /srv/ai-models && chown app:app /tmp/electrohub-ai-artifacts && chmod 0700 /tmp/electrohub-ai-artifacts
 
 USER app
 EXPOSE 8000

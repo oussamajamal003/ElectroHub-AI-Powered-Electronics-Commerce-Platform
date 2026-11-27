@@ -119,3 +119,21 @@ services:
         sync: false
       - key: AI_RELEVANCE_ARTIFACT_DIR
         sync: false
+      - key: AI_ARTIFACT_DOWNLOAD_URL
+        sync: false
+      - key: AI_ARTIFACT_RELEASE_ID
+        sync: false
+      - key: AI_PRODUCTION_RELEASE_SHA256
+        sync: false
+      - key: AI_ARTIFACT_ARCHIVE_SHA256
+        sync: false
+      - key: AI_ARTIFACT_CACHE_DIR
+        value: /tmp/electrohub-ai-artifacts
+      - key: AI_ARTIFACT_MAX_DOWNLOAD_BYTES
+        value: 629145600
+      - key: AI_ARTIFACT_MAX_EXTRACTED_BYTES
+        value: 943718400
+      - key: AI_ARTIFACT_DOWNLOAD_TIMEOUT_SECONDS
+        value: 60
+      - key: AI_ARTIFACT_DOWNLOAD_RETRIES
+        value: 3
