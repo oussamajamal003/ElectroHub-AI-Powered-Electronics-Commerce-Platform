@@ -7,7 +7,7 @@ services:
     runtime: node
     plan: free
     branch: feature/06.3-production-infrastructure
-    region: frankfurt
+    region: singapore
     buildCommand: npm ci && npm run prisma:generate --workspace=@electrohub/backend && npm run build --workspace=@electrohub/frontend && npm run build --workspace=@electrohub/backend
     startCommand: npm run start --workspace=@electrohub/backend
     healthCheckPath: /health/ready
@@ -95,7 +95,7 @@ services:
     runtime: docker
     plan: free
     branch: feature/06.3-production-infrastructure
-    region: frankfurt
+    region: singapore
     dockerfilePath: ./apps/ai-service/Dockerfile
     dockerContext: ./apps/ai-service
     healthCheckPath: /health

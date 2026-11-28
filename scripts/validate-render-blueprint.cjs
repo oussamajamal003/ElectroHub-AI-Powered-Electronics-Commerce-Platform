@@ -14,7 +14,7 @@ if (services.length !== 2 || services.some((service) => !expectedNames.has(servi
 for (const service of services) {
   if (service.plan !== 'free') throw new Error(`${service.name}: paid or unspecified compute plan`);
   if (service.branch !== 'feature/06.3-production-infrastructure') throw new Error(`${service.name}: branch must remain feature/06.3-production-infrastructure`);
-  if (service.region !== 'frankfurt') throw new Error(`${service.name}: region must remain frankfurt`);
+  if (service.region !== 'singapore') throw new Error(`${service.name}: region must remain singapore`);
   if (service.disk || service.disks) throw new Error(`${service.name}: persistent disk is forbidden`);
   if (!service.healthCheckPath) throw new Error(`${service.name}: healthCheckPath is required`);
   if (service.autoDeploy !== false) throw new Error(`${service.name}: autoDeploy must remain false`);
