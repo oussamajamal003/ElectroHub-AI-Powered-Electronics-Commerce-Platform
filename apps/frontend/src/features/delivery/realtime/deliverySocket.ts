@@ -1,5 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 import { getAccessToken, refreshAccessToken } from '@/lib/api';
+import { resolveSocketUrl } from '@/config/deployment';
 
 /**
  * Task 04.7 client transport (architecture §8.2). One `/delivery` socket per verified user, shared by every subscriber in the tab and torn
@@ -10,7 +11,8 @@ import { getAccessToken, refreshAccessToken } from '@/lib/api';
 type Entry = { userId: string; socket: Socket; users: number; lastRefresh: number; detach?: () => void };
 let current: Entry | null = null;
 const REFRESH_FLOOR_MS = 10_000;
-const factory = { create: (auth: (cb: (data: object) => void) => void) => io('/delivery', { path: '/socket.io', auth, transports: ['websocket', 'polling'],
+const socketUrl = resolveSocketUrl();
+const factory = { create: (auth: (cb: (data: object) => void) => void) => io(socketUrl ? `${socketUrl}/delivery` : '/delivery', { path: '/socket.io', auth, transports: ['websocket', 'polling'],
   reconnectionDelay: 1_000, reconnectionDelayMax: 10_000, randomizationFactor: 0.5 }) };
 
 /** Test seam only. */

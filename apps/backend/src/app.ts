@@ -42,8 +42,12 @@ app.use(requestLogger);
 // Security headers
 app.use(helmet());
 
-// CORS — configured for development; restrict in production. Task 04.7: the Socket.IO gateway uses the same allowlist.
-export const corsOrigin = process.env.FRONTEND_URL || 'http://localhost:3000';
+// CORS — exact frontend origins only. Preview origins must be explicitly enumerated; wildcard Vercel origins are not allowed.
+const corsOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:3000',
+  ...(process.env.CORS_ALLOWED_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
+];
+export const corsOrigin = [...new Set(corsOrigins)];
 app.use(
   cors({
     origin: corsOrigin,

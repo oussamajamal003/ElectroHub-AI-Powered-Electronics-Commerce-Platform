@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { ANALYTICS_SESSION_KEY, analyticsAllowed, useChoiceStatus } from '@/features/privacy/consent';
+import { resolveApiUrl } from '@/config/deployment';
 
 const SESSION_KEY = ANALYTICS_SESSION_KEY;
 const MIN_REPORT_MS = 1000;
@@ -48,7 +49,7 @@ export function useStorefrontSession(): void {
       if (!analyticsAllowed() || total < MIN_REPORT_MS || total <= reportedMs) return;
       reportedMs = total;
       try {
-        void fetch('/api/analytics/events', { method: 'POST', keepalive: true, credentials: 'omit', headers: { 'Content-Type': 'application/json' },
+        void fetch(resolveApiUrl('/api/analytics/events'), { method: 'POST', keepalive: true, credentials: 'omit', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ type: 'storefront.session', sessionId, visibleMs: total }) }).catch(() => undefined);
       } catch { /* analytics must never affect the storefront */ }
     };

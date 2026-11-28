@@ -1,4 +1,5 @@
 import { analyticsAllowed, consentGeneration, onAnalyticsWithdrawn } from '@/features/privacy/consent';
+import { resolveApiUrl } from '@/config/deployment';
 import { ApiError, apiClient, isAbortError } from '@/lib/api';
 import type { ProductSummary } from '@/features/products/types';
 
@@ -134,7 +135,7 @@ export function reportImageResultSelected(analyticsToken: string | undefined, pr
   if (!analyticsAllowed() || !analyticsToken || typeof fetch !== 'function') return;
   if (generation !== undefined && generation !== consentGeneration()) return;
   try {
-    void fetch('/api/analytics/events', { method: 'POST', keepalive: true, credentials: 'omit', headers: { 'Content-Type': 'application/json' },
+    void fetch(resolveApiUrl('/api/analytics/events'), { method: 'POST', keepalive: true, credentials: 'omit', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'image_search.result_selected', token: analyticsToken, productId }) }).catch(() => undefined);
   } catch { /* analytics must never affect navigation */ }
 }

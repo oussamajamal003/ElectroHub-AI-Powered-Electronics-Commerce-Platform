@@ -19,13 +19,13 @@ const attributes = (header: string) => header.split(';').slice(1).map(part => pa
 
 describe('refresh cookie attributes', () => {
   for (const scope of ['customer', 'admin'] as const) {
-    it(`${scope}: HttpOnly, Secure, SameSite=Lax, scoped path, 7-day lifetime, no Domain (host-only) in production`, async () => {
+    it(`${scope}: HttpOnly, Secure, SameSite=None, scoped path, 7-day lifetime, no Domain (host-only) in production`, async () => {
       process.env.NODE_ENV = 'production';
       const headers = await cookies(`/set/${scope}`);
       const issued = headers.find(header => header.startsWith(`electrohub_${scope}_refresh=`))!;
       expect(issued).toBeDefined();
       const flags = attributes(issued);
-      expect(flags).toEqual(expect.arrayContaining(['httponly', 'secure', 'samesite=lax', `path=/api/auth/${scope}`, 'max-age=604800']));
+      expect(flags).toEqual(expect.arrayContaining(['httponly', 'secure', 'samesite=none', `path=/api/auth/${scope}`, 'max-age=604800']));
       expect(flags.some(flag => flag.startsWith('domain='))).toBe(false);
       // The other portal's path never receives this cookie, so customer and admin sessions cannot authenticate each other.
       expect(flags).not.toContain(`path=/api/auth/${scope === 'customer' ? 'admin' : 'customer'}`);
@@ -37,7 +37,7 @@ describe('refresh cookie attributes', () => {
       process.env.NODE_ENV = 'production';
       const cleared = (await cookies(`/clear/${scope}`)).find(header => header.startsWith(`electrohub_${scope}_refresh=;`))!;
       expect(cleared).toBeDefined();
-      expect(attributes(cleared)).toEqual(expect.arrayContaining(['httponly', 'secure', 'samesite=lax', `path=/api/auth/${scope}`,
+      expect(attributes(cleared)).toEqual(expect.arrayContaining(['httponly', 'secure', 'samesite=none', `path=/api/auth/${scope}`,
         'expires=thu, 01 jan 1970 00:00:00 gmt']));
     });
   }

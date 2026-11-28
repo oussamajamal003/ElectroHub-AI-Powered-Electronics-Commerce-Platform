@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build --workspace=@electrohub/frontend",
+  "outputDirectory": "apps/frontend/dist",
+  "devCommand": "npm run dev --workspace=@electrohub/frontend",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

@@ -46,7 +46,7 @@ function respondWithOtpDeliveryError(error: unknown, res: Response): boolean {
  * Helper to set HttpOnly cookie securely.
  */
 function cookieOptions(path: string) {
-  return { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const, path };
+  return { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const, path };
 }
 function retireLegacyCookies(res: Response) {
   for (const path of ['/api/auth', '/api/auth/refresh']) res.clearCookie('electrohub_refresh', cookieOptions(path));

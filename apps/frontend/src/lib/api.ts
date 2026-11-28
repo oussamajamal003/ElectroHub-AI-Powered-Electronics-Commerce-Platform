@@ -1,3 +1,5 @@
+import { resolveApiUrl } from '@/config/deployment';
+
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string, public readonly data?: unknown,
     public readonly code?: string, public readonly requestId?: string, public readonly retryAfterMs?: number) {
@@ -104,14 +106,14 @@ async function fetchRefreshUnlocked(url: string, baseInit: RequestInit): Promise
   // keepalive: a navigation must not cancel an in-flight refresh. The server rotates the token whether or not this document survives, and a
   // cancelled request loses the Set-Cookie carrying the successor, stranding the next document on a superseded cookie (409s, then a reuse 401).
   const init: RequestInit = { ...baseInit, keepalive: true };
-  let response = await fetch(url, init);
+  let response = await fetch(resolveApiUrl(url), init);
   for (const delay of ROTATION_RETRY_DELAYS_MS) {
     if (response.status !== 409) break;
     // Honor the server's Retry-After (seconds) as a floor, capped, so the client never retries sooner than the contract says.
     const advised = Number(response.headers.get('Retry-After')) * 1000;
     const wait = Math.min(Math.max(delay, Number.isFinite(advised) ? advised : 0), ROTATION_RETRY_AFTER_CAP_MS);
     await new Promise(resolve => setTimeout(resolve, wait));
-    response = await fetch(url, init);
+    response = await fetch(resolveApiUrl(url), init);
   }
   return response;
 }
@@ -197,8 +199,9 @@ async function send(endpoint: string, options: FetchOptions, extra: RequestInit 
   let response: Response;
   try {
     const path = url.split('?')[0];
+    const resolvedUrl = resolveApiUrl(url);
     response = path === refreshPath('admin') || path === refreshPath('customer')
-      ? await fetchRefresh(path === refreshPath('admin') ? 'admin' : 'customer', url, config) : await fetch(url, config);
+      ? await fetchRefresh(path === refreshPath('admin') ? 'admin' : 'customer', resolvedUrl, config) : await fetch(resolvedUrl, config);
     // Pre-auth administrator endpoints answer 401 for wrong or expired challenges: those are never a reason to refresh the session.
     if (response.status === 401 && !/\/api\/auth\/(me|login|logout)(?:\?|$)|\/api\/auth\/(admin|customer)\/(refresh|logout)|\/api\/auth\/admin\//.test(url)
       && errorCodeOf(await jsonPayload(response)) !== ADMIN_SESSION_INVALID) {
@@ -209,7 +212,7 @@ async function send(endpoint: string, options: FetchOptions, extra: RequestInit 
       if (options.signal?.aborted) throw new DOMException('The user aborted a request.', 'AbortError');
       if (!token) throw new ApiError(401, safeMessage(401));
       headers.set('Authorization', `Bearer ${token}`);
-      response = await fetch(url, config);
+      response = await fetch(resolvedUrl, config);
     }
   } catch (error) {
     if (error instanceof ApiError || isAbortError(error)) throw error;

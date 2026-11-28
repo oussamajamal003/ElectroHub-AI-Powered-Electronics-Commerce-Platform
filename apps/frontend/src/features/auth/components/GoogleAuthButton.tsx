@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/Button';
 import { PasswordInput } from '@/components/ui/PasswordInput/PasswordInput';
 import { Alert } from '@/components/ui/Alert';
 import { authApi } from '../api/auth';
+import { resolveApiUrl } from '@/config/deployment';
 import styles from './AuthModals.module.scss';
 
 interface GoogleAuthButtonProps {
@@ -41,7 +42,7 @@ export function GoogleAuthButton({ disabled, onBusyChange, onSuccess, onLinkingC
     const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2);
     const channelId = crypto.randomUUID();
     const channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(`electrohub-google-${channelId}`);
-    popup.current = window.open(`/api/auth/google/start?channel=${encodeURIComponent(channelId)}`, 'electrohub-google', `popup,width=${width},height=${height},left=${Math.round(left)},top=${Math.round(top)}`);
+    popup.current = window.open(resolveApiUrl(`/api/auth/google/start?channel=${encodeURIComponent(channelId)}`), 'electrohub-google', `popup,width=${width},height=${height},left=${Math.round(left)},top=${Math.round(top)}`);
     if (!popup.current) { channel?.close(); setError('Allow popups to continue with Google.'); return; }
     active.current = true;
     setBusy(true);
@@ -62,7 +63,7 @@ export function GoogleAuthButton({ disabled, onBusyChange, onSuccess, onLinkingC
       finish();
     };
     const receive = (event: MessageEvent) => {
-      const callbackOrigin = import.meta.env.DEV && window.location.origin === 'http://localhost:3000' ? 'http://localhost:5000' : window.location.origin;
+      const callbackOrigin = new URL(resolveApiUrl('/api')).origin;
       if ((event.origin !== callbackOrigin && event.origin !== window.location.origin) || event.source !== popup.current || event.data?.type !== 'electrohub-google') return;
       void receiveResult(event.data.status);
     };

@@ -36,6 +36,7 @@
     "build": "npm run build:frontend && npm run build:backend",
     "audit:ci": "node scripts/security-audit.mjs",
     "validate:render": "node scripts/validate-render-blueprint.cjs",
+    "validate:vercel": "node scripts/validate-vercel-config.cjs",
     "audit": "npm audit --audit-level=high"
   },
   "engines": {

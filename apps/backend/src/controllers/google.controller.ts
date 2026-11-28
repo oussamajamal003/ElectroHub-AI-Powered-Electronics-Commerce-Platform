@@ -11,7 +11,7 @@ import { createAccountDeletionProof } from '../services/account-deletion-proof.j
 
 const service = new GoogleService();
 const cookieName = 'electrohub_google_transaction';
-const clearOptions = { httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'lax' as const, path: '/api/auth/google' };
+const clearOptions = { httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const, path: '/api/auth/google' };
 const cookieOptions = { ...clearOptions, maxAge: 5 * 60 * 1000 };
 const transactionSchema = z.object({
   state: z.string().min(32), verifier: z.string().min(32), nonce: z.string().min(32), expiresAt: z.number(),
@@ -32,7 +32,7 @@ function configuration() {
   const frontendOrigin = new URL(env.FRONTEND_URL).origin;
   const callback = new URL(env.GOOGLE_REDIRECT_URI);
   const localCallback = env.NODE_ENV === 'development' && callback.origin === `http://localhost:${env.PORT}` && frontendOrigin === 'http://localhost:3000';
-  if ((!localCallback && callback.origin !== frontendOrigin) || callback.pathname !== '/api/auth/google/callback' || callback.search || callback.hash) {
+  if ((!localCallback && (callback.protocol !== 'https:' || callback.username || callback.password || callback.search || callback.hash)) || callback.pathname !== '/api/auth/google/callback') {
     throw new AppError('Google sign-in is currently unavailable.', 503, 'GOOGLE_NOT_CONFIGURED');
   }
   return { frontendOrigin, secret: env.JWT_SECRET };
@@ -60,16 +60,6 @@ export function readGoogleTransaction(value: unknown) {
 
 function popup(res: Response, status: string, returnToFrontend = true, channel?: string) {
   const origin = new URL(env.FRONTEND_URL || 'http://localhost:3000').origin;
-  if (returnToFrontend && env.GOOGLE_REDIRECT_URI && new URL(env.GOOGLE_REDIRECT_URI).origin !== origin) {
-    if (env.JWT_SECRET) {
-      const payload = Buffer.from(JSON.stringify({ status, channel, expiresAt: Date.now() + 30000 })).toString('base64url');
-      const signature = crypto.createHmac('sha256', env.JWT_SECRET).update(payload).digest('base64url');
-      res.cookie(`${cookieName}_completion`, `${payload}.${signature}`, { ...clearOptions, maxAge: 30000 });
-    }
-    res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
-    return res.redirect(303, `${origin}/api/auth/google/complete`);
-  }
   const nonce = crypto.randomBytes(24).toString('base64url');
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');

@@ -169,6 +169,7 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().optional(),
   // AI_SERVICE_* settings are validated by src/integrations/ai/ai.config.ts so an AI misconfiguration can never block commerce startup.
   FRONTEND_URL: z.string().url().optional(),
+  CORS_ALLOWED_ORIGINS: z.string().optional(),
   COMMERCE_EMAIL_ORIGIN: z.string().url().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
@@ -213,12 +214,19 @@ const envSchema = z.object({
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['GOOGLE_REDIRECT_URI'],
         message: 'Google OAuth production settings must be configured together' });
     }
-    const productionFrontendUrl = data.FRONTEND_URL;
-    if (googleConfigured && data.GOOGLE_REDIRECT_URI && productionFrontendUrl && isPublicProductionOrigin(productionFrontendUrl)) {
+    if (googleConfigured && data.GOOGLE_REDIRECT_URI) {
       const callback = new URL(data.GOOGLE_REDIRECT_URI);
-      if (callback.origin !== new URL(productionFrontendUrl).origin || callback.pathname !== '/api/auth/google/callback' || callback.search || callback.hash) {
+      if (!isPublicProductionOrigin(callback.origin) || callback.pathname !== '/api/auth/google/callback' || callback.search || callback.hash) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['GOOGLE_REDIRECT_URI'],
-          message: 'GOOGLE_REDIRECT_URI must use FRONTEND_URL origin and the verified callback path' });
+          message: 'GOOGLE_REDIRECT_URI must be a canonical public HTTPS origin plus the exact /api/auth/google/callback path' });
+      }
+    }
+    if (data.CORS_ALLOWED_ORIGINS) {
+      for (const origin of data.CORS_ALLOWED_ORIGINS.split(',').map((value) => value.trim()).filter(Boolean)) {
+        if (!isPublicProductionOrigin(origin)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['CORS_ALLOWED_ORIGINS'],
+            message: 'CORS_ALLOWED_ORIGINS entries must be canonical public HTTPS origins' });
+        }
       }
     }
     if (data.STRIPE_SECRET_KEY && !/^(?:sk|rk)_test_[A-Za-z0-9]+$/.test(data.STRIPE_SECRET_KEY)) {

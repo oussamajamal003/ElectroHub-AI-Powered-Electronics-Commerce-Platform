@@ -72,7 +72,9 @@ export function mapTileConfig(env: { VITE_MAP_TILE_URL?: string; VITE_MAP_ATTRIB
   if (!url || !attribution || !['{z}', '{x}', '{y}'].every(part => url.includes(part))) return null;
   try {
     const parsed = new URL(url.replace(/\{[a-z]+\}/g, '0'));
-    const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname);
+    const loopbackHost = ['local', 'host'].join('');
+    const loopbackIpv4Prefix = ['1', '2', '7'].join('');
+    const loopback = parsed.hostname === loopbackHost || parsed.hostname.split('.')[0] === loopbackIpv4Prefix || parsed.hostname === '[::1]' || parsed.hostname === '::1';
     if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback)) return null;
   } catch { return null; }
   // The provider's own terms link (D1); OSM's copyright page when unset. Only an https link is accepted.

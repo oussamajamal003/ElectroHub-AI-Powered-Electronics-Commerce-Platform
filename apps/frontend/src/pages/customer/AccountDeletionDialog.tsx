@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '@/lib/api';
+import { resolveApiUrl } from '@/config/deployment';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { authApi } from '@/features/auth/api/auth';
 import { Alert } from '@/components/ui/Alert';
@@ -100,7 +101,7 @@ export function AccountDeletionDialog({ open, onOpenChange, onDeleted }: Account
       finish(status);
     };
     const receive = (event: MessageEvent) => {
-      const callbackOrigin = import.meta.env.DEV && window.location.origin === 'http://localhost:3000' ? 'http://localhost:5000' : window.location.origin;
+      const callbackOrigin = new URL(resolveApiUrl('/api')).origin;
       if ((event.origin !== callbackOrigin && event.origin !== window.location.origin) || event.source !== popup.current || event.data?.type !== 'electrohub-google') return;
       receiveResult(event.data.status);
     };

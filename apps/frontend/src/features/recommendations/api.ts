@@ -1,4 +1,5 @@
 import { analyticsAllowed } from '@/features/privacy/consent';
+import { resolveApiUrl } from '@/config/deployment';
 import { apiClient } from '@/lib/api';
 import type {
   PersonalRecommendations, ProductRecommendations, RecentlyViewed, RecommendationPreferences, RecommendationSection,
@@ -35,7 +36,7 @@ export const recommendationsApi = {
 export function sendRecommendationEvents(token: string, events: { productId: string; type: 'IMPRESSION' | 'CLICK' }[]) {
   if (!analyticsAllowed() || events.length === 0 || typeof fetch !== 'function') return;
   try {
-    void fetch('/api/recommendations/events', {
+    void fetch(resolveApiUrl('/api/recommendations/events'), {
       method: 'POST', keepalive: true, credentials: 'omit',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, events }),
