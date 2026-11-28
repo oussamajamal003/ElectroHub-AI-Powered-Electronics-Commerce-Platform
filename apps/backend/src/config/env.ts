@@ -216,7 +216,8 @@ const envSchema = z.object({
     }
     if (googleConfigured && data.GOOGLE_REDIRECT_URI) {
       const callback = new URL(data.GOOGLE_REDIRECT_URI);
-      if (!isPublicProductionOrigin(callback.origin) || callback.pathname !== '/api/auth/google/callback' || callback.search || callback.hash) {
+      const frontendOrigin = data.FRONTEND_URL ? new URL(data.FRONTEND_URL).origin : undefined;
+      if (!isPublicProductionOrigin(callback.origin) || callback.origin !== frontendOrigin || callback.pathname !== '/api/auth/google/callback' || callback.search || callback.hash) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['GOOGLE_REDIRECT_URI'],
           message: 'GOOGLE_REDIRECT_URI must be a canonical public HTTPS origin plus the exact /api/auth/google/callback path' });
       }

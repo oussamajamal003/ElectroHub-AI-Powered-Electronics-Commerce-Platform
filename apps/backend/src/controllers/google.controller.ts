@@ -58,7 +58,7 @@ export function readGoogleTransaction(value: unknown) {
   }
 }
 
-function popup(res: Response, status: string, returnToFrontend = true, channel?: string) {
+function popup(res: Response, status: string, channel?: string) {
   const origin = new URL(env.FRONTEND_URL || 'http://localhost:3000').origin;
   const nonce = crypto.randomBytes(24).toString('base64url');
   res.setHeader('Cache-Control', 'no-store');
@@ -79,10 +79,10 @@ export const completeGoogle = (req: Request, res: Response) => {
     if (extra || received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) throw new Error();
     const completion = z.object({ status: z.enum(['success', 'failure', 'cancelled', 'linking_required']), channel: z.string().uuid().optional(), expiresAt: z.number() }).parse(JSON.parse(Buffer.from(payload, 'base64url').toString()));
     if (completion.expiresAt <= Date.now()) throw new Error();
-    popup(res, completion.status, false, completion.channel);
+    popup(res, completion.status, completion.channel);
   } catch (error) {
     logger.error('Google completion failed', { operation: 'auth.google.complete.failed', error });
-    popup(res, 'failure', false);
+    popup(res, 'failure');
   }
 };
 
@@ -140,7 +140,7 @@ export const callbackGoogle = async (req: Request, res: Response) => {
     channel = data.channel;
     res.clearCookie(cookieName, clearOptions);
     if (typeof req.query.state !== 'string' || req.query.state !== data.state || data.identity) throw new Error('Invalid state');
-    if (req.query.error === 'access_denied') return popup(res, 'cancelled', true, channel);
+    if (req.query.error === 'access_denied') return popup(res, 'cancelled', channel);
     if (typeof req.query.code !== 'string' || req.query.code.length > 4096) throw new Error('Invalid code');
     const identity: GoogleIdentity = await googleProvider.verifyCode(req.query.code, data.verifier, data.nonce);
     if (data.intent === 'ACCOUNT_DELETION' && data.userId) {
@@ -152,19 +152,19 @@ export const callbackGoogle = async (req: Request, res: Response) => {
         path: '/api/account',
         maxAge: 5 * 60 * 1000,
       });
-      return popup(res, 'success', true, channel);
+      return popup(res, 'success', channel);
     }
     const result = await service.signIn(identity);
     if ('linkingRequired' in result) {
       res.cookie(cookieName, seal({ ...data, identity, expiresAt: Date.now() + cookieOptions.maxAge }), cookieOptions);
-      return popup(res, 'linking_required', true, channel);
+      return popup(res, 'linking_required', channel);
     }
     setRefreshCookie(res, result.refreshToken);
-    popup(res, 'success', true, channel);
+    popup(res, 'success', channel);
   } catch (error) {
     res.clearCookie(cookieName, clearOptions);
     logger.error('GOOGLE_AUTH_FAILED', { operation: 'auth.google.callback.failed', error });
-    popup(res, 'failure', true, channel);
+    popup(res, 'failure', channel);
   }
 };
 

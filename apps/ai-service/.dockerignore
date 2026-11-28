@@ -3,5 +3,6 @@
 *
 !Dockerfile
 !requirements-runtime.txt
+!verify-model-artifact.py
 !app
 !app/**

@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.artifact_installer import ArtifactInstallError, _download, _safe_extract, install_approved_artifacts
+from app.core.config import Settings
 from app.main import create_app
 from tests.conftest import make_settings
 
@@ -18,7 +19,7 @@ def _pin(data: bytes = b"fixture") -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _download_settings(tmp_path: Path, url: str | None = None) -> object:
+def _download_settings(tmp_path: Path, url: str | None = None) -> Settings:
     archive = b"fixture archive"
     return make_settings(
         AI_ARTIFACT_DOWNLOAD_URL=url

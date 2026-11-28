@@ -122,7 +122,9 @@ test.describe('toasts', () => {
     await offlineApi(page, { '/api/store/contact': () => ({ status: 429, json: { error: { code: 'RATE_LIMITED', message: 'Too many requests' } } }) });
     await page.goto('/contact');
     await fillContact(page);
+    const response = page.waitForResponse(request => request.url().includes('/api/store/contact') && request.request().method() === 'POST');
     await page.getByRole('button', { name: 'Send Message' }).click();
+    await expect(await response).toHaveProperty('status', 429);
     await expect(page.getByRole('alert').filter({ hasText: 'Please wait a minute, then try again.' })).toBeVisible();
     await expect(viewport(page).locator('[data-toast-variant]')).toHaveCount(0);
   });

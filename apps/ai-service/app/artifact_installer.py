@@ -10,6 +10,7 @@ import re
 import shutil
 import tarfile
 import time
+import types
 import urllib.error
 import urllib.request
 from pathlib import Path, PurePosixPath
@@ -33,7 +34,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _load_repository_verifier():
+def _load_repository_verifier() -> types.ModuleType:
     verifier_path = Path(__file__).resolve().parents[1] / "verify-model-artifact.py"
     spec = importlib.util.spec_from_file_location("electrohub_verify_model_artifact", verifier_path)
     if spec is None or spec.loader is None:

@@ -63,8 +63,12 @@ export function GoogleAuthButton({ disabled, onBusyChange, onSuccess, onLinkingC
       finish();
     };
     const receive = (event: MessageEvent) => {
-      const callbackOrigin = new URL(resolveApiUrl('/api')).origin;
-      if ((event.origin !== callbackOrigin && event.origin !== window.location.origin) || event.source !== popup.current || event.data?.type !== 'electrohub-google') return;
+      const resolvedApiUrl = resolveApiUrl('/api');
+      const callbackOrigin = resolvedApiUrl.startsWith('http')
+        ? new URL(resolvedApiUrl).origin
+        : window.location.origin;
+      const localBackendOrigin = import.meta.env.DEV ? 'http://localhost:5000' : undefined;
+      if ((event.origin !== callbackOrigin && event.origin !== window.location.origin && event.origin !== localBackendOrigin) || event.source !== popup.current || event.data?.type !== 'electrohub-google') return;
       void receiveResult(event.data.status);
     };
     if (channel) channel.onmessage = event => {
