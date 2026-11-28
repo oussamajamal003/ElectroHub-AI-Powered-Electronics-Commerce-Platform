@@ -31,7 +31,9 @@ function configuration() {
   }
   const frontendOrigin = new URL(env.FRONTEND_URL).origin;
   const callback = new URL(env.GOOGLE_REDIRECT_URI);
-  const localCallback = env.NODE_ENV === 'development' && callback.origin === `http://localhost:${env.PORT}` && frontendOrigin === 'http://localhost:3000';
+  const localCallback = (env.NODE_ENV === 'development' || env.NODE_ENV === 'test') &&
+    frontendOrigin === 'http://localhost:3000' &&
+    (callback.origin === frontendOrigin || (env.NODE_ENV === 'development' && callback.origin === `http://localhost:${env.PORT}`));
   if ((!localCallback && (callback.protocol !== 'https:' || callback.username || callback.password || callback.search || callback.hash)) || callback.pathname !== '/api/auth/google/callback') {
     throw new AppError('Google sign-in is currently unavailable.', 503, 'GOOGLE_NOT_CONFIGURED');
   }
@@ -56,6 +58,23 @@ export function readGoogleTransaction(value: unknown) {
   } catch {
     throw new AppError('Google sign-in expired. Please try again.', 400, 'GOOGLE_STATE_INVALID');
   }
+}
+
+function completeGoogleResponse(res: Response, status: string, channel?: string) {
+  if (env.NODE_ENV === 'development' || env.NODE_ENV === 'production') {
+    const secret = env.JWT_SECRET;
+    if (secret) {
+      const payload = Buffer.from(JSON.stringify({ status, channel, expiresAt: Date.now() + cookieOptions.maxAge })).toString('base64url');
+      const signature = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+      res.cookie(`${cookieName}_completion`, `${payload}.${signature}`, cookieOptions);
+    }
+    const frontendOrigin = new URL(env.FRONTEND_URL || 'http://localhost:3000').origin;
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+    res.redirect(303, `${frontendOrigin}/api/auth/google/complete`);
+    return;
+  }
+  popup(res, status, channel);
 }
 
 function popup(res: Response, status: string, channel?: string) {
@@ -114,7 +133,7 @@ export const startGoogle = (req: Request, res: Response) => {
     res.redirect(createAuthorization(data));
   } catch (error) {
     logger.error('Google authorization failed', { operation: 'auth.google.start.failed', error });
-    popup(res, 'failure');
+    completeGoogleResponse(res, 'failure');
   }
 };
 
@@ -140,7 +159,7 @@ export const callbackGoogle = async (req: Request, res: Response) => {
     channel = data.channel;
     res.clearCookie(cookieName, clearOptions);
     if (typeof req.query.state !== 'string' || req.query.state !== data.state || data.identity) throw new Error('Invalid state');
-    if (req.query.error === 'access_denied') return popup(res, 'cancelled', channel);
+    if (req.query.error === 'access_denied') return completeGoogleResponse(res, 'cancelled', channel);
     if (typeof req.query.code !== 'string' || req.query.code.length > 4096) throw new Error('Invalid code');
     const identity: GoogleIdentity = await googleProvider.verifyCode(req.query.code, data.verifier, data.nonce);
     if (data.intent === 'ACCOUNT_DELETION' && data.userId) {
@@ -152,19 +171,19 @@ export const callbackGoogle = async (req: Request, res: Response) => {
         path: '/api/account',
         maxAge: 5 * 60 * 1000,
       });
-      return popup(res, 'success', channel);
+      return completeGoogleResponse(res, 'success', channel);
     }
     const result = await service.signIn(identity);
     if ('linkingRequired' in result) {
       res.cookie(cookieName, seal({ ...data, identity, expiresAt: Date.now() + cookieOptions.maxAge }), cookieOptions);
-      return popup(res, 'linking_required', channel);
+      return completeGoogleResponse(res, 'linking_required', channel);
     }
     setRefreshCookie(res, result.refreshToken);
-    popup(res, 'success', channel);
+    completeGoogleResponse(res, 'success', channel);
   } catch (error) {
     res.clearCookie(cookieName, clearOptions);
     logger.error('GOOGLE_AUTH_FAILED', { operation: 'auth.google.callback.failed', error });
-    popup(res, 'failure', channel);
+    completeGoogleResponse(res, 'failure', channel);
   }
 };
 
